@@ -263,7 +263,8 @@ local function onBJRequestCanSpawnVehicle(req, model, config)
         req.state = false
     elseif not M.allVehicleConfigs[model] and
         not M.allTrailerConfigs[model] and
-        not M.allPropConfigs[model] then
+        not M.allPropConfigs[model] and
+        not model == M.WALKING then
         req.state = false
     end
 end
