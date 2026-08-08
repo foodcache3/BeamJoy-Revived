@@ -40,7 +40,7 @@
         background-color: rgba(0, 0, 0, 0.2);
         border-radius: 0.2em 0 0 0;
 
-        transition: top 0.6s ease-in-out;
+        transition: top 0.2s ease-in-out;
     }
     .window-wrapper.minimized .window-header-background {
         top: 20%;
@@ -132,7 +132,7 @@
         border: 0.3em solid white;
         border-top: none;
         border-left: none;
-        transition: transform 0.5s ease-in-out;
+        transition: transform 0.2s ease-in-out;
     }
     .window-wrapper.minimized .btn .minimize-icon:before {
         transform: translate(-50%, -50%) rotate(135deg);
@@ -156,7 +156,7 @@
         left: 0;
         right: 0;
         bottom: 0%;
-        transition: bottom 0.6s ease-in-out;
+        transition: bottom 0.2s ease-in-out;
         overflow: hidden;
         pointer-events: all;
     }
@@ -173,14 +173,37 @@
         padding: 0.8em;
         overflow: auto;
     }
+    .window-resize-handle {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 1em;
+        height: 1em;
+        pointer-events: all;
+    }
+    .window-resize-handle:before {
+        display: block;
+        content: "";
+        position: absolute;
+        right: 0.2em;
+        bottom: 0.2em;
+        width: 0.5em;
+        height: 0.5em;
+        border-right: 0.15em solid rgba(255, 255, 255, 0.5);
+        border-bottom: 0.15em solid rgba(255, 255, 255, 0.5);
+    }
 </style>
 
 <div
     class="window-wrapper"
     ng-class="{'minimized': $ctrl.minimized}"
     ng-if="$ctrl.visible"
+    ng-mousedown="$ctrl.focus()"
 >
-    <div class="window-header">
+    <div
+        class="window-header cursor-grab"
+        ng-mousedown="$ctrl.startDrag($event)"
+    >
         <div class="window-header-background" ng-hide="!$ctrl.background"></div>
         <span class="window-title">{{ $ctrl.label | translate}}</span>
         <div class="window-header-buttons-stripe"></div>
@@ -208,4 +231,9 @@
             <div class="window-content" ng-transclude></div>
         </div>
     </div>
+    <div
+        class="window-resize-handle cursor-nwse-resize"
+        ng-hide="$ctrl.minimized"
+        ng-mousedown="$ctrl.startResize($event)"
+    ></div>
 </div>

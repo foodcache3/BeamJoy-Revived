@@ -46,7 +46,7 @@ local M = {
         Traffic = {
             enabled = false,
             amount = 15,
-            maxPerPlayer = 5,
+            maxPerPlayer = 1,
             models = { "simple_traffic" },
         },
         Chat = {

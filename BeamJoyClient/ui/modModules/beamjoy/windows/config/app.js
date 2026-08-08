@@ -7,7 +7,7 @@ await import(`/ui/modModules/beamjoy/windows/config/database/app.js`);
 
 angular.module("beamjoy").component("bjConfig", {
     templateUrl: "/ui/modModules/beamjoy/windows/config/app.html",
-    controller: function ($rootScope, beamjoyStore, $timeout) {
+    controller: function ($rootScope, beamjoyStore, $timeout, beamjoyWindowRect) {
         this.visible = false;
         this.onClose = () => {
             this.visible = false;
@@ -16,7 +16,8 @@ angular.module("beamjoy").component("bjConfig", {
         $rootScope.$on("BJSendAppsSizesAndPositions", (_, data) => {
             const el = data["beamjoy-config"];
             const dom = document.querySelector("#beamjoy-config");
-            if (el && dom) {
+            // skip the Lua-driven default once the player has manually moved/resized
+            if (el && dom && !beamjoyWindowRect.get("config")) {
                 dom.style.width = el.width;
                 dom.style.height = el.height;
                 dom.style.top = el.top;

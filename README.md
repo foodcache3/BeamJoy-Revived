@@ -21,29 +21,32 @@ set of racing- and gameplay-focused features.
 
 ### Planned features
 
+Long-term roadmap — not scoped to any particular release, and not yet implemented. This section
+will move into Features as things ship.
+
+**Teleportation** (actively being worked on)
+
 **Racing**
-- Reset/teleport to pits option
 - Pit road / pit paddock options
+- Reset/teleport to pits option
 - Repair / refuel in pits, with configurable times for each
 - Importer for old race configs to the new system
-- Hotlapping system similar to Forza / SRP
+- Hotlapping system similar to Forza / SRP — a passive route with no visible checkpoints, driven
+  naturally, as opposed to an active/visible race
+- Per-race environment customization (time and weather planner)
+- Per-race prop placement
 
 **Drag Racing**
 - Eighth / quarter / half / full mile options
 - Usable drag strips
 - Heads-up / bracket racing
 
-**Optional**
-- Relative time / split times / better leaderboard
-- Racing series options
-- Option to select fuel amount / tyres at the beginning of a race
-
 **Gameplay**
+- Simplified traffic agents / traffic group support
 - New weather system customization
 - Vehicle delivery together
 - Trailer / cargo delivery
-
-> These are planned, not yet implemented — this section will move into Features as things ship.
+- Rideshare / taxi
 
 ## Features
 

@@ -67,6 +67,7 @@ local function render(ctxt)
     RenderMenuDropdown(beamjoy_lang.translate("beamjoy.menu.about"), {
         { type = "item", label = string.var(beamjoy_lang.translate("beamjoy.menu.about.label"), { version = beamjoy_main.VERSION, buildversion = beamjoy_main.BUILD }) },
         { type = "item", label = beamjoy_lang.translate("beamjoy.menu.about.createdBy") },
+        { type = "item", label = beamjoy_lang.translate("beamjoy.menu.about.continuedBy") },
         { type = "item", label = string.var(beamjoy_lang.translate("beamjoy.menu.about.computerTime"), { time = math.floor(ctxt.now / 1000) }) },
     })
 

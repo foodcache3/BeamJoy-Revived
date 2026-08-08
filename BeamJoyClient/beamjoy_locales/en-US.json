@@ -53,6 +53,7 @@
     "beamjoy.menu.about": "About",
     "beamjoy.menu.about.label": "BeamJoy Abstract v{version}, build {buildversion}",
     "beamjoy.menu.about.createdBy": "Created by TontonSamael",
+    "beamjoy.menu.about.continuedBy": "Continued by Captain Nugget",
     "beamjoy.menu.about.computerTime": "Computer time : {time}",
 
     // MAIN WINDOW
