@@ -13,6 +13,38 @@ Since this mod provides a sandbox experience, it should be compatible with all o
 ⚠️ Please ensure you removed any other version before running this mod. ⚠️
 </p>
 
+## About this fork
+
+This is an actively developed, upgraded version of BeamJoy Sandbox, updated to run on
+BeamNG.drive 0.39. On top of the sandbox/moderation feature set below, it's building toward a
+set of racing- and gameplay-focused features.
+
+### Planned features
+
+**Racing**
+- Reset/teleport to pits option
+- Pit road / pit paddock options
+- Repair / refuel in pits, with configurable times for each
+- Importer for old race configs to the new system
+- Hotlapping system similar to Forza / SRP
+
+**Drag Racing**
+- Eighth / quarter / half / full mile options
+- Usable drag strips
+- Heads-up / bracket racing
+
+**Optional**
+- Relative time / split times / better leaderboard
+- Racing series options
+- Option to select fuel amount / tyres at the beginning of a race
+
+**Gameplay**
+- New weather system customization
+- Vehicle delivery together
+- Trailer / cargo delivery
+
+> These are planned, not yet implemented — this section will move into Features as things ship.
+
 ## Features
 
 - HTML windows and interfaces:
