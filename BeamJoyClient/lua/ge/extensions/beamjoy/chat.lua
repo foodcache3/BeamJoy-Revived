@@ -11,46 +11,9 @@ local M = {
 
 ---@param payload {sender: {text: string, color: number[], tag: string?, tagColor: number[]}?, message: {text: string, color: number[]}}
 local function addImguiMessage(payload)
-    local mpChat = require("multiplayer.ui.chat")
-    local parts = {}
-
-    if payload.sender then
-        if payload.sender.tag then
-            local defaultColor = BJColor():fromArray(M.defaultColor):vec4()
-            table.insert(parts, {
-                text = "[",
-                color = defaultColor,
-            })
-            table.insert(parts, {
-                text = payload.sender.tag,
-                color = BJColor():fromArray(payload.sender.tagColor):vec4(),
-            })
-            table.insert(parts, {
-                text = "]",
-                color = defaultColor,
-            })
-        end
-        table.insert(parts, {
-            text = payload.sender.text .. ": ",
-            color = BJColor():fromArray(payload.sender.color):vec4(),
-        })
-    end
-    table.insert(parts, {
-        text = payload.message.text,
-        color = BJColor():fromArray(payload.message.color):vec4(),
-    })
-
-    table.insert(mpChat.chatMessages, {
-        sentTime = os.time(),
-        id = #mpChat.chatMessages + 1,
-        username = "", -- use color to bypass name + colon
-        color = BJColor(0, 0, 0, 0):asPtr(),
-        message = parts,
-    })
-
-    if UI.settings.window.showOnMessage then UI.bringToFront() end
-    -- autoscroll to last
-    mpChat.newMessageCount = mpChat.newMessageCount + 1
+    -- multiplayer.ui.chat was removed in BeamNG 0.39 (chat moved to Vue).
+    -- Messages are now sent to the frontend via BJChat event in printMessage,
+    -- so this ImGui path is no longer needed.
 end
 
 ---@param senderName string?

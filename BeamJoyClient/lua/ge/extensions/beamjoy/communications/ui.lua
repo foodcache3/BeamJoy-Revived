@@ -1,5 +1,5 @@
 local M = {
-    preloadedDependencies = { "ui_apps", "core_gamestate" },
+    preloadedDependencies = { "ui_apps", "ui_appLayouts", "core_gamestate" },
     dependencies = {},
     APP_SIZES = {
         {
@@ -127,7 +127,7 @@ local function dispatch(key, payload)
 end
 
 local function sendWindowsSizesAndPositions()
-    local layout = table.filter(extensions.ui_apps.getAvailableLayouts(), function(l)
+    local layout = table.filter((extensions.ui_appLayouts and extensions.ui_appLayouts.getAvailableLayouts and extensions.ui_appLayouts.getAvailableLayouts()) or {}, function(l)
         return l.type == extensions.core_gamestate.state.appLayout
     end)[1]
     local res = {}

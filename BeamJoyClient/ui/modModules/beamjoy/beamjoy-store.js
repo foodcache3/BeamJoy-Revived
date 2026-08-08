@@ -3,7 +3,6 @@ angular
     .module("beamjoy")
     .service("beamjoyStore", function ($rootScope, $filter, $timeout) {
         initCount++;
-
         this.translate = $filter("translate");
 
         this.accordionStates = {};
@@ -26,10 +25,6 @@ angular
          * @param function? callback
          */
         this.send = (event, payload, callback) => {
-            console.log(`BJ SEND (${callback ? "with" : "no"} callback)`, {
-                event,
-                payload,
-            });
             bngApi.engineLua(
                 `beamjoy_communications_ui.dispatch("${event}", ${bngApi.serializeToLua(
                     payload
@@ -37,8 +32,7 @@ angular
                 callback
             );
         };
-
-        if (initCount === 2) {
+        if (initCount === 1) {
             // import and init services
             ["players", "groups", "permissions", "settings", "utils"].forEach(
                 (service) =>
@@ -90,13 +84,11 @@ angular
              * @param {event: string, payload: object?} data
              */
             $rootScope.$on("BJEvent", (_, data) => {
-                console.log("BJ EVENT", data);
                 if (this[data.event]) {
                     this[data.event](data.payload);
                 }
                 $rootScope.$broadcast(data.event, data.payload);
             });
-
             $timeout(() => {
                 this.send("BJReady");
                 this.send("BJRequestNametagsState");

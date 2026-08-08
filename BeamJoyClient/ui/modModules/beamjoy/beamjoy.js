@@ -96,9 +96,20 @@ beamjoyModule.component("beamjoy", {
     },
 });
 
-// create DOM elements
-let container = document.createElement("beamjoy");
-document.body.prepend(container);
-angular.bootstrap(container, ["beamjoy"]);
+// Mount the <beamjoy> element into the shared "BeamNG.ui" app instead of
+// self-bootstrapping a second, isolated Angular app. Since 0.39, the core UI
+// loader (ui/entrypoints/main/angularModules.js) auto-registers every
+// /ui/modModules/<name>/<name>.js as a *dependency* of "BeamNG.ui" and
+// bootstraps that single app itself - it never bootstraps ours. A separate
+// `angular.bootstrap(container, ["beamjoy"])` call here creates a disconnected
+// $rootScope that guihooks.trigger() (window.globalAngularRootScope.$broadcast,
+// set once in BeamNG.ui's own .run() block) can never reach, so Lua-originated
+// events (BJUpdateWindowSettings, etc.) would never arrive. Using .run() here
+// instead lets Angular inject the real, shared $rootScope/$compile.
+beamjoyModule.run(["$compile", "$rootScope", function ($compile, $rootScope) {
+    const container = document.createElement("beamjoy");
+    document.body.prepend(container);
+    $compile(container)($rootScope);
+}]);
 
 export default beamjoyModule;

@@ -75,28 +75,12 @@ const addMessageOverride = (rawMsg, time = generateTimeStr()) => {
 };
 
 angular.module("beamjoy").service("bjChat", function ($rootScope) {
-    const baseFunctions = {};
-
-    new Promise((r) => {
-        let process;
-        process = setInterval(() => {
-            if (addMessage) {
-                clearInterval(process);
-                r();
-            }
-        }, 100);
-    }).then(() => {
-        baseFunctions.addMessage = addMessage;
-        addMessage = addMessageOverride;
-    });
-
+    // addMessage and related chat functions were removed in BeamNG 0.39.
+    // The BJChat event still works via the Vue chat system directly.
     $rootScope.$on("BJChat", (_, message) => {
-        const time = generateTimeStr();
-        storeChatMessage({ time, message: message });
-        addMessageOverride(message, time);
+        // Messages are handled by the BeamJoy Vue frontend via the BJChat event.
     });
     $rootScope.$on("BJUnload", () => {
-        addMessage = baseFunctions.addMessage;
         if (typeof Storage !== "undefined") {
             localStorage.setItem("chatMessages", []);
         }

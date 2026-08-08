@@ -1,7 +1,6 @@
 local M = {
-    dependencies = {
-        "beamjoy_communications_ui"
-    },
+    preloadedDependencies = { "beamjoy_communications_ui" },
+    dependencies = {},
     DEFAULT_FREECAM_FOV = 65,
     DEFAULT_FREECAM_SPEED = 30,
     CAMERAS = {
@@ -23,6 +22,7 @@ local M = {
         speed = 70,
     }
 }
+AddPreloadedDependencies(M)
 
 ---@return string
 local function getCamera()
@@ -186,6 +186,7 @@ local function setSpeed(value)
 end
 
 local function onInit()
+    InitPreloadedDependencies(M)
     M.state = {
         smooth = localStorage.get(localStorage.GLOBAL_VALUES.FREECAM_SMOOTH),
         fov = localStorage.get(localStorage.GLOBAL_VALUES.FREECAM_FOV),

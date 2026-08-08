@@ -24,9 +24,11 @@ angular.module("beamjoy").component("bjMain", {
         $rootScope.$on("BJUpdateWindowSettings", (_, data) => {
             const el = data["beamjoy-main"];
             if (el) {
-                this.visible = el.visible;
-                this.closable = el.closable;
-                this.onClose = this.closable ? this.closeWindow : undefined;
+                $rootScope.$applyAsync(() => {
+                    this.visible = el.visible;
+                    this.closable = el.closable;
+                    this.onClose = this.closable ? this.closeWindow : undefined;
+                });
             }
         });
 

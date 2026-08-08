@@ -26,7 +26,9 @@ angular.module("beamjoy").component("bjConfig", {
         $rootScope.$on("BJUpdateWindowSettings", (_, data) => {
             const el = data["beamjoy-config"];
             if (el) {
-                this.visible = el.visible;
+                $rootScope.$applyAsync(() => {
+                    this.visible = el.visible;
+                });
             }
         });
 

@@ -119,31 +119,37 @@ local function onInit()
 
     M.baseFunctions = {
         core_environment = {
-            setState = extensions.core_environment.setState,
-            requestState = extensions.core_environment.requestState,
-            setTimeOfDay = extensions.core_environment.setTimeOfDay,
+            setState = extensions.core_environment and extensions.core_environment.setState,
+            requestState = extensions.core_environment and extensions.core_environment.requestState,
+            setTimeOfDay = extensions.core_environment and extensions.core_environment.setTimeOfDay,
         }
     }
-    extensions.core_environment.setState = interceptEnvState
-    extensions.core_environment.requestState = function()
-        if not M.ToDProcess then
-            M.baseFunctions.core_environment.requestState()
+    if not M.baseFunctions.core_environment.setState then
+        log('E', 'BeamJoy', 'core_environment not available during onInit - environment hooks skipped')
+    else
+        extensions.core_environment.setState = interceptEnvState
+        extensions.core_environment.requestState = function()
+            if not M.ToDProcess then
+                local requestState = M.baseFunctions.core_environment.requestState
+            or extensions.core_environment.requestState
+        requestState()
+            end
         end
-    end
-    extensions.core_environment.setTimeOfDay = function(ToD)
-        if not M.data.timeSync then
-            M.baseFunctions.core_environment.setTimeOfDay(ToD)
-        elseif not bigmap.menuOpened and -- skip ToD when bigmap is opened
-            beamjoy_permissions.hasAnyPermission(nil,
-                BJ_PERMISSIONS.SetEnvironment) then
-            sendEnv({
-                ToD = ToD.time,
-                dayNightCycle = ToD.play == true,
-                dayLength = ToD.dayLength,
-                dayScale = ToD.dayScale,
-                nightScale = ToD.nightScale,
-            })
-            M.baseFunctions.core_environment.setTimeOfDay(ToD)
+        extensions.core_environment.setTimeOfDay = function(ToD)
+            if not M.data.timeSync then
+                M.baseFunctions.core_environment.setTimeOfDay(ToD)
+            elseif not bigmap.menuOpened and -- skip ToD when bigmap is opened
+                beamjoy_permissions.hasAnyPermission(nil,
+                    BJ_PERMISSIONS.SetEnvironment) then
+                sendEnv({
+                    ToD = ToD.time,
+                    dayNightCycle = ToD.play == true,
+                    dayLength = ToD.dayLength,
+                    dayScale = ToD.dayScale,
+                    nightScale = ToD.nightScale,
+                })
+                M.baseFunctions.core_environment.setTimeOfDay(ToD)
+            end
         end
     end
 
@@ -193,7 +199,7 @@ end
 ---@param forceToD boolean?
 ---@param forceStopTimePlay boolean?
 local function updateToD(forceToD, forceStopTimePlay)
-    local ToD = core_environment.getTimeOfDay()
+    local ToD = extensions.core_environment.getTimeOfDay()
     if ToD then
         if M.data.timeSync then
             ToD.play = M.data.dayNightCycle == true
@@ -210,22 +216,24 @@ local function updateToD(forceToD, forceStopTimePlay)
         if forceStopTimePlay then
             ToD.play = false
         end
-        M.baseFunctions.core_environment.setTimeOfDay(ToD)
+        local setToD = M.baseFunctions.core_environment.setTimeOfDay
+            or extensions.core_environment.setTimeOfDay
+        setToD(ToD)
     end
 end
 
 ---@param resetGravity boolean?
 local function updateGravity(resetGravity)
     if M.data.gravitySync then
-        core_environment.setGravity(M.data.gravity)
+        extensions.core_environment.setGravity(M.data.gravity)
     elseif resetGravity then
-        core_environment.setGravity(DEFAULT_GRAVITY)
+        extensions.core_environment.setGravity(DEFAULT_GRAVITY)
     end
 end
 
 local function updateBrightness()
     if not beamjoy_main.world_ready then return end
-    local ToD = core_environment.getTimeOfDay()
+    local ToD = extensions.core_environment.getTimeOfDay()
     if not ToD then return end
 
     if M.data.timeSync then
@@ -262,13 +270,15 @@ end
 ---@param ctxt TickContext
 ---@param serverTick BJServerTick
 local function onServerTick(ctxt, serverTick)
-    local ToD = core_environment.getTimeOfDay()
+    local ToD = extensions.core_environment.getTimeOfDay()
     if ToD and serverTick.ToD then
         M.data.ToD = serverTick.ToD
         if math.abs(ToD.time - M.data.ToD) > 0.001 then
             -- resync
             ToD.time = tonumber(M.data.ToD) or 0
-            M.baseFunctions.core_environment.setTimeOfDay(ToD)
+            local setToD = M.baseFunctions.core_environment.setTimeOfDay
+                or extensions.core_environment.setTimeOfDay
+            setToD(ToD)
         end
     end
 end
@@ -332,7 +342,9 @@ local function retrieveCache(caches)
         updateToD(forceToD, forceStopTimePlay)
         M.ToDProcess = false
         updateGravity(resetGravity)
-        M.baseFunctions.core_environment.requestState()
+        local requestState = M.baseFunctions.core_environment.requestState
+            or extensions.core_environment.requestState
+        requestState()
         M.sendEnvToUI()
         extensions.hook("onBJEnvironmentChanged", changes)
     end
@@ -357,7 +369,7 @@ local function setEnv(newData)
     }
     if not M.data.timeSync and newData.timeSync then
         -- retrieve env data from game
-        local ToD = core_environment.getTimeOfDay()
+        local ToD = extensions.core_environment.getTimeOfDay()
         if ToD then
             payload.ToD = ToD.time
             payload.dayNightCycle = ToD.play
@@ -367,7 +379,7 @@ local function setEnv(newData)
     end
     if not M.data.gravity and newData.gravitySync then
         -- retrieve gravity from game
-        payload.gravity = core_environment.getGravity()
+        payload.gravity = extensions.core_environment.getGravity()
     end
     sendEnv(payload)
 end

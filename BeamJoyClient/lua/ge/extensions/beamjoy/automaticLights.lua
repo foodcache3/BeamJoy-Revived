@@ -9,7 +9,7 @@ local M = {
 --- Updates traffic vehicles lights
 ---@param ToD number? 0-1
 local function updateTrafficLights(ToD)
-    ToD = ToD or core_environment.getTimeOfDay().time
+    ToD = ToD or extensions.core_environment.getTimeOfDay().time
 
     beamjoy_vehicles.vehicles:filter(function(v) ---@param v BJVehicle
         return v.isLocal and v.isAi
@@ -21,7 +21,7 @@ end
 ---@param mpVeh BJVehicle
 ---@param ToD number? 0-1
 local function update(mpVeh, ToD)
-    ToD = ToD or core_environment.getTimeOfDay().time
+    ToD = ToD or extensions.core_environment.getTimeOfDay().time
 
     if not M.processed[mpVeh.vid] then
         beamjoy_vehicles.setLights(mpVeh.vid, ToD >= M.dusk and ToD < M.dawn)
@@ -46,7 +46,7 @@ end
 
 local previousToD
 local function onServerTick()
-    local ToD = core_environment.getTimeOfDay()
+    local ToD = extensions.core_environment.getTimeOfDay()
     if not ToD then return end
 
     if previousToD then
