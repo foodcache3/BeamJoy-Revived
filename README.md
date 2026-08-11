@@ -116,7 +116,7 @@ will move into Features as things ship.
 
 ## How to install
 
-Just like the free version, you can download the latest release [HERE](https://github.com/foodcache3/BeamJoy-sandbox/releases) and extract it inside your server's `Resources` folder.<br/>
+Just like the free version, you can download the latest release [HERE](https://github.com/foodcache3/BeamJoy-sandbox/releases/latest) and extract it inside your server's `Resources` folder.<br/>
 No update should never replace server nor players data.
 
 ## Support Samael
