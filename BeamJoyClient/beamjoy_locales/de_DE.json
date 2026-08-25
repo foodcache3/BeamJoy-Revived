@@ -69,6 +69,7 @@
     "beamjoy.window.main.playerlist.actions.delete": "Entfernen",
     "beamjoy.window.main.playerlist.actions.deleteAll": "Alle entfernen",
     "beamjoy.window.main.playerlist.actions.explode": "Explodieren",
+    "beamjoy.window.main.playerlist.actions.launch": "Katapultieren",
     "beamjoy.window.main.playerlist.moderation.previousMuteReason": "Vorheriger Stummschaltungsgrund",
     "beamjoy.window.main.playerlist.moderation.muted": "Stummgeschaltet",
     "beamjoy.window.main.playerlist.moderation.muteReason": "Grund für Stummschaltung",

@@ -13,6 +13,7 @@ local function onInit()
     communications_rx.addHandler("deletePlayerVehicles", M.deletePlayerVehicles)
     communications_rx.addHandler("deleteVehicle", M.deleteVehicle)
     communications_rx.addHandler("explodeVehicle", M.explodeVehicle)
+    communications_rx.addHandler("launchVehicle", M.launchVehicle)
     communications_rx.addHandler("updateVehicleGhost", M.updateGhost)
 end
 
@@ -195,6 +196,22 @@ local function explodeVehicle(ctxt, vid)
 end
 
 ---@param ctxt BJSContext
+---@param vid integer
+local function launchVehicle(ctxt, vid)
+    if not ctxt.sender then return end
+    if not services_permissions.isStaff(ctxt.sender.playerName) then return end
+
+    local targetVeh
+    services_players.players:forEach(function(p)
+        if targetVeh then return end
+        targetVeh = table.find(p.vehicles, function(v) return v.vid == vid end)
+    end)
+    if not targetVeh then return end
+
+    communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "launchVehicle", vid)
+end
+
+---@param ctxt BJSContext
 ---@param vid integer the sender's own vid for their own vehicle, also the cross-client-stable
 ---remoteVID every other client's own copy of this vehicle carries (see the client-side
 ---"updateVehicleGhost" handler's own comment); relaying it unmodified below is
@@ -228,6 +245,7 @@ M.updateCurrentVehicle = updateCurrentVehicle
 M.deletePlayerVehicles = deletePlayerVehicles
 M.deleteVehicle = deleteVehicle
 M.explodeVehicle = explodeVehicle
+M.launchVehicle = launchVehicle
 M.updateGhost = updateGhost
 
 return M

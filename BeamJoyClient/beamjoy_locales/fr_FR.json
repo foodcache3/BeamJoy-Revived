@@ -69,6 +69,7 @@
     "beamjoy.window.main.playerlist.actions.delete": "Supprimer",
     "beamjoy.window.main.playerlist.actions.deleteAll": "Tout supprimer",
     "beamjoy.window.main.playerlist.actions.explode": "Faire exploser",
+    "beamjoy.window.main.playerlist.actions.launch": "Catapulter",
     "beamjoy.window.main.playerlist.moderation.previousMuteReason": "Raison précédente de mise en sourdine",
     "beamjoy.window.main.playerlist.moderation.muted": "En sourdine",
     "beamjoy.window.main.playerlist.moderation.muteReason": "Raison de mise en sourdine",

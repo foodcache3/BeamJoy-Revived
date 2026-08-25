@@ -69,6 +69,7 @@
     "beamjoy.window.main.playerlist.actions.delete": "Usuń",
     "beamjoy.window.main.playerlist.actions.deleteAll": "Usuń wszystkich",
     "beamjoy.window.main.playerlist.actions.explode": "Eksploduj",
+    "beamjoy.window.main.playerlist.actions.launch": "Wystrzel",
     "beamjoy.window.main.playerlist.moderation.previousMuteReason": "Poprzedni powód wyciszenia",
     "beamjoy.window.main.playerlist.moderation.muted": "Wyciszony",
     "beamjoy.window.main.playerlist.moderation.muteReason": "Powód wyciszenia",

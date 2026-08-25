@@ -69,6 +69,7 @@
     "beamjoy.window.main.playerlist.actions.delete": "Удалить",
     "beamjoy.window.main.playerlist.actions.deleteAll": "Удалить всех",
     "beamjoy.window.main.playerlist.actions.explode": "Взорвать",
+    "beamjoy.window.main.playerlist.actions.launch": "Запустить",
     "beamjoy.window.main.playerlist.moderation.previousMuteReason": "Причина предыдущего мута",
     "beamjoy.window.main.playerlist.moderation.muted": "Заглушен",
     "beamjoy.window.main.playerlist.moderation.muteReason": "Причина мута",

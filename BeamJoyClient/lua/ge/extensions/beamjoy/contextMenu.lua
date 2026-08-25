@@ -95,6 +95,16 @@ local function onBJClick(type, data)
                     end
                 end
             })
+
+            -- LAUNCH
+            table.insert(M.current.actions, {
+                text = "beamjoy.window.main.playerlist.actions.launch",
+                callback = function()
+                    if beamjoy_vehicles.vehicles[data.mpVeh.vid] then
+                        beamjoy_communications.send("launchVehicle", data.mpVeh.remoteVID)
+                    end
+                end
+            })
         end
 
         notifyUI()

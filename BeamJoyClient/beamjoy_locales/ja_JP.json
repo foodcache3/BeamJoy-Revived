@@ -69,6 +69,7 @@
     "beamjoy.window.main.playerlist.actions.delete": "削除",
     "beamjoy.window.main.playerlist.actions.deleteAll": "全削除",
     "beamjoy.window.main.playerlist.actions.explode": "爆破",
+    "beamjoy.window.main.playerlist.actions.launch": "打ち上げ",
     "beamjoy.window.main.playerlist.moderation.previousMuteReason": "以前のミュート理由",
     "beamjoy.window.main.playerlist.moderation.muted": "ミュート中",
     "beamjoy.window.main.playerlist.moderation.muteReason": "ミュート理由",

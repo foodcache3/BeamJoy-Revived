@@ -64,3 +64,15 @@
         title="{{'beamjoy.window.main.playerlist.actions.explode' | translate}}"
     ></icon>
 </div>
+<div
+    ng-hide="$ctrl.actions.launch === undefined"
+    class="btn danger"
+    ng-class="{disabled: !$ctrl.actions.launch}"
+    ng-click="$ctrl.action($event,'launch')"
+>
+    <icon
+        name="launch"
+        class="small"
+        title="{{'beamjoy.window.main.playerlist.actions.launch' | translate}}"
+    ></icon>
+</div>

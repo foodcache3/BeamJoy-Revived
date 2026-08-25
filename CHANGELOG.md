@@ -6,6 +6,30 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.27] - 2026-08-25
+
+### Added
+- **New staff moderation action: "Launch"**, a discrete-impulse punishment that catapults a
+  target vehicle into the air (upward velocity plus a random horizontal direction), alongside the
+  existing "Explode" action. Mirrors the existing `explode`/`explodeVehicle` architecture exactly:
+  the server (`services_permissions.isStaff` gated) resolves the target vehicle by its
+  cross-client-stable vid and broadcasts a `launchVehicle` event to every connected client, but
+  only the vehicle's OWNING client actually applies the velocity (`mpVeh.isLocal` check) via
+  `applyClusterVelocityScaleAdd` (BeamNG's own native per-vehicle-cluster velocity primitive) with
+  a random launch angle each time. This discrete, one-shot design is what makes it feasible at
+  all: BeamMP vehicle physics is authoritative only on the owning client, so a continuous,
+  per-frame interaction (like a server-side node grabber) isn't achievable the same way, but a
+  single relayed impulse is, since it becomes real physics on the vehicle's own authoritative
+  simulation the moment it's applied there. Exposed via both the player-list vehicle-line action
+  row and the in-world right-click vehicle context menu, staff-only in both places. New
+  `beamjoy.window.main.playerlist.actions.launch` locale key added across all 13 client locales
+  (translated, not machine-literal) and a new hand-drawn `launch.svg` icon (an upward arrow,
+  matching the existing icon set's style/viewBox rather than guessing at a memorized icon-font
+  glyph). *(client and server, server needs deployment)*
+
+### Changed
+- Version bumped to 1.8.27 (buildversion 2283) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.26] - 2026-08-25
 
 ### Added

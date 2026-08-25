@@ -69,6 +69,7 @@
     "beamjoy.window.main.playerlist.actions.delete": "移除",
     "beamjoy.window.main.playerlist.actions.deleteAll": "移除全部",
     "beamjoy.window.main.playerlist.actions.explode": "爆炸",
+    "beamjoy.window.main.playerlist.actions.launch": "发射",
     "beamjoy.window.main.playerlist.moderation.previousMuteReason": "上次静音原因",
     "beamjoy.window.main.playerlist.moderation.muted": "已静音",
     "beamjoy.window.main.playerlist.moderation.muteReason": "静音原因",

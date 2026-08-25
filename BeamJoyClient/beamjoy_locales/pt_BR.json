@@ -69,6 +69,7 @@
     "beamjoy.window.main.playerlist.actions.delete": "Remover",
     "beamjoy.window.main.playerlist.actions.deleteAll": "Remover todos",
     "beamjoy.window.main.playerlist.actions.explode": "Explodir",
+    "beamjoy.window.main.playerlist.actions.launch": "Lançar",
     "beamjoy.window.main.playerlist.moderation.previousMuteReason": "Motivo anterior do mute",
     "beamjoy.window.main.playerlist.moderation.muted": "Mutado",
     "beamjoy.window.main.playerlist.moderation.muteReason": "Motivo do mute",

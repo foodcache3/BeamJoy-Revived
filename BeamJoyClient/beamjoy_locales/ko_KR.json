@@ -69,6 +69,7 @@
     "beamjoy.window.main.playerlist.actions.delete": "제거",
     "beamjoy.window.main.playerlist.actions.deleteAll": "모두 제거",
     "beamjoy.window.main.playerlist.actions.explode": "폭발",
+    "beamjoy.window.main.playerlist.actions.launch": "발사",
     "beamjoy.window.main.playerlist.moderation.previousMuteReason": "이전 뮤트 이유",
     "beamjoy.window.main.playerlist.moderation.muted": "뮤트됨",
     "beamjoy.window.main.playerlist.moderation.muteReason": "뮤트 이유",

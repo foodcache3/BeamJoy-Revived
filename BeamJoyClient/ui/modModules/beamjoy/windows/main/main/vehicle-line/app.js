@@ -24,6 +24,7 @@ angular.module("beamjoy").component("bjVehicleLine", {
                 this.actions.engine = true;
                 this.actions.delete = true;
                 this.actions.explode = true;
+                this.actions.launch = true;
             }
         };
         updateActions();

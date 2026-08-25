@@ -41,6 +41,7 @@ local function onInit()
     InitPreloadedDependencies(M)
     beamjoy_communications.addHandler("deleteVehicle", M.delete)
     beamjoy_communications.addHandler("explodeVehicle", M.explode)
+    beamjoy_communications.addHandler("launchVehicle", M.launch)
     beamjoy_communications.addHandler("updateVehicleGhost", function(remoteVID, state)
         -- remoteVID is the SENDER's own vid, which is only meaningful as a lookup key in the
         -- sender's own local M.vehicles (each client assigns its own engine-local numeric vid per
@@ -942,6 +943,18 @@ local function explode(remoteVID)
     end
 end
 
+---@param remoteVID integer
+local function launch(remoteVID)
+    local mpVeh = M.vehicles:find(function(v) return v.remoteVID == remoteVID end)
+    if mpVeh and mpVeh.isLocal then
+        local angle = math.random() * 2 * math.pi
+        local horizontalForce = 15
+        local upwardForce = 40
+        mpVeh.veh:applyClusterVelocityScaleAdd(mpVeh.veh:getRefNodeId(), 1,
+            math.cos(angle) * horizontalForce, math.sin(angle) * horizontalForce, upwardForce)
+    end
+end
+
 local function switchToNextVehicle()
     be:enterNextVehicle(0, 1)
 end
@@ -1389,6 +1402,7 @@ M.getLabelByModel = getLabelByModel
 M.waitForSpawn = waitForSpawn
 M.updateVehAttribute = updateVehAttribute
 M.explode = explode
+M.launch = launch
 M.switchToNextVehicle = switchToNextVehicle
 M.setGhost = setGhost
 M.setGhostReason = setGhostReason

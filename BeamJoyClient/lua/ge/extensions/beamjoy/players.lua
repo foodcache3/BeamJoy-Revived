@@ -239,6 +239,8 @@ local function onVehicleAction(playerName, rvid, action)
         end
     elseif action == "explode" then
         beamjoy_communications.send("explodeVehicle", rvid)
+    elseif action == "launch" then
+        beamjoy_communications.send("launchVehicle", rvid)
     end
 end
 
