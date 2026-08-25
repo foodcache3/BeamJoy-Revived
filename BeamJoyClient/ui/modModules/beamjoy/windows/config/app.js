@@ -127,12 +127,16 @@ angular.module("beamjoy").component("bjConfig", {
                 visible: false,
                 closable: false,
                 template: "<bj-config-core></bj-config-core>",
-                // SetCore is the real gate on the identity-fields form below ; EditHunterArenas/
-                // EditRaces (and any future importable mode's own permission) are included here
-                // too so each one's own row in the Legacy Import accordion stays reachable for a
-                // mod-rank holder who isn't also owner-rank SetCore, matching the access those
-                // buttons had in their old homes
-                permissions: ["SetCore", "EditHunterArenas", "EditRaces"],
+                // SetCore only, per direct request : an earlier round widened this to also admit
+                // EditHunterArenas/EditRaces holders so a mod-rank account could reach the Legacy
+                // Import accordion without owner-rank SetCore. That let a non-owner account open
+                // this tab at all, which was flagged as unwanted twice over (the identity-fields
+                // form leaking to them, then Legacy Import itself) - reverted back to SetCore-only,
+                // matching this tab's original gate. A SetCore/owner-rank account still sees every
+                // Legacy Import row it also holds the matching edit permission for (see
+                // core/app.js's own canImportHunter/canImportRaces), which in practice is every row
+                // for a true owner account via this codebase's own rank-inheritance rule.
+                permissions: ["SetCore"],
             },
             database: {
                 id: "database",

@@ -6,6 +6,26 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.30] - 2026-08-25
+
+### Fixed
+- **Real bug, per direct follow-up report: a mod-rank account with only `EditRaces` or
+  `EditHunterArenas` could still open Config > Core and reach the Legacy Import accordion, when
+  only `SetCore` (owner rank) should ever be able to open this tab at all.** The previous round
+  (1.8.28) correctly gated the identity-fields form itself behind `SetCore`, but the Core tab's own
+  visibility was still deliberately widened to `["SetCore", "EditHunterArenas", "EditRaces"]` from
+  an earlier round, specifically so a mod-rank importer-only account could still reach the tab for
+  Legacy Import. Per direct request, that widening is reverted: the Core tab's own `permissions`
+  list is back to `["SetCore"]` only. A non-owner account with `EditRaces`/`EditHunterArenas` no
+  longer sees the Core tab in the Config window at all, Legacy Import included, matching the same
+  "SetCore only" boundary the identity-fields form was already given. A true `SetCore`/owner-rank
+  account still sees every Legacy Import row it's entitled to via this codebase's own rank-
+  inheritance rule (an owner rank almost always satisfies every lower-ranked permission
+  automatically). *(client only, no server changes)*
+
+### Changed
+- Version bumped to 1.8.30 (buildversion 2286) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.29] - 2026-08-25
 
 ### Added
