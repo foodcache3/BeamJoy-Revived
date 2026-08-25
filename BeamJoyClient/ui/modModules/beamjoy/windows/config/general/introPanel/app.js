@@ -20,6 +20,26 @@ angular.module("beamjoy").component("bjConfigGeneralIntropanel", {
                 JSON.stringify(this.data) !== JSON.stringify(this.default);
         };
 
+        // a custom image is any real "http(s)://" URL, matching uiHelpers.lua's own detection ;
+        // anything else is treated as one of the bundled native option keys from imageOptions
+        this.isCustomImage = () =>
+            typeof this.data.image === "string" &&
+            /^https?:\/\//.test(this.data.image);
+        this.toggleCustomImage = () => {
+            if (this.isCustomImage()) {
+                this.data.image =
+                    this.imageOptions.length > 0
+                        ? this.imageOptions[0].value
+                        : null;
+            } else {
+                this.data.image = "https://";
+            }
+        };
+        this.imagePreviewUrl = () =>
+            this.isCustomImage()
+                ? this.data.image
+                : `../../../gameplay/tutorials/pages/${this.data.image}/image.jpg`;
+
         const updateData = (data) => {
             data.settings.content = data.settings.content
                 .replaceAll("<br/>", "\n")

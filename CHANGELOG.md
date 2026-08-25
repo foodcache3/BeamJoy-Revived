@@ -6,6 +6,27 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.29] - 2026-08-25
+
+### Added
+- **Welcome/intro panel now supports a custom external image URL, not just the fixed list of
+  bundled BeamNG tutorial images.** Previously raised as a planned item: `uiHelpers.lua`'s
+  `openPanel(title, content, image)` hard-rejected anything not in its own `PANEL_IMAGES`
+  whitelist, and the image URL was always built from a hardcoded `/gameplay/tutorials/pages/
+  {image}/image.jpg` template with no path for an external URL at all. `openPanel` now detects a
+  real `http(s)://` URL and uses it directly as the panel's `background-image`, CEF's own renderer
+  handles a real external URL the same as any other image, this was never a hard engine
+  limitation, only `openPanel`'s own whitelist check. The Config > General > Intro Panel editor
+  gained a toggle button next to the image picker to switch between the existing built-in-image
+  dropdown and a plain text field for a custom URL, with the live preview image switching sources
+  to match. No server-side change was needed: `services/config.lua`'s `IntroPanel` field already
+  stores `image` as an opaque string with no whitelist validation of its own, the restriction was
+  entirely client-side. New locale keys (`useCustomUrl`, `useBuiltIn`, `customUrl.tooltip`) added
+  across all 13 client locales. *(client only, no server changes)*
+
+### Changed
+- Version bumped to 1.8.29 (buildversion 2285) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.28] - 2026-08-25
 
 ### Fixed

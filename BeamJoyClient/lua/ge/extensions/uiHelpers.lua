@@ -196,14 +196,25 @@ local function toastError(text, timeoutMs, title) toast(M.TOAST_TYPES.ERROR, tex
 --- extensions/career/modules/linearTutorial.lua:introPopup():200
 ---@param title string
 ---@param content string
----@param image? string
+---@param image? string either one of M.PANEL_IMAGES' own keys (a bundled BeamNG tutorial image)
+---or a real "http(s)://" URL, loaded directly by CEF's own background-image rendering the same
+---way any other external image would be
 local function openPanel(title, content, image)
-    if image ~= nil and not table.includes(M.PANEL_IMAGES, image) then return end
-    image = image or M.PANEL_IMAGES.WELCOME
+    local isCustomURL = type(image) == "string" and image:find("^https?://") ~= nil
+    if image ~= nil and not isCustomURL and not table.includes(M.PANEL_IMAGES, image) then return end
+
+    local imageURL
+    if isCustomURL then
+        imageURL = image
+    else
+        image = image or M.PANEL_IMAGES.WELCOME
+        imageURL = string.var("/gameplay/tutorials/pages/{image}/image.jpg", { image = image })
+    end
+
     guihooks.trigger("introPopupTutorial", { {
         type = "info",
         content = string.var(
-            [[<div class="bng-splash-imageonbottom" style="background-image:url('/gameplay/tutorials/pages/{image}/image.jpg');"><h3>{title}</h3><div class="flex-grow"></div><div class="bng-splash-text">{content}</div></div>]],
+            [[<div class="bng-splash-imageonbottom" style="background-image:url('{imageURL}');"><h3>{title}</h3><div class="flex-grow"></div><div class="bng-splash-text">{content}</div></div>]],
             {
                 title = title,
                 content = content:var({
@@ -211,7 +222,7 @@ local function openPanel(title, content, image)
                     server_name = GetServerInfos().name:trim(),
                     players_count = beamjoy_players.players:length(),
                 }),
-                image = image,
+                imageURL = imageURL,
             }),
         flavour = "onlyOk",
         isPopup = true,

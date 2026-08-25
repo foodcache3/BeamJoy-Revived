@@ -58,17 +58,37 @@
             {{"beamjoy.window.config.tabs.general.intropanel.image"|translate}}
         </td>
         <td>
-            <bj-select ng-model="$ctrl.data.image" options="$ctrl.imageOptions">
-            </bj-select>
+            <div class="d-flex gap-1 align-center">
+                <bj-select
+                    ng-if="!$ctrl.isCustomImage()"
+                    class="flex-grow-1"
+                    ng-model="$ctrl.data.image"
+                    options="$ctrl.imageOptions"
+                >
+                </bj-select>
+                <input
+                    ng-if="$ctrl.isCustomImage()"
+                    type="text"
+                    class="flex-grow-1"
+                    ng-model="$ctrl.data.image"
+                    placeholder="https://..."
+                />
+                <button
+                    class="btn neutral w-fitcontent"
+                    ng-click="$ctrl.toggleCustomImage()"
+                    title="{{'beamjoy.window.config.tabs.general.intropanel.image.customUrl.tooltip'|translate}}"
+                >
+                    {{($ctrl.isCustomImage() ?
+                        "beamjoy.window.config.tabs.general.intropanel.image.useBuiltIn" :
+                        "beamjoy.window.config.tabs.general.intropanel.image.useCustomUrl") | translate}}
+                </button>
+            </div>
         </td>
     </tr>
     <tr>
         <td></td>
         <td>
-            <img
-                class="image-preview w-auto"
-                src="../../../gameplay/tutorials/pages/{{$ctrl.data.image}}/image.jpg"
-            />
+            <img class="image-preview w-auto" ng-src="{{$ctrl.imagePreviewUrl()}}" />
         </td>
     </tr>
     <tr>
