@@ -1,0 +1,22 @@
+<table ng-if="$ctrl.init">
+    <tr>
+        <td class="text-right">
+            <span title="{{'beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction.tooltip'|translate}}">
+                {{"beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction"|translate}}
+            </span>
+        </td>
+        <td>
+            <bj-toggle ng-model="$ctrl.data.RaceAuthorshipRestriction"></bj-toggle>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right">
+            <span title="{{'beamjoy.window.config.tabs.general.raceEditor.showOnlyEditable.tooltip'|translate}}">
+                {{"beamjoy.window.config.tabs.general.raceEditor.showOnlyEditable"|translate}}
+            </span>
+        </td>
+        <td>
+            <bj-toggle ng-model="$ctrl.data.RaceEditorShowOnlyEditable"></bj-toggle>
+        </td>
+    </tr>
+</table>

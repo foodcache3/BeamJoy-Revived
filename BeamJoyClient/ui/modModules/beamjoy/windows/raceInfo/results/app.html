@@ -1,0 +1,100 @@
+<style>
+    bj-race-info-results {
+        display: block;
+        height: 100%;
+        overflow: auto;
+    }
+    bj-race-info-results tr.winner {
+        color: #ba68f8;
+    }
+    bj-race-info-results tr.dnf {
+        color: #e57373;
+        opacity: 0.7;
+    }
+    bj-race-info-results tr.selectable {
+        cursor: pointer;
+    }
+    bj-race-info-results tr.selectable:hover {
+        background: rgba(255, 255, 255, 0.08);
+    }
+    bj-race-info-results tr.selected {
+        background: rgba(230, 92, 0, 0.25);
+    }
+    bj-race-info-results td.fastest {
+        color: #ba68f8;
+        font-weight: bold;
+    }
+    bj-race-info-results h5 {
+        margin: 0.6em 0 0.3em;
+        opacity: 0.8;
+    }
+</style>
+
+<div ng-if="!$ctrl.active" class="opacity-70 p-2">
+    {{'beamjoy.window.main.tabs.races.raceInfo.noActiveRace' | translate}}
+</div>
+
+<div ng-if="$ctrl.active">
+    <div ng-if="!$ctrl.finished" class="opacity-70 mb-2">
+        {{'beamjoy.window.main.tabs.races.raceInfo.stillRunning' | translate}}
+    </div>
+
+    <h5>{{'beamjoy.window.main.tabs.races.raceInfo.classification' | translate}}</h5>
+    <table class="race-info-table">
+        <thead>
+            <tr>
+                <th class="text-center">#</th>
+                <th class="text-left">{{'beamjoy.window.main.tabs.races.raceInfo.player' | translate}}</th>
+                <th>{{'beamjoy.window.main.tabs.races.raceInfo.totalTime' | translate}}</th>
+                <th>{{'beamjoy.window.main.tabs.races.raceInfo.gap' | translate}}</th>
+                <th>{{'beamjoy.window.main.tabs.races.raceInfo.bestLap' | translate}}</th>
+                <th ng-if="$ctrl.sectorCount > 0">{{'beamjoy.window.main.tabs.races.raceInfo.theoretical' | translate}}</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr
+                ng-repeat="p in $ctrl.classification track by $index"
+                ng-class="{winner: $index === 0 && p.totalMs !== null, dnf: p.dnf, selectable: true, selected: p.playerName === $ctrl.selectedPlayerName}"
+                ng-click="$ctrl.selectPlayer(p.playerName)"
+            >
+                <td class="text-center">{{$index + 1}}</td>
+                <td class="text-left">{{p.playerName}}</td>
+                <td>
+                    <span ng-if="p.dnf">{{'beamjoy.window.main.tabs.races.raceInfo.dnf' | translate}}</span>
+                    <span ng-if="!p.dnf">{{$ctrl.formatTime(p.totalMs)}}</span>
+                </td>
+                <td>{{$ctrl.formatGap(p.gapMs)}}</td>
+                <td ng-class="{fastest: $ctrl.isFastestLap(p)}">
+                    {{$ctrl.formatTime(p.bestLapMs)}}
+                </td>
+                <td ng-if="$ctrl.sectorCount > 0">{{$ctrl.theoreticalBest(p) !== undefined ? $ctrl.formatTime($ctrl.theoreticalBest(p)) : '-'}}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h5 ng-if="$ctrl.selectedLaps.length > 0">
+        {{'beamjoy.window.main.tabs.races.raceInfo.lapBreakdown' | translate}}:
+        {{$ctrl.selectedPlayerName}}
+    </h5>
+    <table class="race-info-table" ng-if="$ctrl.selectedLaps.length > 0">
+        <thead>
+            <tr>
+                <th class="text-center">{{'beamjoy.window.main.tabs.races.raceInfo.lap' | translate}}</th>
+                <th class="text-center">{{'beamjoy.window.main.tabs.races.raceInfo.lapTime' | translate}}</th>
+                <th ng-repeat="sector in $ctrl.sectors">S{{sector}}</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr ng-repeat="lap in $ctrl.selectedLaps track by $index">
+                <td class="text-center">{{lap.lap}}</td>
+                <td class="text-center">{{$ctrl.formatTime(lap.lapMs)}}</td>
+                <td
+                    ng-repeat="sector in $ctrl.sectors"
+                    ng-class="{fastest: $ctrl.isFastestSector(sector, lap.sectors[sector])}"
+                >
+                    {{lap.sectors[sector] !== undefined ? $ctrl.formatTime(lap.sectors[sector]) : '-'}}
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>

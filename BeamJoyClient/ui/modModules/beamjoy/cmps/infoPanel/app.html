@@ -1,0 +1,83 @@
+<style>
+    /* same reasoning as bj-confirm : fixed + viewport units since <beamjoy>'s own parent has no
+       explicit size, z-index high enough to sit above any window but below bj-confirm itself
+       (a discard-changes prompt should still be able to interrupt this) */
+    #beamjoy-info-panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 50000;
+        background: rgba(0, 0, 0, 0.55);
+    }
+
+    #beamjoy-info-panel .info-panel-box {
+        /* was 44em/90vw: too narrow to fit the race-info Live/Results tables' full column set
+           (#, Player, Lap, Best, Last, Gap, Leader, each with generous 1.25em cell padding)
+           without horizontal scrolling. A thin, easy-to-miss scrollbar at the bottom of an
+           already-compact panel made that read as "the last column is cut off / shifted off-screen"
+           rather than "scroll right to see it", so it's widened to fit content without scrolling
+           in the common case */
+        width: 60em;
+        max-width: 92vw;
+        height: 32em;
+        max-height: 85vh;
+        /* slightly transparent per direct request (was a fully opaque #1c1c1c); same RGB, alpha
+           reduced just enough to let the dimmed backdrop (and the race scene behind it) show
+           through faintly without hurting the table text's own readability */
+        background: rgba(28, 28, 28, 0.9);
+        border: thin solid gray;
+        border-radius: 0.4em;
+        box-shadow: 0 0.3em 1em rgba(0, 0, 0, 0.6);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    #beamjoy-info-panel .info-panel-header {
+        padding: 0.6em 0.8em;
+        border-bottom: thin solid gray;
+        color: white;
+        font-size: 1.1em;
+    }
+
+    #beamjoy-info-panel .info-panel-header .close {
+        font-size: 1.4em;
+        line-height: 1em;
+        cursor: pointer;
+        transition: color 0.2s ease-in-out;
+    }
+
+    #beamjoy-info-panel .info-panel-header .close:hover {
+        color: red;
+    }
+
+    #beamjoy-info-panel .info-panel-tabs {
+        flex-grow: 1;
+        overflow: hidden;
+        padding: 0 0.8em 0.6em;
+        color: white;
+    }
+</style>
+
+<div
+    id="beamjoy-info-panel"
+    class="d-flex align-center justify-center cursor-pointer"
+    ng-if="$ctrl.state.visible"
+    ng-click="$ctrl.close()"
+>
+    <div class="info-panel-box cursor-default" ng-click="$event.stopPropagation()">
+        <div class="info-panel-header d-flex align-center gap-1">
+            <b class="flex-grow-1">{{$ctrl.state.title}}</b>
+            <span class="close" ng-click="$ctrl.close()">×</span>
+        </div>
+        <div class="info-panel-tabs">
+            <bj-tabs
+                tabs="$ctrl.state.tabs"
+                active-tab-index="$ctrl.state.activeTabIndex"
+                on-tab-change="$ctrl.selectTab(tabId)"
+            ></bj-tabs>
+        </div>
+    </div>
+</div>

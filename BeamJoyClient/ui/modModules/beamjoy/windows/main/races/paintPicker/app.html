@@ -1,0 +1,44 @@
+<style>
+    bj-race-paint-picker .paint-slot-title {
+        opacity: 0.7;
+        margin: 0.3em 0 0.15em 0;
+    }
+    bj-race-paint-picker .paint-swatches {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.2em;
+        max-height: 6em;
+        overflow-y: auto;
+    }
+    bj-race-paint-picker .paint-swatch {
+        width: 1.1em;
+        height: 1.1em;
+        border-radius: 0.2em;
+        border: thin solid rgba(255, 255, 255, 0.3);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    bj-race-paint-picker .paint-swatch:hover {
+        border-color: white;
+    }
+</style>
+
+<div>
+    <div ng-repeat="slot in $ctrl.SLOTS">
+        <div class="paint-slot-title small">
+            {{'beamjoy.window.main.tabs.races.paint.slot' | translate}} {{slot}}
+        </div>
+        <div class="paint-swatches">
+            <div
+                class="paint-swatch"
+                ng-repeat="opt in $ctrl.options track by opt.key"
+                ng-style="{background: $ctrl.swatchColor(opt)}"
+                ng-click="$ctrl.pick($event, slot, opt)"
+                title="{{opt.key}}"
+            ></div>
+        </div>
+    </div>
+    <div ng-if="$ctrl.options.length === 0" class="opacity-70 small">
+        {{'beamjoy.window.main.tabs.races.paint.none' | translate}}
+    </div>
+</div>

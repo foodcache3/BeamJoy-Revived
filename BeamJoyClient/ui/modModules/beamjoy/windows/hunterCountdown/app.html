@@ -1,0 +1,64 @@
+<style>
+    #beamjoy-hunter-countdown {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 5;
+    }
+
+    #beamjoy-hunter-countdown .hunter-countdown-number {
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        font-size: 6em;
+        font-weight: bold;
+        line-height: 1;
+        color: white;
+        text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.6);
+    }
+
+    #beamjoy-hunter-countdown .hunter-countdown-number.go {
+        color: #4caf50;
+    }
+
+    #beamjoy-hunter-countdown .hunter-countdown-waiting {
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        font-size: 1.6em;
+        font-weight: bold;
+        color: white;
+        text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.6);
+    }
+
+    #beamjoy-hunter-countdown .hunter-countdown-finished {
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        font-size: 3em;
+        font-weight: bold;
+        line-height: 1;
+        color: #ffca28;
+        text-align: center;
+        text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.6);
+    }
+</style>
+
+<div
+    id="beamjoy-hunter-countdown"
+    class="pointer-events-none d-flex flex-column align-center justify-center"
+    ng-if="$ctrl.active"
+>
+    <div class="hunter-countdown-finished" ng-if="$ctrl.finished">
+        {{('beamjoy.window.main.tabs.hunter.winner.' + $ctrl.winner) | translate}}
+    </div>
+    <div class="hunter-countdown-waiting" ng-if="!$ctrl.finished && $ctrl.choosingOwn">
+        {{'beamjoy.window.hunterCountdown.chooseVehicle' | translate}}
+    </div>
+    <div class="hunter-countdown-waiting" ng-if="!$ctrl.finished && $ctrl.waiting && !$ctrl.choosingOwn">
+        {{'beamjoy.window.hunterCountdown.waitingForVehicles' | translate}}
+    </div>
+    <div
+        class="hunter-countdown-number"
+        ng-if="!$ctrl.finished && !$ctrl.waiting && !$ctrl.choosingOwn"
+        ng-class="{go: $ctrl.seconds === 0}"
+    >
+        {{$ctrl.seconds === 0 ? ('beamjoy.race.go' | translate) : $ctrl.seconds}}
+    </div>
+</div>

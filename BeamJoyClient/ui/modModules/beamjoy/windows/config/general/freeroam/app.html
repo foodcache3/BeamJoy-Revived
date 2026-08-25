@@ -1,0 +1,53 @@
+<table ng-if="$ctrl.init">
+    <tr>
+        <td class="text-right">
+            <span title="{{'beamjoy.window.config.tabs.general.freeroam.collisionsMode.tooltip'|translate}}">
+                {{"beamjoy.window.config.tabs.general.freeroam.collisionsMode"|translate}}
+            </span>
+        </td>
+        <td>
+            <bj-select
+                ng-model="$ctrl.data.CollisionsMode"
+                options="$ctrl.collisionsModeOptions"
+            ></bj-select>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right">
+            <span title="{{'beamjoy.window.config.tabs.general.freeroam.respawnGhostTimeout.tooltip'|translate}}">
+                {{"beamjoy.window.config.tabs.general.freeroam.respawnGhostTimeout"|translate}}
+            </span>
+        </td>
+        <td>
+            <div class="d-flex align-center gap-1">
+                <bj-toggle ng-model="$ctrl.data.RespawnGhostTimeoutEnabled"></bj-toggle>
+                <bj-slider
+                    ng-if="$ctrl.data.RespawnGhostTimeoutEnabled"
+                    class="flex-grow-1"
+                    title="{{'beamjoy.window.config.tabs.general.freeroam.respawnGhostTimeout'|translate}}"
+                    ng-model="$ctrl.data.RespawnGhostTimeout"
+                    min="1"
+                    max="60"
+                    hard-max="600"
+                    step="1"
+                ></bj-slider>
+            </div>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right">
+            <span title="{{'beamjoy.window.config.tabs.general.freeroam.respawnGhostDistance.tooltip'|translate}}">
+                {{"beamjoy.window.config.tabs.general.freeroam.respawnGhostDistance"|translate}}
+            </span>
+        </td>
+        <td>
+            <bj-slider
+                ng-model="$ctrl.data.RespawnGhostDistance"
+                min="0"
+                max="20"
+                hard-max="100"
+                step="1"
+            ></bj-slider>
+        </td>
+    </tr>
+</table>

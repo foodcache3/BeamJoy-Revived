@@ -1,0 +1,66 @@
+<style>
+    bj-config-races .race-row {
+        transition: background-color 0.2s ease-in-out;
+    }
+    bj-config-races .race-row:hover {
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-config-races .race-mode {
+        opacity: 0.7;
+        font-size: 0.85em;
+    }
+    bj-config-races .opacity-70 {
+        opacity: 0.7;
+    }
+</style>
+
+<div ng-if="$ctrl.editingId === null">
+    <div class="d-flex gap-1 mb-2 align-center">
+        <button
+            class="btn success"
+            ng-click="$ctrl.openEditor(null)"
+            title="{{'beamjoy.window.config.tabs.races.create' | translate}}"
+        >
+            <icon name="add"></icon>
+        </button>
+    </div>
+
+    <div
+        class="race-row d-flex p-1 px-2 gap-1 cursor-pointer align-center"
+        ng-repeat="race in $ctrl.races track by race.id"
+        ng-click="$ctrl.openEditor(race.id)"
+    >
+        <span class="flex-grow-1">
+            {{race.name}}
+            <span class="race-mode">
+                {{('beamjoy.window.config.tabs.races.modes.' + race.mode) | translate}}
+                &middot; {{race.gates}} {{'beamjoy.window.config.tabs.races.gates' | translate}}
+                &middot; {{$ctrl.formatDistance(race.distance)}}
+                &middot; {{'beamjoy.window.config.tabs.races.author' | translate}}:
+                {{race.author || ('beamjoy.window.config.tabs.races.unknownAuthor' | translate)}}
+            </span>
+        </span>
+        <!-- ng-show, not ng-if : this row already has its own ng-click (openEditor), and an ng-if'd
+             button nested inside an already-clickable row is the exact structural pattern that was
+             also found to break click-binding for the editor's own Save-as-New/Delete buttons in
+             this CEF/Angular build (see editor/app.html). -->
+        <button
+            class="btn danger"
+            ng-show="$ctrl.canManage(race)"
+            ng-click="$ctrl.deleteRace($event, race)"
+            title="{{'beamjoy.common.delete' | translate}}"
+        >
+            <icon name="delete"></icon>
+        </button>
+    </div>
+
+    <div ng-if="$ctrl.races.length === 0" class="p-2 opacity-70">
+        {{'beamjoy.window.config.tabs.races.empty' | translate}}
+    </div>
+</div>
+
+<bj-config-races-editor
+    ng-if="$ctrl.editingId !== null"
+    race-id="$ctrl.editingId"
+    on-close="$ctrl.closeEditor()"
+></bj-config-races-editor>

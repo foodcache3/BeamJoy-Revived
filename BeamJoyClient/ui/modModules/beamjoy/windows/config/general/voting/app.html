@@ -1,0 +1,56 @@
+<table ng-if="$ctrl.init">
+    <tr>
+        <td class="text-right">
+            {{"beamjoy.window.config.tabs.general.voting.mapVoteThreshold"|translate}}
+        </td>
+        <td>
+            <bj-slider
+                ng-model="$ctrl.data.MapVoteThresholdPercent"
+                min="1"
+                max="100"
+                step="1"
+            ></bj-slider>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right">
+            {{"beamjoy.window.config.tabs.general.voting.mapVoteTimeout"|translate}}
+        </td>
+        <td>
+            <bj-slider
+                ng-model="$ctrl.data.MapVoteTimeout"
+                min="5"
+                max="120"
+                hard-max="600"
+                step="5"
+            ></bj-slider>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right">
+            {{"beamjoy.window.config.tabs.general.voting.kickVoteThreshold"|translate}}
+        </td>
+        <td>
+            <bj-slider
+                ng-model="$ctrl.data.KickVoteThresholdPercent"
+                min="1"
+                max="100"
+                step="1"
+            ></bj-slider>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right">
+            {{"beamjoy.window.config.tabs.general.voting.kickVoteTimeout"|translate}}
+        </td>
+        <td>
+            <bj-slider
+                ng-model="$ctrl.data.KickVoteTimeout"
+                min="5"
+                max="120"
+                hard-max="600"
+                step="5"
+            ></bj-slider>
+        </td>
+    </tr>
+</table>

@@ -1,0 +1,233 @@
+<style>
+    /* position: fixed + viewport units, not position-absolute/percentage sizing: this
+       component's parent (<beamjoy>) has no explicit size of its own, so a percentage-sized
+       absolute box here could collapse to zero size and render invisibly */
+    #beamjoy-race-hud {
+        position: fixed;
+        top: 2vh;
+        right: 1vw;
+        z-index: 4;
+        width: 15em;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC",
+            sans-serif;
+        color: white;
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 0.5em;
+        padding: 0.7em 0.9em;
+    }
+
+    #beamjoy-race-hud .hud-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 0.35em;
+    }
+
+    #beamjoy-race-hud .hud-name {
+        font-weight: bold;
+        font-size: 1em;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #beamjoy-race-hud .hud-spectating {
+        font-size: 0.8em;
+        font-style: italic;
+        opacity: 0.8;
+        margin-bottom: 0.35em;
+        color: #ffd54f;
+    }
+
+    #beamjoy-race-hud .hud-position {
+        font-weight: bold;
+        font-size: 2em;
+        line-height: 1;
+        opacity: 0.95;
+        white-space: nowrap;
+        margin-left: 0.5em;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    #beamjoy-race-hud .hud-progress {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.85em;
+        opacity: 0.75;
+        margin-bottom: 0.15em;
+    }
+
+    #beamjoy-race-hud .hud-timer {
+        font-variant-numeric: tabular-nums;
+        font-weight: bold;
+        font-size: 1.6em;
+        line-height: 1.1;
+        margin-bottom: 0.15em;
+    }
+
+    #beamjoy-race-hud .hud-laps {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8em;
+        font-variant-numeric: tabular-nums;
+        opacity: 0.85;
+        margin-bottom: 0.3em;
+    }
+
+    #beamjoy-race-hud .hud-laps .best {
+        color: #ba68f8;
+    }
+
+    #beamjoy-race-hud .hud-delta {
+        display: inline-block;
+        font-variant-numeric: tabular-nums;
+        font-weight: bold;
+        font-size: 0.95em;
+        padding: 0.1em 0.5em;
+        border-radius: 0.3em;
+        margin-bottom: 0.4em;
+    }
+
+    #beamjoy-race-hud .hud-delta.ahead {
+        background: rgba(139, 195, 74, 0.3);
+        color: #aed581;
+    }
+
+    #beamjoy-race-hud .hud-delta.behind {
+        background: rgba(229, 115, 115, 0.3);
+        color: #ef9a9a;
+    }
+
+    #beamjoy-race-hud .hud-gaps {
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+        padding-top: 0.35em;
+        font-size: 0.85em;
+    }
+
+    #beamjoy-race-hud .hud-gap-row {
+        display: flex;
+        justify-content: space-between;
+        opacity: 0.9;
+        cursor: pointer;
+    }
+
+    #beamjoy-race-hud .hud-gap-row .name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        margin-right: 0.5em;
+    }
+
+    #beamjoy-race-hud .hud-gap-row .gap {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    #beamjoy-race-hud .hud-standings {
+        margin-top: 0.3em;
+        max-height: 12em;
+        overflow-y: auto;
+    }
+
+    #beamjoy-race-hud .hud-standings tr.finished {
+        color: #8bc34a;
+    }
+
+    #beamjoy-race-hud .hud-standings tr.dnf {
+        color: #e57373;
+        opacity: 0.7;
+    }
+
+    #beamjoy-race-hud .hud-standings tr.self {
+        font-weight: bold;
+    }
+
+    #beamjoy-race-hud .hud-standings table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    #beamjoy-race-hud .hud-standings td {
+        padding: 0.1em 0.2em;
+    }
+
+    #beamjoy-race-hud .hud-standings td.rank {
+        opacity: 0.7;
+        width: 1.5em;
+    }
+
+    #beamjoy-race-hud .hud-standings td.gap {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+</style>
+
+<div id="beamjoy-race-hud" ng-if="$ctrl.active">
+    <div class="hud-header">
+        <div class="hud-name">{{$ctrl.raceName}}</div>
+        <div class="hud-position" ng-if="$ctrl.position">
+            P{{$ctrl.position}}/{{$ctrl.totalRacers}}
+        </div>
+    </div>
+
+    <div class="hud-spectating" ng-if="$ctrl.spectatingPlayerName">
+        Spectating {{$ctrl.spectatingPlayerName}}
+    </div>
+
+    <div class="hud-progress" ng-if="$ctrl.self">
+        <span ng-if="$ctrl.totalLaps > 1">Lap {{$ctrl.self.currentLap}}/{{$ctrl.totalLaps}}</span>
+        <span ng-if="$ctrl.totalLaps <= 1">&nbsp;</span>
+        <span>Gate {{$ctrl.self.currentGate}}/{{$ctrl.totalGates}}</span>
+        <span ng-if="$ctrl.totalSectors > 1">Sector {{$ctrl.self.currentSector}}/{{$ctrl.totalSectors}}</span>
+    </div>
+
+    <div class="hud-timer" ng-if="$ctrl.self">
+        {{$ctrl.formatTime($ctrl.totalLaps > 1 ? $ctrl.self.currentLapElapsedMs : $ctrl.elapsedMs)}}
+    </div>
+
+    <div class="hud-laps" ng-if="$ctrl.self && $ctrl.totalLaps > 1">
+        <span>Last {{$ctrl.formatTime($ctrl.self.lastLapMs)}}</span>
+        <span class="best">Best {{$ctrl.formatTime($ctrl.self.bestLapMs)}}</span>
+    </div>
+
+    <div
+        class="hud-delta"
+        ng-if="$ctrl.self.liveDeltaMs !== null && $ctrl.self.liveDeltaMs !== undefined"
+        ng-class="$ctrl.self.liveDeltaMs <= 0 ? 'ahead' : 'behind'"
+    >
+        {{$ctrl.formatDelta($ctrl.self.liveDeltaMs)}}
+    </div>
+
+    <div class="hud-gaps" ng-if="$ctrl.position">
+        <div class="hud-gap-row" ng-if="$ctrl.ahead" ng-click="$ctrl.toggleExpanded()">
+            <span class="name">▲ {{$ctrl.ahead.playerName}}</span>
+            <span class="gap">{{$ctrl.opponentLabel($ctrl.ahead)}}</span>
+        </div>
+        <div class="hud-gap-row" ng-if="$ctrl.behind" ng-click="$ctrl.toggleExpanded()">
+            <span class="name">▼ {{$ctrl.behind.playerName}}</span>
+            <span class="gap">{{$ctrl.opponentLabel($ctrl.behind)}}</span>
+        </div>
+        <div
+            class="hud-gap-row"
+            ng-if="!$ctrl.ahead && !$ctrl.behind"
+            ng-click="$ctrl.toggleExpanded()"
+        >
+            <span class="name">Standings</span>
+            <span class="gap">{{$ctrl.expanded ? '▲' : '▼'}}</span>
+        </div>
+
+        <div class="hud-standings" ng-if="$ctrl.expanded">
+            <table>
+                <tr
+                    ng-repeat="row in $ctrl.standings track by $index"
+                    ng-class="{finished: row.finished, dnf: row.dnf, self: row.playerName === $ctrl.self.playerName}"
+                >
+                    <td class="rank">{{$index + 1}}</td>
+                    <td>{{row.playerName}}</td>
+                    <td class="gap">{{$ctrl.opponentLabel(row)}}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</div>

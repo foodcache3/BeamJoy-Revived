@@ -1,0 +1,119 @@
+<style>
+    /* fixed + viewport units, not position-absolute/w-100/h-100 : this component's parent
+       (<beamjoy>) has no explicit size of its own (unlike bj-hud/bj-main/bj-config, which each
+       get explicit pixel/viewport-unit dimensions pushed to them individually), so a
+       percentage-sized absolute box here could collapse to zero size and render invisibly */
+    #beamjoy-race-countdown {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 5;
+    }
+
+    #beamjoy-race-countdown .race-countdown-name {
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC",
+            sans-serif;
+        font-size: 1.6em;
+        font-weight: bold;
+        color: white;
+        text-shadow: 3px 3px 5px rgba(0, 0, 0, 0.43);
+        margin-bottom: 0.2em;
+    }
+
+    #beamjoy-race-countdown .race-countdown-number {
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC",
+            sans-serif;
+        font-size: 6em;
+        font-weight: bold;
+        line-height: 1;
+        color: white;
+        text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.6);
+    }
+
+    #beamjoy-race-countdown .race-countdown-number.go {
+        color: #4caf50;
+    }
+
+    #beamjoy-race-countdown .race-countdown-number.dnf {
+        color: rgb(199, 0, 0);
+    }
+
+    #beamjoy-race-countdown .race-countdown-number.penalty {
+        color: rgb(255, 152, 0);
+        font-size: 4em;
+    }
+
+    #beamjoy-race-countdown .race-countdown-time {
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC",
+            sans-serif;
+        font-size: 1.6em;
+        font-weight: bold;
+        color: white;
+        text-shadow: 3px 3px 5px rgba(0, 0, 0, 0.43);
+        margin-top: 0.2em;
+    }
+
+    #beamjoy-race-countdown .race-countdown-badge {
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC",
+            sans-serif;
+        font-size: 1.2em;
+        font-weight: bold;
+        text-shadow: 3px 3px 5px rgba(0, 0, 0, 0.43);
+        margin-top: 0.2em;
+    }
+
+    #beamjoy-race-countdown .race-countdown-badge.record {
+        color: #ffd54f;
+    }
+
+    #beamjoy-race-countdown .race-countdown-badge.pb {
+        color: #4caf50;
+    }
+</style>
+
+<div
+    id="beamjoy-race-countdown"
+    class="pointer-events-none d-flex flex-column align-center justify-center"
+    ng-if="$ctrl.active"
+>
+    <div class="race-countdown-name" ng-if="$ctrl.raceName">
+        {{$ctrl.raceName}}
+    </div>
+    <div
+        class="race-countdown-number"
+        ng-if="$ctrl.mode === 'countdown'"
+        ng-class="{go: $ctrl.seconds === 0}"
+    >
+        {{$ctrl.seconds === 0 ? ('beamjoy.race.go' | translate) : $ctrl.seconds}}
+    </div>
+    <div class="race-countdown-number go" ng-if="$ctrl.mode === 'finished'">
+        {{'beamjoy.race.finished' | translate}}
+    </div>
+    <div class="race-countdown-time" ng-if="$ctrl.mode === 'finished' && $ctrl.timeMs != null">
+        <span ng-if="$ctrl.isBestLap">{{'beamjoy.window.main.tabs.races.raceInfo.bestLap' | translate}}: </span>
+        {{$ctrl.formatTime($ctrl.timeMs)}}
+    </div>
+    <div
+        class="race-countdown-badge record"
+        ng-if="$ctrl.mode === 'finished' && $ctrl.isNewRecord"
+    >
+        {{'beamjoy.race.newRecord' | translate}}
+    </div>
+    <div
+        class="race-countdown-badge pb"
+        ng-if="$ctrl.mode === 'finished' && $ctrl.isNewPB && !$ctrl.isNewRecord"
+    >
+        {{'beamjoy.race.newPB' | translate}}
+    </div>
+    <div class="race-countdown-number dnf" ng-if="$ctrl.mode === 'dnf'">
+        {{'beamjoy.race.dnf' | translate}}
+    </div>
+    <div class="race-countdown-badge" ng-if="$ctrl.mode === 'penalty'" style="color: rgb(255, 152, 0);">
+        {{'beamjoy.race.resetPenaltyLabel' | translate}}
+    </div>
+    <div class="race-countdown-number penalty" ng-if="$ctrl.mode === 'penalty'">
+        {{$ctrl.seconds}}
+    </div>
+</div>

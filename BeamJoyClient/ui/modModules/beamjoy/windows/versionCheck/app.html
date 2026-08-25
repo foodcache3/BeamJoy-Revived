@@ -1,0 +1,40 @@
+<style>
+    #beamjoy-version-check {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 1em;
+        background: rgb(150, 40, 0);
+        color: white;
+        padding: 0.5em 1em;
+        text-align: center;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC",
+            sans-serif;
+        font-size: 0.95em;
+        box-shadow: 0 0.2em 0.5em rgba(0, 0, 0, 0.4);
+    }
+
+    #beamjoy-version-check .version-check-message {
+        flex: 1 1 auto;
+    }
+
+    #beamjoy-version-check .version-check-close {
+        flex: 0 0 auto;
+    }
+</style>
+
+<div id="beamjoy-version-check" ng-if="$ctrl.mismatched && !$ctrl.dismissed">
+    <span class="version-check-message">
+        {{'beamjoy.versionCheck.message' | translate}}
+        ({{'beamjoy.versionCheck.uiBuild' | translate}} {{$ctrl.uiBuild}},
+        {{'beamjoy.versionCheck.modBuild' | translate}} {{$ctrl.luaBuild}})
+    </span>
+    <button class="btn info version-check-close" ng-click="$ctrl.dismiss()">
+        {{'beamjoy.common.close' | translate}}
+    </button>
+</div>

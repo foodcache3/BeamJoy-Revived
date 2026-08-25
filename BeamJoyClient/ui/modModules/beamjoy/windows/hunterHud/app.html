@@ -1,0 +1,107 @@
+<style>
+    #beamjoy-hunter-hud {
+        position: fixed;
+        top: 2vh;
+        right: 1vw;
+        z-index: 4;
+        width: 15em;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        color: white;
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 0.5em;
+        padding: 0.7em 0.9em;
+    }
+
+    #beamjoy-hunter-hud .hud-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 0.35em;
+        font-weight: bold;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    #beamjoy-hunter-hud .hud-role.hunted {
+        color: #ff5252;
+    }
+    #beamjoy-hunter-hud .hud-role.hunter {
+        color: #ffd54f;
+    }
+
+    #beamjoy-hunter-hud .hud-spectating {
+        font-size: 0.8em;
+        font-style: italic;
+        opacity: 0.8;
+        margin-bottom: 0.35em;
+        color: #ffd54f;
+    }
+
+    #beamjoy-hunter-hud .hud-timer {
+        font-variant-numeric: tabular-nums;
+        font-weight: bold;
+        font-size: 1.6em;
+        line-height: 1.1;
+        margin-bottom: 0.3em;
+    }
+
+    #beamjoy-hunter-hud .hud-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.9em;
+        opacity: 0.85;
+        margin-bottom: 0.15em;
+    }
+
+    #beamjoy-hunter-hud .hud-revealed {
+        font-weight: bold;
+        color: #ff5252;
+        text-align: center;
+        margin-top: 0.3em;
+    }
+
+    #beamjoy-hunter-hud .hud-reset-locked {
+        font-weight: bold;
+        color: #ff5252;
+        text-align: center;
+        margin-top: 0.3em;
+    }
+
+    #beamjoy-hunter-hud .hud-row.timed {
+        color: #ffd54f;
+    }
+</style>
+
+<div id="beamjoy-hunter-hud" ng-if="$ctrl.active">
+    <div class="hud-header">
+        <span>{{'beamjoy.window.hunterHud.title' | translate}}</span>
+        <span class="hud-role" ng-class="$ctrl.role">
+            {{('beamjoy.window.hunterHud.role.' + ($ctrl.role || 'hunter')) | translate}}
+        </span>
+    </div>
+    <div class="hud-spectating" ng-if="$ctrl.spectatingPlayerName">
+        {{'beamjoy.window.hunterHud.spectating' | translate}} {{$ctrl.spectatingPlayerName}}
+    </div>
+    <div class="hud-timer">{{$ctrl.formatTime($ctrl.huntElapsedMs)}}</div>
+    <div class="hud-row">
+        <span>{{'beamjoy.window.hunterHud.huntersLeft' | translate}}</span>
+        <span>{{$ctrl.huntersLeft}}</span>
+    </div>
+    <div class="hud-row" ng-if="$ctrl.role === 'hunted' && $ctrl.totalWaypoints != null">
+        <span>{{'beamjoy.window.hunterHud.waypoints' | translate}}</span>
+        <span>{{$ctrl.waypointsReached}}/{{$ctrl.totalWaypoints}}</span>
+    </div>
+    <div class="hud-row timed" ng-if="$ctrl.winCondition === 'timed' && $ctrl.timedSecondsLeft != null">
+        <span>{{'beamjoy.window.hunterHud.timeLeft' | translate}}</span>
+        <span>{{$ctrl.formatTime($ctrl.timedSecondsLeft * 1000)}}</span>
+    </div>
+    <div class="hud-row" ng-if="$ctrl.role === 'hunter' && $ctrl.hunterResetCount != null">
+        <span>{{'beamjoy.window.hunterHud.resetCount' | translate}}</span>
+        <span>{{$ctrl.hunterResetCount}}</span>
+    </div>
+    <div class="hud-revealed" ng-if="$ctrl.huntedRevealed">
+        {{'beamjoy.window.hunterHud.exposed' | translate}}
+    </div>
+    <div class="hud-reset-locked" ng-if="$ctrl.huntedResetLocked">
+        {{'beamjoy.window.hunterHud.resetLocked' | translate}}
+    </div>
+</div>

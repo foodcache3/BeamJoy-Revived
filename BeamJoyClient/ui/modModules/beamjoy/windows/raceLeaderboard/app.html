@@ -1,0 +1,86 @@
+<style>
+    bj-race-leaderboard {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+    bj-race-leaderboard .leaderboard-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: auto;
+    }
+    bj-race-leaderboard tr.self {
+        background: rgba(230, 92, 0, 0.25);
+    }
+    bj-race-leaderboard tr.rank-1 {
+        color: #ffd54f;
+    }
+    bj-race-leaderboard tr.rank-2 {
+        color: #cfd8dc;
+    }
+    bj-race-leaderboard tr.rank-3 {
+        color: #d7a06a;
+    }
+    /* pinned self-row, per direct request : separate from the scrollable top-100 table (not just
+       another row inside it), with a bit of spacing so it doesn't read as "part of" the list */
+    bj-race-leaderboard .leaderboard-self-pinned {
+        flex-shrink: 0;
+        margin-top: 0.6em;
+        padding-top: 0.6em;
+        border-top: thin solid rgba(255, 255, 255, 0.2);
+    }
+</style>
+
+<div ng-if="!$ctrl.loaded" class="p-2 opacity-70">
+    {{'beamjoy.window.main.tabs.races.leaderboard.loading' | translate}}
+</div>
+<div ng-if="$ctrl.loaded && $ctrl.entries.length === 0" class="p-2 opacity-70">
+    {{'beamjoy.window.main.tabs.races.leaderboard.empty' | translate}}
+</div>
+<div class="leaderboard-scroll" ng-if="$ctrl.loaded && $ctrl.entries.length > 0">
+    <table class="race-info-table">
+        <thead>
+            <tr>
+                <th class="text-center">#</th>
+                <th class="text-left">
+                    {{'beamjoy.window.main.tabs.races.leaderboard.player' | translate}}
+                </th>
+                <th>{{'beamjoy.window.main.tabs.races.leaderboard.time' | translate}}</th>
+                <th class="text-left">
+                    {{'beamjoy.window.main.tabs.races.leaderboard.vehicle' | translate}}
+                </th>
+                <th>{{'beamjoy.window.main.tabs.races.leaderboard.date' | translate}}</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr
+                ng-repeat="entry in $ctrl.entries track by entry.playerName"
+                ng-class="{
+                    self: $ctrl.selfEntry && entry.playerName === $ctrl.selfEntry.playerName,
+                    'rank-1': entry.rank === 1,
+                    'rank-2': entry.rank === 2,
+                    'rank-3': entry.rank === 3
+                }"
+            >
+                <td class="text-center">{{entry.rank}}</td>
+                <td class="text-left">{{entry.playerName}}</td>
+                <td>{{$ctrl.formatTime(entry.time)}}</td>
+                <td class="text-left">{{entry.model}}</td>
+                <td>{{$ctrl.formatDate(entry.date)}}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+<div class="leaderboard-self-pinned" ng-if="$ctrl.selfEntry && !$ctrl.selfInTop()">
+    <table class="race-info-table">
+        <tbody>
+            <tr class="self">
+                <td class="text-center">{{$ctrl.selfEntry.rank}}</td>
+                <td class="text-left">{{$ctrl.selfEntry.playerName}}</td>
+                <td>{{$ctrl.formatTime($ctrl.selfEntry.time)}}</td>
+                <td class="text-left">{{$ctrl.selfEntry.model}}</td>
+                <td>{{$ctrl.formatDate($ctrl.selfEntry.date)}}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>

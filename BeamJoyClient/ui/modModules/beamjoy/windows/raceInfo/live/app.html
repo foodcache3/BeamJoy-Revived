@@ -1,0 +1,104 @@
+<style>
+    bj-race-info-live {
+        display: block;
+        height: 100%;
+        overflow: auto;
+    }
+    /* REAL root cause of "the columns are shifted" surviving two earlier rounds of fixes here:
+       a GLOBAL rule (cmps/beamjoy-style's own "TABLE UTILS" block: `beamjoy table`,
+       `beamjoy table td`, `beamjoy table td:last-child`) forces EVERY table in the entire app to
+       width:100% with every column fit-content EXCEPT the last, which explicitly gets width:auto
+       and therefore absorbs 100% of whatever width is left over. That's exactly the "last column
+       stretched/shifted" symptom, and neither previous round's fix (touching only this file's own
+       `bj-race-info-live table/td` rules) could ever have beaten it: `beamjoy table td`
+       (3 chained type selectors) is HIGHER CSS SPECIFICITY than `bj-race-info-live td` (2 type
+       selectors) regardless of source order, so the global rule silently won every time no matter
+       what was written here. That global convention makes sense for simple 2-column key/value
+       settings tables elsewhere in this codebase; it actively fights a many-column data table
+       like this one. Fixed by keying every rule off a class (`.race-info-table`, on the <table>
+       tag below) instead of the bare element: a single class selector outranks any number of
+       chained type selectors, so this now reliably wins regardless of where either stylesheet
+       ends up in the cascade. */
+    .race-info-table {
+        border-collapse: collapse;
+        font-size: 0.9em;
+        /* explicitly NOT width:100%: sizes to its own content and sits left-aligned in this
+           component's own block-level, overflow:auto root (above), so a race with few columns
+           doesn't get artificially stretched and one with many just scrolls, populating from the
+           left rather than distorting existing columns to make room */
+        width: auto;
+    }
+    .race-info-table th,
+    .race-info-table td {
+        /* explicit width:auto on every cell: undoes the global rule's td{width:1px} +
+           td:last-child{width:auto} combination (the actual mechanism that dumped all leftover
+           space onto the last column) so every column just sizes to its own real content via
+           normal table auto-layout, last column included */
+        width: auto;
+        /* more breathing room between sector/stat columns, per direct request: safe to be this
+           generous now that the table is no longer fighting to avoid ever triggering a scrollbar */
+        padding: 0.5em 1.1em;
+        text-align: right;
+        white-space: nowrap;
+    }
+    .race-info-table th.text-left,
+    .race-info-table td.text-left {
+        text-align: left;
+    }
+    .race-info-table th.text-center,
+    .race-info-table td.text-center {
+        text-align: center;
+    }
+    .race-info-table th {
+        border-bottom: thin solid gray;
+        opacity: 0.8;
+        font-weight: normal;
+    }
+    bj-race-info-live tr.finished {
+        color: #8bc34a;
+    }
+    bj-race-info-live tr.dnf {
+        color: #e57373;
+        opacity: 0.7;
+    }
+    bj-race-info-live td.fastest {
+        color: #ba68f8;
+        font-weight: bold;
+    }
+</style>
+
+<div ng-if="!$ctrl.active" class="opacity-70 p-2">
+    {{'beamjoy.window.main.tabs.races.raceInfo.noActiveRace' | translate}}
+</div>
+
+<table class="race-info-table" ng-if="$ctrl.active">
+    <thead>
+        <tr>
+            <th class="text-center">#</th>
+            <th class="text-left">{{'beamjoy.window.main.tabs.races.raceInfo.player' | translate}}</th>
+            <th class="text-center" ng-if="$ctrl.totalLaps > 1">
+                {{'beamjoy.window.main.tabs.races.raceInfo.lap' | translate}}
+            </th>
+            <th>{{'beamjoy.window.main.tabs.races.raceInfo.lastLap' | translate}}</th>
+            <th ng-if="$ctrl.multiplayer()">{{'beamjoy.window.main.tabs.races.raceInfo.gap' | translate}}</th>
+            <th ng-if="$ctrl.multiplayer()">{{'beamjoy.window.main.tabs.races.raceInfo.leader' | translate}}</th>
+            <th>{{'beamjoy.window.main.tabs.races.raceInfo.bestLap' | translate}}</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr
+            ng-repeat="p in $ctrl.participants track by $index"
+            ng-class="{finished: p.finished, dnf: p.dnf}"
+        >
+            <td class="text-center">{{$index + 1}}</td>
+            <td class="text-left">{{p.playerName}}</td>
+            <td class="text-center" ng-if="$ctrl.totalLaps > 1">{{p.currentLap}}/{{$ctrl.totalLaps}}</td>
+            <td>{{$ctrl.lastLapTime(p) !== undefined ? $ctrl.formatTime($ctrl.lastLapTime(p)) : '-'}}</td>
+            <td ng-if="$ctrl.multiplayer()">{{$ctrl.aheadGapLabel(p, $index)}}</td>
+            <td ng-if="$ctrl.multiplayer()">{{$ctrl.leaderGapLabel(p, $index)}}</td>
+            <td ng-class="{fastest: $ctrl.isFastestLap(p)}">
+                {{$ctrl.formatTime(p.bestLapMs)}}
+            </td>
+        </tr>
+    </tbody>
+</table>

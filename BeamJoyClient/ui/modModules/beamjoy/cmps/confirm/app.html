@@ -1,0 +1,76 @@
+<style>
+    /* fixed + viewport units (same reasoning as bj-race-countdown/bj-race-hud : <beamjoy>'s own
+       parent has no explicit size) ; z-index far above anything a window's focus-bump counter
+       could realistically reach (starts at 10, +1 per click) so this always sits on top and its
+       full-viewport backdrop actually blocks clicks to the window/tabs underneath instead of just
+       visually covering them */
+    #beamjoy-confirm {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 99999;
+        background: rgba(0, 0, 0, 0.55);
+    }
+
+    #beamjoy-confirm .confirm-box {
+        min-width: 20em;
+        max-width: 32em;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        background: #1c1c1c;
+        border: thin solid gray;
+        border-radius: 0.4em;
+        padding: 1em;
+        box-shadow: 0 0.3em 1em rgba(0, 0, 0, 0.6);
+    }
+
+    #beamjoy-confirm .confirm-message {
+        margin-bottom: 1em;
+        white-space: pre-line;
+        color: white;
+        overflow-y: auto;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    #beamjoy-confirm .confirm-input {
+        width: 100%;
+        margin-bottom: 1em;
+    }
+</style>
+
+<div
+    id="beamjoy-confirm"
+    class="d-flex align-center justify-center cursor-pointer"
+    ng-if="$ctrl.state.visible"
+    ng-click="$ctrl.cancel($event)"
+>
+    <div class="confirm-box cursor-default" ng-click="$event.stopPropagation()">
+        <div class="confirm-message">{{$ctrl.state.message}}</div>
+        <input
+            ng-if="$ctrl.state.showInput"
+            type="text"
+            class="confirm-input"
+            ng-model="$ctrl.state.inputValue"
+            placeholder="{{$ctrl.state.inputPlaceholder}}"
+            maxlength="{{$ctrl.state.inputMaxLength}}"
+            ng-keydown="$event.key === 'Enter' && $ctrl.confirm($event)"
+        />
+        <div class="d-flex gap-1 justify-end">
+            <button class="btn info" ng-click="$ctrl.cancel($event)" ng-if="!$ctrl.state.infoOnly">
+                {{'beamjoy.common.cancel' | translate}}
+            </button>
+            <button
+                class="btn"
+                ng-class="{danger: $ctrl.state.dangerous, success: !$ctrl.state.dangerous}"
+                ng-disabled="$ctrl.state.showInput && !$ctrl.state.inputValue.trim()"
+                ng-click="$ctrl.confirm($event)"
+            >
+                {{($ctrl.state.infoOnly ? 'beamjoy.common.close' : 'beamjoy.common.confirm') | translate}}
+            </button>
+        </div>
+    </div>
+</div>

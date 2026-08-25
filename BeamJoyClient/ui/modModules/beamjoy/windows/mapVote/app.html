@@ -1,0 +1,63 @@
+<style>
+    #beamjoy-map-vote {
+        position: fixed;
+        top: 4em;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 4;
+        background: rgba(20, 20, 20, 0.85);
+        border-radius: 0.4em;
+        padding: 0.8em 1.2em;
+        min-width: 16em;
+        text-align: center;
+        color: white;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC",
+            sans-serif;
+    }
+
+    #beamjoy-map-vote .map-vote-title {
+        font-weight: bold;
+        font-size: 1.1em;
+        margin-bottom: 0.2em;
+    }
+
+    #beamjoy-map-vote .map-vote-sub {
+        opacity: 0.8;
+        font-size: 0.9em;
+        margin-bottom: 0.5em;
+    }
+
+    #beamjoy-map-vote .map-vote-actions {
+        display: flex;
+        gap: 0.5em;
+        justify-content: center;
+    }
+</style>
+
+<div id="beamjoy-map-vote" ng-if="$ctrl.active">
+    <div class="map-vote-title">
+        {{'beamjoy.mapVote.title' | translate}} {{$ctrl.targetMapLabel}}
+    </div>
+    <div class="map-vote-sub">
+        {{'beamjoy.mapVote.startedBy' | translate}} {{$ctrl.creatorName}} ·
+        {{$ctrl.voterNames.length}}/{{$ctrl.threshold}}
+        {{'beamjoy.mapVote.votes' | translate}} ·
+        {{$ctrl.secondsLeft}}{{'beamjoy.mapVote.secondsShort' | translate}}
+    </div>
+    <div class="map-vote-actions">
+        <button
+            class="btn"
+            ng-class="$ctrl.hasVoted() ? 'neutral' : 'success'"
+            ng-click="$ctrl.toggleVote()"
+        >
+            {{($ctrl.hasVoted() ? 'beamjoy.mapVote.leave' : 'beamjoy.mapVote.join') | translate}}
+        </button>
+        <button
+            class="btn danger"
+            ng-if="$ctrl.canCancel()"
+            ng-click="$ctrl.cancel()"
+        >
+            {{'beamjoy.mapVote.cancel' | translate}}
+        </button>
+    </div>
+</div>

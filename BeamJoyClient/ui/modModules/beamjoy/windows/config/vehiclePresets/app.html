@@ -1,0 +1,56 @@
+<style>
+    bj-config-vehicle-presets .preset-row {
+        transition: background-color 0.2s ease-in-out;
+    }
+    bj-config-vehicle-presets .preset-row:hover {
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-config-vehicle-presets .opacity-70 {
+        opacity: 0.7;
+    }
+</style>
+
+<div ng-if="$ctrl.editingId === null">
+    <div class="d-flex gap-1 mb-2 align-center">
+        <button
+            class="btn success"
+            ng-click="$ctrl.openEditor(null)"
+            title="{{'beamjoy.window.config.tabs.vehiclePresets.create' | translate}}"
+        >
+            <icon name="add"></icon>
+        </button>
+    </div>
+
+    <div
+        class="preset-row d-flex p-1 px-2 gap-1 cursor-pointer align-center"
+        ng-repeat="preset in $ctrl.presets track by preset.id"
+        ng-click="$ctrl.openEditor(preset.id)"
+    >
+        <span class="flex-grow-1">
+            {{preset.name}}
+            <span class="opacity-70 small">
+                &middot; {{preset.entries.length}}
+                {{'beamjoy.window.config.tabs.vehiclePresets.vehicles' | translate}}
+                &middot; {{'beamjoy.window.config.tabs.races.author' | translate}}:
+                {{preset.author || ('beamjoy.window.config.tabs.races.unknownAuthor' | translate)}}
+            </span>
+        </span>
+        <button
+            class="btn danger"
+            ng-click="$ctrl.deletePreset($event, preset)"
+            title="{{'beamjoy.common.delete' | translate}}"
+        >
+            <icon name="delete"></icon>
+        </button>
+    </div>
+
+    <div ng-if="$ctrl.presets.length === 0" class="p-2 opacity-70">
+        {{'beamjoy.window.config.tabs.vehiclePresets.empty' | translate}}
+    </div>
+</div>
+
+<bj-config-vehicle-presets-editor
+    ng-if="$ctrl.editingId !== null"
+    preset-id="$ctrl.editingId"
+    on-close="$ctrl.closeEditor()"
+></bj-config-vehicle-presets-editor>

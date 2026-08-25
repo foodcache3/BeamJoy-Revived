@@ -1,0 +1,108 @@
+<style>
+    bj-point-list-editor .point-row {
+        transition: background-color 0.2s ease-in-out;
+    }
+    bj-point-list-editor .point-row:hover,
+    bj-point-list-editor .point-row.active {
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-point-list-editor .point-row.active .point-name {
+        color: #edff00;
+    }
+    bj-point-list-editor .radius-input {
+        width: 4em;
+    }
+</style>
+
+<div class="d-flex gap-1 mb-2 align-center">
+    <button
+        class="btn neutral"
+        ng-class="{success: $ctrl.tool === 'translate'}"
+        ng-click="$ctrl.changeTool($event, 'translate')"
+        title="{{'beamjoy.window.config.editor.gizmo.translate' | translate}}"
+    >
+        <icon name="translate"></icon>
+    </button>
+    <button
+        class="btn neutral"
+        ng-class="{success: $ctrl.tool === 'rotate'}"
+        ng-click="$ctrl.changeTool($event, 'rotate')"
+        title="{{'beamjoy.window.config.editor.gizmo.rotate' | translate}}"
+    >
+        <icon name="rotate"></icon>
+    </button>
+    <button
+        class="btn"
+        ng-class="{
+            success: $ctrl.snapToGroundEnabled && $ctrl.snapMethod !== 'raycast',
+            info: $ctrl.snapToGroundEnabled && $ctrl.snapMethod === 'raycast',
+            danger: !$ctrl.snapToGroundEnabled
+        }"
+        ng-click="$ctrl.cycleSnapMode()"
+        title="{{'beamjoy.window.config.tabs.races.snapToGround.tooltip' | translate}}"
+    >
+        <icon name="snapToGround"></icon>
+    </button>
+</div>
+
+<div ng-repeat="list in $ctrl.lists track by list.key" class="mb-2">
+    <div class="d-flex align-center gap-1 mb-1">
+        <h5 class="flex-grow-1">
+            {{list.labelKey | translate}}
+            {{$ctrl.countLabel(list)}}
+        </h5>
+        <button
+            class="btn success"
+            ng-click="$ctrl.create($event, list.key)"
+            title="{{'beamjoy.window.config.editor.pointList.addAtCurrentPosition' | translate}}"
+        >
+            <icon name="add"></icon>
+        </button>
+    </div>
+    <div
+        id="point-list-row-{{list.key}}-{{$index}}"
+        class="point-row d-flex p-1 px-2 gap-1 cursor-pointer"
+        ng-repeat="point in $ctrl.data[list.key] track by $index"
+        ng-class="{active: $ctrl.activeList === list.key && $index === $ctrl.activeIndex}"
+        ng-click="$ctrl.select($event, list.key, $index)"
+    >
+        <span class="point-name flex-grow-1 d-flex align-center">
+            {{list.labelKey | translate}} {{$index + 1}}
+        </span>
+        <input
+            ng-if="list.hasRadius"
+            type="number"
+            class="radius-input"
+            min="0.5"
+            step="0.5"
+            ng-model="point.radius"
+            ng-click="$event.stopPropagation()"
+            ng-change="$ctrl.setRadius(list.key, $index, point.radius)"
+            title="{{'beamjoy.window.config.editor.pointList.radius.tooltip' | translate}}"
+        />
+        <button
+            class="btn info"
+            ng-click="$ctrl.setToVehicle($event, list.key, $index)"
+            title="{{'beamjoy.window.config.tabs.races.setToVehicle' | translate}}"
+        >
+            <icon name="car"></icon>
+        </button>
+        <button
+            class="btn info"
+            ng-click="$ctrl.teleportTo($event, list.key, $index)"
+            title="{{'beamjoy.window.config.editor.pointList.teleportToHere' | translate}}"
+        >
+            <icon name="eye"></icon>
+        </button>
+        <button
+            class="btn danger"
+            ng-click="$ctrl.remove($event, list.key, $index)"
+            title="{{'beamjoy.common.delete' | translate}}"
+        >
+            <icon name="delete"></icon>
+        </button>
+    </div>
+    <div class="opacity-70 small" ng-if="($ctrl.data[list.key] || []).length === 0">
+        {{'beamjoy.window.config.editor.pointList.empty' | translate}}
+    </div>
+</div>

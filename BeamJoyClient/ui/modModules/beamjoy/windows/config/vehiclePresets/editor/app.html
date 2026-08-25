@@ -1,0 +1,75 @@
+<style>
+    bj-config-vehicle-presets-editor .entry-row {
+        transition: background-color 0.2s ease-in-out;
+    }
+    bj-config-vehicle-presets-editor .entry-row:hover {
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-config-vehicle-presets-editor .opacity-70 {
+        opacity: 0.7;
+    }
+</style>
+
+<div ng-if="$ctrl.preset" class="d-flex flex-column gap-1">
+    <div class="d-flex align-center gap-1">
+        <button class="btn info" ng-click="$ctrl.cancel($event)">
+            &larr;
+        </button>
+        <input
+            type="text"
+            class="flex-grow-1"
+            maxlength="{{$ctrl.NAME_MAX_LENGTH}}"
+            ng-model="$ctrl.preset.name"
+            placeholder="{{'beamjoy.window.config.tabs.vehiclePresets.namePlaceholder' | translate}}"
+        />
+        <button
+            class="btn danger"
+            ng-if="$ctrl.presetId !== 'new'"
+            ng-click="$ctrl.deletePreset($event)"
+            title="{{'beamjoy.common.delete' | translate}}"
+        >
+            <icon name="delete"></icon>
+        </button>
+    </div>
+
+    <h5>{{'beamjoy.window.config.tabs.vehiclePresets.entries' | translate}}</h5>
+
+    <div
+        class="entry-row d-flex align-center gap-1 p-1 px-2"
+        ng-repeat="entry in $ctrl.preset.entries track by $index"
+    >
+        <span class="flex-grow-1">{{entry.label}}</span>
+        <button
+            class="btn danger"
+            ng-click="$ctrl.removeEntry($event, $index)"
+            title="{{'beamjoy.common.delete' | translate}}"
+        >
+            <icon name="delete"></icon>
+        </button>
+    </div>
+    <div ng-if="$ctrl.preset.entries.length === 0" class="opacity-70 small">
+        {{'beamjoy.window.config.tabs.vehiclePresets.entriesEmpty' | translate}}
+    </div>
+
+    <button
+        class="btn info w-fitcontent"
+        ng-click="$ctrl.addCurrentVehicle($event)"
+        title="{{'beamjoy.window.config.tabs.vehiclePresets.addCurrentVehicle.tooltip' | translate}}"
+    >
+        {{'beamjoy.window.config.tabs.vehiclePresets.addCurrentVehicle' | translate}}
+    </button>
+
+    <div class="d-flex gap-1 mt-2">
+        <button
+            class="btn success w-fitcontent"
+            ng-class="{disabled: !$ctrl.dirty || !$ctrl.valid()}"
+            ng-disabled="!$ctrl.dirty || !$ctrl.valid()"
+            ng-click="$ctrl.save()"
+        >
+            {{'beamjoy.common.save' | translate}}
+        </button>
+        <button class="btn warning w-fitcontent" ng-click="$ctrl.cancel()">
+            {{'beamjoy.common.cancel' | translate}}
+        </button>
+    </div>
+</div>
