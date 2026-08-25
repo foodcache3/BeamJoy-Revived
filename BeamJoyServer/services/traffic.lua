@@ -8,7 +8,10 @@ local M = {
 
 ---@return table
 local function getConf()
-    return services_config.data.Traffic
+    local conf = services_config.data.Traffic
+    conf.amount = tonumber(conf.amount) or conf.amount
+    conf.maxPerPlayer = tonumber(conf.maxPerPlayer) or conf.maxPerPlayer
+    return conf
 end
 
 local function updateBalancer()
@@ -107,8 +110,8 @@ local function rxSettings(ctxt, settings)
     end
     local conf = getConf()
     conf.enabled = settings.enabled
-    conf.amount = settings.amount
-    conf.maxPerPlayer = settings.maxPerPlayer
+    conf.amount = tonumber(settings.amount) or conf.amount
+    conf.maxPerPlayer = tonumber(settings.maxPerPlayer) or conf.maxPerPlayer
     conf.models = settings.models
 
     if not conf.enabled then

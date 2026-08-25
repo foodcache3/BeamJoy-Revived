@@ -147,6 +147,27 @@ table.addAll = table.addAll or function(tab1, tab2, distinct)
     end
 end
 
+--- removes every occurrence of each value in tab2 from tab1 (array-style), mutating tab1 in
+--- place and returning it for chaining, mirroring addAll's calling convention. Was referenced
+--- (camera.lua's onBJRequestRestrictions, called with a trailing `true` mirroring addAll's
+--- `distinct` call sites) but never actually defined anywhere in this file. Every call threw
+--- "attempt to call method 'removeAll' (a nil value)"
+---@generic V
+---@param tab1 tablelib<integer,V>|table<integer,V>|V[]
+---@param tab2 table|V[]
+---@return tablelib<integer,V>
+table.removeAll = table.removeAll or function(tab1, tab2)
+    if type(tab1) ~= "table" or type(tab2) ~= "table" then return Table(tab1) end
+    Table(tab2):values():forEach(function(el)
+        local idx = table.indexOf(tab1, el)
+        while idx do
+            table.remove(tab1, idx)
+            idx = table.indexOf(tab1, el)
+        end
+    end)
+    return Table(tab1)
+end
+
 -- table.concat only works on arrays, table.join is working on objects too
 ---@generic K, V
 ---@param tab tablelib<K,V>|table<K,V>|V[]

@@ -183,6 +183,7 @@
         </div>
     </accordion-content>
 </bj-accordion>
+
 <table class="w-100">
     <tr>
         <td class="text-right">
@@ -313,3 +314,42 @@
         </td>
     </tr>
 </table>
+
+<bj-accordion id="core-legacy-import" no-border-bottom="true" ng-if="$ctrl.canImportHunter || $ctrl.canImportRaces">
+    <accordion-title>
+        <h5 style="font-size: 1.3em;">{{'beamjoy.window.config.tabs.core.legacyImport.title' | translate}}</h5>
+        <button
+            class="btn info w-fitcontent"
+            ng-click="$ctrl.showLegacyImportHelp($event)"
+            title="{{'beamjoy.window.config.tabs.core.legacyImport.help.button' | translate}}"
+        >
+            <icon name="info"></icon>
+        </button>
+    </accordion-title>
+    <accordion-content>
+        <div class="d-flex align-center gap-1 mb-1" ng-if="$ctrl.canImportHunter" style="font-size: 1.15em;">
+            <button
+                class="btn info w-fitcontent"
+                ng-click="$ctrl.requestHunterLegacyImport($event)"
+                title="{{'beamjoy.window.config.tabs.core.legacyImport.hunter.tooltip' | translate}}"
+            >
+                {{'beamjoy.window.config.tabs.core.legacyImport.hunter.button' | translate}}
+            </button>
+            <span class="opacity-70 small" ng-if="$ctrl.hunterLegacyImportStatus">
+                {{$ctrl.hunterLegacyImportStatus | translate}}
+            </span>
+        </div>
+        <div class="d-flex align-center gap-1" ng-if="$ctrl.canImportRaces" style="font-size: 1.15em;">
+            <button
+                class="btn info w-fitcontent"
+                ng-click="$ctrl.requestRaceLegacyImport($event)"
+                title="{{'beamjoy.window.config.tabs.core.legacyImport.races.tooltip' | translate}}"
+            >
+                {{'beamjoy.window.config.tabs.core.legacyImport.races.button' | translate}}
+            </button>
+            <span class="opacity-70 small" ng-if="$ctrl.raceLegacyImportStatus">
+                {{$ctrl.raceLegacyImportStatus | translate}}
+            </span>
+        </div>
+    </accordion-content>
+</bj-accordion>

@@ -1,5 +1,9 @@
 ---@class BJCConfig : BJSConfig
----@field AllowClientMods boolean
+---@field AllowClientMods boolean forced permanently false (see sanitizeConfigValue) after the
+---player-vehicle-mod re-scan mechanism it enables (mods.lua's onModActivated/onModDeactivated ->
+---onBJVehicleModChanged) was found causing a real, severe client-side stall ; no longer a real
+---per-server toggle, kept only so the rest of this codebase (mods.lua's M.state, etc.) doesn't need
+---a separate code path
 ---@field DefaultGroup string?
 ---@field ModelBlacklist string[]
 ---@field AllowWalking boolean
@@ -9,11 +13,46 @@
 ---@field DiscordChatHookLang string?
 ---@field Broadcasts {enabled: boolean, delay: integer, messages: table<string, string>[]}
 ---@field Whitelist table?
+---@field Freeroam {TeleportDelay: integer, CollisionsMode: "forced"|"disabled"|"ghosts", RespawnGhostTimeoutEnabled: boolean, RespawnGhostTimeout: integer, RespawnGhostDistance: integer}
+---CollisionsMode : "forced" = collisions always on, ghosting never happens ; "disabled" = every
+---player vehicle permanently ghosted (free-for-all, no vehicle-vehicle collision at all) ;
+---"ghosts" (default) = respawn protection: a vehicle briefly ghosts on spawn/reset, only
+---un-ghosting once clear of other vehicles, so nobody gets exploded by materializing inside
+---someone. Independent of this, a race participant is also always ghosted for the COUNTDOWN grid
+---phase of any race (see BJRaceDefaults.ghostOnCountdown), regardless of this setting.
+---RespawnGhostTimeoutEnabled : whether a "ghosts"-mode spawn/reset protection ghost ever expires
+---on its own at all ; off means it only ever clears via some other reason (leaving/mode change
+---etc.). Same effective behavior as the previous design's "slide the timer to max" convention,
+---replaced because that was fragile (real, reported: setting it that way threw config-save errors,
+---since a value of exactly the client's own RESPAWN_GHOST_TIMEOUT_MAX had no server-side meaning
+---of its own and never should have needed one). Same enabled-toggle + conditional-slider shape as
+---dnfEnabled/dnfTimeout elsewhere in this codebase, deliberately.
+---RespawnGhostTimeout : seconds a "ghosts"-mode spawn/reset protection ghost lasts before it's
+---allowed to clear (subject to RespawnGhostDistance below still being satisfied). Only meaningful
+---while RespawnGhostTimeoutEnabled is true.
+---RespawnGhostDistance : extra buffer distance (meters), on top of the two vehicles' own bounding
+---radii, a spawn/reset-protected vehicle must clear of every other vehicle before un-ghosting.
+---0 (default) matches the original behavior (only literal contact blocks it).
+---@field RaceAuthorshipRestriction boolean when on, non-staff race editors may only save/delete
+---races they authored themselves (services/races.lua's raceSave/raceDelete) ; when off (default),
+---anyone with EditRaces can manage any race, same as before this restriction ever existed
+---@field RaceEditorShowOnlyEditable boolean when on, the Config > Races browse list only shows
+---races the current player can actually manage (staff sees everything regardless) ; purely a
+---client-side display filter, doesn't change who can manage what: that's RaceAuthorshipRestriction
+---@field ForceHud boolean forces the main BeamJoy window open and non-closable for every player,
+---the same treatment staff already always get ; default on
+---@field ShowHudAtStart boolean opens the main BeamJoy window automatically on connect (still
+---player-closable afterward, unlike ForceHud) ; moot while ForceHud is on, matters when it's off ;
+---default on
+---@field Voting {MapVoteThresholdPercent: number, MapVoteTimeout: integer, KickVoteThresholdPercent: number, KickVoteTimeout: integer}
+---ThresholdPercent : percentage (1-100) of eligible voters needed to pass ; Timeout : seconds a
+---vote stays open before it's automatically considered failed. Defaults (51%, 30s) match what
+---mapVote.lua/kickVote.lua originally hardcoded before this became configurable.
 
 local M = {
     ---@class BJSConfig
     data = {
-        AllowClientMods = true,
+        AllowClientMods = false,
         DefaultGroup = "default",
         DiscordChatHookLang = "en-US",
         ---@type string[]
@@ -48,6 +87,23 @@ local M = {
             amount = 15,
             maxPerPlayer = 1,
             models = { "simple_traffic" },
+        },
+        Freeroam = {
+            TeleportDelay = 30,
+            CollisionsMode = "ghosts",
+            RespawnGhostTimeoutEnabled = true,
+            RespawnGhostTimeout = 10,
+            RespawnGhostDistance = 0,
+        },
+        RaceAuthorshipRestriction = false,
+        RaceEditorShowOnlyEditable = false,
+        ForceHud = true,
+        ShowHudAtStart = true,
+        Voting = {
+            MapVoteThresholdPercent = 51,
+            MapVoteTimeout = 30,
+            KickVoteThresholdPercent = 51,
+            KickVoteTimeout = 30,
         },
         Chat = {
             ServerNameColor = { 1, 0, 0 },
@@ -151,6 +207,14 @@ local function onBJRequestCache(caches, targetID, forced)
         IntroPanel = M.data.IntroPanel,
         AllowWalking = M.data.AllowWalking,
         Chat = M.data.Chat,
+        Freeroam = M.data.Freeroam,
+        -- Visible to every player, not SetConfig-gated: each one needs to be readable client-side
+        -- to gate ordinary UI (race edit/delete buttons, the race browse list filter, whether the
+        -- main window opens forced/at-start), not just editable by an admin.
+        RaceAuthorshipRestriction = M.data.RaceAuthorshipRestriction,
+        RaceEditorShowOnlyEditable = M.data.RaceEditorShowOnlyEditable,
+        ForceHud = M.data.ForceHud,
+        ShowHudAtStart = M.data.ShowHudAtStart,
     }
     if forced or (targetID and services_permissions.hasAllPermissions(targetID,
             BJ_PERMISSIONS.SetConfig)) then
@@ -173,6 +237,10 @@ end
 ---@return any value, string? error
 local function sanitizeConfigValue(key, value)
     if key == "AllowClientMods" then
+        return nil, "AllowClientMods has been disabled and can no longer be changed"
+    elseif key == "AllowWalking" or
+        key == "RaceAuthorshipRestriction" or key == "RaceEditorShowOnlyEditable" or
+        key == "ForceHud" or key == "ShowHudAtStart" then
         if type(value) ~= "boolean" then return nil, "Value must be a boolean" end
     elseif key == "DefaultGroup" then
         if type(value) ~= "string" then
@@ -231,6 +299,46 @@ local function sanitizeConfigValue(key, value)
                 return type(msg) ~= "string"
             end) then
             return nil, "Invalid message type in data"
+        end
+    elseif key == "Freeroam" then
+        if type(value) ~= "table" then
+            return nil, "Value must be a table"
+        end
+        -- Defensive coercion, same class of fix already applied at several other numeric UI input
+        -- sites in this codebase (gate width/height, sectorCount): bj-slider's typable number-box
+        -- can hand back a string in this CEF build even though the slider itself always produces a
+        -- real number, silently failing the strict type(...) == "number" checks below on every save
+        -- regardless of the actual value typed/dragged. Coerced here, once, rather than trusting
+        -- every client call site to remember to, since this whole table is saved atomically: one
+        -- bad field (even one the player never touched this session, e.g. RespawnGhostDistance
+        -- sitting at its own already-fine default) would otherwise silently reject unrelated fields
+        -- bundled in the same payload (CollisionsMode, RespawnGhostTimeoutEnabled) too.
+        if type(value.TeleportDelay) == "string" then value.TeleportDelay = tonumber(value.TeleportDelay) end
+        if type(value.RespawnGhostTimeout) == "string" then value.RespawnGhostTimeout = tonumber(value.RespawnGhostTimeout) end
+        if type(value.RespawnGhostDistance) == "string" then value.RespawnGhostDistance = tonumber(value.RespawnGhostDistance) end
+        if type(value.TeleportDelay) ~= "number" then
+            return nil, "TeleportDelay must be a number"
+        elseif value.CollisionsMode ~= "forced" and value.CollisionsMode ~= "disabled" and
+            value.CollisionsMode ~= "ghosts" then
+            return nil, "Invalid CollisionsMode"
+        elseif type(value.RespawnGhostTimeoutEnabled) ~= "boolean" then
+            return nil, "RespawnGhostTimeoutEnabled must be a boolean"
+        elseif type(value.RespawnGhostTimeout) ~= "number" or value.RespawnGhostTimeout < 0 then
+            return nil, "RespawnGhostTimeout must be a positive number"
+        elseif type(value.RespawnGhostDistance) ~= "number" or value.RespawnGhostDistance < 0 then
+            return nil, "RespawnGhostDistance must be a positive number"
+        end
+    elseif key == "Voting" then
+        if type(value) ~= "table" then
+            return nil, "Value must be a table"
+        elseif table.any({ "MapVoteThresholdPercent", "KickVoteThresholdPercent" }, function(k)
+                return type(value[k]) ~= "number" or value[k] < 1 or value[k] > 100
+            end) then
+            return nil, "ThresholdPercent must be a number between 1 and 100"
+        elseif table.any({ "MapVoteTimeout", "KickVoteTimeout" }, function(k)
+                return type(value[k]) ~= "number" or value[k] < 1
+            end) then
+            return nil, "Timeout must be a positive number"
         end
     elseif key == "Whitelist" then
         if type(value) ~= "table" then

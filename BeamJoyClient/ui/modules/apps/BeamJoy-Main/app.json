@@ -3,7 +3,7 @@
     "name": "beamjoy.window.main",
     "types": ["ui.apps.categories.multiplayer"],
     "css": {
-        "top": "4vh",
+        "top": "60vh",
         "left": ".5vw",
         "width": "21vw",
         "min-width": "10vw",

@@ -81,10 +81,11 @@ local function serverMessage(key, args)
 
     local nameColor = beamjoy_config.data.Chat.ServerNameColor
     local textColor = beamjoy_config.data.Chat.ServerTextColor
-    local message = string.var(beamjoy_lang.translate(key),
-        table.map(args or {}, function(v)
-            return beamjoy_lang.translate(v)
-        end))
+    -- args are literal substitution values (player names, map labels, numbers...), never
+    -- translation keys themselves. This used to run them through translate() first, which
+    -- looked each one up as if it were a locale key; for an ordinary player/map name that
+    -- isn't one, so the substitution silently came back blank/missing instead of the real value.
+    local message = string.var(beamjoy_lang.translate(key), args or {})
     M.queue:insert({ beamjoy_lang.translate("beamjoy.chat.senderServer"),
         message, nameColor, textColor })
 end
@@ -100,10 +101,8 @@ local function chatEvent(key, args)
         end)
     end
 
-    local message = string.var(beamjoy_lang.translate(key),
-        table.map(args or {}, function(v)
-            return beamjoy_lang.translate(v)
-        end))
+    -- see serverMessage's own comment above: args are literal values, not translation keys
+    local message = string.var(beamjoy_lang.translate(key), args or {})
     M.queue:insert({ nil, message, nil, beamjoy_config.data.Chat.EventColor })
 end
 

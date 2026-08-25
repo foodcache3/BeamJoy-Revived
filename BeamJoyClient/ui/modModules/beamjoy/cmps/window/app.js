@@ -58,6 +58,22 @@ angular.module("beamjoy").component("bjWindow", {
     controller: function ($element, beamjoyWindowRect) {
         const MIN_WIDTH = 250;
         const MIN_HEIGHT = 150;
+        // The original theory for "scrolling feels unresponsive" was that this CEF build's native
+        // wheel-scroll delta is just small (a couple pixels per tick), fixed by multiplying it.
+        // But that multiplier was applied to `.window-content` specifically, and it turns out
+        // `.window-content` usually isn't the element that's actually scrolling. `bj-config`'s
+        // content is `bj-tabs`, which is itself `height:100%; overflow:hidden` with its OWN
+        // `.tab-content` child doing the real scrolling (and, for the race editor specifically,
+        // there's now a THIRD level down, `.section-panel`, doing the real scrolling instead of
+        // `.tab-content`). `.window-content` never actually overflows in any of these cases, so
+        // multiplying its scrollTop was a no-op: the real, untouched, un-accelerated browser
+        // default wheel-scroll on whichever nested element actually has the overflow is what the
+        // user was feeling (its own native easing reads as "delayed" compared to instant/direct
+        // scrolling elsewhere). Walking up from the actual wheel target to find whichever ancestor
+        // is truly scrollable, rather than hardcoding a specific nesting depth/class name, keeps
+        // this correct regardless of how many scroll levels any given window/tab/panel ends up
+        // with.
+        const WHEEL_SCROLL_MULTIPLIER = 4;
 
         this.minimized = false;
         this.toggleMinimized = () => {
@@ -69,6 +85,23 @@ angular.module("beamjoy").component("bjWindow", {
         let container;
         let drag = null;
         let resize = null;
+        let content;
+        const findScrollTarget = (el) => {
+            while (el && el !== content.parentElement) {
+                if (el instanceof Element) {
+                    const style = window.getComputedStyle(el);
+                    const scrollableY = style.overflowY === "auto" || style.overflowY === "scroll";
+                    if (scrollableY && el.scrollHeight > el.clientHeight) return el;
+                }
+                el = el.parentElement;
+            }
+            return content;
+        };
+        const onContentWheel = (evt) => {
+            const target = findScrollTarget(evt.target);
+            target.scrollTop += evt.deltaY * WHEEL_SCROLL_MULTIPLIER;
+            evt.preventDefault();
+        };
 
         const clampPosition = (top, left, width) => {
             const minVisible = 60; // keep at least this much of the header reachable
@@ -172,9 +205,14 @@ angular.module("beamjoy").component("bjWindow", {
                     container.style.height = saved.height + "px";
                 }
             }
+            content = $element[0].querySelector(".window-content");
+            if (content) {
+                content.addEventListener("wheel", onContentWheel, { passive: false });
+            }
         };
 
         this.$onDestroy = () => {
+            if (content) content.removeEventListener("wheel", onContentWheel);
             document.removeEventListener("mousemove", onDragMove);
             document.removeEventListener("mouseup", onDragEnd);
             document.removeEventListener("mousemove", onResizeMove);

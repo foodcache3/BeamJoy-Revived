@@ -1,3 +1,27 @@
+<style>
+    bj-main-main .vote-panel {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 0.4em;
+        padding: 0.6em;
+        margin-top: 0.5em;
+    }
+    bj-main-main .vote-list {
+        max-height: 14em;
+        overflow-y: auto;
+        margin-top: 0.4em;
+    }
+    bj-main-main .vote-row {
+        transition: background-color 0.2s ease-in-out;
+        border-radius: 0.3em;
+    }
+    bj-main-main .vote-row:hover {
+        background-color: rgba(0, 0, 0, 0.15);
+    }
+    bj-main-main .opacity-70 {
+        opacity: 0.7;
+    }
+</style>
+
 <div class="d-flex gap-1">
     <button
         class="btn primary"
@@ -14,6 +38,91 @@
     >
         <icon name="nametag"></icon>
     </button>
+    <button
+        class="btn info"
+        ng-if="$ctrl.canStartVote()"
+        ng-class="{'success': $ctrl.voteMenu}"
+        ng-click="$ctrl.toggleVoteMenu()"
+        title="{{ 'beamjoy.window.main.tabs.main.startVote' | translate}}"
+    >
+        <icon name="check"></icon>
+    </button>
 </div>
+
+<div class="vote-panel" ng-if="$ctrl.voteMenu === 'choice'">
+    <div class="d-flex gap-1">
+        <button
+            class="btn info flex-grow-1"
+            ng-if="$ctrl.canVoteMap()"
+            ng-click="$ctrl.chooseMapVote()"
+        >
+            {{'beamjoy.window.main.tabs.main.voteMap' | translate}}
+        </button>
+        <button
+            class="btn danger flex-grow-1"
+            ng-if="$ctrl.canVoteKick()"
+            ng-click="$ctrl.chooseKickVote()"
+        >
+            {{'beamjoy.window.main.tabs.main.voteKick' | translate}}
+        </button>
+    </div>
+</div>
+
+<div class="vote-panel" ng-if="$ctrl.voteMenu === 'map'">
+    <div class="d-flex align-center gap-1">
+        <button class="btn neutral" ng-click="$ctrl.backToChoice()">
+            {{'beamjoy.window.main.tabs.main.voteBack' | translate}}
+        </button>
+        <input
+            type="text"
+            class="flex-grow-1"
+            ng-model="$ctrl.voteSearch"
+            placeholder="{{'beamjoy.window.main.tabs.main.voteSearch' | translate}}"
+        />
+    </div>
+    <div class="vote-list">
+        <div
+            class="vote-row d-flex align-center gap-1 p-1"
+            ng-repeat="map in $ctrl.maps | filter:$ctrl.voteSearch"
+        >
+            <span class="flex-grow-1">{{map.label}}</span>
+            <button class="btn info" ng-click="$ctrl.startMapVote(map)">
+                {{'beamjoy.window.main.tabs.main.voteStart' | translate}}
+            </button>
+        </div>
+        <div class="opacity-70 p-1" ng-if="$ctrl.maps.length === 0">
+            {{'beamjoy.window.main.tabs.main.voteNoResults' | translate}}
+        </div>
+    </div>
+</div>
+
+<div class="vote-panel" ng-if="$ctrl.voteMenu === 'kick'">
+    <div class="d-flex align-center gap-1">
+        <button class="btn neutral" ng-click="$ctrl.backToChoice()">
+            {{'beamjoy.window.main.tabs.main.voteBack' | translate}}
+        </button>
+        <input
+            type="text"
+            class="flex-grow-1"
+            ng-model="$ctrl.voteSearch"
+            placeholder="{{'beamjoy.window.main.tabs.main.voteSearch' | translate}}"
+        />
+    </div>
+    <div class="vote-list">
+        <div
+            class="vote-row d-flex align-center gap-1 p-1"
+            ng-repeat="player in $ctrl.kickTargets() | filter:$ctrl.voteSearch"
+        >
+            <span class="flex-grow-1">{{player.playerName}}</span>
+            <button class="btn danger" ng-click="$ctrl.startKickVote(player)">
+                {{'beamjoy.window.main.tabs.main.voteStart' | translate}}
+            </button>
+        </div>
+        <div class="opacity-70 p-1" ng-if="$ctrl.kickTargets().length === 0">
+            {{'beamjoy.window.main.tabs.main.voteNoResults' | translate}}
+        </div>
+    </div>
+</div>
+
 <hr />
 <bj-players-list></bj-players-list>

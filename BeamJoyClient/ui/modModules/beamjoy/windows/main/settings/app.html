@@ -564,4 +564,42 @@
             </div>
         </td>
     </tr>
+
+    <tr>
+        <td colspan="3" class="settings-category d-flex align-center gap-2">
+            <span>
+                <icon name="info" class="light"></icon>
+            </span>
+            <h3>
+                {{ "beamjoy.window.main.tabs.settings.sections.about.title"|
+                translate }}
+            </h3>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            {{ "beamjoy.window.main.tabs.settings.sections.about.version"|
+            translate }}
+        </td>
+        <td colspan="2">
+            {{ $ctrl.version ? ("v" + $ctrl.version + " (build " + $ctrl.build + ")") : "..." }}
+        </td>
+    </tr>
+    <tr>
+        <td>
+            {{ "beamjoy.window.main.tabs.settings.sections.about.github"|
+            translate }}
+        </td>
+        <td colspan="2">
+            <a
+                class="btn neutral w-fitcontent d-flex align-center gap-1"
+                href="{{$ctrl.githubUrl}}"
+                target="_blank"
+                rel="noopener noreferrer"
+            >
+                <icon name="open" class="small"></icon>
+                GitHub
+            </a>
+        </td>
+    </tr>
 </table>

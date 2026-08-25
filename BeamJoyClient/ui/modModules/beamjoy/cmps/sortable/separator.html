@@ -1,4 +1,19 @@
 <style>
+    /* previous attempt padded the OUTER <bj-sort-separator> custom element: that grew the layout
+       gap between rows (confirmed : just more whitespace), but left THIS inner div (the one
+       ng-drop/.active/the transcluded <hr> actually live on, and what a user visually aims at
+       and hovers to see the orange highlight) unchanged, still sized to the thin <hr> via
+       h-fitcontent, so the real interactive/droppable area never actually grew. This inner div
+       carries the `p-0` utility class (padding: 0), which needs an explicit override (not just a
+       same-specificity re-declaration, whose cascade order isn't reliably guaranteed against a
+       separately-loaded global utility stylesheet) to actually win.
+    */
+    bj-sort-separator {
+        display: block;
+    }
+    .bj-sort-separator {
+        padding: 0.6em 0 !important;
+    }
     .bj-sort-separator.active {
         background-color: rgba(252, 164, 49, 0.548);
     }

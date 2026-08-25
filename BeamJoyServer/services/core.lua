@@ -41,7 +41,13 @@ local function onPreInit()
         dao_core.save(M.data)
     else
         M.data = table.assign(M.data, loaded)
-        M.data.MaxCars = M.data.MaxCars == 200 and M.data.MaxCars or 200
+        -- was `M.data.MaxCars == 200 and M.data.MaxCars or 200` : both branches of that ternary
+        -- evaluate to 200 regardless of the loaded value, unconditionally discarding whatever the
+        -- admin actually configured (ServerConfig.toml, env var, or the core config UI) and
+        -- silently re-pushing 200 into BeamMP-Server's real MaxCars setting via MP.Set below on
+        -- every server start. Only fall back to the default when the loaded value is missing/
+        -- invalid, same as every other coercion in this codebase.
+        M.data.MaxCars = tonumber(M.data.MaxCars) or 200
         table.forEach(M.data, function(v, k)
             if MP.Settings[k] and
                 MP.Get(MP.Settings[k]) ~= v then

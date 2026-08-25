@@ -71,6 +71,23 @@ angular.module("beamjoy").component("bjPlayerLine", {
                 if (this.player.vehicles.length > 0) this.actions.delete = true;
             }
 
+            const isSelf = self.playerName === this.player.playerName;
+            if (
+                !isSelf &&
+                this.player.currentVehicle &&
+                beamjoyStore.permissions.hasAllPermissions(null, "TeleportTo")
+            ) {
+                this.actions.teleportTo = true;
+            }
+            if (
+                !isSelf &&
+                this.player.currentVehicle &&
+                self.currentVehicle !== this.player.currentVehicle &&
+                beamjoyStore.permissions.hasAllPermissions(null, "TeleportFrom")
+            ) {
+                this.actions.teleportFrom = true;
+            }
+
             if (group && selfGroup && group.staff && !selfGroup.staff) {
                 this.groupLabel = translate("beamjoy.groups.staffMark");
             } else {

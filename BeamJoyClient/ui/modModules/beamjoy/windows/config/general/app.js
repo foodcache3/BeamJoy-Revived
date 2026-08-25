@@ -9,6 +9,9 @@ await import(
     `/ui/modModules/beamjoy/windows/config/general/environment/app.js`
 );
 await import(`/ui/modModules/beamjoy/windows/config/general/broadcasts/app.js`);
+await import(`/ui/modModules/beamjoy/windows/config/general/raceEditor/app.js`);
+await import(`/ui/modModules/beamjoy/windows/config/general/freeroam/app.js`);
+await import(`/ui/modModules/beamjoy/windows/config/general/voting/app.js`);
 
 angular.module("beamjoy").component("bjConfigGeneral", {
     templateUrl: "/ui/modModules/beamjoy/windows/config/general/app.html",
@@ -17,22 +20,28 @@ angular.module("beamjoy").component("bjConfigGeneral", {
         this.showConfigs = false;
         this.default = {};
         this.data = {
-            AllowClientMods: true,
+            ForceHud: true,
+            ShowHudAtStart: true,
         };
 
-        $scope.$watch(
-            () => this.data.AllowClientMods,
-            () => {
-                if (!this.init) return;
-                if (this.data.AllowClientMods === this.default.AllowClientMods)
-                    return;
-                beamjoyStore.send("BJDirectSend", [
-                    "setConfig",
-                    "AllowClientMods",
-                    this.data.AllowClientMods,
-                ]);
-            }
-        );
+        // every key here is a plain top-level boolean going straight through setConfig, same
+        // watch-and-send shape repeated per key rather than 3 near-identical $watch blocks
+        // (the race-editor-specific settings have their own identical pattern in their own
+        // accordion component below, sharing this same BJSendConfigData broadcast)
+        ["ForceHud", "ShowHudAtStart"].forEach((key) => {
+            $scope.$watch(
+                () => this.data[key],
+                () => {
+                    if (!this.init) return;
+                    if (this.data[key] === this.default[key]) return;
+                    beamjoyStore.send("BJDirectSend", [
+                        "setConfig",
+                        key,
+                        this.data[key],
+                    ]);
+                }
+            );
+        });
         $scope.$on("BJSendConfigData", (_, data) => {
             this.data = data;
             this.default = angular.copy(this.data);
@@ -51,6 +60,9 @@ angular.module("beamjoy").component("bjConfigGeneral", {
             traffic: false,
             environment: false,
             broadcasts: false,
+            raceEditor: false,
+            freeroam: false,
+            voting: false,
         };
         const updateDisplayAndPermissions = () => {
             this.showConfigs = beamjoyStore.permissions.hasAllPermissions(
@@ -90,6 +102,20 @@ angular.module("beamjoy").component("bjConfigGeneral", {
                     beamjoyStore.players.self.playerName,
                     beamjoyStore.permissions.PERMISSIONS.SetConfig
                 );
+            this.display.raceEditor =
+                beamjoyStore.permissions.hasAllPermissions(
+                    beamjoyStore.players.self.playerName,
+                    beamjoyStore.permissions.PERMISSIONS.SetConfig
+                );
+            this.display.freeroam =
+                beamjoyStore.permissions.hasAllPermissions(
+                    beamjoyStore.players.self.playerName,
+                    beamjoyStore.permissions.PERMISSIONS.SetConfig
+                );
+            this.display.voting = beamjoyStore.permissions.hasAllPermissions(
+                beamjoyStore.players.self.playerName,
+                beamjoyStore.permissions.PERMISSIONS.SetConfig
+            );
         };
 
         ["BJUpdateSelf", "BJUpdatePermissions", "BJUpdateGroups"].forEach(

@@ -7,6 +7,14 @@ angular.module("beamjoy").component("bjMainSettings", {
            this.settings = angular.copy(beamjoyStore.settings.data)
         });
 
+        this.githubUrl = "https://github.com/foodcache3/BeamJoy-sandbox";
+        this.version = null;
+        this.build = null;
+        $rootScope.$on("BJVersion", (_, data) => {
+            this.version = data.version;
+            this.build = data.build;
+        });
+
         $scope.$watch(
             () => this.settings,
             () => {

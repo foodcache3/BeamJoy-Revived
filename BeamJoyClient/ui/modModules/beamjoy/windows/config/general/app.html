@@ -1,15 +1,49 @@
 <table ng-if="$ctrl.showConfigs">
     <tr>
         <td class="text-right">
-            <span title="{{'beamjoy.window.config.tabs.general.allowMods.tooltip'|translate}}">
-                {{"beamjoy.window.config.tabs.general.allowMods"|translate}}
+            <span title="{{'beamjoy.window.config.tabs.general.forceHud.tooltip'|translate}}">
+                {{"beamjoy.window.config.tabs.general.forceHud"|translate}}
             </span>
         </td>
         <td>
-            <bj-toggle ng-model="$ctrl.data.AllowClientMods"></bj-toggle>
+            <bj-toggle ng-model="$ctrl.data.ForceHud"></bj-toggle>
+        </td>
+    </tr>
+    <tr ng-if="!$ctrl.data.ForceHud">
+        <td class="text-right">
+            <span title="{{'beamjoy.window.config.tabs.general.showHudAtStart.tooltip'|translate}}">
+                {{"beamjoy.window.config.tabs.general.showHudAtStart"|translate}}
+            </span>
+        </td>
+        <td>
+            <bj-toggle ng-model="$ctrl.data.ShowHudAtStart"></bj-toggle>
         </td>
     </tr>
 </table>
+<bj-accordion id="config-race-editor" ng-hide="!$ctrl.display.raceEditor">
+    <accordion-title>
+        {{"beamjoy.window.config.tabs.general.raceEditor.title"|translate}}
+    </accordion-title>
+    <accordion-content>
+        <bj-config-general-race-editor></bj-config-general-race-editor>
+    </accordion-content>
+</bj-accordion>
+<bj-accordion id="config-freeroam" ng-hide="!$ctrl.display.freeroam">
+    <accordion-title>
+        {{"beamjoy.window.config.tabs.general.freeroam.title"|translate}}
+    </accordion-title>
+    <accordion-content>
+        <bj-config-general-freeroam></bj-config-general-freeroam>
+    </accordion-content>
+</bj-accordion>
+<bj-accordion id="config-voting" ng-hide="!$ctrl.display.voting">
+    <accordion-title>
+        {{"beamjoy.window.config.tabs.general.voting.title"|translate}}
+    </accordion-title>
+    <accordion-content>
+        <bj-config-general-voting></bj-config-general-voting>
+    </accordion-content>
+</bj-accordion>
 <bj-accordion id="config-whitelist" ng-hide="!$ctrl.display.whitelist">
     <accordion-title>
         {{"beamjoy.window.config.tabs.general.whitelist"|translate}}

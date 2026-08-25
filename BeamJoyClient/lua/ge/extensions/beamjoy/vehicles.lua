@@ -1,5 +1,18 @@
 local M = {
-    preloadedDependencies = { "core_vehicles", "core_vehicle_partmgmt", "core_vehicleBridge", "gameplay_walk" },
+    -- "gameplay_walk" used to be in this list too, removed : nothing in this file (or anywhere
+    -- else in the BJS codebase, confirmed by search) ever actually calls it, and force-preloading
+    -- it this early (as part of this extension's own dependency chain, well before a server
+    -- connection even exists) is the likely cause of a real reported bug: the unicycle/walking
+    -- character spawns (BeamMP registers it fine) but its mesh (BeamMP's own "beamling" content,
+    -- vehicles/unicycle/beammp_default.pc) fails to load, ONLY when this mod is loaded ; the exact
+    -- same server+map worked with BJS unloaded. BeamMP's own client mod most plausibly configures
+    -- gameplay_walk for its custom walking character on ITS OWN first load (e.g. a one-time
+    -- onExtensionLoaded-style hook). Preloading it here, ahead of BeamMP's own init, would mean
+    -- that hook fires (or is registered) too late to ever see it, leaving gameplay_walk in a
+    -- vanilla, unpatched state when the player actually tries to walk. No other preloaded
+    -- dependency here is referenced by BeamMP's own multiplayer character system, so this is the
+    -- one specifically worth removing rather than the whole preload mechanism.
+    preloadedDependencies = { "core_vehicles", "core_vehicle_partmgmt", "core_vehicleBridge" },
     dependencies = {},
 
     TYPES = {
@@ -28,10 +41,39 @@ local function onInit()
     InitPreloadedDependencies(M)
     beamjoy_communications.addHandler("deleteVehicle", M.delete)
     beamjoy_communications.addHandler("explodeVehicle", M.explode)
-    beamjoy_communications.addHandler("updateVehicleGhost", function(vid, state)
-        local mpVeh = M.vehicles[vid]
+    beamjoy_communications.addHandler("updateVehicleGhost", function(remoteVID, state)
+        -- remoteVID is the SENDER's own vid, which is only meaningful as a lookup key in the
+        -- sender's own local M.vehicles (each client assigns its own engine-local numeric vid per
+        -- vehicle ; a vid reported by another client has no relation to this client's numbering
+        -- for that same real vehicle). Matching on remoteVID instead: the cross-client-stable ID
+        -- BeamMP itself assigns, mirrored into every client's own copy of that vehicle's record,
+        -- is the same resolution pattern spectateAnotherRacer already uses for exactly this reason.
+        -- Indexing M.vehicles[remoteVID] directly here (as if it were a local vid) was the actual
+        -- root cause of "ghosted on my screen but not on theirs" : it almost always missed
+        -- entirely (nil, mpVeh not found, remote copy never actually ghosted) or, worse, hit
+        -- whatever unrelated vehicle happened to own that number locally.
+        local mpVeh = M.vehicles:find(function(v) return v.remoteVID == remoteVID end)
         if mpVeh then
             M.setGhost(mpVeh.veh, state == true, true)
+        end
+    end)
+end
+
+--- `InitPreloadedDependencies` forces these natives into "manual" unload mode (so they survive
+--- in-session map changes without this extension losing access to them), but nothing ever
+--- reverted that. They stayed loaded forever, past leaving the server entirely, since
+--- `setExtensionUnloadMode(ext, "manual")` only suppresses *automatic* unload, it doesn't stop an
+--- explicit one. Symptom seen in-game : after returning to the main menu, the console floods with
+--- `core/vehicle/manager.lua:360: attempt to index global 'spawn' (a nil value)` every frame:
+--- `spawn` (not preloaded/kept alive by anything here) unloads normally on leaving the level, but
+--- `core_vehicle_manager` apparently doesn't (most likely kept alive transitively through the
+--- vehicle-related natives below staying loaded), so it keeps ticking and referencing something
+--- that's gone. Explicitly unloading these on our own teardown returns them to BeamNG's normal
+--- leave-the-level lifecycle instead of leaving them stuck alive indefinitely.
+local function onExtensionUnloaded()
+    table.forEach(M.preloadedDependencies, function(dep)
+        if extensions.isExtensionLoaded(dep) then
+            extensions.unload(dep)
         end
     end)
 end
@@ -89,6 +131,14 @@ local function registerVehicle(vid, callback)
             protected = mpVeh.protected == "1",
         }
 
+        -- a vehicle spawning WHILE a solo race's visual reversal is active (see
+        -- M.soloGhostVisualReversed) needs to show translucent immediately too, same as every
+        -- other already-tracked vehicle got when the reversal first turned on. Its own ghost
+        -- flag never changes just because it spawned, so nothing else would ever apply this
+        if M.soloGhostVisualReversed then
+            veh:setMeshAlpha(M.computeDisplayAlpha(vid, veh.ghost == "1"), "")
+        end
+
         callback(M.vehicles[vid])
         extensions.hook("onBJVehicleInstantiated", vid)
 
@@ -101,12 +151,25 @@ end
 local function onVehicleSpawned(vid)
     registerVehicle(vid, function(mpVeh)
         if mpVeh.isLocal then
-            if camera.getCamera() == camera.CAMERAS.FREE then
+            -- exempts the walking-mode "vehicle" (the unicycle) : the collada mesh-load error
+            -- chased earlier turned out to be a red herring (confirmed present even in a working,
+            -- BJS-absent test where the beamling was visible). The real, reported symptom is
+            -- "I don't see my beamling in free cam," and this is the one piece of code in the
+            -- whole mod that unconditionally forces the player OUT of free cam the instant ANY
+            -- local vehicle spawns, including their own unicycle. Toggling walking mode while
+            -- already in (or switching into) free cam specifically to look at yourself is a
+            -- normal, expected thing to want to do, unlike spawning an actual car, where forcing
+            -- the camera back onto it makes sense, forcing it away from a just-spawned walking
+            -- character defeats the one thing free cam is useful for here.
+            if mpVeh.jbeam ~= M.WALKING and camera.getCamera() == camera.CAMERAS.FREE then
                 camera.toggleFreeCam()
             end
             local self = beamjoy_players.getSelf()
             if not mpVeh.isAi and self and self.froze then
                 M.setFreeze(vid, false)
+            end
+            if not mpVeh.isAi and mpVeh.jbeam ~= M.WALKING then
+                M.applyRespawnProtection(vid)
             end
         end
     end)
@@ -117,11 +180,23 @@ local function onVehicleSwitched(previousVID, newVID)
         local v = M.vehicles[previousVID]
         if v.isLocal then
             if v.jbeam == M.WALKING then
-                async.delayTask(function()
-                    -- delay unicycle deletion to allow toggleWalk process to complete
-                    local veh = be:getObjectByID(previousVID)
-                    if veh then veh:delete() end
-                end, 50)
+                -- previously scheduled its own delayed deletion of the just-left unicycle here.
+                -- Removed. Confirmed via a real captured crash (getting back in a car threw a
+                -- FATAL LUA ERROR : "Attempted to call a function on an object that no longer
+                -- exists", inside gameplay/walk.lua's getInVehicle -> setWalkingMode ->
+                -- originalToggleWalkingMode, itself called from beammp/multiplayer.lua's own
+                -- wrapped toggleWalkingMode) that BeamMP's OWN toggleWalkingMode flow already
+                -- manages the previous unicycle's lifecycle (including deleting it) as part of
+                -- switching back into a vehicle. This block's own independent, differently-timed
+                -- deletion was racing that native cleanup, sometimes acting on (or leaving
+                -- BeamMP's own code to act on) a unicycle object the other side had already torn
+                -- down, which also lines up with a separately reported "unicycle mesh fails to
+                -- load" symptom (a corrupted/leftover vehicle-ID state from a botched double
+                -- deletion of a previous unicycle plausibly affecting a later one). The 50ms delay
+                -- (its own comment already called out "to allow toggleWalk process to complete")
+                -- was a workaround for this exact race, not a fix for it. Removing this
+                -- redundant deletion outright, rather than tuning the delay further, so there's
+                -- only ever one thing (the game's own flow) deleting a unicycle at all.
             else
                 -- reset inputs except parking brake
                 v.veh:queueLuaCommand([[
@@ -131,9 +206,12 @@ local function onVehicleSwitched(previousVID, newVID)
                 ]])
             end
         end
-        if v.veh.ghost == "1" then
-            extensions.core_vehicle_partmgmt.setHighlightedPartsVisiblity(.5, v.vid)
-        end
+        -- re-assert ghost translucency across the switch (BeamNG's own vehicle-focus handling can
+        -- reset mesh alpha when a vehicle stops/starts being the active one). Unconditionally
+        -- recomputed on BOTH sides of the switch now, not just when v.veh.ghost == "1" : under
+        -- M.soloGhostVisualReversed, a non-ghosted OTHER vehicle also needs to show translucent,
+        -- so "is this vehicle itself ghosted" alone isn't enough to decide anymore either
+        v.veh:setMeshAlpha(M.computeDisplayAlpha(v.vid, v.veh.ghost == "1"), "")
     end
     if newVID ~= -1 then
         local timeout = GetCurrentTimeMillis() + 2000
@@ -159,15 +237,9 @@ local function onVehicleSwitched(previousVID, newVID)
                     beamjoy_communications.send("updateCurrentVehicle")
                 end
             end
+            -- same re-assert as the previousVID side above
             if v then
-                if v.veh.ghost == "1" then
-                    extensions.core_vehicle_partmgmt.setHighlightedPartsVisiblity(1, v.vid)
-                end
-                beamjoy_communications_ui.send("BJHUDIcon", {
-                    pos = 3,
-                    state = v.veh.ghost == "1",
-                    name = "ghost",
-                })
+                v.veh:setMeshAlpha(M.computeDisplayAlpha(v.vid, v.veh.ghost == "1"), "")
             end
         end)
     else
@@ -177,6 +249,7 @@ end
 
 local function onVehicleDestroyed(vid)
     M.vehicles[vid] = nil
+    M.ghostReasons[vid] = nil
 end
 
 local lastShut = {}
@@ -209,18 +282,57 @@ local function onSlowUpdate()
     end)
 end
 
+local lastCollisionsMode = nil
+
 ---@param ctxt TickContext
 local function onServerTick(ctxt)
     if not ctxt.self then return LogWarn("Vehicle server tick => self not initialized") end
+    -- "forced" is a hard admin override of everything CollisionsMode itself controls (zones,
+    -- permanent-ghost, respawn protection). It does NOT touch the "race" reason below, which is
+    -- driven independently by each race's own ghostOnCountdown setting, same as BJI's own
+    -- solo-race permaGhost being separate from its global collision mode
+    local collisionsMode = (beamjoy_config.data.Freeroam and beamjoy_config.data.Freeroam.CollisionsMode)
+        or "ghosts"
+
+    -- computeDisplayAlpha's own CollisionsMode == "disabled" special case can change WITHOUT any
+    -- individual vehicle's own ghost boolean actually flipping (a vehicle already ghosted for
+    -- "zone"/"respawn" stays ghosted either way when the mode changes). setGhost's early-return
+    -- (`if (veh.ghost == "1") == state then return end`) would otherwise never re-touch that
+    -- vehicle's alpha, leaving it stuck translucent (or opaque) until some unrelated ghost-state
+    -- change happened to pass through. Detected here and force-reapplied to every currently-
+    -- tracked vehicle at once, immediately. Same pattern setSoloGhostVisualReversed already uses
+    -- for the identical class of problem.
+    if collisionsMode ~= lastCollisionsMode then
+        local wasDisabled = lastCollisionsMode == "disabled"
+        local isDisabled = collisionsMode == "disabled"
+        lastCollisionsMode = collisionsMode
+        if wasDisabled ~= isDisabled then
+            M.vehicles:forEach(function(mpVeh)
+                mpVeh.veh:setMeshAlpha(M.computeDisplayAlpha(mpVeh.vid, mpVeh.veh.ghost == "1"), "")
+            end)
+        end
+    end
     ctxt.self.vehicles:map(function(v)
         return M.vehicles[v.vid]
     end):filter(function(v) ---@param v BJVehicle
         return not v.isAi and v.jbeam ~= M.WALKING
     end):forEach(function(v) ---@param v BJVehicle
+        if collisionsMode == "forced" then
+            -- the comment above already claimed this clears respawn protection too, but the code
+            -- never actually did. A vehicle mid-way through its post-spawn/reset "ghosts" timer
+            -- when an admin switched to "forced" stayed ghosted until that timer separately
+            -- expired on its own, despite "forced" meaning collisions should be on immediately
+            M.setGhostReason(v.vid, "zone", false)
+            M.setGhostReason(v.vid, "collisionsDisabled", false)
+            M.setGhostReason(v.vid, "respawn", false)
+            return
+        end
+
+        local inZone = false
         if #beamjoy_activity_manager.data.safeZones > 0 then
             local vPos = M.getVehiclePositionRotation(v.veh) + vec3(0, 0, v.veh:getInitialHeight() / 2)
             ---@param zone GizmoObject
-            local inZone = table.any(beamjoy_activity_manager.data.safeZones, function(zone)
+            inZone = table.any(beamjoy_activity_manager.data.safeZones, function(zone)
                 local right = zone.dir:cross(zone.up)
                 local d = vPos - zone.pos
                 local lx = d:dot(right)
@@ -230,21 +342,20 @@ local function onServerTick(ctxt)
                     math.abs(ly) <= zone.scales.y * .5 and
                     math.abs(lz) <= zone.scales.z * .5
             end)
-            if v.veh.ghost ~= "1" and inZone then
-                M.setGhost(v.veh, true)
-            elseif v.veh.ghost == "1" and not inZone then
-                M.setGhost(v.veh, false)
-            end
-        elseif v.veh.ghost == "1" then
-            M.setGhost(v.veh, false)
         end
+        M.setGhostReason(v.vid, "zone", inZone)
+        M.setGhostReason(v.vid, "collisionsDisabled", collisionsMode == "disabled")
     end)
 end
 
 local function onVehicleResetted(vid)
-    if M.vehicles[vid] and M.vehicles[vid].isLocal and
-        not M.vehicles[vid].isAi and M.vehicles[vid].veh.froze then
+    local mpVeh = M.vehicles[vid]
+    if not mpVeh or not mpVeh.isLocal or mpVeh.isAi then return end
+    if mpVeh.veh.froze then
         M.setFreeze(vid, false)
+    end
+    if mpVeh.jbeam ~= M.WALKING then
+        M.applyRespawnProtection(vid)
     end
 end
 
@@ -264,7 +375,16 @@ local function onBJRequestCanSpawnVehicle(req, model, config)
     elseif not M.allVehicleConfigs[model] and
         not M.allTrailerConfigs[model] and
         not M.allPropConfigs[model] and
-        not model == M.WALKING then
+        model ~= M.WALKING then
+        -- was `not model == M.WALKING`, which Lua parses as `(not model) == M.WALKING` (unary
+        -- `not` binds tighter than `==`). `model` is always a non-nil string here, so `not model`
+        -- is always `false`, and `false == "unicycle"` is always false regardless of what `model`
+        -- actually is. That silently made this entire branch dead code : req.state = false could
+        -- never fire here for ANY model, not just the walking exemption it was trying to carve
+        -- out, so a genuinely unknown/unlisted model was never actually being rejected by this
+        -- check at all. Coincidentally harmless for `model == M.WALKING` specifically (both the
+        -- broken and correct forms evaluate to false there, which is why this wasn't what was
+        -- blocking unicycle spawning), but a real hole for everything else.
         req.state = false
     end
 end
@@ -826,43 +946,220 @@ local function switchToNextVehicle()
     be:enterNextVehicle(0, 1)
 end
 
+--- several independent subsystems (safe zones, the server-wide CollisionsMode setting, race-grid
+--- COUNTDOWN, spawn/reset protection) can each want a given vehicle ghosted at the same time.
+--- routing every one of them through this single reason registry instead of each calling setGhost
+--- directly means one subsystem clearing its own reason can never accidentally un-ghost a vehicle
+--- another subsystem still legitimately wants hidden (the vehicle stays ghosted as long as ANY
+--- reason is still active).
+---@type table<integer, table<string, true>> vid -> set of active ghost reasons
+M.ghostReasons = {}
+
+--- true while this client should render its OWN vehicle normally and every OTHER vehicle
+--- translucent instead, reversed specifically for a solo race's full-duration ghost (see
+--- raceRunner.lua's own COUNTDOWN/RACE-transition comments for why solo alone stays ghosted the
+--- whole race), per direct request : a solo racer doesn't want to stare at their own half-
+--- invisible car for an entire race, and every OTHER vehicle nearby genuinely can't stop them
+--- (that's the whole point of the ghost), so flagging THOSE as the visually-odd ones reads better.
+--- Purely a local rendering choice. The real ghost/collision flag and its cross-client sync are
+--- completely unaffected ; every OTHER client still sees this player's own vehicle as the
+--- (correctly, per the real synced ghost flag) translucent one, exactly as before.
+M.soloGhostVisualReversed = false
+
+---@param vid integer
+---@param isGhosted boolean the vehicle's own real ghost/collision state, as already known by the
+---caller (M.ghostReasons only ever tracks reasons for locally-owned vehicles, never a remote
+---vehicle's ghost state, so this can't just be re-derived from it in general)
+---@return number
+local function computeDisplayAlpha(vid, isGhosted)
+    -- CollisionsMode == "disabled" ghosts literally every vehicle, permanently, for as long as
+    -- it's set. The translucency visual exists to flag a TEMPORARY, situational ghost (respawn
+    -- protection, a safe zone, a race countdown), which stops meaning anything once it's just the
+    -- server's permanent baseline state instead ; every vehicle staying translucent forever reads
+    -- as a rendering bug, not useful information. Per direct request.
+    local freeroam = beamjoy_config.data.Freeroam
+    if freeroam and freeroam.CollisionsMode == "disabled" then return 1 end
+    if M.soloGhostVisualReversed then
+        -- real bug, found from a live report ("ghosting doesn't seem to apply to traffic") : this
+        -- used to check mpVeh.isLocal, which is BeamMP's own "not owned by a remote player" flag,
+        -- true for every vehicle that exists on THIS client, not just the one actually being
+        -- driven. Local AI traffic (each client spawns its own, never synced from another player)
+        -- satisfies isLocal just as much as the racer's own car does, so every traffic vehicle was
+        -- silently exempted from the translucent treatment right alongside it. Fixed by checking
+        -- against the actual currently-controlled vehicle (be:getPlayerVehicle(0)) instead. The
+        -- real "is this the racer's own car" question, which traffic can never satisfy.
+        local current = be:getPlayerVehicle(0)
+        return (current and current:getID() == vid) and 1 or 0.5
+    end
+    return isGhosted and 0.5 or 1
+end
+
+---@param state boolean
+local function setSoloGhostVisualReversed(state)
+    if M.soloGhostVisualReversed == state then return end
+    M.soloGhostVisualReversed = state
+    -- re-applies to every currently-tracked vehicle at once, immediately, rather than waiting for
+    -- each one's own ghost flag to happen to change next. A bystander's car that was never
+    -- ghosted at all still needs to flip to translucent (or back) the instant reversal toggles
+    M.vehicles:forEach(function(mpVeh)
+        mpVeh.veh:setMeshAlpha(computeDisplayAlpha(mpVeh.vid, mpVeh.veh.ghost == "1"), "")
+    end)
+end
+
+---@param vid integer
+---@param reason string
+---@param active boolean
+---@param force boolean? bypasses setGhost's own distance-safety retry entirely when this reason
+---being cleared is what actually brings the vehicle to fully un-ghosted (no-op if some OTHER
+---reason is still keeping it ghosted, or if `active` is true). See applyRespawnProtection's own
+---bounded-timeout fallback for why this exists
+---@param checkGhostedBystanders boolean? passed straight through to setGhost. See its own doc
+local function setGhostReason(vid, reason, active, force, checkGhostedBystanders)
+    local mpVeh = M.vehicles[vid]
+    if not mpVeh then return end
+    M.ghostReasons[vid] = M.ghostReasons[vid] or {}
+    M.ghostReasons[vid][reason] = active or nil
+    M.setGhost(mpVeh.veh, next(M.ghostReasons[vid]) ~= nil, force, checkGhostedBystanders)
+
+    -- scoped to reason == "race" specifically (not respawn/zone/disabled ghosting, which can
+    -- affect multiple unrelated vehicles at once and has no single "the racer" to treat
+    -- specially) and to a real solo session (participants <= 1). Multiplayer's own shared
+    -- COUNTDOWN grid-ghost is unaffected. Every "race"-reason call already always targets the
+    -- local player's own vehicle (raceRunner.lua never calls this for anyone else's), but checked
+    -- explicitly anyway rather than assumed.
+    if reason == "race" and mpVeh.isLocal then
+        local session = beamjoy_raceRunner and beamjoy_raceRunner.session
+        M.setSoloGhostVisualReversed(active and session ~= nil and #session.participants <= 1)
+    end
+end
+
+---@param vid integer
+local function applyRespawnProtection(vid)
+    local freeroam = beamjoy_config.data.Freeroam or {}
+    local collisionsMode = freeroam.CollisionsMode or "ghosts"
+    if collisionsMode ~= "ghosts" then return end
+    M.setGhostReason(vid, "respawn", true)
+    local taskName = "ghostRespawnProtect-" .. vid
+    local forceTaskName = "ghostRespawnProtectForce-" .. vid
+    async.removeTask(taskName)
+    async.removeTask(forceTaskName)
+    -- explicit enable flag now (Freeroam.RespawnGhostTimeoutEnabled), not a magic "slide the
+    -- timer to its max value" sentinel. That convention turned out fragile in practice (a value
+    -- of exactly the slider's own max had no real server-side meaning and could trip config-save
+    -- validation).
+    --
+    -- Off is documented (and intended) as "wait indefinitely for RespawnGhostDistance to clear
+    -- instead of a fixed duration", NOT "never even try to clear at all." Real, confirmed bug :
+    -- this used to just `return` here, which never once called setGhostReason(false) at all when
+    -- the timer was off, so setGhost's own distance/contact check (the thing that's actually
+    -- supposed to decide when it's safe to un-ghost) never got invoked, leaving a vehicle ghosted
+    -- forever even standing completely alone with nothing nearby. Fixed by attempting the clear
+    -- immediately instead of skipping it : setGhostReason(false) hands off to setGhost's own
+    -- distance-safety retry (every 200ms, no bound, no force fallback in this branch), which
+    -- un-ghosts right away if already clear or keeps retrying until it genuinely is, exactly the
+    -- "wait indefinitely for distance" behavior this was always meant to have.
+    if freeroam.RespawnGhostTimeoutEnabled == false then
+        M.setGhostReason(vid, "respawn", false)
+        return
+    end
+    local timeoutSec = freeroam.RespawnGhostTimeout
+    if timeoutSec == nil then timeoutSec = 10 end
+    async.delayTask(function() M.setGhostReason(vid, "respawn", false) end, timeoutSec * 1000, taskName)
+    -- setGhost's own RespawnGhostDistance safety check (below) retries un-ghosting every 200ms
+    -- with NO bound of its own until genuinely clear of every other vehicle. Appropriate when the
+    -- timer above is disabled (documented as "wait indefinitely"), but with a real timer enabled
+    -- this could otherwise strand a vehicle ghosted far longer than the configured duration just by
+    -- being parked somewhere crowded, defeating the point of a bounded timeout. A short grace
+    -- period past the timer's own deadline gives the distance check a fair chance to resolve
+    -- cleanly on its own first (the common case, nobody's actually still there) ; past that,
+    -- force through regardless of what's still nearby. Per direct request.
+    async.delayTask(function()
+        M.setGhostReason(vid, "respawn", false, true)
+    end, timeoutSec * 1000 + 3000, forceTaskName)
+end
+
 ---@param veh NGVehicle
 ---@param state boolean
----@param force boolean?
-local function setGhost(veh, state, force)
+---@param force boolean? real, confirmed bug fixed here (live report : ghosting could disable
+---while two vehicles were still physically inside each other, at both a race's countdown->RACE
+---transition and generally). `force` used to skip this WHOLE safety check, including literal
+---bounding-radius contact, not just the extra configurable buffer on top of it. That's a
+---reasonable trade for the wider ghosting system's own force-fallback (`applyRespawnProtection`'s
+---timeout+3s) : a single freshly-spawned vehicle is rarely placed in genuine, literal contact with
+---another one in the first place, so forcing through in the rare case it IS still crowded nearby
+---is a minor, harmless bump at worst. It's NOT a reasonable trade for a race's own grid-start
+---un-ghost fallback (raceRunner.lua's RACE transition, 2s after the green light) : a starting grid
+---is DELIBERATELY packed tight by design, so genuine bounding-radius overlap at the exact moment
+---every participant un-ghosts together is a real, likely case, not a rare edge case. Forcing
+---straight through it launches two solid bodies that are still literally superimposed, which is a
+---collision explosion, not a minor bump. Same underlying mechanism, very different odds of actually
+---triggering it, which is why this only ever showed up as a race problem in practice. Fixed once,
+---for both : `force` now only ever skips the extra CONFIGURABLE buffer above the two vehicles' own
+---real bounding radii. Literal radius-to-radius contact still blocks un-ghosting unconditionally,
+---so this can never launch two vehicles that are still genuinely inside each other, only skip past
+---an overly generous EXTRA safety margin once the caller's own timeout says it's waited long enough.
+---@param checkGhostedBystanders boolean? default true : a bystander vehicle that's currently
+---ghosted itself is normally skipped by the overlap check below (a ghost-ghost overlap can't
+---collide, so it's harmless to ignore). Pass false to check real distance against EVERY nearby
+---vehicle regardless of its own ghost flag. Needed specifically for the race-start un-ghost (see
+---raceRunner.lua's RACE transition) : every participant transitions to solid together, so each
+---client's own locally-known ghost flag for a fellow racer can be a few ms stale (their own
+---un-ghost sync hasn't arrived yet). Both sides could otherwise perceive each other as "still
+---ghosted, safe to ignore" and clear simultaneously while actually overlapping.
+local function setGhost(veh, state, force, checkGhostedBystanders)
+    if checkGhostedBystanders == nil then checkGhostedBystanders = true end
     if (veh.ghost == "1") == state then return end
     local mpVeh = M.vehicles[veh:getID()]
     local processName = "ghostRecover-" .. tostring(veh:getID())
-    if mpVeh and mpVeh.isLocal and not state and not force then
+    -- per direct request : a trailer attached to the local vehicle skips this whole distance/
+    -- contact safety check entirely, un-ghosting immediately regardless of what's nearby (not
+    -- even a literal-contact exemption, the full check is bypassed). A trailer's own separate
+    -- bounding length routinely overlaps whatever it's hitched to and anything else nearby in a
+    -- busy spawn/pits area, which could otherwise strand a towing vehicle ghosted indefinitely,
+    -- the exact same "retries forever" failure mode the timer-fallback fix above exists to guard
+    -- against, just triggered by trailer geometry instead of a crowded area.
+    local hasTrailer = mpVeh and mpVeh.isLocal and #M.getAttachedTrailers(veh:getID()) > 0
+    if mpVeh and mpVeh.isLocal and not state and not hasTrailer then
         local p1 = M.getVehiclePositionRotation(veh)
         local r1 = veh:getInitialLength() / 2
+        -- configurable buffer on top of the two vehicles' own bounding radii (Freeroam.
+        -- RespawnGhostDistance, default 0 = only literal contact blocks un-ghosting, matching the
+        -- original behavior). Same role as BJI's own CollisionsManager.ghostsRadius. `force`
+        -- zeroes this OUT specifically, never the base r1+r2 radii themselves. See this
+        -- function's own `force` doc comment above for why.
+        local distanceBuffer = force and 0 or
+            ((beamjoy_config.data.Freeroam and beamjoy_config.data.Freeroam.RespawnGhostDistance) or 0)
         if M.vehicles:any(function(v)
-                if v.vid == veh:getID() or v.veh.ghost == "1" then return false end
+                if v.vid == veh:getID() then return false end
+                if checkGhostedBystanders and v.veh.ghost == "1" then return false end
                 local p2 = M.getVehiclePositionRotation(v.veh)
                 local r2 = v.veh:getInitialLength() / 2
-                return p1:distance(p2) < r1 + r2
+                return p1:distance(p2) < r1 + r2 + distanceBuffer
             end) then
             async.removeTask(processName)
-            async.delayTask(function() setGhost(veh, false) end, 200, processName)
+            async.delayTask(function() setGhost(veh, false, force, checkGhostedBystanders) end, 200, processName)
             return
         end
     end
     async.removeTask(processName)
     veh:queueLuaCommand("obj:setGhostEnabled(" .. tostring(state) .. ")")
     veh:setDynDataFieldbyName("ghost", 0, state and "1" or "0")
-    local currentVeh = M.getCurrent()
-    if not currentVeh or currentVeh.vid ~= veh:getID() then
-        extensions.core_vehicle_partmgmt.setHighlightedPartsVisiblity(state and .5 or 1, veh:getID())
-    else
-        -- current veh is toggling
-        beamjoy_communications_ui.send("BJHUDIcon", {
-            pos = 3,
-            state = state,
-            name = "ghost",
-        })
-    end
+    -- translucency on the vehicle itself, always, including the one currently being driven,
+    -- matching BJI's own ghost visual intent (its setAlpha), just via veh:setMeshAlpha instead of
+    -- core_vehicle_partmgmt.setHighlightedPartsVisiblity (what this fork AND BJI both originally
+    -- used here) : that function only ever affects whichever parts are in the vehicle's own
+    -- "highlighted parts" set. Real state belonging to the parts-tuning UI, not something this
+    -- vehicle's own alpha visually not changing at all when nothing had ever populated/selected
+    -- it (a real, confirmed-by-testing no-op, not a "current vehicle" special case like round 1's
+    -- HUD-icon guess). setMeshAlpha (confirmed via the installed game's own gameplay/walk.lua and
+    -- gameplay/traffic/vehicle.lua, both already using it for exactly this kind of fade) sets a
+    -- vehicle's actual mesh transparency directly, unconditionally, regardless of any parts-
+    -- selection state. The reliable primitive this should have used from the start.
+    veh:setMeshAlpha(M.computeDisplayAlpha(veh:getID(), state), "")
     if mpVeh and mpVeh.isLocal then
-        beamjoy_communications.send("updateVehicleGhost", mpVeh.vid, state)
+        -- remoteVID, not vid. See the "updateVehicleGhost" handler's own comment above (onInit)
+        -- for why vid alone doesn't identify this vehicle correctly on any OTHER client
+        beamjoy_communications.send("updateVehicleGhost", mpVeh.remoteVID, state)
     end
 end
 
@@ -935,9 +1232,83 @@ local function getFullConfig(veh)
         label = label,
         key = key,
         parts = convertPartsTree(rawConfig.config.partsTree),
-        vars = rawConfig.config.vars,
-        paints = rawConfig.config.paints,
+        -- both legitimately nil for a vehicle with no runtime tuning/paint overrides (the common
+        -- case, not an edge case). Defaulted to empty tables here, at the source, rather than
+        -- trusting every caller to handle a nil vars/paints itself ; a real, confirmed bug
+        -- (raceRunner.lua's restoreSavedVehicle passing a bare nil straight into
+        -- core_vehicles.spawnNewVehicle's config crashed the native spawn code entirely) traced
+        -- back to exactly this
+        vars = rawConfig.config.vars or {},
+        paints = rawConfig.config.paints or {},
     }
+end
+
+--- human-readable "Model - Config" (or "Model (custom)" once the live setup no longer matches any
+--- saved .pc config, BeamNG's own isConfigCustom check, same one getFullConfig already uses)
+--- label for whatever's actually currently equipped. Used for the race leaderboard's vehicle
+--- column, per direct request ("read what config the user has chosen, and if it doesn't fit a
+--- config, say (custom)"). Not stored/localized server-side, this whole formatted string is
+--- computed once here and sent as-is, matching how vehicle/config names are never localized
+--- anywhere else in this codebase either.
+---@param veh NGVehicle
+---@return string
+local function getCurrentConfigDisplayLabel(veh)
+    local rawConfig = extensions.core_vehicle_manager.getVehicleData(veh:getID())
+    local model = rawConfig and rawConfig.config and rawConfig.config.model
+    if not model then return "?" end
+    local modelLabel = M.getModelLabel(model)
+    if isConfigCustom(veh) then
+        return string.format("%s (custom)", modelLabel)
+    end
+    local key = tostring(rawConfig.config.partConfigFilename)
+        :gsub("^vehicles/.*/", ""):gsub("%.pc$", "")
+    return string.format("%s - %s", modelLabel, M.getConfigLabel(model, key))
+end
+
+--- model + normalized config key + display label for whatever's currently equipped, or nil if
+--- it's a custom (unsaved .pc) setup. Used by the race editor's "vehicle restriction" feature
+--- (pool mode) to capture a saved-config vehicle from whatever the host currently happens to be
+--- sitting in, referenced by model+config key rather than a full parts snapshot ("single" mode,
+--- below via getFullConfig, captures the whole parts tree instead. The two modes have different
+--- needs, see their own doc comments). Deliberately refuses a custom config entirely (returns nil,
+--- same as "no vehicle") rather than capturing something : a pool entry has to be something the
+--- native vehicle selector can actually present as a real, clickable tile, and a custom setup has
+--- no saved file to be one. Shares its model/key derivation with getCurrentConfigDisplayLabel
+--- above.
+---@param veh NGVehicle
+---@return {model: string, config: string, label: string}?
+local function getCurrentConfigIdentity(veh)
+    local rawConfig = extensions.core_vehicle_manager.getVehicleData(veh:getID())
+    local model = rawConfig and rawConfig.config and rawConfig.config.model
+    if not model or isConfigCustom(veh) then return nil end
+    local key = tostring(rawConfig.config.partConfigFilename)
+        :gsub("^vehicles/.*/", ""):gsub("%.pc$", "")
+    return {
+        model = model,
+        config = key,
+        label = string.format("%s - %s", M.getModelLabel(model), M.getConfigLabel(model, key)),
+    }
+end
+
+--- a config being non-custom (isConfigCustom above) only means it was loaded from a real .pc file
+--- ON THIS COMPUTER. It says nothing about whether anyone ELSE has that exact file. A player's own
+--- "Save Configuration" preset (from the tuning UI) is just as real a .pc as a factory config,
+--- purely local to their own profile, never bundled or distributed anywhere. The pool mode
+--- vehicle restriction (a joining participant PICKS a config from the native selector, so it has
+--- to actually exist for them) needs to tell these apart, or a host could add a personal preset
+--- that's silently invisible to everyone else. Same signal the installed game's own vehicle
+--- selector already uses to classify a config's "Source" as Custom vs BeamNG-Official/Mod (see
+--- core/vehicles.lua : every config gets an `infoFilename` if (and only if) it ships an
+--- `info_<name>.json` sidecar alongside the .pc: a personal save never does, since it's a raw
+--- dump with no such metadata file).
+---@param model string
+---@param configKey string
+---@return boolean true if this config ships with the base game or a mod (guaranteed present for
+---anyone who has the model) ; false if it's a personal, local-only save
+local function isConfigShareable(model, configKey)
+    local modelData = core_vehicles.getModel(model)
+    local config = modelData and modelData.configs and modelData.configs[configKey]
+    return config ~= nil and config.infoFilename ~= nil
 end
 
 ---@param mpVeh BJVehicle
@@ -981,6 +1352,7 @@ local function paint(veh, paintData)
 end
 
 M.onInit = onInit
+M.onExtensionUnloaded = onExtensionUnloaded
 M.onVehicleSpawned = onVehicleSpawned
 M.onVehicleSwitched = onVehicleSwitched
 M.onVehicleDestroyed = onVehicleDestroyed
@@ -999,6 +1371,9 @@ M.getAllVehicleConfigs = getAllVehicleConfigs
 M.getAllVehicleLabels = getAllVehicleLabels
 M.getModelLabel = getModelLabel
 M.getConfigLabel = getConfigLabel
+M.getCurrentConfigDisplayLabel = getCurrentConfigDisplayLabel
+M.getCurrentConfigIdentity = getCurrentConfigIdentity
+M.isConfigShareable = isConfigShareable
 M.getCurrent = getCurrent
 M.getCurrentOwn = getCurrentOwn
 M.getCurrentModel = getCurrentModel
@@ -1016,6 +1391,10 @@ M.updateVehAttribute = updateVehAttribute
 M.explode = explode
 M.switchToNextVehicle = switchToNextVehicle
 M.setGhost = setGhost
+M.setGhostReason = setGhostReason
+M.applyRespawnProtection = applyRespawnProtection
+M.computeDisplayAlpha = computeDisplayAlpha
+M.setSoloGhostVisualReversed = setSoloGhostVisualReversed
 M.getAttachedTrailers = getAttachedTrailers
 M.getFullConfig = getFullConfig
 M.isPolice = isPolice

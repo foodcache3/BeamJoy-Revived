@@ -4,8 +4,18 @@ local M = {
     tool = "translate",
     ---@type fun(updated: GizmoObject)?
     onChange = nil,
+    ---@type fun(updated: GizmoObject)? fired once when a drag actually ends, not every frame
+    ---during it. The native gizmo API already supports this (editor.updateAxisGizmo's begin/end
+    ---callbacks), it just wasn't wired to anything before (both passed as `nop`)
+    onDragEnd = nil,
     obj = {},
 }
+
+-- which transform column (and sign) corresponds to dir/up for the rotate tool, discovered
+-- empirically in show() below rather than assumed from native API conventions this codebase
+-- doesn't actually have documentation for (two prior attempts each guessed wrong)
+local dirColumn, dirSign
+local upColumn, upSign
 
 local function onInit()
     beamjoy_communications_ui.addHandler("BJEditorChangeTool", M.setTool)
@@ -16,14 +26,34 @@ local function onInit()
     M.setTool()
 end
 
+--- reads dir/up from the transform's own basis-vector columns, using the mapping empirically
+--- discovered in show() below.
+local function readRotation()
+    local gizmoTransform = editor.getAxisGizmoTransform()
+    if dirColumn then
+        M.obj.dir = gizmoTransform:getColumn(dirColumn) * dirSign
+    end
+    if upColumn then
+        M.obj.up = gizmoTransform:getColumn(upColumn) * upSign
+    end
+end
+
 local function onDrag()
     if M.tool == "translate" then
         M.obj.pos = editor.getAxisGizmoTransform():getColumn(3)
     elseif M.tool == "rotate" then
-        local gizmoTransform = editor.getAxisGizmoTransform()
-        local rotation = QuatF(0, 0, 0, 1)
-        rotation:setFromMatrix(gizmoTransform)
-        M.obj.dir, M.obj.up = math.rotationQuatToDirAndUp(rotation)
+        -- deliberately NOT read here, mid-drag. A live report showed the gate's rendering
+        -- flipping 180° instantly on any rotation while the native gizmo widget itself stayed
+        -- visually correct the whole time, only "flipping" once released (when raceEditor.lua's
+        -- ground-snap onDragEnd rebuilds the widget FROM the by-then-corrupted stored dir). That
+        -- points at getAxisGizmoTransform() itself returning something unreliable specifically
+        -- mid-drag, not at a column/sign mapping bug (two earlier attempts at that both failed to
+        -- fix it, consistent with the mapping never having been the actual problem). Reading it
+        -- only once, at drag-end, after the native widget's own transform has settled, avoids
+        -- whatever's unreliable about reading it while the interaction is still live. The native
+        -- widget itself still gives the player correct, smooth visual feedback during the drag ;
+        -- only the stored gate/start data (and its own rendering) updates a beat later, at release.
+        return
     elseif M.tool == "scale" then
         local delta = worldEditorCppApi.getAxisGizmoScaleOffset()
         local axis = worldEditorCppApi.getAxisGizmoSelectedElement()
@@ -43,13 +73,20 @@ end
 local function onUpdate()
     if M.state then
         debugDrawer:drawAxisGizmo()
-        editor.updateAxisGizmo(nop, nop, onDrag)
+        editor.updateAxisGizmo(nop, function()
+            if M.tool == "rotate" then
+                readRotation()
+                if M.onChange then M.onChange(M.obj) end
+            end
+            if M.onDragEnd then M.onDragEnd(M.obj) end
+        end, onDrag)
     end
 end
 
 ---@param obj GizmoObject
 ---@param onChange fun(updated: GizmoObject)
-local function show(obj, onChange)
+---@param onDragEnd fun(updated: GizmoObject)?
+local function show(obj, onChange, onDragEnd)
     M.state = true
     M.obj.pos = obj.pos
     M.obj.dir = obj.dir
@@ -60,7 +97,29 @@ local function show(obj, onChange)
     transform:setPosition(obj.pos)
     worldEditorCppApi.setAxisGizmoAlignment(editor.AxisGizmoAlignment_Local)
     editor.setAxisGizmoTransform(transform, obj.scales)
+
+    -- empirically determine which basis column (and sign) of THIS transform actually corresponds
+    -- to obj.dir/obj.up, right at the one point their true values are already known, rather than
+    -- assuming a specific native local-axis convention, which two earlier attempts each got wrong
+    -- (per a live report : dir flipped 180° immediately on any rotation, a hard/constant mismatch,
+    -- not an intermittent ambiguity). The SAME quatFromDir->getMatrix construction is what's live
+    -- during a drag too, so whichever column matches here keeps matching for the rest of this
+    -- selection's rotate drags.
+    local dirN, upN = obj.dir:normalized(), obj.up:normalized()
+    for i = 0, 2 do
+        local col = transform:getColumn(i):normalized()
+        local dDot = col:dot(dirN)
+        local uDot = col:dot(upN)
+        if math.abs(dDot) > 0.99 then
+            dirColumn, dirSign = i, (dDot > 0 and 1 or -1)
+        end
+        if math.abs(uDot) > 0.99 then
+            upColumn, upSign = i, (uDot > 0 and 1 or -1)
+        end
+    end
+
     M.onChange = onChange
+    M.onDragEnd = onDragEnd
 
     worldEditorCppApi.setGizmoLineThicknessScale(1)
     worldEditorCppApi.setAxisGizmoRenderPlane(false)
@@ -74,7 +133,10 @@ end
 local function hide()
     M.state = false
     M.onChange = nil
+    M.onDragEnd = nil
     M.obj = {}
+    dirColumn, dirSign = nil, nil
+    upColumn, upSign = nil, nil
 end
 
 ---@param tool "translate"|"rotate"|"scale"? default "translate"

@@ -4,7 +4,12 @@ local M = {
     APP_SIZES = {
         {
             name = "beamjoy-main",
-            defaultTop = "4vh",
+            -- must be kept in sync with ui/modules/apps/BeamJoy-Main/app.json's own css.top:
+            -- that file's own css block is NOT what actually drives the rendered default position,
+            -- this table is (sendWindowsSizesAndPositions below reads app.defaultTop, never
+            -- app.json at all). A previous round changed app.json alone, which was a complete
+            -- no-op for the real position because this duplicate never got updated to match.
+            defaultTop = "60vh",
             defaultLeft = ".5vw",
             defaultWidth = "21vw",
             defaultHeight = "30vh",
@@ -35,6 +40,14 @@ local M = {
 }
 AddPreloadedDependencies(M)
 
+--- Also used for the version-mismatch check (windows/versionCheck): that component requests
+--- this itself on mount rather than relying solely on the one-time push below, since a component
+--- mounted after this push already fired (a real, observed race, see its own file comment) would
+--- otherwise miss it entirely and never detect a real mismatch.
+local function sendVersion()
+    M.send("BJVersion", { version = beamjoy_main.VERSION, build = beamjoy_main.BUILD })
+end
+
 local function onUIReady()
     beamjoy_lang.initLang()
     beamjoy_communications.send("clientConnection", beamjoy_lang.lang)
@@ -45,6 +58,8 @@ local function onUIReady()
         end
         M.initWindows()
         M.sendWindowsSizesAndPositions()
+        -- one-time push for the Settings tab's About section (version/build display + GitHub link)
+        sendVersion()
         extensions.core_gamestate.requestExitLoadingScreen("serverConnection")
         uiHelpers.hideGameMenu()
 
@@ -68,7 +83,9 @@ local function onInit()
     InitPreloadedDependencies(M)
     M.addHandler("BJRequestWindowsSizesAndPositions", M.sendWindowsSizesAndPositions)
     M.addHandler("BJCloseWindow", M.closeWindow)
+    M.addHandler("BJRequestOpenWindow", M.requestOpenWindow)
     M.addHandler("BJReady", onUIReady)
+    M.addHandler("BJVersionRequest", sendVersion)
 
     M.addHandler("BJRequestIntroPanelData", M.getIntroPanelData)
     M.addHandler("BJSaveIntroPanelData", M.saveIntroPanelData)
@@ -173,29 +190,55 @@ local function sendWindowsSizesAndPositions()
     return res
 end
 
+--- true whenever the main window should be forced open and non-closable for the CURRENT player:
+--- staff always have this (regardless of config), or every player does when the host has
+--- turned on ForceHud (services_config.data.ForceHud, default on). One place for this so
+--- onBJUpdateSelf/initWindows/toggleWindow can't drift out of sync with each other the way the
+--- COUNTDOWN/RACE restriction checks did earlier.
+---@return boolean
+local function isMainForced()
+    return beamjoy_permissions.isStaff() or beamjoy_config.data.ForceHud == true
+end
+
 local function onBJUpdateSelf()
-    local staff = beamjoy_permissions.isStaff()
-    if not staff then
+    local forced = isMainForced()
+    -- config window visibility is gated on canOpenConfig() (isStaff OR any config-tab permission,
+    -- see permissions.lua), NOT isStaff alone. Gating on isStaff alone used to force-close/hide the
+    -- config window for anyone not ranked "staff" even if they'd been individually granted e.g.
+    -- EditRaces (the real bug behind "non-staff players with EditRaces can't open the config
+    -- menu"; imgui/menu.lua's menu item had the identical bug and is fixed the same way).
+    -- "main" stays forced-specific on purpose: every player gets that window regardless of
+    -- permissions when isMainForced() is true, staff/ForceHud just can't close theirs.
+    local canOpenConfig = beamjoy_permissions.canOpenConfig()
+    if not canOpenConfig then
         M.windowStates.config = false
     end
     M.send("BJUpdateWindowSettings", {
         ["beamjoy-main"] = {
-            visible = staff or M.windowStates.main,
-            closable = not staff,
+            visible = forced or M.windowStates.main,
+            closable = not forced,
         },
         ["beamjoy-config"] = {
-            visible = staff and M.windowStates.config,
+            visible = canOpenConfig and M.windowStates.config,
             closable = true,
         },
     })
 end
 
 local function initWindows()
-    local staff = beamjoy_permissions.isStaff()
+    local forced = isMainForced()
+    -- host-configurable, default on (services_config.data.ShowHudAtStart): opens the main window
+    -- automatically on connect even when it isn't forced-non-closable. Moot when isMainForced()
+    -- is already true (that already implies visible from the start); matters when it's off, so a
+    -- host can choose "starts open, but players may still close it" as a middle ground between
+    -- always-forced and the original "closed until manually opened" default.
+    if forced or beamjoy_config.data.ShowHudAtStart == true then
+        M.windowStates.main = true
+    end
     M.send("BJUpdateWindowSettings", {
         ["beamjoy-main"] = {
-            visible = staff,
-            closable = not staff,
+            visible = forced or M.windowStates.main,
+            closable = not forced,
         },
         ["beamjoy-config"] = {
             visible = false,
@@ -205,11 +248,20 @@ local function initWindows()
 end
 
 local function toggleWindow(windowName)
+    -- closing "config" specifically (not opening it) has to go through Angular's own guarded
+    -- close flow (the same one the in-window X button already uses) instead of being forced
+    -- shut directly from here, since the race editor may have unsaved changes, which is purely
+    -- Angular-side state this module has no visibility into. This ImGui menu item was the one
+    -- remaining way to close the window that bypassed the discard-changes confirm entirely (the
+    -- in-window X button and BJCloseWindow already round-trip through it correctly).
+    if windowName == "config" and M.windowStates.config then
+        M.send("BJRequestCloseWindow", "config")
+        return
+    end
     M.windowStates[windowName] = not M.windowStates[windowName]
     local visible, closable
     if windowName == "main" then
-        local staff = beamjoy_permissions.isStaff()
-        if staff then
+        if isMainForced() then
             M.windowStates[windowName] = true
             visible = true
             closable = false
@@ -219,8 +271,8 @@ local function toggleWindow(windowName)
         end
     elseif windowName == "config" then
         closable = true
-        local staff = beamjoy_permissions.isStaff()
-        visible = staff and M.windowStates[windowName] or false
+        -- see onBJUpdateSelf's own comment above: canOpenConfig(), not isStaff alone
+        visible = beamjoy_permissions.canOpenConfig() and M.windowStates[windowName] or false
     else
         return -- invalid window
     end
@@ -232,6 +284,18 @@ local function toggleWindow(windowName)
     })
     if visible then -- refresh on first drawn
         M.sendWindowsSizesAndPositions()
+    end
+end
+
+--- Angular-initiated "make sure this window is open" (e.g. an in-window shortcut button), as
+--- opposed to toggleWindow's blind flip (fine for the ImGui menu item, which already knows the
+--- window's current state from its own checkbox). Idempotent: does nothing if already open,
+--- rather than closing it. Permission gating for "config" specifically still goes through
+--- toggleWindow's own canOpenConfig() check either way, this is just the open/no-op decision.
+---@param windowName string
+local function requestOpenWindow(windowName)
+    if M.windowStates[windowName] == false then
+        M.toggleWindow(windowName)
     end
 end
 
@@ -306,7 +370,9 @@ M.dispatch = dispatch
 M.sendWindowsSizesAndPositions = sendWindowsSizesAndPositions
 M.initWindows = initWindows
 M.toggleWindow = toggleWindow
+M.isMainForced = isMainForced
 M.closeWindow = closeWindow
+M.requestOpenWindow = requestOpenWindow
 M.getIntroPanelData = getIntroPanelData
 M.saveIntroPanelData = saveIntroPanelData
 M.openIntroPanel = openIntroPanel

@@ -151,7 +151,7 @@ end
 local function sanitizeAndRetrieveModdedMaps()
     local currentMap = services_core.getCurrentMap()
     local rebootNeeded = false
-    local skipped = {} -- already analyzed archives moved/copied to idle
+    local skipped = {} -- archives already analyzed and moved/copied to idle
     local res = {}
     for _, mod in ipairs(FS.ListFiles(M.clientFolder)) do
         if mod:find("%.zip$") then
@@ -168,7 +168,15 @@ local function sanitizeAndRetrieveModdedMaps()
                     }
                 end):values()
             else
-                maps = extractLevelData(M.clientFolder .. "/" .. mod)
+                local ok, extracted = pcall(extractLevelData, M.clientFolder .. "/" .. mod)
+                if ok then
+                    maps = extracted
+                else
+                    -- one bad archive (eg. a path/name the OS can't fully process) must not abort
+                    -- the whole scan and leave every other map unregistered.
+                    LogError(string.format("Error analyzing mod %s : %s", mod, tostring(extracted)))
+                    maps = {}
+                end
             end
             if table.length(maps) > 0 then
                 if not FS.Exists(M.mapsFolder .. "/" .. mod) then
@@ -210,7 +218,13 @@ local function sanitizeAndRetrieveModdedMaps()
                     }
                 end):values()
             else
-                maps = extractLevelData(M.mapsFolder .. "/" .. mod)
+                local ok, extracted = pcall(extractLevelData, M.mapsFolder .. "/" .. mod)
+                if ok then
+                    maps = extracted
+                else
+                    LogError(string.format("Error analyzing mod %s : %s", mod, tostring(extracted)))
+                    maps = {}
+                end
             end
             if table.length(maps) > 0 then
                 if table.any(maps, function(data)
@@ -232,7 +246,12 @@ local function sanitizeAndRetrieveModdedMaps()
     return res, rebootNeeded
 end
 
-local function scanNewMods()
+---@param onRebootNeeded fun()? called instead of the default exit()-after-3s behavior if this
+---scan determines a reboot/reload is needed. Pass a no-op if the caller is already about to
+---reload/restart mods anyway for its own separate reason (eg. switchMap already calling
+---FS.SendConsoleCommand("reloadmods") for the specific map it's switching to), since otherwise
+---whatever this scan additionally found would still schedule its own independent exit() on top.
+local function scanNewMods(onRebootNeeded)
     LogWarn(services_lang.get("maps.scan.start"))
     local modded, rebootNeeded = sanitizeAndRetrieveModdedMaps()
     local changed = false
@@ -266,9 +285,32 @@ local function scanNewMods()
 
     if rebootNeeded then
         LogWarn(services_lang.get("maps.scan.done.withReboot"))
-        utils_async.delayTask(exit, 3)
+        if onRebootNeeded then
+            onRebootNeeded()
+        else
+            utils_async.delayTask(exit, 3)
+        end
     else
         LogInfo(services_lang.get("maps.scan.done"))
+    end
+end
+
+---@param onRebootNeeded fun()? forwarded to scanNewMods, see its own doc comment
+local function refreshModsIfChanged(onRebootNeeded)
+    local cache = generateCache()
+    if not table.compare(M.modsCache, cache, true) then
+        -- set MaxPlayers to 0 to prevent connections during the scan
+        local maxPlayers = services_core.data.MaxPlayers
+        MP.Set(MP.Settings.MaxPlayers, 0)
+        -- pcall'd so one bad mod (eg. an OS-level Unicode path issue) can't leave MaxPlayers
+        -- stuck at 0 and abort the caller before it can finish its own remaining work
+        local ok, err = pcall(scanNewMods, onRebootNeeded)
+        if not ok then
+            LogError("Error scanning mods, aborting this scan : " .. tostring(err))
+        end
+        M.modsCache = generateCache()
+        dao_maps.saveModsCache(M.modsCache)
+        MP.Set(MP.Settings.MaxPlayers, maxPlayers)
     end
 end
 
@@ -282,16 +324,7 @@ local function onInit()
     table.assign(M.data, dao_maps.get() or {})
 
     table.assign(M.modsCache, dao_maps.getModsCache() or {})
-    local cache = generateCache()
-    if not table.compare(M.modsCache, cache, true) then
-        -- set MaxPlayers to 0 to prevent connections during mods scan
-        local maxPlayers = services_core.data.MaxPlayers
-        MP.Set(MP.Settings.MaxPlayers, 0)
-        scanNewMods()
-        M.modsCache = generateCache()
-        dao_maps.saveModsCache(M.modsCache)
-        MP.Set(MP.Settings.MaxPlayers, maxPlayers)
-    end
+    refreshModsIfChanged()
 
     if not M.data[services_core.getCurrentMap()] or
         M.data[services_core.getCurrentMap()].ignore then
@@ -306,6 +339,9 @@ local function onInit()
     communications_rx.addHandler("switchMap", M.switchMap)
 
     services_consoleCommands.register("map", "commands.map.args", "commands.map.desc", M.consoleMap)
+
+    services_chatCommands.addCommand("map", "chat.command.map.desc", M.chatMap,
+        { commandKey = "chat.command.map.command", permissions = { BJ_PERMISSIONS.SwitchMap } })
 end
 
 ---@param caches table<string, any>
@@ -313,7 +349,9 @@ end
 local function onBJRequestCache(caches, playerID)
     if services_permissions.hasAllPermissions(playerID, BJ_PERMISSIONS.SetMaps) then
         caches.maps = M.data
-    elseif services_permissions.hasAllPermissions(playerID, BJ_PERMISSIONS.SwitchMap) then
+    elseif services_permissions.hasAnyPermission(playerID, BJ_PERMISSIONS.SwitchMap, BJ_PERMISSIONS.VoteMap) then
+        -- VoteMap holders need the enabled map list too, to build a map-vote picker: they can't
+        -- switch directly, but they can still see what's pickable
         caches.maps = table.filter(M.data, function(map)
             return map.enabled
         end)
@@ -362,7 +400,16 @@ local function setMaps(ctxt, mapsData)
     end
 end
 
-local function switchMap(ctxt, newMapName)
+---@param ctxt BJSContext
+---@param newMapName string
+---@param onComplete fun()? called once the switch has actually finished: once mods have been
+---reloaded (Windows), right before the process exits to let the host restart it (Linux), or
+---immediately (a non-modded-to-non-modded switch has nothing to reload/restart). Never called at
+---all if the switch is rejected outright (bad permissions/invalid/no-op map) before the kick
+---countdown even starts. MaxPlayers is kept at 0 for the whole switch regardless of whether this
+---is passed, and is always restored right before this fires, whether or not a caller wants a
+---callback.
+local function switchMap(ctxt, newMapName, onComplete)
     local currentMapName = services_core.getCurrentMap()
     if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID, BJ_PERMISSIONS.SwitchMap) then
         return
@@ -372,6 +419,21 @@ local function switchMap(ctxt, newMapName)
 
     local currentMap = M.data[currentMapName]
     local newMap = M.data[newMapName]
+
+    -- Block new connections for the ENTIRE switch (kick countdown + reload/restart), not just the
+    -- reloadmods sub-step itself. Otherwise a player could connect mid-countdown, or in the gap
+    -- before Windows' reloadmods actually runs, and get served whatever mix of old/new archives is
+    -- sitting in M.clientFolder at that moment. Mirrors the temporary-MaxPlayers-0 pattern
+    -- refreshModsIfChanged already uses for its own scan, captured once here (before anything
+    -- touches it) so `complete()` below restores the real original value regardless of what
+    -- refreshModsIfChanged's own internal capture/restore does with it in the meantime.
+    local maxPlayers = services_core.data.MaxPlayers
+    MP.Set(MP.Settings.MaxPlayers, 0)
+    local complete = function()
+        MP.Set(MP.Settings.MaxPlayers, maxPlayers)
+        if onComplete then onComplete() end
+    end
+
     if not currentMap.base then
         -- current is modded, remove archive
         FS.Remove(M.clientFolder .. "/" .. currentMap.archive)
@@ -388,13 +450,51 @@ local function switchMap(ctxt, newMapName)
     services_core.setMap(newMapName)
 
     local finishProcess = function()
+        -- Always fires now (previously only for a non-modded switch, via the OTHER branch this
+        -- used to have). The modded-switch branch used to call exit() right after its own
+        -- onMapChangedWithReboot hook, so activityConfig/races/hunter's own onMapChanged listeners
+        -- (which reload their per-map data) never actually ran for a modded switch. Harmless
+        -- before, since the process died immediately after anyway, but a real gap now that it doesn't.
+        extensions.hook("onMapChanged", currentMapName, newMapName)
         if not currentMap.base or not newMap.base then
-            -- reboot required if previous or next map is modded
-            LogWarn(services_lang.get("maps.switch.rebootWarn"))
-            extensions.hook("onMapChangedWithReboot", currentMapName, newMapName)
-            exit()
+            -- Previous or next map is modded : the mod archive was already moved in/out of
+            -- M.clientFolder above, so newly-connecting players need BeamMP-Server to re-serve
+            -- what's actually there now.
+            if FS.isWindows() then
+                -- Confirmed (via a BeamMP dev, then live-tested) this doesn't require a full
+                -- process restart. FS.SendConsoleCommand("reloadmods") gets the same result live,
+                -- with the server never actually going down. Windows-only: it works by injecting
+                -- keystrokes into BeamMP-Server.exe's own attached console (AttachConsole/
+                -- WriteConsoleInput), which has no Linux equivalent wired up here.
+                --
+                -- Also re-runs the same mods-changed scan onInit runs at startup (skipped
+                -- otherwise now that a modded switch no longer restarts the process, which used to
+                -- be what triggered it again as a side effect). An onRebootNeeded no-op is passed
+                -- since reloadmods is already about to run regardless, covering whatever this scan
+                -- finds too, without it also scheduling its own separate exit().
+                refreshModsIfChanged(function() end)
+                LogWarn(services_lang.get("maps.switch.reloadingMods"))
+                FS.SendConsoleCommand("reloadmods")
+                complete()
+            else
+                -- Linux host (or anything else FS.isWindows() doesn't recognize): no console-
+                -- injection path exists here, so fall back to the original behavior from before
+                -- reloadmods was added. Exit and let the host's own process supervisor (systemd/
+                -- pm2/the hoster's own panel, etc.) restart BeamMP-Server, which will pick up the
+                -- already-swapped archive in M.clientFolder on its own.
+                LogWarn(services_lang.get("maps.switch.rebootWarn"))
+                -- Restore MaxPlayers and fire onComplete now, not after the delayed exit: the
+                -- process is about to die regardless, so there's nothing left to usefully wait on,
+                -- and leaving MaxPlayers at 0 across the exit would persist into the config
+                -- BeamMP-Server reads back on restart, permanently locking it at 0 players until
+                -- someone manually fixes it.
+                complete()
+                utils_async.delayTask(exit, 3)
+            end
         else
-            extensions.hook("onMapChanged", currentMapName, newMapName)
+            -- non-modded-to-non-modded switch : nothing to reload/restart, the switch is already
+            -- fully done at this point
+            complete()
         end
     end
     -- warn and kick all players
@@ -460,11 +560,65 @@ local function consoleMap(args)
         return
     end
 
-    M.switchMap(InitContext(), matches[1])
-    local out = "\n" .. services_lang.get("commands.map.current")
-        :var({ map = M.data[matches[1]] and M.data[matches[1]].label or matches[1] })
-    print(GetConsoleColor(CONSOLE_COLORS.FOREGROUNDS.LIGHT_GREEN) ..
-        out .. GetConsoleColor(CONSOLE_COLORS.STYLES.RESET))
+    -- Reported via the onComplete callback, not immediately after this call. switchMap's own
+    -- kick-countdown/mods-reload-or-restart sequence is async, so printing this right away would
+    -- claim the switch is done before it actually is (previously printed right here, misleadingly
+    -- appearing BEFORE the "reloading mods"/"reboot" warning and the actual reload/restart).
+    M.switchMap(InitContext(), matches[1], function()
+        local out = "\n" .. services_lang.get("commands.map.current")
+            :var({ map = M.data[matches[1]] and M.data[matches[1]].label or matches[1] })
+        print(GetConsoleColor(CONSOLE_COLORS.FOREGROUNDS.LIGHT_GREEN) ..
+            out .. GetConsoleColor(CONSOLE_COLORS.STYLES.RESET))
+    end)
+end
+
+--- chat-command equivalent of consoleMap : same fuzzy exact-then-substring name matching against
+--- M.data's keys, just reporting via services_chat.directSend instead of print()
+---@param ctxt BJSContext
+---@param args string[] "<map_name>"
+---@param command BJChatCommand
+local function chatMap(ctxt, args, command)
+    if #args < 1 then
+        services_chat.directSend(ctxt.senderID,
+            string.format("%s : %s -> %s",
+                services_lang.get("chat.command.usage", ctxt.sender.lang),
+                services_lang.get(command.commandKey, ctxt.sender.lang),
+                services_lang.get(command.descKey, ctxt.sender.lang)),
+            services_chat.COLORS.ERROR)
+        return
+    end
+
+    local matches
+    if M.data[args[1]] then
+        matches = { args[1] }
+    else
+        matches = table.keys(M.data):filter(function(name)
+            return tostring(name):lower():find(args[1]:lower()) ~= nil
+        end)
+    end
+
+    if #matches == 0 then
+        services_chat.directSend(ctxt.senderID,
+            services_lang.get("commands.map.notFound", ctxt.sender.lang),
+            services_chat.COLORS.ERROR)
+        return
+    elseif #matches > 1 then
+        services_chat.directSend(ctxt.senderID,
+            services_lang.get("commands.map.ambiguous", ctxt.sender.lang)
+            .. "\n" .. matches:sort():join(", "),
+            services_chat.COLORS.ERROR)
+        return
+    end
+
+    -- Deliberately NOT deferred to switchMap's own onComplete callback like consoleMap's
+    -- equivalent print now is. The sender gets kicked along with everyone else as part of the
+    -- switch's own kick-countdown, so they'd never actually be connected to receive a confirmation
+    -- sent after the fact. Sent immediately instead, worded as in-progress rather than
+    -- already-done, since that's the only true thing that can be said before they're disconnected.
+    M.switchMap(ctxt, matches[1])
+    services_chat.directSend(ctxt.senderID,
+        services_lang.get("commands.map.switching", ctxt.sender.lang)
+        :var({ map = M.data[matches[1]] and M.data[matches[1]].label or matches[1] }))
 end
 
 M.onInit = onInit
@@ -473,5 +627,6 @@ M.onBJRequestCache = onBJRequestCache
 M.setMaps = setMaps
 M.switchMap = switchMap
 M.consoleMap = consoleMap
+M.chatMap = chatMap
 
 return M

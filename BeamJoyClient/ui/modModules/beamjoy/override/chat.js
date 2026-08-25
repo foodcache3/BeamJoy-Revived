@@ -1,84 +1,37 @@
-const createSpanNode = (text, color, bold) => {
-    const node = document.createElement("span");
-    node.appendChild(document.createTextNode(text));
-    if (color)
-        node.style.color = `rgb(${Math.round(color[0] * 255)}, ${Math.round(
-            color[1] * 255
-        )}, ${Math.round(color[2] * 255)})`;
-    if (bold) node.classList.add("bold");
-    return node;
-};
-
-const generateTimeStr = () => {
-    const now = new Date();
-    let hour = now.getHours();
-    let minute = now.getMinutes();
-    let second = now.getSeconds();
-    if (hour < 10) hour = "0" + hour;
-    if (minute < 10) minute = "0" + minute;
-    if (second < 10) second = "0" + second;
-    return hour + ":" + minute + ":" + second;
-};
-
-const addMessageOverride = (rawMsg, time = generateTimeStr()) => {
-    let payload;
-    try {
-        payload = JSON.parse(rawMsg);
-    } catch (e) {
-        // invalid json, do not print
-        console.warn("Invalid chat message", rawMsg, e);
-        return;
-    }
-
-    // Create the message node
-    const chatMessageNode = document.createElement("li");
-    chatMessageNode.className = "chat-message";
-    fadeNode(chatMessageNode);
-
-    // create node for the timestamp
-    const messageTimestampNode = createSpanNode(time);
-    messageTimestampNode.className = "chat-message-timestamp";
-    chatMessageNode.appendChild(messageTimestampNode);
-
-    if (payload.sender) {
-        if (payload.sender.tag) {
-            chatMessageNode.appendChild(createSpanNode("[", null, true));
-            chatMessageNode.appendChild(
-                createSpanNode(
-                    payload.sender.tag,
-                    payload.sender.tagColor,
-                    true
-                )
-            );
-            chatMessageNode.appendChild(createSpanNode("]", null, true));
-        }
-        chatMessageNode.appendChild(
-            createSpanNode(
-                payload.sender.text + ": ",
-                payload.sender.color,
-                true
-            )
-        );
-    }
-    chatMessageNode.appendChild(
-        createSpanNode(payload.message.text, payload.message.color)
-    );
-
-    // create text for the message itself, add it to chat message list
-    const chatList = document.getElementById("chat-list");
-    chatList.appendChild(chatMessageNode);
-    // Delete oldest chat message if more than 70 messages exist
-    if (chatList.children.length > 70) {
-        chatList.removeChild(chatList.children[0]);
-    }
-    scrollToLastMessage();
-};
-
 angular.module("beamjoy").service("bjChat", function ($rootScope) {
-    // addMessage and related chat functions were removed in BeamNG 0.39.
-    // The BJChat event still works via the Vue chat system directly.
-    $rootScope.$on("BJChat", (_, message) => {
-        // Messages are handled by the BeamJoy Vue frontend via the BJChat event.
+    // Previously rebuilt the whole message DOM node by hand and appended it to #chat-list
+    // directly. Broke silently after BeamNG 0.39 moved the native chat UI to a real "UI App"
+    // (BeamMP-Chat/app.js) and got stubbed out to a no-op rather than fixed, meaning no BJS chat
+    // message (including the player's own, echoed back by the server) ever displayed at all.
+    // BeamMP-Chat/app.js's own `addMessage(msg)` is a plain global function (not Angular/Vue
+    // scoped: that file is a classic non-module script, so its top-level function declarations
+    // land on `window`), already handling the timestamp, fade-in, scrollback, and localStorage
+    // persistence #chat-list needs, so this reuses it instead of re-deriving all of that. Its own
+    // rich-formatting path only understands BeamMP's own `^`-color-code syntax for
+    // "Server: "-prefixed messages, not arbitrary per-message RGB, so this only restores plain
+    // text (sender tag + name + message); the old per-message custom color styling isn't
+    // reproduced here.
+    $rootScope.$on("BJChat", (_, rawMsg) => {
+        let payload;
+        try {
+            payload = JSON.parse(rawMsg);
+        } catch (e) {
+            console.warn("Invalid chat message", rawMsg, e);
+            return;
+        }
+
+        let text = "";
+        if (payload.sender) {
+            if (payload.sender.tag) {
+                text += `[${payload.sender.tag}] `;
+            }
+            text += `${payload.sender.text}: `;
+        }
+        text += payload.message.text;
+
+        if (typeof addMessage === "function") {
+            addMessage(text);
+        }
     });
     $rootScope.$on("BJUnload", () => {
         if (typeof Storage !== "undefined") {

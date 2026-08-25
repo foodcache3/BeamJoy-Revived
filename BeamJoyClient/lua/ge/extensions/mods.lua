@@ -7,6 +7,13 @@ local M = {
     process = false,
 }
 
+-- shared delayTask key: onBJVehicleModChanged forces a full re-parse of every installed vehicle
+-- mod's jbeam files (expensive, and noisy in the log for any broken mod). Several vehicle mods can
+-- activate/deactivate within the same moment (e.g. each player in a race bringing in their own
+-- custom vehicle) ; using the same key for all of them collapses that burst into a single re-scan
+-- instead of one full re-scan per mod.
+local VEHICLE_MOD_CHANGED_KEY = "onBJVehicleModChanged"
+
 local function initServerMods()
     M.serverMods = table.filter(MPModManager.getModList(), function(v, k)
         return v.active and tostring(k):find("^multiplayer") ~= nil
@@ -72,7 +79,7 @@ local function disableMods(modsToRemove, delete)
         if changedVehicles then
             async.delayTask(function()
                 extensions.hook("onBJVehicleModChanged")
-            end, 200)
+            end, 200, VEHICLE_MOD_CHANGED_KEY)
         end
     end)
     M.process = false
@@ -159,6 +166,13 @@ local function initHooks()
         return M.baseFunctions.core_modmanager.checkUpdate(...)
     end
     extensions.core_modmanager.deleteMod = function(modName)
+        -- Deliberately NOT gated on M.state like its siblings above : this function isn't purely
+        -- player-initiated the way activateModId/deactivateModId are. BeamMP's own native
+        -- cleanUpSessionMods() (disconnect cleanup) calls back into this same overridden function
+        -- to actually remove each session mod ; gating it on M.state (1.8.7, reverted here) blocked
+        -- every one of those calls too once AllowClientMods was permanently forced off (1.8.8),
+        -- silently breaking real disconnect cleanup instead of just blocking a player's own manual
+        -- mod-manager action.
         if isServerMod(modName) then
             uiHelpers.applyLoading(false)
             uiHelpers.toastError(beamjoy_lang.translate("beamjoy.toast.mods.cannotDisableMandatory"))
@@ -209,7 +223,7 @@ local function onModActivated(mod)
     if mod.modType == "vehicle" then
         async.delayTask(function()
             extensions.hook("onBJVehicleModChanged")
-        end, 200)
+        end, 200, VEHICLE_MOD_CHANGED_KEY)
     end
 end
 
@@ -222,7 +236,7 @@ local function onModDeactivated(mod)
     if mod.modType == "vehicle" then
         async.delayTask(function()
             extensions.hook("onBJVehicleModChanged")
-        end, 200)
+        end, 200, VEHICLE_MOD_CHANGED_KEY)
     end
 end
 

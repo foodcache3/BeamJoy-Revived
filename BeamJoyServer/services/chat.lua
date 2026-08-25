@@ -69,10 +69,12 @@ local function sendEvent(eventKey, eventParams)
 
     -- Discord ChatHook Mod integration (https://github.com/OfficialLambdax/BeamMP-ChatHook)
     if not table.includes(M.DISCORD_CHAT_HOOK_EVENTS_BLACKLIST, eventKey) then
+        -- eventParams are literal substitution values (player names, map labels...), never
+        -- translation keys themselves. Looking each one up via services_lang.get() first (as
+        -- this used to) only works if the value happens to also BE a locale key; an
+        -- ordinary player/map name isn't, silently blanking the substitution instead
         local discordMessage = services_lang.get(eventKey, services_config.data.DiscordChatHookLang)
-            :var(table.map(eventParams or {}, function(subKey)
-                return services_lang.get(subKey, services_config.data.DiscordChatHookLang)
-            end))
+            :var(eventParams or {})
         MP.TriggerGlobalEvent("onScriptMessage", discordMessage, "BeamJoy")
     end
 end

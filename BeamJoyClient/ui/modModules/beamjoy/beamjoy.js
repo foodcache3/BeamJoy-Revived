@@ -37,10 +37,23 @@ await import(`/ui/modModules/beamjoy/cmps/accordion/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/fade/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/contextMenu/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/sortable/app.js`);
+await import(`/ui/modModules/beamjoy/cmps/confirm/app.js`);
+await import(`/ui/modModules/beamjoy/cmps/infoPanel/app.js`);
+await import(`/ui/modModules/beamjoy/cmps/pointListEditor/app.js`);
 
+await import(`/ui/modModules/beamjoy/windows/versionCheck/app.js`);
 await import(`/ui/modModules/beamjoy/windows/hud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/app.js`);
+await import(`/ui/modModules/beamjoy/windows/raceCountdown/app.js`);
+await import(`/ui/modModules/beamjoy/windows/raceHud/app.js`);
+await import(`/ui/modModules/beamjoy/windows/hunterCountdown/app.js`);
+await import(`/ui/modModules/beamjoy/windows/hunterHud/app.js`);
+await import(`/ui/modModules/beamjoy/windows/mapVote/app.js`);
+await import(`/ui/modModules/beamjoy/windows/kickVote/app.js`);
+await import(`/ui/modModules/beamjoy/windows/raceInfo/live/app.js`);
+await import(`/ui/modModules/beamjoy/windows/raceInfo/results/app.js`);
+await import(`/ui/modModules/beamjoy/windows/raceLeaderboard/app.js`);
 
 beamjoyModule.component("beamjoy", {
     template: ``,
@@ -57,10 +70,19 @@ beamjoyModule.component("beamjoy", {
                 const el = angular.element(`
                         <bj-style></bj-style>
                         <bj-context-menu></bj-context-menu>
+                        <bj-version-check></bj-version-check>
 
                         <bj-hud></bj-hud>
                         <bj-main></bj-main>
                         <bj-config></bj-config>
+                        <bj-race-countdown></bj-race-countdown>
+                        <bj-race-hud></bj-race-hud>
+                        <bj-hunter-countdown></bj-hunter-countdown>
+                        <bj-hunter-hud></bj-hunter-hud>
+                        <bj-map-vote></bj-map-vote>
+                        <bj-kick-vote></bj-kick-vote>
+                        <bj-confirm></bj-confirm>
+                        <bj-info-panel></bj-info-panel>
                     `);
                 $compile(el)($rootScope);
                 angular.element(wrapper).append(el);
@@ -91,7 +113,10 @@ beamjoyModule.component("beamjoy", {
         $rootScope.$on("GameStateUpdate", requestSizesAndPositions);
 
         $rootScope.$on("BJUnload", () => {
-            document.querySelector("beamjoy").remove();
+            // guarded : this can now be sent twice in a row (main.lua's own onServerLeave, as a
+            // fallback, plus communications/ui.lua's own independent onServerLeave hook), so
+            // querySelector returns null the second time, and null.remove() would throw
+            document.querySelector("beamjoy")?.remove();
         });
     },
 });

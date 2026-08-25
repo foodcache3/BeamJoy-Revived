@@ -182,6 +182,7 @@ local function onInit()
     communications_rx.addHandler("requestDatabase", M.requestDatabase)
     communications_rx.addHandler("setGroup", M.setGroup)
     communications_rx.addHandler("setData", M.setData)
+    communications_rx.addHandler("teleportFrom", M.teleportFrom)
 
     services_consoleCommands.register("kick", "commands.bjkick.args", "commands.bjkick.desc", M.consoleKick)
     services_consoleCommands.register("ban", "commands.bjban.args", "commands.bjban.desc", M.consoleBan)
@@ -190,6 +191,29 @@ local function onInit()
     services_consoleCommands.register("unmute", "commands.bjunmute.args", "commands.bjunmute.desc", M.consoleUnmute)
     services_consoleCommands.register("group", "commands.bjgroup.args", "commands.bjgroup.desc", M
         .consoleGroup)
+
+    services_chatCommands.addCommand("kick", "chat.command.kick.desc", M.chatKick,
+        { commandKey = "chat.command.kick.command", permissions = { BJ_PERMISSIONS.Kick } })
+    services_chatCommands.addCommand("mute", "chat.command.mute.desc", M.chatMute,
+        { commandKey = "chat.command.mute.command", permissions = { BJ_PERMISSIONS.Mute } })
+    services_chatCommands.addCommand("unmute", "chat.command.unmute.desc", M.chatUnmute,
+        { commandKey = "chat.command.unmute.command", permissions = { BJ_PERMISSIONS.Mute } })
+    services_chatCommands.addCommand("ban", "chat.command.ban.desc", M.chatBan,
+        { commandKey = "chat.command.ban.command", permissions = { BJ_PERMISSIONS.Ban } })
+    services_chatCommands.addCommand("tempban", "chat.command.tempban.desc", M.chatTempBan,
+        { commandKey = "chat.command.tempban.command", permissions = { BJ_PERMISSIONS.TempBan } })
+    services_chatCommands.addCommand("unban", "chat.command.unban.desc", M.chatUnban,
+        { commandKey = "chat.command.unban.command", permissions = { BJ_PERMISSIONS.Ban } })
+    services_chatCommands.addCommand("setgroup", "chat.command.setgroup.desc", M.chatSetGroup,
+        { commandKey = "chat.command.setgroup.command", permissions = { BJ_PERMISSIONS.SetGroup } })
+    services_chatCommands.addCommand("freeze", "chat.command.freeze.desc", M.chatFreeze,
+        { commandKey = "chat.command.freeze.command", permissions = { BJ_PERMISSIONS.FreezePlayers } })
+    services_chatCommands.addCommand("engine", "chat.command.engine.desc", M.chatEngine,
+        { commandKey = "chat.command.engine.command", permissions = { BJ_PERMISSIONS.EnginePlayers } })
+    services_chatCommands.addCommand("tpfrom", "chat.command.tpfrom.desc", M.chatTeleportFrom,
+        { commandKey = "chat.command.tpfrom.command", permissions = { BJ_PERMISSIONS.TeleportFrom } })
+    services_chatCommands.addCommand("tp", "chat.command.tp.desc", M.chatTeleportTo,
+        { commandKey = "chat.command.tp.command", permissions = { BJ_PERMISSIONS.TeleportTo } })
 end
 
 local function onBJRequestCache(caches, targetID)
@@ -625,6 +649,21 @@ local function setData(ctxt, playerName, key, value)
 end
 
 ---@param ctxt BJSContext
+---@param targetName string brought to the sender's position
+local function teleportFrom(ctxt, targetName)
+    if not ctxt.sender then return end
+    if not services_permissions.hasAllPermissions(ctxt.senderID,
+            BJ_PERMISSIONS.TeleportFrom) then
+        return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
+            services_lang.get("error.insufficientPermissions", ctxt.sender.lang))
+    end
+    local target = M.players[targetName]
+    if not target or target.playerID == ctxt.senderID then return end
+
+    communications_tx.sendToPlayer(target.playerID, "teleportToPlayer", ctxt.sender.playerName)
+end
+
+---@param ctxt BJSContext
 ---@param args string[] "&lt;player_name> &lt;message...>"
 ---@param command BJChatCommand
 local function chatPrivateMessage(ctxt, args, command)
@@ -687,6 +726,197 @@ local function chatPrivateMessage(ctxt, args, command)
                 services_chat.COLORS.DISABLED)
         end)
     end
+end
+
+---@param ctxt BJSContext
+---@param command BJChatCommand
+local function chatCommandUsage(ctxt, command)
+    services_chat.directSend(ctxt.senderID,
+        string.format("%s : %s -> %s",
+            services_lang.get("chat.command.usage", ctxt.sender.lang),
+            services_lang.get(command.commandKey, ctxt.sender.lang),
+            services_lang.get(command.descKey, ctxt.sender.lang)),
+        services_chat.COLORS.ERROR)
+end
+
+--- resolves a chat-typed player name to exactly one currently-connected player, sending the
+--- appropriate not-found/ambiguous chat feedback itself (mirrors chatPrivateMessage's own inline
+--- resolution, factored out since every moderation/utility/teleport chat command below needs the
+--- exact same "connected player, fuzzy name, single match required" behavior)
+---@param ctxt BJSContext
+---@param playerName string
+---@return BJSPlayer? target nil if not resolved (an error message has already been sent)
+local function resolveChatTarget(ctxt, playerName)
+    local targets = M.getConnectedByName(playerName)
+    if #targets == 0 then
+        services_chat.directSend(ctxt.senderID,
+            services_lang.get("chat.command.error.invalidTarget", ctxt.sender.lang)
+            :var({ playerName = playerName }),
+            services_chat.COLORS.ERROR)
+        return nil
+    elseif #targets > 1 then
+        services_chat.directSend(ctxt.senderID,
+            services_lang.get("chat.command.error.ambiguousTargets", ctxt.sender.lang)
+            :var({ playerList = targets:map(function(p) return p.playerName end):join(", ") }),
+            services_chat.COLORS.ERROR)
+        return nil
+    end
+    return targets[1]
+end
+
+---@param ctxt BJSContext
+---@param args string[] "<player_name> [reason...]"
+---@param command BJChatCommand
+local function chatKick(ctxt, args, command)
+    if #args < 1 then return chatCommandUsage(ctxt, command) end
+    local target = resolveChatTarget(ctxt, args[1])
+    if not target then return end
+    local reason = #args > 1 and table.filter(args, function(_, i) return i > 1 end):join(" ") or nil
+    M.kick(ctxt, target.playerName, reason)
+    services_chat.directSend(ctxt.senderID,
+        services_lang.get("chat.command.kick.success", ctxt.sender.lang):var({ playerName = target.playerName }))
+end
+
+---@param ctxt BJSContext
+---@param args string[] "<player_name> [reason...]"
+---@param command BJChatCommand
+local function chatMute(ctxt, args, command)
+    if #args < 1 then return chatCommandUsage(ctxt, command) end
+    local target = resolveChatTarget(ctxt, args[1])
+    if not target then return end
+    local reason = #args > 1 and table.filter(args, function(_, i) return i > 1 end):join(" ") or nil
+    M.mute(ctxt, target.playerName, true, reason)
+    services_chat.directSend(ctxt.senderID,
+        services_lang.get("chat.command.mute.success", ctxt.sender.lang):var({ playerName = target.playerName }))
+end
+
+---@param ctxt BJSContext
+---@param args string[] "<player_name>"
+---@param command BJChatCommand
+local function chatUnmute(ctxt, args, command)
+    if #args < 1 then return chatCommandUsage(ctxt, command) end
+    local target = resolveChatTarget(ctxt, args[1])
+    if not target then return end
+    M.mute(ctxt, target.playerName, false)
+    services_chat.directSend(ctxt.senderID,
+        services_lang.get("chat.command.unmute.success", ctxt.sender.lang):var({ playerName = target.playerName }))
+end
+
+---@param ctxt BJSContext
+---@param args string[] "<player_name> [reason...]"
+---@param command BJChatCommand
+local function chatBan(ctxt, args, command)
+    if #args < 1 then return chatCommandUsage(ctxt, command) end
+    local target = resolveChatTarget(ctxt, args[1])
+    if not target then return end
+    local reason = #args > 1 and table.filter(args, function(_, i) return i > 1 end):join(" ") or nil
+    M.ban(ctxt, target.playerName, reason)
+    services_chat.directSend(ctxt.senderID,
+        services_lang.get("chat.command.ban.success", ctxt.sender.lang):var({ playerName = target.playerName }))
+end
+
+---@param ctxt BJSContext
+---@param args string[] "<player_name> <seconds> [reason...]"
+---@param command BJChatCommand
+local function chatTempBan(ctxt, args, command)
+    local duration = args[2] and tonumber(args[2])
+    if #args < 2 or not duration then return chatCommandUsage(ctxt, command) end
+    local target = resolveChatTarget(ctxt, args[1])
+    if not target then return end
+    local reason = #args > 2 and table.filter(args, function(_, i) return i > 2 end):join(" ") or nil
+    M.tempBan(ctxt, target.playerName, duration, reason)
+    services_chat.directSend(ctxt.senderID,
+        services_lang.get("chat.command.tempban.success", ctxt.sender.lang):var({ playerName = target.playerName }))
+end
+
+---@param ctxt BJSContext
+---@param args string[] "<exact_player_name>"
+---@param command BJChatCommand
+local function chatUnban(ctxt, args, command)
+    if #args < 1 then return chatCommandUsage(ctxt, command) end
+    -- a banned target is by definition not connected, so this is the one target-resolution
+    -- exception among these commands : exact offline lookup via the database, not
+    -- getConnectedByName (which only ever searches currently-connected players)
+    if not dao_players.get(args[1]) then
+        services_chat.directSend(ctxt.senderID,
+            services_lang.get("chat.command.error.invalidTarget", ctxt.sender.lang)
+            :var({ playerName = args[1] }),
+            services_chat.COLORS.ERROR)
+        return
+    end
+    M.unban(ctxt, args[1])
+    services_chat.directSend(ctxt.senderID,
+        services_lang.get("chat.command.unban.success", ctxt.sender.lang):var({ playerName = args[1] }))
+end
+
+---@param ctxt BJSContext
+---@param args string[] "<player_name> <group>"
+---@param command BJChatCommand
+local function chatSetGroup(ctxt, args, command)
+    if #args < 2 then return chatCommandUsage(ctxt, command) end
+    local target = resolveChatTarget(ctxt, args[1])
+    if not target then return end
+    if not services_groups.getGroupIndex(args[2]) then
+        services_chat.directSend(ctxt.senderID,
+            services_lang.get("chat.command.setgroup.groupNotFound", ctxt.sender.lang)
+            :var({ group = args[2] }),
+            services_chat.COLORS.ERROR)
+        return
+    end
+    M.setGroup(ctxt, target.playerName, args[2])
+    services_chat.directSend(ctxt.senderID,
+        services_lang.get("chat.command.setgroup.success", ctxt.sender.lang)
+        :var({ playerName = target.playerName, group = args[2] }))
+end
+
+---@param ctxt BJSContext
+---@param args string[] "<player_name>"
+---@param command BJChatCommand
+local function chatFreeze(ctxt, args, command)
+    if #args < 1 then return chatCommandUsage(ctxt, command) end
+    local target = resolveChatTarget(ctxt, args[1])
+    if not target then return end
+    M.toggleFreeze(ctxt, target.playerName)
+    services_chat.directSend(ctxt.senderID,
+        services_lang.get("chat.command.freeze.success", ctxt.sender.lang):var({ playerName = target.playerName }))
+end
+
+---@param ctxt BJSContext
+---@param args string[] "<player_name>"
+---@param command BJChatCommand
+local function chatEngine(ctxt, args, command)
+    if #args < 1 then return chatCommandUsage(ctxt, command) end
+    local target = resolveChatTarget(ctxt, args[1])
+    if not target then return end
+    M.toggleEngine(ctxt, target.playerName)
+    services_chat.directSend(ctxt.senderID,
+        services_lang.get("chat.command.engine.success", ctxt.sender.lang):var({ playerName = target.playerName }))
+end
+
+---@param ctxt BJSContext
+---@param args string[] "<player_name>"
+---@param command BJChatCommand
+local function chatTeleportFrom(ctxt, args, command)
+    if #args < 1 then return chatCommandUsage(ctxt, command) end
+    local target = resolveChatTarget(ctxt, args[1])
+    if not target or target.playerID == ctxt.senderID then return end
+    M.teleportFrom(ctxt, target.playerName)
+    services_chat.directSend(ctxt.senderID,
+        services_lang.get("chat.command.tpfrom.success", ctxt.sender.lang):var({ playerName = target.playerName }))
+end
+
+--- self-teleport is entirely client-driven (rate limit, permission re-check, and the mid-race
+--- block all already live in the client's own beamjoy_players.tryTeleportToPlayer, used
+--- unchanged by the existing "Teleport To" UI button): this just tells the issuing player's OWN
+--- client to run it, the same call the UI button already makes locally with no server round trip
+---@param ctxt BJSContext
+---@param args string[] "<player_name>"
+---@param command BJChatCommand
+local function chatTeleportTo(ctxt, args, command)
+    if #args < 1 then return chatCommandUsage(ctxt, command) end
+    local target = resolveChatTarget(ctxt, args[1])
+    if not target or target.playerID == ctxt.senderID then return end
+    communications_tx.sendToPlayer(ctxt.senderID, "chatTeleportTo", target.playerName)
 end
 
 ---@param playerID integer
@@ -899,8 +1129,21 @@ M.tempBan = tempBan
 M.unban = unban
 M.setGroup = setGroup
 M.setData = setData
+M.teleportFrom = teleportFrom
 M.chatPrivateMessage = chatPrivateMessage
 M.sendBroadcast = sendBroadcast
+
+M.chatKick = chatKick
+M.chatMute = chatMute
+M.chatUnmute = chatUnmute
+M.chatBan = chatBan
+M.chatTempBan = chatTempBan
+M.chatUnban = chatUnban
+M.chatSetGroup = chatSetGroup
+M.chatFreeze = chatFreeze
+M.chatEngine = chatEngine
+M.chatTeleportFrom = chatTeleportFrom
+M.chatTeleportTo = chatTeleportTo
 
 M.consoleKick = consoleKick
 M.consoleBan = consoleBan

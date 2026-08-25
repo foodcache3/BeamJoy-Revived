@@ -32,7 +32,9 @@ local M = {
         "beamjoy_restrictions", "beamjoy_config", "beamjoy_permissions", "beamjoy_groups",
         "beamjoy_players", "beamjoy_nametags", "beamjoy_contextMenu", "beamjoy_traffic",
         "beamjoy_activity_manager", "beamjoy_ui_activityEditor", "beamjoy_environment",
-        "beamjoy_broadcast", "beamjoy_maps", "beamjoy_automaticLights", "beamjoy_pursuit" },
+        "beamjoy_broadcast", "beamjoy_maps", "beamjoy_mapVote", "beamjoy_kickVote", "beamjoy_automaticLights", "beamjoy_pursuit",
+        "beamjoy_vehiclePresets", "beamjoy_races", "beamjoy_raceRunner", "beamjoy_raceMarkers",
+        "beamjoy_hunter", "beamjoy_hunterRunner", "beamjoy_hunterMarkers" },
 
     world_ready = false,
     client_ready = false,
@@ -83,6 +85,14 @@ M.onPreRender = function(dtReal, dtSim, dtRaw)
 end
 
 M.onServerLeave = function()
+    -- belt-and-suspenders : `beamjoy_communications_ui` has its own `onServerLeave` that sends
+    -- this same message, but that only works if the engine actually calls `onServerLeave`
+    -- separately on every dependency extension (unconfirmed to always happen reliably. The HUD
+    -- was seen still on-screen after returning to the main menu, i.e. the "beamjoy" DOM root was
+    -- never removed). This one is guaranteed to run, since it's what's firing right now.
+    if beamjoy_communications_ui then
+        beamjoy_communications_ui.send("BJUnload")
+    end
     extensions.unload("beamjoy_main")
 end
 

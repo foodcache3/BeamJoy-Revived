@@ -90,6 +90,8 @@ angular.module("beamjoy").component("bjConfigGeneralTraffic", {
         };
         this.save = () => {
             this.dirty = false;
+            this.data.amount = Number(this.data.amount);
+            this.data.maxPerPlayer = Number(this.data.maxPerPlayer);
             beamjoyStore.send("BJTrafficSettings", [this.data]);
         };
         this.cancel = () => {

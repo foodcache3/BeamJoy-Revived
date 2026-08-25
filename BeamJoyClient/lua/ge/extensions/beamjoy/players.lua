@@ -7,6 +7,8 @@ local function onInit()
     beamjoy_communications.addHandler("sendCache", M.retrieveCache)
     beamjoy_communications.addHandler("updatePlayer", M.updatePlayer)
     beamjoy_communications.addHandler("updateDBPlayer", M.updateDBPlayer)
+    beamjoy_communications.addHandler("teleportToPlayer", M.onTeleportToPlayer)
+    beamjoy_communications.addHandler("chatTeleportTo", M.onChatTeleportTo)
 
     beamjoy_communications_ui.addHandler("BJReady", M.onUIReady)
     beamjoy_communications_ui.addHandler("BJPlayerAction", M.onPlayerAction)
@@ -74,6 +76,93 @@ local function onBJVehicleInstantiated(vid)
     end)
 end
 
+local teleportToLock = false
+
+---@param targetPlayerName string
+---@param forced boolean? true when triggered remotely by a "Teleport From" summon (bypasses the cooldown)
+local function tryTeleportToPlayer(targetPlayerName, forced)
+    local staff = beamjoy_permissions.isStaff()
+    if not forced and not staff and
+        not beamjoy_permissions.hasAllPermissions(nil, BJ_PERMISSIONS.TeleportTo) then
+        return
+    end
+
+    local target = M.players[targetPlayerName]
+    if not target or not target.currentVehicle then return end
+
+    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    if not myVeh then return end
+
+    -- voluntary self-teleport during an active race would trivially let someone skip ahead.
+    -- staff-forced summons (`forced == true`, a moderator using "Teleport From") are left
+    -- unaffected, same as how they already bypass the cooldown below. Staff themselves are NOT
+    -- exempt here (a previous round's comment claimed this matched the walking-away/nodegrabber
+    -- restrictions in raceRunner.lua, but those actually apply unconditionally once race-locked,
+    -- with no staff bypass at all. That mismatch is almost certainly why this looked like it
+    -- "didn't work" when tested from a staff/owner account).
+    if not forced then
+        local session = beamjoy_raceRunner and beamjoy_raceRunner.session
+        -- COUNTDOWN too, not just RACE. A real, confirmed gap : a player could still self-
+        -- teleport away during the grid/countdown lock (before gate-crossing tracking even starts,
+        -- so it wouldn't even show as leaving the track), skipping the start entirely. Same class
+        -- of bug this file's own other race restrictions (walking away, nodegrabber, camera) all
+        -- originally shipped RACE-only and needed a follow-up patch for.
+        if session and (session.state == "RACE" or session.state == "COUNTDOWN") then
+            local selfName = MPConfig.getNickname()
+            local participant = table.find(session.participants, function(p) return p.playerName == selfName end)
+            if participant and not participant.finished and not participant.dnf then
+                return toast.warn(beamjoy_lang.translate("beamjoy.teleport.duringRace"))
+            end
+        end
+
+        -- per direct request : same reasoning as races' own restriction above. A hunter/fugitive
+        -- self-teleporting during an active hunt would trivially skip the chase entirely (or let
+        -- the fugitive escape any close call). Scoped to COUNTDOWN/HUNT, not LOBBY, matching races'
+        -- own RACE/COUNTDOWN-only scope.
+        local hunterSession = beamjoy_hunterRunner and beamjoy_hunterRunner.session
+        if hunterSession and (hunterSession.state == "COUNTDOWN" or hunterSession.state == "HUNT") then
+            local selfName = MPConfig.getNickname()
+            local participant = table.find(hunterSession.participants, function(p) return p.playerName == selfName end)
+            if participant then
+                return toast.warn(beamjoy_lang.translate("beamjoy.teleport.duringHunt"))
+            end
+        end
+    end
+
+    if not forced and not staff then
+        if teleportToLock then
+            return toast.warn(beamjoy_lang.translate("beamjoy.teleport.onCooldown"))
+        end
+        teleportToLock = true
+        local delay = (beamjoy_config.data.Freeroam and beamjoy_config.data.Freeroam.TeleportDelay) or 30
+        async.delayTask(function() teleportToLock = false end, delay * 1000, "BJTeleportToDelay")
+    end
+
+    ---@type BJVehicle?
+    local targetMpVeh = beamjoy_vehicles.vehicles:find(function(v)
+        return v.remoteVID == target.currentVehicle
+    end)
+    if not targetMpVeh then return end
+
+    local pos, dir, up = beamjoy_vehicles.getVehiclePositionRotation(targetMpVeh.veh)
+    beamjoy_vehicles.setVehiclePositionRotation(myVeh.veh, pos, dir, up)
+end
+
+---@param fromPlayerName string
+local function onTeleportToPlayer(fromPlayerName)
+    M.tryTeleportToPlayer(fromPlayerName, true)
+end
+
+--- relay for the "/tp <player>" chat command : the server can't move the caller's vehicle itself
+--- (teleport is entirely client-driven, per tryTeleportToPlayer's own rate-limit/permission/
+--- race-restriction checks below), so it just tells this client to run the exact same call the
+--- "Teleport To" UI button already makes locally. forced=false, so the normal cooldown still
+--- applies (unlike the forced=true "Teleport From" summon path above)
+---@param targetPlayerName string
+local function onChatTeleportTo(targetPlayerName)
+    M.tryTeleportToPlayer(targetPlayerName, false)
+end
+
 local function onPlayerAction(playerName, action)
     local target = M.players[playerName]
     if not target then return end
@@ -117,6 +206,10 @@ local function onPlayerAction(playerName, action)
         else
             beamjoy_communications.send("deletePlayerVehicles", playerName)
         end
+    elseif action == "teleportTo" then
+        M.tryTeleportToPlayer(playerName)
+    elseif action == "teleportFrom" then
+        beamjoy_communications.send("teleportFrom", playerName)
     end
 end
 
@@ -353,6 +446,9 @@ M.onInit = onInit
 M.onUIReady = onUIReady
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
 M.onPlayerAction = onPlayerAction
+M.tryTeleportToPlayer = tryTeleportToPlayer
+M.onTeleportToPlayer = onTeleportToPlayer
+M.onChatTeleportTo = onChatTeleportTo
 M.onVehicleAction = onVehicleAction
 M.onModerationDemote = onModerationDemote
 M.onModerationPromote = onModerationPromote

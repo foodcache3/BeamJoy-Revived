@@ -10,11 +10,30 @@ local M = {
         DRIVER = "driver",
         PASSENGER = "passenger",
         FREE = "free",
+        -- both global cameras (like FREE, not vehicle-ring cameras), labeled "Cinematic" and
+        -- "Steadycam" respectively in BeamNG's own UI (locales/.../main.translation.json's
+        -- ui.camera.mode.* strings), confirmed against the installed game's own core/camera.lua
+        -- and cameraModes/steadycam.lua, not guessed
+        CINEMATIC = "smoothFree",
+        STEADYCAM = "steadycam",
     },
 
     forcedCameras = Table(),
+    -- cameras that are disallowed while everything else stays available, e.g. the "freeroam ring"
+    -- (free cam, big map) during an active race, as opposed to forcedCameras, which is an
+    -- allowlist of the only cameras permitted. Kept as a separate mechanism/state so a blocklist
+    -- restriction doesn't have to enumerate every camera in the "vehicle" ring, which BeamNG 0.39
+    -- expanded beyond what this module's own CAMERAS enum models (hood/chase/bumper/etc. aren't
+    -- named here at all). Blocking just the known non-vehicle cameras lets core_camera's own
+    -- cycling (M.next) reach whatever vehicle cameras exist, present or future, unnamed here.
+    blockedCameras = Table(),
     ---@type PosRot?
     forceFreeCamPosRot = nil,
+    -- cameras that need an explicit resetCamera() after switching (e.g. to reframe on the
+    -- vehicle). None currently flagged; was referenced but never defined at all here, which
+    -- made every call to M.setCamera() throw ("attempt to index a nil value") since this field
+    -- didn't exist
+    NEED_RESET = {},
 
     state = {
         smooth = false,
@@ -113,9 +132,32 @@ local function forceCamera(...)
     M.forcedCameras:clear()
     M.forcedCameras:addAll({ ... }, true)
     if not M.forcedCameras:includes(M.getCamera()) then
+        -- Jump straight to the target when there's exactly one (the only way this is actually
+        -- called anywhere in this codebase) rather than cycling one ring-step at a time. See
+        -- onCameraModeChanged's own identical fix below for why that matters.
+        if M.forcedCameras:length() == 1 then
+            M.setCamera(M.forcedCameras:values()[1])
+        else
+            M.next()
+        end
+    end
+    -- TODO update restrictions
+end
+
+--- disallow specific cameras (e.g. FREE/BIG_MAP, the "freeroam ring") while leaving every other
+--- camera - including any this module's CAMERAS enum doesn't itself name - fully available and
+--- cyclable via M.next(), unlike forceCamera's allowlist-and-force-switch behavior
+---@param ... string cameraNames
+local function blockCameras(...)
+    M.blockedCameras:clear()
+    M.blockedCameras:addAll({ ... }, true)
+    if M.blockedCameras:includes(M.getCamera()) then
         M.next()
     end
-    -- todo update restrictions
+end
+
+local function unblockCameras()
+    M.blockedCameras:clear()
 end
 
 ---@param pos vec3
@@ -227,6 +269,20 @@ end
 ---@param newCam string
 local function onCameraModeChanged(newCam)
     if M.forcedCameras:length() > 0 and not M.forcedCameras:includes(newCam) then
+        -- Root cause of "changing camera during the countdown lock makes the camera change every
+        -- frame": M.next() only cycles ONE ring-step per call, which almost never lands back on
+        -- the single forced camera (e.g. EXTERNAL) in one hop once the vehicle's own camera ring
+        -- has more than 2-3 entries. onUpdate's per-frame lastCam~=cam check then immediately sees
+        -- the ring is STILL not on the forced camera and calls this again, repeating every frame
+        -- until the ring happens to cycle all the way back around on its own. Jumping straight to
+        -- the forced camera fixes it outright (the only way this is ever called is a single-camera
+        -- lock, never a multi-camera allowlist).
+        if M.forcedCameras:length() == 1 then
+            M.setCamera(M.forcedCameras:values()[1])
+        else
+            M.next()
+        end
+    elseif M.blockedCameras:length() > 0 and M.blockedCameras:includes(newCam) then
         M.next()
     elseif M.forceFreeCamPosRot and M.getCamera() ~= M.CAMERAS.FREE then
         M.setPositionRotation(M.forceFreeCamPosRot.pos, M.forceFreeCamPosRot.rot)
@@ -234,11 +290,14 @@ local function onCameraModeChanged(newCam)
     if newCam == M.CAMERAS.FREE then
         M.setFOV(M.state.fov)
         M.setSpeed(M.state.speed)
-
-        local veh = beamjoy_vehicles.getCurrentOwn()
-        if veh and veh.jbeam == beamjoy_vehicles.WALKING then
-            beamjoy_vehicles.delete(veh.vid)
-        end
+        -- Used to delete the current unicycle here when entering free cam while walking. That was
+        -- the actual root cause of a long-standing "can't see my beamling" report. The base game
+        -- only ever renders the walking character's mesh while a *global* camera (free cam) is
+        -- active (gameplay/walk.lua fades it in/out by distance from a non-nil
+        -- core_camera.getActiveGlobalCameraName(), and hard-hides it otherwise), and free cam is
+        -- the only time it's ever meant to be visible at all, so deleting the unicycle at exactly
+        -- that moment guaranteed it could never actually be seen. No comment ever explained why
+        -- this existed, so it was removed outright rather than guessing at a replacement.
     else
         if newCam == M.CAMERAS.PASSENGER and
             beamjoy_vehicles.getCurrentOwn() then
@@ -269,6 +328,14 @@ local function onBJRequestRestrictions(restrictions)
                 "switch_camera_prev"
             }, true)
         end
+    end
+    if M.blockedCameras:length() > 0 and M.blockedCameras:includes(M.CAMERAS.FREE) then
+        -- Best-effort: blocks the known keybind(s) for reaching free cam directly. The reactive
+        -- auto-skip in onCameraModeChanged is what actually guarantees the restriction regardless
+        -- of how a player attempts to reach a blocked camera (including via 0.39's Ctrl+C
+        -- ring-switch, whose exact action name isn't known here); this is just belt-and-suspenders
+        -- so the attempt doesn't even visually flash through free cam first.
+        restrictions:addAll({ "toggleCamera", "dropCameraAtPlayer" }, true)
     end
     if M.forceFreeCamPosRot then
         restrictions:addAll({
@@ -330,6 +397,8 @@ M.getWorldPositionFromCursor = getWorldPositionFromCursor
 M.setPositionRotation = setPositionRotation
 M.toggleFreeCam = toggleFreeCam
 M.forceCamera = forceCamera
+M.blockCameras = blockCameras
+M.unblockCameras = unblockCameras
 M.forcePositionRotation = forcePositionRotation
 M.stopForcedCameras = stopForcedCameras
 M.next = next

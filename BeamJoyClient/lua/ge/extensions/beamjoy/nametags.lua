@@ -6,6 +6,9 @@ local M = {
 
     ---@type table<string, string>
     tagNames = {},
+
+    ---@type table<integer, boolean> vid -> true, for trailers currently attached to a vehicle
+    towedTrailerVids = {},
 }
 
 local function updateState()
@@ -78,8 +81,30 @@ local function onInit()
     end)
 end
 
+---@param v BJVehicle
+local function _isTowingVehicle(v)
+    return not table.includes({
+        beamjoy_vehicles.TYPES.TRAILER,
+        beamjoy_vehicles.TYPES.PROP
+    }, v.type)
+end
+
+local function updateTowedTrailers()
+    table.clear(M.towedTrailerVids)
+    beamjoy_vehicles.vehicles:forEach(function(v) ---@param v BJVehicle
+        if _isTowingVehicle(v) then
+            table.forEach(beamjoy_vehicles.getAttachedTrailers(v.vid), function(avid)
+                M.towedTrailerVids[avid] = true
+            end)
+        end
+    end)
+end
+
 local function onSlowUpdate()
     updateState()
+    if not M.state.hideNameTags then
+        updateTowedTrailers()
+    end
 end
 
 ---@param playerName string
@@ -147,6 +172,11 @@ local function drawNametag(mpVeh, orig)
             alpha = math.clamp(alpha, .3)
         end
     end
+    -- Hunter mode: an additional distance fade for hunter-role nametags specifically (see
+    -- hunterRunner.lua's own hunterNametagAlpha), on top of whatever the generic fade above already
+    -- did. A no-op (returns 1) whenever there's no active hunt or the arena's own
+    -- hunterNametagFadeDistance is 0/unset, so this has zero effect outside Hunter.
+    alpha = alpha * beamjoy_hunterRunner.hunterNametagAlpha(mpVeh, dist)
 
     if mpVeh.spectators[mpVeh.ownerName] then
         textColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_PLAYER_TEXT)
@@ -188,6 +218,18 @@ end
 
 local ctxt, orig, veh, mpVeh, ray
 local drawn = {}
+local lastHoverVid, lastHoverCheckMs = nil, 0
+-- Confirmed via live profiling: the native cameraMouseRayCast() call below (used only for the
+-- hover-reveal below) can cost several milliseconds on its own against a complex/modded vehicle,
+-- dwarfing every other extension's entire onUpdate combined. A throttle alone (an earlier attempt)
+-- just spreads that same cost out over time rather than removing it, which still reads as
+-- intermittent stutter. Since this hover-reveal is a minor cosmetic nicety, not anything
+-- gameplay-critical, it's now opt-in only: held Alt (unbound by default in BeamNG's own
+-- keyboard.json) gates the raycast entirely, so idle/normal play never pays this cost at all.
+-- Still throttled while Alt is actually held, so sweeping the camera across a crowd of vehicles
+-- with Alt down doesn't reintroduce a steady per-frame cost either.
+local HOVER_RAYCAST_THROTTLE_MS = 150
+local altKeyIdx = ui_imgui.GetKeyIndex(ui_imgui.Key_ModAlt)
 local function onUpdate()
     MPVehicleGE.hideNicknames(true)
     if replay.isOn() then return end
@@ -217,17 +259,7 @@ local function onUpdate()
                     -- not own trailer
                     return false
                 end
-                ---@param veh2 BJVehicle
-                if beamjoy_vehicles.vehicles:filter(function(veh2)
-                        return not table.includes({
-                            beamjoy_vehicles.TYPES.TRAILER,
-                            beamjoy_vehicles.TYPES.PROP
-                        }, veh2.type)
-                    end):map(function(veh2) ---@param veh2 BJVehicle
-                        return beamjoy_vehicles.getAttachedTrailers(veh2.vid)
-                    end):any(function(avids) ---@param avids integer[]
-                        return table.includes(avids, v.vid)
-                    end) then
+                if M.towedTrailerVids[v.vid] then
                     -- some vehicle is tracting it
                     return false
                 end
@@ -238,39 +270,80 @@ local function onUpdate()
                 return false
             end
             if replay.replayPlayers[v.ownerName] then return false end
+            -- Hunter mode: the currently-hunted fugitive's real nametag is suppressed for every
+            -- OTHER client until a reveal trigger fires (proximity / near-final-waypoint /
+            -- post-reset, see hunterRunner.lua's own isHiddenFugitiveVehicle). Never hidden on the
+            -- fugitive's own client, which already doesn't see its own tag while driving normally
+            -- via the ctxt.mpVeh check just above.
+            if beamjoy_hunterRunner.isHiddenFugitiveVehicle(v) then return false end
             return true
+        end):forEach(function(v) ---@param v BJVehicle
+            drawn[v.vid] = true
+            drawNametag(beamjoy_vehicles.getVehicle(v.vid) or {}, orig)
+        end)
+    else
+        -- Nametags globally disabled for this viewer, but Hunter's reveal mechanic is core
+        -- gameplay (how a hunter actually spots the fugitive once revealed), not cosmetic. Don't
+        -- let it silently stop working just because this player turned nametags off for unrelated
+        -- reasons. Deliberately narrow: this is the ONLY tag force-drawn here, every other vehicle
+        -- stays hidden exactly per the viewer's own preference.
+        beamjoy_vehicles.vehicles:filter(function(v)
+            return beamjoy_hunterRunner.isRevealedFugitiveVehicle(v)
         end):forEach(function(v) ---@param v BJVehicle
             drawn[v.vid] = true
             drawNametag(beamjoy_vehicles.getVehicle(v.vid) or {}, orig)
         end)
     end
 
-    -- mouse hover nametag
-    ray = nil
-    if ctxt.camera ~= camera.CAMERAS.FREE and ctxt.mpVeh then
-        ctxt.mpVeh.veh:disableCollision()
-        ray = cameraMouseRayCast(true, ui_imgui.flags(SOTVehicle), 200)
-        ctxt.mpVeh.veh:enableCollision()
-    else
-        ray = cameraMouseRayCast(true, ui_imgui.flags(SOTVehicle), 200)
-    end
-    if ray then
-        ---@type NGVehicle?
-        veh = ray.object
-        if not veh then goto skipHover end
-        if drawn[veh:getID()] then goto skipHover end
-        mpVeh = beamjoy_vehicles.getVehicle(veh:getID())
-        if not mpVeh then goto skipHover end
-        if mpVeh.isAi then goto skipHover end
-        if not beamjoy_permissions.isStaff() and
-            mpVeh.type == beamjoy_vehicles.TYPES.PROP and
-            mpVeh.jbeam ~= beamjoy_vehicles.WALKING then
-            goto skipHover
+    -- Mouse hover nametag: disableCollision()/enableCollision() here is purely to keep the
+    -- player's own current vehicle out of the raycast hit-test (so you can't "hover" your own
+    -- nametag). Done unconditionally for ANY current vehicle, including the unicycle while
+    -- walking. That means every single frame spent walking around (not in free cam) toggles
+    -- collision off-then-on on the walking character's own vehicle object, every frame, for as
+    -- long as you're walking. A real suspect for the "unicycle randomly gets removed by local
+    -- player" investigation (BeamMP's own client code, MPVehicleGE.lua, owns that object's
+    -- lifecycle, and flapping its collision state every frame is exactly the kind of thing that
+    -- could race whatever BeamMP does internally, which would explain why the delay before it
+    -- happens is different every time rather than a fixed duration). Skipped for the walking
+    -- vehicle specifically. Hovering your own nametag while walking is a non-issue either way,
+    -- since there's nothing else drawing over it.
+    if not ui_imgui.IsKeyDown(altKeyIdx) then
+        lastHoverVid = nil
+    elseif ctxt.now - lastHoverCheckMs >= HOVER_RAYCAST_THROTTLE_MS then
+        lastHoverCheckMs = ctxt.now
+        lastHoverVid = nil
+        ray = nil
+        if ctxt.camera ~= camera.CAMERAS.FREE and ctxt.mpVeh and
+            ctxt.mpVeh.jbeam ~= beamjoy_vehicles.WALKING then
+            ctxt.mpVeh.veh:disableCollision()
+            ray = cameraMouseRayCast(true, ui_imgui.flags(SOTVehicle), 200)
+            ctxt.mpVeh.veh:enableCollision()
+        else
+            ray = cameraMouseRayCast(true, ui_imgui.flags(SOTVehicle), 200)
         end
-        drawn[veh:getID()] = true
-        drawNametag(mpVeh, orig)
+        if ray then
+            ---@type NGVehicle?
+            veh = ray.object
+            if veh then
+                mpVeh = beamjoy_vehicles.getVehicle(veh:getID())
+                if mpVeh and not mpVeh.isAi and
+                    (beamjoy_permissions.isStaff() or
+                        mpVeh.type ~= beamjoy_vehicles.TYPES.PROP or
+                        mpVeh.jbeam == beamjoy_vehicles.WALKING) then
+                    lastHoverVid = veh:getID()
+                end
+            end
+        end
     end
-    ::skipHover::
+    if lastHoverVid and not drawn[lastHoverVid] then
+        mpVeh = beamjoy_vehicles.getVehicle(lastHoverVid)
+        if mpVeh then
+            drawn[lastHoverVid] = true
+            drawNametag(mpVeh, orig)
+        else
+            lastHoverVid = nil
+        end
+    end
 end
 
 M.onInit = onInit

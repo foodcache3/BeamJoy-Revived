@@ -1,80 +1,11 @@
+<!-- ServerNameColor/ServerTextColor/EventColor/BroadcastColor pickers removed from this UI, per
+     direct request : native BeamMP chat only supports its own fixed `^`-color-code palette now
+     (see chat.js's own rewrite comment: the custom RGB coloring these applied to used a hand-
+     built DOM node this rewrite moved away from), so editing them here no longer does anything
+     visible. Left in $ctrl.data/save()'s own payload untouched (still round-tripped verbatim,
+     same "preserved even though not editable here" treatment Freeroam's own TeleportDelay gets)
+     in case native color support returns later: only the UI is hidden, not the data. -->
 <table>
-    <tr>
-        <td class="text-right">
-            {{"beamjoy.window.config.tabs.general.chat.ServerNameColor"|translate}}
-        </td>
-        <td>
-            <div class="d-flex align-center w-fitcontent">
-                <button
-                    class="btn warning"
-                    title="{{ 'beamjoy.common.reset' | translate}}"
-                    ng-click="$ctrl.data.ServerNameColor = $ctrl.resetValues.ServerNameColor"
-                >
-                    <icon name="reset" class="small"></icon>
-                </button>
-                <bj-color-picker
-                    ng-model="$ctrl.data.ServerNameColor"
-                ></bj-color-picker>
-            </div>
-        </td>
-    </tr>
-    <tr>
-        <td class="text-right">
-            {{"beamjoy.window.config.tabs.general.chat.ServerTextColor"|translate}}
-        </td>
-        <td>
-            <div class="d-flex align-center w-fitcontent">
-                <button
-                    class="btn warning"
-                    title="{{ 'beamjoy.common.reset' | translate}}"
-                    ng-click="$ctrl.data.ServerTextColor = $ctrl.resetValues.ServerTextColor"
-                >
-                    <icon name="reset" class="small"></icon>
-                </button>
-                <bj-color-picker
-                    ng-model="$ctrl.data.ServerTextColor"
-                ></bj-color-picker>
-            </div>
-        </td>
-    </tr>
-    <tr>
-        <td class="text-right">
-            {{"beamjoy.window.config.tabs.general.chat.EventColor"|translate}}
-        </td>
-        <td>
-            <div class="d-flex align-center w-fitcontent">
-                <button
-                    class="btn warning"
-                    title="{{ 'beamjoy.common.reset' | translate}}"
-                    ng-click="$ctrl.data.EventColor = $ctrl.resetValues.EventColor"
-                >
-                    <icon name="reset" class="small"></icon>
-                </button>
-                <bj-color-picker
-                    ng-model="$ctrl.data.EventColor"
-                ></bj-color-picker>
-            </div>
-        </td>
-    </tr>
-    <tr>
-        <td class="text-right">
-            {{"beamjoy.window.config.tabs.general.chat.BroadcastColor"|translate}}
-        </td>
-        <td>
-            <div class="d-flex align-center w-fitcontent">
-                <button
-                    class="btn warning"
-                    title="{{ 'beamjoy.common.reset' | translate}}"
-                    ng-click="$ctrl.data.BroadcastColor = $ctrl.resetValues.BroadcastColor"
-                >
-                    <icon name="reset" class="small"></icon>
-                </button>
-                <bj-color-picker
-                    ng-model="$ctrl.data.BroadcastColor"
-                ></bj-color-picker>
-            </div>
-        </td>
-    </tr>
     <tr>
         <td class="text-right">
             {{"beamjoy.window.config.tabs.general.chat.ShowStaffTag"|translate}}

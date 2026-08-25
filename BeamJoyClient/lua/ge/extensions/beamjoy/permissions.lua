@@ -5,6 +5,7 @@ BJ_PERMISSIONS = {
     BypassModelBlacklist = "BypassModelBlacklist",
     SpawnProps = "SpawnProps",
     TeleportFrom = "TeleportFrom",
+    EditRaces = "EditRaces",
     DeleteVehicle = "DeleteVehicle",
     Kick = "Kick",
     Mute = "Mute",
@@ -107,6 +108,23 @@ local function hasAnyPermission(playerName, ...)
     end)
 end
 
+--- single source of truth for "can this player open the config window at all". Mirrors
+--- windows/config/app.js's own tabsData permission list (EditRaces/SetPermissions/SetMaps/
+--- SetCore/DatabasePlayers ; General and SafeZones tabs have no permission gate at all, visible to
+--- anyone who gets this far). Used by both imgui/menu.lua (the "Toggle Config" menu item) and
+--- communications/ui.lua (the actual beamjoy-config window visibility). Previously each of those
+--- gated on isStaff() alone instead of this, so a player granted e.g. EditRaces without being
+--- ranked "staff" had no way to ever reach the window, even though the window's own per-tab
+--- filtering was already correctly permission-based underneath. isStaff is kept as an explicit
+--- fallback (not just folded into the permission list) so staff always retains access regardless
+--- of whether any of these specific keys happen to be assigned to their group.
+---@return boolean
+local function canOpenConfig()
+    return isStaff() or hasAnyPermission(nil,
+        BJ_PERMISSIONS.EditRaces, BJ_PERMISSIONS.SetPermissions, BJ_PERMISSIONS.SetMaps,
+        BJ_PERMISSIONS.SetCore, BJ_PERMISSIONS.DatabasePlayers)
+end
+
 ---@param perms BJPermissions
 local function savePermissions(perms)
     beamjoy_communications.send("savePermissions", perms)
@@ -118,6 +136,7 @@ M.onUIReady = onUIReady
 M.retrieveCache = retrieveCache
 M.isStaff = isStaff
 M.hasAllPermissions = hasAllPermissions
+M.canOpenConfig = canOpenConfig
 M.hasAnyPermission = hasAnyPermission
 M.savePermissions = savePermissions
 

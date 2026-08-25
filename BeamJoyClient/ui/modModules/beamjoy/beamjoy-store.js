@@ -14,6 +14,11 @@ angular
         this.permissions = {};
         this.settings = {};
         this.utils = {};
+        // server-configurable, proactively pushed (config.lua's retrieveCache) rather than
+        // request-gated like the admin-only General config tab's own data: every client needs to
+        // read these, not just whoever has that tab open. Defaults here match the server's own
+        // (services/config.lua) until the first real push arrives.
+        this.raceSettings = { authorshipRestriction: false, editorShowOnlyEditable: false };
 
         // METHODS
 
@@ -62,6 +67,9 @@ angular
             this.BJUpdateSelf = (payload) => {
                 this.players.self = payload;
             };
+            this.BJRaceSettings = (payload) => {
+                this.raceSettings = payload;
+            };
 
             this.BJNametagsState = (data) => {
                 this.settings.assign({ nametags: data });
@@ -83,11 +91,24 @@ angular
              * @param {any} evt
              * @param {event: string, payload: object?} data
              */
+            // wrapped in $applyAsync : guihooks.trigger() is a native->JS call from outside
+            // Angular's own digest cycle. $broadcast still runs and every $rootScope.$on(...)
+            // listener downstream still updates its bound scope value, but without a digest the
+            // DOM never re-renders: the view sits stale until some UNRELATED Angular action
+            // (a click, a $timeout) happens to trigger the next digest on its own.
+            // A couple of call sites already work around this per-handler (windows/main/app.js's
+            // own BJUpdateWindowSettings listener wraps itself in $applyAsync) ; centralizing it
+            // here fixes it for every current and future $rootScope.$on(eventName, ...) listener
+            // at once, not just the ones that happened to notice and add their own workaround.
+            // $applyAsync (not $apply) is safe to call unconditionally, whether or not this was
+            // already invoked from inside a digest.
             $rootScope.$on("BJEvent", (_, data) => {
-                if (this[data.event]) {
-                    this[data.event](data.payload);
-                }
-                $rootScope.$broadcast(data.event, data.payload);
+                $rootScope.$applyAsync(() => {
+                    if (this[data.event]) {
+                        this[data.event](data.payload);
+                    }
+                    $rootScope.$broadcast(data.event, data.payload);
+                });
             });
             $timeout(() => {
                 this.send("BJReady");

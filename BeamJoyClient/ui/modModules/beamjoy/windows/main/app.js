@@ -1,5 +1,7 @@
 await import(`/ui/modModules/beamjoy/windows/main/main/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/settings/app.js`);
+await import(`/ui/modModules/beamjoy/windows/main/races/app.js`);
+await import(`/ui/modModules/beamjoy/windows/main/hunter/app.js`);
 
 angular.module("beamjoy").component("bjMain", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/app.html",
@@ -42,9 +44,25 @@ angular.module("beamjoy").component("bjMain", {
                 closable: false,
                 template: "<bj-main-main></bj-main-main>",
             },
+            races: {
+                id: "races",
+                order: 2,
+                title: "beamjoy.window.main.tabs.races.title",
+                visible: true,
+                closable: false,
+                template: "<bj-main-races></bj-main-races>",
+            },
+            hunter: {
+                id: "hunter",
+                order: 3,
+                title: "beamjoy.window.main.tabs.hunter.title",
+                visible: true,
+                closable: false,
+                template: "<bj-main-hunter></bj-main-hunter>",
+            },
             settings: {
                 id: "settings",
-                order: 2,
+                order: 4,
                 title: "beamjoy.window.main.tabs.settings.title",
                 visible: false,
                 closable: true,

@@ -195,7 +195,10 @@ local function explodeVehicle(ctxt, vid)
 end
 
 ---@param ctxt BJSContext
----@param vid integer
+---@param vid integer the sender's own vid for their own vehicle, also the cross-client-stable
+---remoteVID every other client's own copy of this vehicle carries (see the client-side
+---"updateVehicleGhost" handler's own comment); relaying it unmodified below is
+---correct even though it's only ever looked up here against the SENDER's own vehicle list
 ---@param state boolean
 local function updateGhost(ctxt, vid, state)
     if type(vid) ~= "number" or type(state) ~= "boolean" then

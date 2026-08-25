@@ -51,6 +51,19 @@ local function onBJChatCommand(ctxt, args)
         return
     end
 
+    -- front-door permission check : previously the "permissions" field was only ever consulted
+    -- by /help's own visibility filter, so an unauthorized player invoking a hidden command would
+    -- silently fall through to whatever the downstream callback happened to do (most already
+    -- self-check and reject, but nothing enforced it here). Matches BJI's own findCommand, which
+    -- gates both discovery and execution the same way.
+    if #command.permissions > 0 and
+        not services_permissions.hasAllPermissions(ctxt.senderID, table.unpack(command.permissions)) then
+        services_chat.directSend(ctxt.senderID,
+            services_lang.get("chat.command.error.noPermission", ctxt.sender.lang),
+            services_chat.COLORS.ERROR)
+        return
+    end
+
     if command.validate(ctxt, args) then
         command.callback(ctxt, table.filter(args, function(_, i) return i > 1 end), command)
     end

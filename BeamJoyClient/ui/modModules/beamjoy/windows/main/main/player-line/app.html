@@ -13,6 +13,30 @@
     ></icon>
 </div>
 <div
+    ng-hide="$ctrl.actions.teleportTo === undefined"
+    class="btn primary"
+    ng-class="{disabled: !$ctrl.actions.teleportTo}"
+    ng-click="$ctrl.action($event,'teleportTo')"
+>
+    <icon
+        name="teleportTo"
+        class="small"
+        title="{{'beamjoy.window.main.playerlist.actions.teleportTo'|translate}}"
+    ></icon>
+</div>
+<div
+    ng-hide="$ctrl.actions.teleportFrom === undefined"
+    class="btn primary"
+    ng-class="{disabled: !$ctrl.actions.teleportFrom}"
+    ng-click="$ctrl.action($event,'teleportFrom')"
+>
+    <icon
+        name="teleportFrom"
+        class="small"
+        title="{{'beamjoy.window.main.playerlist.actions.teleportFrom'|translate}}"
+    ></icon>
+</div>
+<div
     ng-hide="$ctrl.actions.freeze === undefined"
     class="btn"
     ng-class="{danger: !$ctrl.player.froze, success: $ctrl.player.froze, disabled: !$ctrl.actions.freeze}"

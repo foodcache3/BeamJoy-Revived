@@ -1,6 +1,122 @@
 angular.module("beamjoy").component("bjConfigCore", {
     templateUrl: "/ui/modModules/beamjoy/windows/config/core/app.html",
-    controller: function ($scope, beamjoyStore) {
+    controller: function (
+        $rootScope,
+        $scope,
+        $filter,
+        beamjoyStore,
+        beamjoyConfirm
+    ) {
+        const translate = $filter("translate");
+
+        // Legacy Import: one row per importable mode's legacy-data importer (Hunter, Races today,
+        // see services/hunter.lua and services/races.lua's own doc comments for each design). Lives
+        // here rather than on each mode's own Config tab so it has one obvious, stable home as more
+        // modes gain their own importer ; each row is independently permission-gated on that mode's
+        // own edit permission, not on this tab's own SetCore gate (see windows/config/app.js's own
+        // comment on why Core's tab visibility itself is widened to match).
+        this.canImportHunter = false;
+        this.canImportRaces = false;
+        const updateLegacyImportPermissions = () => {
+            this.canImportHunter = beamjoyStore.permissions.hasAllPermissions(
+                undefined,
+                "EditHunterArenas"
+            );
+            this.canImportRaces = beamjoyStore.permissions.hasAllPermissions(
+                undefined,
+                "EditRaces"
+            );
+        };
+        updateLegacyImportPermissions();
+        ["BJUpdateGroups", "BJUpdatePermissions", "BJUpdateSelf"].forEach(
+            (eventName) => {
+                $rootScope.$on(eventName, updateLegacyImportPermissions);
+            }
+        );
+
+        this.showLegacyImportHelp = (event) => {
+            event.stopPropagation(); // don't also toggle the accordion this button lives inside
+            beamjoyConfirm.info(
+                translate("beamjoy.window.config.tabs.core.legacyImport.help.text")
+            );
+        };
+
+        this.hunterLegacyImportStatus = null;
+        this.requestHunterLegacyImport = (event) => {
+            event.stopPropagation();
+            this.hunterLegacyImportStatus = null;
+            beamjoyStore.send("BJHunterLegacyImportPreviewRequest");
+        };
+        $rootScope.$on("BJHunterLegacyImportPreview", (_, results) => {
+            if (!results || results.length === 0) {
+                this.hunterLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.hunter.none";
+                return;
+            }
+            const conflictCount = results.filter((r) => r.conflict).length;
+            const lines = results
+                .map((r) => {
+                    const counts = `${r.hunterSpawnCount}/${r.preySpawnCount}/${r.waypointCount}`;
+                    const overwrite = r.conflict
+                        ? ` (${translate("beamjoy.window.config.tabs.core.legacyImport.hunter.overwriteTag")})`
+                        : "";
+                    return `${r.map} · ${counts}${overwrite}`;
+                })
+                .join("\n");
+            const header = translate("beamjoy.window.config.tabs.core.legacyImport.hunter.confirm")
+                .replace("{count}", results.length)
+                .replace("{conflicts}", conflictCount);
+            beamjoyConfirm.ask(`${header}\n\n${lines}`, () => {
+                beamjoyStore.send("BJHunterLegacyImportConfirm");
+            });
+        });
+
+        // races' own importer is deliberately NON-DESTRUCTIVE (per direct request) : every
+        // convertible race is ADDED as a brand-new race, never overwriting anything already in the
+        // list; a name collision is skipped and reported instead, so this preview's own wording
+        // and confirm flow differ from Hunter's own "will overwrite" framing above on purpose.
+        this.raceLegacyImportStatus = null;
+        this.requestRaceLegacyImport = (event) => {
+            event.stopPropagation();
+            this.raceLegacyImportStatus = null;
+            beamjoyStore.send("BJRaceLegacyImportPreviewRequest");
+        };
+        $rootScope.$on("BJRaceLegacyImportPreview", (_, results) => {
+            if (!results || results.length === 0) {
+                this.raceLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.races.none";
+                return;
+            }
+            const importable = results.filter((r) => !r.conflict && !r.invalid);
+            const conflictCount = results.filter((r) => r.conflict).length;
+            const invalidCount = results.filter((r) => r.invalid).length;
+            const lines = results
+                .map((r) => {
+                    const counts = `${r.gateCount} gates / ${r.startCount} starts${r.branching ? " (branching)" : ""}${r.loopable ? " (loopable)" : ""}`;
+                    const tag = r.conflict
+                        ? ` (${translate("beamjoy.window.config.tabs.core.legacyImport.races.skipTag")})`
+                        : r.invalid
+                        ? ` (${translate("beamjoy.window.config.tabs.core.legacyImport.races.invalidTag")})`
+                        : "";
+                    const author = r.author ? ` (by ${r.author})` : "";
+                    return `${r.map} · ${r.name}${author} · ${counts}${tag}`;
+                })
+                .join("\n");
+            if (importable.length === 0) {
+                this.raceLegacyImportStatus = null;
+                beamjoyConfirm.ask(
+                    `${translate("beamjoy.window.config.tabs.core.legacyImport.races.noneImportable")}\n\n${lines}`,
+                    () => {}
+                );
+                return;
+            }
+            const header = translate("beamjoy.window.config.tabs.core.legacyImport.races.confirm")
+                .replace("{count}", importable.length)
+                .replace("{skipped}", conflictCount)
+                .replace("{invalid}", invalidCount);
+            beamjoyConfirm.ask(`${header}\n\n${lines}`, () => {
+                beamjoyStore.send("BJRaceLegacyImportConfirm");
+            });
+        });
+
         this.data = {
             Name: "",
             Description: "",

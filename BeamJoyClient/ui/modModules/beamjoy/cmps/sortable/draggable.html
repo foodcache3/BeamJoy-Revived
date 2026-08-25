@@ -4,10 +4,22 @@
     }
 </style>
 
+<!-- `draggable="true"` is kept only because ngDragstart's own directive (cmps/sortable/app.js)
+     guards on `attrs.draggable` being truthy; the actual drag tracking below is 100% custom
+     (mousedown starts it, a document-level mouseup ends it and hit-tests for a drop target), not
+     real HTML5 drag-and-drop at all (ng-dragstart/ng-dragend are plain attributes this directive
+     reads manually, not real dragstart/dragend event bindings). Without `ondragstart="return
+     false"`, the browser's OWN native drag-and-drop still engages the moment `draggable="true"`
+     sees mouse movement, which swallows the mouseup our custom mousedown/mouseup tracking depends
+     on entirely (a real, previously-unexercised bug in this shared component : start-drag fired,
+     but the corresponding release/drop never did, matching "I can see a start dragging note...
+     but that's all"). Cancelling the native drag here lets the custom mouse tracking work
+     uninterrupted. -->
 <div
     class="w-fit-content h-fitcontent p-1 cursor-grab"
     ng-class="{horizontal: $ctrl.horizontal === true}"
     draggable="true"
+    ondragstart="return false"
     ng-dragstart="$ctrl.startDrag($event)"
     ng-dragend="$ctrl.endDrag($event)"
 >

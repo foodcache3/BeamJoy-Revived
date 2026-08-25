@@ -12,16 +12,28 @@ local size, position
 
 ---@param ctxt TickContext
 local function render(ctxt)
-    local isStaff = beamjoy_permissions.isStaff()
     BeginMenuBar()
 
-    if not isStaff and MenuItem(beamjoy_lang.translate("beamjoy.menu.toggleMain"), nil,
+    -- hidden whenever the main window can't actually be toggled off anyway (staff, or the host's
+    -- ForceHud setting). Matches isMainForced()'s own "closable" flag communications/ui.lua sends
+    -- alongside this, no point offering a toggle for something that snaps back open regardless
+    if not beamjoy_communications_ui.isMainForced() and
+        MenuItem(beamjoy_lang.translate("beamjoy.menu.toggleMain"), nil,
             beamjoy_communications_ui.windowStates["main"]) then
         beamjoy_communications_ui.toggleWindow("main")
         M.toggle()
     end
 
-    if isStaff and MenuItem(beamjoy_lang.translate("beamjoy.menu.toggleConfig"), nil,
+    -- previously gated on isStaff alone : a player granted one of the config-tab permissions
+    -- individually (e.g. EditRaces) without being ranked "staff" had no way to ever open the
+    -- config window at all. The window's own tabs (windows/config/app.js's tabsData) already
+    -- filter correctly per permission, so this menu item just needs to stop being the bottleneck
+    -- that kept non-staff-but-permitted players out before that per-tab filtering ever got a
+    -- chance to apply. See beamjoy_permissions.canOpenConfig's own doc comment. The same check is
+    -- also used by communications/ui.lua, which had the identical isStaff-only bug for the actual
+    -- window visibility, not just this menu item.
+    if beamjoy_permissions.canOpenConfig() and
+        MenuItem(beamjoy_lang.translate("beamjoy.menu.toggleConfig"), nil,
             beamjoy_communications_ui.windowStates["config"]) then
         beamjoy_communications_ui.toggleWindow("config")
         M.toggle()

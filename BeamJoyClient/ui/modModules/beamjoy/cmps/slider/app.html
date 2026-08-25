@@ -1,25 +1,39 @@
 <style>
     bj-slider {
+        /* real root cause of "the slider doesn't resize with the window" : a custom element with
+           no display rule of its own defaults to `display: inline`, same as a <span>. width:100%
+           on an inline element is a no-op (inline boxes size to their own content, not to any
+           percentage of their container), so this was silently doing nothing and every slider was
+           actually just sitting at its native <input type="range">'s own fixed intrinsic width the
+           whole time, never actually stretching/shrinking with anything */
+        display: block;
         width: 100%;
     }
-    bj-slider input {
+    bj-slider .slider-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        width: 100%;
+    }
+    bj-slider input[type="range"] {
+        flex-grow: 1;
         appearance: none;
         border: none;
     }
-    bj-slider input:focus {
+    bj-slider input[type="range"]:focus {
         border: none;
     }
-    bj-slider input::-webkit-slider-runnable-track {
+    bj-slider input[type="range"]::-webkit-slider-runnable-track {
         appearance: none;
         height: 0.6em;
         border-radius: 0.3em;
         background: rgba(255, 255, 255, 0.5);
         transition: background-color 0.2s ease-in-out;
     }
-    bj-slider input::-webkit-slider-runnable-track:hover {
+    bj-slider input[type="range"]::-webkit-slider-runnable-track:hover {
         background: rgba(255, 255, 255, 0.6);
     }
-    bj-slider input::-webkit-slider-thumb {
+    bj-slider input[type="range"]::-webkit-slider-thumb {
         appearance: none;
         width: 1.3em;
         aspect-ratio: 1;
@@ -29,18 +43,58 @@
         background: rgb(230, 92, 0);
         transition: background-color 0.2s ease-in-out;
     }
-    bj-slider input::-webkit-slider-thumb:hover {
+    bj-slider input[type="range"]::-webkit-slider-thumb:hover {
         background: rgb(218, 87, 0);
+    }
+    bj-slider .value-label {
+        flex-shrink: 0;
+        width: 4em;
+        text-align: center;
+        opacity: 0.85;
+    }
+    bj-slider input[type="number"] {
+        flex-grow: 1;
+        text-align: center;
+    }
+    bj-slider .mode-toggle-btn {
+        flex-shrink: 0;
+        width: 1.6em;
+        aspect-ratio: 1;
+        text-align: center;
+        line-height: 1;
     }
 </style>
 
-<input
-    type="range"
-    class="w-100"
-    min="{{$ctrl.min}}"
-    max="{{$ctrl.max}}"
-    step="{{$ctrl.step}}"
-    ng-disabled="$ctrl.disabled"
-    ng-model="$ctrl.ngModel"
-    ng-style="{'background': 'linear-gradient(to right, rgb(230, 92, 0) 0% ' + $ctrl.percent + '%, transparent ' + $ctrl.percent + '% 100%)'}"
-/>
+<div class="slider-row">
+    <input
+        type="range"
+        ng-if-start="$ctrl.mode === 'slider'"
+        min="{{$ctrl.min}}"
+        max="{{$ctrl.max}}"
+        step="{{$ctrl.step}}"
+        ng-disabled="$ctrl.disabled"
+        ng-model="$ctrl.ngModel"
+        ng-style="{'background': 'linear-gradient(to right, rgb(230, 92, 0) 0% ' + $ctrl.percent + '%, transparent ' + $ctrl.percent + '% 100%)'}"
+    />
+    <span ng-if-end class="value-label">{{$ctrl.ngModel}}</span>
+
+    <input
+        type="number"
+        ng-if="$ctrl.mode === 'number'"
+        min="{{$ctrl.numberMin}}"
+        max="{{$ctrl.numberMax}}"
+        step="{{$ctrl.step}}"
+        ng-disabled="$ctrl.disabled"
+        ng-blur="$ctrl.toggleMode()"
+        ng-keydown="$event.key === 'Enter' && $event.target.blur()"
+        ng-model="$ctrl.ngModel"
+    />
+
+    <button
+        class="btn neutral mode-toggle-btn"
+        ng-click="$ctrl.toggleMode()"
+        ng-mousedown="$event.preventDefault()"
+        ng-disabled="$ctrl.disabled"
+        title="{{($ctrl.mode === 'slider' ? 'beamjoy.common.typeValue' : 'beamjoy.common.useSlider') | translate}}"
+    >{{$ctrl.mode === 'slider' ? '#' : '≡'}}</button>
+</div>

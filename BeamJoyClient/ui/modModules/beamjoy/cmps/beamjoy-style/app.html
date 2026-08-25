@@ -45,7 +45,20 @@
 <!-- TOOLTIP -->
 <style>
     beamjoy-tooltip {
-        position: absolute;
+        /* real, confirmed bug ("a long tooltip changes the window's width") : this element is
+           positioned via viewport-relative math (getBoundingClientRect/window.innerWidth, see
+           directives/tooltip.js's showTooltip) but was `position: absolute`, not `fixed`. Visually
+           the two often look identical when nothing in the ancestor chain is itself positioned or
+           scrolled, but they're NOT equivalent structurally : an absolutely positioned element
+           still contributes to its containing block's scrollable overflow if it extends beyond it,
+           while a fixed one is explicitly excluded from that calculation entirely, viewport-
+           anchored and independent of any ancestor's layout. A wide tooltip positioned far via
+           `right: <value>px` (a right-aligned tooltip in particular, see showTooltip's own
+           left/right branch) was expanding document.body's own scrollable width, which this
+           embedded CEF surface reads as the page itself needing to be wider, so that's what
+           actually changed the window/panel width. `fixed` is also just the objectively correct choice
+           given the coordinates are already computed relative to the viewport, not any ancestor. */
+        position: fixed;
         z-index: 100;
         padding: 0 0.2em;
         pointer-events: none;
@@ -64,6 +77,10 @@
         font-size: 0.7em;
         color: white;
         background-color: rgba(0, 0, 0, 0.6);
+        /* pre-line : lets multi-line tooltips (explicit \n, e.g. a settings summary) actually
+           wrap onto separate lines instead of collapsing to one. Harmless for every existing
+           single-line tooltip, since pre-line only changes how \n / repeated whitespace behave */
+        white-space: pre-line;
     }
 </style>
 
@@ -208,6 +225,29 @@
     input[type="text"].danger {
         background-color: rgba(255, 0, 0, 0.425);
     }
+
+    /* real bug fixed here : whichever option a bj-select's dropdown panel opens on (always the
+       first one when nothing is selected yet, e.g. a race gate's "reachable from" picker before
+       anything's been chosen), and any option you hover/click, gets Angular Material's own
+       keyboard-focus highlight, rendered via a theme-generated rule
+       (`md-select-menu.md-SOME-THEME-theme md-option:focus:not([selected])`) baked into the
+       game's own angular-material.js at runtime, confirmed by reading that file directly rather
+       than guessing. A first attempt at this fix used the wrong attribute (`aria-selected`,
+       Material's own real attribute is the boolean `selected`) AND, even fixed, would still have
+       lost outright : that theme-generated selector carries a theme CLASS plus two pseudo-classes,
+       which beats a plain `md-select-menu md-option:focus` rule on specificity alone regardless of
+       stylesheet order. `!important` here isn't a shortcut around understanding the cascade: it's
+       the correct fix given the actual theme class name is chosen at runtime and can't be matched
+       exactly from here. The open panel itself is appended outside <beamjoy> entirely (a floating
+       overlay near the document root, not a child of it), so none of this can be scoped under the
+       `beamjoy` selector like every other rule here; it's deliberately global. */
+    md-select-menu md-option:focus,
+    md-select-menu md-option[selected] {
+        background-color: var(--bng-black-o2) !important;
+    }
+    md-select-menu md-option .md-text {
+        color: white !important;
+    }
 </style>
 
 <!-- BTN -->
@@ -238,6 +278,12 @@
     }
     .btn.info:hover {
         background-color: rgb(0, 106, 192);
+    }
+    .btn.neutral {
+        background-color: rgb(90, 90, 90);
+    }
+    .btn.neutral:hover {
+        background-color: rgb(70, 70, 70);
     }
     .btn.warning {
         background-color: rgb(192 205 4);
@@ -609,6 +655,47 @@
     beamjoy table tr.spacer {
         display: block;
         height: 0.3em;
+    }
+
+    /* Real, confirmed root cause of "a table's last column stretches to fill all leftover space"
+       (race-info panel, then the leaderboard panel later) surviving multiple earlier attempts at a
+       fix scoped to just one component's own <style> block : the rule above (`beamjoy table
+       td:last-child { width: auto }`) is GLOBAL, but each earlier fix's own override only actually
+       existed in the DOM once THAT SPECIFIC component had been compiled/rendered at least once,
+       since Angular only injects a templateUrl component's <style> tag when it's actually mounted.
+       Opening (for example) the leaderboard panel WITHOUT ever having opened the race-info Results
+       tab first left this override entirely absent, and the global rule won by default. Defined
+       here instead, since this file is the one shared stylesheet always loaded regardless of which
+       panel happens to open first, so any table opting into `.race-info-table` gets it
+       unconditionally. */
+    .race-info-table {
+        border-collapse: collapse;
+        font-size: 0.9em;
+        margin-bottom: 1em;
+        /* explicitly NOT width:100%: a table should size to its own content, not stretch */
+        width: auto;
+    }
+    .race-info-table th,
+    .race-info-table td {
+        /* explicit width:auto undoes the global rule's td{width:1px} + td:last-child{width:auto}
+           combination: every column just sizes to its own real content now, last included */
+        width: auto;
+        padding: 0.5em 1.1em;
+        text-align: right;
+        white-space: nowrap;
+    }
+    .race-info-table th.text-left,
+    .race-info-table td.text-left {
+        text-align: left;
+    }
+    .race-info-table th.text-center,
+    .race-info-table td.text-center {
+        text-align: center;
+    }
+    .race-info-table th {
+        border-bottom: thin solid gray;
+        opacity: 0.8;
+        font-weight: normal;
     }
 </style>
 

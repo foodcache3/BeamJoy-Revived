@@ -24,7 +24,7 @@ end
 
 local function onSlowUpdate()
     local conf = services_config.data.Broadcasts
-    if conf.enabled then
+    if conf.enabled and #conf.messages > 0 then
         if MP.GetPlayerCount() == 0 then return end
         counter = counter + 1
         if counter >= conf.delay then

@@ -36,6 +36,14 @@ local function retrieveCache(caches)
         M.sendModelBlacklistToUI()
         M.sendWhitelistToUI()
         M.sendBroadcastToUI()
+        -- proactive, not request-gated like sendConfigToUI (BJRequestConfigData/BJSendConfigData,
+        -- only ever fetched by the admin-only General config tab) : the race browse list filter and
+        -- canManage/canEdit checks need these values on every client, not just whoever happens to
+        -- have that tab open, so they're pushed straight through on every cache update instead
+        beamjoy_communications_ui.send("BJRaceSettings", {
+            authorshipRestriction = M.data.RaceAuthorshipRestriction == true,
+            editorShowOnlyEditable = M.data.RaceEditorShowOnlyEditable == true,
+        })
     end
     if caches.core then
         M.core = caches.core
@@ -46,6 +54,21 @@ end
 local function sendConfigToUI()
     beamjoy_communications_ui.send("BJSendConfigData", {
         AllowClientMods = M.data.AllowClientMods,
+        RaceAuthorshipRestriction = M.data.RaceAuthorshipRestriction,
+        RaceEditorShowOnlyEditable = M.data.RaceEditorShowOnlyEditable,
+        ForceHud = M.data.ForceHud,
+        ShowHudAtStart = M.data.ShowHudAtStart,
+        -- real root cause of "toggling Freeroam/Voting settings visually reverts itself": both
+        -- accordions' own $on("BJSendConfigData", ...) handlers fall back to `data.Freeroam || {}`
+        -- / `data.Voting || {}` whenever their own key is missing from this payload, silently
+        -- resetting every field back to its own hardcoded UI default (not the real saved value).
+        -- This broadcast fires after ANY successful setConfig call anywhere on the server (M.set's
+        -- success path pushes a full sendCache to every player unconditionally), not just a
+        -- Freeroam/Voting one, so the reset could be triggered by something completely unrelated.
+        -- Neither key was ever actually included here despite both accordions expecting to read
+        -- them from this exact broadcast.
+        Freeroam = M.data.Freeroam,
+        Voting = M.data.Voting,
     })
 end
 

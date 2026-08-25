@@ -20,7 +20,7 @@ local M = {
 ---@param newZones GizmoObject[]
 function M.safeZones.save(ctxt, newZones)
     if not services_permissions.hasAllPermissions(ctxt.senderID,
-            BJ_PERMISSIONS.SetConfig) then -- TODO create a better permission
+            BJ_PERMISSIONS.EditSafeZones) then
         return
     end
 
