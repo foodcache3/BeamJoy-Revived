@@ -1,0 +1,962 @@
+# Changelog
+
+All notable changes to BeamJoy Sandbox. The v1.3.0 entry was originally compiled against a real
+file-by-file diff of this working directory against the last GitHub release (v1.2.0), not just
+session memory, then kept up to date as work continued. Format loosely follows
+[Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
+the live server per the usual workflow: see each entry.
+
+## [1.8.26] - 2026-08-25
+
+### Added
+- **Full locale expansion: every non-English client and server translation brought to 100% key
+  parity with `en-US.json`.** All 12 non-English client locales (`de_DE`, `es_419`, `es_ES`,
+  `fr_FR`, `ja_JP`, `ko_KR`, `pl_PL`, `pt_BR`, `pt_PT`, `ru_RU`, `zh_Hans`, `zh_Hant`) were missing
+  the same 403 keys (this session's race/Hunter/config additions) and carried 2 stale orphaned
+  keys (`allowMods`/`allowMods.tooltip`, superseded by an earlier rename in the English source).
+  All 7 non-English server locales (`de_DE`, `es_419`, `es_ES`, `fr_FR`, `pl_PL`, `pt_BR`, `pt_PT`)
+  were missing the same 94 keys. Every missing key was given a real, natively-translated value
+  (not machine-literal), matching each locale's existing tone and register, with regional dialect
+  differentiation where relevant (`es_419` Latin American vs. `es_ES` Peninsular Spanish,
+  `pt_BR` vs. `pt_PT`), and preserving every `{placeholder}` token and `\n` escape exactly. Server
+  locales keep this codebase's existing ASCII-only convention (diacritics stripped); client locales
+  use full native diacritics as before. Verified via a full key-set diff (0 missing, 0 extra
+  everywhere) and a JSON-validity sweep across all 21 locale files. *(both client and server, server
+  locales need deployment)*
+
+### Changed
+- Version bumped to 1.8.26 (buildversion 2282) on both client and server, `UI_BUILD` kept in sync
+  per the project's own versioning convention.
+
+## [1.8.25] - 2026-08-23
+
+### Fixed
+- **Race reset-penalty lock hardened: the ghost reason is now reasserted every frame, same as the
+  freeze already was**, per direct request to make sure it genuinely holds for the whole duration.
+  `vehicles.lua`'s own generic `onVehicleResetted` hook unconditionally un-freezes any already-frozen
+  vehicle the instant a native reset event fires, with no awareness of this lock. Since
+  `applyResetPenalty` sets its freeze pre-emptively (from `onBJRequestCurrentVehicleReset`, which
+  fires before the actual reset event dispatches), that generic hook could briefly see the fresh
+  freeze as pre-existing and clear it within the same tick, before the next frame's reassertion
+  caught it back. The ghost reason itself was never touched by that hook, so it already persisted
+  correctly through the shared ghost-reason registry; reasserting it every frame regardless is a
+  cheap, purely defensive tightening. *(client only, no server changes)*
+
+## [1.8.24] - 2026-08-23
+
+### Fixed
+- **versionCheck banner's own advice was wrong**, per direct correction: "fully reinstall the mod"
+  doesn't clear BeamNG's cache at all. Reinstalling only replaces the mod's own files on disk, with
+  no effect on the separate CEF cache state actually causing the staleness, so it was never a real
+  alternative. Removed. Also dropped the "UI" qualifier from "clear your UI cache," since BeamNG's
+  own in-game terminology (Help menu) just calls it "Clear cache." Message is now: "Close BeamNG
+  completely, clear your cache, then relaunch." *(client only, no server changes)*
+
+## [1.8.23] - 2026-08-23
+
+### Changed
+- **Reverted the "Clear Cache & Reload" button. Confirmed, via live testing, that no in-session
+  fix for this actually exists.** Two separate attempts (1.8.19's `reloadUI()` round-trip, 1.8.22's
+  query-string cache-busted navigation) were both live-tested and failed: the player bumped the
+  server's build after the UI had already cached the old one, clicked the button, and the banner
+  still correctly reported "out of date" both times. BeamNG's own native UI has no working live
+  cache-clear to model this on either: its "Clear cache" tool (Help menu) just sets a
+  `folderCleanupRequested` flag and labels itself "(requires a restart)," with the actual cleanup
+  only running on the next launch. Both prior attempts only ever affected ordinary browser HTTP
+  caching, and BeamNG serves its UI through a custom `local://` CEF scheme, not real HTTP, so
+  neither had anything to actually bust.
+- The banner no longer offers a button that can't work. Its message is now honest about what
+  actually fixes this: close BeamNG completely, clear the cache, then relaunch. Only "Close"
+  (dismiss) remains as an action. *(client only, no server changes)*
+
+## [1.8.22] - 2026-08-23
+
+### Fixed
+- **"Clear Cache & Reload" (versionCheck) visibly reloaded the UI but never actually cleared the
+  staleness.** The 1.8.21 diagnostics confirmed the click did reach Lua and did call the native
+  `reloadUI()` engine global successfully, ruling out every theory from that round. Traced
+  `reloadUI()` itself by reading the installed game's own `ui/entrypoints/main/main.js`: it's a
+  thin wrapper around a plain `window.location.reload()`, an ordinary reload, not a
+  cache-bypassing one. Modern Chromium/CEF ignores the legacy "force reload" argument entirely, so
+  this reloaded the Angular app in place without ever forcing a fresh fetch of the cached
+  JS/ES-module content: the page visibly reloads, but the same stale bundle (and the same
+  mismatch) comes right back.
+- **Real fix**: `clearCacheAndReload()` now cache-busts the navigation URL directly, in the mod's
+  own JS, no Lua round-trip at all. It appends a changing query parameter and does a real
+  `window.location.href` navigation, which Chromium can't serve from either the HTTP cache or the
+  JS module cache (both keyed by exact URL). The now-dead-end Lua-side
+  `BJRequestUIReload`/`requestUIReload` handler and the 1.8.21 diagnostics were removed.
+- **Known bootstrapping limitation, flagged honestly**: anyone already stuck on a stale UI from
+  before this fix has the old, broken button cached and needs one manual cache clear (or a full
+  game restart) to pick up this fix at all. Every mismatch after that will be fixable with the
+  button alone. *(client only, no server changes)*
+
+## [1.8.21] - 2026-08-23 (diagnostic only)
+
+### Diagnostics
+- **"Clear Cache & Reload" button (versionCheck) reported as doing nothing, with no console
+  output at all.** LogError's own output only shows in the game's own in-game Lua console, which
+  may not have been what was being watched, so nothing here was live-confirmed yet. Shipped a
+  visible, no-setup-required diagnostic instead of guessing again: a `console.log` right when the
+  button is clicked (browser/CEF devtools), and an in-game `toast.warn` right when
+  `communications/ui.lua`'s `requestUIReload` handler is actually reached, reporting whether
+  `reloadUI` resolves to a real function at all. Both are temporary and will be removed once the
+  actual break point is confirmed. *(client only, no server changes)*
+
+## [1.8.20] - 2026-08-23
+
+### Added
+- **New race option: "Reset penalty"**, matching Hunter's own crash-reset penalty design (minus
+  the camera lock, per direct request: races just freeze and briefly ghost the vehicle, no forced
+  external view). When enabled (default off), a racer's vehicle freezes and ghosts for a
+  configurable number of seconds every time they reset or recover during an active attempt, no
+  exception for a plain in-place Recover, matching Hunter's own "any reset counts" philosophy. An
+  earlier design that added time directly to the total race clock was scrapped in favor of this
+  once it became clear the freeze itself is the penalty: being unable to move for N seconds already
+  costs real race time on its own. Threaded through the exact same host-configurable-default
+  pattern as `dnfEnabled`/`dnfTimeout`: `BJRaceDefaults.resetPenaltyEnabled`/`resetPenaltySeconds`
+  (`services/races.lua`), `raceGrid.lua`'s `buildSettings` override resolution, a toggle+slider in
+  both the race editor and the per-start options panel (hidden entirely under "norespawn", where
+  resets are already fully blocked outright). Purely client-enforced (`raceRunner.lua`) with zero
+  server round-trip, same as Hunter's own version. Reuses the existing shared countdown overlay
+  (`windows/raceCountdown`) for the freeze timer display, adding a new "penalty" mode alongside its
+  existing countdown/finished/dnf ones. **Server file changed, needs deployment**:
+  `Server/BeamJoyServer/services/{races.lua,raceGrid.lua}`.
+
+### Added
+- **The stale-UI-cache banner (`windows/versionCheck`) can now actually fix itself, not just tell
+  the player to do it manually.** Previously the mismatch banner's only action was a "Close"
+  dismiss button, and its message just told the player to try clearing the cache or reinstalling
+  the mod by hand. Added a "Clear Cache & Reload" button that calls a new `communications/ui.lua`
+  handler (`BJRequestUIReload` -> `requestUIReload`), which invokes BeamNG's own native
+  `reloadUI()` global, confirmed via the game's own installed `mcp/tools/system.lua` to hard-reload
+  the UI ignoring cache. *(client only, no server changes; superseded in 1.8.22-1.8.23, see above)*
+
+## [1.8.18] - 2026-08-23
+
+### Fixed
+- **Hunter's fugitive-reveal nametag never rendered at all for a hunter with nametags globally
+  disabled.** `nametags.lua`'s entire "draw all" block (including the revealed fugitive's own tag)
+  was wrapped in `if not M.state.hideNameTags then`, a purely cosmetic personal preference
+  unrelated to Hunter. A hunter who'd turned nametags off for normal freeroam would never see the
+  fugitive's tag even after a real reveal trigger fired, silently breaking the reveal mechanic for
+  them specifically. Fixed narrowly, not by forcing nametags on for everyone: new
+  `beamjoy_hunterRunner.isRevealedFugitiveVehicle` lets `nametags.lua` force-draw just the
+  currently-revealed fugitive's tag when `hideNameTags` is on, while every other vehicle's nametag
+  still respects the viewer's own preference. *(client only, no server changes)*
+
+## [1.8.17] - 2026-08-23
+
+### Fixed
+- **`/map`/`bj map`'s own "Current map is X" confirmation printed/sent immediately after
+  triggering a switch, before the actual mods-reload (Windows) or restart (Linux) had happened,**
+  misleadingly claiming the switch was already complete while it was still mid-flight (a real
+  captured log showed the confirmation appearing before the "reloading server mods" warning and
+  the actual `reloadmods` completion). `switchMap` gained an optional `onComplete` callback,
+  invoked once the switch has genuinely finished. `bj map <name>`'s console confirmation now uses
+  it, so it only prints once the switch is actually done. `/map <name>`'s chat confirmation
+  deliberately does not use it: the sender gets kicked along with everyone else as part of the same
+  switch, so a confirmation sent after the fact would never reach them. It's sent immediately
+  instead, reworded to "Switching to X..." rather than "Current map is X." *(server only, no
+  client changes)*
+
+### Added
+- **`MaxPlayers` is now forced to 0 for the entire duration of a map switch** (kick countdown plus
+  mods-reload-or-restart), not just during `refreshModsIfChanged`'s own internal scan. Previously
+  nothing stopped a new player from connecting mid-countdown or in the gap before Windows'
+  `reloadmods` actually ran, potentially serving them an inconsistent mix of old/new mod archives.
+  Restored to its real original value automatically once the switch completes, including on the
+  Linux restart path, where it's restored before the delayed `exit()` rather than after, since
+  leaving it at 0 across a process exit would persist into the config BeamMP-Server reads back on
+  restart and permanently lock the server at 0 players.
+
+## [1.8.16] - 2026-08-23
+
+### Fixed
+- **`reloadmods` map-switch fix from 1.8.12/1.8.13 crashed a Linux-hosted server.** The
+  `reloadmods`-via-console-injection technique (`FS.SendConsoleCommand`) only ever had a Windows
+  implementation (`AttachConsole`/`WriteConsoleInput`, real Win32 APIs), and ran unconditionally on
+  any modded-map switch regardless of host OS. A Linux server hoster hit `FS.SendConsoleCommand is
+  Windows-only` instead of ever actually reloading its mods. `switchMap`'s modded-switch branch now
+  checks `FS.isWindows()` first: Windows still uses the no-restart `reloadmods` path exactly as
+  before; anything else falls back to the original, cross-platform behavior from before 1.8.12,
+  `exit()` after a 3s warning, relying on the host's own process supervisor (systemd, pm2, the
+  hoster's control panel, etc.) to restart BeamMP-Server, which then picks up the already-swapped
+  mod archive on its own. *(server only, no client changes)*
+
+## [1.8.15] - 2026-08-23
+
+### Fixed
+- **The actual root cause of "the fugitive could reset/recover while a hunter was right next to
+  them."** The reset-lock distance check (and the reveal-proximity check, which shares the same
+  computation) compared the local player's position against `v.position`, a cached field on each
+  tracked vehicle. That field is only ever refreshed by `beamjoy_vehicles.getVehicle(vid)` being
+  called without `light=true`, which for another player's vehicle only ever happens in
+  `nametags.lua`'s own "draw all" loop (skipped entirely once nametags are disabled) plus its
+  Alt-gated hover-reveal. On a client with nametags turned off, a hunter's tracked position never
+  updated past wherever they were at registration, so the fugitive's own reset-lock/reveal checks
+  were silently comparing against a frozen, stale position. Fixed by computing each candidate
+  hunter's position fresh (`beamjoy_vehicles.getVehiclePositionRotation`) instead of trusting the
+  cached field, removing an accidental coupling between the cosmetic nametag system and Hunter's
+  core proximity mechanics. This was the only place in the codebase relying on that cached field
+  for another vehicle's live world position. *(client only, no server changes)*
+
+## [1.8.14] - 2026-08-22
+
+### Fixed
+- **Hunter: sometimes the countdown ends without releasing your car.** The HUNT-start
+  freeze-and-release logic captured `getCurrentOwn()` once and skipped scheduling the release
+  entirely if that returned nil, a real possibility for a vehicle that had only just spawned
+  (still mid-registration at that exact instant). `onBJVehicleInstantiated` had already frozen it
+  moments earlier during COUNTDOWN, so with the release never scheduled, the vehicle stayed
+  frozen for the rest of the hunt. The release is now always scheduled regardless of whether a
+  vehicle exists at that exact instant; the delayed callback already re-fetches the current
+  vehicle fresh when it actually fires.
+- **Hunter: hunters saw their own HUD claim "YOU ARE EXPOSED"** whenever the fugitive got
+  revealed, not just the fugitive themselves. `huntedRevealed` was pushed to every participant
+  unconditionally, unlike its sibling `huntedResetLocked` right next to it, which was already
+  correctly scoped to the fugitive's own client only. Fixed to match.
+- **Hunter: a spawn point placed under an object (a gas station awning, a tunnel ceiling) spawned
+  the vehicle on top of it instead.** Both hunter spawn-teleport call sites left `cling` at its
+  default (`true`), which re-snaps the position to the nearest surface below a point 10 units above
+  the target: fine for a point sitting in the open, but wrong for one deliberately placed under a
+  covering structure, where that structure's own underside is what the ray hits first. The arena
+  editor already places these positions correctly; spawn time no longer re-clings them.
+- **Verified, not a bug**: the Hunter reveal-proximity distance setting is genuinely meters, with
+  no unit mismatch or scaling applied anywhere in the chain.
+- **Verified, not a bug**: `huntedResetDistanceThreshold` resolution and the reset-lock distance
+  check are both completely independent of `winCondition` ("waypoints" vs "timed"). No
+  timed-mode-specific difference found in this logic. *(client only, no server changes)*
+
+## [1.8.13] - 2026-08-22
+
+### Fixed
+- **A real gap from 1.8.12's own change, caught immediately**: switching to/from a modded map no
+  longer restarts the process, but a restart used to be what re-triggered `onInit`'s own mods-
+  changed scan (`scanNewMods`) as a side effect. Any other new mod content sitting in
+  `Client/`/`Maps/`, unrelated to the specific map being switched to, would now never get
+  discovered until a genuine manual server restart. `switchMap` now re-runs that same scan
+  directly (`scanNewMods`, extracted alongside its own cache-comparison gating into a shared
+  `refreshModsIfChanged`) as part of the same modded-switch branch, restoring the original
+  cadence without needing an actual restart. `scanNewMods` itself now takes an optional
+  `onRebootNeeded` callback so a caller that's already about to reload mods for its own reason
+  (like this one) can suppress its default "schedule `exit()` in 3s" behavior instead of both
+  independently trying to handle the same situation. **Needs server deployment.**
+
+## [1.8.12] - 2026-08-22
+
+### Changed
+- **Switching to/from a modded map no longer restarts the server**, confirmed with a BeamMP dev
+  and live-tested end to end. Previously, `switchMap` called `exit()` whenever either side of a
+  map switch was modded, since BeamMP-Server only serves `Client/`'s contents at process startup,
+  and the only way to make a newly-added/removed mod archive available was a full restart. BeamMP's
+  own `reloadmods` console command re-serves the current folder contents to newly-connecting
+  players without a restart, but has no Lua-callable equivalent. New `FS.SendConsoleCommand(cmd)`
+  (`utils/FS.lua`) works around that: a short-lived PowerShell process (via the same
+  `runPowerShell` helper already used for mod extraction) attaches to its own parent process's
+  console (the running `BeamMP-Server.exe`, found via WMI, no PID needs passing in) and injects
+  the command as real key-event records via the Win32 `AttachConsole`/`WriteConsoleInput` APIs,
+  then exits: a single short-lived process, no persistent/hidden background daemon. Requires
+  `BeamMP-Server.exe` to have a real attached console (launched normally, not with its own stdin/
+  stdout redirected to pipes/files).
+- `switchMap`'s own player-kick countdown is unchanged (still warns and clears everyone before the
+  map actually changes). Only what happens after that changed: `reloadmods` instead of `exit()`
+  when either map is modded.
+- **Real correctness fix found while making this change**: the `onMapChangedWithReboot` hook fired
+  for a modded switch had zero listeners anywhere in the codebase. `activityConfig.lua`/
+  `races.lua`/`hunter.lua`'s own `onMapChanged` listeners (which reload their per-map data) never
+  actually ran for a modded map switch, only for a non-modded one. Harmless before, since the
+  process died via `exit()` immediately after anyway, but would have been a real gap now that it
+  doesn't. Fixed by always firing `onMapChanged` regardless of modded status.
+- `scanNewMods`'s own startup-time reboot path (a different code path, for a newly-discovered
+  map found during the mod scan at server boot) is deliberately left unchanged for now. The
+  timing there (very early in server startup, before the console's own input loop may be fully
+  ready) hasn't been verified safe for `FS.SendConsoleCommand` the way the runtime `switchMap`
+  case has been. **Needs server deployment.**
+
+## [1.8.11] - 2026-08-22
+
+### Changed
+- **The 1.8.9 nametag hover-reveal throttle replaced with a real fix**, per direct feedback that
+  a throttle alone just spreads the same expensive native `cameraMouseRayCast()` cost out over
+  time rather than removing it, showing up as intermittent stutter instead of steady lag. The
+  hover-reveal (letting a hovered vehicle's nametag show even while nametags are globally hidden)
+  is a minor cosmetic nicety, not gameplay-critical, so it's now opt-in: the raycast only runs at
+  all while **Alt** is held (unbound by default in BeamNG's own `keyboard.json`, confirmed before
+  choosing it), so idle/normal play never pays this cost at all. Still throttled to at most once
+  every 150ms while Alt is actually held, so sweeping the camera across a crowd of vehicles with
+  Alt down doesn't reintroduce a steady per-frame cost either. *(client only, no server changes)*
+
+## [1.8.10] - 2026-08-22
+
+### Fixed
+- **A real regression from 1.8.7, confirmed via a live disconnect capture**: session mods no
+  longer got cleaned up properly on disconnect (files remained where BeamMP's own multiplayer
+  Resources cache lives, instead of being removed/moved the way they normally are). Root cause:
+  1.8.7 added an `M.state` (`AllowClientMods`) guard to `deleteMod`, based on the wrong assumption
+  that it's purely a player-initiated action like its sibling wrappers
+  (`activateModId`/`deactivateModId`). It isn't: `mods.lua` overrides
+  `extensions.core_modmanager.deleteMod` at the Lua level, and BeamMP's own native
+  `cleanUpSessionMods()` (the disconnect-cleanup routine) calls back into that same overridden
+  function to actually remove each session mod. Once 1.8.8 permanently forced `AllowClientMods`
+  off, that guard silently blocked every call to `deleteMod`, including BeamMP's own internal
+  cleanup calls, not just a player's own manual "delete mod" action. Fixed by reverting the guard
+  on `deleteMod` specifically (it now only checks `isServerMod`, same as before 1.8.7). Every other
+  wrapper in this file stays correctly gated on `M.state`, since none of the others are called
+  internally by BeamMP's own cleanup the way this one is. *(client only, no server changes)*
+
+## [1.8.9] - 2026-08-22
+
+### Fixed
+- **The actual, confirmed root cause of the reported race/proximity lag** (the mod-scan fixes in
+  1.8.6-1.8.8 were real bugs but turned out to be connect-time costs, not this). Found from a live
+  per-extension engine profile showing `extensions.beamjoy_nametags.onUpdate` costing 5.5-13.3ms in
+  a single frame, while every other extension (native or BJS, ~90 of them) sat at 0.0002-0.07ms.
+  `nametags.lua`'s "mouse hover nametag" feature (letting a hovered vehicle's tag show even while
+  nametags are globally hidden) called the native `cameraMouseRayCast()` every single frame,
+  unconditionally, not gated by the `hideNameTags` setting at all unlike the rest of this file.
+  That native raycast is expensive against a vehicle's actual mesh, worse for more complex/modded
+  vehicles, and only produces a hit when the camera is pointed at a vehicle within its range,
+  matching every reported symptom exactly. Fixed by throttling the raycast to run at most every
+  150ms instead of every frame, redrawing the last resolved target in between so there's no visible
+  flicker. As a side effect, this also cuts how often the surrounding
+  disableCollision()/enableCollision() toggle on the local vehicle fires, which was separately
+  flagged as a suspect in the unrelated "unicycle randomly gets removed" investigation earlier in
+  this project's history. *(client only, no server changes)*
+
+## [1.8.8] - 2026-08-22
+
+### Changed
+- **`AllowClientMods` (letting players use their own personal vehicle mods in multiplayer) is now
+  permanently disabled**, per direct request: the re-scan mechanism it enables (`mods.lua`'s
+  `onModActivated`/`onModDeactivated` -> a forced full jbeam re-parse of every installed vehicle
+  mod) was found, from a real client log, to cause a severe multi-minute stall right after
+  connecting whenever several distinct vehicle mods activated close together (the common case with
+  multiple players each using a different custom vehicle). See 1.8.6/1.8.7's own entries for the
+  full diagnosis and partial mitigations. Rather than continue optimizing a feature that's this
+  expensive to support, it's shelved outright: `AllowClientMods` now defaults to `false` and
+  `sanitizeConfigValue` rejects any attempt to change it (server-side, so this can't be re-enabled
+  via the UI, chat, or console), and its toggle has been removed from Config > General entirely,
+  since it no longer does anything. `mods.lua`'s own wrapping logic is untouched and simply stays
+  permanently dormant as a result. Server-mod enforcement (forcing required server mods to stay
+  active) is
+  unaffected, since that was already unconditional and never depended on this setting. **Needs
+  server deployment** (`services/config.lua`).
+
+## [1.8.7] - 2026-08-22
+
+### Fixed
+- **`deleteMod` bypassed the `AllowClientMods` gate**, unlike every sibling mod-manager wrapper
+  (`deactivateModId`/`deactivateAllMods`/`activateModId`/`activateAllMods` all check `M.state`
+  first). Deleting (not just deactivating) a non-server vehicle mod through the vanilla mod manager
+  UI could still schedule the same forced `onBJVehicleModChanged` re-scan even with client mods
+  disabled server-wide. Fixed by adding the same `if not M.state then return stopProcess() end`
+  guard `deleteAllMods` already has. *(client only, no server changes)*
+
+## [1.8.6] - 2026-08-22
+
+### Added
+- **A UI cache/version mismatch warning.** GE-Lua always reads `version`/`buildversion` fresh off
+  disk every session, but the Angular UI runs inside CEF (a real embedded browser) and can keep
+  serving a stale, browser-cached bundle after a mod update if the player never clears their cache,
+  with no built-in way for a player to know that's what's happening. A new
+  `windows/versionCheck` component compares Lua's real, freshly-reported build number against a
+  `UI_BUILD` constant baked directly into the UI's own JS source (kept in sync with the client
+  `buildversion` at every release) ; on a mismatch, it shows a persistent, dismissible banner
+  across the top of the screen telling the player their UI looks out of date. Reuses the existing
+  one-time `BJVersion` push (previously only consumed by the Settings tab's About section) for the
+  Lua-side number, and adds a matching `BJVersionRequest` handler so this new component gets a
+  reliable value regardless of when it happens to mount, instead of racing a broadcast it could
+  otherwise miss entirely. *(client only, no server changes)*
+
+### Fixed
+- **A real GPU/performance bug in the race gate/marker rendering**, reported as lag/stutter when
+  racers are close to each other: `onBJRaceMarkersRefresh` fired on every session update, and the
+  server pushes one on every participant's gate crossing, not just the local player's own. Nothing
+  drawn in the live-session render branch actually depends on any OTHER participant's progress
+  (their crossings never change this player's own next-gate highlight, visible-gate window, or a
+  pure spectator's always-fully-visible gate set), so most of those refreshes were rebuilding the
+  full gate layout from scratch (a `shape.reset()` plus every gate's quad/arrow/text/path geometry)
+  for no visual change at all, worse the more nearby participants are actively crossing gates.
+  Fixed by computing a lightweight signature of exactly what the live-session render actually
+  depends on (session id/state, the local player's own last-crossed/current gate, finished/dnf) and
+  skipping the rebuild entirely when it's unchanged since the last call. *(client only, no server
+  changes)*
+- **A real GPU/CPU stall found from a live server log**, contributing to the same race lag/stutter
+  reports: any time BeamMP activates or deactivates a vehicle mod locally (this happens once per
+  distinct vehicle mod as it gets streamed in for each connected player, so it's common for several
+  to fire close together, e.g. everyone in a race using a different custom vehicle), `mods.lua`
+  scheduled a full forced re-parse of every installed vehicle mod's jbeam files
+  (`onBJVehicleModChanged`) 200ms later. None of those scheduling calls passed a dedupe key, so
+  several mod-change events landing close together queued that same expensive full re-scan once
+  *per event* instead of once for the whole burst. The captured log showed exactly this: a run of
+  duplicate-part and malformed-JSON errors from broken vehicle mods (`DK_TUNDRA`, `Kinetik`) large
+  enough to flood the console. Fixed by giving all three scheduling call sites the same debounce key
+  (`async.lua`'s `delayTask` already supports canceling-and-replacing a pending call by key, just
+  wasn't being used here), collapsing a burst of mod-change events into a single re-scan instead of
+  one per mod. Note: the two mods named above are genuinely malformed (a real duplicate-part
+  conflict and an invalid JSON comment). This fix reduces how often they get re-parsed; it doesn't
+  fix the mod files themselves, which isn't something this mod's own code can do. *(client only, no
+  server changes)*
+
+## [1.8.4] - 2026-08-21
+
+### Fixed
+- **1.8.3's own fix broke server startup entirely:** `onInit: utils/FS.lua:72: attempt to index
+  a nil value (global 'utils_sha')`, thrown the instant the server started, before the mod scan
+  ever ran. Root cause: the new PowerShell-based `FS.RemoveDirectory` reached for
+  `utils_sha.bin_to_base64` to encode its script, but `FS.RemoveDirectory` is also called from
+  `checkWritePermissions()` at the very start of `BeamJoyServer.lua`'s own `onInit`,
+  *before* `loadExtensions()` runs, which is what populates `utils_sha` in `_G` in the first
+  place. `utils/FS.lua` is deliberately `require()`'d at the very top of the file specifically so
+  it's usable standalone this early ; depending on a module that only exists after the dependency
+  system finishes loading broke that. Fixed by giving `FS.lua` its own tiny, self-contained base64
+  encoder instead of reusing `utils_sha`'s, removing the dependency entirely. *(server:
+  `utils/FS.lua`, needs deployment)*
+
+## [1.8.3] - 2026-08-21
+
+### Fixed
+- **A third variant of the mod-scan Unicode crash, this time cascading across multiple unrelated
+  mods in the same scan:** a live capture showed four otherwise-plain-named mods all failing
+  back to back with the same `No mapping for the Unicode character exists in the target
+  multi-byte code page` error, right after each other, immediately following "Starting new mods
+  scan process". Root cause: `services/maps.lua`'s mod scan reuses one shared scratch folder
+  (`tmp/`) to analyze every mod archive in turn, pre-cleaning it via `FS.RemoveDirectory` before
+  each one. That pre-clean still went through BeamMP-Server's own native `FS.ListFiles`/
+  `FS.Remove` bindings, which, like `Expand-Archive`, can themselves throw this exact error when
+  touching a genuinely Unicode-named leftover file (from whatever mod was extracted into that same
+  scratch folder previously). Once that happens, the leftover never actually gets removed, so every
+  later mod's own scan attempt trips over the same poisoned scratch folder before it even reaches
+  its own extraction, explaining why several unrelated, plain-named mods all failed in a row.
+  1.8.1's fix (routing `os.execute`'s own command line through `-EncodedCommand`) and 1.8.2's fix
+  (dropping `Expand-Archive` for .NET's `ZipFile` API) were both real, necessary fixes for their
+  own distinct failure points, but neither one touched this pre-clean step. Fixed by rewriting
+  `FS.RemoveDirectory` itself to go through PowerShell's `Remove-Item -Recurse -Force` (via the
+  same `-EncodedCommand` transport, Unicode-safe end to end) instead of the native bindings, on
+  Windows, closing off the whole class of "a native FS call chokes on a Unicode-named file" bug
+  at its source rather than patching each call site that happens to trip over it. Linux is
+  unaffected: the native recursive-delete path is kept there, since it isn't subject to this
+  ANSI-codepage limitation to begin with. *(server: `utils/FS.lua`, needs deployment)*
+
+## [1.8.2] - 2026-08-21
+
+### Fixed
+- **A different, second bug in the same mod-scan area, surfaced by live testing after 1.8.1**:
+  extracting some custom mods (confirmed against a wheel mod with non-ASCII characters in its
+  internal file names) still failed, this time inside `Expand-Archive` itself:
+  `Cannot find path '...' because it does not exist` repeated for every affected file, thrown from
+  the cmdlet's own post-extraction cleanup pass (`Microsoft.PowerShell.Archive.psm1`). This is a
+  known flakiness in Windows PowerShell 5.1's built-in `Expand-Archive`: for archives with certain
+  non-ASCII entry names, the cmdlet's internal record of "which paths did I just write" can drift
+  from what's actually on disk, so its own cleanup `Remove-Item` pass throws trying to delete paths
+  that were never really there. 1.8.1's fix (routing the command through `-EncodedCommand` so the
+  path text never has to survive an ANSI-codepage conversion) was necessary and is still correct:
+  it's what let PowerShell actually start running instead of failing immediately, but it doesn't
+  touch this separate bug living inside `Expand-Archive` itself. Fixed by dropping `Expand-Archive`
+  entirely and extracting directly via .NET's `System.IO.Compression.ZipFile.ExtractToDirectory`,
+  which does the raw extraction without that extra cleanup/bookkeeping layer, and whose normal
+  Unicode-safe file I/O isn't affected by the OS's active ANSI codepage either way. Linux is
+  unaffected: this only touches the Windows extraction branch. *(server: `utils/FS.lua`, needs
+  deployment)*
+
+## [1.8.1] - 2026-08-21
+
+### Fixed
+- **Loading a certain custom map could crash the whole server-side mod scan** with `No mapping
+  for the Unicode character exists in the target multi-byte code page`. The mod-archive extractor
+  ran PowerShell by interpolating the archive/destination paths directly into the `os.execute`
+  command line, which Windows converts through the system's active ANSI codepage; a map whose zip
+  filename (or extracted level folder name) contained a Unicode character outside that codepage
+  made the conversion itself throw, taking down `services_maps.onInit` entirely, not just for that
+  one map, but blocking the whole mod scan (and therefore every map) until the server was restarted
+  without it. Fixed by handing PowerShell a base64-encoded, UTF-16-encoded script via
+  `-EncodedCommand` instead of literal text on the command line, so the outer command line is pure
+  ASCII regardless of what the paths themselves contain. Also hardened the mod scan itself so a
+  future problem with one archive can't repeat this: each mod is now analyzed inside its own
+  `pcall`, logging and skipping just that one archive instead of aborting the scan, and the scan as
+  a whole is `pcall`'d too so a failure elsewhere can't leave `MaxPlayers` stuck at 0 or block the
+  rest of `onInit` (map RX handlers, current-map fallback, chat commands) from ever registering.
+  Linux is unaffected either way: the new encoding path only runs on Windows; the Linux `unzip`
+  branch is untouched. *(server: `utils/FS.lua`, `services/maps.lua`, needs deployment)*
+
+## [1.8.0] - 2026-08-21
+
+### Added
+- **A "How to install legacy races" help button** in the Config > Core "Legacy Import" section,
+  opening a plain info popup that explains what the feature does and walks through installing old
+  BeamJoy Free data step by step. The same steps are now also documented in the project README.
+
+### Fixed
+- **The legacy race importer's author fix from the previous release didn't actually take effect:**
+  a single leftover line, predating that fix, unconditionally stamped every imported race's
+  author back to `"console"` immediately after conversion, silently overwriting the correct value.
+  Removed. *(server: `services/races.lua`, needs deployment)*
+- **The previous release's fix for unreadable white-on-white dropdown options didn't actually work:**
+  it targeted the wrong attribute (`aria-selected`, Angular Material's real attribute for this is
+  the boolean `selected`) and, even corrected, would still have lost outright: the game's own
+  Material theme generates this highlight via a rule carrying a theme class plus two pseudo-classes,
+  which beats a plain rule on specificity regardless of stylesheet order. Confirmed by reading the
+  actual theme template baked into the game's own `angular-material.js`. Fixed with the real
+  attribute and an explicit override, which is the correct tool here given the exact theme class
+  name is only known at runtime.
+- **A branching race's gate could silently lose its Start/Finish status the moment a second real
+  parent was added alongside "Start"** (even with "Start" still sitting right there in the list),
+  and replacing "Start" entirely with a link from the route's own last gate (the natural way to
+  author a visible closing segment) left nothing at all recognized as the loop's anchor, producing
+  a race that looped forever without ever counting a lap. Fixed so a gate keeps its Start/Finish
+  status any time "Start" is present anywhere in its own parents, regardless of what else is also
+  listed alongside it. *(server: `services/races.lua`, needs deployment)*
+- **Removing a parent from a branching race's gate could silently duplicate a different one instead**
+  (e.g. removing "Start" from `[Start, Gate 6]` could echo back as `[Gate 6, Gate 6]`), which then
+  threw a hard Angular error the instant that duplicate reached the "reachable from" chip list,
+  the real explanation for a separately-reported "Start disappeared from the parent list" symptom,
+  since the thrown error left that list's rendering stuck on stale content instead of reflecting
+  its real, current data. Root cause: the race editor applied every gate edit through a generic
+  recursive merge instead of replacing the whole list at once, so a shorter new list only
+  overwrote the front of the old, longer one and left its own stale tail value in place. Fixed at
+  the source, plus a defensive de-duplication pass on save/load so any race already saved with a
+  duplicate from this bug gets cleaned up automatically. *(server: `services/races.lua`, needs
+  deployment)*
+- **A race's countdown-to-green-light and Hunter's own equivalent hunt-start release could
+  un-ghost two vehicles that were still genuinely inside each other**, once their shared timeout
+  ran out. A starting grid is deliberately packed tight by design, so genuine overlap at the exact
+  moment everyone releases together is the expected case there, not a rare edge case, making this
+  a real collision-explosion risk specific to these tight-grid releases (the same underlying
+  fallback is much safer everywhere else in the ghosting system, since a single freshly-spawned
+  vehicle is rarely placed in genuine contact with another one to begin with). Fixed so a timed-out
+  release can only ever skip past an overly generous *extra* safety margin, never through the two
+  vehicles' own real physical overlap, everywhere this pattern is used, race and Hunter alike.
+
+## [1.7.0] - 2026-08-21
+
+### Added
+- **Races: the legacy BeamJoy Free importer now credits the original race's own author**, instead
+  of leaving every imported race unattributed (which silently made it staff-only to edit or
+  delete, with no record of who actually built it). The author's name is also shown in the import
+  preview dialog next to each race. *(server: `services/races.lua`, needs deployment)*
+
+### Fixed
+- **A long list in any confirm dialog (both the Hunter and Races legacy importer previews included)
+  could grow taller than the screen with no way to scroll and see the rest of it:** the shared
+  confirm dialog now caps its height and scrolls its message internally instead.
+- **Branching-path races imported from legacy BeamJoy Free data had their start/finish line on the
+  wrong gate, with no visible connection back to it:** BJI's own race format always places its
+  "finish" waypoint (and any alternate ending, like a pit stop) physically right back at the real
+  start grid, but graphically at the *end* of its own waypoint chain ; the importer was taking that
+  literally, leaving this fork's actual loop-closing gate deep in the middle of the route instead
+  of at the real start/finish line. Confirmed by measuring two real imported races ("Sawmill Long",
+  "Gas Station Loop") against their own recorded grid positions. Fixed by having the importer swap
+  which end of the route is treated as the anchor, and physically reordering the gate list so the
+  real start/finish line is gate 1 (matching how a race built directly in this fork's own editor
+  is always laid out), instead of only being correct in the invisible, derived step number.
+  *(server: `services/races.lua`, needs deployment)*
+- **A branching, loopable race's real closing segment (the drive from its last gate back to the
+  start/finish line) was never drawn**, in the editor or in a live race, even though it's still a
+  real, driven part of the route. Only the plain, non-branching case ever got this treatment
+  before. Now drawn for any branching, loopable race, not just the two reported above.
+- **Manually editing a branching race's gate connections could silently mislabel an unrelated gate
+  as the Start/Finish line.** Found while investigating the report above: a gate with two parents
+  (a genuinely supported, correct setup, e.g. two parallel finish alternates both leading back
+  into the same next gate) could, after a further edit elsewhere, form a real loop back through
+  itself. The engine's own fallback for that case used to default to the gate's own position in the
+  list, which for gate 1 happens to collide with a genuine "this is the start/finish" value, so an
+  unrelated gate would silently take over that role, with no warning that anything had gone wrong
+  (matching a separately-reported symptom where the "reachable from" list looked wrong even though
+  the drawn path was correct: both were downstream of the same bad value). Fixed so this fallback
+  can never be mistaken for a real start/finish gate. *(server: `services/races.lua`, needs
+  deployment)*
+- **The first option in any dropdown could render as unreadable white text on a white background:**
+  whichever option a dropdown opens on with nothing selected yet (always the first one, e.g. a
+  race gate's "reachable from" picker before a choice is made) was picking up the browser's own
+  default focus highlight with no color override, anywhere in the app, not just this one dropdown.
+
+## [1.6.0] - 2026-08-21
+
+### Added
+- **Hunter: timed mode**, an alternative win condition alongside the original waypoint route:
+  hunters have a configurable number of minutes to catch the fugitive, who otherwise wins by
+  survival once the clock runs out. No route/waypoints exist at all in this mode; the HUD shows a
+  live countdown instead of waypoint progress. Configurable per-arena default and per-start
+  override, same as every other Hunter setting. *(server: `services/hunter.lua`,
+  `services/hunterGrid.lua`, needs deployment)*
+- **Hunter: session settings shown in the lobby**, not just before starting: vehicle pool
+  restrictions, respawn strategy/penalty, reset-lock distance, and reveal distance are now visible
+  in a collapsible section of the lobby/countdown/hunt status panel.
+- **Races: branching paths**, a new opt-in per-race toggle. Gates can have more than one valid
+  "next" gate (parallel alternates, forks that rejoin later, shortcuts) instead of one fixed
+  sequential order. Authored via a flat "Reachable from" parent/child picker on each gate. No
+  graph/tree view yet, by design. A gate's position in the route ("step") is fully derived from
+  these links automatically, never manually set, so it can't drift out of sync with what's
+  actually connected. Sectors and the "limit visible gates" display option are automatically
+  disabled for a branching race, since both are ambiguous once a route can genuinely fork.
+  *(server: `services/races.lua`, `services/raceGrid.lua`, needs deployment)*
+- **Races: importer for legacy BeamJoy Free races**, in the same "Legacy Import" section (Core
+  config tab) as the existing Hunter arena importer. Non-destructive: every convertible race is
+  added as a brand-new race with a fresh id, never overwriting anything already in the list. A
+  name collision with an existing race is skipped and reported instead. Converts BJI's own
+  parents-by-name waypoint graph into this fork's gate/branching model, sizes gates from the
+  source checkpoint radius, and derives gate facing from the route's own shape rather than
+  trusting BJI's captured rotation (a proximity checkpoint has no meaningful facing to begin with).
+  *(server: `services/races.lua`, `services/hunter.lua`, needs deployment)*
+
+### Fixed
+- **A slider configured with any step other than 0.1 (e.g. the Hunter reset-lock distance, meant
+  to move in 10m increments) actually settled on arbitrary ~1m values:** the shared slider
+  component rounded every drag to the nearest 0.1 unconditionally, ignoring its own configured
+  `step` entirely. This affected every stepped slider app-wide, not just Hunter's.
+- Hunter's fugitive reset-lock toast (shown when a hunter gets too close to reset/recover) replaced
+  with a persistent HUD indicator. A one-off toast was easy to miss for a state that can hold for
+  a while.
+- **Branching-race "Reachable from" dropdown showed no selectable options at all:** its options
+  were built by calling a function directly from the template instead of binding to a precomputed
+  property, the pattern every other working dropdown in this codebase actually uses.
+- **The remove button on a "Reachable from" chip didn't remove anything:** a nested list inside
+  the per-gate parent list shadowed the outer gate index AngularJS was actually needing, so the
+  wrong gate object (or none at all) got mutated on every click.
+- **A branching race's progress could get permanently stuck one lap in, showing no further gate
+  progress on any path:** closing the loop (re-crossing the route's own starting gate to complete
+  a lap) used to require the exact same explicit "reachable from" link as any other gate, an
+  easy-to-forget backward link that silently froze all further progress once missed. A loopable
+  race's own starting gate is now always a valid crossing regardless of that link.
+  *(server: `services/raceGrid.lua`, needs deployment)*
+- **A branching race's gate counter could show a much higher total than the route actually has:**
+  a gate's position in the route ("step") used to be an independently hand-set field, which a
+  branch alternate created after its siblings had no way to default correctly on its own; now fully
+  derived from the actual "reachable from" links instead of trusted from manual input.
+  *(server: `services/races.lua`, needs deployment)*
+- A branching race's in-world path line connected gates by their raw array order regardless of
+  actual topology. Now draws the real "reachable from" links instead.
+- A branching race's Results screen still showed a sector-time column (and a meaningless
+  "Theoretical" time equal to the whole lap) even though sectors are supposed to be disabled
+  entirely for that mode.
+
+## [1.5.0] - 2026-08-17
+
+### Added
+- **Vehicle Pool Presets**: a new dedicated Config tab to create, name, and manage reusable pools
+  of vehicles (captured once), then selectable from any race's Pool vehicle restriction (in the
+  race editor) or picked fresh at start time, instead of authoring a pool separately per race.
+  Built generically enough to be reused by future non-race gamemodes too. A shortcut "edit preset"
+  button appears next to a race's pool restriction in the Activities menu for anyone with the new
+  permission below. *(server: new `services/vehiclePresets.lua`, `dao/vehiclePresets.lua`, needs
+  deployment)*
+- New `EditVehiclePresets` permission (default rank `mod`), gating the new Config tab.
+- **Streamlined in-lobby paint picker** for single-config and Pool vehicle-restricted races: the
+  full native paint list, across all 3 paint slots, applied live with one click. No need to open
+  BeamNG's own tuning menu.
+- **"Allow tuning" option** (race editor + start options, default **on**) for single-config, Pool,
+  and Race-defined vehicle restrictions. When turned off, tuning variables (tire pressure,
+  gearing, anti-roll bars, differential, ...) are locked to the captured setup alongside parts, for
+  a genuine "spec car, spec tune" mode. Paint is always free regardless of this setting.
+  *(server: `services/races.lua`, `services/raceGrid.lua`, `services/vehiclePresets.lua`, needs
+  deployment)*
+
+### Changed
+- **Pool vehicle restriction now matches by the vehicle's actual captured parts**, not by which
+  saved config file it was loaded from, resolving the "Known unresolved" issue noted in 1.4.0
+  below. Repainting or adjusting tuning after picking a pool vehicle no longer invalidates it
+  (unless "Allow tuning" is off, in which case only tuning changes count against it, while an actual
+  parts swap still always does, in both Single Config and Pool modes).
+
+### Fixed
+- Vehicle-restriction tuning comparison used exact floating-point equality on values that cross a
+  JSON round-trip on their way to the check, which could reject a perfectly matching car (with
+  "Allow tuning" off) for no reason at all. Now compares with a small tolerance instead.
+- Vehicle preset dropdowns (race editor's Pool picker, start-options' Pool picker) rendered no
+  options at all (the only native HTML `<select>` in the whole UI, which doesn't work in BeamNG's
+  off-screen-rendered UI); switched to the app's own dropdown component like everywhere else.
+
+### Known unresolved
+- Paint still can't be independently locked the way parts and (now) tuning can: it's always free
+  regardless of any restriction setting. A future pass may add its own toggle for it, following the
+  same pattern "Allow tuning" just established.
+
+## [1.4.0] - 2026-08-16
+
+### Added
+- **Race leaderboards**: per-race personal-best/record tracking with a dedicated leaderboard
+  button (small bulleted-list icon) next to each race in the browse list. Shows the top 100 times,
+  with the viewing player's own rank/time pinned separately below if they're outside it, and the
+  vehicle/config actually used for each time (showing "(custom)" if it doesn't match a saved
+  config). A new-PB/new-record popup shows on finish. Retiring or DNF'ing still submits whatever
+  best lap was already completed, instead of only a full finish counting. Saving an edited race
+  now wipes its existing leaderboard, with a confirmation warning naming the record count (skipped
+  if there are none). *(server: `services/races.lua`, `services/raceGrid.lua`, needs deployment)*
+- **Vehicle restrictions** for races, chosen per race in the editor: **Free** (default), **Single
+  Config** (every participant is force-spawned into one exact captured vehicle, including a fully
+  custom/never-saved setup, not limited to a saved `.pc`), and **Pool** (a curated list of
+  saved-config vehicles a joining participant picks from via the native vehicle selector,
+  pre-filtered to just the pool). At start time, whoever starts a race independently chooses Free
+  / a fresh Single Config captured from their own current vehicle right at that moment / the
+  race's own authored restriction ("Race-defined", offered only when the race actually has one). A
+  restriction-violating attempt is excluded from the leaderboard. A missing vehicle mod or an
+  unshareable personal saved config is caught and explained rather than silently stranding a
+  player carless. *(server: `services/races.lua`, `services/raceGrid.lua`, needs deployment)*
+- "Disable gravity changes" anticheat option (race editor + start options, default on): actively
+  re-asserts the server's expected gravity every frame during a race, since gravity has no native
+  BeamNG keybind to block outright the way other anticheat options can.
+- Starting a race with any anticheat or vehicle-restriction option disabled now shows a
+  confirmation warning that the attempt won't count on the leaderboard.
+- A debug console command to seed a race's leaderboard with fake entries around a given time, for
+  testing formatting/pagination.
+
+### Changed
+- Slow-motion and pausing are no longer a per-race toggle: always blocked and actively reasserted
+  for every race (matching the other anticheat options, but with no opt-out, since neither was
+  ever a legitimate racing input to begin with).
+- Race editor's "Reverse" button now keeps a loopable race's start/finish line in the same
+  physical spot, only flipping the direction of travel around the loop. It used to relocate the
+  start/finish line to wherever the old last gate happened to be.
+- Race results/leaderboard panel background is now slightly transparent instead of fully opaque.
+- Race editor's Vehicle Restrictions section moved to the top of the settings list, with its own
+  divider.
+
+### Fixed
+- **The vehicle selector's own search/type filters had stopped working entirely:** a global
+  spawn-permission wrapper was replacing the native filtering function outright instead of
+  layering on top of it, so no filter criteria (only spawn permission) was ever actually checked.
+- Traffic vehicles were incorrectly exempted from the solo-race ghost visual reversal (rendered
+  solid instead of translucent): the check used to key off a flag that's also true for local
+  traffic, not just the racer's own vehicle.
+- Staff/owner could bypass the slow-motion/pause anticheat block via the Environment settings
+  panel, which reaches the game's simulation-speed API directly. The previous block only covered
+  the keybind path.
+- A race saved before the vehicle-restriction feature existed (or simply never re-saved since)
+  could trigger a spurious "anticheat options disabled" warning on every start regardless of the
+  real toggle states. Legacy races are now backfilled to a real "no restriction" value on load.
+  *(server: `services/races.lua`, needs deployment)*
+- A long vehicle-restriction note in the Activities race list, or a long tooltip anywhere in the
+  UI, could widen the whole window instead of wrapping.
+- Race info panel: a low-gate-count/high-sector-count race only ever recorded times for the first
+  couple of sectors; the best lap wasn't highlighted like it already was in the Live tab; the date
+  column stretched to fill the panel.
+- Race info panel now waits ~3s before auto-opening on finish, so it doesn't visually collide with
+  the finish popup.
+- Leaderboard's vehicle column was always blank; the leaderboard and start buttons were visually
+  mismatched in size (start button switched to a plain icon).
+
+### Known unresolved
+- Vehicle Pool restriction mode currently rejects *any* live edit to a matching vehicle (paint,
+  tuning variables, or actual parts alike) as a mismatch, since it keys off the vehicle's own
+  "loaded from an exact file" state, which BeamNG clears on any live edit regardless of what
+  actually changed. Deliberately left as-is for now: a future pass is planned to allow
+  customizing exactly which kinds of changes (parts / tuning / paint) are permitted per
+  restriction, most likely by switching Pool's match logic onto the same parts/vars/paints
+  comparison Single Config mode already has.
+
+## [1.3.2] - 2026-08-15
+
+### Added
+- **Reverse** button in the race editor: reverses gate order and flips each gate to face the new
+  direction of travel. Start positions are left untouched: where the grid should sit for a
+  reversed direction is a track-specific call, so it's flagged for the author to double check
+  rather than guessed at automatically.
+- Race editor ground-snapping now has a switchable height source, cycled with the existing
+  snap-to-ground button: off (red) → terrain height (green) → raycast (blue). Terrain height reads
+  the map's real heightmap directly, so it can no longer snap a gate into tree/foliage collision,
+  but some maps (Gridmap) have a visible ground that isn't real terrain at all, so raycast (the old
+  behavior) is kept available for those.
+- An **About** section in the Settings tab showing the installed version/build and a link to the
+  GitHub repository.
+
+### Fixed
+- **Traffic never actually spawned** once the amount or max-per-player sliders were touched:
+  their typed values were sent to the server as strings, and the traffic balancer's own comparison
+  against them threw a runtime error every time, silently leaving every player's traffic
+  allocation at 0 regardless of what the settings said. *(needs deployment: `services/traffic.lua`)*
+- **Phantom `chatBroadcast` events kept firing** on their configured interval even after deleting
+  the last broadcast message. Enabling the feature was never re-checked against whether there was
+  anything left to actually say. *(needs deployment: `services/broadcast.lua`)*
+- **DNF'd/finished participants' vehicles still weren't coming back**, even after the 1.3.0 fix:
+  that earlier fix (defaulting `vars`/`paints` to `{}`) was a real, worthwhile bugfix but never
+  actually the cause of the crash. Found via a debug-injected fake participant (simulating a second
+  player without needing one) that the restore's spawn config used `format = 4` (the game's own
+  *multi-vehicle* config wrapper, which expects a `vehicles` array the restore never provided)
+  instead of `format = 2`, a real single-vehicle config. Every restore attempt was crashing the
+  game's own spawn code on this, unconditionally. *(needs deployment: `services/raceGrid.lua`)*
+
+## [1.3.0] - 2026-08-14
+
+### Added
+- **Race system** (the largest addition): full grid-based racing, solo hotlapping and
+  head-to-head, with join/leave/ready/cancel/retire, gate-crossing detection, lap tracking, a
+  leaderboard, DNF handling, configurable respawn strategies, and an in-world 3D gate/start editor
+  with translate/rotate gizmos and edge-resize handles. Race authorship tracking (non-staff players
+  can only edit/delete races they created). Configurable per-race defaults: laps, respawn strategy,
+  joinable/multiplayer toggle, phase timers (grid timeout, ready timeout, countdown), DNF handling,
+  and auto-spectate-on-finish. Finished/DNF popup feedback, vehicle restoration after a race ends,
+  and a "Retire and spectate" option alongside "Leave". *(new server files
+  `services/races.lua`, `services/raceGrid.lua`; needs deployment)*
+- **Map voting**: `/votemap <name>` starts a vote (any connected player), `/votemap`/`/votemap join`
+  toggles your own vote, `/votemap cancel` stops it (creator or staff). Passes at a majority
+  threshold (min. 2 votes) within 30s, with a live status panel showing the target map, vote
+  count, and countdown. A lone connected player switches instantly with no vote needed. *(new
+  server file `services/mapVote.lua`, needs deployment)*
+- **Vote-kick**: `/votekick <player>` starts a vote (staff excluded, they already have direct
+  `/kick`), `/votekick`/`/votekick join` toggles your own vote (staff and the target can't vote),
+  `/votekick cancel` stops it (creator or staff only). Passes at a majority of eligible voters
+  within 30s, with a live status panel showing the target, vote count, and countdown. *(new server
+  file `services/kickVote.lua`, needs deployment)*
+- **Chat commands** ported from BeamJoy Free plus new additions: `/kick`, `/mute`, `/unmute`,
+  `/ban`, `/tempban`, `/unban`, `/setgroup`, `/freeze`, `/engine`, `/tpfrom`, `/tp`, `/map`,
+  `/race ready|leave|cancel|retire`. `/help` lists only commands the caller has permission for.
+  *(server: `chatCommands.lua`, `players.lua`, `maps.lua`, `raceGrid.lua`, needs deployment)*
+- **Teleportation**: "Teleport To" (self-directed, rate-limited via a configurable
+  `Freeroam.TeleportDelay`, blocked mid-race, staff-exempt) and "Teleport From" (mod-permission
+  server-relayed summon, no position data crosses the server) as two new player-list action
+  buttons, plus `/tp`/`/tpfrom` chat command equivalents. *(server: `players.lua`, `config.lua`,
+  needs deployment)*
+- Draggable/resizable main and config windows, with position/size persisted per window.
+- A reusable confirmation-modal component (`cmps/confirm`), used for a "discard unsaved changes?"
+  guard when closing the config window or switching tabs with an unsaved race edit open, and for
+  the race editor's "Save As New" name prompt.
+- Race list now shows grid-slot count and distance under each race name.
+- Typed values above a slider's normal maximum are now accepted (up to a hard cap) for gate
+  width/height, laps (500), and all four race timer settings (600), not just draggable within the
+  visible range.
+- **Manual sector boundaries**: races can now flag specific gates as sector boundaries directly,
+  instead of always relying on an automatic even-by-distance split. Falls back to the automatic
+  split if nothing is flagged. Sector labels in both the editor and live race now show the actual
+  sector number.
+- **Gate nametag and visible-gate-count race options**: toggle floating "Gate N" labels on/off
+  during a race, and optionally limit rendering to only the next N (1-5) upcoming gates for long or
+  dense tracks. The lobby (grid) phase always shows every gate regardless, so players can see the
+  full layout before starting. Defaults to nametags off, limited to 2 gates.
+- Current sector is now shown in the race HUD, below the current gate.
+- Live lobby countdown feedback ("Starting in Ns" once everyone's ready, "Lobby closes in Ns"
+  otherwise) in the Activities tab's status panel. Previously only the COUNTDOWN phase had this.
+- New `EditSafeZones` permission, gating both the SafeZones and General config tabs from players
+  who don't hold it (previously always visible to anyone who could open Config at all). *(server:
+  `services/permissions.lua`, `services/activityConfig.lua`, needs deployment)*
+- An "Edit" button next to the Racing category on the Activities tab opens the race editor
+  directly for any `EditRaces` holder, not just staff digging through the Config window's own tab
+  list.
+- "Ghost backmarkers" race option: once a leader gains a full lap of real gate-progress on a
+  trailing racer, that racer ghosts (against everyone, since BeamNG has no selective collision)
+  until they catch back up.
+- "Disable collisions" race option: ghosts every participant for the entire race, not just the
+  grid phase, regardless of solo/multiplayer participant count.
+- Race names are now capped at 40 characters, enforced both in the editor's name field and the
+  "Save as New" prompt.
+- Configurable respawn-ghost protection: an explicit enable toggle (replacing an earlier
+  slide-to-max "disabled" sentinel that could trip config validation) plus a configurable timeout
+  (default 10s) and an extra buffer distance vehicles must clear before un-ghosting. A trailer
+  attached to the local vehicle now bypasses this distance/contact check entirely, so towing
+  something can't leave a vehicle stuck ghosted indefinitely. *(server: `services/config.lua`,
+  needs deployment)*
+- BeamJoy-Main's default on-screen position moved lower (~60% down the screen).
+
+### Fixed
+- **Unicycle/walking character was never visible**, in free cam or otherwise. Root cause:
+  `camera.lua` was deleting the player's own unicycle the instant free cam engaged (the one
+  camera mode the base game ever renders the walking character in at all).
+- **Chat messages never appeared** after typing and sending, even though sending itself worked:
+  this mod's own incoming-message handler had been stubbed to a no-op during an earlier BeamNG
+  0.39 compatibility pass and never reconnected to anything. Now reuses BeamMP's own native
+  `addMessage()`.
+- **Non-staff players with a config-tab permission (e.g. edit-races) couldn't open the config
+  window at all:** three separate places were blanket-checking staff status instead of the
+  actual granted permission.
+- **UI could silently go stale after a Lua→UI push:** the central event handler never wrapped
+  work in an Angular digest, so a bound value could update internally but not actually re-render
+  until some unrelated click or timer happened to trigger the next digest. Explained several
+  separately-reported "this button does nothing" symptoms at once.
+- **Race editor rotate gizmo would flip 180° instantly** on any rotation, even though the native
+  gizmo widget itself rendered correctly the whole time. It was reading rotation from the gizmo's
+  live transform every frame during the drag, which is unreliable mid-drag; now reads it once, at
+  drag-end.
+- **Drag-to-reorder gates in the race editor was broken three separate ways**: native HTML5 drag
+  was swallowing the mouseup a custom drag tracker needed; the visual drop-zone padding was on the
+  wrong (non-interactive) element; and a reordered index was being sent as a concatenated string
+  instead of a number, corrupting the value server-side received.
+- A generic `table.removeAll` helper was referenced but never actually defined anywhere in the
+  codebase. It threw an error on every call.
+- **"Finished screen disappears almost instantly":** every delayed popup-hide in the race runner
+  was passing seconds where milliseconds were expected, firing near-instantly regardless of the
+  intended duration.
+- **Race grid timer/countdown values could be silently overridden or discarded** server-side:
+  the countdown clamp didn't match the client's own allowed range.
+- Menu/list scrolling felt sluggish. It was accelerating an element that never actually had anything
+  to scroll; now finds the real scrolling ancestor.
+- Players could ready up in a race with no vehicle spawned.
+- Rapid clicks on a gate width/height number box's spin arrows only applied every other click.
+- Slider drag-and-type editing had several rounds of regressions (values snapping, live update
+  breaking); settled on a mode-toggle design (slider vs. typed entry, never both live at once)
+  that resolved the whole bug class.
+- The race editor's pinned header/toolbar could visually overlap the scrolling gate/start list;
+  rebuilt as a real flex layout instead of a sticky overlay.
+- Closing the config window via the ImGui menu (rather than the in-window close button) bypassed
+  the discard-unsaved-changes prompt entirely.
+- `MaxCars` server setting was silently forced to 200 on every server start regardless of the
+  admin's actual configured value. *(server: `services/core.lua`, needs deployment)*
+- `nametags.lua` was toggling collision on the player's current vehicle every single frame just
+  to keep it out of the nametag hover raycast.
+- A vehicle-model permission check (`onBJRequestCanSpawnVehicle`) had a Lua operator-precedence
+  bug that silently disabled rejection of unlisted models.
+- **DNF'd/finished players' vehicles never came back once the race ended:** confirmed from a live
+  console capture (not just static tracing) that `core_vehicles.spawnNewVehicle` was crashing
+  inside the game's own native spawn code (`bad argument #1 to 'ipairs'`) whenever the saved
+  vehicle's `vars`/`paints` were `nil`, which is the normal case for a vehicle with no runtime
+  tuning or custom paint (i.e. most vehicles, not an edge case). Both now default to empty tables.
+- The very last participant to finish/DNF a race (whose own action completes the whole session)
+  no longer has their own vehicle needlessly deleted for auto-spectate, since there's nobody left to
+  spectate, and it would've just been restored again moments later anyway.
+- **Real multiplayer race-start collision risk**: every participant transitioning from ghosted to
+  solid together at the green light had a narrow window where two nearby cars could both perceive
+  each other as "still ghosted, safe to ignore" and un-ghost simultaneously while overlapping,
+  materializing solid inside each other.
+- Camera would flicker every frame if the player tried to change camera during a race countdown.
+  The forced-camera logic was cycling the camera ring one step at a time instead of jumping
+  straight to the locked camera.
+- The laps option was missing from the start-options panel for every race, even loopable ones.
+  The trimmed race-list payload sent to the UI never actually included the `loopable` field.
+- Ghost-timeout slider showed raw `{{...}}` template text instead of rendering: an invalid
+  `{{}}`-interpolated value on a one-way expression binding (`<?`) threw a syntax error that
+  aborted the rest of that component's compilation.
+- **Toggling the global "Respawn ghost timeout" or "Collisions mode" setting visually reverted
+  itself right after saving:** the broadcast that pushes config data to the UI never actually
+  included the `Freeroam`/`Voting` sections at all, so any unrelated config save anywhere on the
+  server reset those two accordions back to their hardcoded UI defaults.
+- A player DNF'ing as the very last active racer didn't reliably end the session for everyone,
+  including spectators. Several call sites weren't re-checking session completion after DNF/Leave.
+- Race-info panel column misalignment, finally traced to a global stylesheet rule with higher CSS
+  specificity than the panel's own table styles, silently overriding two earlier fix attempts.
+- Sliders app-wide weren't resizing with their container: a custom element defaults to
+  `display: inline`, so `width: 100%` had never actually applied to any `bj-slider` anywhere.
+- Self-teleporting (both this mod's own "Teleport To" and BeamNG's native "drop vehicle at
+  camera" action, bound to F7 by default) was still possible during a race's COUNTDOWN freeze, and
+  an earlier partial fix incorrectly exempted staff/owner accounts from the block.
+- BeamJoy-Main's default position change had no effect for anyone: a duplicated, never-updated
+  hardcoded position table was what actually drove the rendered default, not the app's own
+  manifest.
+- Respawn-ghost distance's own un-ghost safety check retried forever with no bound, defeating a
+  configured timeout entirely if a vehicle happened to be parked somewhere crowded; separately,
+  disabling the timeout altogether left vehicles ghosted forever even when standing completely
+  alone, since the code never actually attempted to clear the ghost in that mode at all.
+- BeamNG's native vehicle recovery/rewind was still usable during a race's COUNTDOWN freeze.
+- **Grid-session timer settings genuinely weren't taking effect** (previously listed below as
+  unresolved). Root cause found: the joinable/multiplayer flag was resolved with a plain `OR`
+  that couldn't represent an explicit "off" override, so unchecking Multiplayer for one attempt
+  was silently ignored whenever the race's own saved default had it on, leaving the grid timers
+  "active" for a session that should have been solo.
+- "1/4 joined" and "Waiting for players" text no longer shown for solo (non-joinable) races.
+- The spectate HUD timer only updated when the spectated racer crossed a checkpoint, instead of
+  ticking smoothly every frame like the active-racer HUD already did.
+- The ahead/behind gap indicator on the race HUD went blank for the entire stretch between a
+  racer crossing the start/finish line and actually completing a full lap ahead, instead of
+  showing a continuous value.
+- The race name character-limit counter in the editor rendered off-screen regardless of window
+  width.
+- Dragging a gate's width/height handle over uneven terrain now only ground-snaps once, at
+  mouse-release, instead of risking a mid-drag jump.
+- Chat message color pickers removed from the settings menu: non-functional since chat moved to
+  native BeamMP message rendering, which only supports its own fixed color codes.
+
+### Known unresolved
+- The race editor's height-resize handle is unusable when the camera is pointed at open sky with
+  nothing behind the handle. Four fix attempts so far, none successful; paused pending better
+  diagnostic evidence.
+- "Ghost backmarkers" doesn't appear to actually ghost a lapped racer in testing. The entire
+  server/client chain reads correct in isolation and no bug has been found yet; needs a console
+  capture from a repro where a real lap gap should have triggered it.
