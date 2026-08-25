@@ -75,6 +75,17 @@ set of racing- and gameplay-focused features.
     force-spawned for every participant, custom setups included) or a host-curated pool of
     allowed vehicles to pick from, either baked into the race itself or chosen fresh each time
     it's started
+- **Hunter**: asymmetric hide-and-seek chase mode — one random player becomes the hunted
+  fugitive, everyone else hunts. Stuck-timer elimination (no direct collision "tag"), a
+  three-trigger reveal system (proximity, final-waypoint tension, post-crash), asymmetric grid
+  release (fugitive gets a head start), native GPS routing plus an in-world beacon guiding the
+  fugitive to their next waypoint, a hunter crash-reset penalty, and a staff force-fugitive
+  reassignment tool. Includes its own in-world arena editor (hunter/prey spawns, waypoints)
+- **Vehicle presets**: admin-curated, shareable vehicle lists (captured model/config/parts/tuning)
+  usable to restrict a race or Hunter session to one exact vehicle or a host-picked pool, with
+  matching that tolerates post-spawn paint and tuning changes
+- **Legacy import**: convert an old BeamJoy Free (BJI) server's Hunter arenas and races straight
+  into this fork's own format — see the section above for the full walkthrough
 - **Map voting** (`/votemap`) and **vote-kick** (`/votekick`), both with configurable thresholds
   and timeouts and a live status panel
 - **Teleportation**: self-teleport to another player (rate-limited) and a moderator-relayed
@@ -95,7 +106,8 @@ set of racing- and gameplay-focused features.
 - Customizable yet powerful welcome window
 - Support for replay mode (players watching replays and their vehicles are not visible by others until they play again)
 - Fixed and fully integrated vehicle selector (hide presets from disabled mods, filtered by permissions, fixed action buttons)
-- Messages and labels internationalization
+- Messages and labels internationalization (English source plus 12 client and 7 server
+  translations, all kept at full key parity)
 - Disabled multiplayer-conflicting features (desynced pause, force field)
 - LocalStorage to keep personal data and settings between servers
 - Contextual menu when right-clicking another vehicle (disabled while nodegrabbing or dragging view)
