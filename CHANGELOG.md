@@ -6,6 +6,32 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.28] - 2026-08-25
+
+### Fixed
+- **Real bug, per direct report: an account with only `EditRaces` or `EditHunterArenas` (a
+  mod-rank permission) could open Config > Core and see the full server identity-fields form
+  (Name, Description, Max Players, Private, Debug, Information Packet, with a real if
+  ultimately-rejected Save button), when only `SetCore` (owner rank) should ever be able to.**
+  The server already correctly withholds this data server-side (`services/core.lua`'s
+  `onBJRequestCache` only ever includes `caches.core` for a `SetCore` holder), but the client-side
+  identity-fields form itself rendered unconditionally the moment the Core tab mounted at all.
+  Since the tab's own visibility was deliberately widened in an earlier round to
+  `["SetCore", "EditHunterArenas", "EditRaces"]` (so each mode's own Legacy Import row stays
+  reachable for a mod-rank holder who isn't also owner-rank), a `EditRaces`/`EditHunterArenas`
+  account could reach the tab and see the identity-fields form fully rendered, even though any
+  Save attempt would have been rejected server-side and the requested data would never actually
+  arrive (a `nil` `BJSendCoreData` payload for a non-`SetCore` requester). Fixed by gating the
+  identity-fields form itself (`core/app.html`'s whole `<table>`) on a new `$ctrl.canSetCore`
+  check, computed the same way `canImportHunter`/`canImportRaces` already are, and skipping the
+  `BJRequestCoreData` request entirely in `$onInit` unless `canSetCore` is true. A non-`SetCore`
+  holder now only ever sees the Formatting Hints reference and their own permitted Legacy Import
+  rows; the identity-fields form is invisible to them entirely, not just non-functional.
+  *(client only, no server changes)*
+
+### Changed
+- Version bumped to 1.8.28 (buildversion 2284) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.27] - 2026-08-25
 
 ### Added

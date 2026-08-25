@@ -17,6 +17,17 @@ angular.module("beamjoy").component("bjConfigCore", {
         // comment on why Core's tab visibility itself is widened to match).
         this.canImportHunter = false;
         this.canImportRaces = false;
+        // the identity-fields form below (server name/description/max players/private/debug/
+        // informationPacket) is real admin-only data - the server already withholds it entirely
+        // from anyone without SetCore (see services/core.lua's own onBJRequestCache), but this
+        // form used to render unconditionally the moment this tab mounted at all, regardless of
+        // permission. Since the tab itself is deliberately reachable by EditHunterArenas/EditRaces
+        // holders too (for the Legacy Import accordion below), that meant a mod-rank importer-only
+        // account could open Config > Core and see this whole form rendered (with a real, if
+        // ultimately-rejected, Save button) even though they were never meant to have any access to
+        // core server config at all. Gated separately from tab visibility so a non-SetCore holder
+        // only ever sees the Legacy Import accordion, never this form.
+        this.canSetCore = false;
         const updateLegacyImportPermissions = () => {
             this.canImportHunter = beamjoyStore.permissions.hasAllPermissions(
                 undefined,
@@ -25,6 +36,10 @@ angular.module("beamjoy").component("bjConfigCore", {
             this.canImportRaces = beamjoyStore.permissions.hasAllPermissions(
                 undefined,
                 "EditRaces"
+            );
+            this.canSetCore = beamjoyStore.permissions.hasAllPermissions(
+                undefined,
+                "SetCore"
             );
         };
         updateLegacyImportPermissions();
@@ -167,7 +182,7 @@ angular.module("beamjoy").component("bjConfigCore", {
             this.init = true;
         });
         this.$onInit = () => {
-            beamjoyStore.send("BJRequestCoreData");
+            if (this.canSetCore) beamjoyStore.send("BJRequestCoreData");
         };
         this.cancel = () => {
             this.data = angular.copy(this.default);
