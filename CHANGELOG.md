@@ -6,6 +6,22 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.40] - 2026-08-26
+
+### Fixed
+- **Removed a stray leftover debug `console.log` in `player-line/app.js`** that printed every
+  player's name and resolved current-vehicle-owner on every update, cluttering the CEF console
+  for every player. Found while investigating a live report (missing teleport options, broken
+  spectate-by-name, orange nametag, all for the same player): its output was the evidence that
+  actually pinned down the real bug, that player's `currentVehicle` field was never syncing from
+  their own client, staying `null` across two full reconnects and multiple vehicle spawns. The
+  underlying sync issue itself is still under investigation (needs a log from that player's own
+  client to trace further, this client only observes it over the network), this entry is just the
+  debug-code cleanup. *(client only, no server changes)*
+
+### Changed
+- Version bumped to 1.8.40 (buildversion 2296) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.39] - 2026-08-26
 
 ### Changed

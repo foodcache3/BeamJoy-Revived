@@ -24,7 +24,6 @@ angular.module("beamjoy").component("bjPlayerLine", {
                       );
                   })
                 : null;
-                console.log(this.player.playerName, currentVehicleOwner)
             currentVehicleOwner = currentVehicleOwner ? currentVehicleOwner.playerName : null;
             if (!this.player.currentVehicle) {
                 // no current vehicle
