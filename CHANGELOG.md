@@ -6,6 +6,23 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.41] - 2026-08-26
+
+### Added
+- **Bundled default race/hunter arena seeding now logs what it actually did, per direct request
+  ("how can I be sure they'll be applied").** `seedBundledRaces`/`seedBundledHunterArena` (see
+  1.8.33) ran completely silently before, the only way to confirm a bundled race/arena actually
+  landed was to dig through `BeamJoyData/db/activities/` or the ledger file by hand. Each one now
+  logs a clear line to the server console the moment it actually happens: a successful seed, a
+  skip because a race/arena by that name already exists on that map, or a validation failure
+  (already logged as an error before this, kept as-is). Nothing to see yet since no content is
+  bundled, this just makes the next real addition to `bundledContent/activities/` immediately
+  confirmable in the console on the boot after you add it and restart. *(server only, needs
+  deployment)*
+
+### Changed
+- Version bumped to 1.8.41 (buildversion 2297) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.40] - 2026-08-26
 
 ### Fixed

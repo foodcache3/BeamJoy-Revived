@@ -1023,6 +1023,9 @@ local function seedBundledRaces()
                         if err == "A race with this name already exists" then
                             -- someone (an admin, or a previous boot) already has a race by this
                             -- name on this map ; treat it as handled rather than retrying forever
+                            LogInfo(string.format(
+                                "seedBundledRaces: skipped %s / %s, a race with this name already exists",
+                                mapName, name))
                             dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, name)
                         else
                             LogError(string.format(
@@ -1038,6 +1041,7 @@ local function seedBundledRaces()
                         table.insert(targetList, candidate)
                         dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, name)
                         changed = true
+                        LogInfo(string.format("seedBundledRaces: seeded %s / %s", mapName, name))
                     end
                 end
             end

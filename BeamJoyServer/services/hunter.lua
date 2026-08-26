@@ -235,8 +235,12 @@ local function seedBundledHunterArena()
                             "seedBundledHunterArena: %s failed sanitation: %s", mapName, err))
                     else
                         dao_activity.save(mapName, M.ACTIVITY_TYPE, candidate)
+                        LogInfo(string.format("seedBundledHunterArena: seeded %s", mapName))
                     end
                 end
+            else
+                LogInfo(string.format(
+                    "seedBundledHunterArena: skipped %s, already has an arena", mapName))
             end
             -- marked regardless of outcome (map already had an arena, or a validation failure) :
             -- a map is only ever considered once, ever
