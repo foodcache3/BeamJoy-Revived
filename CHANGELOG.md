@@ -6,6 +6,27 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.34] - 2026-08-26
+
+### Removed
+- **Race "Mandatory stop" (the `stand` gate flag and `stand` respawn strategy) removed entirely.**
+  This was always a stub: both `raceRunner.lua` and `raceGrid.lua` carried their own explicit
+  "NOT YET IMPLEMENTED" note for it, the data model, editor toggle, and save validation existed,
+  but nothing at the actual gate-crossing/respawn level ever enforced a real stop, a stand gate
+  behaved exactly like any other checkpoint. Removed rather than finished, per direct request:
+  `BJRaceGate.stand`, `RESPAWN_STRATEGIES.STAND`, the editor's per-gate "Mandatory stop" toggle and
+  the respawn strategy option, the "(stand)" gate label, the legacy BJI importer's now-pointless
+  `stand` field mapping, and the 3 related locale keys across all 13 client locales are all gone.
+  `sanitizeRace` now also actively scrubs any stray `stand` flag off a gate the next time its race
+  is saved through the editor. A race saved with `respawnStrategy: "stand"` before this update
+  falls back to `lastcheckpoint` the next time it's re-saved (sanitizeRace's own existing
+  unrecognized-strategy fallback); since the strategy was never actually implemented at runtime,
+  this changes nothing about how such a race actually played, only what gets written to disk on
+  its next save. *(client and server, server needs deployment)*
+
+### Changed
+- Version bumped to 1.8.34 (buildversion 2290) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.33] - 2026-08-26
 
 ### Added

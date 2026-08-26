@@ -120,10 +120,7 @@ local function pushListToUI()
             -- this summary carrying its own copy of the pool
             vehicleRestrictionPoolPresetId = r.vehicleRestrictionPoolPresetId,
             gates = #r.gates,
-            -- lets the start-options panel hide "Mandatory stop" for races that don't actually
-            -- have any gate flagged for it, without sending the full gate array just for this
-            hasStandGate = table.find(r.gates, function(g) return g.stand == true end) ~= nil,
-            -- also lets it hide "joinable" for single-slot races (can never actually be joined,
+            -- lets it hide "joinable" for single-slot races (can never actually be joined,
             -- raceStart already forces joinable=false server-side too, this is just the matching
             -- UI hint) and lets the race list show grid-slot count without sending full positions
             startPositions = #r.startPositions,
@@ -172,8 +169,7 @@ end
 ---@param width number?
 ---@param height number?
 ---@param lap true?
----@param stand true?
-local function testAddGate(width, height, lap, stand)
+local function testAddGate(width, height, lap)
     local pos, dir = builderPositionDirection()
     if not pos then return end
     table.insert(M.testBuilder.gates, {
@@ -182,7 +178,6 @@ local function testAddGate(width, height, lap, stand)
         width = width or 6,
         height = height or 3,
         lap = lap or nil,
-        stand = stand or nil,
     })
     LogInfo(string.format("beamjoy_races test builder: gate %d added", #M.testBuilder.gates))
     extensions.hook("onBJRaceMarkersRefresh")

@@ -11,7 +11,7 @@ angular.module("beamjoy").component("bjMainRaces", {
         beamjoyConfirm
     ) {
         const translate = $filter("translate");
-        this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint", "stand"];
+        this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint"];
         // mirrors raceGrid.lua's own trySubmitTime gate exactly (all three must be enabled for a
         // time to count at all). Used here only to decide whether to warn before starting, not to
         // enforce anything; the server remains the real source of truth for that. Slow-mo/pause
@@ -231,11 +231,6 @@ angular.module("beamjoy").component("bjMainRaces", {
         this.openStart = (event, race) => {
             event.stopPropagation();
             this.startingId = race.id;
-            // "Mandatory stop" only means anything if the race actually has a gate flagged for
-            // it; offering it otherwise would just be a no-op option
-            this.availableRespawnStrategies = this.RESPAWN_STRATEGIES.filter(
-                (s) => s !== "stand" || race.hasStandGate
-            );
             // seed from the race's own saved defaults (host-configurable per the plan; these
             // are just the starting point, not fixed), not generic hardcoded values
             const d = race.defaults || {};

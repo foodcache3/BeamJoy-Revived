@@ -22,14 +22,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         // matches services/races.lua's own sanitizeRace truncation; see its comment for why a
         // limit exists at all
         this.NAME_MAX_LENGTH = 40;
-        this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint", "stand"];
-        // "Mandatory stop" only means anything once at least one gate is actually flagged for
-        // it; offering it otherwise would just be a no-op option. Computed live (not cached)
-        // since gate.stand toggles are edited right here in the same session.
-        this.availableRespawnStrategies = () =>
-            this.RESPAWN_STRATEGIES.filter(
-                (s) => s !== "stand" || (this.race && this.race.gates.some((g) => g.stand))
-            );
+        this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint"];
         this.SECTIONS = ["info", "waypoints", "starts", "settings"];
         this.activeSection = "info";
 
@@ -99,7 +92,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
 
         // Lua is the source of truth (mirrors the safe-zone editor's architecture): gate/start
         // position+direction only ever change through the gizmo and are never diffed/sent back
-        // from here. Every other field (name/mode/loopable/defaults/gate width-height-lap-stand)
+        // from here. Every other field (name/mode/loopable/defaults/gate width-height-lap)
         // is free-edited locally via ng-model, then a deep watch below diffs against the last
         // known state and sends only what actually changed.
         let previous = null;
@@ -109,8 +102,8 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             // initially-empty gates/startPositions can arrive here as {} instead of []: a real,
             // confirmed crash : "(race.gates || []).forEach is not a function" (the || [] fallback
             // only catches null/undefined, not a truthy-but-non-array {}). Normalized once here,
-            // at the boundary, so every consumer (the deep-watch below, availableRespawnStrategies,
-            // any future one) can safely assume real arrays without its own defensive check.
+            // at the boundary, so every consumer (the deep-watch below, any future one) can safely
+            // assume real arrays without its own defensive check.
             if (race) {
                 if (!Array.isArray(race.gates)) race.gates = [];
                 if (!Array.isArray(race.startPositions)) race.startPositions = [];
@@ -141,7 +134,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
                     race.gates.forEach((echoedGate, i) => {
                         const localGate = this.race.gates[i];
                         const prevGate = previous.gates[i];
-                        ["width", "height", "stand", "sector", "parents", "isFinish"].forEach((k) => {
+                        ["width", "height", "sector", "parents", "isFinish"].forEach((k) => {
                             if (angular.equals(localGate[k], prevGate[k])) localGate[k] = echoedGate[k];
                         });
                         // pos/dir/step are never locally edited via this diff path: pos/dir
@@ -260,7 +253,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
                 const partial = {};
                 // "step" deliberately excluded: it's derived Lua-side from "parents" now, never
                 // locally edited (see the echo-merge comment above for why)
-                ["width", "height", "stand", "sector", "parents", "isFinish"].forEach((k) => {
+                ["width", "height", "sector", "parents", "isFinish"].forEach((k) => {
                     if (!angular.equals(gate[k], prevGate[k])) {
                         let v = gate[k] === undefined ? null : gate[k];
                         // the typable number-box on bj-slider can hand back a string in this

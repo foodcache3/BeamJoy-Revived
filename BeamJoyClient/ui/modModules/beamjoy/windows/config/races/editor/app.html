@@ -349,7 +349,6 @@
                     <span ng-if="$ctrl.gateRole($index) === 'finish'" class="small startfinish-badge">
                         {{'beamjoy.window.config.tabs.races.finish' | translate}}
                     </span>
-                    <span ng-if="gate.stand" class="small opacity-70">(stand)</span>
                     <span ng-if="!$ctrl.race.branchingEnabled && $ctrl.race.manualSectors && gate.sector" class="small opacity-70">
                         ({{'beamjoy.window.config.tabs.races.sector' | translate}} {{$ctrl.sectorNumber($index)}})
                     </span>
@@ -401,15 +400,6 @@
                                 step="0.5"
                             ></bj-slider>
                         </td>
-                    </tr>
-                    <tr>
-                        <td
-                            class="text-right"
-                            title="{{'beamjoy.window.config.tabs.races.gateStand.tooltip' | translate}}"
-                        >
-                            {{'beamjoy.window.config.tabs.races.gateStand' | translate}}
-                        </td>
-                        <td><bj-toggle ng-model="gate.stand"></bj-toggle></td>
                     </tr>
                     <tr ng-if="$ctrl.race.branchingEnabled">
                         <td
@@ -570,7 +560,7 @@
                 <td>
                     <div class="d-flex gap-1 flex-wrap">
                         <button
-                            ng-repeat="strategy in $ctrl.availableRespawnStrategies()"
+                            ng-repeat="strategy in $ctrl.RESPAWN_STRATEGIES"
                             class="btn info"
                             ng-class="{success: $ctrl.race.defaults.respawnStrategy === strategy}"
                             ng-click="$ctrl.race.defaults.respawnStrategy = strategy"

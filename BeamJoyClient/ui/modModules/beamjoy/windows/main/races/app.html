@@ -417,7 +417,7 @@
                     <td>
                         <div class="d-flex gap-1 flex-wrap">
                             <button
-                                ng-repeat="strategy in $ctrl.availableRespawnStrategies"
+                                ng-repeat="strategy in $ctrl.RESPAWN_STRATEGIES"
                                 class="btn info"
                                 ng-class="{success: $ctrl.startOptions.respawnStrategy === strategy}"
                                 ng-click="$ctrl.startOptions.respawnStrategy = strategy"

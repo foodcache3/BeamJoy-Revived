@@ -1,12 +1,11 @@
 ---@alias BJRaceMode "grid"|"passive"
----@alias BJRaceRespawnStrategy "all"|"norespawn"|"lastcheckpoint"|"stand"
+---@alias BJRaceRespawnStrategy "all"|"norespawn"|"lastcheckpoint"
 
 ---@class BJRaceGate
 ---@field pos {x: number, y: number, z: number}
 ---@field dir {x: number, y: number, z: number}
 ---@field width number
 ---@field height number
----@field stand true? mandatory-stop checkpoint (respawnStrategy == STAND)
 ---@field sector true? marks this gate as a sector boundary when the owning race's own
 ---`manualSectors` is enabled; ignored entirely otherwise (see BJRace.manualSectors below)
 ---@field step integer read-only/derived: never trust a client-submitted value for this field.
@@ -215,7 +214,6 @@ local M = {
         ALL = "all",
         NORESPAWN = "norespawn",
         LASTCHECKPOINT = "lastcheckpoint",
-        STAND = "stand",
     },
     MODES = {
         GRID = "grid",
@@ -386,7 +384,13 @@ local function sanitizeRace(race, existingRaces)
 
     race.sectorCount = math.max(1, math.min(math.floor(tonumber(race.sectorCount) or 3), #race.gates, 12))
     race.manualSectors = race.manualSectors == true
-    table.forEach(race.gates, function(g) g.sector = g.sector == true or nil end)
+    table.forEach(race.gates, function(g)
+        g.sector = g.sector == true or nil
+        -- mandatory-stop was removed outright (never actually implemented, see raceRunner.lua/
+        -- raceGrid.lua's own former "NOT YET IMPLEMENTED" notes) ; scrubbed here too so a gate
+        -- saved back through the editor sheds any stray `stand` flag left over from before
+        g.stand = nil
+    end)
 
     -- branching paths : see BJRace.branchingEnabled's own doc comment above, and
     -- normalizeGateSteps's own comment for why this same normalization also runs at load time
@@ -415,10 +419,6 @@ local function sanitizeRace(race, existingRaces)
     race.defaults = race.defaults or {}
     if not table.includes(M.RESPAWN_STRATEGIES, race.defaults.respawnStrategy) then
         race.defaults.respawnStrategy = M.RESPAWN_STRATEGIES.LASTCHECKPOINT
-    end
-    if race.defaults.respawnStrategy == M.RESPAWN_STRATEGIES.STAND and
-        not table.any(race.gates, function(g) return g.stand end) then
-        return "STAND respawn strategy requires at least one stand gate"
     end
     -- a race with only one grid slot can never actually be joined by anyone else (raceJoin caps
     -- participants at #startPositions), so normalize the saved default here too, not just at
@@ -528,7 +528,7 @@ end
 --- `name` string, or the literal "start" sentinel). `step`/`isFinish` for a genuinely branching
 --- result are left for deriveStepsFromParents/the finish-flagging below to fill in; nothing here
 --- needs to preserve BJI's own step GROUPING once the graph edges themselves are captured.
----@param steps {name:string, pos:table, rot:table, radius:number, stand:boolean?, parents:string[]?}[][]
+---@param steps {name:string, pos:table, rot:table, radius:number, parents:string[]?}[][]
 ---@param loopable boolean
 ---@return BJRaceGate[]? gates, boolean branching
 local function convertLegacyRaceGates(steps, loopable)
@@ -547,7 +547,6 @@ local function convertLegacyRaceGates(steps, loopable)
                 dir = { x = 1, y = 0, z = 0 }, -- placeholder, replaced below once every gate exists
                 width = math.max(2, (tonumber(wp.radius) or 3) * 2),
                 height = math.max(2, (tonumber(wp.radius) or 3) * 2),
-                stand = wp.stand == true or nil,
                 parents = {}, -- filled in below, once every name is known
             })
             nameToIndex[wp.name] = #gates

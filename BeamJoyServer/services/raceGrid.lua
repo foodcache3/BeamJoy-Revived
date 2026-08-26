@@ -5,9 +5,8 @@
 --- server-wide active scenario.
 ---
 --- NOT YET IMPLEMENTED (deferred, see the plan): vehicle model/config enforcement during grid,
---- the `stand` mandatory-stop choreography (client-side UX, needs the gate data this module
---- already tracks), the admin-forced server-wide path, and anything about `passive` mode (that's
---- an ambient/freeroam mechanic, not a grid session at all).
+--- the admin-forced server-wide path, and anything about `passive` mode (that's an ambient/
+--- freeroam mechanic, not a grid session at all).
 
 ---@alias BJRaceSessionState "GRID"|"COUNTDOWN"|"RACE"|"FINISHED"
 

@@ -20,8 +20,6 @@
 --- displayed it until now. Own progress (lap/gate/live timer) always shows; the comparison table
 --- only appears once there's more than one participant, matching the "solo is a private attempt"
 --- design: nothing to compare against alone.
----
---- NOT YET IMPLEMENTED : `stand` mandatory-stop choreography.
 
 local CAMERA_RELEASE_SECONDS = 3
 local DNF_WARNING_SECONDS = 10
@@ -312,7 +310,7 @@ local function onVehicleDestroyed(vid)
 end
 
 --- real gap closed here : the enforcement above only ever reacts to a NATIVE reset event. A
---- player could otherwise sidestep "lastcheckpoint"/"norespawn"/"stand" entirely by picking a
+--- player could otherwise sidestep "lastcheckpoint"/"norespawn" entirely by picking a
 --- DIFFERENT vehicle mid-race via the selector's own "Replace" action (or a delete-then-respawn,
 --- see onVehicleDestroyed above), neither of which BeamNG considers a "reset" at all. Mirrors
 --- hunterRunner.lua's own identical fix for the fugitive : any vehicle appearing for this client

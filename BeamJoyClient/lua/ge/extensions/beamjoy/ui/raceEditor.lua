@@ -11,7 +11,7 @@
 --- Angular never displays position, so there's no need to push a full snapshot on every drag
 --- frame (mirrors safe-zone editor's `updateGizmo`, which does the same; gate width/height via the
 --- gizmo's scale tool is the one exception, see `updateGizmo` below). Every other field
---- (name/mode/loopable/defaults/gate width-height-lap-stand) is mutated via discrete
+--- (name/mode/loopable/defaults/gate width-height-lap) is mutated via discrete
 --- `BJEditorRaceSet*` messages from Angular, each followed by a full `BJEditorRaceUpdate` push
 --- back so the UI always reflects Lua-authoritative state.
 ---
@@ -1010,7 +1010,7 @@ end
 --- already enforces elsewhere in this file) so driving through in the new order faces the right
 --- way at every gate. For a loopable race the new gate 1 (the old last gate) automatically becomes
 --- the start/finish line via gateRole's existing index-based convention, no separate "which gate
---- is the start" flag to update. Per-gate flags (sector, width/height/stand) travel with their own
+--- is the start" flag to update. Per-gate flags (sector, width/height) travel with their own
 --- gate object unchanged, just reordered ; a manually-flagged sector boundary keeps marking the
 --- same physical gate, though its meaning relative to the new direction of travel may need manual
 --- re-checking afterward. Start positions are deliberately left untouched: where the grid should
@@ -1124,7 +1124,6 @@ local function onReset(kind, index)
     if kind == "gate" then
         current.width = saved.width
         current.height = saved.height
-        current.stand = saved.stand
     end
     refreshDirty()
     pushUpdate()

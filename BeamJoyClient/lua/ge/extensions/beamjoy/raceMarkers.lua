@@ -229,7 +229,7 @@ local function drawGate(gate, index, color, showDirection, role, showLabel, sect
             or ""
         local sectorLabel = sectorNumber and string.format(" (Sector %d)", sectorNumber) or ""
         shape.addText(
-            string.format("Gate %d%s%s%s", index, roleLabel, gate.stand and " (stand)" or "", sectorLabel),
+            string.format("Gate %d%s%s", index, roleLabel, sectorLabel),
             pos + up * (gate.height + .5), TEXT_COLOR, TEXT_BG_COLOR)
     end
 end
