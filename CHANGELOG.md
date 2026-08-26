@@ -6,6 +6,30 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.36] - 2026-08-26
+
+### Fixed
+- **Real bug, per direct report with a screenshot: the Legacy Import (BJI) race importer's gates
+  sometimes came in rotated at strange, skewed angles**, specifically for a loopable race with
+  multiple parallel start/finish lanes (e.g. a dual-lane grid, each lane ending at its own
+  physically-separate finish checkpoint). The loop-closing rewrite (`convertLegacyRaceGates`,
+  which promotes the terminal gate(s) to the new genesis/step-1 so the start/finish line always
+  sits at gate 1) used to connect EVERY genesis gate to EVERY terminal, a full bipartite
+  cross-product, whenever more than one of either existed, instead of only its own lane's actual
+  terminal. `deriveLegacyGateDirections` then averaged each terminal's direction across ALL
+  genesis gates as children, including ones never actually reachable from it, pulling a lane's own
+  start/finish gate diagonally toward a completely unrelated lane's next checkpoint instead of
+  pointing straight down its own lane, exactly the skewed/kite-shaped gates in the report. Fixed by
+  only connecting a genesis gate to the terminal(s) actually reachable from it, computed via a
+  forward BFS over the original (pre-rewire) parent chain before any parents get rewritten. A
+  single-lane loop (the common case) is unaffected either way, since there's only ever one genesis
+  and one terminal to connect regardless. *(server only, needs deployment ; re-running Legacy
+  Import again picks up the fix for any race still affected, since import is non-destructive and
+  additive)*
+
+### Changed
+- Version bumped to 1.8.36 (buildversion 2292) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.35] - 2026-08-26
 
 ### Added

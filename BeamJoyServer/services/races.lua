@@ -612,21 +612,73 @@ local function convertLegacyRaceGates(steps, loopable)
         local needsRotation = #terminals > 0 and #genesis > 0 and
             table.any(genesis, function(g) return not terminalSet[g] end)
         if needsRotation then
+            -- Real, confirmed bug fixed here (live report: imported gates "sometimes rotated at
+            -- strange angles", against a race with multiple parallel start/finish lanes). The
+            -- rewiring below used to connect EVERY genesis gate to EVERY terminal (a full
+            -- bipartite cross-product) whenever more than one of either existed, e.g. two lanes
+            -- each ending at their own physically-separate finish checkpoint, instead of only its
+            -- own lane's actual terminal. deriveLegacyGateDirections then averaged each terminal's
+            -- direction across ALL genesis gates as children, including ones never actually
+            -- reachable from it, pulling a lane's own start/finish gate diagonally toward a
+            -- completely unrelated lane's next checkpoint instead of pointing straight down its
+            -- own lane. Fixed by only connecting a genesis gate to the terminal(s) actually
+            -- reachable FROM it, computed via a plain forward BFS over the ORIGINAL (pre-rewire)
+            -- parent chain, before any of the parents below get mutated.
+            local preRewireChildren = {}
+            for i, g in ipairs(gates) do
+                for _, p in ipairs(g.parents) do
+                    if p > 0 then
+                        preRewireChildren[p] = preRewireChildren[p] or {}
+                        table.insert(preRewireChildren[p], i)
+                    end
+                end
+            end
+            ---@param fromIdx integer
+            ---@return table<integer, true> every terminal gate index reachable from fromIdx by
+            ---walking preRewireChildren forward (the original, pre-rewire DAG: strictly genesis ->
+            ---... -> terminal, so no cycle risk here)
+            local function reachableTerminals(fromIdx)
+                local seen, found, frontier = { [fromIdx] = true }, {}, { fromIdx }
+                while #frontier > 0 do
+                    local nextFrontier = {}
+                    for _, idx in ipairs(frontier) do
+                        if terminalSet[idx] then found[idx] = true end
+                        for _, child in ipairs(preRewireChildren[idx] or {}) do
+                            if not seen[child] then
+                                seen[child] = true
+                                table.insert(nextFrontier, child)
+                            end
+                        end
+                    end
+                    frontier = nextFrontier
+                end
+                return found
+            end
+
             -- 1. Rewire the graph: the (possibly several, parallel) terminal gate(s) become the
             -- new genesis (parented straight to the sentinel), the old genesis gate(s) get rewired
-            -- to be reached FROM the terminal(s) instead. deriveStepsFromParents (already required
-            -- for any branching race, see normalizeGateSteps) recomputes every gate's `step`
-            -- correctly from this regardless of the gates array's own physical order, so only
-            -- force branchingEnabled on when a real fork actually exists (start, finish, or both):
-            -- a genuinely simple single-path loop stays non-branching, keeping its sector timing /
-            -- visible-gate-limit support instead of losing both purely as a side effect of this fix
+            -- to be reached FROM their own lane's terminal(s) instead. deriveStepsFromParents
+            -- (already required for any branching race, see normalizeGateSteps) recomputes every
+            -- gate's `step` correctly from this regardless of the gates array's own physical
+            -- order, so only force branchingEnabled on when a real fork actually exists (start,
+            -- finish, or both): a genuinely simple single-path loop stays non-branching, keeping
+            -- its sector timing / visible-gate-limit support instead of losing both purely as a
+            -- side effect of this fix
             for _, g in ipairs(genesis) do
                 local gate = gates[g]
                 local newParents = {}
                 for _, p in ipairs(gate.parents) do
                     if p ~= 0 then table.insert(newParents, p) end
                 end
-                for _, t in ipairs(terminals) do table.insert(newParents, t) end
+                local ownTerminals = reachableTerminals(g)
+                if next(ownTerminals) then
+                    for t in pairs(ownTerminals) do table.insert(newParents, t) end
+                else
+                    -- defensive fallback, shouldn't happen for a well-formed chain (every genesis
+                    -- eventually reaches SOME terminal): better a loop that closes onto the wrong
+                    -- lane than one that can never close at all
+                    for _, t in ipairs(terminals) do table.insert(newParents, t) end
+                end
                 gate.parents = newParents
             end
             for _, t in ipairs(terminals) do
