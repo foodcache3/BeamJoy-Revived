@@ -786,6 +786,19 @@ local function hunterReady(ctxt, sessionId, ready, model)
     end
 end
 
+---@param playerID integer
+--- unreadies a LOBBY participant the moment their vehicle's actual config changes (parts, tuning,
+--- anything BeamMP's own onVehicleEdited fires for), per direct report ; same reasoning and
+--- exact-mirror implementation as raceGrid.lua's own unreadyOnVehicleChange
+local function unreadyOnVehicleChange(playerID)
+    local session = findSessionByParticipant(playerID)
+    if not session or session.state ~= "LOBBY" then return end
+    local participant = session.participants[playerID]
+    if not participant or not participant.ready then return end
+    participant.ready = false
+    pushSessionUpdate(session)
+end
+
 ---@param ctxt BJSContext
 ---@param sessionId string
 ---@param routeIndex integer 1-based position within this round's own route the fugitive claims to
@@ -1176,6 +1189,7 @@ M.hunterJoin = hunterJoin
 M.hunterLeave = hunterLeave
 M.hunterCancel = hunterCancel
 M.hunterReady = hunterReady
+M.unreadyOnVehicleChange = unreadyOnVehicleChange
 M.hunterCheckpointReached = hunterCheckpointReached
 M.hunterEliminated = hunterEliminated
 M.hunterRevealUpdate = hunterRevealUpdate

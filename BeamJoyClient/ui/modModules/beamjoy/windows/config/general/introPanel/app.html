@@ -71,7 +71,8 @@
                     type="text"
                     class="flex-grow-1"
                     ng-model="$ctrl.data.image"
-                    placeholder="https://..."
+                    placeholder="/ui/myAssets/image.jpg"
+                    title="{{'beamjoy.window.config.tabs.general.intropanel.image.custom.tooltip'|translate}}"
                 />
                 <button
                     class="btn neutral w-fitcontent"
@@ -82,6 +83,42 @@
                         "beamjoy.window.config.tabs.general.intropanel.image.useBuiltIn" :
                         "beamjoy.window.config.tabs.general.intropanel.image.useCustomUrl") | translate}}
                 </button>
+            </div>
+        </td>
+    </tr>
+    <tr ng-if="$ctrl.isCustomImage()">
+        <td
+            class="text-right"
+            title="{{'beamjoy.window.config.tabs.general.intropanel.image.browseFolder.tooltip'|translate}}"
+        >
+            {{"beamjoy.window.config.tabs.general.intropanel.image.browseFolder"|translate}}
+        </td>
+        <td>
+            <div class="d-flex flex-column gap-1">
+                <div class="d-flex gap-1 align-center">
+                    <input
+                        type="text"
+                        class="flex-grow-1"
+                        ng-model="$ctrl.browseFolder"
+                        placeholder="/myWelcomeStuff"
+                    />
+                    <button
+                        class="btn neutral w-fitcontent"
+                        ng-click="$ctrl.listFolderImages()"
+                    >
+                        {{"beamjoy.window.config.tabs.general.intropanel.image.listImages"|translate}}
+                    </button>
+                </div>
+                <bj-select
+                    ng-if="$ctrl.folderImages.length > 0"
+                    class="w-100"
+                    ng-model="$ctrl.data.image"
+                    options="$ctrl.folderImages"
+                >
+                </bj-select>
+                <div ng-if="$ctrl.folderImagesRequested && $ctrl.folderImages.length === 0">
+                    {{"beamjoy.window.config.tabs.general.intropanel.image.noImagesFound"|translate}}
+                </div>
             </div>
         </td>
     </tr>

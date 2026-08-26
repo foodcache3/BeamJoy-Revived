@@ -386,6 +386,7 @@ local function demote(ctxt, playerName)
         if previousGroup then
             target.group = previousGroup
             M.savePlayer(target)
+            M.sendCacheUpdate()
         end
     end
 end
@@ -420,6 +421,7 @@ local function promote(ctxt, playerName)
         if nextGroup then
             target.group = nextGroup
             M.savePlayer(target)
+            M.sendCacheUpdate()
         end
     end
 end

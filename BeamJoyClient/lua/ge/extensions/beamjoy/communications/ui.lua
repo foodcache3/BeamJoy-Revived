@@ -91,6 +91,7 @@ local function onInit()
     M.addHandler("BJSaveIntroPanelData", M.saveIntroPanelData)
     M.addHandler("BJOpenIntroPanel", M.openIntroPanel)
     M.addHandler("BJResetIntroPanelData", M.saveIntroPanelData)
+    M.addHandler("BJRequestIntroPanelImagesInFolder", M.listIntroPanelImagesInFolder)
     beamjoy_communications.addHandler("sendCache", function(caches)
         if caches.config then
             async.delayTask(M.getIntroPanelData, 0)
@@ -333,6 +334,33 @@ local function saveIntroPanelData(data)
     end
 end
 
+local INTRO_PANEL_IMAGE_EXTENSIONS = { "jpg", "jpeg", "png", "gif", "webp", "bmp" }
+
+--- Lists image files sitting in a folder within the game's own merged virtual filesystem -- this
+--- includes files delivered by any currently-active mod (including a BeamMP server's own
+--- Resources/Client/ resource, the same mechanism that already delivers BJ.zip itself), so an
+--- admin can point this at a folder from their own custom-image resource zip and pick a file from
+--- a list instead of typing its exact path by hand. Non-recursive (folderPath's own direct
+--- contents only, matching FS:findFiles' 3-arg call convention already used by lang.lua elsewhere
+--- in this codebase) -- a subfolder isn't walked into, keeping the returned list flat and simple.
+---@param folderPath string a root-relative folder path, e.g. "/myWelcomeStuff"
+local function listIntroPanelImagesInFolder(folderPath)
+    local images = {}
+    if type(folderPath) == "string" and folderPath ~= "" then
+        if folderPath:sub(1, 1) ~= "/" then
+            folderPath = "/" .. folderPath
+        end
+        for _, ext in ipairs(INTRO_PANEL_IMAGE_EXTENSIONS) do
+            local found = FS:findFiles(folderPath, "*." .. ext, 0) or {}
+            for _, f in ipairs(found) do
+                table.insert(images, f)
+            end
+        end
+        table.sort(images)
+    end
+    M.send("BJSendIntroPanelImagesInFolder", { folderPath = folderPath, images = images })
+end
+
 ---@param title string?
 ---@param content string?
 ---@param image string?
@@ -375,6 +403,7 @@ M.closeWindow = closeWindow
 M.requestOpenWindow = requestOpenWindow
 M.getIntroPanelData = getIntroPanelData
 M.saveIntroPanelData = saveIntroPanelData
+M.listIntroPanelImagesInFolder = listIntroPanelImagesInFolder
 M.openIntroPanel = openIntroPanel
 M.uiBroadcast = broadcast
 

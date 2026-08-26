@@ -149,7 +149,6 @@
         </button>
         <button
             class="btn info"
-            ng-if="!$ctrl.status.isStarter"
             ng-click="$ctrl.leaveSession($event)"
         >
             {{'beamjoy.window.main.tabs.races.leaveSession' | translate}}
@@ -169,9 +168,12 @@
             </span>
         </div>
     </div>
+    <!-- "pool" deliberately excluded, per direct request: each pool entry can be a different
+    model, and pool-mode paint (per-entry paint tracking/restore across randomizeVehiclePool
+    reroll and grid respawns) isn't implemented yet, only "single" is. -->
     <div
         class="player-list"
-        ng-if="$ctrl.status.vehicleRestrictionMode !== 'free'"
+        ng-if="$ctrl.status.vehicleRestrictionMode === 'single' && $ctrl.status.state === 'GRID'"
     >
         <div class="d-flex align-center gap-1 cursor-pointer" ng-click="$ctrl.togglePaint($event)">
             <span class="flex-grow-1 opacity-70">

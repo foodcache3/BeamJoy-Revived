@@ -1060,6 +1060,21 @@ local function raceReady(ctxt, sessionId, ready, model)
     end
 end
 
+---@param playerID integer
+--- unreadies a GRID participant the moment their vehicle's actual config changes (parts, tuning,
+--- anything BeamMP's own onVehicleEdited fires for), per direct report. "Ready" is supposed to mean
+--- "the vehicle I'm about to race is locked in as-is" ; letting it silently keep counting as ready
+--- after the player edited parts/retuned post-ready-up (no re-confirmation) meant tryStartFromGrid
+--- could launch a session on a vehicle nobody actually re-confirmed was still legit for that race.
+local function unreadyOnVehicleChange(playerID)
+    local session = findSessionByParticipant(playerID)
+    if not session or session.state ~= "GRID" then return end
+    local participant = session.participants[playerID]
+    if not participant or not participant.ready then return end
+    participant.ready = false
+    pushSessionUpdate(session)
+end
+
 ---@param ctxt BJSContext
 ---@param sessionId string
 ---@param gateIndex integer
@@ -1415,6 +1430,7 @@ M.raceJoin = raceJoin
 M.raceLeave = raceLeave
 M.raceCancel = raceCancel
 M.raceReady = raceReady
+M.unreadyOnVehicleChange = unreadyOnVehicleChange
 M.raceGateCrossed = raceGateCrossed
 M.raceDNF = raceDNF
 M.raceSpectate = raceSpectate

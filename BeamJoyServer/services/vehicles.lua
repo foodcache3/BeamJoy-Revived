@@ -113,6 +113,13 @@ local function onVehicleEdited(playerID, vehID, vehDataStr)
 
     communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
         playerName, services_players.players[playerName])
+
+    -- per direct report: "ready" is a snapshot commitment ("the vehicle I'm about to race is
+    -- locked in as-is"), so any real config/tuning change (BeamMP fires this same event for both,
+    -- along with everything else that touches the vehicle's .pc) has to invalidate it, in whatever
+    -- grid/lobby this player currently happens to be readied up in, if any
+    services_raceGrid.unreadyOnVehicleChange(playerID)
+    services_hunterGrid.unreadyOnVehicleChange(playerID)
 end
 
 ---@param playerID integer

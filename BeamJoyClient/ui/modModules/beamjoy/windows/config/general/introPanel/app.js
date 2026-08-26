@@ -20,11 +20,13 @@ angular.module("beamjoy").component("bjConfigGeneralIntropanel", {
                 JSON.stringify(this.data) !== JSON.stringify(this.default);
         };
 
-        // a custom image is any real "http(s)://" URL, matching uiHelpers.lua's own detection ;
-        // anything else is treated as one of the bundled native option keys from imageOptions
+        // a custom image is a root-relative local path (e.g. "/ui/myAssets/image.jpg") to an
+        // image delivered to clients via the server's own Resources/Client/ folder -- matches
+        // uiHelpers.lua's own openPanel detection ; a live http(s):// URL is deliberately not
+        // supported here, since BeamNG's engine blocks cross-origin loads for almost every domain
+        // ; anything else is treated as one of the bundled native option keys from imageOptions
         this.isCustomImage = () =>
-            typeof this.data.image === "string" &&
-            /^https?:\/\//.test(this.data.image);
+            typeof this.data.image === "string" && this.data.image.startsWith("/");
         this.toggleCustomImage = () => {
             if (this.isCustomImage()) {
                 this.data.image =
@@ -32,13 +34,39 @@ angular.module("beamjoy").component("bjConfigGeneralIntropanel", {
                         ? this.imageOptions[0].value
                         : null;
             } else {
-                this.data.image = "https://";
+                this.data.image = "/";
             }
         };
         this.imagePreviewUrl = () =>
             this.isCustomImage()
                 ? this.data.image
                 : `../../../gameplay/tutorials/pages/${this.data.image}/image.jpg`;
+
+        // folder-browse assist for the custom-image path : lets an admin list whatever image
+        // files are actually sitting in a folder (from their own server-delivered resource, or
+        // anywhere else in the game's merged mod filesystem) instead of typing the exact filename
+        this.browseFolder = "";
+        this.folderImages = [];
+        this.folderImagesRequested = false;
+        this.listFolderImages = () => {
+            this.folderImagesRequested = false;
+            beamjoyStore.send("BJRequestIntroPanelImagesInFolder", [
+                this.browseFolder,
+            ]);
+        };
+        $rootScope.$on("BJSendIntroPanelImagesInFolder", (_, data) => {
+            $rootScope.$applyAsync(() => {
+                this.browseFolder = data.folderPath;
+                // bj-select expects {value, label} entries, matching imageOptions' own shape ;
+                // the label just shows the filename (after the last "/") instead of the full path,
+                // since the folder itself is already known/fixed from the input above
+                this.folderImages = data.images.map((img) => ({
+                    value: img,
+                    label: img.split("/").pop(),
+                }));
+                this.folderImagesRequested = true;
+            });
+        });
 
         const updateData = (data) => {
             data.settings.content = data.settings.content

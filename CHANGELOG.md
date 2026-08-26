@@ -6,6 +6,66 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.31] - 2026-08-26
+
+### Fixed
+- **Promote/demote buttons in the player list never reflected a player's actual current rank.**
+  `services/players.lua`'s `demote`/`promote` updated and saved `target.group` correctly but never
+  broadcast the change to any client, unlike every sibling moderation action (`toggleFreeze`,
+  `toggleEngine`, `setGroup`), which all call `M.sendCacheUpdate()`. Every connected client kept
+  showing the player's OLD group forever, so the moderation panel's computed next/previous labels
+  (via `getNext`/`getPrevious`) always looked "stuck" on the very first promotion/demotion available
+  from whatever rank the UI had last actually seen, exactly matching the report. Both functions now
+  call `M.sendCacheUpdate()` after saving, same as every other moderation action. *(server only,
+  needs deployment)*
+- **The player who started a race could only Retire, never Leave.** The Leave button in
+  `races/app.html` was hidden outright with `ng-if="!$ctrl.status.isStarter"`, forcing the starter
+  into either Cancel (GRID only, or solo, and ends the session for everyone) or Retire (RACE only,
+  stays a tracked DNF participant) with no way to just leave and hand the race off. The server's own
+  `raceLeave` already reassigns `session.starterID` to another participant when the starter leaves
+  (`session.starterID = session.participants:keys()[1]`) and correctly tears the session down if
+  they were the last one in it, this was purely a client UI restriction with no matching server
+  requirement. Hunter's own Leave button already had no such restriction. Removed the gate: the
+  starter now sees Leave same as any other participant. *(client only, no server changes)*
+- **Ghost mode could silently fail to apply to a just-spawned vehicle if it hadn't finished syncing
+  to the local client yet.** `updateVehicleGhost`'s handler looked up the target vehicle by
+  `remoteVID` in `M.vehicles` and, if not found yet (a real, race-prone window: `registerVehicle`
+  polls `MPVehicleGE.getVehicles()` and can take a few frames to pick up a fresh spawn), silently
+  dropped the ghost state with nothing to ever retry it once the vehicle actually appeared. Added
+  `M.pendingGhostStates`, keyed by `remoteVID`: a miss now records the intended state instead of
+  discarding it, and `registerVehicle` consumes and applies it the moment that vehicle actually
+  finishes registering. *(client only, no server changes)*
+- **A player who readied up could edit their vehicle's parts or tuning afterward with the race
+  still treating them as ready.** BeamMP's `onVehicleEdited` fires for any real config/tuning change
+  but never touched a player's ready state in either race or Hunter lobbies. Added
+  `unreadyOnVehicleChange(playerID)` to both `raceGrid.lua` and `hunterGrid.lua` (mirrors each
+  other exactly): looks up the player's current GRID/LOBBY session, and if they're ready, un-readies
+  them and pushes the session update. Wired in from `services/vehicles.lua`'s `onVehicleEdited`.
+  *(server only, needs deployment)*
+
+### Changed
+- **Belated documentation for a revision already shipped under 1.8.29/1.8.30's own buildversions,
+  never previously written up:** the welcome/intro panel's custom-image support turned out to
+  actually need a real `http(s)://` URL replaced with a root-relative local path instead (e.g.
+  `/myWelcomeStuff/image.jpg`), delivered to clients via the server's own `Resources/Client/`
+  folder, the same mechanism that already delivers BJ.zip itself. A genuine live `http(s)://` URL
+  is not reachable here: BeamNG's engine only allows cross-origin loads for a small, hardcoded set
+  of domains (confirmed by reading strings out of the game's own binary), so it would have silently
+  rendered a blank white panel instead of the intended image. The Intro Panel editor also gained a
+  folder-browse assist (`BJRequestIntroPanelImagesInFolder` / `listIntroPanelImagesInFolder`): point
+  it at a folder and pick a file from a list instead of typing the exact path by hand. Also, Legacy
+  Import race names longer than sanitizeRace's 40-character max are now truncated on import instead
+  of unconditionally failing sanitization, real legacy BJRally/BJI race names routinely exceed it.
+- **The in-lobby race paint picker is now GRID-only and "single" vehicle-restriction only.**
+  Previously shown for any non-free vehicle restriction (including "pool") and regardless of race
+  state, meaning it stayed visible (and functional, `setPaint` had no state/mode check of its own)
+  straight through COUNTDOWN and into a live RACE. "Pool" races are excluded for now since per-entry
+  paint tracking across a pool reroll/respawn isn't implemented yet, only "single" is. Both the
+  panel's own `ng-if` and `raceRunner.lua`'s `setPaint` handler now enforce
+  `state === 'GRID'` and `mode === 'single'` as a second, independent layer, not just the panel's
+  visibility. *(client only, no server changes)*
+- Version bumped to 1.8.31 (buildversion 2287) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.30] - 2026-08-25
 
 ### Fixed

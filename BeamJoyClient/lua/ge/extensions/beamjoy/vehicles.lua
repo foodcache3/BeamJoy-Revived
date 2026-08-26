@@ -28,6 +28,18 @@ local M = {
     vehicles = Table(),
 
     modelTypeCache = {},
+
+    --- edge case, real report: a ghost-state broadcast ("updateVehicleGhost") for someone else's
+    --- vehicle can arrive on this client BEFORE that vehicle has finished syncing in locally (its
+    --- own registerVehicle job is still polling MPVehicleGE.getVehicles() for it). The handler used
+    --- to just silently drop the update when M.vehicles had no matching remoteVID yet, permanently
+    --- ; nothing ever re-applied it once the vehicle actually showed up a moment later, leaving it
+    --- visibly un-ghosted (and collidable) on this client while every other client had it correctly
+    --- ghosted. Keyed by remoteVID (the same cross-client-stable ID the broadcast itself uses),
+    --- latest-wins : registerVehicle consumes and clears its own entry the instant that vehicle
+    --- finishes registering, same one-shot handoff pattern as a normal queued task.
+    ---@type table<integer, boolean>
+    pendingGhostStates = {},
 }
 AddPreloadedDependencies(M)
 
@@ -56,6 +68,10 @@ local function onInit()
         local mpVeh = M.vehicles:find(function(v) return v.remoteVID == remoteVID end)
         if mpVeh then
             M.setGhost(mpVeh.veh, state == true, true)
+        else
+            -- not synced on this client yet ; registerVehicle picks this back up and applies it
+            -- the moment that vehicle actually finishes registering (see M.pendingGhostStates)
+            M.pendingGhostStates[remoteVID] = state == true
         end
     end)
 end
@@ -138,6 +154,16 @@ local function registerVehicle(vid, callback)
         -- flag never changes just because it spawned, so nothing else would ever apply this
         if M.soloGhostVisualReversed then
             veh:setMeshAlpha(M.computeDisplayAlpha(vid, veh.ghost == "1"), "")
+        end
+
+        -- consume any ghost broadcast that arrived for this vehicle before it finished syncing in
+        -- (see M.pendingGhostStates' own doc) ; not local's own vehicle, only ever tracked/sent for
+        -- a REMOTE one, but checking unconditionally here is harmless (a local vid's remoteVID never
+        -- has a pending entry, since setGhost only ever sends updateVehicleGhost for its own copy)
+        local pendingGhostState = M.pendingGhostStates[M.vehicles[vid].remoteVID]
+        if pendingGhostState ~= nil then
+            M.pendingGhostStates[M.vehicles[vid].remoteVID] = nil
+            M.setGhost(veh, pendingGhostState, true)
         end
 
         callback(M.vehicles[vid])
@@ -356,7 +382,19 @@ local function onVehicleResetted(vid)
         M.setFreeze(vid, false)
     end
     if mpVeh.jbeam ~= M.WALKING then
-        M.applyRespawnProtection(vid)
+        -- During an active race, raceRunner.lua's own reset-ghost handling (applied identically,
+        -- local or remote, to every participant) already covers this reset with race-appropriate
+        -- scope and a short, bounded duration. Skipping the general mechanism here specifically
+        -- avoids stacking a SECOND, much longer (host-configurable, ~10s by default) ghost reason
+        -- on top of it -- this general "respawn" reason has no race-awareness at all, and letting
+        -- it run in parallel would still let a mid-race resetter phase through real racing
+        -- opponents for however long RespawnGhostTimeout is configured, defeating the entire point
+        -- of scoping the race-specific fix tightly in the first place.
+        local racing = beamjoy_raceRunner and beamjoy_raceRunner.session and
+            beamjoy_raceRunner.session.state == "RACE"
+        if not racing then
+            M.applyRespawnProtection(vid)
+        end
     end
 end
 

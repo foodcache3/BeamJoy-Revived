@@ -641,11 +641,34 @@ local function vehicleMatchesRestriction(veh, restriction)
         -- has no v.parts (or no v.vars, under allowTuning == false) to compare against and is
         -- correctly never matched (falls through, same as any other genuinely non-matching entry)
         -- rather than erroring.
-        return table.find(restriction.pool, function(v)
+        local match = table.find(restriction.pool, function(v)
             return v.model == full.model and v.parts ~= nil and
                 table.deepcompare(full.parts or {}, v.parts) and
                 (restriction.allowTuning or (v.vars ~= nil and varsMatch(full.vars, v.vars)))
-        end) ~= nil
+        end)
+        if not match then
+            -- Diagnostic only, same technique that found the real varsMatch float-precision bug
+            -- earlier (see this file's own history) : rather than guess again at why one specific
+            -- vehicle fails pool matching while others don't, log the exact key-by-key parts diff
+            -- against every same-model pool candidate. Safe to remove once a real cause is
+            -- confirmed from actual output.
+            for _, v in ipairs(restriction.pool) do
+                if v.model == full.model and v.parts ~= nil then
+                    local diffs, seen = {}, {}
+                    for k in pairs(full.parts or {}) do seen[k] = true end
+                    for k in pairs(v.parts) do seen[k] = true end
+                    for k in pairs(seen) do
+                        local a, b = (full.parts or {})[k], v.parts[k]
+                        if a ~= b then
+                            table.insert(diffs, string.format("%s: live=%s preset=%s", k, tostring(a), tostring(b)))
+                        end
+                    end
+                    LogWarn(string.format("pool match failed for '%s' (%d part diffs): %s",
+                        tostring(v.label), #diffs, table.concat(diffs, " | ")))
+                end
+            end
+        end
+        return match ~= nil
     end
     return true
 end
@@ -838,6 +861,16 @@ end
 ---@param slot integer 1-3
 ---@param key string paint key, as returned by currentPaintOptions
 local function setPaint(slot, key)
+    -- UI-only guard mirrored here as a second, independent layer (same convention as the ready()
+    -- vehicle-restriction check above) : the picker itself is only ever shown during GRID for a
+    -- "single"-restriction race (see races/app.html ; "pool" is excluded there too, per direct
+    -- request, since per-entry paint tracking across a pool reroll/respawn isn't implemented yet),
+    -- but nothing stopped this handler itself from still applying a stray/replayed BJRaceSetPaint
+    -- once the grid starts moving or for a pool race, which is exactly what both reports are about,
+    -- not just a cosmetic panel-visibility one
+    if not M.session or M.session.state ~= "GRID" then return end
+    local restriction = activeVehicleRestriction()
+    if restriction and restriction.mode == "pool" then return end
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if not myVeh then return end
     local p = beamjoy_vehicles.getAllPaints(myVeh.veh)[key]
@@ -2288,6 +2321,37 @@ end
 -- own player-teleport code already guards against (an "exempt this reset from being treated as
 -- player-initiated" flag set right before moving the vehicle).
 
+-- Ported from BJI's own CollisionsManager (confirmed via direct research, not guessed) : mid-race
+-- reset-ghosting is deliberately its OWN thing, entirely separate from the general freeroam
+-- CollisionsMode="ghosts" respawn-protection in vehicles.lua. That mechanism has zero race-
+-- awareness at all -- it fires for any reset anywhere, for its own host-configurable
+-- RespawnGhostTimeout (~10s by default, meant for "just freeroam-spawned, give me a moment to
+-- clear parked cars"), and would otherwise let a mid-race crash ghost a real racer against real
+-- opponents for several seconds, exactly the "actual racers could go through each other" bug
+-- flagged live before this existed. BJI's own fix, ported here : (1) gated strictly to
+-- session.state == "RACE" (never GRID/COUNTDOWN -- BJI keeps collisions fully FORCED before the
+-- race actually starts specifically so grid position can't be gamed by ghosting through it,
+-- matching this fork's own COUNTDOWN-is-collision-real convention already) ; (2) a short, fixed
+-- base delay (BJI's own constant, not a long host-configurable one) that only actually extends
+-- while the vehicle remains within setGhost's own proximity check, dropping the instant it's
+-- clear rather than blindly waiting out a timer ; (3) applied identically for ANY vehicle's
+-- reset, local or remote -- every client already independently observes the same native
+-- onVehicleResetted event with the same already-synced vehicle state, so (matching BJI exactly)
+-- this needs no separate network message at all, unlike the general "respawn" reason.
+local RACE_RESET_GHOST_SECONDS = 5
+---@param vid integer
+local function applyRaceResetGhost(vid)
+    if not M.session or M.session.state ~= "RACE" then return end
+    local mpVeh = beamjoy_vehicles.getVehicle(vid, true)
+    if not mpVeh or mpVeh.isAi or mpVeh.jbeam == beamjoy_vehicles.WALKING then return end
+    beamjoy_vehicles.setGhostReason(vid, "raceReset", true)
+    local taskName = "raceResetGhost-" .. vid
+    async.removeTask(taskName)
+    async.delayTask(function()
+        beamjoy_vehicles.setGhostReason(vid, "raceReset", false)
+    end, RACE_RESET_GHOST_SECONDS * 1000, taskName)
+end
+
 --- fallback only now that `onBJRequestCurrentVehicleReset` above intercepts the common
 --- keybind-triggered case before it ever visibly applies. This reactive path still matters for
 --- any reset that reaches the vehicle by some other route `inputs.lua`'s override doesn't cover
@@ -2295,6 +2359,12 @@ end
 --- find out about it, hence still needing the settle-then-correct deferral below.
 ---@param vid integer
 local function onVehicleResetted(vid)
+    -- unconditional (runs even for our own substituted checkpoint-teleport reset, and for any
+    -- OTHER participant's reset too) -- only the checkpoint-teleport fallback logic below this is
+    -- specific to "my own vehicle, lastcheckpoint strategy", the reset-ghost applies far more
+    -- broadly than that
+    applyRaceResetGhost(vid)
+
     if ignoreNextReset[vid] then
         ignoreNextReset[vid] = nil
         return

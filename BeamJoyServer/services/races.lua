@@ -716,8 +716,19 @@ local function convertLegacyRace(oldData)
     local startPositions = convertLegacyStartPositions(oldData.startPositions)
     if #startPositions == 0 then return nil end
 
+    -- sanitizeRace enforces a 40-char max (added after this importer was first built, see its own
+    -- "not the old 150" comment) ; a real legacy race name routinely exceeds that (BJRally/BJI
+    -- allowed much longer descriptive names), and this importer would otherwise unconditionally
+    -- fail sanitation for every one of those instead of importing a truncated name
+    local importedName = type(oldData.name) == "string" and oldData.name:trim() or ""
+    if #importedName < 3 then
+        importedName = "Imported Race"
+    elseif #importedName > 40 then
+        importedName = importedName:sub(1, 40):trim()
+    end
+
     return {
-        name = type(oldData.name) == "string" and oldData.name or "Imported Race",
+        name = importedName,
         -- Credits the ORIGINAL BJI author, not whoever ran the import: raceSave's own new-race
         -- path (the only other place `author` gets stamped) would otherwise leave every imported
         -- race attributed to nobody but the admin who happened to click Import, silently erasing

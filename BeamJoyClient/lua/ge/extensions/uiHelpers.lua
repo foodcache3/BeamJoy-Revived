@@ -196,33 +196,71 @@ local function toastError(text, timeoutMs, title) toast(M.TOAST_TYPES.ERROR, tex
 --- extensions/career/modules/linearTutorial.lua:introPopup():200
 ---@param title string
 ---@param content string
----@param image? string either one of M.PANEL_IMAGES' own keys (a bundled BeamNG tutorial image)
----or a real "http(s)://" URL, loaded directly by CEF's own background-image rendering the same
----way any other external image would be
+---@param image? string either one of M.PANEL_IMAGES' own keys (a bundled BeamNG tutorial image,
+---always available locally) or a root-relative local path (e.g. "/ui/myAssets/image.jpg") to an
+---image file delivered to every client via the SERVER's own Resources/Client/ folder (the same
+---mechanism BeamMP already uses to deliver BJ.zip itself) -- loaded locally, with no network
+---request at all. A real "http(s)://" URL is deliberately NOT supported here : BeamNG's engine
+---only allows cross-origin resource loads for a small, hardcoded set of domains (confirmed by
+---reading strings out of the game's own binary, see BNGCefClient::OnBeforeResourceLoad /
+---cef_add_cross_origin_whitelist_entry), so a live URL almost always silently fails to load
+---(rendering as a plain white panel) and isn't worth the false promise of supporting it
 local function openPanel(title, content, image)
-    local isCustomURL = type(image) == "string" and image:find("^https?://") ~= nil
-    if image ~= nil and not isCustomURL and not table.includes(M.PANEL_IMAGES, image) then return end
+    local isLocalPath = type(image) == "string" and image:find("^/") ~= nil
+        and not table.includes(M.PANEL_IMAGES, image)
+    if image ~= nil and not isLocalPath and not table.includes(M.PANEL_IMAGES, image) then
+        return
+    end
 
     local imageURL
-    if isCustomURL then
+    if isLocalPath then
         imageURL = image
     else
         image = image or M.PANEL_IMAGES.WELCOME
         imageURL = string.var("/gameplay/tutorials/pages/{image}/image.jpg", { image = image })
     end
 
+    -- string.var's own gsub call treats every substituted VALUE as a Lua gsub REPLACEMENT
+    -- string, where a lone "%" is special (capture-index escape) and throws "invalid capture
+    -- index" for anything but "%%"/"%<digit>" -- exactly the reason this file's sibling text
+    -- fields already go through a "%" -> "%%" round-trip at the Angular layer before being saved.
+    -- A real custom image path could in principle contain a literal "%", and nothing escaped it
+    -- here, so a path like that would throw and silently abort this whole function before
+    -- guihooks.trigger is ever reached -- no popup at all, not even a white one. Doubling every
+    -- "%" here is the standard fix ; string.var's own gsub then collapses each "%%" back down to
+    -- a single, correct "%" in the final rendered string.
+    local function escapeForVar(str) return (str:gsub("%%", "%%%%")) end
+    local imageURLSafe = escapeForVar(imageURL)
+
+    -- a bundled PANEL_IMAGES key always resolves to a real, locally-bundled asset, so it has
+    -- nothing to fail ; a custom local path can silently fail (typo, or the server-delivered
+    -- resource containing it isn't actually present/activated) -- `.bng-splash-imageonbottom`'s
+    -- own native CSS (`background: no-repeat center/cover white`) already bakes in a white
+    -- fallback for exactly that failure case, which is why a failed custom image renders as a
+    -- plain white panel instead of an obvious error. This hidden probe <img> can't change what's
+    -- already rendered as a CSS background-image, but it CAN detect the same failure (a real
+    -- request against the same path) and surface it as a visible in-panel banner instead of a
+    -- silent, confusing blank white panel.
+    local diagnosticImg = ""
+    if isLocalPath then
+        diagnosticImg = string.var(
+            [[<img src="{imageURL}" style="display:none" onerror="this.insertAdjacentHTML('afterend', '<div style=\'position:absolute;top:0;left:0;right:0;padding:0.6em 1em;background:#c0392b;color:#fff;font-size:0.85em;z-index:20;\'>BeamJoy: the custom intro image failed to load. Make sure this path matches a file your own server actually delivers to clients (via its Resources/Client/ folder, the same way it delivers this mod itself) -- check for a typo, and that the server has been restarted since the resource was added.<\/div>')" />]],
+            { imageURL = imageURLSafe })
+    end
+
     guihooks.trigger("introPopupTutorial", { {
         type = "info",
         content = string.var(
-            [[<div class="bng-splash-imageonbottom" style="background-image:url('{imageURL}');"><h3>{title}</h3><div class="flex-grow"></div><div class="bng-splash-text">{content}</div></div>]],
+            [[<div class="bng-splash-imageonbottom" style="background-image:url('{imageURL}');">{diagnosticImg}<h3>{title}</h3><div class="flex-grow"></div><div class="bng-splash-text">{content}</div></div>]],
             {
-                title = title,
+                title = escapeForVar(title),
+                diagnosticImg = escapeForVar(diagnosticImg),
                 content = content:var({
                     player_name = MPConfig.getNickname(),
                     server_name = GetServerInfos().name:trim(),
                     players_count = beamjoy_players.players:length(),
                 }),
-                imageURL = imageURL,
+                imageURL = imageURLSafe,
             }),
         flavour = "onlyOk",
         isPopup = true,
