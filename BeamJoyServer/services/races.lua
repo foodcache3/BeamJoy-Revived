@@ -206,8 +206,8 @@ local M = {
     -- services_hunter : only for its own already-verified quatToFlatDir helper, reused by this
     -- file's own legacy race importer (see convertLegacyStartPositions below) rather than
     -- re-deriving the same fragile quaternion math a second time
-    dependencies = { "dao_activity", "services_core", "services_config", "services_vehiclePresets",
-        "services_hunter" },
+    dependencies = { "dao_activity", "dao_bundled", "services_core", "services_config",
+        "services_vehiclePresets", "services_hunter" },
 
     ACTIVITY_TYPE = "races",
 
@@ -922,6 +922,58 @@ local function saveData()
     dao_activity.save(services_core.getCurrentMap(), M.ACTIVITY_TYPE, M.data)
 end
 
+--- auto-imports any of this mod's own bundled default races that haven't been seeded into a
+--- given map's live data yet, per direct request (see dao/bundled.lua's own doc for the whole
+--- mechanism). Runs once, at boot, for every map dao_bundled has content for, not just whichever
+--- one happens to be currently loaded, so it's already there and ready the moment an admin
+--- switches maps later without needing a restart. Deliberately NOT re-run on every onMapChanged
+--- (loadData already is, right after this in onInit): a bundled race is only ever considered once
+--- per (map, name), tracked persistently by dao_bundled's own ledger, so this can never re-add
+--- something an admin has since deleted on purpose, and never touches an already-seeded map again
+--- just because the server restarted
+local function seedBundledRaces()
+    for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
+        local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
+        if table.isArray(bundled) then
+            local targetList = dao_activity.get(mapName, M.ACTIVITY_TYPE) or {}
+            local changed = false
+            for _, race in ipairs(bundled) do
+                local name = type(race.name) == "string" and race.name or ""
+                if not dao_bundled.isSeeded(mapName, M.ACTIVITY_TYPE, name) then
+                    -- work on a copy: sanitizeRace mutates its argument (defaults backfill etc.),
+                    -- and re-mutating the same shared bundled table across every map it happens to
+                    -- also ship for would be a real bug otherwise
+                    local candidate = table.deepcopy(race)
+                    local err = sanitizeRace(candidate, targetList)
+                    if err then
+                        if err == "A race with this name already exists" then
+                            -- someone (an admin, or a previous boot) already has a race by this
+                            -- name on this map ; treat it as handled rather than retrying forever
+                            dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, name)
+                        else
+                            LogError(string.format(
+                                "seedBundledRaces: %s / %s failed sanitation: %s", mapName, name, err))
+                        end
+                    else
+                        local id = 1
+                        while table.any(targetList, function(r) return r.id == id end) do
+                            id = id + 1
+                        end
+                        candidate.id = id
+                        candidate.leaderboard = {}
+                        table.insert(targetList, candidate)
+                        dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, name)
+                        changed = true
+                    end
+                end
+            end
+            if changed then
+                dao_activity.save(mapName, M.ACTIVITY_TYPE, targetList)
+            end
+        end
+    end
+end
+
 ---@param caches table
 local function onBJRequestCache(caches)
     -- Visible to every player, not staff-gated: races are meant to be played, not just administered.
@@ -1188,6 +1240,7 @@ local function onInit()
         "inject <count> fake leaderboard entries around <timeMs> for <raceId> (debug)",
         consoleDebugLeaderboard)
 
+    seedBundledRaces()
     loadData()
 end
 

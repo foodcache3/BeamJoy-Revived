@@ -6,6 +6,28 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.33] - 2026-08-26
+
+### Added
+- **Bundled default races and hunter arenas, seeded automatically, no admin action required.**
+  New `Server/BeamJoyServer/bundledContent/activities/` folder ships as part of the mod package
+  (empty for now, plumbing only, see its own README.md for the file-naming/schema convention for
+  future rounds). On every boot, `dao/bundled.lua` mirrors that folder into a brand-new
+  `BeamJoyData/db/bundled/` (always fully overwritten from the package, never admin-edited),
+  deliberately kept separate from `BeamJoyData/db/activities/` so shipping or updating bundled
+  content can never interfere with an admin's own existing races/arenas. `services/races.lua` and
+  `services/hunter.lua` each auto-import anything bundled that hasn't been seeded into a given
+  map's live data yet, tracked persistently in a small ledger so a given bundled item is only ever
+  considered once, ever: an admin renaming, editing, or deleting their own copy of a seeded race
+  or arena afterward is never overwritten or reintroduced on a later restart, and a later mod
+  update that adds new bundled content is picked up automatically on the next boot with no
+  migration step. Races seed per-map, per-name (a name collision with an existing race is skipped,
+  not overwritten); hunter arenas seed only for a map that has genuinely never had one saved at
+  all, since a map only ever has one arena. *(server only, needs deployment)*
+
+### Changed
+- Version bumped to 1.8.33 (buildversion 2289) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.32] - 2026-08-26
 
 ### Fixed

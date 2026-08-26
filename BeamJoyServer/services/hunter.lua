@@ -95,7 +95,7 @@
 ---@field defaults BJHunterDefaults
 
 local M = {
-    dependencies = { "dao_activity", "services_core", "services_vehiclePresets" },
+    dependencies = { "dao_activity", "dao_bundled", "services_core", "services_vehiclePresets" },
 
     ACTIVITY_TYPE = "hunter",
 
@@ -212,6 +212,37 @@ end
 
 local function saveData()
     dao_activity.save(services_core.getCurrentMap(), M.ACTIVITY_TYPE, M.data)
+end
+
+--- auto-imports this mod's own bundled default hunter arena for a map that doesn't have one
+--- saved yet, per direct request (see races.lua's own seedBundledRaces and dao/bundled.lua's own
+--- doc for the whole mechanism). Unlike races (an array, several per map), a map only ever has ONE
+--- hunter arena, so there's no per-item name to dedupe by: only seeds a map that has genuinely
+--- never had an arena saved at all (dao_activity.get returns nil), and only ever considers a given
+--- map once (dao_bundled's own ledger, itemName fixed to "arena" since there's only ever the one),
+--- so an admin explicitly clearing/disabling their own arena later never causes it to silently
+--- come back.
+local function seedBundledHunterArena()
+    for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
+        if not dao_bundled.isSeeded(mapName, M.ACTIVITY_TYPE, "arena") then
+            if dao_activity.get(mapName, M.ACTIVITY_TYPE) == nil then
+                local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
+                if type(bundled) == "table" then
+                    local candidate = table.deepcopy(bundled)
+                    local err = sanitizeArena(candidate)
+                    if err then
+                        LogError(string.format(
+                            "seedBundledHunterArena: %s failed sanitation: %s", mapName, err))
+                    else
+                        dao_activity.save(mapName, M.ACTIVITY_TYPE, candidate)
+                    end
+                end
+            end
+            -- marked regardless of outcome (map already had an arena, or a validation failure) :
+            -- a map is only ever considered once, ever
+            dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, "arena")
+        end
+    end
 end
 
 ---@param caches table
@@ -453,6 +484,7 @@ local function onInit()
     communications_rx.addHandler("hunterArenaSave", M.hunterArenaSave)
     communications_rx.addHandler("hunterLegacyImportPreview", M.hunterLegacyImportPreview)
     communications_rx.addHandler("hunterLegacyImportConfirm", M.hunterLegacyImportConfirm)
+    seedBundledHunterArena()
     loadData()
 end
 

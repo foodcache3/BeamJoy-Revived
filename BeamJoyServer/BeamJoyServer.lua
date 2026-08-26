@@ -34,7 +34,7 @@ local M = {
     VERSION = "INVALID",
     dependencies = { "utils_async", "utils_sha", "utils_json", "utils_toml",
         "dao_main", "dao_core", "dao_config", "dao_groups", "dao_players",
-        "dao_permissions", "dao_groups", "dao_environment", "dao_activity",
+        "dao_permissions", "dao_groups", "dao_environment", "dao_activity", "dao_bundled",
         "dao_maps", "dao_vehiclePresets",
         "services_core", "services_lang", "services_config", "services_groups",
         "services_players", "services_vehicles", "services_chat", "services_cache",
