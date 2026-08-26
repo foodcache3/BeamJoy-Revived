@@ -6,6 +6,23 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.38] - 2026-08-26
+
+### Added
+- **Camera auto-centers when control is handed back after a race/Hunter countdown.** Camera
+  control returns to the player a few seconds before the actual start (`CAMERA_RELEASE_SECONDS`),
+  and free-looking an orbit camera around during that window used to leave it wherever it was
+  rotated once the vehicle actually unfroze, instead of facing forward. New `camera.resetCamera()`
+  wrapper (`core_camera.resetCamera(0)`, confirmed against the installed game's own
+  `core/cameraModes/orbit.lua`: its `reset()` snaps rotation back to `defaultRotation`, directly
+  behind the vehicle) is now called right after both `raceRunner.lua`'s and `hunterRunner.lua`'s
+  own `restorePreviousCamera()` restores the player's camera. Safe regardless of which camera mode
+  actually ends up active, `core_camera.resetCamera` just delegates to whatever that mode's own
+  `reset()` does (or no-ops if it doesn't define one). *(client only, no server changes)*
+
+### Changed
+- Version bumped to 1.8.38 (buildversion 2294) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.37] - 2026-08-26
 
 ### Fixed

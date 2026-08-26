@@ -909,6 +909,13 @@ local function restorePreviousCamera()
         local target = table.includes(nonVehicleCameras, M.previousCamera)
             and camera.CAMERAS.ORBIT or M.previousCamera
         camera.setCamera(target)
+        -- per direct request : a player free-looking their orbit camera around during the last
+        -- few seconds of countdown (control is handed back at CAMERA_RELEASE_SECONDS remaining,
+        -- see updateCountdown) used to leave it wherever they'd rotated it once the vehicle
+        -- actually unfroze, instead of facing forward down the track. Re-centers whatever camera
+        -- mode ended up active, see camera.resetCamera's own doc for why this is safe regardless
+        -- of which one that turned out to be.
+        camera.resetCamera()
         M.previousCamera = nil
     end
 end

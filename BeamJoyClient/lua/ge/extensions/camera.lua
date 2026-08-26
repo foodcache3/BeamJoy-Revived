@@ -61,6 +61,20 @@ local function setCamera(cameraName, withTransition)
     end
 end
 
+--- Re-centers whatever camera mode is currently active back to its own default (orbit: snaps
+--- rotation back to directly-behind-the-vehicle, confirmed by reading the installed game's own
+--- core/cameraModes/orbit.lua reset(), which resets `camRot` to `defaultRotation`; any other mode
+--- either does the equivalent for its own concept of "default view" or simply has nothing to
+--- reset, since core_camera.resetCamera just delegates to whichever mode is currently active).
+--- Safe to call unconditionally regardless of which camera is active. Per direct request: a
+--- player free-looking their orbit camera around during the last few seconds of a race/hunter
+--- countdown (once control is handed back, see raceRunner.lua/hunterRunner.lua's own
+--- restorePreviousCamera) used to leave it wherever they'd rotated it once the vehicle actually
+--- unfroze, instead of facing forward down the track/route.
+local function resetCamera()
+    core_camera.resetCamera(0)
+end
+
 ---@param keepOrientation boolean? default true
 ---@return vec3 pos, vec3 dir, vec3 up
 local function getPositionRotation(keepOrientation)
@@ -391,6 +405,7 @@ end
 -- functions
 M.getCamera = getCamera
 M.setCamera = setCamera
+M.resetCamera = resetCamera
 M.getPositionRotation = getPositionRotation
 M.setPositionRotation = setPositionRotation
 M.getWorldPositionFromCursor = getWorldPositionFromCursor

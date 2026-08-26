@@ -412,6 +412,10 @@ local function restorePreviousCamera()
     local target = table.includes(nonVehicleCameras, M.previousCamera) and camera.CAMERAS.ORBIT or
         M.previousCamera
     camera.setCamera(target)
+    -- per direct request, matching raceRunner.lua's own identical fix : a player free-looking
+    -- their orbit camera around during the last few seconds of countdown used to leave it
+    -- wherever they'd rotated it once control was actually handed back, instead of facing forward
+    camera.resetCamera()
     M.previousCamera = nil
 end
 
