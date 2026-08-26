@@ -168,12 +168,13 @@
             </span>
         </div>
     </div>
-    <!-- "pool" deliberately excluded, per direct request: each pool entry can be a different
-    model, and pool-mode paint (per-entry paint tracking/restore across randomizeVehiclePool
-    reroll and grid respawns) isn't implemented yet, only "single" is. -->
+    <!-- "pool" re-enabled: the paint picker's own swatch list now re-requests itself whenever the
+    player's local vehicle actually changes (see raceRunner.lua's onBJVehicleInstantiated), which
+    covers a pool racer switching between pool entries via the native selector before readying up.
+    Was briefly restricted to "single" only, over a stale-swatch-list concern now fixed instead. -->
     <div
         class="player-list"
-        ng-if="$ctrl.status.vehicleRestrictionMode === 'single' && $ctrl.status.state === 'GRID'"
+        ng-if="$ctrl.status.vehicleRestrictionMode !== 'free' && $ctrl.status.state === 'GRID'"
     >
         <div class="d-flex align-center gap-1 cursor-pointer" ng-click="$ctrl.togglePaint($event)">
             <span class="flex-grow-1 opacity-70">

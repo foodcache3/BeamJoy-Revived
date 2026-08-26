@@ -6,6 +6,29 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.32] - 2026-08-26
+
+### Fixed
+- **Race paint picker's swatch list could go stale after a "pool" mode vehicle switch.** 1.8.31
+  restricted the in-lobby paint picker to "single" vehicle-restriction races only, over a real
+  concern: "pool" mode legitimately lets a racer switch between pool entries via the native
+  selector before readying up (`onBJRequestCanSpawnVehicle` authorizes any model/config that's a
+  member of the pool), but `currentPaintOptions()`/`pushPaintOptions()` only ever ran once, when
+  the picker's own Angular component first mounted, so switching vehicles left it showing swatches
+  for whatever model the player used to have. Not dangerous (`setPaint`'s own key lookup is always
+  against the CURRENTLY spawned vehicle's real paint list, so a stale key just silently missed
+  instead of mis-painting anything), just broken/confusing UX. Fixed at the source instead of
+  leaving pool paint disabled: `raceRunner.lua`'s `onBJVehicleInstantiated` now re-pushes fresh
+  paint options whenever the player's own local vehicle changes during GRID, so the swatch list
+  stays honest across any mid-lobby vehicle change. *(client only, no server changes)*
+
+### Changed
+- **Race paint picker re-enabled for "pool" mode races**, now that the stale-swatch-list issue
+  above is actually fixed rather than worked around by disabling it. Both the picker's own `ng-if`
+  and `raceRunner.lua`'s `setPaint` handler are back to allowing any non-"free" vehicle restriction
+  (GRID state still required, unchanged from 1.8.31).
+- Version bumped to 1.8.32 (buildversion 2288) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.31] - 2026-08-26
 
 ### Fixed

@@ -321,6 +321,24 @@ end
 --- uses. "all" (free respawn) has nothing to bypass, so it's exempted.
 ---@param vid integer
 local function onBJVehicleInstantiated(vid)
+    -- real, confirmed bug: the paint picker's own swatch list (see currentPaintOptions/
+    -- pushPaintOptions below) only ever requested itself once, when the picker's own Angular
+    -- component first mounted. A "pool" racer legitimately switching between pool entries via the
+    -- native selector before readying up (allowed: onBJRequestCanSpawnVehicle authorizes any
+    -- model/config that's a member of the pool, not just whichever one they first spawned into)
+    -- left the picker showing swatches for whatever model they USED to have, not the one they
+    -- actually have now. Clicking one of those stale swatches wasn't dangerous (setPaint's own key
+    -- lookup is always against the CURRENT vehicle's real paint list, so a stale key just silently
+    -- misses) but it was broken/confusing UX with zero feedback. Re-pushing here, scoped to GRID
+    -- (the only state the picker's ever shown in) and the player's own vehicle specifically, keeps
+    -- the swatch list honest across any mid-lobby vehicle change, pool or otherwise.
+    if M.session and M.session.state == "GRID" then
+        local instantiatedVeh = beamjoy_vehicles.getVehicle(vid, true)
+        if instantiatedVeh and instantiatedVeh.isLocal then
+            M.pushPaintOptions()
+        end
+    end
+
     if not M.session or M.session.state ~= "RACE" then return end
     local mpVeh = beamjoy_vehicles.getVehicle(vid, true)
     if not mpVeh or not mpVeh.isLocal then return end
@@ -862,15 +880,13 @@ end
 ---@param key string paint key, as returned by currentPaintOptions
 local function setPaint(slot, key)
     -- UI-only guard mirrored here as a second, independent layer (same convention as the ready()
-    -- vehicle-restriction check above) : the picker itself is only ever shown during GRID for a
-    -- "single"-restriction race (see races/app.html ; "pool" is excluded there too, per direct
-    -- request, since per-entry paint tracking across a pool reroll/respawn isn't implemented yet),
-    -- but nothing stopped this handler itself from still applying a stray/replayed BJRaceSetPaint
-    -- once the grid starts moving or for a pool race, which is exactly what both reports are about,
-    -- not just a cosmetic panel-visibility one
+    -- vehicle-restriction check above) : the picker itself is only ever shown during GRID (see
+    -- races/app.html), but nothing stopped this handler itself from still applying a stray/replayed
+    -- BJRaceSetPaint once the grid starts moving, which is exactly the "paint menu should go away
+    -- on countdown" report's underlying concern, not just a cosmetic panel-visibility one. "pool" is
+    -- allowed through here same as "single": the key lookup below is always against whatever
+    -- vehicle is CURRENTLY spawned, so it's safe regardless of which pool entry that happens to be.
     if not M.session or M.session.state ~= "GRID" then return end
-    local restriction = activeVehicleRestriction()
-    if restriction and restriction.mode == "pool" then return end
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if not myVeh then return end
     local p = beamjoy_vehicles.getAllPaints(myVeh.veh)[key]
