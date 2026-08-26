@@ -629,12 +629,10 @@ local function buildSettings(race, overrides)
     elseif defaults.limitVisibleGates ~= nil then
         limitVisibleGates = defaults.limitVisibleGates == true
     end
-    -- a sliding "next N gates" visibility window is ambiguous the instant a route can genuinely
-    -- fork (which branch's "next N" do you walk?). Forced off here, the single point every client
-    -- reads this setting from, rather than needing its own separate branchingEnabled check
-    if race.branchingEnabled then
-        limitVisibleGates = false
-    end
+    -- used to be forced off outright for a branching race (a sliding "next N gates" window has no
+    -- meaning for a plain linear index once a route can fork). raceMarkers.lua's own
+    -- visibleGateSetBranching now walks the real `parents` graph instead of a linear index, so the
+    -- setting is meaningful (and left as whatever the host actually configured) for both now.
 
     local allowTuning = true
     if overrides.allowTuning ~= nil then

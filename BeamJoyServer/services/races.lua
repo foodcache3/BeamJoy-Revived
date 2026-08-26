@@ -137,9 +137,11 @@
 ---shape by `sanitizeRace` regardless of what's stored, so a race can be safely toggled back to
 ---linear at any time with zero risk of stale branching data leaking through. While on, the editor
 ---exposes per-gate parent/child links and an explicit finish flag ; `sectorCount`/`manualSectors`
----and `limitVisibleGates` are both ignored (forced off) for a branching race, since index/distance-
----based sector splitting and a sliding "next N gates" visibility window are both ambiguous once a
----route can genuinely fork; see raceGrid.lua/raceRunner.lua's own handling
+---are ignored (forced off) for a branching race, since index/distance-based sector splitting is
+---still ambiguous once a route can genuinely fork. `limitVisibleGates` used to be forced off here
+---too (a sliding "next N gates" window has no meaning for a plain linear index once a route can
+---fork), but raceMarkers.lua's own visibleGateSetBranching now walks the real `parents` graph
+---instead, so it's meaningful (and left as configured) for a branching race as well
 ---@field startPositions {pos: {x: number, y: number, z: number}, dir: {x: number, y: number, z: number}}[]
 ---grid-slot placements for `grid` mode with multiple participants; index 1 is also used as the
 ---single spawn point for a solo/passive attempt. `dir` (not a quaternion) matches

@@ -6,6 +6,28 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.35] - 2026-08-26
+
+### Added
+- **"Limit visible gates" now works for branching races too, not just linear ones.** Previously
+  forced off outright the moment a race had `branchingEnabled` on: the old computation
+  (`visibleGateSet`) was a plain "index + i" walk, which has no defined meaning once a route can
+  fork (which branch's "next N" do you even walk?), so the server zeroed the setting and the UI
+  hid the toggle entirely for a branching race. `raceMarkers.lua` now has a real branching-aware
+  equivalent, `visibleGateSetBranching`: instead of a linear index, it walks the race's actual
+  `parents` graph breadth-first, `visibleGateCount` levels deep, unioning every level (built on a
+  new shared `branchingStep` helper, mirroring `raceGrid.lua`'s own real crossing-validation rule
+  exactly, including the loopable "step 1 is always reachable" exception). Sitting right at a fork
+  now shows every alternate fanning out from it, resolving the old ambiguity by showing all
+  reachable branches instead of guessing one. The toggle is back in both the race editor's default
+  settings and the in-game start-options panel for a branching race. `sectorCount`/`manualSectors`
+  remain forced off for branching (that limitation is unrelated and unchanged, index/distance-based
+  sector splitting is still genuinely ambiguous once a route forks). *(client and server, server
+  needs deployment)*
+
+### Changed
+- Version bumped to 1.8.35 (buildversion 2291) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.34] - 2026-08-26
 
 ### Removed

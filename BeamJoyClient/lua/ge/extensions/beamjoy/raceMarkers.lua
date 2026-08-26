@@ -144,6 +144,25 @@ local function gateRole(race, index)
     return nil
 end
 
+---@param race BJRace
+---@param fromIds integer[] node ids (gate indices, or 0 for "start"/nothing crossed yet) to walk
+---one step forward from, using the EXACT same reachability rule raceGrid.lua's own
+---raceGateCrossed validates a real crossing against: `parents` graph edges, plus the loopable
+---"step 1 is always reachable" exception (see that file's own "make step 1 unconditionally
+---reachable whenever the race is loopable" comment). Kept in lockstep with that rule specifically
+---so a visible/highlighted gate here can never be one the server would actually reject crossing.
+---@return integer[] gate indices reachable in exactly one step from any id in fromIds
+local function branchingStep(race, fromIds)
+    local reachable = {}
+    for i, g in ipairs(race.gates) do
+        local isLoopClosing = race.loopable and g.step == 1
+        if isLoopClosing or table.any(fromIds, function(f) return table.includes(g.parents, f) end) then
+            table.insert(reachable, i)
+        end
+    end
+    return reachable
+end
+
 ---@param expectedIndex integer? the participant's own next gate (1-based). nil disables limiting
 ---entirely (finished/dnf'd, or the setting is off), and every gate stays visible in that case.
 ---@param total integer
@@ -161,6 +180,33 @@ local function visibleGateSet(expectedIndex, total, loopable, count)
             break
         end
         visible[idx] = true
+    end
+    return visible
+end
+
+--- branching equivalent of visibleGateSet above : a plain "index + i" walk has no meaning once a
+--- route can fork, so this walks the real `parents` graph instead, `count` levels deep via
+--- branchingStep, unioning every level. Resolves the old "which branch's next N" ambiguity by
+--- simply showing every alternate actually reachable within `count` steps, not picking one
+--- arbitrarily : sitting right at a fork shows every branch fanning out from it.
+---@param race BJRace
+---@param lastCrossedGate integer participant.lastCrossedGate (0 = nothing crossed yet)
+---@param count integer how many levels of the branch graph (including the immediate next level)
+---stay visible ; same meaning as visibleGateSet's own `count`
+---@return table<integer, true> set of visible 1-based gate indices
+local function visibleGateSetBranching(race, lastCrossedGate, count)
+    local visible = {}
+    local frontier = { lastCrossedGate }
+    for _ = 1, count do
+        local nextFrontier = {}
+        for _, i in ipairs(branchingStep(race, frontier)) do
+            if not visible[i] then
+                visible[i] = true
+                table.insert(nextFrontier, i)
+            end
+        end
+        if #nextFrontier == 0 then break end
+        frontier = nextFrontier
     end
     return visible
 end
@@ -356,19 +402,14 @@ local function render()
                 -- single `expectedIndex`). nil once finished/dnf, since lastCrossedGate/currentGate
                 -- stay at wherever they ended, which would otherwise wrongly re-highlight
                 -- something. `expectedIndex` (the plain single-index form) is only ever needed for
-                -- visibleGateSet below, which never runs for a branching race anyway (see its own
-                -- comment). Kept separate rather than reverse-deriving a single index out of the set.
+                -- visibleGateSet below, moot for a branching race (see visibleGateSetBranching
+                -- instead). Kept separate rather than reverse-deriving a single index out of the set.
                 local nextGateSet, expectedIndex
                 if participant and not participant.finished and not participant.dnf then
                     if race.branchingEnabled then
                         nextGateSet = {}
-                        for i, g in ipairs(race.gates) do
-                            -- loop-closing exception, matching raceGrid.lua/raceRunner.lua's own
-                            -- identical rule: a loopable race's step-1 gate is always reachable.
-                            local isLoopClosing = race.loopable and g.step == 1
-                            if isLoopClosing or table.includes(g.parents, participant.lastCrossedGate) then
-                                nextGateSet[i] = true
-                            end
+                        for _, i in ipairs(branchingStep(race, { participant.lastCrossedGate })) do
+                            nextGateSet[i] = true
                         end
                     else
                         expectedIndex = (participant.currentGate % #race.gates) + 1
@@ -381,12 +422,19 @@ local function render()
                 -- Per direct request: the lobby (GRID, picking a slot / waiting to ready up)
                 -- always shows every gate regardless of limitVisibleGates, so players can see the
                 -- whole layout before committing to start. The limit only actually kicks in once
-                -- COUNTDOWN/RACE begins. limitVisibleGates is already forced off server-side for a
-                -- branching race (see raceGrid.lua's buildSettings: a sliding "next N" window is
-                -- ambiguous once a route can fork), so expectedIndex being nil there is harmless.
-                local visible = settings.limitVisibleGates and session.state ~= "GRID"
-                    and visibleGateSet(expectedIndex, #race.gates, race.loopable, settings.visibleGateCount or 2)
-                    or nil
+                -- COUNTDOWN/RACE begins. `nextGateSet` doubles as "is there a real current position
+                -- to walk from at all" here (set exactly when the guard above would also be true),
+                -- avoiding repeating that whole condition a second time.
+                local visible = nil
+                if settings.limitVisibleGates and session.state ~= "GRID" and nextGateSet then
+                    if race.branchingEnabled then
+                        visible = visibleGateSetBranching(race, participant.lastCrossedGate,
+                            settings.visibleGateCount or 2)
+                    else
+                        visible = visibleGateSet(expectedIndex, #race.gates, race.loopable,
+                            settings.visibleGateCount or 2)
+                    end
+                end
 
                 table.forEach(race.gates, function(g, i)
                     if visible and not visible[i] then return end
