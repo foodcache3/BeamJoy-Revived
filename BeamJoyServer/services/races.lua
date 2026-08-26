@@ -205,8 +205,8 @@
 
 local M = {
     -- services_hunter : only for its own already-verified quatToFlatDir helper, reused by this
-    -- file's own legacy race importer (see convertLegacyStartPositions below) rather than
-    -- re-deriving the same fragile quaternion math a second time
+    -- file's own legacy race importer (see convertLegacyStartPositions and convertLegacyRaceGates
+    -- below) rather than re-deriving the same fragile quaternion math a second time
     dependencies = { "dao_activity", "dao_bundled", "services_core", "services_config",
         "services_vehiclePresets", "services_hunter" },
 
@@ -479,49 +479,59 @@ local function deltaNormalized(ax, ay, bx, by)
     return dx / len, dy / len
 end
 
---- BJI's own waypoint `rot` is a raw captured vehicle-rotation quaternion with no more meaning for
---- a proximity checkpoint than the one already flagged for Hunter's spawn import (see
---- services_hunter.quatToFlatDir's own comment), and WORSE here, actually, since a checkpoint is a
---- pure radius trigger with no directional gameplay significance at all in BJI, so there's no
---- signal there even to guess from. Derived from the route's own topology instead: point toward
---- the average direction of this gate's own children (the natural "which way to drive through
---- this gate" answer), or away from a real parent for a childless/terminal gate (continuing that
---- parent's own incoming heading), falling back to a plain +X facing only for a fully isolated gate
---- (unreachable from anywhere but "start", with no children either). No vec3 usage anywhere in this
---- file: the headless server Lua VM has no game-engine types available at all (confirmed already
---- by quatToFlatDir's own comment), so this is all plain scalar (x,y) arithmetic.
+--- Real, confirmed bug fixed here (live report with actual source data attached, "gates
+--- sometimes rotated at strange angles", reproduced even on a genuinely non-branching race):
+--- this used to always IGNORE BJI's own waypoint `rot` for gates outright, reasoning it was "a
+--- raw captured vehicle-rotation quaternion with no more meaning for a pure radius-trigger
+--- checkpoint than the one already flagged for Hunter's spawn import", and derived a direction
+--- from the route's own topology instead (point toward this gate's own children). Checked against
+--- the reported race's real exported data: BJI's waypoints are frequently 60-300m apart on a
+--- circuit that curves between them, so a straight chord to the next waypoint routinely points
+--- nowhere near the actual LOCAL road heading at the gate itself, exactly the "rotated at a
+--- strange angle" symptom, reproducing even with zero branching involved, since the chord method
+--- never depended on branching to begin with. `rot` (via quatToFlatDir, same helper this file's
+--- own convertLegacyStartPositions and Hunter's own spawn import already trust for the identical
+--- purpose) turned out to diverge from the chord direction by anywhere from ~0 to ~90 degrees
+--- across that same real race, exactly the signature of it capturing genuine local heading the
+--- chord approximation can't. `rot` is now used directly whenever present ; the topology-derived
+--- heuristic below is kept only as a fallback for the rare gate missing usable rot data (an older
+--- export, or a hand-edited file), not the default path anymore.
 ---@param gates BJRaceGate[] already positioned, with `parents` already resolved to real indices
 ---@param children table<integer, integer[]> gate index -> array of its own children's indices
-local function deriveLegacyGateDirections(gates, children)
+---@param onlyIndices table<integer, true> only these gate indices get a derived direction (every
+---other gate already has a real rot-derived one, see convertLegacyRaceGates)
+local function deriveLegacyGateDirections(gates, children, onlyIndices)
     for i, g in ipairs(gates) do
-        local dx, dy = 0, 0
-        local kids = children[i]
-        if kids then
-            for _, childIdx in ipairs(kids) do
-                local cx, cy = deltaNormalized(g.pos.x, g.pos.y, gates[childIdx].pos.x, gates[childIdx].pos.y)
-                dx, dy = dx + cx, dy + cy
-            end
-        end
-        local len = math.sqrt(dx * dx + dy * dy)
-        if len < 1e-3 then
-            local realParent
-            for _, p in ipairs(g.parents) do
-                if p > 0 then
-                    realParent = p
-                    break
+        if onlyIndices[i] then
+            local dx, dy = 0, 0
+            local kids = children[i]
+            if kids then
+                for _, childIdx in ipairs(kids) do
+                    local cx, cy = deltaNormalized(g.pos.x, g.pos.y, gates[childIdx].pos.x, gates[childIdx].pos.y)
+                    dx, dy = dx + cx, dy + cy
                 end
             end
-            if realParent then
-                dx, dy = deltaNormalized(gates[realParent].pos.x, gates[realParent].pos.y, g.pos.x, g.pos.y)
-                len = math.sqrt(dx * dx + dy * dy)
+            local len = math.sqrt(dx * dx + dy * dy)
+            if len < 1e-3 then
+                local realParent
+                for _, p in ipairs(g.parents) do
+                    if p > 0 then
+                        realParent = p
+                        break
+                    end
+                end
+                if realParent then
+                    dx, dy = deltaNormalized(gates[realParent].pos.x, gates[realParent].pos.y, g.pos.x, g.pos.y)
+                    len = math.sqrt(dx * dx + dy * dy)
+                end
             end
+            if len < 1e-3 then
+                dx, dy = 1, 0
+            else
+                dx, dy = dx / len, dy / len
+            end
+            g.dir = { x = dx, y = dy, z = 0 }
         end
-        if len < 1e-3 then
-            dx, dy = 1, 0
-        else
-            dx, dy = dx / len, dy / len
-        end
-        g.dir = { x = dx, y = dy, z = 0 }
     end
 end
 
@@ -544,12 +554,18 @@ local function convertLegacyRaceGates(steps, loopable)
             if type(wp) ~= "table" or type(wp.pos) ~= "table" or type(wp.name) ~= "string" or #wp.name == 0 then
                 return nil
             end
+            local hasRot = type(wp.rot) == "table"
             table.insert(gates, {
                 pos = { x = tonumber(wp.pos.x) or 0, y = tonumber(wp.pos.y) or 0, z = tonumber(wp.pos.z) or 0 },
-                dir = { x = 1, y = 0, z = 0 }, -- placeholder, replaced below once every gate exists
+                dir = hasRot and services_hunter.quatToFlatDir(wp.rot) or { x = 1, y = 0, z = 0 }, -- placeholder
+                -- if !hasRot, replaced below by deriveLegacyGateDirections once every gate exists
                 width = math.max(2, (tonumber(wp.radius) or 3) * 2),
                 height = math.max(2, (tonumber(wp.radius) or 3) * 2),
                 parents = {}, -- filled in below, once every name is known
+                -- transient, stripped before this function returns: survives the loopable
+                -- rewrite's own array reordering below since it travels on the gate object itself,
+                -- unlike a plain index-based set built at this creation-time indexing would
+                needsDerivedDir = not hasRot or nil,
             })
             nameToIndex[wp.name] = #gates
         end
@@ -715,6 +731,7 @@ local function convertLegacyRaceGates(steps, loopable)
     end
 
     local children = {}
+    local needsDerivedDir = {}
     for i, g in ipairs(gates) do
         for _, p in ipairs(g.parents) do
             if p > 0 then
@@ -722,8 +739,12 @@ local function convertLegacyRaceGates(steps, loopable)
                 table.insert(children[p], i)
             end
         end
+        if g.needsDerivedDir then
+            needsDerivedDir[i] = true
+            g.needsDerivedDir = nil -- transient, never part of the real BJRaceGate shape
+        end
     end
-    deriveLegacyGateDirections(gates, children)
+    deriveLegacyGateDirections(gates, children, needsDerivedDir)
 
     -- finish flagging : only meaningful for a branching, non-loopable race (a loopable race's own
     -- finish is always "re-crossing the step-1 gate" regardless of this flag, and a non-branching

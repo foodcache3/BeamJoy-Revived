@@ -6,6 +6,28 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.37] - 2026-08-26
+
+### Fixed
+- **Real bug, per direct follow-up report with the actual source data attached: the 1.8.36 fix
+  didn't resolve it, gates still came in rotated at strange angles, even on a genuinely
+  non-branching race.** The real root cause was upstream of the loop-rewiring fixed in 1.8.36:
+  `convertLegacyRaceGates` always ignored BJI's own waypoint `rot` for gates outright, deriving a
+  direction from the route's own topology instead (a straight chord to this gate's own next
+  waypoint). Checked against the reported race's real exported data: BJI's waypoints are
+  frequently 60-300m apart on a circuit that curves between them, so a straight chord routinely
+  points nowhere near the actual local road heading at the gate itself, by as much as ~90 degrees
+  off on that same real race. `rot` (via `quatToFlatDir`, the same helper this file's own
+  `convertLegacyStartPositions` and Hunter's own spawn import already trust for the identical
+  purpose) is now used directly whenever present ; the old topology-derived heuristic is kept only
+  as a fallback for a gate genuinely missing usable rot data. A previously-imported race isn't
+  automatically fixed (Legacy Import is non-destructive/additive, and a same-named re-import is
+  skipped as a duplicate, not overwritten), delete the affected race first, then re-run Legacy
+  Import to get a freshly, correctly-oriented copy. *(server only, needs deployment)*
+
+### Changed
+- Version bumped to 1.8.37 (buildversion 2293) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.36] - 2026-08-26
 
 ### Fixed
