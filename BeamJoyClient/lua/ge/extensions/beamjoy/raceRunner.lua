@@ -2538,6 +2538,7 @@ M.onUpdate = onUpdate
 M.onSlowUpdate = onSlowUpdate
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onBJRequestCanSpawnVehicle = onBJRequestCanSpawnVehicle
+M.isRaceLocked = isRaceLocked
 
 M.onSessionUpdate = onSessionUpdate
 M.onSessionsList = onSessionsList

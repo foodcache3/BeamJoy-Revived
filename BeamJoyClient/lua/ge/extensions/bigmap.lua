@@ -84,6 +84,36 @@ local function getMissionById(id)
     }
 end
 
+--- Real, cleaner fix, per direct request ("is there a better way to disable the whole map mode
+--- during a race"): the previous approach only ever blocked the "bigMap" CAMERA name, via
+--- camera.lua's own reactive blockedCameras mechanism. That's a poll-based catch, one frame late
+--- at best (onUpdate detects the camera actually changed, then switches it back), and native
+--- freeroam/bigMapMode.lua's own entry points call core_camera.setByName directly inside their own
+--- transition code, a path this mod's camera.lua wrapper never sees at all, so the block could at
+--- best clean up AFTER big map had already started opening (transition animation, UI overlay,
+--- ui_visibility/input remapping), not actually prevent it.
+---
+--- `enterBigMap` (confirmed by reading the installed game's own freeroam/bigMapMode.lua) is the
+--- true common funnel every real entry path goes through before any of that starts: the default
+--- keybind's own toggleBigMap() calls it, but so does core/quickAccess.lua's map icon action
+--- (DIRECTLY, bypassing toggleBigMap()'s own separate isCurrentlyProcessingStep check entirely),
+--- and so does career code opening big map for its own missions. `enterBigMap` itself already
+--- refuses outright the instant `gameplay_missions_missionManager.getCurrentTaskdataTypeOrNil()`
+--- returns anything truthy (the same check a vanilla mission/scenario already relies on to block
+--- big map for itself). That function has exactly one caller in the entire game (confirmed by
+--- search), so wrapping it here to also return truthy while race/hunt-locked covers every real
+--- entry path at once, with zero side effects anywhere else. The camera-level block in
+--- raceRunner.lua/hunterRunner.lua stays in place too, as a second, independent layer, in case
+--- some other path ever manages to switch the active camera to "bigMap" regardless.
+---@return string?
+local function getCurrentTaskdataTypeOrNil()
+    if (beamjoy_raceRunner and beamjoy_raceRunner.isRaceLocked()) or
+        (beamjoy_hunterRunner and beamjoy_hunterRunner.isHuntLocked()) then
+        return "beamjoySandbox"
+    end
+    return M.baseFunctions.gameplay_missions_missionManager.getCurrentTaskdataTypeOrNil()
+end
+
 local vanillaIcons = {
     spawnPoint = 'fastTravel',
     garage = 'garage01',
@@ -253,11 +283,15 @@ local function onInit()
         },
         gameplay_missions_missions = {
             getMissionById = extensions.gameplay_missions_missions.getMissionById
-        }
+        },
+        gameplay_missions_missionManager = {
+            getCurrentTaskdataTypeOrNil = extensions.gameplay_missions_missionManager.getCurrentTaskdataTypeOrNil,
+        },
     }
     extensions.gameplay_rawPois.getRawPoiListByLevel = getRawPOIs
     extensions.gameplay_missions_missions.getMissionById = getMissionById
     extensions.freeroam_bigMapPoiProvider.sendCurrentLevelMissionsToBigmap = sendCurrentLevelMissionsToBigmap
+    extensions.gameplay_missions_missionManager.getCurrentTaskdataTypeOrNil = getCurrentTaskdataTypeOrNil
 
     beamjoy_communications_ui.addHandler("BJReady", function()
         M.vanillaPOIs = table.filter(M.baseFunctions.gameplay_rawPois

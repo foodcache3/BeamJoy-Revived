@@ -6,6 +6,26 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.39] - 2026-08-26
+
+### Changed
+- **Big Map is now blocked at the real source during a race/Hunter lock, not just its camera.**
+  The previous approach only ever blocked the "bigMap" camera NAME via `camera.lua`'s reactive
+  poll (one frame late at best, and native code changes the camera directly, a path that wrapper
+  never sees at all, so it could only clean up after big map had already started opening). Found
+  a much cleaner native hook by reading the installed game's own `freeroam/bigMapMode.lua`:
+  `enterBigMap` is the true common funnel every real entry path goes through (the default keybind,
+  the quick-access menu's map icon, which calls it directly and bypasses the keybind's own separate
+  check entirely, career code), and it already refuses outright if
+  `gameplay_missions_missionManager.getCurrentTaskdataTypeOrNil()` returns anything truthy, the
+  same check a vanilla mission/scenario already relies on to block big map for itself. That
+  function has exactly one caller in the entire game, so `bigmap.lua` now wraps it (same
+  wrap/rollback pattern already used there for 3 other native functions) to also return truthy
+  while `raceRunner.lua`/`hunterRunner.lua` report a race/hunt lock, covering every entry path at
+  once with zero side effects elsewhere. The existing camera-level block stays in place too, as a
+  second, independent layer. *(client only, no server changes)*
+- Version bumped to 1.8.39 (buildversion 2295) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.38] - 2026-08-26
 
 ### Added

@@ -1483,6 +1483,7 @@ M.onSlowUpdate = onSlowUpdate
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onBJRequestCanSpawnVehicle = onBJRequestCanSpawnVehicle
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
+M.isHuntLocked = isHuntLocked
 M.onVehicleResetted = onVehicleResetted
 M.onVehicleDestroyed = onVehicleDestroyed
 
