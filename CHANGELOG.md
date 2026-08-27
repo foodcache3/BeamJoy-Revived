@@ -6,6 +6,19 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.45] - 2026-08-27
+
+### Fixed
+- **Real bug: the vehicle-next-to-name display added in v1.8.42 never actually showed up anywhere**,
+  regardless of solo vs. multiplayer. The Angular templates were updated to display `vehicleModel`,
+  but the two client-side functions that actually build the data those screens receive
+  (`raceRunner.lua`'s `pushSessionStatus`, feeding the lobby player-list, and `pushRaceInfo`,
+  feeding both the Live and Results race info screens, since Results reuses the same payload) each
+  hand-pick which participant fields to forward, and neither list included `vehicleModel`, so it
+  was silently dropped every time before ever reaching the UI. Found and fixed the identical bug
+  in `hunterRunner.lua`'s own equivalent lobby push too. *(client only, no server changes; the
+  server side already tracked and sent this correctly)*
+
 ## [1.8.44] - 2026-08-27
 
 ### Fixed

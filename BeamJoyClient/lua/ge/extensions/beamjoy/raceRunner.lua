@@ -1209,6 +1209,7 @@ local function pushRaceInfo()
                 local aheadGap = (ahead and ahead ~= p) and describeOpponent(ahead, p, totalSteps(race)) or nil
                 return {
                     playerName = p.playerName,
+                    vehicleModel = p.vehicleModel,
                     finished = p.finished,
                     dnf = p.dnf,
                     currentLap = p.currentLap,
@@ -1377,9 +1378,10 @@ local function pushSessionStatus()
         joinable = M.session.joinable,
         participantCount = #M.session.participants,
         maxParticipants = race and #race.startPositions or 0,
-        -- {playerName, ready} per participant, for the status panel's player-list dropdown
+        -- {playerName, ready, vehicleModel} per participant, for the status panel's player-list
+        -- dropdown
         participants = table.map(M.session.participants, function(p)
-            return { playerName = p.playerName, ready = p.ready }
+            return { playerName = p.playerName, ready = p.ready, vehicleModel = p.vehicleModel }
         end),
         laps = M.session.settings.laps,
         respawnStrategy = M.session.settings.respawnStrategy,

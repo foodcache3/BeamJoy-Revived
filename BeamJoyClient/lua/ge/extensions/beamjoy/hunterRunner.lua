@@ -486,7 +486,13 @@ local function pushSessionStatus_impl(session)
         participantCount = #session.participants,
         maxParticipants = 1 + #(arena.hunterSpawns or {}),
         participants = table.map(session.participants, function(p)
-            return { playerName = p.playerName, playerID = p.playerID, ready = p.ready, role = p.role }
+            return {
+                playerName = p.playerName,
+                playerID = p.playerID,
+                ready = p.ready,
+                role = p.role,
+                vehicleModel = p.vehicleModel,
+            }
         end),
         role = participant.role,
         ready = participant.ready,
