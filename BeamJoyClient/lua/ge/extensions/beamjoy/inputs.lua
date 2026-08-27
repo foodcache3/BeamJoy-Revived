@@ -82,20 +82,29 @@ local function onUpdate()
         if throughSelf then currentVeh:disableCollision() end
         ray = cameraMouseRayCast(true, ui_imgui.flags(SOTStaticObject, SOTVehicle), 200)
         if throughSelf then currentVeh:enableCollision() end
-        if not ray then return end
 
         ---@type BJVehicle?, any?
         local veh, static
-        if ray.object then
+        if ray and ray.object then
             if ray.object:getClassName() == "BeamNGVehicle" then
                 veh = beamjoy_vehicles.vehicles[ray.object:getID()]
             else
                 static = ray.object
             end
         end
+        -- Real, confirmed bug: this used to bail out entirely (`if not ray then return end`)
+        -- whenever the raycast found nothing within range, e.g. the cursor pointing at open sky.
+        -- That silently starved every onBJClick consumer of the click, not just handed it a nil
+        -- pos: a consumer whose targeting genuinely needs a real hit (contextMenu.lua's vehicle
+        -- targeting) already guards on `data.mpVeh` being present and is unaffected either way,
+        -- but one whose own hit-test reconstructs the camera ray itself against authored
+        -- world-space geometry rather than trusting whatever the raycast actually found
+        -- (raceEditor.lua/pointListEditor.lua's world-click selection, via camera.mouseRay())
+        -- never even got called in that case, which is exactly what made a gate/point
+        -- unselectable while looking steeply up at it.
         extensions.hook("onBJClick", type, {
-            pos = ray.pos,
-            distance = ray.distance,
+            pos = ray and ray.pos or nil,
+            distance = ray and ray.distance or nil,
             mpVeh = veh,
             static = static
         })

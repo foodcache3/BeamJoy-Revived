@@ -514,45 +514,14 @@ local function endHandleDrag()
     extensions.hook("onBJRaceMarkersRefresh")
 end
 
---- computes the camera→cursor ray directly from the camera's own transform + FOV, instead of
---- backing it out from a `cameraMouseRayCast` HIT point like both the click-grab and drag-update
---- below used to. That approach broke down completely whenever the cursor pointed at open sky:
---- a raycast with nothing to hit returns no result at all, and looking steeply upward at a tall
---- gate's own top handle is exactly that scenario (confirmed by a live report : the handle was
---- entirely unusable looking up at it, not just imprecise, because the click that's supposed to
---- grab it, and every subsequent drag-update frame, were silently no-oping the instant the ray
---- found nothing to hit). This never depends on hitting anything: it's the same math a native
---- picking/gizmo system does internally, just done by hand : mouse position → normalized device
---- coordinates → a direction via the camera's own right/up/forward vectors and FOV.
---- **Unverified assumption**: treats `camera.getFOV()` as the VERTICAL FOV (common default in
---- many engines) ; if the computed ray feels systematically off-target, swapping which axis uses
---- the raw FOV vs. the aspect-derived one is the first thing to try.
----@return vec3? camPos, vec3? rayDir
-local function mouseRay()
-    local camPos, camDir, camUp = camera.getPositionRotation(true)
-    if not camPos then
-        return nil
-    end
-    local camRight = camDir:cross(camUp):normalized()
-    local mousePos = ui_imgui.GetMousePos()
-    local viewport = ui_imgui.GetWindowViewport()
-    local vpX = mousePos.x - viewport.Pos.x
-    local vpY = mousePos.y - viewport.Pos.y
-    if vpX < 0 or vpX > viewport.Size.x or vpY < 0 or vpY > viewport.Size.y then
-        return nil -- cursor outside the game viewport (e.g. over a CEF UI panel)
-    end
-    local ndcX = (vpX / viewport.Size.x) * 2 - 1
-    local ndcY = 1 - (vpY / viewport.Size.y) * 2
-    local halfHeight = math.tan(math.rad(camera.getFOV()) / 2)
-    local halfWidth = halfHeight * (viewport.Size.x / viewport.Size.y)
-    local rayDir = (camDir + camRight * (ndcX * halfWidth) + camUp * (ndcY * halfHeight)):normalized()
-    return camPos, rayDir
-end
+-- camera-ray computation (hit-independent, unlike `cameraMouseRayCast`) lives in camera.lua's own
+-- `mouseRay()` now, shared with pointListEditor.lua's world-click selection which needed the same
+-- fix for the same reason ; see that function's own doc comment for the full rationale.
 
 --- per-frame handle hit-test/drag polling, delegated from `activityEditor.lua`'s `onUpdate` the
 --- same way `gizmo.lua`'s own per-frame drag polling works. These handles are plain custom
 --- geometry though, not a real engine gizmo, so there's no native widget to ask "was this click on
---- you" ; raw `ui_imgui` mouse state + `mouseRay()` above stand in for that.
+--- you" ; raw `ui_imgui` mouse state + `camera.mouseRay()` stand in for that.
 local function onUpdate()
     if not parent or parent.activeEditor ~= M or not M.race or not M.activeGateIndex then
         draggingHandle = nil
@@ -564,7 +533,7 @@ local function onUpdate()
             endHandleDrag()
             return
         end
-        local camPos, rayDir = mouseRay()
+        local camPos, rayDir = camera.mouseRay()
         if camPos then
             updateHandleDrag(camPos, rayDir)
         end
@@ -572,7 +541,7 @@ local function onUpdate()
     end
 
     if ui_imgui.IsMouseClicked(ui_imgui.MouseButton_Left) then
-        local camPos, rayDir = mouseRay()
+        local camPos, rayDir = camera.mouseRay()
         if not camPos then return end
         local kind = hitTestHandles(camPos, rayDir)
         if kind then beginHandleDrag(kind) end
@@ -782,23 +751,24 @@ local function onSelectStart(index)
     extensions.hook("onBJRaceMarkersRefresh")
 end
 
---- click-to-select in world space, via the generic `onBJClick` hook (`inputs.lua`, already fires
---- on every in-viewport click with a raycast hit point, previously used for vehicle/context-menu
---- targeting, not yet for anything editor-related). Our gates/starts are debug-drawn geometry
---- (`shape.lua`), not real scene objects, so `data.pos` (wherever the ray actually hit: terrain,
---- a prop, whatever's really there) isn't usable directly ; instead this reconstructs the actual
---- camera→mouse ray (origin = camera eye position, direction = towards `data.pos`) and does a
---- real ray↔plane intersection against each gate's own plane, independent of what's actually
---- rendered behind it.
+--- click-to-select in world space, via the generic `onBJClick` hook (`inputs.lua`, fires on every
+--- in-viewport click, previously used for vehicle/context-menu targeting, not yet for anything
+--- editor-related). Our gates/starts are debug-drawn geometry (`shape.lua`), not real scene
+--- objects, so `data.pos` (wherever a raycast against real world geometry actually hit, if
+--- anything) was never actually usable here anyway ; this does a real ray↔plane intersection
+--- against each gate's own authored plane instead, independent of what's actually rendered behind
+--- it. Uses `camera.mouseRay()` rather than `data.pos` for the ray itself too now : real, confirmed
+--- bug (same root cause as the height-handle drag fix above) : `data.pos` only exists when
+--- `inputs.lua`'s own raycast hit something, so looking up at a gate with open sky behind it made
+--- it entirely unselectable, not just imprecise, since this whole function never even ran.
 ---@param clickType "left"|"middle"|"right"
 ---@param data onBJClickData
 local function onWorldClick(clickType, data)
     if clickType ~= "left" then return end
     if not parent or parent.activeEditor ~= M or not M.race then return end
-    if not data.pos then return end
 
-    local camPos = camera.getPositionRotation(true)
-    local rayDir = (data.pos - camPos):normalized()
+    local camPos, rayDir = camera.mouseRay()
+    if not camPos then return end
 
     ---@param pos {x:number,y:number,z:number}
     ---@param dir {x:number,y:number,z:number}

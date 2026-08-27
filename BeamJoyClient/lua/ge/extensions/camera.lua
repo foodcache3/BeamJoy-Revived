@@ -214,6 +214,42 @@ local function getFOV()
     return core_camera.getFovDeg()
 end
 
+--- computes the camera->cursor ray directly from the camera's own transform + FOV, instead of
+--- backing it out from a `cameraMouseRayCast` HIT point. That approach breaks down completely
+--- whenever the cursor points at open sky : a raycast with nothing to hit returns no result at
+--- all, so anything built on top of it (a world-click hit-test against custom debug-drawn
+--- geometry, e.g. raceEditor.lua's gate quads or pointListEditor.lua's point markers) silently
+--- can't be picked while looking steeply up at it, even though the ray itself is perfectly
+--- well-defined. This never depends on hitting anything: it's the same math a native
+--- picking/gizmo system does internally, just done by hand : mouse position -> normalized device
+--- coordinates -> a direction via the camera's own right/up/forward vectors and FOV. Originally
+--- raceEditor.lua-local (for its own height-handle drag), promoted here once pointListEditor.lua's
+--- world-click selection needed the exact same fix for the exact same reason.
+--- **Unverified assumption**: treats `getFOV()` as the VERTICAL FOV (common default in many
+--- engines) ; if the computed ray feels systematically off-target, swapping which axis uses the
+--- raw FOV vs. the aspect-derived one is the first thing to try.
+---@return vec3? camPos, vec3? rayDir
+local function mouseRay()
+    local camPos, camDir, camUp = getPositionRotation(true)
+    if not camPos then
+        return nil
+    end
+    local camRight = camDir:cross(camUp):normalized()
+    local mousePos = ui_imgui.GetMousePos()
+    local viewport = ui_imgui.GetWindowViewport()
+    local vpX = mousePos.x - viewport.Pos.x
+    local vpY = mousePos.y - viewport.Pos.y
+    if vpX < 0 or vpX > viewport.Size.x or vpY < 0 or vpY > viewport.Size.y then
+        return nil -- cursor outside the game viewport (e.g. over a CEF UI panel)
+    end
+    local ndcX = (vpX / viewport.Size.x) * 2 - 1
+    local ndcY = 1 - (vpY / viewport.Size.y) * 2
+    local halfHeight = math.tan(math.rad(getFOV()) / 2)
+    local halfWidth = halfHeight * (viewport.Size.x / viewport.Size.y)
+    local rayDir = (camDir + camRight * (ndcX * halfWidth) + camUp * (ndcY * halfHeight)):normalized()
+    return camPos, rayDir
+end
+
 ---@param deg number? 10-120
 local function setFOV(deg)
     if not deg then
@@ -421,6 +457,7 @@ M.isFreeCamSmooth = isFreeCamSmooth
 M.setFreeCamSmooth = setFreeCamSmooth
 M.getFOV = getFOV
 M.setFOV = setFOV
+M.mouseRay = mouseRay
 M.getSpeed = getSpeed
 M.setSpeed = setSpeed
 

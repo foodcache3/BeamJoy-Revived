@@ -6,6 +6,24 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.44] - 2026-08-27
+
+### Fixed
+- **Real bug, same root cause as v1.8.42's height-handle drag fix, one level up: a race gate (or
+  a hunter arena point marker) couldn't be clicked to select in the world at all while looking
+  steeply upward at it with open sky behind it.** `inputs.lua`'s shared `onBJClick` hook only ever
+  fired when its own raycast against real world geometry actually hit something ; looking at open
+  sky means that raycast finds nothing, so the hook never fired, and the click-to-select logic in
+  `raceEditor.lua`/`pointListEditor.lua` (used by the hunter arena editor's own point-list
+  selection) never even ran, let alone with an unusable position. Fixed at both ends: `inputs.lua`
+  now fires the hook regardless (`pos`/`distance` simply nil on a miss, which existing hit-dependent
+  consumers like the vehicle context menu already handle safely), and gate/point selection no
+  longer needs a hit position anyway, since it already does its own ray↔plane / ray↔point math
+  against authored world-space positions. The camera-ray math this needs (mouse position -> world
+  ray, independent of hitting anything) already existed as a local helper in `raceEditor.lua` for
+  the earlier handle-drag fix ; promoted it to `camera.lua` as `camera.mouseRay()` so both editors
+  share one implementation. *(client only, no server changes)*
+
 ## [1.8.43] - 2026-08-27
 
 ### Fixed

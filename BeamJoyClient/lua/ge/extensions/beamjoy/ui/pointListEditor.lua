@@ -297,15 +297,18 @@ local function new(config)
     --- list at once. Simpler than a ray↔quad-plane test since these are plain point markers, not
     --- rectangular gates. Ignores a hit on the already-selected point so re-clicking it in the
     --- world doesn't toggle selection off mid-gizmo-grab (same reasoning raceEditor.lua's own
-    --- world-click already established).
+    --- world-click already established). Uses `camera.mouseRay()` rather than `data.pos` for the
+    --- ray itself: real, confirmed bug (same one raceEditor.lua's own world-click selection had) :
+    --- `data.pos` only exists when `inputs.lua`'s own raycast actually hit real world geometry, so
+    --- looking up at a point marker with open sky behind it made it entirely unselectable.
     ---@param clickType "left"|"middle"|"right"
     ---@param data onBJClickData
     local function onBJClick(clickType, data)
         if clickType ~= "left" then return end
-        if not config.isActive() or not data.pos then return end
+        if not config.isActive() then return end
 
-        local camPos = camera.getPositionRotation(true)
-        local rayDir = (data.pos - camPos):normalized()
+        local camPos, rayDir = camera.mouseRay()
+        if not camPos then return end
         local bestList, bestIndex, bestAlong
 
         for _, spec in ipairs(config.lists) do
