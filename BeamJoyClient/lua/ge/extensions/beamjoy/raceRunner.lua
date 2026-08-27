@@ -1614,10 +1614,17 @@ local function onSessionUpdate(session)
         local myVeh = beamjoy_vehicles.getCurrentOwn()
         if participant.startPosition and myVeh then
             local sp = participant.startPosition
+            -- real, confirmed bug fixed here (per direct request, mirroring hunterRunner.lua's
+            -- own identical fix): setVehiclePositionRotation's default cling=true re-snaps to the
+            -- nearest surface below via a ray starting 10 units above the target and stopping at
+            -- the first surface it hits, which can land the vehicle on top of a covering
+            -- structure (a gas station awning, a tunnel ceiling, a building roof) instead of the
+            -- actually-authored start position if one happens to sit underneath. This position is
+            -- already correctly placed, so re-clinging only ever risks moving it somewhere worse.
             beamjoy_vehicles.setVehiclePositionRotation(myVeh.veh,
                 vec3(sp.pos.x, sp.pos.y, sp.pos.z),
                 vec3(sp.dir.x, sp.dir.y, sp.dir.z),
-                vec3(0, 0, 1))
+                vec3(0, 0, 1), { cling = false })
         else
             LogWarn("beamjoy_raceRunner: no start position to teleport to")
         end
@@ -2329,10 +2336,13 @@ local function onBJRequestCurrentVehicleReset(req, resetType, mpVeh)
     ignoreNextReset[mpVeh.vid] = true -- setVehiclePositionRotation's own teleport still triggers
     -- BeamNG's native reset detection as a side effect ; without this it would recurse straight
     -- back into onVehicleResetted below
+    -- cling=false, same reasoning as the sibling grid-teleport above (and hunterRunner.lua's own
+    -- identical fix): this position is already correctly placed, re-clinging to the nearest
+    -- surface below can land the vehicle on top of a covering structure instead
     beamjoy_vehicles.setVehiclePositionRotation(mpVeh.veh,
         vec3(target.pos.x, target.pos.y, target.pos.z),
         vec3(target.dir.x, target.dir.y, target.dir.z),
-        vec3(0, 0, 1))
+        vec3(0, 0, 1), { cling = false })
 end
 
 -- teleporting a vehicle (spawn.safeTeleport, inside setVehiclePositionRotation below) fires
@@ -2412,10 +2422,11 @@ local function onVehicleResetted(vid)
         local currentVeh = beamjoy_vehicles.getCurrentOwn()
         if not currentVeh or currentVeh.vid ~= vid then return end
         ignoreNextReset[vid] = true
+        -- cling=false, same reasoning as this file's own other lastCheckpointTarget teleport
         beamjoy_vehicles.setVehiclePositionRotation(currentVeh.veh,
             vec3(target.pos.x, target.pos.y, target.pos.z),
             vec3(target.dir.x, target.dir.y, target.dir.z),
-            vec3(0, 0, 1))
+            vec3(0, 0, 1), { cling = false })
     end, 100, "BJRaceLastCheckpointRespawn-" .. vid)
 end
 

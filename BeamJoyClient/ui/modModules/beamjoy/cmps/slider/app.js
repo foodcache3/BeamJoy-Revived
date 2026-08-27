@@ -93,29 +93,10 @@ angular.module("beamjoy").component("bjSlider", {
         updateNumberRange();
         updatePercent();
 
-        this.$onInit = () => {
-            // bound to the stable row container (not the range input itself, which gets
-            // destroyed/recreated by ng-if every time the mode toggles away from and back to
-            // "slider") so the wheel-to-adjust behavior survives mode switches without needing to
-            // re-attach a listener on every toggle.
-            const row = $element[0].querySelector(".slider-row");
-            row.addEventListener(
-                "wheel",
-                (evt) => {
-                    if (this.mode !== "slider" || this.disabled) return;
-                    evt.preventDefault();
-                    const step = this.step || 1;
-                    const offset = evt.deltaY < 0 ? step : -step;
-                    let value = Number(this.ngModel) + offset;
-                    const min = this.min ?? -Infinity;
-                    const max = this.max ?? Infinity;
-                    if (value < min) value = min;
-                    if (value > max) value = max;
-                    this.ngModel = value;
-                    $scope.$applyAsync();
-                },
-                { passive: false }
-            );
-        };
+        // wheel-to-adjust used to live here (scrolling over the slider nudged its value up/down).
+        // Removed per direct request: scrolling a settings page whose cursor happened to pass over
+        // a slider silently changed its value along the way, a real, confusing footgun with no
+        // opt-out. Sliders are now purely drag/click/type, same as every other input in this
+        // codebase, no special-cased wheel behavior.
     },
 });

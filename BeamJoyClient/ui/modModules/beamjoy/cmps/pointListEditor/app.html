@@ -14,37 +14,6 @@
     }
 </style>
 
-<div class="d-flex gap-1 mb-2 align-center">
-    <button
-        class="btn neutral"
-        ng-class="{success: $ctrl.tool === 'translate'}"
-        ng-click="$ctrl.changeTool($event, 'translate')"
-        title="{{'beamjoy.window.config.editor.gizmo.translate' | translate}}"
-    >
-        <icon name="translate"></icon>
-    </button>
-    <button
-        class="btn neutral"
-        ng-class="{success: $ctrl.tool === 'rotate'}"
-        ng-click="$ctrl.changeTool($event, 'rotate')"
-        title="{{'beamjoy.window.config.editor.gizmo.rotate' | translate}}"
-    >
-        <icon name="rotate"></icon>
-    </button>
-    <button
-        class="btn"
-        ng-class="{
-            success: $ctrl.snapToGroundEnabled && $ctrl.snapMethod !== 'raycast',
-            info: $ctrl.snapToGroundEnabled && $ctrl.snapMethod === 'raycast',
-            danger: !$ctrl.snapToGroundEnabled
-        }"
-        ng-click="$ctrl.cycleSnapMode()"
-        title="{{'beamjoy.window.config.tabs.races.snapToGround.tooltip' | translate}}"
-    >
-        <icon name="snapToGround"></icon>
-    </button>
-</div>
-
 <div ng-repeat="list in $ctrl.lists track by list.key" class="mb-2">
     <div class="d-flex align-center gap-1 mb-1">
         <h5 class="flex-grow-1">

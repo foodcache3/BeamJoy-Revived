@@ -58,7 +58,10 @@
                 ng-click="$ctrl.selectPlayer(p.playerName)"
             >
                 <td class="text-center">{{$index + 1}}</td>
-                <td class="text-left">{{p.playerName}}</td>
+                <td class="text-left">
+                    {{p.playerName}}
+                    <span ng-if="p.vehicleModel" class="small opacity-70">({{p.vehicleModel}})</span>
+                </td>
                 <td>
                     <span ng-if="p.dnf">{{'beamjoy.window.main.tabs.races.raceInfo.dnf' | translate}}</span>
                     <span ng-if="!p.dnf">{{$ctrl.formatTime(p.totalMs)}}</span>

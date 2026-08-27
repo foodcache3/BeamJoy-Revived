@@ -91,7 +91,10 @@
             ng-class="{finished: p.finished, dnf: p.dnf}"
         >
             <td class="text-center">{{$index + 1}}</td>
-            <td class="text-left">{{p.playerName}}</td>
+            <td class="text-left">
+                {{p.playerName}}
+                <span ng-if="p.vehicleModel" class="small opacity-70">({{p.vehicleModel}})</span>
+            </td>
             <td class="text-center" ng-if="$ctrl.totalLaps > 1">{{p.currentLap}}/{{$ctrl.totalLaps}}</td>
             <td>{{$ctrl.lastLapTime(p) !== undefined ? $ctrl.formatTime($ctrl.lastLapTime(p)) : '-'}}</td>
             <td ng-if="$ctrl.multiplayer()">{{$ctrl.aheadGapLabel(p, $index)}}</td>

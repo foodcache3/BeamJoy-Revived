@@ -1108,7 +1108,21 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         -- transition every loopable branching race always needs anyway was pure authoring risk
         -- with no real benefit. Every other (non-step-1) crossing still goes through the normal
         -- parents-check below, unchanged.
-        local isLoopClosing = race.loopable and gate.step == 1
+        --
+        -- Real, confirmed bug fixed here too (live report: crossing the start/finish line, then
+        -- backing up and crossing it again immediately, counted a second lap with zero real
+        -- progress in between). The unconditional bypass above accepted EVERY step-1 crossing
+        -- regardless of the participant's actual position, so two crossings back-to-back with
+        -- nothing driven in between both passed it, and gateAlreadyCrossed (set true by the
+        -- first one) made the second one register as a genuine lap completion. Fixed by also
+        -- requiring `participant.currentGate ~= gate.step` : false only immediately after a
+        -- step-1 crossing with nothing else crossed since (currentGate is still left at step 1
+        -- from that last crossing), which correctly falls through to the normal parents-check
+        -- below and gets rejected outright (a step-1 gate is never its own listed parent),
+        -- discarding the stray re-crossing as a no-op instead of registering it. Any REAL lap
+        -- (at least one other gate crossed since the last step-1 crossing) leaves currentGate at
+        -- that other gate's step, so this never reintroduces the original "stuck" bug above.
+        local isLoopClosing = race.loopable and gate.step == 1 and participant.currentGate ~= gate.step
         if not isLoopClosing and not table.includes(gate.parents, participant.lastCrossedGate) then
             return
         end

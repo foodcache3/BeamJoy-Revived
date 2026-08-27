@@ -159,7 +159,10 @@
             class="d-flex align-center gap-1"
             ng-repeat="player in $ctrl.status.participants"
         >
-            <span class="flex-grow-1">{{player.playerName}}</span>
+            <span class="flex-grow-1">
+                {{player.playerName}}
+                <span ng-if="player.vehicleModel" class="small opacity-70">({{player.vehicleModel}})</span>
+            </span>
             <span ng-if="player.ready" class="ready small">
                 {{'beamjoy.window.main.tabs.races.ready' | translate}}
             </span>
@@ -298,6 +301,18 @@
         </div>
         <div class="start-options" ng-if="$ctrl.startingId === race.id">
             <table class="w-100">
+                <!-- topmost, per direct request : the single most consequential option in this
+                     whole panel (solo/private vs a real multiplayer lobby others can join), so it
+                     should be the first thing seen, not buried after every restriction option -->
+                <tr ng-if="race.startPositions > 1">
+                    <td
+                        class="text-right"
+                        title="{{'beamjoy.window.config.tabs.races.joinable.tooltip' | translate}}"
+                    >
+                        {{'beamjoy.window.config.tabs.races.joinable' | translate}}
+                    </td>
+                    <td><bj-toggle ng-model="$ctrl.startOptions.joinable"></bj-toggle></td>
+                </tr>
                 <tr>
                     <td
                         class="text-right"
@@ -426,15 +441,6 @@
                             </button>
                         </div>
                     </td>
-                </tr>
-                <tr ng-if="race.startPositions > 1">
-                    <td
-                        class="text-right"
-                        title="{{'beamjoy.window.config.tabs.races.joinable.tooltip' | translate}}"
-                    >
-                        {{'beamjoy.window.config.tabs.races.joinable' | translate}}
-                    </td>
-                    <td><bj-toggle ng-model="$ctrl.startOptions.joinable"></bj-toggle></td>
                 </tr>
                 <tr ng-if="race.startPositions > 1">
                     <td

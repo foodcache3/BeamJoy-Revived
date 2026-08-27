@@ -1,22 +1,53 @@
-<div class="d-flex gap-1 mb-2 align-center">
-    <span class="flex-grow-1"></span>
-    <span title="{{'beamjoy.window.config.tabs.hunterArena.enabled.tooltip' | translate}}" class="d-flex align-center gap-1">
-        {{'beamjoy.window.config.tabs.hunterArena.enabled' | translate}}
-        <bj-toggle ng-model="$ctrl.enabled"></bj-toggle>
-    </span>
-    <button
-        class="btn success"
-        ng-click="$ctrl.save($event)"
-        ng-disabled="!$ctrl.dirty"
-        title="{{'beamjoy.common.save' | translate}}"
-    >
-        <icon name="save"></icon>
-    </button>
-</div>
+<style>
+    /* pins the header row and the point-list-editor's own translate/rotate/snap toolbar above a
+       separately-scrolling region, exactly mirroring races/editor's own already-established split
+       (see that file's own comment) : previously this toolbar lived inside <bj-point-list-editor>
+       itself and scrolled away with the point-list rows, per direct request it now stays fixed at
+       the top the same way the race editor's own gizmo toolbar already does. */
+    bj-config-hunterarena {
+        display: block;
+        height: 100%;
+        overflow: hidden;
+    }
+    bj-config-hunterarena .editor-root {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    bj-config-hunterarena .editor-pinned {
+        flex-shrink: 0;
+    }
+    bj-config-hunterarena .section-panel {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+</style>
 
-<bj-point-list-editor lists="$ctrl.pointLists" events="$ctrl.pointListEvents"></bj-point-list-editor>
+<div class="editor-root">
+    <div class="editor-pinned">
+        <div class="d-flex gap-1 mb-2 align-center">
+            <span class="flex-grow-1"></span>
+            <span title="{{'beamjoy.window.config.tabs.hunterArena.enabled.tooltip' | translate}}" class="d-flex align-center gap-1">
+                {{'beamjoy.window.config.tabs.hunterArena.enabled' | translate}}
+                <bj-toggle ng-model="$ctrl.enabled"></bj-toggle>
+            </span>
+            <button
+                class="btn success"
+                ng-click="$ctrl.save($event)"
+                ng-disabled="!$ctrl.dirty"
+                title="{{'beamjoy.common.save' | translate}}"
+            >
+                <icon name="save"></icon>
+            </button>
+        </div>
+        <bj-point-list-editor-toolbar events="$ctrl.pointListEvents"></bj-point-list-editor-toolbar>
+    </div>
 
-<bj-accordion id="hunter-arena-defaults-roles" no-border-bottom="true">
+    <div class="section-panel">
+    <bj-point-list-editor lists="$ctrl.pointLists" events="$ctrl.pointListEvents"></bj-point-list-editor>
+
+    <bj-accordion id="hunter-arena-defaults-roles" no-border-bottom="true">
     <accordion-title>
         <h5>{{'beamjoy.window.config.tabs.hunterArena.sections.rolesAndReveal' | translate}}</h5>
     </accordion-title>
@@ -211,3 +242,5 @@
         </table>
     </accordion-content>
 </bj-accordion>
+    </div>
+</div>

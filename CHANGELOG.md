@@ -6,6 +6,49 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.42] - 2026-08-26
+
+### Fixed
+- **Real bug, per direct report: a branching, loopable race could be lap-counted by crossing the
+  start/finish line, backing up, and crossing it again, with zero real progress in between.** The
+  loop-closing bypass added for step-1 gates (making them unconditionally reachable so a race
+  doesn't need an explicit backward parents-link) accepted every step-1 crossing regardless of the
+  participant's actual position, so two crossings back-to-back both passed it, and the
+  already-crossed flag from the first one made the second register as a genuine completed lap.
+  Fixed by also requiring `currentGate ~= step` for the bypass: false only immediately after a
+  step-1 crossing with nothing else crossed since, which now correctly falls through to the
+  normal parents-check and gets rejected as a no-op instead. A real lap (at least one other gate
+  crossed since) is unaffected. *(server only, needs deployment)*
+- **Hunter/prey spawn-on-roof fix applied to races too.** `setVehiclePositionRotation`'s default
+  `cling=true` re-snaps to the nearest surface below via a ray starting 10 units above the target,
+  which can land a vehicle on top of a covering structure (an awning, a tunnel ceiling, a roof)
+  instead of the actually-authored position if one happens to sit underneath. `hunterRunner.lua`
+  already passes `cling=false` at its own spawn-teleport call sites for exactly this reason ;
+  `raceRunner.lua`'s three own teleport call sites (grid start, and both last-checkpoint respawn
+  paths) never did. All three now do. *(client only, no server changes)*
+
+### Added
+- **Hunter arena editor's translate/rotate/snap-to-ground toolbar now stays pinned at the top
+  while scrolling**, matching the race editor's own already-established layout. Split out of
+  `bjPointListEditor` into a new standalone `bjPointListEditorToolbar` component (both stay in
+  sync purely via the same `$rootScope` broadcasts they already used, no direct coupling), since
+  the toolbar and the point-list rows needed to live in separate pinned/scrolling regions.
+- **A player's currently-selected vehicle now shows next to their name** in the race lobby, the
+  Hunter lobby, and both race info screens (Live and Results). The data (`participant.vehicleModel`)
+  was already tracked server-side and already reaching the client, just never actually displayed
+  anywhere until now.
+- **Maximum gate height increased** from 15 (hard cap 30) to 30 (hard cap 60), matching gate
+  width's own existing scale.
+
+### Changed
+- **"Multiplayer" is now the topmost option** in both the race editor's own defaults section and
+  the in-game start-options panel, per direct request: the single most consequential option in
+  either screen (solo/private vs a real lobby others can join).
+- **Scroll-wheel-to-adjust removed from sliders entirely**, per direct request: scrolling a
+  settings page whose cursor happened to pass over a slider silently changed its value along the
+  way. Sliders are now purely drag/click/type.
+- Version bumped to 1.8.42 (buildversion 2298) on both client and server, `UI_BUILD` kept in sync.
+
 ## [1.8.41] - 2026-08-26
 
 ### Added

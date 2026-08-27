@@ -39,6 +39,7 @@ await import(`/ui/modModules/beamjoy/cmps/contextMenu/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/sortable/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/confirm/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/infoPanel/app.js`);
+await import(`/ui/modModules/beamjoy/cmps/pointListEditorToolbar/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/pointListEditor/app.js`);
 
 await import(`/ui/modModules/beamjoy/windows/versionCheck/app.js`);
