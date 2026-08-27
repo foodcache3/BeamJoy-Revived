@@ -6,6 +6,27 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.43] - 2026-08-27
+
+### Fixed
+- **Real bug: the hunter arena editor's toolbar still didn't stay pinned at the top**, despite
+  last round's fix. The CSS added for it targeted the selector `bj-config-hunterarena`, but the
+  component is actually registered as `bjConfigHunterArena`, which AngularJS normalizes to the
+  custom element `bj-config-hunter-arena` (hyphen between "hunter" and "arena"). The selector
+  never matched anything, so none of the pinned/scrolling flex layout rules ever applied. Fixed
+  by correcting the selector. *(client only, no server changes)*
+- **Real bug: last round's gate height increase (to 30, hard cap 60) only updated the Config
+  window's slider.** The in-viewport 3D drag handle used to resize a gate directly in the race
+  editor is a separate system (`raceEditor.lua`) with its own hardcoded cap, still at 15 while the
+  width handles right next to it were already at 30. Raised to match. *(client only, no server
+  changes)*
+
+### Changed
+- **Starting a race from the Activities tab now hides every other race in the list** (and the
+  open-sessions list) while its start options panel is open, showing only the race being
+  configured until Cancel is pressed, instead of leaving the options panel buried inline in a
+  long scrolling list of unrelated races. *(client only, no server changes)*
+
 ## [1.8.42] - 2026-08-26
 
 ### Fixed

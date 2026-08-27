@@ -219,7 +219,7 @@
             {{'beamjoy.window.main.tabs.races.editRaces' | translate}}
         </button>
     </div>
-    <div ng-if="$ctrl.sessions.length > 0" class="mb-2">
+    <div ng-if="$ctrl.sessions.length > 0 && !$ctrl.startingId" class="mb-2">
         <div class="opacity-70 mb-1">{{'beamjoy.window.main.tabs.races.openSessions' | translate}}</div>
         <div
             class="session-row d-flex p-1 px-2 gap-1 align-center"
@@ -254,6 +254,7 @@
     <div
         class="race-row d-flex flex-column p-1 px-2 gap-1"
         ng-repeat="race in $ctrl.races track by race.id"
+        ng-if="!$ctrl.startingId || $ctrl.startingId === race.id"
     >
         <div class="d-flex align-center gap-1">
             <span class="flex-grow-1 race-row-info">

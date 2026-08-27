@@ -427,7 +427,7 @@ local function beginHandleDrag(kind)
         draggingHandle = { kind = "right", anchor = f.bottomLeft, axis = f.right, min = 2, max = 30 }
     else
         draggingHandle = {
-            kind = "top", anchor = f.pos, axis = vec3(0, 0, 1), min = 1, max = 15,
+            kind = "top", anchor = f.pos, axis = vec3(0, 0, 1), min = 1, max = 30,
             -- Only used by the mouse-delta fallback in updateHandleDrag below, for whenever the
             -- camera is looking too steeply upward/downward for the ray-plane math to stay
             -- well-conditioned.

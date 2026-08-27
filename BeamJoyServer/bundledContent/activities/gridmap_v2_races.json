@@ -1,0 +1,3096 @@
+[
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 1554,
+        "gates": [
+            {
+                "dir": {
+                    "x": 0.0051635741808542,
+                    "y": 0.99998666866198,
+                    "z": 0
+                },
+                "height": 16,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": -1304,
+                    "y": 453.926,
+                    "z": 99.976
+                },
+                "step": 1,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": 0.99942019611562,
+                    "y": 0.034048077717006,
+                    "z": 0
+                },
+                "height": 17,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": -1044.0459388856,
+                    "y": 902.71561891415,
+                    "z": 100
+                },
+                "step": 2,
+                "width": 16.768628021335
+            },
+            {
+                "dir": {
+                    "x": -0.0076016626782053,
+                    "y": -0.99997110694486,
+                    "z": 0
+                },
+                "height": 16,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": -781.917,
+                    "y": 453.997,
+                    "z": 99.977
+                },
+                "step": 3,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": -0.99999748320603,
+                    "y": -0.0022435644886221,
+                    "z": 0
+                },
+                "height": 17,
+                "isFinish": true,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": -1044.0221212599,
+                    "y": 9.3640477599141,
+                    "z": 100
+                },
+                "step": 4,
+                "width": 17.108095791883
+            }
+        ],
+        "id": 1,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Highspeed Ring - Oval",
+        "sectorCount": 4,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.021379426999055,
+                    "y": 0.99977143392937,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1301.3000488281,
+                    "y": 449.77709960938,
+                    "z": 100
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.030797606039804,
+                    "y": 0.99952564122298,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1306.6262207031,
+                    "y": 449.67379760742,
+                    "z": 100
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.01140499970326,
+                    "y": 0.99993496087584,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1301.434,
+                    "y": 437.606,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.010006862720324,
+                    "y": 0.99994993009575,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1306.565,
+                    "y": 437.638,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.014606452243609,
+                    "y": 0.99989332008613,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1301.584,
+                    "y": 425.619,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0088296117780955,
+                    "y": 0.99996101821813,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1306.458,
+                    "y": 425.582,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.017205785185637,
+                    "y": 0.99985196952156,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1301.771,
+                    "y": 413.588,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0070116317368535,
+                    "y": 0.99997541820806,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1306.384,
+                    "y": 413.64,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.01620324628618,
+                    "y": 0.99986871878752,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1301.963,
+                    "y": 401.597,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0065809372928866,
+                    "y": 0.99997834539771,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1306.309,
+                    "y": 401.62,
+                    "z": 99.976
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 480,
+        "gates": [
+            {
+                "dir": {
+                    "x": 0.99996162304539,
+                    "y": -0.0087608467868959,
+                    "z": 0
+                },
+                "height": 9,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 469.9,
+                    "y": -624.002,
+                    "z": 104.79
+                },
+                "step": 1,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": -0.13822079786963,
+                    "y": 0.99040143933472,
+                    "z": 0
+                },
+                "height": 9,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": 653.206,
+                    "y": -596.391,
+                    "z": 110.125
+                },
+                "step": 2,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": -0.99999454362921,
+                    "y": -0.0033034393897267,
+                    "z": 0
+                },
+                "height": 9,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 505.3711683698,
+                    "y": -659.28172761646,
+                    "z": 114.02323150635
+                },
+                "step": 3,
+                "width": 8.3690034641904
+            },
+            {
+                "dir": {
+                    "x": 0.059418650937538,
+                    "y": -0.99823315108283,
+                    "z": 0
+                },
+                "height": 9,
+                "isFinish": true,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 375.112,
+                    "y": -629.323,
+                    "z": 122.11
+                },
+                "step": 4,
+                "width": 9
+            }
+        ],
+        "id": 3,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Easy Skycurve",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": 0.99999221245581,
+                    "y": 0.0039465209658816,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 466.915,
+                    "y": -624.35,
+                    "z": 104.79
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 0,
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.99996147408811,
+                    "y": 0.0087778322802291,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 469.901,
+                    "y": -624.001,
+                    "z": 104.79
+                },
+                "step": 1,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": -0.057975914891315,
+                    "y": 0.99831798205407,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": 375.116,
+                    "y": -629.438,
+                    "z": 122.099
+                },
+                "step": 2,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": 0.99999688500475,
+                    "y": 0.002495992949717,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 505.398,
+                    "y": -659.605,
+                    "z": 114.792
+                },
+                "step": 3,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": 0.13976677722811,
+                    "y": -0.99018445149541,
+                    "z": 0
+                },
+                "height": 9.0,
+                "isFinish": true,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 653.158,
+                    "y": -596.615,
+                    "z": 110.085
+                },
+                "step": 4,
+                "width": 9.0
+            }
+        ],
+        "id": 4,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Easy Skycurve Reverse",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.99999962369017,
+                    "y": -0.00086753646904974,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 474.458,
+                    "y": -624.324,
+                    "z": 104.79
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 6809,
+        "gates": [
+            {
+                "dir": {
+                    "x": 0.9999942798122,
+                    "y": 0.0033823575910918,
+                    "z": 0
+                },
+                "height": 17,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 249.81953430176,
+                    "y": 899.96508789062,
+                    "z": 100
+                },
+                "step": 1,
+                "width": 17
+            },
+            {
+                "dir": {
+                    "x": 0.99999602046415,
+                    "y": -0.0028211798714745,
+                    "z": 0
+                },
+                "height": 17,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": 1197.6169433594,
+                    "y": 899.94500732422,
+                    "z": 100
+                },
+                "step": 2,
+                "width": 17
+            },
+            {
+                "dir": {
+                    "x": -0.99998413538074,
+                    "y": -0.0056328489088681,
+                    "z": 0
+                },
+                "height": 18,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 1164.16796875,
+                    "y": 379.90899658203,
+                    "z": 100
+                },
+                "step": 3,
+                "width": 18
+            },
+            {
+                "dir": {
+                    "x": 0.99999601305398,
+                    "y": 0.0028238052596444,
+                    "z": 0
+                },
+                "height": 18,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 1147.8430175781,
+                    "y": -140.0119934082,
+                    "z": 100
+                },
+                "step": 4,
+                "width": 18
+            },
+            {
+                "dir": {
+                    "x": -0.99997088497871,
+                    "y": -0.0076308056514178,
+                    "z": 0
+                },
+                "height": 8,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": 1020.4359741211,
+                    "y": -915.98999023438,
+                    "z": 100
+                },
+                "step": 5,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": -0.9999980139531,
+                    "y": -0.0019930102517667,
+                    "z": 0
+                },
+                "height": 8,
+                "parents": [
+                    5
+                ],
+                "pos": {
+                    "x": 787.587,
+                    "y": -915.987,
+                    "z": 99.976
+                },
+                "step": 6,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": -0.0042054612194776,
+                    "y": -0.99999115700887,
+                    "z": 0
+                },
+                "height": 24,
+                "parents": [
+                    6
+                ],
+                "pos": {
+                    "x": 252.043,
+                    "y": -1331.648,
+                    "z": 99.977
+                },
+                "step": 7,
+                "width": 24
+            },
+            {
+                "dir": {
+                    "x": 0.013405182836123,
+                    "y": 0.99991014649974,
+                    "z": 0
+                },
+                "height": 16,
+                "parents": [
+                    7
+                ],
+                "pos": {
+                    "x": -267.969,
+                    "y": -1380.157,
+                    "z": 99.977
+                },
+                "step": 8,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": -0.99998395383031,
+                    "y": 0.0056649873703848,
+                    "z": 0
+                },
+                "height": 17,
+                "parents": [
+                    8
+                ],
+                "pos": {
+                    "x": -653.706,
+                    "y": -995.961,
+                    "z": 99.976
+                },
+                "step": 9,
+                "width": 17
+            },
+            {
+                "dir": {
+                    "x": 0.69770404784164,
+                    "y": 0.71638611211091,
+                    "z": 0
+                },
+                "height": 16,
+                "parents": [
+                    9
+                ],
+                "pos": {
+                    "x": -900.689,
+                    "y": -295.769,
+                    "z": 99.977
+                },
+                "step": 10,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": 0.0078158473053622,
+                    "y": 0.99996945579898,
+                    "z": 0
+                },
+                "height": 17,
+                "parents": [
+                    10
+                ],
+                "pos": {
+                    "x": -760.008,
+                    "y": 239.765,
+                    "z": 99.976
+                },
+                "step": 11,
+                "width": 17
+            },
+            {
+                "dir": {
+                    "x": 0.99994800066746,
+                    "y": 0.01019784100426,
+                    "z": 0
+                },
+                "height": 17,
+                "isFinish": true,
+                "parents": [
+                    11
+                ],
+                "pos": {
+                    "x": -384.277,
+                    "y": 899.882,
+                    "z": 99.976
+                },
+                "step": 12,
+                "width": 17
+            }
+        ],
+        "id": 5,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Highspeed Ring - Perimeter",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": 0.99972140824532,
+                    "y": 0.023603090814242,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 245.642,
+                    "y": 897.281,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9999951917778,
+                    "y": 0.003101035516091,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 245.623,
+                    "y": 902.858,
+                    "z": 99.975
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99988824175608,
+                    "y": -0.014950050098194,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 233.633,
+                    "y": 897.409,
+                    "z": 99.978
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99991488370841,
+                    "y": 0.013047043281748,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 233.588,
+                    "y": 902.722,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99985236307596,
+                    "y": -0.017182899971414,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 221.605,
+                    "y": 897.602,
+                    "z": 99.975
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99990729057771,
+                    "y": 0.013616543230574,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 221.627,
+                    "y": 902.565,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99983747391986,
+                    "y": -0.018028470416211,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 209.623,
+                    "y": 897.811,
+                    "z": 99.975
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99991860458497,
+                    "y": 0.012758691345604,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 209.622,
+                    "y": 902.405,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99982716965615,
+                    "y": -0.018591148898531,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 197.603,
+                    "y": 898.032,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99993247019671,
+                    "y": 0.011621318612634,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 197.613,
+                    "y": 902.256,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99999653864284,
+                    "y": -0.0026311028756445,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 188.2025432113,
+                    "y": 898.06086242048,
+                    "z": 100.43564784102
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99999653863093,
+                    "y": -0.0026311074017398,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 188.21201410195,
+                    "y": 901.65246333144,
+                    "z": 100.43564745769
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99999653863093,
+                    "y": -0.0026311074017398,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 176.56813049316,
+                    "y": 897.88360595703,
+                    "z": 100
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99999653863093,
+                    "y": -0.0026311074017398,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 176.50102233887,
+                    "y": 901.89282226562,
+                    "z": 100
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99999653863093,
+                    "y": -0.0026311074017398,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 164.49075317383,
+                    "y": 897.90759277344,
+                    "z": 100
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99999653863093,
+                    "y": -0.0026311074017398,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 164.70860290527,
+                    "y": 901.87268066406,
+                    "z": 100
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 0,
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.99999421732319,
+                    "y": -0.0034007822903041,
+                    "z": 0
+                },
+                "height": 17.0,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 248.017,
+                    "y": 899.958,
+                    "z": 99.98
+                },
+                "step": 1,
+                "width": 17.0
+            },
+            {
+                "dir": {
+                    "x": -0.99994540896667,
+                    "y": -0.010448879675719,
+                    "z": 0
+                },
+                "height": 17.0,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": -384.278,
+                    "y": 899.88,
+                    "z": 99.98
+                },
+                "step": 2,
+                "width": 17.0
+            },
+            {
+                "dir": {
+                    "x": -0.0078006536936037,
+                    "y": -0.99996957443812,
+                    "z": 0
+                },
+                "height": 17.0,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": -759.989,
+                    "y": 239.765,
+                    "z": 99.98
+                },
+                "step": 3,
+                "width": 17.0
+            },
+            {
+                "dir": {
+                    "x": -0.69789189523816,
+                    "y": -0.71620311543646,
+                    "z": 0
+                },
+                "height": 16,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": -900.691,
+                    "y": -295.766,
+                    "z": 99.98
+                },
+                "step": 4,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": 0.99998553411238,
+                    "y": -0.0053788071157187,
+                    "z": 0
+                },
+                "height": 17.0,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": -653.703,
+                    "y": -995.96,
+                    "z": 99.98
+                },
+                "step": 5,
+                "width": 17.0
+            },
+            {
+                "dir": {
+                    "x": -0.013400805223143,
+                    "y": -0.99991020517813,
+                    "z": 0
+                },
+                "height": 16,
+                "parents": [
+                    5
+                ],
+                "pos": {
+                    "x": -267.968,
+                    "y": -1380.155,
+                    "z": 99.98
+                },
+                "step": 6,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": 0.0043855073053448,
+                    "y": 0.9999903836166,
+                    "z": 0
+                },
+                "height": 24,
+                "parents": [
+                    6
+                ],
+                "pos": {
+                    "x": 252.041,
+                    "y": -1331.649,
+                    "z": 99.98
+                },
+                "step": 7,
+                "width": 24
+            },
+            {
+                "dir": {
+                    "x": 0.99998401754908,
+                    "y": 0.0056537285394658,
+                    "z": 0
+                },
+                "height": 8,
+                "parents": [
+                    7
+                ],
+                "pos": {
+                    "x": 787.642,
+                    "y": -916.016,
+                    "z": 99.977
+                },
+                "step": 8,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.99997081936684,
+                    "y": 0.0076393988518688,
+                    "z": 0
+                },
+                "height": 8,
+                "parents": [
+                    8
+                ],
+                "pos": {
+                    "x": 1020.436,
+                    "y": -915.989,
+                    "z": 99.98
+                },
+                "step": 9,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": -0.99999420895339,
+                    "y": -0.0034032425255474,
+                    "z": 0
+                },
+                "height": 18,
+                "parents": [
+                    9
+                ],
+                "pos": {
+                    "x": 1147.841,
+                    "y": -140.012,
+                    "z": 99.98
+                },
+                "step": 10,
+                "width": 18
+            },
+            {
+                "dir": {
+                    "x": 0.9999840219472,
+                    "y": 0.0056529505844878,
+                    "z": 0
+                },
+                "height": 18,
+                "parents": [
+                    10
+                ],
+                "pos": {
+                    "x": 1164.172,
+                    "y": 379.914,
+                    "z": 99.98
+                },
+                "step": 11,
+                "width": 18
+            },
+            {
+                "dir": {
+                    "x": -0.99999853122998,
+                    "y": 0.0017139247028608,
+                    "z": 0
+                },
+                "height": 17.0,
+                "isFinish": true,
+                "parents": [
+                    11
+                ],
+                "pos": {
+                    "x": 1197.602,
+                    "y": 899.939,
+                    "z": 99.993
+                },
+                "step": 12,
+                "width": 17.0
+            }
+        ],
+        "id": 6,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Highspeed Ring - Perimeter Reverse",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.99999426747998,
+                    "y": -0.003386001651204,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 250.402,
+                    "y": 902.804,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99998399759049,
+                    "y": 0.0056572575460614,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 250.42,
+                    "y": 897.37,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99967934854826,
+                    "y": 0.025321928957629,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 262.411,
+                    "y": 902.488,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99999802131518,
+                    "y": -0.0019893128786571,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 262.407,
+                    "y": 897.385,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99998701856513,
+                    "y": 0.0050953607543062,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 274.439,
+                    "y": 902.356,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99999935275775,
+                    "y": -0.0011377539651155,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 274.403,
+                    "y": 897.4,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99997877796196,
+                    "y": 0.006514877259197,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 286.388,
+                    "y": 902.286,
+                    "z": 99.975
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99999516314852,
+                    "y": 0.0031102539399161,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 286.391,
+                    "y": 897.409,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99998400296485,
+                    "y": 0.0056563074883319,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 298.344,
+                    "y": 902.206,
+                    "z": 99.978
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99999678804117,
+                    "y": 0.0025345428265535,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 298.418,
+                    "y": 897.371,
+                    "z": 99.977
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 1052,
+        "gates": [
+            {
+                "dir": {
+                    "x": 0.99998234082627,
+                    "y": -0.0059428979140875,
+                    "z": 0
+                },
+                "height": 20,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 159.806,
+                    "y": 665.933,
+                    "z": 135.976
+                },
+                "step": 1,
+                "width": 20
+            },
+            {
+                "dir": {
+                    "x": 0.99998227381969,
+                    "y": 0.0059541621080991,
+                    "z": 0
+                },
+                "height": 16,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": 393.887,
+                    "y": 667.992,
+                    "z": 151.978
+                },
+                "step": 2,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": 0.0063980568338181,
+                    "y": -0.99997953222491,
+                    "z": 0
+                },
+                "height": 4,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 534.023,
+                    "y": 639.994,
+                    "z": 131.977
+                },
+                "step": 3,
+                "width": 4
+            },
+            {
+                "dir": {
+                    "x": -0.99991207662488,
+                    "y": -0.013260430601159,
+                    "z": 0
+                },
+                "height": 9,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 394.001,
+                    "y": 587.975,
+                    "z": 139.977
+                },
+                "step": 4,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": -0.99999660078062,
+                    "y": 0.0026073793762621,
+                    "z": 0
+                },
+                "height": 8,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": 103.999,
+                    "y": 604.019,
+                    "z": 131.983
+                },
+                "step": 5,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.0013755410363093,
+                    "y": 0.99999905394298,
+                    "z": 0
+                },
+                "height": 4,
+                "isFinish": true,
+                "parents": [
+                    5
+                ],
+                "pos": {
+                    "x": -125.934,
+                    "y": 640.011,
+                    "z": 131.977
+                },
+                "step": 6,
+                "width": 4
+            }
+        ],
+        "id": 7,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Halfpipes - Roofs",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": 0.9999855736389,
+                    "y": -0.0053714536274295,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 154.94502258301,
+                    "y": 665.95977783203,
+                    "z": 136
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 0,
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.99998401291331,
+                    "y": 0.0056545484158997,
+                    "z": 0
+                },
+                "height": 20,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 159.806,
+                    "y": 665.933,
+                    "z": 135.98
+                },
+                "step": 1,
+                "width": 20
+            },
+            {
+                "dir": {
+                    "x": -0.0010000168202744,
+                    "y": -0.99999949998305,
+                    "z": 0
+                },
+                "height": 4,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": -125.935,
+                    "y": 640.011,
+                    "z": 131.98
+                },
+                "step": 2,
+                "width": 4
+            },
+            {
+                "dir": {
+                    "x": 0.99999471159718,
+                    "y": -0.0032521958231607,
+                    "z": 0
+                },
+                "height": 8,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 103.999,
+                    "y": 603.975,
+                    "z": 131.983
+                },
+                "step": 3,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.99991944729321,
+                    "y": -0.012692475126523,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 373.743,
+                    "y": 587.958,
+                    "z": 139.978
+                },
+                "step": 4,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": -0.0061829705162401,
+                    "y": 0.99998088525511,
+                    "z": 0
+                },
+                "height": 4,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": 534.023,
+                    "y": 639.996,
+                    "z": 131.98
+                },
+                "step": 5,
+                "width": 4
+            },
+            {
+                "dir": {
+                    "x": -0.99998399105298,
+                    "y": -0.0056584130062752,
+                    "z": 0
+                },
+                "height": 16,
+                "isFinish": true,
+                "parents": [
+                    5
+                ],
+                "pos": {
+                    "x": 393.871,
+                    "y": 667.982,
+                    "z": 151.98
+                },
+                "step": 6,
+                "width": 16
+            }
+        ],
+        "id": 8,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Halfpipes - Roofs Reverse",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.99998064877713,
+                    "y": 0.0062210988798926,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 162.441,
+                    "y": 665.919,
+                    "z": 135.976
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": true,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 0,
+        "gates": [
+            {
+                "dir": {
+                    "x": 0.99967243632972,
+                    "y": 0.025593359345723,
+                    "z": 0
+                },
+                "height": 36,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 223.808,
+                    "y": 618.314,
+                    "z": 101.08
+                },
+                "step": 1,
+                "width": 36
+            },
+            {
+                "dir": {
+                    "x": 0.99999418991964,
+                    "y": -0.0034088307333748,
+                    "z": 0
+                },
+                "height": 32,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 208.037,
+                    "y": 655.952,
+                    "z": 99.969
+                },
+                "step": 1,
+                "width": 32
+            },
+            {
+                "dir": {
+                    "x": 0.99997495733609,
+                    "y": 0.0070770545206072,
+                    "z": 0
+                },
+                "height": 30,
+                "isFinish": true,
+                "parents": [
+                    1,
+                    2
+                ],
+                "pos": {
+                    "x": 555.843,
+                    "y": 640.027,
+                    "z": 99.979
+                },
+                "step": 2,
+                "width": 30
+            }
+        ],
+        "id": 9,
+        "leaderboard": [
+
+        ],
+        "loopable": false,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Halfpipes",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": 0.99998402613268,
+                    "y": 0.0056522101414759,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -166.394,
+                    "y": 637.168,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99998397295754,
+                    "y": -0.0056616100235906,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -166.391,
+                    "y": 642.851,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99996141100646,
+                    "y": 0.0087850155362545,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -166.411,
+                    "y": 631.024,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.99998848242016,
+                    "y": 0.0047994819537864,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -166.418,
+                    "y": 649.041,
+                    "z": 99.976
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": true,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 0,
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.99919609237598,
+                    "y": -0.04008951210205,
+                    "z": 0
+                },
+                "height": 36,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 224.127,
+                    "y": 618.012,
+                    "z": 101.2
+                },
+                "step": 1,
+                "width": 36
+            },
+            {
+                "dir": {
+                    "x": -0.9999942707275,
+                    "y": 0.0033850424172873,
+                    "z": 0
+                },
+                "height": 32,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 208.047,
+                    "y": 655.946,
+                    "z": 99.97
+                },
+                "step": 1,
+                "width": 32
+            },
+            {
+                "dir": {
+                    "x": -0.99998070746125,
+                    "y": -0.0062116588194104,
+                    "z": 0
+                },
+                "height": 30,
+                "isFinish": true,
+                "parents": [
+                    1,
+                    2
+                ],
+                "pos": {
+                    "x": -147.811,
+                    "y": 640.037,
+                    "z": 99.976
+                },
+                "step": 2,
+                "width": 30
+            }
+        ],
+        "id": 10,
+        "leaderboard": [
+
+        ],
+        "loopable": false,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Halfpipes Reverse",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.99988261653165,
+                    "y": 0.015321656497623,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 574.358,
+                    "y": 642.717,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99989532114889,
+                    "y": 0.014468819736235,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 574.464,
+                    "y": 637.276,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99999999996302,
+                    "y": -8.600228249876e-06,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 574.399,
+                    "y": 648.933,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99999672508168,
+                    "y": -0.0025592627663337,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 574.354,
+                    "y": 631.039,
+                    "z": 99.977
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 0,
+        "gates": [
+            {
+                "dir": {
+                    "x": 0.0097933701004033,
+                    "y": -0.99995204380114,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 340.037,
+                    "y": -476.185,
+                    "z": 100.79
+                },
+                "step": 1,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": -0.025925995428386,
+                    "y": 0.99966386488712,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": 409.935,
+                    "y": -555.586,
+                    "z": 109.355
+                },
+                "step": 2,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": -0.044744073958653,
+                    "y": 0.99899848240404,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 421.746,
+                    "y": -397.607,
+                    "z": 105.152
+                },
+                "step": 3,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": 0.35853497268965,
+                    "y": 0.93351629517563,
+                    "z": 0
+                },
+                "height": 9.0,
+                "isFinish": true,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 402.913,
+                    "y": -368.738,
+                    "z": 118.186
+                },
+                "step": 4,
+                "width": 9.0
+            }
+        ],
+        "id": 11,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Medium Skycurve",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": 0.017205308059357,
+                    "y": -0.999851977732,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 340.066,
+                    "y": -473.757,
+                    "z": 100.791
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 0,
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.009370120102044,
+                    "y": 0.99995609946101,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 340.031,
+                    "y": -476.179,
+                    "z": 100.79
+                },
+                "step": 1,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": -0.35478591382881,
+                    "y": -0.93494756823506,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": 403.002,
+                    "y": -368.623,
+                    "z": 118.167
+                },
+                "step": 2,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": 0.042995004976817,
+                    "y": -0.99907528722667,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 422.078,
+                    "y": -397.674,
+                    "z": 105.068
+                },
+                "step": 3,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": 0.02518158122028,
+                    "y": -0.99968289370542,
+                    "z": 0
+                },
+                "height": 9.0,
+                "isFinish": true,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 409.754,
+                    "y": -555.512,
+                    "z": 109.329
+                },
+                "step": 4,
+                "width": 9.0
+            }
+        ],
+        "id": 12,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Medium Skycurve Reverse",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.017591175058321,
+                    "y": 0.99984526330831,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 340.143,
+                    "y": -478.539,
+                    "z": 100.79
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 0,
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.99998524728995,
+                    "y": 0.0054318691487928,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 497.042,
+                    "y": -315.988,
+                    "z": 109.79
+                },
+                "step": 1,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": 0.99977863833595,
+                    "y": 0.021039827164567,
+                    "z": 0
+                },
+                "height": 8.4,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": 469.911,
+                    "y": -381,
+                    "z": 136.807
+                },
+                "step": 2,
+                "width": 8.4
+            },
+            {
+                "dir": {
+                    "x": -0.70579993273386,
+                    "y": -0.708411218822,
+                    "z": 0
+                },
+                "height": 8.4,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 547.802,
+                    "y": -451.637,
+                    "z": 104.831
+                },
+                "step": 3,
+                "width": 8.4
+            },
+            {
+                "dir": {
+                    "x": 0.046500631915624,
+                    "y": 0.99891826053559,
+                    "z": 0
+                },
+                "height": 9.0,
+                "isFinish": true,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 641.395,
+                    "y": -459.973,
+                    "z": 103.897
+                },
+                "step": 4,
+                "width": 9.0
+            }
+        ],
+        "id": 13,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Fast Skycurve",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.99998679446294,
+                    "y": 0.0051391536005518,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 500.013,
+                    "y": -316.004,
+                    "z": 109.79
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 0,
+        "gates": [
+            {
+                "dir": {
+                    "x": 0.99998554270509,
+                    "y": -0.0053772093885661,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 497.053,
+                    "y": -315.984,
+                    "z": 109.79
+                },
+                "step": 1,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": -0.021166280664296,
+                    "y": -0.99977596918652,
+                    "z": 0
+                },
+                "height": 9.0,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": 641.805,
+                    "y": -434.197,
+                    "z": 103.94
+                },
+                "step": 2,
+                "width": 9.0
+            },
+            {
+                "dir": {
+                    "x": 0.73174157877754,
+                    "y": 0.6815821754478,
+                    "z": 0
+                },
+                "height": 8,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 547.73,
+                    "y": -452.176,
+                    "z": 104.937
+                },
+                "step": 3,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": -0.99999999275924,
+                    "y": 0.00012033920007619,
+                    "z": 0
+                },
+                "height": 8.4,
+                "isFinish": true,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 470.307,
+                    "y": -381.046,
+                    "z": 136.795
+                },
+                "step": 4,
+                "width": 8.4
+            }
+        ],
+        "id": 14,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Fast Skycurve Reverse",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": 0.99998845593565,
+                    "y": -0.0048049969244637,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 493.933,
+                    "y": -315.972,
+                    "z": 109.788
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 0,
+        "gates": [
+            {
+                "dir": {
+                    "x": 0.99995918215013,
+                    "y": -0.0090351554304446,
+                    "z": 0
+                },
+                "height": 17.0,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 2.609,
+                    "y": 524.011,
+                    "z": 73.014
+                },
+                "step": 1,
+                "width": 17.0
+            },
+            {
+                "dir": {
+                    "x": 0.99995385832291,
+                    "y": -0.0096063117334451,
+                    "z": 0
+                },
+                "height": 17.0,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": 65.735,
+                    "y": 587.99,
+                    "z": 73.02
+                },
+                "step": 2,
+                "width": 17.0
+            },
+            {
+                "dir": {
+                    "x": 0.99981882052975,
+                    "y": 0.019034865760197,
+                    "z": 0
+                },
+                "height": 34,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 196.805,
+                    "y": 540.022,
+                    "z": 64.013
+                },
+                "step": 3,
+                "width": 34
+            },
+            {
+                "dir": {
+                    "x": -0.99999661338308,
+                    "y": 0.0026025415218797,
+                    "z": 0
+                },
+                "height": 34,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 248.326,
+                    "y": 540.023,
+                    "z": 104.013
+                },
+                "step": 4,
+                "width": 34
+            },
+            {
+                "dir": {
+                    "x": 0.99998422804981,
+                    "y": -0.0056163735291522,
+                    "z": 0
+                },
+                "height": 17.0,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": 352.602,
+                    "y": 572.04,
+                    "z": 112.016
+                },
+                "step": 5,
+                "width": 17.0
+            },
+            {
+                "dir": {
+                    "x": 0.0029962213968028,
+                    "y": -0.9999955113186,
+                    "z": 0
+                },
+                "height": 48,
+                "isFinish": true,
+                "parents": [
+                    5
+                ],
+                "pos": {
+                    "x": 512,
+                    "y": 544.144,
+                    "z": 99.977
+                },
+                "step": 6,
+                "width": 48
+            }
+        ],
+        "id": 15,
+        "leaderboard": [
+
+        ],
+        "loopable": false,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Halfpipes - Tunnel",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": 0.01042893180794,
+                    "y": 0.99994561721193,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -101.925,
+                    "y": 543.645,
+                    "z": 99.98
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.021039005193675,
+                    "y": 0.99977865563357,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -107.924,
+                    "y": 543.621,
+                    "z": 99.978
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.00057377383502392,
+                    "y": 0.99999983539178,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -113.951,
+                    "y": 543.574,
+                    "z": 99.979
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.014404956539352,
+                    "y": 0.99989624323082,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -119.968,
+                    "y": 543.575,
+                    "z": 99.978
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 0,
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.99998393205425,
+                    "y": 0.0056688299774227,
+                    "z": 0
+                },
+                "height": 17.0,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 352.585,
+                    "y": 572.024,
+                    "z": 112.005
+                },
+                "step": 1,
+                "width": 17.0
+            },
+            {
+                "dir": {
+                    "x": 0.99999678206732,
+                    "y": 0.0025368987000953,
+                    "z": 0
+                },
+                "height": 34,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": 223.684,
+                    "y": 539.987,
+                    "z": 104.013
+                },
+                "step": 2,
+                "width": 34
+            },
+            {
+                "dir": {
+                    "x": -0.99992280790076,
+                    "y": -0.012424904018053,
+                    "z": 0
+                },
+                "height": 34,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 240.046,
+                    "y": 539.948,
+                    "z": 64.014
+                },
+                "step": 3,
+                "width": 34
+            },
+            {
+                "dir": {
+                    "x": -0.99995636744426,
+                    "y": 0.0093414778107605,
+                    "z": 0
+                },
+                "height": 17.0,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 65.716,
+                    "y": 587.983,
+                    "z": 73.005
+                },
+                "step": 4,
+                "width": 17.0
+            },
+            {
+                "dir": {
+                    "x": -0.99999801873133,
+                    "y": 0.0019906113155358,
+                    "z": 0
+                },
+                "height": 17.0,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": 16.179,
+                    "y": 524.04,
+                    "z": 73.016
+                },
+                "step": 5,
+                "width": 17.0
+            },
+            {
+                "dir": {
+                    "x": -0.011400080193522,
+                    "y": -0.99993501697439,
+                    "z": 0
+                },
+                "height": 36,
+                "isFinish": true,
+                "parents": [
+                    5
+                ],
+                "pos": {
+                    "x": -109.992,
+                    "y": 544.012,
+                    "z": 99.932
+                },
+                "step": 6,
+                "width": 36
+            }
+        ],
+        "id": 16,
+        "leaderboard": [
+
+        ],
+        "loopable": false,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Halfpipes - Tunnel Reverse",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.00024541524984325,
+                    "y": 0.99999996988568,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 503.852,
+                    "y": 541.595,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0015597695113443,
+                    "y": 0.9999987835588,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 509.968,
+                    "y": 541.583,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0081030700741673,
+                    "y": 0.99996716958877,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 515.97,
+                    "y": 541.653,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.021005372866853,
+                    "y": 0.99977936281498,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 522.025,
+                    "y": 541.616,
+                    "z": 99.976
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "BeamNG",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": false,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "randomizeVehiclePool": false,
+            "resetPenaltyEnabled": false,
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "visibleGateCount": 2
+        },
+        "distance": 0,
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.0048006607324987,
+                    "y": -0.99998847676187,
+                    "z": 0
+                },
+                "height": 16,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": -1304.011,
+                    "y": 453.926,
+                    "z": 99.98
+                },
+                "step": 1,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": 0.99996961708641,
+                    "y": 0.0077951846718518,
+                    "z": 0
+                },
+                "height": 17.0,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": -1043.964,
+                    "y": 9.803,
+                    "z": 100.26
+                },
+                "step": 2,
+                "width": 17.0
+            },
+            {
+                "dir": {
+                    "x": 0.0075816456154486,
+                    "y": 0.99997125891186,
+                    "z": 0
+                },
+                "height": 16,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": -781.917,
+                    "y": 453.996,
+                    "z": 99.98
+                },
+                "step": 3,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": -0.99999934178392,
+                    "y": -0.0011473585892681,
+                    "z": 0
+                },
+                "height": 17.0,
+                "isFinish": true,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": -1044.008,
+                    "y": 902.321,
+                    "z": 100.124
+                },
+                "step": 4,
+                "width": 17.0
+            }
+        ],
+        "id": 2,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Highspeed Ring - Oval Reverse",
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": 0.0043665696183128,
+                    "y": -0.99999046648944,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1306.618,
+                    "y": 456.546,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.0087984081116088,
+                    "y": -0.99996129325824,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1301.581,
+                    "y": 456.549,
+                    "z": 99.975
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.016200467668631,
+                    "y": -0.99986876381219,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1306.442,
+                    "y": 470.392,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.015395885553235,
+                    "y": -0.99988147633009,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1301.792,
+                    "y": 470.409,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.015801172274242,
+                    "y": -0.99987515368408,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1306.242,
+                    "y": 482.42,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.013601193507588,
+                    "y": -0.99990749948941,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1301.962,
+                    "y": 482.406,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.018803048231082,
+                    "y": -0.99982320706074,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1306.044,
+                    "y": 494.42,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0025993801020452,
+                    "y": -0.99999662160584,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1301.952,
+                    "y": 494.425,
+                    "z": 99.977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.020194095016039,
+                    "y": -0.99979607847125,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1305.804,
+                    "y": 506.4,
+                    "z": 99.976
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0038012684049014,
+                    "y": -0.99999277515316,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1301.913,
+                    "y": 506.386,
+                    "z": 99.978
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    }
+]
