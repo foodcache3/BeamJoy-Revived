@@ -1,4 +1,4 @@
-# BeamJoy-Sandbox
+# BeamJoy-Revived
 <p align="center">
   <img src="./assets/cover.jpg" style="width: 49%; height: auto;" />
 </p>
@@ -27,7 +27,7 @@ Come say hi for troubleshooting help, to suggest features, or for sneak peeks at
 
 ## How to install
 
-Just like the free version, you can download the latest release [HERE](https://github.com/foodcache3/BeamJoy-sandbox/releases/latest) and extract it inside your server's `Resources` folder.<br/>
+Just like the free version, you can download the latest release [HERE](https://github.com/foodcache3/BeamJoy-Revived/releases/latest) and extract it inside your server's `Resources` folder.<br/>
 No update should never replace server nor players data.
 
 ## Importing legacy Hunter arenas / races from BeamJoy Free

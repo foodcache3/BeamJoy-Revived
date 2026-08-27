@@ -6,6 +6,15 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.47] - 2026-08-27
+
+### Changed
+- **Repo renamed to BeamJoy-Revived** (github.com/foodcache3/BeamJoy-Revived), to distinguish this
+  fork from the original BeamJoy Sandbox it started from. Updated the in-game Settings window's
+  GitHub link and the README's title/download link to match. Internal naming (`beamjoy`, `BJ`/`BJS`
+  throughout the codebase) is unchanged; this is a repo/branding-only update. *(client only, no
+  server changes)*
+
 ## [1.8.46] - 2026-08-27
 
 ### Fixed

@@ -7,7 +7,7 @@ angular.module("beamjoy").component("bjMainSettings", {
            this.settings = angular.copy(beamjoyStore.settings.data)
         });
 
-        this.githubUrl = "https://github.com/foodcache3/BeamJoy-sandbox";
+        this.githubUrl = "https://github.com/foodcache3/BeamJoy-Revived";
         this.version = null;
         this.build = null;
         $rootScope.$on("BJVersion", (_, data) => {
