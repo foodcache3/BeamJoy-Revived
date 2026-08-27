@@ -6,6 +6,27 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.46] - 2026-08-27
+
+### Fixed
+- **Real bug: `west_coast_usa_races.json`'s bundled content had a trailing comma before its
+  closing bracket, making it invalid JSON.** Confirmed severity, not just a west_coast_usa
+  problem: `seedBundledRaces()` loops over every map's bundled file in one pass, and this
+  codebase's own JSON parser raises a real Lua error on malformed input rather than returning
+  nil/false. Left unguarded, that error propagated all the way up through `services_races.onInit`,
+  which calls `seedBundledRaces()` immediately before its own `loadData()` call in the same
+  function body ; an uncaught error partway through aborts the rest of that function too, so
+  `loadData()` never runs and the current map's actual races silently never load into memory at
+  all on that boot, not just west_coast_usa's bundled races going unseeded. Fixed the file itself,
+  and hardened `dao/main.lua`'s `get()` with a `pcall` around the JSON parse so any future
+  malformed file (bundled or admin-authored) fails to load just that one file, logged clearly,
+  instead of taking the rest of that boot's initialization down with it. Every other bundled
+  race/hunter arena file (149 races, 6 hunter arenas across 12 maps) was checked against the
+  actual save-time validation rules (`sanitizeRace`/`sanitizeArena`) and found structurally clean
+  otherwise: no invalid gates/start positions, no hunter arenas below the enable minimums, no
+  dangling references to a vehicle preset id that won't exist on a fresh server. *(server only,
+  needs deployment)*
+
 ## [1.8.45] - 2026-08-27
 
 ### Fixed

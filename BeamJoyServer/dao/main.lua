@@ -17,7 +17,19 @@ local function get(filePath)
     if file and not err then
         local data = file:read("*a")
         file:close()
-        return utils_json.parse(data) or data
+        -- Real, confirmed risk: utils_json.parse errors (a real Lua `error()`, not a nil return)
+        -- on malformed JSON, e.g. a single stray trailing comma. Left unguarded, that propagates
+        -- all the way up through whatever caller chain led here ; for a caller like
+        -- services_races.seedBundledRaces (itself called synchronously from services_races.onInit,
+        -- before that same function's own loadData() call), an uncaught error there aborts the
+        -- rest of onInit too, so the current map's actual races silently never load at all, not
+        -- just the one broken bundled file. pcall here contains that to just this one file.
+        local ok, parsed = pcall(utils_json.parse, data)
+        if not ok then
+            LogError(string.format("dao_main.get: failed to parse JSON in %s : %s", filePath, parsed))
+            return nil
+        end
+        return parsed or data
     end
 end
 
