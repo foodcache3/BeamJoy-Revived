@@ -12,6 +12,9 @@ angular.module("beamjoy").component("bjMainRaces", {
     ) {
         const translate = $filter("translate");
         this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint"];
+        // mirrors races.lua's PLACEMENT_MODES: how grid slots get assigned at countdown time
+        // ("deterministic" = lobby join order, "random" = shuffled, "manual" = host-assigned)
+        this.PLACEMENT_MODES = ["deterministic", "random", "manual"];
         // mirrors raceGrid.lua's own trySubmitTime gate exactly (all three must be enabled for a
         // time to count at all). Used here only to decide whether to warn before starting, not to
         // enforce anything; the server remains the real source of truth for that. Slow-mo/pause
@@ -101,6 +104,23 @@ angular.module("beamjoy").component("bjMainRaces", {
                 Array.isArray(this.status.participants) &&
                 this.status.participants.length > 0 &&
                 this.status.participants.every((p) => p.ready);
+            // "manual" placement: the host's per-player slot dropdown, one option per grid slot.
+            // bj-select needs a {value, label}[] shape (same CEF native-<select> limitation as
+            // the vehicle preset dropdown above). The list itself is also kept sorted by slot so
+            // it reads top-to-bottom as the actual grid order being built
+            this.gridSlotOptions = [];
+            if (this.status && this.status.placementMode === "manual") {
+                for (let slot = 1; slot <= (this.status.maxParticipants || 0); slot++) {
+                    this.gridSlotOptions.push({ value: slot, label: `${slot}` });
+                }
+                if (Array.isArray(this.status.participants)) {
+                    // 9999 (not Infinity) as the "no slot" sink: Infinity - Infinity is NaN,
+                    // which a sort comparator must never return
+                    this.status.participants.sort(
+                        (a, b) => (a.gridSlot || 9999) - (b.gridSlot || 9999)
+                    );
+                }
+            }
         });
         // pure non-participant spectating, entirely separate from this.status above (a spectator
         // was never a participant); driven by its own push (raceRunner.lua's pushSpectateStatus)
@@ -237,6 +257,9 @@ angular.module("beamjoy").component("bjMainRaces", {
             this.startOptions = {
                 laps: d.laps || 3,
                 respawnStrategy: d.respawnStrategy || "lastcheckpoint",
+                placementMode: this.PLACEMENT_MODES.includes(d.placementMode)
+                    ? d.placementMode
+                    : "random",
                 // a single-slot race can never actually be joined by anyone else (raceStart
                 // already forces this server-side too ; matched here so the panel doesn't seed a
                 // now-hidden toggle to a stale "true" default)
@@ -351,6 +374,13 @@ angular.module("beamjoy").component("bjMainRaces", {
         this.setReady = (event, state) => {
             event.stopPropagation();
             beamjoyStore.send("BJRaceReady", [state]);
+        };
+        // "manual" placement: host assigns a participant's grid slot from the player list.
+        // Fired by the bj-select's own ng-change, so player.gridSlot already holds the newly
+        // picked value; the authoritative state (including the swapped occupant's slot) comes
+        // right back via the next session update push
+        this.setGridSlot = (player) => {
+            beamjoyStore.send("BJRaceSetGridSlot", [player.playerID, player.gridSlot]);
         };
         this.leaveSession = (event) => {
             event.stopPropagation();

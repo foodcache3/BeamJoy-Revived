@@ -6,6 +6,25 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.48] - 2026-08-28
+
+### Added
+- **Race grid placement strategies.** How starting slots are assigned when a race's countdown
+  begins is now a real, host-configurable choice (per-start option in the start panel, per-race
+  default in the race editor's Settings section, only shown for multi-slot races): **Join order**
+  ("deterministic") places players in the order they joined the lobby, host first; **Random** (the
+  new default) shuffles the field; **Manual** lets the host assign each player's slot from the
+  lobby player list (a dropdown per player, visible to the host while the lobby is open; picking a
+  slot someone else holds swaps the two, so a full grid can be freely rearranged; everyone else
+  sees their assigned slot number next to each name). Previously there was no policy at all: slots
+  followed `pairs()` iteration order over the participants table (keyed by playerID), i.e. roughly
+  server-connection order by accident and formally arbitrary, which is also why "Random" rather
+  than the old behavior is the new default — nothing reproducible existed to preserve. Manual
+  assignments are auto-seeded join-ordered so the host only has to touch what they want changed,
+  and the countdown falls back to filling free slots in join order for anyone left unassignable
+  (defensive only; the lobby always maintains a complete assignment). *(client + server, needs
+  deployment)*
+
 ## [1.8.47] - 2026-08-27
 
 ### Changed

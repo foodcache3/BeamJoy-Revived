@@ -13,6 +13,15 @@
 ---@class BJRaceParticipant
 ---@field playerID integer
 ---@field playerName string
+---@field joinIndex integer 1-based order in which this participant entered the session (the
+---starter is always 1). The "deterministic" placement mode's sort key, and the fallback fill
+---order for "manual" mode's defensive path; previously nothing recorded join order at all
+---(participants are keyed by playerID, so pairs() iteration order was the de-facto, arbitrary
+---grid order)
+---@field gridSlot integer? "manual" placement mode only : this participant's host-assigned grid
+---slot (1-based index into race.startPositions). Auto-seeded to the lowest free slot on join so
+---the lobby always shows a complete assignment, then re-arranged by the host via raceSetGridSlot
+---(assigning an occupied slot swaps the two participants). nil in every other placement mode
 ---@field ready boolean
 ---@field currentGate integer 0 = nothing crossed yet this race, else the PROGRESS number (each
 ---gate's own `step`, see BJRaceGate.step, identical to the crossed gate's plain array index for
@@ -70,6 +79,9 @@
 ---@class BJRaceSessionSettings host-configurable at start time, seeded from BJRaceDefaults
 ---@field laps integer?
 ---@field respawnStrategy BJRaceRespawnStrategy
+---@field placementMode BJRacePlacementMode how grid slots are assigned at countdown time:
+---"deterministic" = lobby join order (starter first), "random" = shuffled, "manual" = whatever
+---the host assigned in the lobby (see raceSetGridSlot). Default "random"
 ---@field gridTimeout integer seconds
 ---@field gridReadyTimeout integer seconds
 ---@field countdown integer seconds
@@ -148,6 +160,8 @@
 ---@field state BJRaceSessionState
 ---@field createdAt integer
 ---@field startedAt integer?
+---@field joinCounter integer? monotonic source of BJRaceParticipant.joinIndex (see
+---addParticipant); never decremented on leave
 ---@field participants tablelib<integer, BJRaceParticipant> index playerID
 
 local M = {
@@ -654,6 +668,11 @@ local function buildSettings(race, overrides)
         respawnStrategy = table.includes(services_races.RESPAWN_STRATEGIES, overrides.respawnStrategy)
             and overrides.respawnStrategy or defaults.respawnStrategy or services_races.RESPAWN_STRATEGIES
             .LASTCHECKPOINT,
+        placementMode = table.includes(services_races.PLACEMENT_MODES, overrides.placementMode)
+            and overrides.placementMode
+            or (table.includes(services_races.PLACEMENT_MODES, defaults.placementMode)
+                and defaults.placementMode)
+            or services_races.PLACEMENT_MODES.RANDOM,
         gridTimeout = math.max(10, tonumber(overrides.gridTimeout) or defaults.gridTimeout or 180),
         gridReadyTimeout = math.max(0, tonumber(overrides.gridReadyTimeout) or defaults.gridReadyTimeout or 10),
         -- was clamped to [3,30], a hidden ceiling/floor mismatched with the client slider's own
@@ -698,9 +717,28 @@ end
 ---@param playerID integer
 ---@param playerName string
 local function addParticipant(session, playerID, playerName)
+    -- monotonic join counter, never decremented on leave : joinIndex must stay unique and
+    -- ordered even after someone mid-list leaves the lobby
+    session.joinCounter = (session.joinCounter or 0) + 1
+    -- "manual" placement : seed the lowest free slot immediately so the lobby always shows a
+    -- complete, host-rearrangeable assignment instead of a pile of "unassigned" entries the
+    -- host would have to place one by one before starting
+    local gridSlot
+    if session.settings.placementMode == services_races.PLACEMENT_MODES.MANUAL then
+        local race = getRace(session)
+        local maxSlots = race and #race.startPositions or 0
+        for slot = 1, maxSlots do
+            if not session.participants:any(function(p) return p.gridSlot == slot end) then
+                gridSlot = slot
+                break
+            end
+        end
+    end
     session.participants[playerID] = {
         playerID = playerID,
         playerName = playerName,
+        joinIndex = session.joinCounter,
+        gridSlot = gridSlot,
         ready = false,
         currentGate = 0,
         lastCrossedGate = 0,
@@ -721,19 +759,55 @@ local function addParticipant(session, playerID, playerName)
     }
 end
 
---- begins the pre-race countdown. Assigns start positions, freezes the field, schedules the
---- actual race start
+--- begins the pre-race countdown. Assigns start positions per the session's placementMode,
+--- freezes the field, schedules the actual race start
 ---@param session BJRaceSession
 local function beginCountdown(session)
     local race = getRace(session)
     if not race then return removeSession(session) end
 
     session.state = "COUNTDOWN"
-    local participants = session.participants:values()
-    table.forEach(participants, function(p, i)
-        local slot = race.startPositions[((i - 1) % #race.startPositions) + 1]
-        p.startPosition = slot
-    end)
+    local mode = session.settings.placementMode
+    if mode == services_races.PLACEMENT_MODES.MANUAL then
+        -- gridSlot is the authoritative assignment (auto-seeded on join, rearranged by the host
+        -- via raceSetGridSlot). The fallback path below is purely defensive: a participant can
+        -- only ever lack a valid, unique slot through a bug or stray data, but silently stacking
+        -- two cars on one slot (or none) is bad enough to be worth guarding against anyway :
+        -- anyone unplaceable gets the free slots, in join order
+        local taken = {}
+        local unassigned = {}
+        session.participants:forEach(function(p)
+            local slot = p.gridSlot
+            if slot and race.startPositions[slot] and not taken[slot] then
+                taken[slot] = true
+                p.startPosition = race.startPositions[slot]
+            else
+                table.insert(unassigned, p)
+            end
+        end)
+        table.sort(unassigned, function(a, b) return (a.joinIndex or 0) < (b.joinIndex or 0) end)
+        local nextFree = 1
+        for _, p in ipairs(unassigned) do
+            while taken[nextFree] and nextFree < #race.startPositions do
+                nextFree = nextFree + 1
+            end
+            taken[nextFree] = true
+            p.startPosition = race.startPositions[nextFree]
+        end
+    else
+        -- "deterministic" : lobby join order, starter first. This replaces the old implicit
+        -- behavior, which iterated session.participants (keyed by playerID) with pairs() and was
+        -- therefore arbitrary, not actually join-ordered. "random" : a real shuffle on top
+        local participants = session.participants:values()
+        table.sort(participants, function(a, b) return (a.joinIndex or 0) < (b.joinIndex or 0) end)
+        if mode == services_races.PLACEMENT_MODES.RANDOM then
+            participants = table.shuffle(participants)
+        end
+        table.forEach(participants, function(p, i)
+            local slot = race.startPositions[((i - 1) % #race.startPositions) + 1]
+            p.startPosition = slot
+        end)
+    end
 
     utils_async.delayTask(function() M.beginRace(session.id) end,
         session.settings.countdown, "BJRaceGrid-" .. session.id .. "-countdown")
@@ -848,7 +922,7 @@ end
 
 ---@param ctxt BJSContext
 ---@param raceId integer
----@param opts {joinable: boolean?, laps: integer?, respawnStrategy: string?, gridTimeout: integer?, gridReadyTimeout: integer?, countdown: integer?, dnfEnabled: boolean?, dnfTimeout: integer?, resetPenaltyEnabled: boolean?, resetPenaltySeconds: integer?, autoSpectateOnFinish: boolean?, disableNodegrabber: boolean?, disableCameras: boolean?, disableGravityChange: boolean?, vehicleRestrictionMode: string?, vehicleRestrictionModel: string?, vehicleRestrictionParts: table?, vehicleRestrictionVars: table?, vehicleRestrictionPaints: table?, vehicleRestrictionLabel: string?, vehicleRestrictionPoolPresetId: integer?, ghostOnCountdown: boolean?, disableCollisions: boolean?, ghostBackmarkers: boolean?, showGateNametags: boolean?, limitVisibleGates: boolean?, visibleGateCount: integer?, allowTuning: boolean?}?
+---@param opts {joinable: boolean?, laps: integer?, respawnStrategy: string?, placementMode: string?, gridTimeout: integer?, gridReadyTimeout: integer?, countdown: integer?, dnfEnabled: boolean?, dnfTimeout: integer?, resetPenaltyEnabled: boolean?, resetPenaltySeconds: integer?, autoSpectateOnFinish: boolean?, disableNodegrabber: boolean?, disableCameras: boolean?, disableGravityChange: boolean?, vehicleRestrictionMode: string?, vehicleRestrictionModel: string?, vehicleRestrictionParts: table?, vehicleRestrictionVars: table?, vehicleRestrictionPaints: table?, vehicleRestrictionLabel: string?, vehicleRestrictionPoolPresetId: integer?, ghostOnCountdown: boolean?, disableCollisions: boolean?, ghostBackmarkers: boolean?, showGateNametags: boolean?, limitVisibleGates: boolean?, visibleGateCount: integer?, allowTuning: boolean?}?
 local function raceStart(ctxt, raceId, opts)
     if not ctxt.sender then return end
     -- multiple independent sessions of the SAME race running concurrently (different players) is
@@ -1055,6 +1129,40 @@ local function raceReady(ctxt, sessionId, ready, model)
     if M.sessions[sessionId] then -- session may have just been consumed by tryStartFromGrid
         pushSessionUpdate(session)
     end
+end
+
+--- "manual" placement mode's lobby-time slot assignment: the starter (or staff) moves any
+--- participant onto any grid slot while still in GRID. Assigning a slot someone else already
+--- occupies swaps the two participants' slots rather than erroring or silently unseating the
+--- occupant, so the host can freely rearrange a full grid without ever passing through an
+--- invalid "two players, one slot" state.
+---@param ctxt BJSContext
+---@param sessionId string
+---@param targetPlayerID integer whose slot is being set
+---@param slot integer 1-based index into race.startPositions
+local function raceSetGridSlot(ctxt, sessionId, targetPlayerID, slot)
+    if not ctxt.sender then return end
+    local session = M.sessions[sessionId]
+    if not session or session.state ~= "GRID" then return end
+    if session.settings.placementMode ~= services_races.PLACEMENT_MODES.MANUAL then return end
+    if session.starterID ~= ctxt.senderID and
+        not services_permissions.isStaff(ctxt.sender.playerName) then
+        return
+    end
+    local race = getRace(session)
+    local target = session.participants[tonumber(targetPlayerID)]
+    slot = tonumber(slot)
+    if not race or not target or not slot then return end
+    slot = math.floor(slot)
+    if not race.startPositions[slot] then return end
+    if target.gridSlot == slot then return end
+
+    local occupant = session.participants:find(function(p) return p.gridSlot == slot end)
+    if occupant then
+        occupant.gridSlot = target.gridSlot
+    end
+    target.gridSlot = slot
+    pushSessionUpdate(session)
 end
 
 ---@param playerID integer
@@ -1330,6 +1438,7 @@ local function onInit()
     communications_rx.addHandler("raceLeave", M.raceLeave)
     communications_rx.addHandler("raceCancel", M.raceCancel)
     communications_rx.addHandler("raceReady", M.raceReady)
+    communications_rx.addHandler("raceSetGridSlot", M.raceSetGridSlot)
     communications_rx.addHandler("raceGateCrossed", M.raceGateCrossed)
     communications_rx.addHandler("raceDNF", M.raceDNF)
     communications_rx.addHandler("raceSpectate", M.raceSpectate)
@@ -1441,6 +1550,7 @@ M.raceJoin = raceJoin
 M.raceLeave = raceLeave
 M.raceCancel = raceCancel
 M.raceReady = raceReady
+M.raceSetGridSlot = raceSetGridSlot
 M.unreadyOnVehicleChange = unreadyOnVehicleChange
 M.raceGateCrossed = raceGateCrossed
 M.raceDNF = raceDNF
