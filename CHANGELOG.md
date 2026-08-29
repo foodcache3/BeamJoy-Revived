@@ -6,6 +6,19 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.48] - 2026-08-29
+
+### Fixed
+- **Real bug: nametag rendering could crash with a FATAL LUA ERROR spam right after connecting to
+  a server.** `nametags.lua` had four call sites that indexed `beamjoy_players.getSelf()` directly
+  (`.playerName`/`.playerID`), assuming it always returns the local player's own record. For a
+  short window right after connecting, before the server's own player-list push has landed,
+  `getSelf()` legitimately returns nil, while other players' vehicles can already be drawing
+  nametags every frame. That produced a repeating "attempt to index a nil value" error at
+  `nametags.lua:113` (and the other three call sites), tens of times a second until the player list
+  arrived, confirmed in a user-supplied `beamng.log`. Fixed by treating "self not loaded yet" as
+  "not self" at each call site instead of indexing nil. *(client only)*
+
 ## [1.8.47] - 2026-08-27
 
 ### Changed

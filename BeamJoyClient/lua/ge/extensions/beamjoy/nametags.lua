@@ -110,7 +110,13 @@ end
 ---@param playerName string
 ---@return string
 local function updateTagName(playerName)
-    if playerName == beamjoy_players.getSelf().playerName then
+    -- getSelf() is nil for a short window right after connecting, before the server's player-list
+    -- push has landed (M.players[MPConfig.getNickname()] isn't populated yet), while nametags for
+    -- OTHER players' vehicles can already be drawing every frame. Treat "self not loaded yet" as
+    -- "not self" rather than indexing nil, which used to spam a FATAL LUA ERROR every frame during
+    -- that window.
+    local self = beamjoy_players.getSelf()
+    if self and playerName == self.playerName then
         M.tagNames[playerName] = beamjoy_lang.translate("beamjoy.nametags.you")
         return M.tagNames[playerName]
     end
@@ -135,9 +141,11 @@ end
 ---@param orig vec3
 local function drawNametag(mpVeh, orig)
     local textColor, bgColor
+    -- see updateTagName's comment: getSelf() can be nil briefly right after connecting.
+    local self = beamjoy_players.getSelf()
     local tag = M.tagNames[mpVeh.ownerName] or updateTagName(mpVeh.ownerName)
     if mpVeh.type == beamjoy_vehicles.TYPES.TRAILER then
-        if mpVeh.ownerID == beamjoy_players.getSelf().playerID then
+        if self and mpVeh.ownerID == self.playerID then
             tag = beamjoy_lang.translate("beamjoy.nametags.yourTrailer")
         else
             tag = beamjoy_lang.translate("beamjoy.nametags.othersTrailer")
@@ -198,7 +206,7 @@ local function drawNametag(mpVeh, orig)
                 return playerName ~= mpVeh.ownerName and
                     not replay.replayPlayers[playerName] and
                     (camera.getCamera() == camera.CAMERAS.FREE or
-                        playerName ~= beamjoy_players.getSelf().playerName)
+                        not self or playerName ~= self.playerName)
             end)
             :forEach(function(_, specName, specs)
                 specName = M.tagNames[specName] or
@@ -255,7 +263,9 @@ local function onUpdate()
                 return false
             end
             if v.type == beamjoy_vehicles.TYPES.TRAILER then
-                if v.ownerName ~= beamjoy_players.getSelf().playerName then
+                -- see updateTagName's comment: getSelf() can be nil briefly right after connecting.
+                local self = beamjoy_players.getSelf()
+                if not self or v.ownerName ~= self.playerName then
                     -- not own trailer
                     return false
                 end
