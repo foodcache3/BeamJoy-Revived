@@ -6,6 +6,26 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.49] - 2026-08-29
+
+### Fixed
+- **Real bug: manual grid-slot assignment (v1.8.48) never actually applied.** Picking a new slot
+  in the lobby's per-player dropdown showed the change for about a second, then reverted, with or
+  without a collision. Root cause was client-side, in `bj-select`'s ng-change plumbing (this was
+  the first consumer of it): the component invoked its `&` callback with a positional argument,
+  which Angular `&` bindings ignore, so the caller's expression read the slot back off its own
+  two-way-bound `player.gridSlot` — which still holds the OLD value at the instant ng-change
+  fires (the binding's write-back to the parent scope runs later in the digest). The client
+  therefore sent the player's current slot to the server, which correctly treated "already on
+  that slot" as a no-op, and the once-a-second lobby status tick then repainted the authoritative
+  (unchanged) state: exactly the observed show-then-revert. Server-side placement logic
+  (seeding, swap, free move, countdown assignment) was verified correct under a test harness,
+  including 0-based player IDs and float-typed wire arguments. Fixed by having `bj-select` expose
+  the freshly picked value to its ng-change expression as a named local (`value`) and sending
+  that; also `track by player.playerID` on the lobby player list so those rows (and an open
+  dropdown) survive the once-a-second status pushes instead of being torn down and rebuilt every
+  tick. *(client only, no server changes)*
+
 ## [1.8.48] - 2026-08-28
 
 ### Added

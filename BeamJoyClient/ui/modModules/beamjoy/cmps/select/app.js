@@ -17,7 +17,14 @@ angular.module("beamjoy").component("bjSelect", {
             true
         );
         this.handleChange = () => {
-            if (this.ngChange) this.ngChange(this.ngModel);
+            // "&" bindings ignore positional arguments; they take a named-locals object, exposed
+            // to the caller's expression as `value` (e.g. ng-change="$ctrl.onPick(item, value)").
+            // Passing the value explicitly matters: at the moment ng-change fires, the two-way
+            // ngModel copy back to the PARENT scope's property has not run yet (that happens
+            // later in the digest), so a caller reading its own bound property from inside
+            // ng-change gets the stale pre-change value. Confirmed real bug: the race lobby's
+            // manual grid-slot dropdown sent the OLD slot to the server, which no-op'd it.
+            if (this.ngChange) this.ngChange({ value: this.ngModel });
         };
     },
 });

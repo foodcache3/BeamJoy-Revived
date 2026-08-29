@@ -157,16 +157,21 @@
     <div class="player-list" ng-if="$ctrl.showPlayers">
         <div
             class="d-flex align-center gap-1"
-            ng-repeat="player in $ctrl.status.participants"
+            ng-repeat="player in $ctrl.status.participants track by player.playerID"
         >
             <!-- "manual" placement: the host rearranges slots right here while the lobby is
                  still open (picking a taken slot swaps the two players server-side); everyone
-                 else just sees each player's assigned slot number -->
+                 else just sees each player's assigned slot number. `value` is the freshly picked
+                 slot, exposed by bj-select's own ng-change locals: player.gridSlot itself is
+                 still the OLD value at this instant (the two-way binding write-back runs later
+                 in the digest), which is exactly the stale-send bug this replaced. track by
+                 playerID keeps these rows (and an open dropdown) alive across the once-a-second
+                 lobby-countdown status pushes instead of rebuilding the whole list each tick -->
             <bj-select
                 ng-if="$ctrl.status.placementMode === 'manual' && $ctrl.status.isStarter && $ctrl.status.state === 'GRID'"
                 ng-model="player.gridSlot"
                 options="$ctrl.gridSlotOptions"
-                ng-change="$ctrl.setGridSlot(player)"
+                ng-change="$ctrl.setGridSlot(player, value)"
                 title="{{'beamjoy.window.main.tabs.races.gridSlot.tooltip' | translate}}"
             ></bj-select>
             <span

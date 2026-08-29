@@ -376,11 +376,15 @@ angular.module("beamjoy").component("bjMainRaces", {
             beamjoyStore.send("BJRaceReady", [state]);
         };
         // "manual" placement: host assigns a participant's grid slot from the player list.
-        // Fired by the bj-select's own ng-change, so player.gridSlot already holds the newly
-        // picked value; the authoritative state (including the swapped occupant's slot) comes
-        // right back via the next session update push
-        this.setGridSlot = (player) => {
-            beamjoyStore.send("BJRaceSetGridSlot", [player.playerID, player.gridSlot]);
+        // `slot` comes from bj-select's ng-change locals (the freshly picked value), NOT read
+        // back off player.gridSlot: at ng-change time the two-way binding write-back hasn't run
+        // yet, so player.gridSlot still holds the OLD slot. Reading it here sent the old value,
+        // which the server correctly no-op'd (target already on that slot), and the next lobby
+        // status tick then visually reverted the pick: the original "can't actually set manual
+        // grid slots" bug. The authoritative state (including the swapped occupant's slot) comes
+        // right back via the next session update push either way.
+        this.setGridSlot = (player, slot) => {
+            beamjoyStore.send("BJRaceSetGridSlot", [player.playerID, slot]);
         };
         this.leaveSession = (event) => {
             event.stopPropagation();
