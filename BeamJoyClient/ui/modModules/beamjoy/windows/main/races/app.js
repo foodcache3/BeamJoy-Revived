@@ -12,6 +12,9 @@ angular.module("beamjoy").component("bjMainRaces", {
     ) {
         const translate = $filter("translate");
         this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint"];
+        // mirrors races.lua's PLACEMENT_MODES: how grid slots get assigned at countdown time
+        // ("deterministic" = lobby join order, "random" = shuffled, "manual" = host-assigned)
+        this.PLACEMENT_MODES = ["deterministic", "random", "manual"];
         // mirrors raceGrid.lua's own trySubmitTime gate exactly (all three must be enabled for a
         // time to count at all). Used here only to decide whether to warn before starting, not to
         // enforce anything; the server remains the real source of truth for that. Slow-mo/pause
@@ -101,6 +104,23 @@ angular.module("beamjoy").component("bjMainRaces", {
                 Array.isArray(this.status.participants) &&
                 this.status.participants.length > 0 &&
                 this.status.participants.every((p) => p.ready);
+            // "manual" placement: the host's per-player slot dropdown, one option per grid slot.
+            // bj-select needs a {value, label}[] shape (same CEF native-<select> limitation as
+            // the vehicle preset dropdown above). The list itself is also kept sorted by slot so
+            // it reads top-to-bottom as the actual grid order being built
+            this.gridSlotOptions = [];
+            if (this.status && this.status.placementMode === "manual") {
+                for (let slot = 1; slot <= (this.status.maxParticipants || 0); slot++) {
+                    this.gridSlotOptions.push({ value: slot, label: `${slot}` });
+                }
+                if (Array.isArray(this.status.participants)) {
+                    // 9999 (not Infinity) as the "no slot" sink: Infinity - Infinity is NaN,
+                    // which a sort comparator must never return
+                    this.status.participants.sort(
+                        (a, b) => (a.gridSlot || 9999) - (b.gridSlot || 9999)
+                    );
+                }
+            }
         });
         // pure non-participant spectating, entirely separate from this.status above (a spectator
         // was never a participant); driven by its own push (raceRunner.lua's pushSpectateStatus)
@@ -237,6 +257,9 @@ angular.module("beamjoy").component("bjMainRaces", {
             this.startOptions = {
                 laps: d.laps || 3,
                 respawnStrategy: d.respawnStrategy || "lastcheckpoint",
+                placementMode: this.PLACEMENT_MODES.includes(d.placementMode)
+                    ? d.placementMode
+                    : "random",
                 // a single-slot race can never actually be joined by anyone else (raceStart
                 // already forces this server-side too ; matched here so the panel doesn't seed a
                 // now-hidden toggle to a stale "true" default)
@@ -351,6 +374,17 @@ angular.module("beamjoy").component("bjMainRaces", {
         this.setReady = (event, state) => {
             event.stopPropagation();
             beamjoyStore.send("BJRaceReady", [state]);
+        };
+        // "manual" placement: host assigns a participant's grid slot from the player list.
+        // `slot` comes from bj-select's ng-change locals (the freshly picked value), NOT read
+        // back off player.gridSlot: at ng-change time the two-way binding write-back hasn't run
+        // yet, so player.gridSlot still holds the OLD slot. Reading it here sent the old value,
+        // which the server correctly no-op'd (target already on that slot), and the next lobby
+        // status tick then visually reverted the pick: the original "can't actually set manual
+        // grid slots" bug. The authoritative state (including the swapped occupant's slot) comes
+        // right back via the next session update push either way.
+        this.setGridSlot = (player, slot) => {
+            beamjoyStore.send("BJRaceSetGridSlot", [player.playerID, slot]);
         };
         this.leaveSession = (event) => {
             event.stopPropagation();

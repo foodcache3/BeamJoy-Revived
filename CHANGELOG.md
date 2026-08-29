@@ -6,6 +6,62 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.52] - 2026-08-29
+
+### Fixed
+- **Real bug: "random" grid placement never teleported anyone to their start position.**
+  `beginCountdown`'s random branch shuffled the participant list via `table.shuffle`, which
+  deep-CLONES its input (`table.clone` all the way down) before shuffling, so the slot-assignment
+  loop wrote every `startPosition` onto throwaway copies while the real session participants
+  never received one. Each client then hit raceRunner.lua's "no start position to teleport to"
+  fallback and stayed wherever it was. Deterministic/manual modes were unaffected (`values()`
+  rebuilds the array but keeps real references; no clone involved). Now shuffles in place with a
+  plain Fisher-Yates over the values array. Verified under the server-side test harness: the
+  regression test asserts every REAL participant record ends countdown holding a distinct grid
+  slot, and fails on the previous code exactly as reported. *(server only, needs deployment)*
+
+## [1.8.51] - 2026-08-29
+
+### Fixed
+- **Real bug: manual grid-slot assignment (v1.8.50) never actually applied.** Picking a new slot
+  in the lobby's per-player dropdown showed the change for about a second, then reverted, with or
+  without a collision. Root cause was client-side, in `bj-select`'s ng-change plumbing (this was
+  the first consumer of it): the component invoked its `&` callback with a positional argument,
+  which Angular `&` bindings ignore, so the caller's expression read the slot back off its own
+  two-way-bound `player.gridSlot`, which still holds the OLD value at the instant ng-change
+  fires (the binding's write-back to the parent scope runs later in the digest). The client
+  therefore sent the player's current slot to the server, which correctly treated "already on
+  that slot" as a no-op, and the once-a-second lobby status tick then repainted the authoritative
+  (unchanged) state: exactly the observed show-then-revert. Server-side placement logic
+  (seeding, swap, free move, countdown assignment) was verified correct under a test harness,
+  including 0-based player IDs and float-typed wire arguments. Fixed by having `bj-select` expose
+  the freshly picked value to its ng-change expression as a named local (`value`) and sending
+  that; also `track by player.playerID` on the lobby player list so those rows (and an open
+  dropdown) survive the once-a-second status pushes instead of being torn down and rebuilt every
+  tick. *(client only, no server changes)*
+
+## [1.8.50] - 2026-08-28
+
+### Added
+- **Race grid placement strategies**, contributed by Bytestorm5 via
+  [PR #1](https://github.com/foodcache3/BeamJoy-Revived/pull/1) (originally opened and tagged
+  v1.8.48-v1.8.50 upstream; renumbered here to 1.8.50-1.8.52 to land after this fork's own
+  v1.8.48/v1.8.49 below, which used those same numbers for unrelated work first). How starting
+  slots are assigned when a race's countdown begins is now a real, host-configurable choice
+  (per-start option in the start panel, per-race default in the race editor's Settings section,
+  only shown for multi-slot races): **Join order** ("deterministic") places players in the order
+  they joined the lobby, host first; **Random** (the new default) shuffles the field; **Manual**
+  lets the host assign each player's slot from the lobby player list (a dropdown per player,
+  visible to the host while the lobby is open; picking a slot someone else holds swaps the two, so
+  a full grid can be freely rearranged; everyone else sees their assigned slot number next to each
+  name). Previously there was no policy at all: slots followed `pairs()` iteration order over the
+  participants table (keyed by playerID), i.e. roughly server-connection order by accident and
+  formally arbitrary, which is also why "Random" rather than the old behavior is the new default,
+  nothing reproducible existed to preserve. Manual assignments are auto-seeded join-ordered so the
+  host only has to touch what they want changed, and the countdown falls back to filling free slots
+  in join order for anyone left unassignable (defensive only; the lobby always maintains a complete
+  assignment). *(client + server, needs deployment)*
+
 ## [1.8.49] - 2026-08-29
 
 ### Fixed

@@ -1,5 +1,6 @@
 ---@alias BJRaceMode "grid"|"passive"
 ---@alias BJRaceRespawnStrategy "all"|"norespawn"|"lastcheckpoint"
+---@alias BJRacePlacementMode "deterministic"|"random"|"manual"
 
 ---@class BJRaceGate
 ---@field pos {x: number, y: number, z: number}
@@ -43,6 +44,8 @@
 ---overridable per start by whoever starts the race (grid/joinable/admin-forced alike)
 ---@field laps integer?
 ---@field respawnStrategy BJRaceRespawnStrategy
+---@field placementMode BJRacePlacementMode? how grid slots are assigned at countdown time (see
+---M.PLACEMENT_MODES / raceGrid.lua's beginCountdown) ; default "random"
 ---@field joinable boolean default state of the "let others join" flag for the `grid` mode
 ---@field gridTimeout integer seconds
 ---@field gridReadyTimeout integer seconds
@@ -216,6 +219,16 @@ local M = {
         ALL = "all",
         NORESPAWN = "norespawn",
         LASTCHECKPOINT = "lastcheckpoint",
+    },
+    -- how grid slots map to participants at countdown (see raceGrid.lua's beginCountdown):
+    -- "deterministic" = lobby join order (starter first), "random" = shuffled, "manual" = the
+    -- host assigns each participant's slot in the lobby. Random is the default: the old implicit
+    -- behavior was pairs() iteration order over playerIDs, i.e. arbitrary anyway, never a real
+    -- ordering anyone could have been relying on
+    PLACEMENT_MODES = {
+        DETERMINISTIC = "deterministic",
+        RANDOM = "random",
+        MANUAL = "manual",
     },
     MODES = {
         GRID = "grid",
@@ -421,6 +434,9 @@ local function sanitizeRace(race, existingRaces)
     race.defaults = race.defaults or {}
     if not table.includes(M.RESPAWN_STRATEGIES, race.defaults.respawnStrategy) then
         race.defaults.respawnStrategy = M.RESPAWN_STRATEGIES.LASTCHECKPOINT
+    end
+    if not table.includes(M.PLACEMENT_MODES, race.defaults.placementMode) then
+        race.defaults.placementMode = M.PLACEMENT_MODES.RANDOM
     end
     -- a race with only one grid slot can never actually be joined by anyone else (raceJoin caps
     -- participants at #startPositions), so normalize the saved default here too, not just at

@@ -129,6 +129,7 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJRaceStart", M.startRace)
     beamjoy_communications_ui.addHandler("BJRaceJoin", M.joinRace)
     beamjoy_communications_ui.addHandler("BJRaceReady", M.ready)
+    beamjoy_communications_ui.addHandler("BJRaceSetGridSlot", M.setGridSlot)
     beamjoy_communications_ui.addHandler("BJRaceLeave", M.leave)
     beamjoy_communications_ui.addHandler("BJRaceCancel", M.cancel)
     beamjoy_communications_ui.addHandler("BJRaceRetire", M.retire)
@@ -1394,13 +1395,21 @@ local function pushSessionStatus()
         joinable = M.session.joinable,
         participantCount = #M.session.participants,
         maxParticipants = race and #race.startPositions or 0,
-        -- {playerName, ready, vehicleModel} per participant, for the status panel's player-list
-        -- dropdown
+        -- {playerID, playerName, ready, vehicleModel, gridSlot} per participant, for the status
+        -- panel's player-list dropdown. playerID/gridSlot exist for the "manual" placement
+        -- mode's host slot-assignment UI (gridSlot is nil in every other placement mode)
         participants = table.map(M.session.participants, function(p)
-            return { playerName = p.playerName, ready = p.ready, vehicleModel = p.vehicleModel }
+            return {
+                playerID = p.playerID,
+                playerName = p.playerName,
+                ready = p.ready,
+                vehicleModel = p.vehicleModel,
+                gridSlot = p.gridSlot,
+            }
         end),
         laps = M.session.settings.laps,
         respawnStrategy = M.session.settings.respawnStrategy,
+        placementMode = M.session.settings.placementMode,
         vehicleRestrictionMode = restriction and restriction.mode or "free",
         vehicleRestrictionLabel = restriction and restriction.mode == "single" and restriction.label or nil,
         vehicleRestrictionPoolCount = restriction and restriction.mode == "pool" and
@@ -2540,6 +2549,16 @@ local function ready(state)
     beamjoy_communications.send("raceReady", M.session.id, becomingReady, model)
 end
 
+--- "manual" placement mode only : the host assigning a participant's grid slot from the lobby's
+--- player list. Server-validated (starter/staff only, GRID state, slot in range, swap semantics),
+--- this just forwards the click.
+---@param playerID integer
+---@param slot integer
+local function setGridSlot(playerID, slot)
+    if not M.session then return end
+    beamjoy_communications.send("raceSetGridSlot", M.session.id, playerID, slot)
+end
+
 local function leave()
     if not M.session then return end
     beamjoy_communications.send("raceLeave", M.session.id)
@@ -2589,6 +2608,7 @@ M.setPaint = setPaint
 M.startRace = startRace
 M.joinRace = joinRace
 M.ready = ready
+M.setGridSlot = setGridSlot
 M.leave = leave
 M.cancel = cancel
 M.retire = retire

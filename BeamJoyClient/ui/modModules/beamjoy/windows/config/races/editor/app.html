@@ -562,6 +562,26 @@
                 </td>
                 <td><bj-toggle ng-model="$ctrl.race.defaults.joinable"></bj-toggle></td>
             </tr>
+            <tr ng-if="$ctrl.race.startPositions.length > 1">
+                <td
+                    class="text-right"
+                    title="{{'beamjoy.window.config.tabs.races.placementMode.tooltip' | translate}}"
+                >
+                    {{'beamjoy.window.config.tabs.races.placementMode' | translate}}
+                </td>
+                <td>
+                    <div class="d-flex gap-1 flex-wrap">
+                        <button
+                            ng-repeat="mode in $ctrl.PLACEMENT_MODES"
+                            class="btn info"
+                            ng-class="{success: ($ctrl.race.defaults.placementMode || 'random') === mode}"
+                            ng-click="$ctrl.race.defaults.placementMode = mode"
+                        >
+                            {{('beamjoy.window.config.tabs.races.placementModes.' + mode) | translate}}
+                        </button>
+                    </div>
+                </td>
+            </tr>
             <tr>
                 <td class="text-right">
                     {{'beamjoy.window.config.tabs.races.respawnStrategy' | translate}}

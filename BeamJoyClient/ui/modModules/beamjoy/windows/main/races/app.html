@@ -157,8 +157,30 @@
     <div class="player-list" ng-if="$ctrl.showPlayers">
         <div
             class="d-flex align-center gap-1"
-            ng-repeat="player in $ctrl.status.participants"
+            ng-repeat="player in $ctrl.status.participants track by player.playerID"
         >
+            <!-- "manual" placement: the host rearranges slots right here while the lobby is
+                 still open (picking a taken slot swaps the two players server-side); everyone
+                 else just sees each player's assigned slot number. `value` is the freshly picked
+                 slot, exposed by bj-select's own ng-change locals: player.gridSlot itself is
+                 still the OLD value at this instant (the two-way binding write-back runs later
+                 in the digest), which is exactly the stale-send bug this replaced. track by
+                 playerID keeps these rows (and an open dropdown) alive across the once-a-second
+                 lobby-countdown status pushes instead of rebuilding the whole list each tick -->
+            <bj-select
+                ng-if="$ctrl.status.placementMode === 'manual' && $ctrl.status.isStarter && $ctrl.status.state === 'GRID'"
+                ng-model="player.gridSlot"
+                options="$ctrl.gridSlotOptions"
+                ng-change="$ctrl.setGridSlot(player, value)"
+                title="{{'beamjoy.window.main.tabs.races.gridSlot.tooltip' | translate}}"
+            ></bj-select>
+            <span
+                ng-if="$ctrl.status.placementMode === 'manual' && !($ctrl.status.isStarter && $ctrl.status.state === 'GRID') && player.gridSlot"
+                class="opacity-70 small"
+                title="{{'beamjoy.window.main.tabs.races.gridSlot.tooltip' | translate}}"
+            >
+                #{{player.gridSlot}}
+            </span>
             <span class="flex-grow-1">
                 {{player.playerName}}
                 <span ng-if="player.vehicleModel" class="small opacity-70">({{player.vehicleModel}})</span>
@@ -313,6 +335,28 @@
                         {{'beamjoy.window.config.tabs.races.joinable' | translate}}
                     </td>
                     <td><bj-toggle ng-model="$ctrl.startOptions.joinable"></bj-toggle></td>
+                </tr>
+                <!-- grid placement only ever matters with more than one participant, i.e. a real
+                     multiplayer lobby, so it's hidden (not just ignored) for a solo start -->
+                <tr ng-if="race.startPositions > 1 && $ctrl.startOptions.joinable">
+                    <td
+                        class="text-right"
+                        title="{{'beamjoy.window.config.tabs.races.placementMode.tooltip' | translate}}"
+                    >
+                        {{'beamjoy.window.config.tabs.races.placementMode' | translate}}
+                    </td>
+                    <td>
+                        <div class="d-flex gap-1 flex-wrap">
+                            <button
+                                ng-repeat="mode in $ctrl.PLACEMENT_MODES"
+                                class="btn info"
+                                ng-class="{success: $ctrl.startOptions.placementMode === mode}"
+                                ng-click="$ctrl.startOptions.placementMode = mode"
+                            >
+                                {{('beamjoy.window.config.tabs.races.placementModes.' + mode) | translate}}
+                            </button>
+                        </div>
+                    </td>
                 </tr>
                 <tr>
                     <td
