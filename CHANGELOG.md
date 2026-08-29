@@ -6,6 +6,20 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.50] - 2026-08-29
+
+### Fixed
+- **Real bug: "random" grid placement never teleported anyone to their start position.**
+  `beginCountdown`'s random branch shuffled the participant list via `table.shuffle`, which
+  deep-CLONES its input (`table.clone` all the way down) before shuffling, so the slot-assignment
+  loop wrote every `startPosition` onto throwaway copies while the real session participants
+  never received one. Each client then hit raceRunner.lua's "no start position to teleport to"
+  fallback and stayed wherever it was. Deterministic/manual modes were unaffected (`values()`
+  rebuilds the array but keeps real references; no clone involved). Now shuffles in place with a
+  plain Fisher-Yates over the values array. Verified under the server-side test harness: the
+  regression test asserts every REAL participant record ends countdown holding a distinct grid
+  slot, and fails on the previous code exactly as reported. *(server only, needs deployment)*
+
 ## [1.8.49] - 2026-08-29
 
 ### Fixed

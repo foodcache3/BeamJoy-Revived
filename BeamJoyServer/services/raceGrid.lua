@@ -797,11 +797,21 @@ local function beginCountdown(session)
     else
         -- "deterministic" : lobby join order, starter first. This replaces the old implicit
         -- behavior, which iterated session.participants (keyed by playerID) with pairs() and was
-        -- therefore arbitrary, not actually join-ordered. "random" : a real shuffle on top
+        -- therefore arbitrary, not actually join-ordered. "random" : a real shuffle on top.
+        --
+        -- Shuffled in place, NOT via table.shuffle : that util deep-CLONES its input first
+        -- (table.clone all the way down), so the loop below would assign startPosition onto
+        -- throwaway copies while the real session.participants records never got one at all.
+        -- Confirmed live as "random placement just fails to teleport people": every client hit
+        -- raceRunner.lua's own "no start position to teleport to" fallback. values() itself is
+        -- safe (it rebuilds the ARRAY but keeps the same participant references inside).
         local participants = session.participants:values()
         table.sort(participants, function(a, b) return (a.joinIndex or 0) < (b.joinIndex or 0) end)
         if mode == services_races.PLACEMENT_MODES.RANDOM then
-            participants = table.shuffle(participants)
+            for i = #participants, 2, -1 do
+                local j = math.random(i)
+                participants[i], participants[j] = participants[j], participants[i]
+            end
         end
         table.forEach(participants, function(p, i)
             local slot = race.startPositions[((i - 1) % #race.startPositions) + 1]
