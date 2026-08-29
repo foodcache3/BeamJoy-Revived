@@ -6,6 +6,20 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.49] - 2026-08-29
+
+### Fixed
+- **Real bug: a hard game crash (native C++ crash, not a catchable Lua error) could happen right
+  after a race ends.** Confirmed from a user-supplied `beamng.log`: the crash landed inside the
+  engine's own vehicle-construction code (`finishConstructionGESide`), immediately after another
+  player's vehicle had just been destroyed, right as `raceRunner.lua`'s `restoreSavedVehicle()`
+  synchronously spawned the player's own pre-race car back in, from inside a network-message
+  handler mid-frame. Matches the same "let the engine settle first" issue class already found and
+  fixed elsewhere in this file for reset-teleports: triggering another native vehicle spawn while
+  the engine is still mid-way through processing a prior vehicle event can crash it outright.
+  Deferred the actual spawn by one short async tick so the engine has a chance to finish first,
+  same pattern already used for that teleport fix. *(client only)*
+
 ## [1.8.48] - 2026-08-29
 
 ### Fixed

@@ -405,22 +405,38 @@ local function restoreSavedVehicle()
     -- wrapper (core/vehicles.lua's prepareMultiVehConfig routes format==4 into
     -- spawnMultipleVehicles, which iterates a top-level `vehicles` array this table never had,
     -- the actual source of the same ipairs crash). A real single-vehicle .pc file uses format 2.
-    local newVeh = core_vehicles.spawnNewVehicle(saved.model, {
-        pos = pos,
-        config = {
-            format = 2,
-            model = saved.model,
-            parts = saved.parts or {},
-            vars = saved.vars or {},
-            paints = saved.paints or {},
-        },
-    })
-    if newVeh then
-        be:enterVehicle(0, newVeh)
-        if camera.getCamera() == camera.CAMERAS.FREE then
-            camera.toggleFreeCam()
+    --
+    -- Real crash: both call sites run synchronously inside a network-message handler (session
+    -- removed / leave-while-spectating), which itself runs mid-onUpdate. A user-supplied log
+    -- showed a native engine crash (FATAL, not a catchable Lua error) inside
+    -- finishConstructionGESide right as this spawn's C callback landed, immediately after another
+    -- player's vehicle had just been destroyed (a large mesh-cache rebuild for the newly-spawned
+    -- model's parts was still in flight in the same log window). Matches the exact "let the engine
+    -- settle first" issue class already found and fixed elsewhere in this file (see the
+    -- lastCheckpointTarget reset-teleport below): triggering another native vehicle op while the
+    -- engine is still mid-way through processing a prior one can crash it outright, not just error.
+    -- Deferring the actual spawn by one short async tick, same pattern already used for that
+    -- teleport, gives the engine a chance to finish whatever it was doing first. pos/currVeh are
+    -- still captured synchronously above, matching "wherever the player currently is" at the
+    -- moment the restore was triggered.
+    async.delayTask(function()
+        local newVeh = core_vehicles.spawnNewVehicle(saved.model, {
+            pos = pos,
+            config = {
+                format = 2,
+                model = saved.model,
+                parts = saved.parts or {},
+                vars = saved.vars or {},
+                paints = saved.paints or {},
+            },
+        })
+        if newVeh then
+            be:enterVehicle(0, newVeh)
+            if camera.getCamera() == camera.CAMERAS.FREE then
+                camera.toggleFreeCam()
+            end
         end
-    end
+    end, 100, "BJRaceRestoreSavedVehicle")
 end
 
 --- Blocks native BeamNG inputs that would otherwise let an active participant sidestep the race
