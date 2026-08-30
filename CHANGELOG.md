@@ -6,6 +6,20 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.56] - 2026-08-30
+
+### Fixed
+- **Reduced remaining pop-in after v1.8.55.** `getNewRandomSpawn` computed `targetDist` (the
+  point past which `findSafeSpawnPoint`'s search stops requiring a candidate be hidden from the
+  camera) as 25% into the speed-scaled min/max search band. Native's own call site for this exact
+  function uses the band's midpoint instead (`clamp(lerp(minDist, maxDist, 0.5), 120, 500)`), so
+  BJS was giving up on requiring a hidden spawn spot noticeably sooner than native itself does with
+  the same underlying search. Matched native's midpoint convention. Some residual pop-in on long,
+  unobstructed straight roads is inherent to any on-demand spawn system and can't be fully
+  eliminated without a much larger vehicle budget or a genuine dormant vehicle pool, which BJS
+  doesn't have (each traffic vehicle is a real BeamMP-synced entity, unlike native's local-only
+  pool). *(client only)*
+
 ## [1.8.55] - 2026-08-30
 
 ### Fixed

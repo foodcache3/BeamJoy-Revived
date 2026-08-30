@@ -89,10 +89,17 @@ local function getNewRandomSpawn(job)
         -- The plain radial search this used to call could land a vehicle on any nearby road,
         -- including one behind the player or one that curves into direct view around a bend,
         -- which is what caused both the sparse-at-speed and pop-in-view symptoms.
+        --
+        -- targetDist is the point past which the search stops requiring the spot be hidden from
+        -- the camera (see checkRayCast in trafficUtils.lua). Native's own call site uses the
+        -- midpoint of the min/max band (clamp(lerp(minDist, maxDist, 0.5), 120, 500)); mirror that
+        -- instead of a narrower quarter-point so occlusion is required over as much of the search
+        -- band as native itself relies on, cutting down on spawns landing in plain sight.
+        local targetDist = math.clamp(
+            (origin.minDistance + origin.maxDistance) / 2, 120, 500)
         spawnData, onRoute = extensions.gameplay_traffic_trafficUtils
             .findSafeSpawnPoint(origin.pos, origin.dir,
-                origin.minDistance, origin.maxDistance, origin.minDistance +
-                (origin.maxDistance - origin.minDistance) / 4,
+                origin.minDistance, origin.maxDistance, targetDist,
                 { pathRandomization = origin.pathRandomization, minDrivability = .1 })
         if onRoute then
             local playersDistances = playerPositions:map(function(pData)
