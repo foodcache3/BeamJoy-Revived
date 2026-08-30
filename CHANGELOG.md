@@ -6,6 +6,24 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.55] - 2026-08-30
+
+### Fixed
+- **Traffic still sparse and now also popping in visibly at speed, after v1.8.53/v1.8.54.** Root
+  cause was the spawn-point search method itself: `getNewRandomSpawn` called
+  `trafficUtils.findSpawnPointRadial` directly, a raw "somewhere within a ring" search that can
+  land a vehicle on any nearby road segment, including one behind the player, a side road, or one
+  that curves into direct view around a bend or over a rise. BeamNG's own native traffic never
+  uses that function for its actual live spawn maintenance; it uses `findSafeSpawnPoint`, which
+  tries a route generated along the road graph ahead of the player's travel direction first, and
+  only falls back to a radial search if no point on that route validates. Both methods share the
+  same camera-occlusion check (a candidate must be hidden from view unless past a target distance,
+  which BJS sets to only ~25% into its speed-scaled min/max band), but without route-ahead
+  placement, most candidates fell outside that narrow hidden window and could pop straight into
+  view, while cars placed on unrelated nearby roads were simply never driven past. Switched
+  `getNewRandomSpawn` to call `findSafeSpawnPoint` instead, matching what native traffic actually
+  uses. *(client only)*
+
 ## [1.8.54] - 2026-08-30
 
 ### Fixed

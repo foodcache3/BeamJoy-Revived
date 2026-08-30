@@ -53,8 +53,8 @@ local function getPathRandomization(speed)
     return math.scale(speed * 3.6, 20, 200, 1, .15, true)
 end
 
--- ge/extensions/core/funstuff.lua:randomRoute():191 <br/>
--- ge/spawn.lua:teleportToLastRoadCallback():616
+-- ge/extensions/gameplay/traffic/trafficUtils.lua:findSafeSpawnPoint(), the same spawn-point
+-- search native's own live traffic uses (route-ahead-of-travel-direction first, radial fallback).
 ---@param job NGJob?
 ---@return vec3? pos, quat? rot
 local function getNewRandomSpawn(job)
@@ -83,8 +83,14 @@ local function getNewRandomSpawn(job)
             origin.minDistance, origin.maxDistance = M.getMinMaxDistFromPlayer(origin.speed)
             origin.pathRandomization = M.getPathRandomization(origin.speed)
         end
+        -- findSafeSpawnPoint (native's own gameplay_traffic.lua live spawn maintenance uses this,
+        -- not the raw radial search) tries a route ahead of origin.dir along the road graph first,
+        -- only falling back to "anywhere nearby" radial search if no such route point validates.
+        -- The plain radial search this used to call could land a vehicle on any nearby road,
+        -- including one behind the player or one that curves into direct view around a bend,
+        -- which is what caused both the sparse-at-speed and pop-in-view symptoms.
         spawnData, onRoute = extensions.gameplay_traffic_trafficUtils
-            .findSpawnPointRadial(origin.pos, origin.dir,
+            .findSafeSpawnPoint(origin.pos, origin.dir,
                 origin.minDistance, origin.maxDistance, origin.minDistance +
                 (origin.maxDistance - origin.minDistance) / 4,
                 { pathRandomization = origin.pathRandomization, minDrivability = .1 })
