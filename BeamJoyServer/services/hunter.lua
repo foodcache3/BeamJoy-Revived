@@ -154,7 +154,12 @@ local function sanitizeArena(arena)
     arena.defaults.huntedStartDelay = math.max(0, tonumber(arena.defaults.huntedStartDelay) or 0)
     arena.defaults.huntersStartDelay = math.max(0, tonumber(arena.defaults.huntersStartDelay) or 5)
     arena.defaults.huntersRespawnDelay = math.max(0, tonumber(arena.defaults.huntersRespawnDelay) or 10)
-    arena.defaults.revealProximityDistance = math.max(1, tonumber(arena.defaults.revealProximityDistance) or 50)
+    -- Real bug: the Config UI's bj-slider only enforces "increments of 10m" (per its own tooltip)
+    -- as a client-side widget behavior while actively dragging/typing in it; nothing server-side
+    -- ever rounds the stored value, so anything saved before that widget behavior existed, or set
+    -- by any other path, keeps whatever precision it already had, silently, forever.
+    arena.defaults.revealProximityDistance = math.max(10,
+        math.round((tonumber(arena.defaults.revealProximityDistance) or 50) / 10) * 10)
     arena.defaults.revealResetDuration = math.max(0, tonumber(arena.defaults.revealResetDuration) or 5)
     arena.defaults.revealOnFinalWaypoint = arena.defaults.revealOnFinalWaypoint ~= false
     arena.defaults.huntedResetDistanceThreshold = math.max(0,

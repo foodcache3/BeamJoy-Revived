@@ -449,8 +449,11 @@ local function buildSettings(arena, overrides)
         respawnPenaltyIncrement = math.max(0, tonumber(overrides.respawnPenaltyIncrement) or
             defaults.respawnPenaltyIncrement or 0),
         hunterRespawnStrategy = hunterRespawnStrategy,
-        revealProximityDistance = math.max(1, tonumber(overrides.revealProximityDistance) or
-            defaults.revealProximityDistance or 50),
+        -- see services/hunter.lua's own resolve step for why this rounds to the nearest 10
+        -- instead of just flooring at 1: nothing else in this chain enforces the "increments of
+        -- 10m" the Config UI's slider only ever promises cosmetically, client-side
+        revealProximityDistance = math.max(10, math.round((tonumber(overrides.revealProximityDistance) or
+            defaults.revealProximityDistance or 50) / 10) * 10),
         revealResetDuration = math.max(0, tonumber(overrides.revealResetDuration) or
             defaults.revealResetDuration or 5),
         revealOnFinalWaypoint = revealOnFinalWaypoint,

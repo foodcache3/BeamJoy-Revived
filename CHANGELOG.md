@@ -6,6 +6,21 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [server 1.8.56] - 2026-08-30
+
+### Fixed
+- **Real bug: Hunter arena's reveal distance wasn't actually guaranteed to be in 10m increments.**
+  The Config UI's `bj-slider` widget for it (min 10, step 10) does correctly snap to 10m while
+  actively dragging or typing in it (its own tooltip promises "Increments of 10m"), but that's
+  purely a client-side widget behavior. The actual value used by gameplay resolves through
+  `services/hunter.lua` (arena defaults) and `services/hunterGrid.lua` (per-session start
+  overrides), and both only ever clamped it to a floor of 1 (`math.max(1, ...)`) with no rounding
+  to 10 at all. Any value saved before that slider behavior existed, or set through any other
+  path, silently kept whatever precision it already had and got used exactly as-is by the real
+  proximity check (`hunterRunner.lua`'s `nearestHunterDist <= settings.revealProximityDistance`).
+  Both resolve steps now round to the nearest 10 (floor raised to 10 to match the slider's own
+  minimum) instead of just flooring at 1. *(server only, needs deployment)*
+
 ## [1.8.66] - 2026-08-30
 
 ### Fixed
