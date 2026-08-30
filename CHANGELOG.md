@@ -6,6 +6,27 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.62] - 2026-08-30 (server v1.8.55)
+
+### Added
+- **License plate controls for traffic**, ported from Agent's Traffic Tool and scoped to the parts
+  of it that don't require detecting a specific third-party plate mod: front plate usage
+  (Normal/None/Random), plate shape (native US square / EU wide, swapped via each config's own
+  `_licenseplate_F/R_US`/`_EU` alternate parts), and a plate design dropdown. The design list is a
+  real scan (`FS:findFiles` + jbeam parse over `/vehicles/common/` for any part tagged
+  `licenseplate_design_2_1`), the same method Agent's own tool uses, not a preset list, so it stays
+  accurate as new plate-design content gets installed. Shape intentionally stops at native US/EU:
+  unlike design, a plate *shape* is a genuinely different jbeam part per mod, not a different skin
+  of the same slot, so there's no way to discover a new shape by scanning, only by hardcoding a
+  specific mod's naming scheme the way Agent's own tool does per-shape; going beyond native US/EU
+  would mean maintaining that same kind of mod-specific list. Implemented by loading each spawned
+  vehicle's base `.pc` config, mutating its `parts` table, and passing the resulting table (rather
+  than a file path) to `spawn.spawnVehicle`, which native's own `spawn.lua:setVehicleObject`
+  already supports (serializing a table the same way it would read one from disk) - confirmed by
+  reading the engine source, not assumed. Applies to moving traffic only; parked vehicles spawn
+  through native's own separate `gameplay_parking` pipeline, which doesn't offer the same hook.
+  *(server-side services/traffic.lua and services/config.lua changes need deployment)*
+
 ## [1.8.61] - 2026-08-30 (server v1.8.54)
 
 ### Added

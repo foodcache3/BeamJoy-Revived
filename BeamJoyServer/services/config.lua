@@ -91,6 +91,9 @@ local M = {
             smartSelection = false,
             parkedAmount = 0,
             parkedMaxPerPlayer = 1,
+            plateFrontUsage = "normal",
+            plateShape = "eu",
+            plateDesign = "",
         },
         Freeroam = {
             TeleportDelay = 30,

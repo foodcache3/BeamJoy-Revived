@@ -13,6 +13,9 @@ angular.module("beamjoy").component("bjConfigGeneralTraffic", {
             smartSelection: false,
             parkedAmount: 0,
             parkedMaxPerPlayer: 0,
+            plateFrontUsage: "normal",
+            plateShape: "eu",
+            plateDesign: "",
         };
         this.modelLabels = {};
         this.selectedModel = null;
@@ -22,6 +25,17 @@ angular.module("beamjoy").component("bjConfigGeneralTraffic", {
         this.showSmartSelection = false;
         this.showRarity = false;
         this.default = {};
+
+        this.plateFrontUsageOptions = [
+            { value: "normal", label: "Normal" },
+            { value: "none", label: "No Front Plates" },
+            { value: "random", label: "Random" },
+        ];
+        this.plateShapeOptions = [
+            { value: "eu", label: "EU (wide)" },
+            { value: "us", label: "US (square)" },
+        ];
+        this.plateDesignOptions = [{ value: "", label: "Map Default" }];
 
         const updateDirty = () => {
             this.dirty = !angular.equals(this.data, this.default);
@@ -83,6 +97,12 @@ angular.module("beamjoy").component("bjConfigGeneralTraffic", {
             if (!Array.isArray(this.default.models)) this.default.models = [];
             this.modelLabels = payload.models;
             this.hideModels = Object.values(payload.models).length <= 1;
+            this.plateDesignOptions = [{ value: "", label: "Map Default" }].concat(
+                (payload.plateDesigns || []).map((d) => ({
+                    value: d.id,
+                    label: d.name,
+                }))
+            );
             if (!this.dirty) {
                 // apply form data if not dirty
                 this.data = angular.copy(this.default);

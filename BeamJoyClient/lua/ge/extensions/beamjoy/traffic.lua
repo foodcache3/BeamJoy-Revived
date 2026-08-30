@@ -23,6 +23,19 @@ local M = {
         parkedAmount = 0,
         parkedTotal = 0,
         parkedMaxPerPlayer = 1,
+        -- license plate part-slot overrides, ported from Agent's Traffic Tool's own
+        -- preparePartsPlates but scoped to vanilla US/EU only (see plateDesigns' own doc for why
+        -- shape can't go further than that without hardcoding third-party mod detection).
+        -- "normal": leave front plates as each config already has them
+        -- "none": strip every front plate slot
+        -- "random": strip each front plate slot on a coin flip, per vehicle
+        plateFrontUsage = "normal",
+        -- "us" or "eu": which of the two native plate part variants to force everywhere a
+        -- config has a swappable _licenseplate_F/R_US or _licenseplate_F/R_EU slot
+        plateShape = "eu",
+        -- a specific licenseplate_design_2_1 part id (see scanPlateDesigns), or "" for "leave
+        -- whatever the map/config's own default design is, don't override it"
+        plateDesign = "",
     },
     ---@type tablelib<integer, integer> index 1-N, value vid
     vehs = Table(), -- owned AI vehs
@@ -35,6 +48,9 @@ local M = {
     -- the extension stripped. Selectable in Config's traffic models list alongside raw model
     -- names, prefixed with VEHGROUP_PREFIX so the two key spaces never collide.
     vehGroups = Table(),
+
+    ---@type tablelib<integer, {id: string, name: string}>
+    plateDesigns = Table(),
 
     baseFunctions = {},
 }
@@ -63,6 +79,75 @@ local function scanVehGroups()
         end
     end
     return groups
+end
+
+-- Same discovery method as Agent's own Traffic Tool (agentTrafficTool.lua's
+-- scanAvailableLicensePlatesJob): any jbeam part tagged slotType "licenseplate_design_2_1" is a
+-- valid plate design, found generically rather than off a preset list. Unlike plate SHAPE (US vs
+-- EU are different jbeam parts entirely, not different skins of the same slot, so there's no way
+-- to discover "here's a new shape" without hardcoding a specific third-party mod's naming scheme
+-- the way Agent's own tool does per-shape), a design is always the same slot regardless of who
+-- authored it, so scanning generically here costs nothing extra and stays accurate as new plate
+-- packs get installed.
+---@param job NGJob
+---@return tablelib<integer, {id: string, name: string}>
+local function scanPlateDesigns(job)
+    local found = Table()
+    local jbeamFiles = FS:findFiles("/vehicles/common/", "*.jbeam", -1, true, false) or {}
+    for _, filePath in ipairs(jbeamFiles) do
+        local ok, jbeamData = pcall(jsonReadFile, filePath)
+        if ok and type(jbeamData) == "table" then
+            for partKey, part in pairs(jbeamData) do
+                if type(part) == "table" and part.slotType == "licenseplate_design_2_1" and
+                    part.information and part.information.name then
+                    found:insert({ id = partKey, name = part.information.name })
+                end
+            end
+        end
+        if job then job.sleep(.01) end
+    end
+    found:sort(function(a, b) return a.name < b.name end)
+    return found
+end
+
+-- Ported from Agent's Traffic Tool's own preparePartsPlates, scoped to only the part of it that
+-- doesn't require detecting a specific third-party plate mod: front plate usage, and swapping
+-- between the two native BeamNG plate shapes (US square / EU wide), which every stock vehicle
+-- already ships both variants of as alternate parts for the same slot. Silently a no-op on any
+-- slot a given config doesn't have, so this is safe to call unconditionally regardless of which
+-- traffic source a vehicle came from.
+---@param partsTbl table<string, string>
+---@param opts {shape: "us"|"eu", frontUsage: "normal"|"none"|"random", designId: string?}
+local function preparePlateParts(partsTbl, opts)
+    for slot, part in pairs(partsTbl) do
+        if type(part) == "string" then
+            if opts.shape == "eu" then
+                if part:find("_licenseplate_F_US", 1, true) then
+                    partsTbl[slot] = part:gsub("_licenseplate_F_US", "_licenseplate_F_EU")
+                elseif part:find("_licenseplate_R_US", 1, true) then
+                    partsTbl[slot] = part:gsub("_licenseplate_R_US", "_licenseplate_R_EU")
+                end
+            elseif opts.shape == "us" then
+                if part:find("_licenseplate_F_EU", 1, true) then
+                    partsTbl[slot] = part:gsub("_licenseplate_F_EU", "_licenseplate_F_US")
+                elseif part:find("_licenseplate_R_EU", 1, true) then
+                    partsTbl[slot] = part:gsub("_licenseplate_R_EU", "_licenseplate_R_US")
+                end
+            end
+        end
+
+        if slot:find("_licenseplate_F", 1, true) then
+            if opts.frontUsage == "none" then
+                partsTbl[slot] = ""
+            elseif opts.frontUsage == "random" and math.random(0, 2) == 2 then
+                partsTbl[slot] = ""
+            end
+        end
+
+        if opts.designId and opts.designId ~= "" and slot:find("licenseplate_design_2_1", 1, true) then
+            partsTbl[slot] = opts.designId
+        end
+    end
 end
 
 -- ge/extensions/gameplay/traffic/trafficUtils.lua:getLevelInfo() reads the exact same file; that
@@ -373,7 +458,25 @@ local function spawnNewTrafficVehicles(amount)
                 end
                 job.sleep(.01)
                 local pathConfig = string.format("vehicles/%s/%s.pc", vehConfig.model, vehConfig.config)
-                local veh = spawn.spawnVehicle(vehConfig.model, pathConfig, pos, rot, options)
+                -- spawn.lua's own setVehicleObject accepts either a file path string here or an
+                -- in-memory config table (which it serializes itself), confirmed straight from
+                -- ge/spawn.lua : type(options.config) == 'table' then pc = serialize(options.config)
+                -- end. Loading the config ourselves and mutating its parts table is what lets
+                -- plate overrides apply without needing a different spawn API.
+                local spawnConfig = pathConfig
+                -- jsonReadFile needs the FS-rooted form (leading slash), unlike spawn.spawnVehicle
+                -- itself which tolerates the relative one above; matches Agent's own Traffic Tool
+                -- reading a config the same way ("/vehicles/" .. model .. "/" .. config .. ".pc")
+                local ok, baseConfig = pcall(jsonReadFile, "/" .. pathConfig)
+                if ok and type(baseConfig) == "table" and type(baseConfig.parts) == "table" then
+                    preparePlateParts(baseConfig.parts, {
+                        shape = M.data.plateShape,
+                        frontUsage = M.data.plateFrontUsage,
+                        designId = M.data.plateDesign,
+                    })
+                    spawnConfig = baseConfig
+                end
+                local veh = spawn.spawnVehicle(vehConfig.model, spawnConfig, pos, rot, options)
                 -- beamjoy_vehicles' own isAi() only recognizes a model as traffic by its name
                 -- containing "traffic" (simple_traffic, agent_traffic_eu2, ...), which a vehGroup
                 -- can easily name off a model that doesn't follow that convention at all (e.g.
@@ -534,6 +637,9 @@ local function saveAndSend(payload)
             smartSelection = newData.smartSelection,
             parkedAmount = newData.parkedTotal,
             parkedMaxPerPlayer = newData.parkedMaxPerPlayer,
+            plateFrontUsage = newData.plateFrontUsage,
+            plateShape = newData.plateShape,
+            plateDesign = newData.plateDesign,
         })
     end
 end
@@ -561,8 +667,12 @@ local function sendSettingsToUI()
                 smartSelection = M.data.smartSelection,
                 parkedAmount = M.data.parkedTotal,
                 parkedMaxPerPlayer = M.data.parkedMaxPerPlayer,
+                plateFrontUsage = M.data.plateFrontUsage,
+                plateShape = M.data.plateShape,
+                plateDesign = M.data.plateDesign,
             },
-            models = models
+            models = models,
+            plateDesigns = M.plateDesigns,
         })
         local newModels = table.filter(table.clone(M.data.models), function(m)
             return models[m] ~= nil
@@ -623,12 +733,14 @@ end
 -- vehicles.lua:onBJVehicleModChanged) keeps the vehGroup list from going stale after connecting.
 local function onBJVehicleModChanged()
     M.vehGroups = scanVehGroups()
+    core_jobsystem.create(function(job) M.plateDesigns = scanPlateDesigns(job) end)
 end
 
 local function onInit()
     InitPreloadedDependencies(M)
 
     M.vehGroups = scanVehGroups()
+    core_jobsystem.create(function(job) M.plateDesigns = scanPlateDesigns(job) end)
 
     beamjoy_communications.addHandler("sendCache", function(caches)
         if caches.traffic then

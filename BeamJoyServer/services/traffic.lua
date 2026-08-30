@@ -103,6 +103,9 @@ local function onBJRequestCache(caches, targetID)
         parkedAmount = M.parkedBalancer[targetID] or 0,
         parkedTotal = conf.parkedAmount,
         parkedMaxPerPlayer = conf.parkedMaxPerPlayer,
+        plateFrontUsage = conf.plateFrontUsage,
+        plateShape = conf.plateShape,
+        plateDesign = conf.plateDesign,
     }
     caches.pursuitFugitives = M.pursuitFugitives
 end
@@ -136,7 +139,7 @@ local function onSlowUpdate()
 end
 
 ---@param ctxt BJSContext
----@param settings {enabled: boolean, amount: integer, maxPerPlayer: integer, models: string[], weights: table<string, number>?, smartSelection: boolean?, parkedAmount: integer?, parkedMaxPerPlayer: integer?}
+---@param settings {enabled: boolean, amount: integer, maxPerPlayer: integer, models: string[], weights: table<string, number>?, smartSelection: boolean?, parkedAmount: integer?, parkedMaxPerPlayer: integer?, plateFrontUsage: string?, plateShape: string?, plateDesign: string?}
 local function rxSettings(ctxt, settings)
     if not ctxt.sender or (not services_permissions.isStaff(ctxt.sender.playerName) and
             not services_permissions.hasAnyPermission(ctxt.senderID, BJ_PERMISSIONS.SetConfig)) then
@@ -151,6 +154,9 @@ local function rxSettings(ctxt, settings)
     conf.smartSelection = settings.smartSelection and true or false
     conf.parkedAmount = tonumber(settings.parkedAmount) or conf.parkedAmount
     conf.parkedMaxPerPlayer = tonumber(settings.parkedMaxPerPlayer) or conf.parkedMaxPerPlayer
+    conf.plateFrontUsage = settings.plateFrontUsage or conf.plateFrontUsage
+    conf.plateShape = settings.plateShape or conf.plateShape
+    conf.plateDesign = settings.plateDesign or conf.plateDesign
 
     if not conf.enabled then
         table.clear(M.pursuitFugitives)
