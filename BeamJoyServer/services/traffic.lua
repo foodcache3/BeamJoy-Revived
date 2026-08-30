@@ -1,6 +1,8 @@
 local M = {
     ---@type tablelib<integer, integer> index playerID, value amount of traffic handled
     playerBalancer = Table(),
+    ---@type tablelib<integer, integer> index playerID, value amount of parked vehicles handled
+    parkedBalancer = Table(),
 
     ---@type integer[] vids
     pursuitFugitives = {},
@@ -11,34 +13,60 @@ local function getConf()
     local conf = services_config.data.Traffic
     conf.amount = tonumber(conf.amount) or conf.amount
     conf.maxPerPlayer = tonumber(conf.maxPerPlayer) or conf.maxPerPlayer
+    conf.parkedAmount = tonumber(conf.parkedAmount) or conf.parkedAmount or 0
+    conf.parkedMaxPerPlayer = tonumber(conf.parkedMaxPerPlayer) or conf.parkedMaxPerPlayer or 0
     return conf
 end
 
-local function updateBalancer()
-    local sum = M.playerBalancer:reduce(function(acc, amount)
+---@param balancer tablelib<integer, integer>
+---@param total integer effective target total; pass 0 when the feature (or master enabled toggle) is off
+---@param maxPerPlayer integer
+---@return tablelib<integer, integer> newBalancer, boolean changed
+local function computeBalancer(balancer, total, maxPerPlayer)
+    local sum = balancer:reduce(function(acc, amount)
         return acc + amount
     end, 0)
 
-    local conf = getConf()
-    local changes = false
-    if not conf.enabled and sum > 0 then
-        M.playerBalancer = Table()
-        changes = true
-    elseif conf.enabled and sum ~= conf.amount then
-        M.playerBalancer = Table()
+    if total <= 0 then
+        if sum > 0 then return Table(), true end
+        return balancer, false
+    elseif sum ~= total then
+        local newBalancer = Table()
         local newSum = 0
         services_players.players:values()
             :forEach(function(p, i)
-                local balancedAmount = (conf.amount - newSum) /
+                local balancedAmount = (total - newSum) /
                     (services_players.players:length() - i + 1)
                 if i > 1 and math.floor(balancedAmount) < balancedAmount then
                     balancedAmount = math.ceil(balancedAmount)
                 end
-                balancedAmount = balancedAmount > conf.maxPerPlayer and
-                    conf.maxPerPlayer or balancedAmount
-                M.playerBalancer[p.playerID] = math.round(balancedAmount)
+                balancedAmount = balancedAmount > maxPerPlayer and
+                    maxPerPlayer or balancedAmount
+                newBalancer[p.playerID] = math.round(balancedAmount)
                 newSum = newSum + balancedAmount
             end)
+        return newBalancer, true
+    end
+    return balancer, false
+end
+
+local function updateBalancer()
+    local conf = getConf()
+    local changes = false
+
+    local newTrafficBalancer, trafficChanged = computeBalancer(
+        M.playerBalancer, conf.enabled and conf.amount or 0, conf.maxPerPlayer)
+    if trafficChanged then
+        M.playerBalancer = newTrafficBalancer
+        changes = true
+    end
+
+    -- parked vehicles share the master "enabled" toggle but have their own independent
+    -- amount/maxPerPlayer, so they can be turned off on their own by setting parkedAmount to 0
+    local newParkedBalancer, parkedChanged = computeBalancer(
+        M.parkedBalancer, conf.enabled and conf.parkedAmount or 0, conf.parkedMaxPerPlayer)
+    if parkedChanged then
+        M.parkedBalancer = newParkedBalancer
         changes = true
     end
 
@@ -70,6 +98,10 @@ local function onBJRequestCache(caches, targetID)
         total = conf.amount,
         maxPerPlayer = conf.maxPerPlayer,
         models = conf.models,
+        smartSelection = conf.smartSelection,
+        parkedAmount = M.parkedBalancer[targetID] or 0,
+        parkedTotal = conf.parkedAmount,
+        parkedMaxPerPlayer = conf.parkedMaxPerPlayer,
     }
     caches.pursuitFugitives = M.pursuitFugitives
 end
@@ -77,6 +109,7 @@ end
 ---@param playerID integer
 local function onPlayerDisconnect(playerID)
     M.playerBalancer[playerID] = nil
+    M.parkedBalancer[playerID] = nil
     updateBalancer()
 end
 
@@ -102,7 +135,7 @@ local function onSlowUpdate()
 end
 
 ---@param ctxt BJSContext
----@param settings {enabled: boolean, amount: integer, maxPerPlayer: integer, models: string[]}
+---@param settings {enabled: boolean, amount: integer, maxPerPlayer: integer, models: string[], smartSelection: boolean?, parkedAmount: integer?, parkedMaxPerPlayer: integer?}
 local function rxSettings(ctxt, settings)
     if not ctxt.sender or (not services_permissions.isStaff(ctxt.sender.playerName) and
             not services_permissions.hasAnyPermission(ctxt.senderID, BJ_PERMISSIONS.SetConfig)) then
@@ -113,6 +146,9 @@ local function rxSettings(ctxt, settings)
     conf.amount = tonumber(settings.amount) or conf.amount
     conf.maxPerPlayer = tonumber(settings.maxPerPlayer) or conf.maxPerPlayer
     conf.models = settings.models
+    conf.smartSelection = settings.smartSelection and true or false
+    conf.parkedAmount = tonumber(settings.parkedAmount) or conf.parkedAmount
+    conf.parkedMaxPerPlayer = tonumber(settings.parkedMaxPerPlayer) or conf.parkedMaxPerPlayer
 
     if not conf.enabled then
         table.clear(M.pursuitFugitives)

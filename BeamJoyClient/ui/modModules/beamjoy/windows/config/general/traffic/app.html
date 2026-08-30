@@ -77,6 +77,44 @@
             </ul>
         </td>
     </tr>
+    <tr ng-show="$ctrl.showSmartSelection">
+        <td class="text-right">
+            {{"beamjoy.window.config.tabs.general.traffic.smartSelection"|translate}}
+        </td>
+        <td>
+            <bj-toggle ng-model="$ctrl.data.smartSelection"></bj-toggle>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right">
+            {{"beamjoy.window.config.tabs.general.traffic.parkedAmount"|translate}}
+        </td>
+        <td>
+            <div class="d-flex gap-1 align-center">
+                <span>{{$ctrl.data.parkedAmount}}</span>
+                <bj-slider
+                    ng-model="$ctrl.data.parkedAmount"
+                    min="0"
+                    max="30"
+                ></bj-slider>
+            </div>
+        </td>
+    </tr>
+    <tr ng-hide="$ctrl.data.parkedAmount == 0">
+        <td class="text-right">
+            {{"beamjoy.window.config.tabs.general.traffic.parkedMaxPerPlayer"|translate}}
+        </td>
+        <td>
+            <div class="d-flex gap-1 align-center">
+                <span>{{$ctrl.data.parkedMaxPerPlayer}}</span>
+                <bj-slider
+                    ng-model="$ctrl.data.parkedMaxPerPlayer"
+                    min="1"
+                    max="20"
+                ></bj-slider>
+            </div>
+        </td>
+    </tr>
     <tr>
         <td colspan="2">
             <div class="d-flex gap-1">

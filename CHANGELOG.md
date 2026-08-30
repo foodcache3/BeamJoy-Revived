@@ -6,6 +6,31 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.59] - 2026-08-30 (server v1.8.53)
+
+### Added
+- **Parked vehicles and population/region "Smart Selection" for traffic.** Two additions to the
+  Config -> Traffic panel, both requiring the server-side update too (v1.8.53):
+  - **Parked vehicles**, sourced exclusively from stock simple_traffic's own dedicated "_parked"
+    configs (e.g. `bastion_base_parked.pc`), which `beamjoy_vehicles`' regular config scan
+    deliberately excludes. Placed via native's own `gameplay_parking` extension, using real
+    hand-authored parking-spot markers on the map, not the road-graph search moving traffic uses,
+    so they won't appear on maps without that data, same as native single-player. Gets its own
+    independent amount/max-per-player budget and per-player server-side balancer (mirroring the
+    existing moving-traffic one, generalized into a shared `computeBalancer` helper server-side),
+    separate from the moving-traffic total so it doesn't compete for the same slots. Unlike moving
+    traffic, `gameplay_parking.setupVehicles` has no incremental "spawn N more" primitive, so a
+    parked-count change always fully replaces this client's own current parked set rather than
+    diffing it.
+  - **Smart Selection**, a toggle mirroring native's own "Smart Selection" traffic setting:
+    weights which config gets picked by each stock config's real `Population`/`Region` metadata
+    (e.g. `info_bastion_base.json`: `{"Population":10000,"Region":["northAmerica"]}`), instead of
+    picking uniformly at random, biasing toward whatever's actually common for the current map's
+    own region. Only appears in Config when `simple_traffic` is the sole selected traffic source,
+    since third-party vehGroups/models generally don't carry that same metadata; applies to both
+    moving and parked vehicle selection. *(server-side services/traffic.lua and services/config.lua
+    changes need deployment to the live server)*
+
 ## [1.8.58] - 2026-08-30
 
 ### Fixed

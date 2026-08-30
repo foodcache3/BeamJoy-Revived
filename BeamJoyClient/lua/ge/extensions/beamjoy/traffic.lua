@@ -1,5 +1,5 @@
 local M = {
-    preloadedDependencies = { "gameplay_traffic" },
+    preloadedDependencies = { "gameplay_traffic", "gameplay_parking" },
     dependencies = { "beamjoy_communications", "beamjoy_communications_ui" },
 
     data = {
@@ -8,9 +8,19 @@ local M = {
         total = 20,
         maxPerPlayer = 10,
         models = { "simple_traffic" },
+        -- population/region-weighted config picking (mirrors native's own "Smart Selection"
+        -- traffic setting); only meaningful when every candidate config actually has that
+        -- metadata, which BJS can only guarantee for stock simple_traffic
+        smartSelection = false,
+        -- this player's own share of parked vehicles, server-computed like `amount` above
+        parkedAmount = 0,
+        parkedTotal = 0,
+        parkedMaxPerPlayer = 1,
     },
     ---@type tablelib<integer, integer> index 1-N, value vid
     vehs = Table(), -- owned AI vehs
+    ---@type tablelib<integer, integer> index 1-N, value vid
+    parkedVehs = Table(), -- owned parked vehs, separate budget/pool from moving traffic
 
     ---@type tablelib<string, {name: string, entries: tablelib<integer, {model: string, config: string, paintName: string?}>}>
     -- discovered *.vehGroup.json bundles (native BeamNG's own curated model+config lists, e.g. a
@@ -46,6 +56,48 @@ local function scanVehGroups()
         end
     end
     return groups
+end
+
+-- ge/extensions/gameplay/traffic/trafficUtils.lua:getLevelInfo() reads the exact same file; that
+-- function isn't exposed on M though, and its country-of-origin logic is meant for weighting
+-- across DIFFERENT models (e.g. an American brand vs a Japanese one), which doesn't apply within
+-- one model's own configs the way region does, so only region is worth porting here.
+---@return string?
+local function getMapRegion()
+    local fileName = path.getPathLevelInfo(getCurrentLevelIdentifier() or '')
+    local info = fileName and jsonReadFile(fileName)
+    return info and info.region or nil
+end
+
+-- Mirrors native's own per-config weighting (core/multiSpawn.lua:getPopulationFactor +
+-- setPopulationData), scoped down to a single model's own configs: each stock simple_traffic
+-- config carries real Population/Region metadata (see e.g. vehicles/simple_traffic's own
+-- info_bastion_base.json: {"Population":10000,"Region":["northAmerica"]}), which third-party
+-- vehGroup/model content generally doesn't, hence this only ever gets used for simple_traffic.
+---@param config table
+---@param mapRegion string?
+---@return number weight, 0 meaning "never pick this one"
+local function getSmartSelectionWeight(config, mapRegion)
+    local population = tonumber(config.Population) or 0
+    if population <= 0 then return 0 end
+    local regionFactor = 1
+    if mapRegion and type(config.Region) == "table" and #config.Region > 0 then
+        regionFactor = table.includes(config.Region, mapRegion) and 1 or .25
+    end
+    return population * regionFactor
+end
+
+---@param candidates tablelib<integer, {config: string, weight: number}>
+---@return {config: string, weight: number}
+local function weightedRandomPick(candidates)
+    local total = candidates:reduce(function(acc, c) return acc + c.weight end, 0)
+    if total <= 0 then return candidates:random() end
+    local r = math.random() * total
+    for _, c in ipairs(candidates) do
+        if r < c.weight then return c end
+        r = r - c.weight
+    end
+    return candidates[candidates:length()]
 end
 
 ---@return tablelib<integer, {pos: vec3, dir: vec3, speed: number}> index vid, value pos
@@ -179,6 +231,27 @@ local function createGroup(job, amount)
         return string.startswith(m, VEHGROUP_PREFIX)
     end):map(function(m) return m:sub(#VEHGROUP_PREFIX + 1) end)
 
+    -- Population/region-weighted picking only makes sense when every candidate actually has that
+    -- metadata, which BJS can only guarantee for stock simple_traffic; skip straight to the
+    -- regular uniform pool below for any other selection, including a mix that adds vehGroups.
+    if M.data.smartSelection and selectedVehGroupIds:length() == 0 and
+        table.compare(selectedModels, { "simple_traffic" }) then
+        local configs = beamjoy_vehicles.getAllVehicleConfigs(job, { traffic = true }).simple_traffic
+        local mapRegion = getMapRegion()
+        local candidates = configs and Table(configs.configs):map(function(config, key)
+            return { config = key, weight = getSmartSelectionWeight(config, mapRegion) }
+        end):values():filter(function(c) return c.weight > 0 end) or Table()
+        if candidates:length() > 0 then
+            local res = {}
+            repeat
+                table.insert(res, { model = "simple_traffic", config = weightedRandomPick(candidates).config })
+            until #res == amount
+            return res
+        end
+        -- no config had usable Population data (e.g. a modified simple_traffic install); fall
+        -- through to the regular uniform pool below instead of returning an empty group
+    end
+
     -- Flat pool of every candidate {model, config} pair, combining full config lists from raw
     -- selected models with the exact curated entries of each selected vehGroup (additive: a
     -- vehGroup doesn't replace the model list, it's one more pickable source alongside it).
@@ -297,6 +370,70 @@ local function spawnNewTrafficVehicles(amount)
     end)
 end
 
+-- Parked vehicles are sourced exclusively from stock simple_traffic's own "_parked" configs
+-- (e.g. bastion_base_parked.pc), which beamjoy_vehicles' own scan deliberately excludes from the
+-- regular traffic config list, and are placed via native's gameplay_parking extension (real
+-- hand-authored parking-spot markers on the map), not the road-graph search moving traffic uses.
+---@return tablelib<string, table> index config key, value config data
+local function getParkedConfigs()
+    local coreModel = extensions.core_vehicles.getModel("simple_traffic") -- {model=.., configs=..}
+    if not coreModel or not coreModel.configs then return Table() end
+    return Table(coreModel.configs):filter(function(config, key)
+        return type(key) == "string" and key:lower():endswith("_parked")
+    end)
+end
+
+---@param amount integer
+---@return {model: string, config: string}[]?
+local function createParkedGroup(amount)
+    local configs = getParkedConfigs()
+    if configs:length() == 0 then return nil end
+
+    if M.data.smartSelection then
+        local mapRegion = getMapRegion()
+        local candidates = configs:map(function(config, key)
+            return { config = key, weight = getSmartSelectionWeight(config, mapRegion) }
+        end):values():filter(function(c) return c.weight > 0 end)
+        if candidates:length() > 0 then
+            local res = {}
+            repeat
+                table.insert(res, { model = "simple_traffic", config = weightedRandomPick(candidates).config })
+            until #res == amount
+            return res
+        end
+        -- fall through to uniform if none of them had usable Population data
+    end
+
+    local keys = configs:keys()
+    local res = {}
+    repeat
+        table.insert(res, { model = "simple_traffic", config = keys:random() })
+    until #res == amount
+    return res
+end
+
+-- gameplay_parking.setupVehicles has no incremental "spawn N more" primitive: every call fully
+-- replaces this client's own current parked set (it runs its own deleteVehicles() first unless
+-- keepCurrent is passed, which this never does), so unlike moving traffic's
+-- spawnNewTrafficVehicles/updateVehs this always does a full resize rather than diffing, and never
+-- fires M.onVehicleGroupSpawned at all when target is 0 (setupVehicles bails out before spawning
+-- anything) - clear M.parkedVehs up front instead of waiting on that hook to do it.
+local function updateParkedVehs()
+    local target = M.data.enabled and M.data.parkedAmount or 0
+    if target == M.parkedVehs:length() then return end
+
+    local group = target > 0 and createParkedGroup(target) or nil
+    if target > 0 and not group then
+        LogError("Invalid parked vehicle configs")
+        return
+    end
+    for _, vid in pairs(M.parkedVehs) do
+        extensions.hook("onBJTrafficVehicleDeleted", vid)
+    end
+    M.parkedVehs:clear()
+    extensions.gameplay_parking.setupVehicles(target, { vehGroup = group })
+end
+
 ---@param forceReset boolean? if traffic models have changed
 local function updateVehs(forceReset)
     if spawnLock then
@@ -307,6 +444,13 @@ local function updateVehs(forceReset)
         end, "updateTrafficVehs")
         return
     end
+
+    -- onBJVehicleInstantiated's isAi check can't distinguish a moving-traffic config from a
+    -- parked one (both come off the same "simple_traffic" model), so a parked vehicle can
+    -- transiently land in M.vehs before M.onVehicleGroupSpawned claims it into M.parkedVehs.
+    -- Reconciling here, regardless of which hook fired first, keeps the moving-traffic budget
+    -- accurate instead of miscounting parked cars against it.
+    M.vehs = M.vehs:filter(function(vid) return not M.parkedVehs:includes(vid) end)
 
     local function clearVehs()
         for _, vid in pairs(M.vehs) do
@@ -337,7 +481,9 @@ local function saveAndSend(payload)
     local newData = table.clone(M.data)
     table.assign(newData, payload)
     newData.amount = nil
+    newData.parkedAmount = nil
     if payload.amount then newData.total = payload.amount end
+    if payload.parkedAmount then newData.parkedTotal = payload.parkedAmount end
     if payload.models then newData.models = payload.models end
     local dirty = not table.compare(newData, M.data)
     if dirty then
@@ -346,6 +492,9 @@ local function saveAndSend(payload)
             amount = newData.total,
             maxPerPlayer = newData.maxPerPlayer,
             models = newData.models,
+            smartSelection = newData.smartSelection,
+            parkedAmount = newData.parkedTotal,
+            parkedMaxPerPlayer = newData.parkedMaxPerPlayer,
         })
     end
 end
@@ -369,6 +518,9 @@ local function sendSettingsToUI()
                 amount = M.data.total,
                 maxPerPlayer = M.data.maxPerPlayer,
                 models = M.data.models,
+                smartSelection = M.data.smartSelection,
+                parkedAmount = M.data.parkedTotal,
+                parkedMaxPerPlayer = M.data.parkedMaxPerPlayer,
             },
             models = models
         })
@@ -443,7 +595,10 @@ local function onInit()
             M.retrieveCache(caches.traffic)
         end
     end)
-    beamjoy_communications_ui.addHandler("BJReady", updateVehs)
+    beamjoy_communications_ui.addHandler("BJReady", function()
+        updateVehs()
+        updateParkedVehs()
+    end)
     beamjoy_communications_ui.addHandler("BJRequestTrafficSettings", sendSettingsToUI)
     beamjoy_communications_ui.addHandler("BJTrafficSettings", saveAndSend)
     beamjoy_communications.addHandler("trafficRubberbandTick", M.onRubberbandTick)
@@ -476,6 +631,31 @@ local function onBJVehicleInstantiated(vid)
         mpVeh.playerUsable = true
         mpVeh.uiState = 1
     end
+end
+
+-- Native gameplay_parking broadcasts this (core/multiSpawn.lua:spawnGroup) once its own async
+-- spawn job for a group finishes; "autoParking" is the groupName gameplay_parking.setupVehicles
+-- always uses internally, not something BJS's own call gets to choose. This is how M.parkedVehs
+-- actually gets populated, since setupVehicles has no synchronous return of what it spawned.
+---@param vehIds integer[]
+---@param groupId integer
+---@param groupName string
+local function onVehicleGroupSpawned(vehIds, groupId, groupName)
+    if groupName ~= "autoParking" then return end
+    Table(vehIds):forEach(function(vid)
+        if not M.parkedVehs:includes(vid) then
+            M.parkedVehs:insert(vid)
+        end
+        -- any cross-contamination into M.vehs (see updateVehs' own reconciliation comment) gets
+        -- cleaned up there via a value-filter, not here: tablelib:remove is plain Lua
+        -- table.remove underneath, which is INDEX-based, not value-based, so calling it with a
+        -- vehicle id directly would remove whatever happens to sit at that index instead
+        local mpVeh = beamjoy_vehicles.vehicles[vid]
+        if mpVeh then
+            mpVeh.playerUsable = false
+            mpVeh.uiState = 0
+        end
+    end)
 end
 
 local cachesPaints = {}
@@ -535,6 +715,7 @@ local function retrieveCache(cache)
         M.data = cache
         sendSettingsToUI()
         updateVehs(not table.compare(previousModels, M.data.models))
+        updateParkedVehs()
     end
 end
 
@@ -552,6 +733,7 @@ M.onExtensionUnloaded = onExtensionUnloaded
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
 M.onBJVehicleModChanged = onBJVehicleModChanged
+M.onVehicleGroupSpawned = onVehicleGroupSpawned
 M.onRubberbandTick = onRubberbandTick
 
 M.getMinMaxDistFromPlayer = getMinMaxDistFromPlayer

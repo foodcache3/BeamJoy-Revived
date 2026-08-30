@@ -9,16 +9,29 @@ angular.module("beamjoy").component("bjConfigGeneralTraffic", {
             amount: 0,
             maxPerPlayer: 0,
             models: ["simple_traffic"],
+            smartSelection: false,
+            parkedAmount: 0,
+            parkedMaxPerPlayer: 0,
         };
         this.modelLabels = {};
         this.selectedModel = null;
         this.modelOptions = [{ value: "simple_traffic", label: "Traffic" }];
         this.hideModels = true;
         this.hideRemoveModel = false;
+        this.showSmartSelection = false;
         this.default = {};
 
         const updateDirty = () => {
             this.dirty = !angular.equals(this.data, this.default);
+        };
+        // Population/region-weighted picking (native's own "Smart Selection" traffic setting)
+        // only makes sense when every candidate config actually carries that metadata, which is
+        // only guaranteed for stock simple_traffic, not vehGroups or other custom models.
+        const updateShowSmartSelection = () => {
+            this.showSmartSelection =
+                this.data.models.length === 1 &&
+                this.data.models[0] === "simple_traffic";
+            if (!this.showSmartSelection) this.data.smartSelection = false;
         };
         const updateModelOptions = () => {
             this.modelOptions = Object.entries(this.modelLabels)
@@ -67,6 +80,7 @@ angular.module("beamjoy").component("bjConfigGeneralTraffic", {
                 this.save();
             }
             updateModelOptions();
+            updateShowSmartSelection();
             updateDirty();
             this.init = true;
         });
@@ -74,6 +88,7 @@ angular.module("beamjoy").component("bjConfigGeneralTraffic", {
             () => this.data,
             () => {
                 if (!this.init) return;
+                updateShowSmartSelection();
                 updateDirty();
             },
             true
@@ -82,16 +97,20 @@ angular.module("beamjoy").component("bjConfigGeneralTraffic", {
             evt.stopPropagation();
             this.data.models.push(this.selectedModel);
             updateModelOptions();
+            updateShowSmartSelection();
         };
         this.removeModel = (evt, model) => {
             evt.stopPropagation();
             this.data.models = this.data.models.filter((m) => m !== model);
             updateModelOptions();
+            updateShowSmartSelection();
         };
         this.save = () => {
             this.dirty = false;
             this.data.amount = Number(this.data.amount);
             this.data.maxPerPlayer = Number(this.data.maxPerPlayer);
+            this.data.parkedAmount = Number(this.data.parkedAmount);
+            this.data.parkedMaxPerPlayer = Number(this.data.parkedMaxPerPlayer);
             beamjoyStore.send("BJTrafficSettings", [this.data]);
         };
         this.cancel = () => {

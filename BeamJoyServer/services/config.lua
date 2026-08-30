@@ -87,6 +87,9 @@ local M = {
             amount = 15,
             maxPerPlayer = 1,
             models = { "simple_traffic" },
+            smartSelection = false,
+            parkedAmount = 0,
+            parkedMaxPerPlayer = 1,
         },
         Freeroam = {
             TeleportDelay = 30,
