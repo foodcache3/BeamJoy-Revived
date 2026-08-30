@@ -6,6 +6,20 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.58] - 2026-08-30
+
+### Fixed
+- **Real bug: vehGroup traffic bundles added in v1.8.57 never showed up for BeamMP server mods
+  (Resources/Client), only for mods already active at game boot.** `scanVehGroups()` only ran once,
+  from `traffic.lua`'s own `onInit`, which fires at GE extension load, before a BeamMP server mod
+  (like a Resources/Client traffic pack) has necessarily been downloaded and mounted by
+  `MPModManager` during the actual connection. `beamjoy_vehicles` already solves the identical
+  problem for its own vehicle/config scan via a custom `onBJVehicleModChanged` event
+  (`ge/extensions/mods.lua`, hooked into `MPModManager.onModActivated`/`onModDeactivated`), but
+  `traffic.lua` was never wired into it. Added an `onBJVehicleModChanged` handler that rescans
+  vehGroups, so a server-provided traffic pack's groups now appear once it actually mounts instead
+  of only if it happened to already be active before the game finished loading. *(client only)*
+
 ## [1.8.57] - 2026-08-30
 
 ### Added

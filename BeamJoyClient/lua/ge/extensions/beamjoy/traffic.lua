@@ -424,6 +424,15 @@ local function overrideNGHooks()
     end
 end
 
+-- BeamMP server mods (ge/extensions/mods.lua) can activate well after this extension's own onInit
+-- has already run and cached M.vehGroups, e.g. a Resources/Client traffic pack that only gets
+-- mounted once the client actually connects and downloads it. Rescanning on the same
+-- onBJVehicleModChanged event beamjoy_vehicles already uses for the equivalent problem (see
+-- vehicles.lua:onBJVehicleModChanged) keeps the vehGroup list from going stale after connecting.
+local function onBJVehicleModChanged()
+    M.vehGroups = scanVehGroups()
+end
+
 local function onInit()
     InitPreloadedDependencies(M)
 
@@ -542,6 +551,7 @@ M.onInit = onInit
 M.onExtensionUnloaded = onExtensionUnloaded
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
+M.onBJVehicleModChanged = onBJVehicleModChanged
 M.onRubberbandTick = onRubberbandTick
 
 M.getMinMaxDistFromPlayer = getMinMaxDistFromPlayer
