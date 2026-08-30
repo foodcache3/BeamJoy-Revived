@@ -6,6 +6,20 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.64] - 2026-08-30
+
+### Fixed
+- **Real bug: v1.8.63's own parking-spot check regressed parked vehicles to never spawning at
+  all.** `gameplay_parking.getRandomParkingSpots` bails out to an empty list
+  (`if not sites then return {} end`) instead of loading that data on demand the way
+  `setupVehicles` does; unlike `setupVehicles`, it never calls native's own `loadSites()` itself.
+  `updateParkedVehs`' new pre-check called it directly, so on a fresh connect (before anything
+  else had triggered a load) every request saw zero spots and clamped to 0, silently disabling
+  parked vehicles entirely instead of just avoiding the road-placement fallback. Now calls
+  `gameplay_parking.getParkingSpots()` first (its own `if not sites then loadSites() end` is
+  exactly what native's own tooling relies on to trigger this), which guarantees `sites` are
+  loaded before the real spot-count check runs. *(client only)*
+
 ## [1.8.63] - 2026-08-30
 
 ### Fixed

@@ -570,6 +570,14 @@ local function updateParkedVehs()
         -- the middle of the road on any map with fewer usable spots than requested. Checking the
         -- actual usable spot count first, with the same filters setupVehicles itself uses
         -- internally, and clamping to it keeps every request inside the real-parking-spot path.
+        --
+        -- getRandomParkingSpots itself bails out to an empty list (`if not sites then return {}
+        -- end`) rather than loading that data on demand the way setupVehicles does; unlike
+        -- setupVehicles, it never calls loadSites() on its own. getParkingSpots() does, as a
+        -- side effect of its own `if not sites then loadSites() end` - calling it first (ignoring
+        -- its own return value) is what actually guarantees sites are loaded before the real
+        -- check below, instead of every request silently clamping to 0 on a fresh connect.
+        extensions.gameplay_parking.getParkingSpots()
         local psList = extensions.gameplay_parking.getRandomParkingSpots(nil, nil, nil, target,
             { checkVehicles = true, standardSize = true })
         target = math.min(target, #psList)
