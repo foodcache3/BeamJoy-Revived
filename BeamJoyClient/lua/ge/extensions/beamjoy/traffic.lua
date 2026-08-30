@@ -561,6 +561,19 @@ end
 -- anything) - clear M.parkedVehs up front instead of waiting on that hook to do it.
 local function updateParkedVehs()
     local target = M.data.enabled and M.data.parkedAmount or 0
+    if target > 0 then
+        -- Real bug: setupVehicles only builds real parking-spot placements when it finds AT
+        -- LEAST as many usable spots as requested (gameplay/parking.lua:setupVehicles, the
+        -- `if psList[amount] then transforms = {...} end` check). Short of that it doesn't
+        -- reduce the count or skip, it silently falls through to spawnGroup's generic
+        -- "roadBehind" placement mode instead, which is why parked vehicles were showing up in
+        -- the middle of the road on any map with fewer usable spots than requested. Checking the
+        -- actual usable spot count first, with the same filters setupVehicles itself uses
+        -- internally, and clamping to it keeps every request inside the real-parking-spot path.
+        local psList = extensions.gameplay_parking.getRandomParkingSpots(nil, nil, nil, target,
+            { checkVehicles = true, standardSize = true })
+        target = math.min(target, #psList)
+    end
     if target == M.parkedVehs:length() then return end
 
     local group = target > 0 and createParkedGroup(target) or nil

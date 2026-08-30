@@ -6,6 +6,21 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.63] - 2026-08-30
+
+### Fixed
+- **Real bug: parked vehicles spawning in the middle of the road.** Native's own
+  `gameplay_parking.setupVehicles` only builds real parking-spot placements when its own internal
+  search finds at least as many usable spots as requested (`if psList[amount] then transforms =
+  {...} end`); short of that, it doesn't reduce the count or skip spawning, it silently falls
+  through to `core_multiSpawn.spawnGroup`'s generic `"roadBehind"` placement mode instead, putting
+  every vehicle in that batch along the road rather than at an actual parking spot. This happened
+  on any map with fewer usable parking spots nearby than the requested parked amount.
+  `updateParkedVehs` now checks the actual usable spot count first, via
+  `gameplay_parking.getRandomParkingSpots` with the exact same filters `setupVehicles` uses
+  internally, and clamps the request to it, so the request never crosses into that fallback path.
+  *(client only)*
+
 ## [1.8.62] - 2026-08-30 (server v1.8.55)
 
 ### Added
