@@ -413,29 +413,23 @@ local function onRubberbandTick()
         local playerPositions = getPlayersPositions()
         if playerPositions:length() > 0 then
             local selfAis = M.vehs:map(function(vid) return beamjoy_vehicles.vehicles[vid] end)
-            local targetToRubberband = selfAis:reduce(function(acc, v)
+            -- Previously rubberbanded only a single (and, due to a dead distance-tracking bug,
+            -- effectively arbitrary) vehicle per tick, which this server-throttled event fires at
+            -- most once/second for. At speed, a player can leave several owned traffic vehicles
+            -- beyond their max distance in the same tick; capping repositioning to one at a time
+            -- left the rest invisible out of range for multiple seconds, reading as sparse traffic.
+            -- Rubberbanding every out-of-range vehicle in one pass fixes the throughput, not just
+            -- the spawn direction bias fixed by getPathRandomization above.
+            local targetsToRubberband = selfAis:filter(function(v)
                 local pos = vec3(be:getObjectOOBBCenterXYZ(v.vid))
-                --- distance from the closest player
-                local distance = 0
-                if playerPositions:every(function(data)
-                        local _, dist = M.getMinMaxDistFromPlayer(data.speed)
-                        if dist < distance then distance = dist end
-                        return pos:distance(data.pos) >= dist
-                    end) then
-                    acc:insert({
-                        v = v,
-                        distance = distance,
-                    })
-                    acc:sort(function(a, b)
-                        -- sort by furthest distance first
-                        return a.distance > b.distance
-                    end)
-                end
-                return acc
-            end, Table())[1]
-            if targetToRubberband then
-                rubberband(job, targetToRubberband.v.vid)
-            end
+                return playerPositions:every(function(data)
+                    local _, maxDist = M.getMinMaxDistFromPlayer(data.speed)
+                    return pos:distance(data.pos) >= maxDist
+                end)
+            end)
+            targetsToRubberband:forEach(function(v)
+                rubberband(job, v.vid)
+            end)
         end
     end)
 end

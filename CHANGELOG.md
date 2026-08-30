@@ -6,6 +6,23 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.54] - 2026-08-30
+
+### Fixed
+- **Real bug: AI traffic still stayed sparse at high speed after v1.8.53's spawn-direction fix.**
+  Two compounding issues in `onRubberbandTick`: (1) the server only fires a
+  `trafficRubberbandTick` event to a given player at most once per second (`onSlowUpdate`,
+  round-robined across players who own traffic), and the client only rubberbanded a single
+  out-of-range vehicle per tick, no matter how many actually needed it; at 100+ mph a player can
+  leave several owned traffic vehicles beyond max distance in the same second, but only one got
+  repositioned, leaving the rest invisible out of range for multiple seconds. (2) the "pick the
+  furthest vehicle" selection was dead code: its `distance` accumulator was initialized to `0` and
+  only updated via `if dist < distance`, but `dist` (a max-distance value) is always positive, so
+  the condition was never true and every candidate tied at `0`, making the "sort by furthest
+  first" pick effectively arbitrary. Now rubberbands every vehicle that's out of range in a single
+  tick instead of one, and drops the broken distance-sort entirely since it's no longer needed.
+  *(client only)*
+
 ## [1.8.53] - 2026-08-30
 
 ### Fixed
