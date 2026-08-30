@@ -40,6 +40,25 @@ local M = {
     --- finishes registering, same one-shot handoff pattern as a normal queued task.
     ---@type table<integer, boolean>
     pendingGhostStates = {},
+
+    -- isAi(model) below only recognizes a model as AI-controlled traffic by its name containing
+    -- "traffic" (e.g. simple_traffic, agent_traffic_eu2). Real bug: a traffic vehGroup can name a
+    -- perfectly legitimate AI vehicle off a model that doesn't follow that convention at all (e.g.
+    -- SimpleNG's SNG_120a, SNG_510, ...), which isAi() then misses entirely. registerVehicle then
+    -- treats that spawn exactly like the local player spawning their own car: it doesn't set
+    -- playerUsable=false, it force-exits free cam, unfreezes the player, and applies respawn
+    -- protection to a car nobody is driving, and separately traffic.lua never sees mpVeh.isAi to
+    -- add it to M.vehs, so its own spawn loop's "wait until this vid is tracked" check spins
+    -- forever, leaking spawnLock=true and permanently wedging every future traffic setting change
+    -- (reported symptoms: an orphaned traffic vehicle shows an orange "You" nametag, the loading
+    -- overlay from that spawn never clears, and no traffic settings apply again afterward).
+    -- Per-vid override for exactly this case: a spawner that knows a given vid IS meant to be AI
+    -- traffic, regardless of what its model is named, calls M.markVehicleAsAi(vid) right after
+    -- spawning it (before registerVehicle's own async job gets to classify it). Consumed (cleared)
+    -- the moment registerVehicle reads it, since vids get reused across a session and a stale
+    -- leftover entry would wrongly mark some unrelated future vehicle as AI.
+    ---@type table<integer, boolean>
+    forcedAiVids = {},
 }
 AddPreloadedDependencies(M)
 
@@ -47,6 +66,11 @@ AddPreloadedDependencies(M)
 ---@return boolean
 local function isAi(model)
     return type(model) == "string" and model:lower():find("traffic") ~= nil
+end
+
+---@param vid integer
+local function markVehicleAsAi(vid)
+    M.forcedAiVids[vid] = true
 end
 
 local function onInit()
@@ -120,7 +144,8 @@ local function registerVehicle(vid, callback)
             if not owner then job.sleep(.25) end
         end
         local vtype = M.getType(veh.jbeam)
-        local aiVeh = isAi(veh.jbeam)
+        local aiVeh = isAi(veh.jbeam) or M.forcedAiVids[vid] == true
+        M.forcedAiVids[vid] = nil -- consumed; see M.forcedAiVids' own doc for why this must not linger
         if aiVeh then
             veh.playerUsable = false
             veh.uiState = 0
@@ -1415,6 +1440,7 @@ M.onBJVehicleModChanged = onBJVehicleModChanged
 
 M.getVehicle = getVehicle
 M.getType = getType
+M.markVehicleAsAi = markVehicleAsAi
 M.getVehicleByRemoteID = getVehicleByRemoteID
 M.getVehiclePositionRotation = getVehiclePositionRotation
 M.setVehiclePositionRotation = setVehiclePositionRotation

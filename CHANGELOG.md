@@ -6,6 +6,27 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.60] - 2026-08-30
+
+### Fixed
+- **Real bug: traffic content from a vehGroup whose model name doesn't contain "traffic" (e.g.
+  SimpleNG's SNG_120a, SNG_510, ...) broke traffic entirely once spawned.**
+  `beamjoy_vehicles.lua`'s `isAi(model)` decides whether a spawned vehicle counts as AI-controlled
+  traffic purely by checking whether its model name contains the substring "traffic"; it has no
+  idea a vehGroup even exists. For a model that doesn't follow that naming convention,
+  `registerVehicle` misclassified the spawn exactly like the local player spawning their own car:
+  it left `playerUsable` true, force-exited free cam, applied respawn protection to a car nobody
+  is driving, and attributed local ownership to it, which is why it showed an orange "You"
+  nametag. Separately, `traffic.lua`'s own spawn loop waits for the just-spawned vid to land in
+  `M.vehs`, which only happens via the same `isAi` classification, so with it wrongly false that
+  wait span forever, leaving the loading overlay up and (more seriously) leaking `spawnLock = true`
+  forever, which permanently blocked every later traffic setting change from taking effect until a
+  restart. Added `beamjoy_vehicles.markVehicleAsAi(vid)`, a per-vid override any spawner can call
+  immediately after spawning a vehicle it knows is meant to be AI regardless of its model's name;
+  `traffic.lua` now calls it right after every traffic spawn. Also bounded the spawn loop's own
+  wait to 10s as defense in depth, so any future gap of the same shape fails gracefully (releasing
+  `spawnLock`) instead of wedging the whole traffic system again. *(client only)*
+
 ## [1.8.59] - 2026-08-30 (server v1.8.53)
 
 ### Added

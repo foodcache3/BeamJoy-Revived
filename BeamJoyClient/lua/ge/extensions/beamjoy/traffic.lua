@@ -354,12 +354,30 @@ local function spawnNewTrafficVehicles(amount)
                 job.sleep(.01)
                 local pathConfig = string.format("vehicles/%s/%s.pc", vehConfig.model, vehConfig.config)
                 local veh = spawn.spawnVehicle(vehConfig.model, pathConfig, pos, rot, options)
+                -- beamjoy_vehicles' own isAi() only recognizes a model as traffic by its name
+                -- containing "traffic" (simple_traffic, agent_traffic_eu2, ...), which a vehGroup
+                -- can easily name off a model that doesn't follow that convention at all (e.g.
+                -- SimpleNG's SNG_120a). Without this, that spawn gets treated exactly like the
+                -- local player spawning their own car (forced out of free cam, respawn protection
+                -- applied, an orange "You" nametag), and traffic.lua's own wait loop below never
+                -- sees it land in M.vehs, spinning forever and leaking spawnLock=true, wedging
+                -- every future traffic setting change. Called unconditionally, before any
+                -- job.sleep gives beamjoy_vehicles.registerVehicle's own async job a chance to
+                -- classify this vid first.
+                beamjoy_vehicles.markVehicleAsAi(veh:getID())
                 job.sleep(.01)
                 extensions.hook("onBJTrafficVehicleSpawned", veh)
                 core_vehicleBridge.executeAction(veh, 'setAIMode', "traffic")
                 job.sleep(.01)
                 createPostSpawnMergeCheck(veh:getID())
-                while i == amount and not M.vehs:includes(veh:getID()) do
+                -- Bounded defensively: this used to wait unconditionally, and any future gap in
+                -- getting a spawned vid recognized as AI (like the SimpleNG case above) would spin
+                -- forever here, never releasing spawnLock and permanently wedging every later
+                -- traffic setting change until a restart. 10s is generous for a single registration
+                -- that normally completes in well under a second.
+                local waitDeadline = GetCurrentTimeMillis() + 10000
+                while i == amount and not M.vehs:includes(veh:getID()) and
+                    GetCurrentTimeMillis() < waitDeadline do
                     job.sleep(.2)
                 end
             end
