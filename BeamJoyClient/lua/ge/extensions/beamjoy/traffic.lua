@@ -553,32 +553,24 @@ local function createParkedGroup(amount)
     return res
 end
 
--- gameplay_parking.setupVehicles has no incremental "spawn N more" primitive: every call fully
--- replaces this client's own current parked set (it runs its own deleteVehicles() first unless
--- keepCurrent is passed, which this never does), so unlike moving traffic's
--- spawnNewTrafficVehicles/updateVehs this always does a full resize rather than diffing, and never
--- fires M.onVehicleGroupSpawned at all when target is 0 (setupVehicles bails out before spawning
--- anything) - clear M.parkedVehs up front instead of waiting on that hook to do it.
+-- There's no incremental "spawn N more" primitive for parked vehicles (see the spawnGroup call
+-- below for why this goes around gameplay_parking.setupVehicles rather than through it): every
+-- resize fully replaces this client's own current parked set via an explicit deleteVehicles()
+-- first, so unlike moving traffic's spawnNewTrafficVehicles/updateVehs this always does a full
+-- resize rather than diffing, and nothing fires M.onVehicleGroupSpawned at all when target is 0
+-- (there's nothing to spawn) - clear M.parkedVehs up front instead of waiting on that hook to do it.
 local function updateParkedVehs()
     local target = M.data.enabled and M.data.parkedAmount or 0
+    local psList
     if target > 0 then
-        -- Real bug: setupVehicles only builds real parking-spot placements when it finds AT
-        -- LEAST as many usable spots as requested (gameplay/parking.lua:setupVehicles, the
-        -- `if psList[amount] then transforms = {...} end` check). Short of that it doesn't
-        -- reduce the count or skip, it silently falls through to spawnGroup's generic
-        -- "roadBehind" placement mode instead, which is why parked vehicles were showing up in
-        -- the middle of the road on any map with fewer usable spots than requested. Checking the
-        -- actual usable spot count first, with the same filters setupVehicles itself uses
-        -- internally, and clamping to it keeps every request inside the real-parking-spot path.
-        --
         -- getRandomParkingSpots itself bails out to an empty list (`if not sites then return {}
-        -- end`) rather than loading that data on demand the way setupVehicles does; unlike
-        -- setupVehicles, it never calls loadSites() on its own. getParkingSpots() does, as a
-        -- side effect of its own `if not sites then loadSites() end` - calling it first (ignoring
-        -- its own return value) is what actually guarantees sites are loaded before the real
-        -- check below, instead of every request silently clamping to 0 on a fresh connect.
+        -- end`) rather than loading that data on demand; unlike setupVehicles, it never calls
+        -- loadSites() on its own. getParkingSpots() does, as a side effect of its own
+        -- `if not sites then loadSites() end` - calling it first (ignoring its own return value)
+        -- guarantees sites are loaded before the real check below, instead of every request
+        -- silently seeing zero spots (and clamping to 0) on a fresh connect.
         extensions.gameplay_parking.getParkingSpots()
-        local psList = extensions.gameplay_parking.getRandomParkingSpots(nil, nil, nil, target,
+        psList = extensions.gameplay_parking.getRandomParkingSpots(nil, nil, nil, target,
             { checkVehicles = true, standardSize = true })
         target = math.min(target, #psList)
     end
@@ -593,7 +585,30 @@ local function updateParkedVehs()
         extensions.hook("onBJTrafficVehicleDeleted", vid)
     end
     M.parkedVehs:clear()
-    extensions.gameplay_parking.setupVehicles(target, { vehGroup = group })
+    extensions.gameplay_parking.deleteVehicles()
+
+    if target > 0 then
+        -- Real bug: setupVehicles only builds real parking-spot placements when its OWN internal
+        -- getRandomParkingSpots call finds at least as many usable spots as requested; short of
+        -- that it doesn't reduce the count or skip, it silently falls through to
+        -- core_multiSpawn.spawnGroup's generic "roadBehind" placement mode instead. Clamping to
+        -- the count found above should already avoid that, but calling setupVehicles here would
+        -- still make it run that exact search a SECOND time internally, which can disagree with
+        -- the one above (map/vehicle state can shift between the two calls, or
+        -- filterParkingSpots' own randomization can select a different subset) and fall into the
+        -- same fallback this was meant to avoid. Building the transforms directly from the spots
+        -- already confirmed above and calling core_multiSpawn.spawnGroup ourselves (the same
+        -- lower-level call setupVehicles itself makes, and the same "autoParking" groupName
+        -- gameplay_parking's own onVehicleGroupSpawned listens for to register these into its
+        -- own tracking) removes that race entirely: there is no second search to disagree with
+        -- the first.
+        local transforms = {}
+        for i = 1, target do
+            table.insert(transforms, { pos = psList[i].ps.pos, rot = psList[i].ps.rot })
+        end
+        extensions.core_multiSpawn.spawnGroup(group, target,
+            { name = "autoParking", mode = "roadBehind", gap = 50, customTransforms = transforms, randomPaints = true })
+    end
 end
 
 ---@param forceReset boolean? if traffic models have changed

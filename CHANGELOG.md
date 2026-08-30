@@ -6,6 +6,23 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.65] - 2026-08-30
+
+### Fixed
+- **Parked vehicles still occasionally spawned on the road after v1.8.63/v1.8.64's spot-count
+  clamp.** Clamping the requested amount to a spot count found beforehand still left
+  `gameplay_parking.setupVehicles` free to run its own internal `getRandomParkingSpots` search a
+  second time when actually spawning, moments later. That second search can disagree with the
+  first (map/vehicle state can shift between the two calls, or `filterParkingSpots`' own
+  randomization can select a different subset), and if it comes up short, `setupVehicles` still
+  falls back to `core_multiSpawn.spawnGroup`'s generic `"roadBehind"` mode exactly like before.
+  `updateParkedVehs` no longer calls `setupVehicles` at all: it builds the spawn transforms
+  directly from the exact spots already confirmed by its own check, and calls
+  `core_multiSpawn.spawnGroup` itself (the same lower-level call `setupVehicles` makes
+  internally, and the same `"autoParking"` groupName `gameplay_parking`'s own
+  `onVehicleGroupSpawned` listens for to register the result into its own tracking), removing the
+  second search, and the race, entirely. *(client only)*
+
 ## [1.8.64] - 2026-08-30
 
 ### Fixed
