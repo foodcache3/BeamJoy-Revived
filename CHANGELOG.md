@@ -6,6 +6,28 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.66] - 2026-08-30
+
+### Fixed
+- **Real bug: parked vehicles still ended up in the middle of the road after v1.8.65's spawn-time
+  fix, for larger parked amounts (e.g. 10/player).** The actual cause was never at spawn time; it
+  was `onRubberbandTick`, the moving-traffic relocation tick. A parked vehicle is still
+  `simple_traffic` by model name, so the instant each one individually finishes registering
+  (`onBJVehicleInstantiated`, well before the whole `"autoParking"` batch finishes) it's
+  `isAi=true` and lands in `M.vehs` too, exactly like moving traffic. `M.onVehicleGroupSpawned`
+  only claims the *entire* batch into `M.parkedVehs` once `core_multiSpawn.spawnGroup`'s own
+  async job is completely done, and `updateVehs`' own `M.vehs`/`M.parkedVehs` reconciliation only
+  runs at specific trigger points (settings changes, `BJReady`), not every tick. With a large
+  batch (10 per player) taking a few seconds to spawn and `onRubberbandTick` firing roughly once a
+  second, an early-registered parked vehicle could sit in `M.vehs`, unclaimed, long enough for a
+  tick to treat it as moving traffic and teleport it via the road-graph spawn search instead of
+  leaving it at its parking spot. `onRubberbandTick` now filters `M.parkedVehs` out of its
+  candidate list directly (instead of trusting `M.vehs` to already be clean) and skips entirely
+  while a parked batch is actively spawning (a timed flag, cleared early once
+  `M.onVehicleGroupSpawned` confirms the batch actually finished, with a 15s ceiling as defense in
+  depth against the same permanently-stuck-flag class of bug fixed for `spawnLock` earlier).
+  *(client only)*
+
 ## [1.8.65] - 2026-08-30
 
 ### Fixed

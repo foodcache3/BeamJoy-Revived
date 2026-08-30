@@ -553,6 +553,16 @@ local function createParkedGroup(amount)
     return res
 end
 
+-- Timestamp (GetCurrentTimeMillis) up to which onRubberbandTick should skip entirely; 0 means no
+-- parked batch is in flight. Set just before handing a batch to core_multiSpawn.spawnGroup, and
+-- cleared early by M.onVehicleGroupSpawned once it confirms the whole "autoParking" group
+-- actually finished. The 15s ceiling is defense in depth, not the expected path: if
+-- onVehicleGroupSpawned somehow never fires for a given batch (e.g. it got interrupted by a
+-- follow-up deleteVehicles() from another settings change before spawning finished),
+-- rubberbanding for ALL moving traffic would otherwise stay paused forever, the same class of
+-- permanently-stuck-flag bug fixed for spawnLock/spawnNewTrafficVehicles earlier.
+local parkedSpawnDeadline = 0
+
 -- There's no incremental "spawn N more" primitive for parked vehicles (see the spawnGroup call
 -- below for why this goes around gameplay_parking.setupVehicles rather than through it): every
 -- resize fully replaces this client's own current parked set via an explicit deleteVehicles()
@@ -606,6 +616,7 @@ local function updateParkedVehs()
         for i = 1, target do
             table.insert(transforms, { pos = psList[i].ps.pos, rot = psList[i].ps.rot })
         end
+        parkedSpawnDeadline = GetCurrentTimeMillis() + 15000
         extensions.core_multiSpawn.spawnGroup(group, target,
             { name = "autoParking", mode = "roadBehind", gap = 50, customTransforms = transforms, randomPaints = true })
     end
@@ -830,6 +841,7 @@ end
 ---@param groupName string
 local function onVehicleGroupSpawned(vehIds, groupId, groupName)
     if groupName ~= "autoParking" then return end
+    parkedSpawnDeadline = 0
     Table(vehIds):forEach(function(vid)
         if not M.parkedVehs:includes(vid) then
             M.parkedVehs:insert(vid)
@@ -872,10 +884,24 @@ local function rubberband(job, vid)
 end
 
 local function onRubberbandTick()
+    -- Real bug: a parked vehicle is still "simple_traffic" by model name, so the instant each one
+    -- individually finishes registering (onBJVehicleInstantiated, well before the whole
+    -- "autoParking" batch finishes) it's isAi=true and lands in M.vehs too, same as moving
+    -- traffic. M.onVehicleGroupSpawned only claims the WHOLE batch into M.parkedVehs once
+    -- core_multiSpawn.spawnGroup's own async job is entirely done, and updateVehs' own
+    -- M.vehs/M.parkedVehs reconciliation only runs at specific trigger points (settings changes,
+    -- BJReady), not every tick - so a parked vehicle spawned mid-batch could sit in M.vehs,
+    -- unclaimed, long enough for THIS tick (fires roughly once/second) to treat it as moving
+    -- traffic and teleport it via the road-graph search instead of leaving it at its parking
+    -- spot. Skipping entirely while a parked batch is actively spawning, plus filtering
+    -- M.parkedVehs out here directly rather than trusting M.vehs to already be clean, closes
+    -- both the mid-batch window and the "already claimed but not yet reconciled" one.
+    if GetCurrentTimeMillis() < parkedSpawnDeadline then return end
     core_jobsystem.create(function(job)
         local playerPositions = getPlayersPositions()
         if playerPositions:length() > 0 then
-            local selfAis = M.vehs:map(function(vid) return beamjoy_vehicles.vehicles[vid] end)
+            local selfAis = M.vehs:filter(function(vid) return not M.parkedVehs:includes(vid) end)
+                :map(function(vid) return beamjoy_vehicles.vehicles[vid] end)
             -- Previously rubberbanded only a single (and, due to a dead distance-tracking bug,
             -- effectively arbitrary) vehicle per tick, which this server-throttled event fires at
             -- most once/second for. At speed, a player can leave several owned traffic vehicles
