@@ -6,6 +6,25 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.57] - 2026-08-30
+
+### Added
+- **Support for native BeamNG "Vehicle Group" (`*.vehGroup.json`) traffic bundles.** BJS's traffic
+  system previously only picked spawns from raw model names configured in Config -> Traffic
+  (`M.data.models`), scanning every config a whitelisted model happens to have. It had no support
+  at all for `.vehGroup.json` files, BeamNG's own format for a curated, named list of specific
+  `{model, config, paintName}` combos (used e.g. by third-party regional/themed traffic packs that
+  reuse a shared model like `simple_traffic` with only a subset of its configs, rather than
+  shipping a whole new model). `traffic.lua` now scans `/vehicleGroups/**/*.vehGroup.json` at init
+  (mirroring native's own `trafficUtils.lua:getTrafficGroupFromFile` discovery convention) and
+  lists each discovered group as an extra selectable entry in the existing Config -> Traffic
+  models list, prefixed internally so it can't collide with a real model name; no changes needed
+  to the Config UI itself, since it already treats that list as a generic key/label multi-select.
+  Selecting a vehGroup is additive: its curated entries become one more pool the random spawn pick
+  draws from, alongside whatever raw models are also selected, and an explicit non-"random"
+  `paintName` in a vehGroup entry now overrides the primary paint slot instead of always
+  re-randomizing it. *(client only)*
+
 ## [1.8.56] - 2026-08-30
 
 ### Fixed

@@ -12,9 +12,41 @@ local M = {
     ---@type tablelib<integer, integer> index 1-N, value vid
     vehs = Table(), -- owned AI vehs
 
+    ---@type tablelib<string, {name: string, entries: tablelib<integer, {model: string, config: string, paintName: string?}>}>
+    -- discovered *.vehGroup.json bundles (native BeamNG's own curated model+config lists, e.g. a
+    -- themed/regional subset of an existing model's configs), keyed by their relative path with
+    -- the extension stripped. Selectable in Config's traffic models list alongside raw model
+    -- names, prefixed with VEHGROUP_PREFIX so the two key spaces never collide.
+    vehGroups = Table(),
+
     baseFunctions = {},
 }
 AddPreloadedDependencies(M)
+
+local VEHGROUP_PREFIX = "vehGroup:"
+
+---@return tablelib<string, {name: string, entries: tablelib<integer, {model: string, config: string, paintName: string?}>}>
+local function scanVehGroups()
+    local groups = Table()
+    -- Same discovery convention as native's own trafficUtils.lua:getTrafficGroupFromFile, so any
+    -- vehGroup drop-in (e.g. the "Stock Traffic US/EU" bundles that curate a regional subset of
+    -- simple_traffic's own configs) becomes selectable as its own traffic vehicle source instead
+    -- of only being usable by picking every config an already-supported model has.
+    local files = FS:findFiles('/vehicleGroups/', '*.vehGroup.json', -1, true, true) or {}
+    for _, filePath in ipairs(files) do
+        local ok, group = pcall(jsonReadFile, filePath)
+        if ok and group and type(group.data) == "table" then
+            local id = filePath:gsub("/vehicleGroups/", ""):gsub("%.vehGroup%.json$", "")
+            local entries = Table(group.data):filter(function(e)
+                return type(e) == "table" and e.model and e.config
+            end)
+            if entries:length() > 0 then
+                groups[id] = { name = group.name or id, entries = entries }
+            end
+        end
+    end
+    return groups
+end
 
 ---@return tablelib<integer, {pos: vec3, dir: vec3, speed: number}> index vid, value pos
 local function getPlayersPositions()
@@ -136,15 +168,44 @@ end
 --- overrides ge/extensions/core/multiSpawn.lua:createGroup():285
 ---@param job NGJob
 ---@param amount integer
----@return {model: string, config: string}[]
+---@return {model: string, config: string, paintName: string?}[]
 local function createGroup(job, amount)
     if type(amount) ~= "number" or amount < 1 then return {} end
-    local models = table.filter(beamjoy_vehicles.getAllVehicleConfigs(job, { traffic = true }),
-        function(_, model)
-            return table.includes(M.data.models, model)
-        end)
 
-    if models:length() < 1 then
+    local selectedModels = table.filter(M.data.models, function(m)
+        return not string.startswith(m, VEHGROUP_PREFIX)
+    end)
+    local selectedVehGroupIds = table.filter(M.data.models, function(m)
+        return string.startswith(m, VEHGROUP_PREFIX)
+    end):map(function(m) return m:sub(#VEHGROUP_PREFIX + 1) end)
+
+    -- Flat pool of every candidate {model, config} pair, combining full config lists from raw
+    -- selected models with the exact curated entries of each selected vehGroup (additive: a
+    -- vehGroup doesn't replace the model list, it's one more pickable source alongside it).
+    local pool = Table()
+    table.filter(beamjoy_vehicles.getAllVehicleConfigs(job, { traffic = true }),
+        function(_, model) return table.includes(selectedModels, model) end)
+        :forEach(function(data, model)
+            table.keys(data.configs):forEach(function(config)
+                pool:insert({ model = model, config = config })
+            end)
+        end)
+    selectedVehGroupIds:forEach(function(id)
+        local group = M.vehGroups[id]
+        if group then
+            group.entries:forEach(function(entry)
+                pool:insert({
+                    model = entry.model,
+                    config = entry.config,
+                    -- vehGroup files use the literal string "random" to mean "no override", the
+                    -- same behavior spawnNewTrafficVehicles already falls back to when unset
+                    paintName = entry.paintName ~= "random" and entry.paintName or nil,
+                })
+            end)
+        end
+    end)
+
+    if pool:length() < 1 then
         LogError("Invalid traffic models")
         dump(M.data.models)
         return {}
@@ -152,9 +213,7 @@ local function createGroup(job, amount)
 
     local res = {}
     repeat
-        local model = models:keys():random()
-        local config = table.keys(models[model].configs):random()
-        table.insert(res, { model = model, config = config })
+        table.insert(res, pool:random())
     until #res == amount
     return res
 end
@@ -203,7 +262,13 @@ local function spawnNewTrafficVehicles(amount)
                 job.sleep(.01)
                 local paintNames = table.keys(coreModel.model.paints or {})
                 for j = 1, 3 do
-                    local pickName = table.random(paintNames)
+                    local pickName
+                    if j == 1 and vehConfig.paintName and coreModel.model.paints[vehConfig.paintName] then
+                        -- vehGroup-provided override for the primary paint slot
+                        pickName = vehConfig.paintName
+                    else
+                        pickName = table.random(paintNames)
+                    end
                     if coreModel.model.paints[pickName] then
                         local key = "paintName"
                         if j > 1 then key = key .. tostring(j) end
@@ -292,6 +357,12 @@ local function sendSettingsToUI()
             :map(function(v)
                 return v.label
             end)
+        -- vehGroups appear as extra entries in this same key->label dict, so the existing
+        -- Config UI multi-select (models/modelOptions in windows/config/general/traffic/app.js)
+        -- lists and validates them exactly like raw model names, with no frontend changes needed.
+        M.vehGroups:forEach(function(group, id)
+            models[VEHGROUP_PREFIX .. id] = group.name
+        end)
         beamjoy_communications_ui.send("BJTrafficSettings", {
             data = {
                 enabled = M.data.enabled,
@@ -355,6 +426,8 @@ end
 
 local function onInit()
     InitPreloadedDependencies(M)
+
+    M.vehGroups = scanVehGroups()
 
     beamjoy_communications.addHandler("sendCache", function(caches)
         if caches.traffic then
