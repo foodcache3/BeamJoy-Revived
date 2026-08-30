@@ -6,6 +6,23 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.53] - 2026-08-30
+
+### Fixed
+- **AI traffic felt sparse while driving, fine while parked.** `traffic.lua`'s spawn placement
+  (`getNewRandomSpawn`) always called `findSpawnPointRadial` with `pathRandomization = 1`
+  (fully random road direction), regardless of the observing player's speed. Compared against
+  BeamNG's own native traffic system (`gameplay/traffic.lua`), which scales that same parameter
+  down as speed increases so spawns get biased ahead of the player's travel direction, BJS never
+  carried that scaling over, even though its own code comments cite the native functions it was
+  modeled on. Combined with `getMinMaxDistFromPlayer`'s existing min/max spawn-distance band
+  widening at speed, spawns kept landing uniformly all around the player at any speed, so most of
+  the fixed traffic budget (`total`/`maxPerPlayer`) ended up behind or beside the player and was
+  never actually driven past, reading as "traffic disappeared" once moving. Added
+  `getPathRandomization(speed)`, mirroring the existing `getMinMaxDistFromPlayer` speed-scale
+  convention (1 at 20 km/h and below down to 0.15 at 200 km/h and above), and wired it into both
+  `getNewRandomSpawn` origin branches. *(client only)*
+
 ## [1.8.52] - 2026-08-29
 
 ### Fixed

@@ -42,6 +42,17 @@ local function getMinMaxDistFromPlayer(speed)
         math.scale(speed * 3.6, 20, 200, 150, 400, true)
 end
 
+-- Matches ge/extensions/gameplay/traffic.lua's own speed-based falloff (native traffic biases
+-- spawns ahead of the player's travel direction at speed instead of picking a fully random road).
+-- Without this, spawns stay uniformly random around the player even at highway speed, so most of
+-- the fixed traffic budget lands somewhere behind/beside the player and is never driven past,
+-- reading as "traffic got sparse" once the min/max band above also widens with speed.
+---@param speed number meter/sec
+---@return number
+local function getPathRandomization(speed)
+    return math.scale(speed * 3.6, 20, 200, 1, .15, true)
+end
+
 -- ge/extensions/core/funstuff.lua:randomRoute():191 <br/>
 -- ge/spawn.lua:teleportToLastRoadCallback():616
 ---@param job NGJob?
@@ -65,16 +76,18 @@ local function getNewRandomSpawn(job)
                 speed = 0,
                 minDistance = min,
                 maxDistance = max,
+                pathRandomization = M.getPathRandomization(0),
             }
         else
             origin = playerPositions:random()
             origin.minDistance, origin.maxDistance = M.getMinMaxDistFromPlayer(origin.speed)
+            origin.pathRandomization = M.getPathRandomization(origin.speed)
         end
         spawnData, onRoute = extensions.gameplay_traffic_trafficUtils
             .findSpawnPointRadial(origin.pos, origin.dir,
                 origin.minDistance, origin.maxDistance, origin.minDistance +
                 (origin.maxDistance - origin.minDistance) / 4,
-                { pathRandomization = 1, minDrivability = .1 })
+                { pathRandomization = origin.pathRandomization, minDrivability = .1 })
         if onRoute then
             local playersDistances = playerPositions:map(function(pData)
                 return {
@@ -452,6 +465,7 @@ M.onBJVehicleInstantiated = onBJVehicleInstantiated
 M.onRubberbandTick = onRubberbandTick
 
 M.getMinMaxDistFromPlayer = getMinMaxDistFromPlayer
+M.getPathRandomization = getPathRandomization
 M.retrieveCache = retrieveCache
 M.markForRespawn = markForRespawn
 
