@@ -8,6 +8,13 @@ local M = {
         total = 20,
         maxPerPlayer = 10,
         models = { "simple_traffic" },
+        -- per-source (raw model key or "vehGroup:<id>") rarity weight, 0-100, mirroring Agent's
+        -- own Traffic Tool "Rarity" slider convention (Rare=10/Medium=50/Common=100). A source is
+        -- picked with probability proportional to its own weight relative to the total, then a
+        -- config is picked uniformly within that source; missing here defaults to 100 (Common),
+        -- so newly-added sources aren't unexpectedly quiet until the admin dials one down.
+        ---@type table<string, number>
+        weights = {},
         -- population/region-weighted config picking (mirrors native's own "Smart Selection"
         -- traffic setting); only meaningful when every candidate config actually has that
         -- metadata, which BJS can only guarantee for stock simple_traffic
@@ -87,8 +94,11 @@ local function getSmartSelectionWeight(config, mapRegion)
     return population * regionFactor
 end
 
----@param candidates tablelib<integer, {config: string, weight: number}>
----@return {config: string, weight: number}
+-- Generic: used both for per-config weighting (Smart Selection) and per-source weighting
+-- (rarity), any table shape with a numeric .weight field works.
+---@generic T: {weight: number}
+---@param candidates tablelib<integer, T>
+---@return T
 local function weightedRandomPick(candidates)
     local total = candidates:reduce(function(acc, c) return acc + c.weight end, 0)
     if total <= 0 then return candidates:random() end
@@ -252,33 +262,43 @@ local function createGroup(job, amount)
         -- through to the regular uniform pool below instead of returning an empty group
     end
 
-    -- Flat pool of every candidate {model, config} pair, combining full config lists from raw
-    -- selected models with the exact curated entries of each selected vehGroup (additive: a
-    -- vehGroup doesn't replace the model list, it's one more pickable source alongside it).
-    local pool = Table()
+    -- One source per selected raw model and per selected vehGroup (additive: a vehGroup doesn't
+    -- replace the model list, it's one more pickable source alongside it), each carrying its own
+    -- full config list and its own rarity weight. A source is picked weighted by M.data.weights
+    -- (default 100/Common when unset), then a config is picked uniformly within that source, so
+    -- e.g. a 128-config pack and a 5-config pack can be balanced against each other instead of the
+    -- bigger one dominating purely by having more configs.
+    local sources = Table()
     table.filter(beamjoy_vehicles.getAllVehicleConfigs(job, { traffic = true }),
         function(_, model) return table.includes(selectedModels, model) end)
         :forEach(function(data, model)
-            table.keys(data.configs):forEach(function(config)
-                pool:insert({ model = model, config = config })
+            local configs = table.keys(data.configs):map(function(config)
+                return { model = model, config = config }
             end)
+            if configs:length() > 0 then
+                sources:insert({ configs = configs, weight = M.data.weights[model] or 100 })
+            end
         end)
     selectedVehGroupIds:forEach(function(id)
         local group = M.vehGroups[id]
         if group then
-            group.entries:forEach(function(entry)
-                pool:insert({
+            local configs = group.entries:map(function(entry)
+                return {
                     model = entry.model,
                     config = entry.config,
                     -- vehGroup files use the literal string "random" to mean "no override", the
                     -- same behavior spawnNewTrafficVehicles already falls back to when unset
                     paintName = entry.paintName ~= "random" and entry.paintName or nil,
-                })
+                }
             end)
+            if configs:length() > 0 then
+                local key = VEHGROUP_PREFIX .. id
+                sources:insert({ configs = configs, weight = M.data.weights[key] or 100 })
+            end
         end
     end)
 
-    if pool:length() < 1 then
+    if sources:length() < 1 then
         LogError("Invalid traffic models")
         dump(M.data.models)
         return {}
@@ -286,7 +306,7 @@ local function createGroup(job, amount)
 
     local res = {}
     repeat
-        table.insert(res, pool:random())
+        table.insert(res, weightedRandomPick(sources).configs:random())
     until #res == amount
     return res
 end
@@ -510,6 +530,7 @@ local function saveAndSend(payload)
             amount = newData.total,
             maxPerPlayer = newData.maxPerPlayer,
             models = newData.models,
+            weights = newData.weights,
             smartSelection = newData.smartSelection,
             parkedAmount = newData.parkedTotal,
             parkedMaxPerPlayer = newData.parkedMaxPerPlayer,
@@ -536,6 +557,7 @@ local function sendSettingsToUI()
                 amount = M.data.total,
                 maxPerPlayer = M.data.maxPerPlayer,
                 models = M.data.models,
+                weights = M.data.weights,
                 smartSelection = M.data.smartSelection,
                 parkedAmount = M.data.parkedTotal,
                 parkedMaxPerPlayer = M.data.parkedMaxPerPlayer,

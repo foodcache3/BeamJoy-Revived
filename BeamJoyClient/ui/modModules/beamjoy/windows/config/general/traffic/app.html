@@ -44,18 +44,55 @@
         <td>
             <ul>
                 <li
-                    class="d-flex align-center gap-1 pb-1"
+                    class="pb-1"
                     ng-repeat="model in $ctrl.data.models"
                 >
-                    <button
-                        class="btn"
-                        ng-hide="$ctrl.hideRemoveModel"
-                        ng-click="$ctrl.removeModel($event, model)"
-                        title="{{'beamjoy.common.remove'|translate}}"
+                    <div class="d-flex align-center gap-1">
+                        <button
+                            class="btn"
+                            ng-hide="$ctrl.hideRemoveModel"
+                            ng-click="$ctrl.removeModel($event, model)"
+                            title="{{'beamjoy.common.remove'|translate}}"
+                        >
+                            <icon name="remove" class="danger"></icon>
+                        </button>
+                        <span>{{model}} - {{$ctrl.modelLabels[model]}}</span>
+                    </div>
+                    <div
+                        class="d-flex align-center gap-1 pl-2"
+                        ng-show="$ctrl.showRarity"
                     >
-                        <icon name="remove" class="danger"></icon>
-                    </button>
-                    <span>{{model}} - {{$ctrl.modelLabels[model]}}</span>
+                        <span class="text-nowrap">
+                            {{"beamjoy.window.config.tabs.general.traffic.rarity"|translate}}
+                        </span>
+                        <button
+                            class="btn"
+                            ng-click="$ctrl.setRarity(model, 10)"
+                            title="{{'beamjoy.window.config.tabs.general.traffic.rarity.rare'|translate}}"
+                        >
+                            {{"beamjoy.window.config.tabs.general.traffic.rarity.rare"|translate}}
+                        </button>
+                        <button
+                            class="btn"
+                            ng-click="$ctrl.setRarity(model, 50)"
+                            title="{{'beamjoy.window.config.tabs.general.traffic.rarity.medium'|translate}}"
+                        >
+                            {{"beamjoy.window.config.tabs.general.traffic.rarity.medium"|translate}}
+                        </button>
+                        <button
+                            class="btn"
+                            ng-click="$ctrl.setRarity(model, 100)"
+                            title="{{'beamjoy.window.config.tabs.general.traffic.rarity.common'|translate}}"
+                        >
+                            {{"beamjoy.window.config.tabs.general.traffic.rarity.common"|translate}}
+                        </button>
+                        <span>{{$ctrl.data.weights[model]}}%</span>
+                        <bj-slider
+                            ng-model="$ctrl.data.weights[model]"
+                            min="0"
+                            max="100"
+                        ></bj-slider>
+                    </div>
                 </li>
                 <li
                     class="d-flex align-center gap-1"

@@ -6,6 +6,18 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.61] - 2026-08-30 (server v1.8.54)
+
+### Added
+- **Per-source rarity weighting for traffic.** Config -> Traffic's model list now shows a Rarity
+  slider (0-100%, plus Rare/Medium/Common quick-set buttons, matching Agent's own Traffic Tool
+  convention) next to each selected source once more than one is selected. `createGroup` now picks
+  a source (raw model or vehGroup) weighted by this value first, then a config uniformly within
+  that source, instead of pooling every config from every source together where a large pack (e.g.
+  128 configs) would dominate a small one (e.g. 5) purely by config count. Defaults to 100
+  (Common) for any source without an explicit weight, so nothing goes quiet unless deliberately
+  turned down. *(server-side services/traffic.lua and services/config.lua changes need deployment)*
+
 ## [1.8.60] - 2026-08-30
 
 ### Fixed

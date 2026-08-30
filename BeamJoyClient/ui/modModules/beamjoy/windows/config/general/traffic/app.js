@@ -9,6 +9,7 @@ angular.module("beamjoy").component("bjConfigGeneralTraffic", {
             amount: 0,
             maxPerPlayer: 0,
             models: ["simple_traffic"],
+            weights: {},
             smartSelection: false,
             parkedAmount: 0,
             parkedMaxPerPlayer: 0,
@@ -19,10 +20,24 @@ angular.module("beamjoy").component("bjConfigGeneralTraffic", {
         this.hideModels = true;
         this.hideRemoveModel = false;
         this.showSmartSelection = false;
+        this.showRarity = false;
         this.default = {};
 
         const updateDirty = () => {
             this.dirty = !angular.equals(this.data, this.default);
+        };
+        // Rarity only means anything once there's more than one source to weigh against each
+        // other; also drops any leftover weight entry for a model that's no longer selected, so
+        // dirty-checking doesn't get fooled by stale keys nobody can see or edit anymore.
+        const updateWeights = () => {
+            this.showRarity = this.data.models.length > 1;
+            Object.keys(this.data.weights).forEach((k) => {
+                if (!this.data.models.includes(k)) delete this.data.weights[k];
+            });
+            this.data.models.forEach((m) => {
+                if (typeof this.data.weights[m] !== "number")
+                    this.data.weights[m] = 100;
+            });
         };
         // Population/region-weighted picking (native's own "Smart Selection" traffic setting)
         // only makes sense when every candidate config actually carries that metadata, which is
@@ -80,6 +95,7 @@ angular.module("beamjoy").component("bjConfigGeneralTraffic", {
                 this.save();
             }
             updateModelOptions();
+            updateWeights();
             updateShowSmartSelection();
             updateDirty();
             this.init = true;
@@ -97,13 +113,19 @@ angular.module("beamjoy").component("bjConfigGeneralTraffic", {
             evt.stopPropagation();
             this.data.models.push(this.selectedModel);
             updateModelOptions();
+            updateWeights();
             updateShowSmartSelection();
         };
         this.removeModel = (evt, model) => {
             evt.stopPropagation();
             this.data.models = this.data.models.filter((m) => m !== model);
             updateModelOptions();
+            updateWeights();
             updateShowSmartSelection();
+        };
+        // matches Agent's Traffic Tool's own Rare/Medium/Common quick-set convention
+        this.setRarity = (model, value) => {
+            this.data.weights[model] = value;
         };
         this.save = () => {
             this.dirty = false;

@@ -98,6 +98,7 @@ local function onBJRequestCache(caches, targetID)
         total = conf.amount,
         maxPerPlayer = conf.maxPerPlayer,
         models = conf.models,
+        weights = conf.weights,
         smartSelection = conf.smartSelection,
         parkedAmount = M.parkedBalancer[targetID] or 0,
         parkedTotal = conf.parkedAmount,
@@ -135,7 +136,7 @@ local function onSlowUpdate()
 end
 
 ---@param ctxt BJSContext
----@param settings {enabled: boolean, amount: integer, maxPerPlayer: integer, models: string[], smartSelection: boolean?, parkedAmount: integer?, parkedMaxPerPlayer: integer?}
+---@param settings {enabled: boolean, amount: integer, maxPerPlayer: integer, models: string[], weights: table<string, number>?, smartSelection: boolean?, parkedAmount: integer?, parkedMaxPerPlayer: integer?}
 local function rxSettings(ctxt, settings)
     if not ctxt.sender or (not services_permissions.isStaff(ctxt.sender.playerName) and
             not services_permissions.hasAnyPermission(ctxt.senderID, BJ_PERMISSIONS.SetConfig)) then
@@ -146,6 +147,7 @@ local function rxSettings(ctxt, settings)
     conf.amount = tonumber(settings.amount) or conf.amount
     conf.maxPerPlayer = tonumber(settings.maxPerPlayer) or conf.maxPerPlayer
     conf.models = settings.models
+    conf.weights = settings.weights or conf.weights
     conf.smartSelection = settings.smartSelection and true or false
     conf.parkedAmount = tonumber(settings.parkedAmount) or conf.parkedAmount
     conf.parkedMaxPerPlayer = tonumber(settings.parkedMaxPerPlayer) or conf.parkedMaxPerPlayer
