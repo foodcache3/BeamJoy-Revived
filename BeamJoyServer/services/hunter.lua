@@ -162,8 +162,9 @@ local function sanitizeArena(arena)
         math.round((tonumber(arena.defaults.revealProximityDistance) or 50) / 10) * 10)
     arena.defaults.revealResetDuration = math.max(0, tonumber(arena.defaults.revealResetDuration) or 5)
     arena.defaults.revealOnFinalWaypoint = arena.defaults.revealOnFinalWaypoint ~= false
+    -- same "Increments of 10m" tooltip promise as revealProximityDistance above, same gap
     arena.defaults.huntedResetDistanceThreshold = math.max(0,
-        tonumber(arena.defaults.huntedResetDistanceThreshold) or 150)
+        math.round((tonumber(arena.defaults.huntedResetDistanceThreshold) or 150) / 10) * 10)
     if arena.defaults.huntedVehiclePresetId ~= nil then
         arena.defaults.huntedVehiclePresetId = tonumber(arena.defaults.huntedVehiclePresetId)
         if not arena.defaults.huntedVehiclePresetId or
@@ -191,7 +192,9 @@ local function sanitizeArena(arena)
         and arena.defaults.hunterRespawnStrategy ~= "hubs" then
         arena.defaults.hunterRespawnStrategy = "nearestSpawn"
     end
-    arena.defaults.hunterNametagFadeDistance = math.max(0, tonumber(arena.defaults.hunterNametagFadeDistance) or 0)
+    -- same "Increments of 10m" tooltip promise as revealProximityDistance above, same gap
+    arena.defaults.hunterNametagFadeDistance = math.max(0,
+        math.round((tonumber(arena.defaults.hunterNametagFadeDistance) or 0) / 10) * 10)
     if arena.defaults.winCondition ~= "waypoints" and arena.defaults.winCondition ~= "timed" then
         arena.defaults.winCondition = "waypoints"
     end

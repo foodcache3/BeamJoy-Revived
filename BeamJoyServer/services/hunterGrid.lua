@@ -457,8 +457,9 @@ local function buildSettings(arena, overrides)
         revealResetDuration = math.max(0, tonumber(overrides.revealResetDuration) or
             defaults.revealResetDuration or 5),
         revealOnFinalWaypoint = revealOnFinalWaypoint,
-        huntedResetDistanceThreshold = math.max(0, tonumber(overrides.huntedResetDistanceThreshold) or
-            defaults.huntedResetDistanceThreshold or 150),
+        -- same "Increments of 10m" tooltip promise as revealProximityDistance above, same gap
+        huntedResetDistanceThreshold = math.max(0, math.round((tonumber(overrides.huntedResetDistanceThreshold) or
+            defaults.huntedResetDistanceThreshold or 150) / 10) * 10),
         huntedVehiclePresetId = huntedVehiclePresetId,
         huntedVehiclePool = huntedVehiclePool,
         huntedVehicleLabel = huntedVehicleLabel,
@@ -471,8 +472,9 @@ local function buildSettings(arena, overrides)
         vehicleConfirmTimeout = math.max(3, tonumber(overrides.vehicleConfirmTimeout) or
             defaults.vehicleConfirmTimeout or 20),
         randomizeVehiclePool = randomizeVehiclePool,
-        hunterNametagFadeDistance = math.max(0, tonumber(overrides.hunterNametagFadeDistance) or
-            defaults.hunterNametagFadeDistance or 0),
+        -- same "Increments of 10m" tooltip promise as revealProximityDistance above, same gap
+        hunterNametagFadeDistance = math.max(0, math.round((tonumber(overrides.hunterNametagFadeDistance) or
+            defaults.hunterNametagFadeDistance or 0) / 10) * 10),
         winCondition = winCondition,
         timedModeDuration = math.max(1, math.min(120, tonumber(overrides.timedModeDuration) or
             defaults.timedModeDuration or 10)),

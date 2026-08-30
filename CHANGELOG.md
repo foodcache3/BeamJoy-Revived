@@ -6,6 +6,20 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [server 1.8.57] - 2026-08-30
+
+### Fixed
+- **Same "increments of 10m" gap as revealProximityDistance (server 1.8.56), found on the other
+  two fields that make the same promise.** Searched the whole locale file for every tooltip
+  promising a specific increment; `huntedResetDistanceThreshold` and `hunterNametagFadeDistance`
+  are the only other two ("Increments of 10m."), and both had the exact same issue: their
+  `services/hunter.lua` and `services/hunterGrid.lua` resolve steps only ever floored the value
+  (at 0, since unlike revealProximityDistance both explicitly allow 0 to mean "disabled" per their
+  own tooltips), never rounded it to 10. Both now round to the nearest 10, floor unchanged at 0.
+  Other sliders with a non-1 step (`huntedStuckDistance` at 0.1, `gridTimeout` at 10 in both
+  Hunter and Races) don't make an explicit increment promise in their own tooltips, so they're not
+  the same class of bug and were left as-is. *(server only, needs deployment)*
+
 ## [server 1.8.56] - 2026-08-30
 
 ### Fixed
