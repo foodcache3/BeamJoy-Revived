@@ -1,3 +1,142 @@
+// Race Share Codes (see TODO.md's own "Race share codes" plan for the full design/measurements
+// behind every choice below). Entirely client-side, module-local to this file since it has no
+// other consumer: gzip+base64 happens right here in the browser via the native
+// CompressionStream/DecompressionStream APIs (confirmed available in this mod's actual CEF build,
+// Chromium 148 ; no bundled library needed). The server never sees a code at all, only the plain
+// race object this decodes into, submitted through the exact same `raceSave` message (and
+// `sanitizeRace` validation) any other race creation already goes through, via the existing
+// BJEditorRaceImportCode -> onImportCode Lua handler (ui/raceEditor.lua). Never trust a pasted
+// code blindly: this only ever decodes/decompresses it, nothing here is a substitute for that
+// server-side validation.
+const RACE_SHARE_CODE_PREFIX = "BJRACE1:";
+
+// Feature-detected, not assumed forever: gates every Export/Import affordance in the template so
+// a future CEF downgrade (or a different embedder entirely) degrades to "hidden" instead of a
+// ReferenceError on click.
+const raceShareIsSupported = () =>
+    typeof CompressionStream === "function" && typeof DecompressionStream === "function";
+
+// Real-world precision loss from repeated capture/edit round-trips is irrelevant for a gate
+// trigger radius. Rounding every number recursively (rather than hand-picking pos/dir/width/
+// height fields one by one) is what keeps a big race's code small enough to actually paste: per
+// the TODO's own measurements against real bundled race data, gzip+base64 of the rounded JSON
+// comes out ~3.5-4x smaller than gzip+base64 of full-precision JSON.
+const raceShareRoundNumbers = (value) => {
+    if (typeof value === "number") return Math.round(value * 1000) / 1000;
+    if (Array.isArray(value)) return value.map(raceShareRoundNumbers);
+    if (value && typeof value === "object") {
+        const out = {};
+        Object.keys(value).forEach((k) => {
+            out[k] = raceShareRoundNumbers(value[k]);
+        });
+        return out;
+    }
+    return value;
+};
+
+// Only the portable route definition travels in a code. `id`/`author`/`leaderboard`/
+// `leaderboardCount` are this fork's own local bookkeeping for THIS server's copy of the race,
+// never meaningful to (and never trusted from, see raceSave server-side) a pasted code. `step` is
+// dropped from every gate too: it's re-derived server/editor-side from `parents` regardless of
+// what's sent (see BJRaceGate.step's own doc comment in services/races.lua), so shipping it is
+// dead weight the receiving end throws away anyway.
+const raceShareStrip = (race) => {
+    const payload = raceShareRoundNumbers({
+        name: race.name,
+        mode: race.mode,
+        loopable: race.loopable,
+        sectorCount: race.sectorCount,
+        manualSectors: race.manualSectors,
+        branchingEnabled: race.branchingEnabled,
+        gates: race.gates,
+        startPositions: race.startPositions,
+        defaults: race.defaults,
+    });
+    (payload.gates || []).forEach((g) => {
+        delete g.step;
+    });
+    return payload;
+};
+
+const raceShareBytesToBase64 = (bytes) => {
+    let binary = "";
+    bytes.forEach((b) => {
+        binary += String.fromCharCode(b);
+    });
+    return btoa(binary);
+};
+
+const raceShareBase64ToBytes = (b64) => {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+};
+
+// race: the editor's own live race object. Returns the pasteable code string.
+const raceShareExportCode = async (race) => {
+    if (!raceShareIsSupported()) {
+        throw new Error("beamjoy.window.config.tabs.races.share.unsupported");
+    }
+    const json = JSON.stringify(raceShareStrip(race));
+    const compressedStream = new Response(new TextEncoder().encode(json)).body.pipeThrough(
+        new CompressionStream("gzip")
+    );
+    const compressed = new Uint8Array(await new Response(compressedStream).arrayBuffer());
+    return RACE_SHARE_CODE_PREFIX + raceShareBytesToBase64(compressed);
+};
+
+// code: the pasted string. Returns the decoded race payload, ready to hand straight to
+// BJEditorRaceImportCode ; throws (with a translate key as its message) on anything invalid.
+const raceShareImportCode = async (code) => {
+    if (!raceShareIsSupported()) {
+        throw new Error("beamjoy.window.config.tabs.races.share.unsupported");
+    }
+    const trimmed = (code || "").trim();
+    if (!trimmed.startsWith(RACE_SHARE_CODE_PREFIX)) {
+        throw new Error("beamjoy.window.config.tabs.races.share.invalidCode");
+    }
+    let json;
+    try {
+        const bytes = raceShareBase64ToBytes(trimmed.slice(RACE_SHARE_CODE_PREFIX.length));
+        const decompressedStream = new Response(bytes).body.pipeThrough(
+            new DecompressionStream("gzip")
+        );
+        json = new TextDecoder().decode(await new Response(decompressedStream).arrayBuffer());
+    } catch (e) {
+        throw new Error("beamjoy.window.config.tabs.races.share.invalidCode");
+    }
+    let race;
+    try {
+        race = JSON.parse(json);
+    } catch (e) {
+        throw new Error("beamjoy.window.config.tabs.races.share.invalidCode");
+    }
+    if (!race || !Array.isArray(race.gates) || !Array.isArray(race.startPositions)) {
+        throw new Error("beamjoy.window.config.tabs.races.share.invalidCode");
+    }
+    return race;
+};
+
+// Mirrors the native ui-vue UI's own copy-to-clipboard helper (`writeText`, falling back to a
+// hidden-textarea `execCommand("copy")` when the async Clipboard API isn't available), see e.g.
+// modules/multiplayer/components/MultiplayerSessionIdentifiers.vue for the same pattern used
+// elsewhere in this exact CEF build.
+const raceShareCopyToClipboard = async (text) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+};
+
 angular.module("beamjoy").component("bjConfigRacesEditor", {
     bindings: {
         raceId: "<",
@@ -563,6 +702,73 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
                 this.NAME_MAX_LENGTH
             );
         };
+        // Race Share Codes : see the module-scope raceShare* helpers above this component for the
+        // actual encode/decode. `canShare` gates both buttons in the template (see raceShareIsSupported's
+        // own comment for why this is checked live rather than assumed).
+        this.canShare = raceShareIsSupported();
+
+        // transient "Copied!" affordance next to the export button, replacing a dedicated toast :
+        // this is a pure client-side clipboard write, nothing Lua-side needs to know happened.
+        this.shareCopied = false;
+        this.copyShareCode = (event) => {
+            event.stopPropagation();
+            raceShareExportCode(this.race)
+                .then((code) => raceShareCopyToClipboard(code))
+                .then(() => {
+                    this.shareCopied = true;
+                    $timeout(() => {
+                        this.shareCopied = false;
+                    }, 2000);
+                })
+                .catch((err) => {
+                    beamjoyConfirm.info(
+                        translate(err.message || "beamjoy.window.config.tabs.races.share.invalidCode")
+                    );
+                });
+        };
+
+        // Import replaces this editor's whole in-progress race outright (gates/starts are
+        // Lua/gizmo-authoritative, there's no per-field merge to do here, same as opening a
+        // different race would), so anything already worth keeping gets a confirm first, same
+        // pattern as every other destructive action in this editor.
+        this.importShareCode = (event) => {
+            event.stopPropagation();
+            const doImport = () => {
+                beamjoyConfirm.askForInput(
+                    translate("beamjoy.window.config.tabs.races.share.importPrompt"),
+                    "",
+                    translate("beamjoy.window.config.tabs.races.share.importPlaceholder"),
+                    (code) => {
+                        if (!code) return;
+                        raceShareImportCode(code)
+                            .then((race) => {
+                                beamjoyStore.send("BJEditorRaceImportCode", [race]);
+                            })
+                            .catch((err) => {
+                                beamjoyConfirm.info(
+                                    translate(
+                                        err.message ||
+                                            "beamjoy.window.config.tabs.races.share.invalidCode"
+                                    )
+                                );
+                            });
+                    }
+                );
+            };
+            const hasContent =
+                this.race.gates.length > 0 ||
+                this.race.startPositions.length > 0 ||
+                (this.race.name || "").trim().length > 0;
+            if (hasContent) {
+                beamjoyConfirm.ask(
+                    translate("beamjoy.window.config.tabs.races.share.confirmOverwrite"),
+                    doImport
+                );
+            } else {
+                doImport();
+            }
+        };
+
         this.deleteRace = (event) => {
             event.stopPropagation();
             beamjoyConfirm.ask(

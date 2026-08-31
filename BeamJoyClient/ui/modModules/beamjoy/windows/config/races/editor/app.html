@@ -130,6 +130,29 @@
             </button>
         </div>
 
+        <!-- Race Share Codes : text buttons rather than icon-only (no existing icon fits either
+             action well), hidden outright when this CEF build lacks CompressionStream/
+             DecompressionStream (see the component's own raceShareIsSupported) rather than shown
+             disabled with no explanation -->
+        <div class="d-flex gap-1 mb-2 align-center" ng-if="$ctrl.canShare">
+            <button
+                class="btn info"
+                ng-click="$ctrl.importShareCode($event)"
+                title="{{'beamjoy.window.config.tabs.races.share.importButton.tooltip' | translate}}"
+            >
+                {{'beamjoy.window.config.tabs.races.share.importButton' | translate}}
+            </button>
+            <button
+                class="btn info"
+                ng-click="$ctrl.copyShareCode($event)"
+                title="{{'beamjoy.window.config.tabs.races.share.exportButton.tooltip' | translate}}"
+            >
+                {{($ctrl.shareCopied
+                    ? 'beamjoy.window.config.tabs.races.share.copied'
+                    : 'beamjoy.window.config.tabs.races.share.exportButton') | translate}}
+            </button>
+        </div>
+
         <div class="section-bar d-flex flex-wrap">
             <div
                 class="section-tab cursor-pointer"

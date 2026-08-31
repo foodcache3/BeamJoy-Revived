@@ -6,6 +6,22 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.67] - 2026-08-31
+
+### Added
+- **Race Share Codes.** The race editor (Config > Races) now has "Copy Share Code" and "Import
+  from Code" buttons. Export serializes the currently-open race (name/mode/loopable/sectors/
+  branching/gates/start positions/defaults, not id/author/leaderboard, and not any vehicle
+  restriction capture since that's local to the exporting server), rounds every number to 3
+  decimal places, gzips the compact JSON, base64-encodes it behind a `BJRACE1:` prefix, and copies
+  the result to the clipboard entirely client-side (native `CompressionStream`/`btoa`, no bundled
+  library). Import decodes a pasted code the same way and replaces the editor's in-progress race
+  with it (confirming first if there's anything unsaved worth losing), but nothing about the
+  imported data is trusted any further than a race authored from scratch would be: it still has to
+  go through the existing `sanitizeRace` validation server-side the moment it's actually saved, no
+  server-side change was needed for this at all. Scoped to races only for now, per the original
+  design note; Hunter arenas weren't extended to this.
+
 ## [server 1.8.57] - 2026-08-30
 
 ### Fixed

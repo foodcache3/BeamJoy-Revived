@@ -637,6 +637,16 @@
     "beamjoy.window.config.tabs.races.confirmDuplicate": "Duplicate \"{name}\" as a new race?",
     "beamjoy.window.config.tabs.races.confirmDelete": "Delete the race \"{name}\"? This cannot be undone.",
     "beamjoy.window.config.tabs.races.confirmDiscard": "Discard unsaved changes to this race?",
+    "beamjoy.window.config.tabs.races.share.exportButton": "Copy Share Code",
+    "beamjoy.window.config.tabs.races.share.exportButton.tooltip": "Copies a pasteable text code for this race (as currently shown in the editor, including unsaved changes) to your clipboard. Anyone can paste it back in via Import from Code to get an exact copy of the route on their own server.",
+    "beamjoy.window.config.tabs.races.share.copied": "Copied!",
+    "beamjoy.window.config.tabs.races.share.importButton": "Import from Code",
+    "beamjoy.window.config.tabs.races.share.importButton.tooltip": "Replaces this editor's race with one decoded from a pasted share code. The code is never trusted blindly, it still goes through the same validation any other saved race does.",
+    "beamjoy.window.config.tabs.races.share.importPrompt": "Paste a race share code:",
+    "beamjoy.window.config.tabs.races.share.importPlaceholder": "BJRACE1:...",
+    "beamjoy.window.config.tabs.races.share.confirmOverwrite": "This will replace everything currently in the editor with the imported race. Continue?",
+    "beamjoy.window.config.tabs.races.share.invalidCode": "That doesn't look like a valid race share code.",
+    "beamjoy.window.config.tabs.races.share.unsupported": "Race share codes aren't supported by this game version.",
 
     // HUD UI APP
     "beamjoy.window.hud": "BeamJoy HUD",

@@ -549,6 +549,54 @@ local function onUpdate()
 end
 
 ---@param raceId integer?
+--- Backfills every optional/defaults field a race might be missing with the same fallback value
+--- the "new race" template below already uses, so sliders/toggles never start from nil/NaN.
+--- Shared by onOpen's own "existing race" branch (a race authored before these fields existed,
+--- e.g. via the old console test builder, or a stale cached copy opened before a server reload)
+--- and onImportCode below (a share code from an older exporter, or a hand-edited one : see
+--- onImportCode's own doc comment for why this can't be trusted to already be complete either).
+--- Defensive only for the gates' own step/parents backfill specifically: the server's own
+--- normalizeGateSteps already guarantees every gate has a real step/parents/isFinish for any race
+--- that actually reached this client through the normal save/load path, this is a pure safety net.
+---@param race BJRace
+local function backfillRaceDefaults(race)
+    race.defaults = race.defaults or {}
+    race.defaults.laps = race.defaults.laps or 3
+    if race.defaults.dnfEnabled == nil then race.defaults.dnfEnabled = true end
+    race.defaults.dnfTimeout = race.defaults.dnfTimeout or 30
+    if race.defaults.resetPenaltyEnabled == nil then race.defaults.resetPenaltyEnabled = false end
+    race.defaults.resetPenaltySeconds = race.defaults.resetPenaltySeconds or 5
+    if race.defaults.disableNodegrabber == nil then race.defaults.disableNodegrabber = true end
+    if race.defaults.disableCameras == nil then race.defaults.disableCameras = true end
+    if race.defaults.disableGravityChange == nil then race.defaults.disableGravityChange = true end
+    if race.defaults.ghostOnCountdown == nil then race.defaults.ghostOnCountdown = true end
+    if race.defaults.disableCollisions == nil then race.defaults.disableCollisions = false end
+    if race.defaults.ghostBackmarkers == nil then race.defaults.ghostBackmarkers = false end
+    if race.defaults.showGateNametags == nil then race.defaults.showGateNametags = false end
+    if race.defaults.limitVisibleGates == nil then race.defaults.limitVisibleGates = true end
+    race.defaults.visibleGateCount = race.defaults.visibleGateCount or 2
+    if race.defaults.allowTuning == nil then race.defaults.allowTuning = true end
+    if race.defaults.randomizeVehiclePool == nil then race.defaults.randomizeVehiclePool = false end
+    -- mirrors services/races.lua's own RESPAWN_STRATEGIES values (no shared constant across the
+    -- Lua/JS split here, same as this file's other hand-synced mirrors, e.g. deriveStepsFromParents)
+    if not table.includes({ "all", "norespawn", "lastcheckpoint" }, race.defaults.respawnStrategy) then
+        race.defaults.respawnStrategy = "lastcheckpoint"
+    end
+    if race.defaults.placementMode == nil then race.defaults.placementMode = "random" end
+    if race.defaults.joinable == nil then race.defaults.joinable = false end
+    race.defaults.gridTimeout = race.defaults.gridTimeout or 180
+    race.defaults.gridReadyTimeout = race.defaults.gridReadyTimeout or 10
+    race.defaults.countdown = race.defaults.countdown or 10
+    if race.manualSectors == nil then race.manualSectors = false end
+    race.sectorCount = race.sectorCount or 3
+    if race.vehicleRestrictionMode == nil then race.vehicleRestrictionMode = "free" end
+    if race.branchingEnabled == nil then race.branchingEnabled = false end
+    table.forEach(race.gates, function(g, i)
+        if type(g.step) ~= "number" then g.step = i end
+        if not table.isArray(g.parents) then g.parents = { i - 1 } end
+    end)
+end
+
 local function onOpen(raceId)
     if not parent then return end
     if parent.activeEditor and parent.activeEditor ~= M then
@@ -561,36 +609,7 @@ local function onOpen(raceId)
     local existing = raceId and table.find(beamjoy_races.data, function(r) return r.id == raceId end)
     if existing then
         M.race = table.clone(existing)
-        -- Races authored before these fields existed (e.g. via the old console test builder) may
-        -- have them unset. Keep them concrete so their sliders never start from NaN.
-        M.race.defaults.laps = M.race.defaults.laps or 3
-        if M.race.defaults.dnfEnabled == nil then M.race.defaults.dnfEnabled = true end
-        M.race.defaults.dnfTimeout = M.race.defaults.dnfTimeout or 30
-        if M.race.defaults.resetPenaltyEnabled == nil then M.race.defaults.resetPenaltyEnabled = false end
-        M.race.defaults.resetPenaltySeconds = M.race.defaults.resetPenaltySeconds or 5
-        if M.race.defaults.disableNodegrabber == nil then M.race.defaults.disableNodegrabber = true end
-        if M.race.defaults.disableCameras == nil then M.race.defaults.disableCameras = true end
-        if M.race.defaults.disableGravityChange == nil then M.race.defaults.disableGravityChange = true end
-        if M.race.defaults.ghostOnCountdown == nil then M.race.defaults.ghostOnCountdown = true end
-        if M.race.defaults.disableCollisions == nil then M.race.defaults.disableCollisions = false end
-        if M.race.defaults.ghostBackmarkers == nil then M.race.defaults.ghostBackmarkers = false end
-        if M.race.defaults.showGateNametags == nil then M.race.defaults.showGateNametags = false end
-        if M.race.defaults.limitVisibleGates == nil then M.race.defaults.limitVisibleGates = true end
-        M.race.defaults.visibleGateCount = M.race.defaults.visibleGateCount or 2
-        if M.race.defaults.allowTuning == nil then M.race.defaults.allowTuning = true end
-        if M.race.defaults.randomizeVehiclePool == nil then M.race.defaults.randomizeVehiclePool = false end
-        if M.race.manualSectors == nil then M.race.manualSectors = false end
-        M.race.sectorCount = M.race.sectorCount or 3
-        if M.race.vehicleRestrictionMode == nil then M.race.vehicleRestrictionMode = "free" end
-        if M.race.branchingEnabled == nil then M.race.branchingEnabled = false end
-        -- Defensive only. The server's own normalizeGateSteps already guarantees every gate has a
-        -- real step/parents/isFinish by the time this reaches the client, so this should never
-        -- actually trigger against a live, reloaded server. Kept as a safety net in case a stale
-        -- cached copy is opened before that reload happens.
-        table.forEach(M.race.gates, function(g, i)
-            if type(g.step) ~= "number" then g.step = i end
-            if not table.isArray(g.parents) then g.parents = { i - 1 } end
-        end)
+        backfillRaceDefaults(M.race)
     else
         M.id = nil
         M.race = {
@@ -1161,6 +1180,53 @@ local function onSaveAsNew(name)
     end, 5000)
 end
 
+--- Race Share Codes (see TODO.md's own "Race share codes" plan for the full design). Angular
+--- decodes the pasted code entirely client-side (gzip+base64, `services/raceShare.js`) and hands
+--- the plain decoded table straight to this handler ; nothing here trusts it any further than a
+--- brand-new race authored from scratch would be, it still goes through the exact same
+--- `sanitizeRace` gate at actual Save time (see raceSave, services/races.lua) before anything
+--- persists here. Always opened as a NEW race (M.id stays nil regardless of what the payload
+--- contains) : id/author/leaderboard never travel in a code to begin with (see beamjoyRaceShare's
+--- own strip()), so there's no path here that could overwrite or claim authorship of an existing
+--- race just by importing a code. Replaces whatever the editor currently holds outright, same as
+--- opening a different race would (Angular already confirms with the player before calling this
+--- if there was anything worth losing, see the editor's own importCode()).
+---@param race table decoded share-code payload : name/mode/loopable/sectorCount/manualSectors/
+---branchingEnabled/gates/startPositions/defaults, the same shape strip() produces. May be missing
+---any field a race exported by an older version of this feature (or a hand-edited code) would
+---also lack ; backfillRaceDefaults covers exactly that, same as it already does for a legacy save.
+local function onImportCode(race)
+    if not M.race or type(race) ~= "table" then return end
+    if not table.isArray(race.gates) or not table.isArray(race.startPositions) then
+        toast.warn("Invalid race code", nil, 4)
+        return
+    end
+
+    M.id = nil
+    M.race = {
+        name = type(race.name) == "string" and race.name or "",
+        mode = type(race.mode) == "string" and race.mode or "grid",
+        loopable = race.loopable == true,
+        distance = 0, -- recomputed by pushUpdate below from the real imported gate positions
+        sectorCount = race.sectorCount,
+        manualSectors = race.manualSectors,
+        branchingEnabled = race.branchingEnabled,
+        vehicleRestrictionMode = nil, -- never travels in a code (an author-local capture/preset ref)
+        gates = race.gates,
+        startPositions = race.startPositions,
+        defaults = race.defaults,
+    }
+    backfillRaceDefaults(M.race)
+
+    M.activeGateIndex = nil
+    M.activeStartIndex = nil
+    updateGizmo("gate", nil) -- hides the gizmo ; nothing from the old selection still applies
+    markDirty()
+    extensions.hook("onBJRaceMarkersRefresh")
+    pushUpdate()
+    pushActive()
+end
+
 ---@param activityEditor BJActivityEditorCommon
 local function onInit(activityEditor)
     parent = activityEditor
@@ -1188,6 +1254,7 @@ local function onInit(activityEditor)
     beamjoy_communications_ui.addHandler("BJEditorRaceResetStart", onResetStart)
     beamjoy_communications_ui.addHandler("BJEditorRaceSave", onSave)
     beamjoy_communications_ui.addHandler("BJEditorRaceSaveAsNew", onSaveAsNew)
+    beamjoy_communications_ui.addHandler("BJEditorRaceImportCode", onImportCode)
 end
 
 local function onClose()
