@@ -1181,16 +1181,17 @@ local function onSaveAsNew(name)
 end
 
 --- Race Share Codes (see TODO.md's own "Race share codes" plan for the full design). Angular
---- decodes the pasted code entirely client-side (gzip+base64, `services/raceShare.js`) and hands
---- the plain decoded table straight to this handler ; nothing here trusts it any further than a
---- brand-new race authored from scratch would be, it still goes through the exact same
---- `sanitizeRace` gate at actual Save time (see raceSave, services/races.lua) before anything
---- persists here. Always opened as a NEW race (M.id stays nil regardless of what the payload
---- contains) : id/author/leaderboard never travel in a code to begin with (see beamjoyRaceShare's
---- own strip()), so there's no path here that could overwrite or claim authorship of an existing
---- race just by importing a code. Replaces whatever the editor currently holds outright, same as
---- opening a different race would (Angular already confirms with the player before calling this
---- if there was anything worth losing, see the editor's own importCode()).
+--- decodes the pasted code entirely client-side (gzip+base64, the `raceShare*` module-scope
+--- helpers at the top of windows/config/races/editor/app.js) and hands the plain decoded table
+--- straight to this handler ; nothing here trusts it any further than a brand-new race authored
+--- from scratch would be, it still goes through the exact same `sanitizeRace` gate at actual Save
+--- time (see raceSave, services/races.lua) before anything persists here. Always opened as a NEW
+--- race (M.id stays nil regardless of what the payload contains) : id/author/leaderboard never
+--- travel in a code to begin with (see that file's own raceShareStrip()), so there's no path here
+--- that could overwrite or claim authorship of an existing race just by importing a code.
+--- Replaces whatever the editor currently holds outright, same as opening a different race would
+--- (Angular already confirms with the player before calling this if there was anything worth
+--- losing, see that same file's own importShareCode()).
 ---@param race table decoded share-code payload : name/mode/loopable/sectorCount/manualSectors/
 ---branchingEnabled/gates/startPositions/defaults, the same shape strip() produces. May be missing
 ---any field a race exported by an older version of this feature (or a hand-edited code) would
