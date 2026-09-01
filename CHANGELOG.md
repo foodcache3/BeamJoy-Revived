@@ -6,6 +6,34 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.69] - 2026-09-01
+
+### Added
+- **Infected's `enableColors` now actually repaints vehicles**, the one piece v1.8.68 shipped
+  stored/exposed in the UI but never applied. Every participant's own client force-repaints its
+  own vehicle (all 3 paint slots) to the current role's flat color at round start, and again the
+  instant a survivor gets tagged, via the same `beamjoy_vehicles.paint()` call (and therefore the
+  same BeamMP paint sync) traffic's own livery randomization already uses, so the repaint reaches
+  every other player normally. The original color is restored the moment the round ends or the
+  player leaves.
+
+### Fixed
+- **Real bug caught before it shipped further: the color-format mismatch this repaint work
+  surfaced.** `<bj-color-picker>` only ever speaks hex strings, but the arena's `survivorColor`/
+  `infectedColor` settings are plain `{r, g, b}` objects everywhere else in this codebase (what
+  Lua's `BJColor` actually is). The arena editor's defaults panel now converts at its own edge
+  (`services/settings.js`'s own identical `rgbToHex`/`hexToRgb` boundary conversion for nametag
+  colors, reused via `beamjoyStore.utils`), and the client-side color lookup normalizes a
+  plain `{r,g,b}` table (no metatable, since nothing server-sent ever reconstructs `BJColor`'s own
+  methods) into a real `BJColor` instead of assuming one arrives ready-made.
+  - Also fixed the snapshot source for the restore-on-round-end above: `beamjoy_vehicles.
+    getFullConfig(veh).paints` is empty for the common case of a vehicle using its `.pc` file's own
+    baked-in colors with no explicit runtime override recorded, which would have made the restore
+    silently do nothing for most players. Reads the vehicle's real live color fields
+    (`veh.color`/`colorPalette0`/`colorPalette1`) instead, the same snapshot source the standalone
+    community "Outbreak" mod uses for this identical temporarily-recolor-then-revert case.
+  *(client only)*
+
 ## [1.8.68] - 2026-09-01 (server v1.8.58)
 
 ### Added

@@ -35,6 +35,14 @@ local M = {
     ---@type integer? vid of the local player's own current session vehicle
     myVehicleVid = nil,
 
+    ---@type table<integer, NGPaint>? this round's own snapshot of the local player's OWN vehicle
+    ---paint (all 3 slots, as returned by beamjoy_vehicles.getFullConfig), taken the first time
+    ---applyRoleColor actually overrides it (round start, or the mid-round survivor->infected
+    ---flip for someone with no prior override this round) ; nil whenever enableColors is off or
+    ---nothing's been overridden yet this round. Restored (and cleared) the moment the round ends
+    ---or this client leaves/is removed, so a repainted car doesn't stay that color forever.
+    originalPaints = nil,
+
     -- infected-only, local tag-detection state : nearbySurvivorVids is the slow-tick coarse cull
     -- (BJI's own two-tier convention), refreshed roughly once a second ; selfDiag/survivorDiagCache
     -- avoid recomputing each vehicle's own bounding radius every frame
@@ -84,6 +92,116 @@ local function isGameLocked()
     return M.session ~= nil and (M.session.state == "COUNTDOWN" or M.session.state == "GAME")
 end
 
+--- session.settings.survivorColor/infectedColor arrive over the wire as plain {r, g, b} tables
+--- (Lua's BJColor is never anything more than that shape ; see services/infected.lua's own
+--- BJInfectedDefaults doc), not real BJColor() objects with their metatable/methods attached
+--- (JSON round-tripping never reconstructs those, same reason localStorage.lua's own color reads
+--- come back as plain tables too). Normalizes into a real BJColor so every caller (nametag
+--- override, vehicle repaint) gets a consistent, always-valid object with a real default alpha,
+--- falling back to `fallback` (itself a real BJColor) whenever the setting is unset/malformed.
+---@param raw table?
+---@param fallback BJColor
+---@return BJColor
+local function toColor(raw, fallback)
+    if type(raw) == "table" and type(raw.r) == "number" then
+        return BJColor(raw.r, raw.g, raw.b, raw.a)
+    end
+    return fallback
+end
+
+local DEFAULT_SURVIVOR_COLOR = BJColor(.33, 1, .33)
+local DEFAULT_INFECTED_COLOR = BJColor(1, 0, 0)
+
+---@param session BJInfectedSession
+---@param role BJInfectedRole
+---@return BJColor
+local function roleColor(session, role)
+    if role == "infected" then
+        return toColor(session.settings.infectedColor, DEFAULT_INFECTED_COLOR)
+    end
+    return toColor(session.settings.survivorColor, DEFAULT_SURVIVOR_COLOR)
+end
+
+---@param p Point4F?
+---@return {x: number, y: number, z: number, w: number}?
+local function snapshotColorField(p)
+    if not p then return nil end
+    return { x = p.x, y = p.y, z = p.z, w = p.w }
+end
+
+--- NGPaint shaped from a plain 4-value color snapshot, at fixed material defaults (BJI's own
+--- reference values for a flat, uniform paint job). Used both for the role-color override itself
+--- and for reconstructing a paintable NGPaint from a restore snapshot, so a restore goes through
+--- the exact same beamjoy_vehicles.paint()/liveUpdateVehicleColors path the override did (the
+--- proven, network-synced mechanism this codebase already establishes for repainting a vehicle,
+--- e.g. traffic.lua's own random livery pick ; a remote participant's own repaint likewise reaches
+--- every other client through that same BeamMP paint sync, not by this function running again on
+--- their behalf). The trade-off: only the color itself round-trips exactly, not whatever
+--- metallic/roughness/clearCoat finish the vehicle's own config originally had ; an accepted
+--- simplification, not a bug, since there's no established way in this codebase to read a
+--- vehicle's live (as opposed to catalog) material properties at all.
+---@param snap {x: number, y: number, z: number, w: number}
+---@return NGPaint
+local function ngPaintFromSnapshot(snap)
+    return {
+        baseColor = { snap.x, snap.y, snap.z, snap.w },
+        metallic = .5,
+        roughness = .5,
+        clearCoat = .5,
+        clearCoatRoughness = .5,
+    }
+end
+
+--- enableColors' own effect (separate from, and in addition to, the always-on nametag color
+--- above): force-repaints the LOCAL PLAYER'S OWN vehicle to their current role's flat color, all 3
+--- paint slots, matching BJI's own tryApplyScenarioColor (a uniform paint loop over every slot).
+--- Only ever touches this client's own vehicle: a remote participant's repaint reaches every other
+--- client the normal way, through BeamMP's own vehicle paint sync, not through this function
+--- running again on their behalf. Snapshots the vehicle's real current color into M.originalPaints
+--- the first time this actually overrides anything this round (never overwritten by a later call,
+--- e.g. the mid-round survivor->infected flip, so the snapshot always reflects genuinely original
+--- color, not an already-overridden one), for restoreOriginalPaint to hand back later. Reads
+--- veh.color/colorPalette0/colorPalette1 directly (the vehicle's real, currently-rendered colors,
+--- Point4F x/y/z/w) rather than beamjoy_vehicles.getFullConfig(veh).paints: that field is only
+--- ever populated for a vehicle that already has an explicit runtime paint override recorded, and
+--- is an EMPTY table for the common case of one just using its .pc file's own baked-in colors,
+--- which would make a later restore call silently do nothing. Same snapshot source the standalone
+--- community "Outbreak" mod uses for this exact same temporarily-recolor-then-revert case.
+---@param role BJInfectedRole
+local function applyRoleColor(role)
+    if not M.session or not M.session.settings.enableColors then return end
+    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    if not myVeh then return end
+    local veh = myVeh.veh
+    if not M.originalPaints then
+        M.originalPaints = {
+            snapshotColorField(veh.color),
+            snapshotColorField(veh.colorPalette0),
+            snapshotColorField(veh.colorPalette1),
+        }
+    end
+
+    local color = roleColor(M.session, role)
+    local ngPaint = ngPaintFromSnapshot({ x = color.r, y = color.g, z = color.b, w = color.a })
+    beamjoy_vehicles.paint(veh, { [1] = ngPaint, [2] = ngPaint, [3] = ngPaint })
+end
+
+--- hands the local player's own vehicle color back once a round ends or this client stops
+--- participating, so enableColors never leaves a car stuck red/green after the fact. A no-op
+--- whenever nothing was ever actually overridden this round (M.originalPaints stays nil).
+local function restoreOriginalPaint()
+    if not M.originalPaints then return end
+    local snap = M.originalPaints
+    M.originalPaints = nil
+    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    if not myVeh then return end
+    local paintData = {}
+    for slot = 1, 3 do
+        if snap[slot] then paintData[slot] = ngPaintFromSnapshot(snap[slot]) end
+    end
+    beamjoy_vehicles.paint(myVeh.veh, paintData)
+end
+
 --- whether `mpVeh` currently belongs to an Infected participant, and if so which color its nametag
 --- should be forced to (green survivor / red infected by default, host-overridable). Used by
 --- nametags.lua exactly like beamjoy_pursuit's own fugitive-tag precedent: an unconditional color
@@ -96,10 +214,7 @@ local function infectedNametagColor(mpVeh)
     if not session or (session.state ~= "COUNTDOWN" and session.state ~= "GAME") then return false end
     local participant = table.find(session.participants, function(p) return p.playerName == mpVeh.ownerName end)
     if not participant or not participant.role then return false end
-    if participant.role == "infected" then
-        return true, session.settings.infectedColor or BJColor(1, 0, 0), BJColor(0, 0, 0, .5)
-    end
-    return true, session.settings.survivorColor or BJColor(.33, 1, .33), BJColor(0, 0, 0, .5)
+    return true, roleColor(session, participant.role), BJColor(0, 0, 0, .5)
 end
 
 ---@param req RequestAuthorization
@@ -241,6 +356,7 @@ local function clearGameState()
         M.lastGpsTargetVid = nil
         extensions.core_groundMarkers.setPath(nil)
     end
+    restoreOriginalPaint()
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if myVeh then
         beamjoy_vehicles.setGhostReason(myVeh.vid, "infected", false)
@@ -410,6 +526,14 @@ local function onSessionUpdate(session)
     local wasCountdown = M.session ~= nil and M.session.state == "COUNTDOWN"
     local wasGame = M.session ~= nil and M.session.state == "GAME"
     local wasFinished = M.session ~= nil and M.session.state == "FINISHED"
+    -- captured before M.session gets overwritten below, purely so applyRoleColor's mid-round
+    -- survivor->infected repaint (see the GAME-state block further down) can tell "just got
+    -- infected this update" apart from "already was infected, this is an unrelated push"
+    local wasInfected = false
+    if M.session then
+        local prevSelf = getSelfParticipant()
+        wasInfected = prevSelf ~= nil and prevSelf.role == "infected"
+    end
     M.session = session
 
     if session.state == "LOBBY" and session.joinable and session.gridReadySecondsLeft ~= nil then
@@ -523,7 +647,20 @@ local function onSessionUpdate(session)
         M.selfDiag = nil
         M.survivorDiagCache = {}
         M.taggedVids = {}
+        -- fresh per-round snapshot : a leftover M.originalPaints from an earlier round (should
+        -- never happen, restoreOriginalPaint already clears it at FINISHED/leave, but this is
+        -- cheap insurance) would otherwise make this round's own restore hand back the WRONG
+        -- paint once it ends
+        M.originalPaints = nil
+        applyRoleColor(participant.role)
         beamjoy_communications_ui.uiBroadcast("beamjoy.infected.gameStarted", nil, "green", 3)
+    end
+
+    -- mid-round survivor->infected repaint : the round-start block above already covers everyone
+    -- ONCE, at the LOBBY/COUNTDOWN -> GAME transition, so this only needs to catch a participant
+    -- whose role just changed while already in GAME (a successful tag against them)
+    if session.state == "GAME" and wasGame and participant.role == "infected" and not wasInfected then
+        applyRoleColor("infected")
     end
 
     if session.state == "GAME" and beamjoy_vehicles.getCurrentOwn() then
@@ -536,6 +673,7 @@ local function onSessionUpdate(session)
         local myVeh = beamjoy_vehicles.getCurrentOwn()
         if myVeh then beamjoy_vehicles.setGhostReason(myVeh.vid, "infected", false) end
         if not wasFinished then
+            restoreOriginalPaint()
             beamjoy_communications_ui.send("BJInfectedCountdown",
                 { active = true, finished = true, winner = session.winner })
             async.delayTask(function()

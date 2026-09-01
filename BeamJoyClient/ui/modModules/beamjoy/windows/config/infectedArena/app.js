@@ -55,9 +55,32 @@ angular.module("beamjoy").component("bjConfigInfectedArena", {
         this.defaults = {};
         let previousEnabled = null;
         let previousDefaults = null;
+        // survivorColor/infectedColor travel the wire as plain {r,g,b} objects (what Lua's BJColor
+        // actually is), same as every other color this codebase persists (see services/settings.js'
+        // own identical rgbToHex/hexToRgb boundary conversion for nametag colors) ; <bj-color-picker>
+        // itself only ever speaks hex strings, so both directions convert right at this component's
+        // own edge, keeping $ctrl.defaults itself always hex while it's on screen.
+        const COLOR_KEYS = ["survivorColor", "infectedColor"];
+        const toHexColors = (defaults) => {
+            COLOR_KEYS.forEach((key) => {
+                if (defaults[key] && typeof defaults[key] === "object") {
+                    defaults[key] = beamjoyStore.utils.rgbToHex(defaults[key]);
+                }
+            });
+            return defaults;
+        };
+        const toRgbColors = (defaults) => {
+            const copy = angular.copy(defaults);
+            COLOR_KEYS.forEach((key) => {
+                if (typeof copy[key] === "string") {
+                    copy[key] = beamjoyStore.utils.hexToRgb(copy[key]);
+                }
+            });
+            return copy;
+        };
         $rootScope.$on("BJEditorInfectedArenaMetaUpdate", (_, meta) => {
             this.enabled = meta.enabled === true;
-            this.defaults = meta.defaults || {};
+            this.defaults = toHexColors(meta.defaults || {});
             previousEnabled = this.enabled;
             previousDefaults = angular.copy(this.defaults);
         });
@@ -105,7 +128,7 @@ angular.module("beamjoy").component("bjConfigInfectedArena", {
                 previousDefaults = angular.copy(val);
                 if (defaultsTimeout) $timeout.cancel(defaultsTimeout);
                 defaultsTimeout = $timeout(() => {
-                    beamjoyStore.send("BJEditorInfectedArenaSetDefaults", [val]);
+                    beamjoyStore.send("BJEditorInfectedArenaSetDefaults", [toRgbColors(val)]);
                 }, DEBOUNCE_MS);
             },
             true
