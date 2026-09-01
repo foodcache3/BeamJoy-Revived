@@ -16,6 +16,7 @@ angular.module("beamjoy").component("bjConfigCore", {
         // own edit permission, not on this tab's own SetCore gate (see windows/config/app.js's own
         // comment on why Core's tab visibility itself is widened to match).
         this.canImportHunter = false;
+        this.canImportInfected = false;
         this.canImportRaces = false;
         // the identity-fields form below (server name/description/max players/private/debug/
         // informationPacket) is real admin-only data - the server already withholds it entirely
@@ -32,6 +33,10 @@ angular.module("beamjoy").component("bjConfigCore", {
             this.canImportHunter = beamjoyStore.permissions.hasAllPermissions(
                 undefined,
                 "EditHunterArenas"
+            );
+            this.canImportInfected = beamjoyStore.permissions.hasAllPermissions(
+                undefined,
+                "EditInfectedArenas"
             );
             this.canImportRaces = beamjoyStore.permissions.hasAllPermissions(
                 undefined,
@@ -82,6 +87,37 @@ angular.module("beamjoy").component("bjConfigCore", {
                 .replace("{conflicts}", conflictCount);
             beamjoyConfirm.ask(`${header}\n\n${lines}`, () => {
                 beamjoyStore.send("BJHunterLegacyImportConfirm");
+            });
+        });
+
+        // same "will overwrite" framing as Hunter's own importer above (they share the exact same
+        // source <map>_hunter.json files, see services/infected.lua's own doc comment)
+        this.infectedLegacyImportStatus = null;
+        this.requestInfectedLegacyImport = (event) => {
+            event.stopPropagation();
+            this.infectedLegacyImportStatus = null;
+            beamjoyStore.send("BJInfectedLegacyImportPreviewRequest");
+        };
+        $rootScope.$on("BJInfectedLegacyImportPreview", (_, results) => {
+            if (!results || results.length === 0) {
+                this.infectedLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.infected.none";
+                return;
+            }
+            const conflictCount = results.filter((r) => r.conflict).length;
+            const lines = results
+                .map((r) => {
+                    const counts = `${r.survivorSpawnCount}/${r.infectedSpawnCount}`;
+                    const overwrite = r.conflict
+                        ? ` (${translate("beamjoy.window.config.tabs.core.legacyImport.infected.overwriteTag")})`
+                        : "";
+                    return `${r.map} · ${counts}${overwrite}`;
+                })
+                .join("\n");
+            const header = translate("beamjoy.window.config.tabs.core.legacyImport.infected.confirm")
+                .replace("{count}", results.length)
+                .replace("{conflicts}", conflictCount);
+            beamjoyConfirm.ask(`${header}\n\n${lines}`, () => {
+                beamjoyStore.send("BJInfectedLegacyImportConfirm");
             });
         });
 

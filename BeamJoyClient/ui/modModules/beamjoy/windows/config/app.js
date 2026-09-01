@@ -3,6 +3,7 @@ await import(`/ui/modModules/beamjoy/windows/config/safeZones/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/races/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/vehiclePresets/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/hunterArena/app.js`);
+await import(`/ui/modModules/beamjoy/windows/config/infectedArena/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/permissions/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/maps/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/core/app.js`);
@@ -102,9 +103,18 @@ angular.module("beamjoy").component("bjConfig", {
                 template: "<bj-config-hunter-arena></bj-config-hunter-arena>",
                 permissions: ["EditHunterArenas"],
             },
+            infectedArena: {
+                id: "infectedArena",
+                order: 6,
+                title: "beamjoy.window.config.tabs.infectedArena.title",
+                visible: false,
+                closable: false,
+                template: "<bj-config-infected-arena></bj-config-infected-arena>",
+                permissions: ["EditInfectedArenas"],
+            },
             permissions: {
                 id: "permissions",
-                order: 6,
+                order: 7,
                 title: "beamjoy.window.config.tabs.permissions.title",
                 visible: false,
                 closable: false,
@@ -113,7 +123,7 @@ angular.module("beamjoy").component("bjConfig", {
             },
             maps: {
                 id: "maps",
-                order: 7,
+                order: 8,
                 title: "beamjoy.window.config.tabs.maps.title",
                 visible: false,
                 closable: false,
@@ -122,7 +132,7 @@ angular.module("beamjoy").component("bjConfig", {
             },
             core: {
                 id: "core",
-                order: 8,
+                order: 9,
                 title: "beamjoy.window.config.tabs.core.title",
                 visible: false,
                 closable: false,
@@ -140,7 +150,7 @@ angular.module("beamjoy").component("bjConfig", {
             },
             database: {
                 id: "database",
-                order: 9,
+                order: 10,
                 title: "beamjoy.window.config.tabs.database.title",
                 visible: false,
                 closable: false,

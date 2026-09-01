@@ -160,6 +160,16 @@ local function drawNametag(mpVeh, orig)
         else
             tag = string.format("[AI] %d-%d", mpVeh.ownerID, mpVeh.vid)
         end
+    else
+        -- Infected mode: a participant's nametag is unconditionally colored by their current role
+        -- (green survivor / red infected by default, host-overridable), same forced-override
+        -- mechanism as the Pursuit fugitive tag above, just for a normal (non-AI, non-trailer)
+        -- player vehicle instead. A no-op (isParticipant false) whenever there's no active Infected
+        -- round, or this vehicle's owner isn't currently a participant in it.
+        local isParticipant, infTextColor, infBgColor = beamjoy_infectedRunner.infectedNametagColor(mpVeh)
+        if isParticipant then
+            textColor, bgColor = infTextColor, infBgColor
+        end
     end
 
     local dist = math.round(orig:distance(mpVeh.position) or 0)

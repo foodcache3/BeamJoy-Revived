@@ -2,6 +2,7 @@ await import(`/ui/modModules/beamjoy/windows/main/main/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/settings/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/races/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/hunter/app.js`);
+await import(`/ui/modModules/beamjoy/windows/main/infected/app.js`);
 
 angular.module("beamjoy").component("bjMain", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/app.html",
@@ -60,9 +61,17 @@ angular.module("beamjoy").component("bjMain", {
                 closable: false,
                 template: "<bj-main-hunter></bj-main-hunter>",
             },
+            infected: {
+                id: "infected",
+                order: 4,
+                title: "beamjoy.window.main.tabs.infected.title",
+                visible: true,
+                closable: false,
+                template: "<bj-main-infected></bj-main-infected>",
+            },
             settings: {
                 id: "settings",
-                order: 4,
+                order: 5,
                 title: "beamjoy.window.main.tabs.settings.title",
                 visible: false,
                 closable: true,

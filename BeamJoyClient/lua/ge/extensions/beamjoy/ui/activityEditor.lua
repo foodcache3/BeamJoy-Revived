@@ -10,6 +10,7 @@ local editors = Table({
     require("ge/extensions/beamjoy/ui/activityEditorSafeZone"),
     require("ge/extensions/beamjoy/ui/raceEditor"),
     require("ge/extensions/beamjoy/ui/hunterEditor"),
+    require("ge/extensions/beamjoy/ui/infectedEditor"),
 })
 
 local function onInit()
@@ -55,10 +56,19 @@ local function onBJHunterArenaChanged()
     end
 end
 
+--- same forwarding pattern as onBJHunterArenaChanged above, for infected.lua's own
+--- extensions.hook("onBJInfectedArenaChanged")
+local function onBJInfectedArenaChanged()
+    if M.activeEditor and M.activeEditor.onBJInfectedArenaChanged then
+        M.activeEditor.onBJInfectedArenaChanged()
+    end
+end
+
 M.onInit = onInit
 M.onUpdate = onUpdate
 M.onBJClick = onBJClick
 M.onClose = onClose
 M.onBJHunterArenaChanged = onBJHunterArenaChanged
+M.onBJInfectedArenaChanged = onBJInfectedArenaChanged
 
 return M

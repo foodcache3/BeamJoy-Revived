@@ -315,7 +315,7 @@
     </tr>
 </table>
 
-<bj-accordion id="core-legacy-import" no-border-bottom="true" ng-if="$ctrl.canImportHunter || $ctrl.canImportRaces">
+<bj-accordion id="core-legacy-import" no-border-bottom="true" ng-if="$ctrl.canImportHunter || $ctrl.canImportInfected || $ctrl.canImportRaces">
     <accordion-title>
         <h5 style="font-size: 1.3em;">{{'beamjoy.window.config.tabs.core.legacyImport.title' | translate}}</h5>
         <button
@@ -337,6 +337,18 @@
             </button>
             <span class="opacity-70 small" ng-if="$ctrl.hunterLegacyImportStatus">
                 {{$ctrl.hunterLegacyImportStatus | translate}}
+            </span>
+        </div>
+        <div class="d-flex align-center gap-1 mb-1" ng-if="$ctrl.canImportInfected" style="font-size: 1.15em;">
+            <button
+                class="btn info w-fitcontent"
+                ng-click="$ctrl.requestInfectedLegacyImport($event)"
+                title="{{'beamjoy.window.config.tabs.core.legacyImport.infected.tooltip' | translate}}"
+            >
+                {{'beamjoy.window.config.tabs.core.legacyImport.infected.button' | translate}}
+            </button>
+            <span class="opacity-70 small" ng-if="$ctrl.infectedLegacyImportStatus">
+                {{$ctrl.infectedLegacyImportStatus | translate}}
             </span>
         </div>
         <div class="d-flex align-center gap-1" ng-if="$ctrl.canImportRaces" style="font-size: 1.15em;">

@@ -43,6 +43,7 @@ local M = {
         "services_broadcast", "services_maps", "services_mapVote", "services_kickVote",
         "services_vehiclePresets", "services_races", "services_raceGrid",
         "services_hunter", "services_hunterGrid",
+        "services_infected", "services_infectedGrid",
         "communications_rx", "communications_tx" },
 }
 

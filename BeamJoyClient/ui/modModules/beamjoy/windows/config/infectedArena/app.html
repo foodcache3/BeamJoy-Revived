@@ -1,0 +1,129 @@
+<style>
+    /* pins the header row and the point-list-editor's own translate/rotate/snap toolbar above a
+       separately-scrolling region, same split hunterArena's own app.html already established */
+    bj-config-infected-arena {
+        display: block;
+        height: 100%;
+        overflow: hidden;
+    }
+    bj-config-infected-arena .editor-root {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    bj-config-infected-arena .editor-pinned {
+        flex-shrink: 0;
+    }
+    bj-config-infected-arena .section-panel {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+</style>
+
+<div class="editor-root">
+    <div class="editor-pinned">
+        <div class="d-flex gap-1 mb-2 align-center">
+            <span class="flex-grow-1"></span>
+            <span title="{{'beamjoy.window.config.tabs.infectedArena.enabled.tooltip' | translate}}" class="d-flex align-center gap-1">
+                {{'beamjoy.window.config.tabs.infectedArena.enabled' | translate}}
+                <bj-toggle ng-model="$ctrl.enabled"></bj-toggle>
+            </span>
+            <button
+                class="btn success"
+                ng-click="$ctrl.save($event)"
+                ng-disabled="!$ctrl.dirty"
+                title="{{'beamjoy.common.save' | translate}}"
+            >
+                <icon name="save"></icon>
+            </button>
+        </div>
+        <bj-point-list-editor-toolbar events="$ctrl.pointListEvents"></bj-point-list-editor-toolbar>
+    </div>
+
+    <div class="section-panel">
+    <bj-point-list-editor lists="$ctrl.pointLists" events="$ctrl.pointListEvents"></bj-point-list-editor>
+
+    <bj-accordion id="infected-arena-defaults-round" no-border-bottom="true">
+    <accordion-title>
+        <h5>{{'beamjoy.window.config.tabs.infectedArena.sections.round' | translate}}</h5>
+    </accordion-title>
+    <accordion-content>
+        <table class="w-100">
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.initialInfectedCount.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.infectedArena.initialInfectedCount' | translate}}
+                </td>
+                <td><bj-slider ng-model="$ctrl.defaults.initialInfectedCount" min="1" max="5" hard-max="20" step="1"></bj-slider></td>
+            </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.roundDuration.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.infectedArena.roundDuration' | translate}}
+                </td>
+                <td><bj-slider ng-model="$ctrl.defaults.roundDuration" min="1" max="30" hard-max="120" step="1"></bj-slider></td>
+            </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.survivorsStartDelay.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.infectedArena.survivorsStartDelay' | translate}}
+                </td>
+                <td><bj-slider ng-model="$ctrl.defaults.survivorsStartDelay" min="0" max="30" hard-max="60" step="1"></bj-slider></td>
+            </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.infectedStartDelay.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.infectedArena.infectedStartDelay' | translate}}
+                </td>
+                <td><bj-slider ng-model="$ctrl.defaults.infectedStartDelay" min="0" max="30" hard-max="60" step="1"></bj-slider></td>
+            </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.enableColors.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.infectedArena.enableColors' | translate}}
+                </td>
+                <td><bj-toggle ng-model="$ctrl.defaults.enableColors"></bj-toggle></td>
+            </tr>
+            <tr ng-if="$ctrl.defaults.enableColors">
+                <td class="text-right">{{'beamjoy.window.config.tabs.infectedArena.survivorColor' | translate}}</td>
+                <td><bj-color-picker ng-model="$ctrl.defaults.survivorColor"></bj-color-picker></td>
+            </tr>
+            <tr ng-if="$ctrl.defaults.enableColors">
+                <td class="text-right">{{'beamjoy.window.config.tabs.infectedArena.infectedColor' | translate}}</td>
+                <td><bj-color-picker ng-model="$ctrl.defaults.infectedColor"></bj-color-picker></td>
+            </tr>
+        </table>
+    </accordion-content>
+</bj-accordion>
+
+<bj-accordion id="infected-arena-defaults-lobby" no-border-bottom="true">
+    <accordion-title>
+        <h5>{{'beamjoy.window.config.tabs.infectedArena.sections.lobby' | translate}}</h5>
+    </accordion-title>
+    <accordion-content>
+        <table class="w-100">
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.gridTimeout.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.infectedArena.gridTimeout' | translate}}
+                </td>
+                <td><bj-slider ng-model="$ctrl.defaults.gridTimeout" min="10" max="300" hard-max="600" step="10"></bj-slider></td>
+            </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.gridReadyTimeout.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.infectedArena.gridReadyTimeout' | translate}}
+                </td>
+                <td><bj-slider ng-model="$ctrl.defaults.gridReadyTimeout" min="0" max="30" hard-max="600" step="1"></bj-slider></td>
+            </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.countdown.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.infectedArena.countdown' | translate}}
+                </td>
+                <td><bj-slider ng-model="$ctrl.defaults.countdown" min="0" max="30" hard-max="600" step="1"></bj-slider></td>
+            </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.endTimeout.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.infectedArena.endTimeout' | translate}}
+                </td>
+                <td><bj-slider ng-model="$ctrl.defaults.endTimeout" min="3" max="30" hard-max="120" step="1"></bj-slider></td>
+            </tr>
+        </table>
+    </accordion-content>
+</bj-accordion>
+    </div>
+</div>

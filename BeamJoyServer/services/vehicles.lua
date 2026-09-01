@@ -120,6 +120,7 @@ local function onVehicleEdited(playerID, vehID, vehDataStr)
     -- grid/lobby this player currently happens to be readied up in, if any
     services_raceGrid.unreadyOnVehicleChange(playerID)
     services_hunterGrid.unreadyOnVehicleChange(playerID)
+    services_infectedGrid.unreadyOnVehicleChange(playerID)
 end
 
 ---@param playerID integer

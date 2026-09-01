@@ -1,0 +1,50 @@
+<style>
+    #beamjoy-infected-countdown {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 5;
+    }
+
+    #beamjoy-infected-countdown .infected-countdown-number {
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        font-size: 6em;
+        font-weight: bold;
+        line-height: 1;
+        color: white;
+        text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.6);
+    }
+
+    #beamjoy-infected-countdown .infected-countdown-number.go {
+        color: #4caf50;
+    }
+
+    #beamjoy-infected-countdown .infected-countdown-finished {
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        font-size: 3em;
+        font-weight: bold;
+        line-height: 1;
+        color: #ffca28;
+        text-align: center;
+        text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.6);
+    }
+</style>
+
+<div
+    id="beamjoy-infected-countdown"
+    class="pointer-events-none d-flex flex-column align-center justify-center"
+    ng-if="$ctrl.active"
+>
+    <div class="infected-countdown-finished" ng-if="$ctrl.finished">
+        {{('beamjoy.window.main.tabs.infected.winner.' + $ctrl.winner) | translate}}
+    </div>
+    <div
+        class="infected-countdown-number"
+        ng-if="!$ctrl.finished"
+        ng-class="{go: $ctrl.seconds === 0}"
+    >
+        {{$ctrl.seconds === 0 ? ('beamjoy.race.go' | translate) : $ctrl.seconds}}
+    </div>
+</div>

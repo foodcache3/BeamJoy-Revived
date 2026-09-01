@@ -6,6 +6,41 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.68] - 2026-09-01 (server v1.8.58)
+
+### Added
+- **Infected mode**, a new gamemode alongside Race and Hunter: a lobby of survivors (green
+  nametags) starts with a random subset already infected (red nametags), who spread the infection
+  by touching a survivor's vehicle; survivors win by outlasting a host-configurable round timer,
+  infected win once every survivor is caught. Built as a close structural mirror of Hunter
+  (`services/infected.lua` + `services/infectedGrid.lua` server-side, `infected.lua` +
+  `infectedRunner.lua` client-side), reusing its exact LOBBY/COUNTDOWN/lock/freeze-release/
+  restriction conventions rather than inventing a new shape, but trimmed to what Infected actually
+  needs: no vehicle-pool/respawn-penalty/reveal system, and a genuinely new client-side two-tier
+  proximity tag-detection loop (coarse cull every slow-tick, precise bounding-radius check every
+  frame, deduped so a held touch doesn't spam the server) since Infected's win condition has no
+  equivalent in Hunter's own waypoint-chase design.
+  - Full UI: an in-world arena editor (survivor/infected spawn points, built on the same shared
+    point-list-editor toolkit Hunter's own arena editor uses), a lobby/join window with live
+    roster and per-infected tag counts, countdown and in-round HUD overlays, and a start-options
+    panel (starting infected count, round length, asymmetric release delay, optional forced
+    role-color repaint).
+  - **Legacy BeamJoy Free (BJI) import**: reads the exact same `<map>_hunter.json` files Hunter's
+    own importer already reads (BJI stores both modes' spawn points in that one file), a new row
+    next to Hunter's own in Config > Core > Legacy Import.
+  - New `EditInfectedArenas` permission (mod rank by default), gating both arena edits and the
+    legacy import row, mirroring `EditHunterArenas` exactly.
+  - One deliberate departure from BJI: a genuine host-configurable round timer for survivors to
+    win by outlasting, since neither BJI's own client reference nor the standalone community
+    "Outbreak" mod this design was cross-checked against expose one, and a mode where the only way
+    to end is every survivor eventually getting caught felt like a real gap.
+  - **Not yet wired up**: `enableColors`' vehicle-repaint behavior is stored and exposed in the UI
+    but not yet applied client-side (nametag role-coloring works unconditionally regardless; only
+    the optional flat vehicle-paint override is the deferred part). Untested against the real
+    engine (no BeamNG access from this environment) : this is careful, closely-mirrored code
+    against an already-shipped Hunter implementation, not confirmed-working via actual play yet.
+    *(client + server, server needs deployment)*
+
 ## [1.8.67] - 2026-08-31
 
 ### Added
