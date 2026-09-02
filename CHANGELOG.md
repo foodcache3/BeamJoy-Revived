@@ -6,6 +6,19 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.70] - 2026-09-02
+
+### Fixed
+- **Infected's role-color repaint didn't survive a mid-round `reload_vehicle`.** Ordinary
+  reset/recover keeps the same vehicle object, so the live paint override `enableColors` applies
+  already survived those with no extra work (Infected deliberately has no reset penalty at all,
+  unlike Hunter, so nothing here needed to hook resets themselves). A full reload is different: it
+  creates a genuinely new vehicle object with none of that override and no snapshot of its own
+  default color either. `onBJVehicleInstantiated` now also fires during `GAME` (previously
+  early-returned for any state but `COUNTDOWN`), re-snapshotting and reapplying the current round's
+  role color to a freshly-reloaded vehicle the same way a fresh round start already does.
+  *(client only)*
+
 ## [1.8.69] - 2026-09-01
 
 ### Added

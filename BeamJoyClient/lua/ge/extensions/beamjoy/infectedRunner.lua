@@ -821,11 +821,26 @@ end
 
 ---@param vid integer
 local function onBJVehicleInstantiated(vid)
-    if not M.session or M.session.state ~= "COUNTDOWN" then return end
+    if not M.session then return end
     local participant = getSelfParticipant()
     if not participant then return end
     local mpVeh = beamjoy_vehicles.getVehicle(vid, true)
     if not mpVeh or not mpVeh.isLocal then return end
+
+    if M.session.state == "GAME" then
+        -- a genuinely new vehicle object appeared mid-round (reload_vehicle, or any other full
+        -- respawn) : ordinary reset/recover keeps the same object, so the live NGPaint override
+        -- applyRoleColor already applied survives those fine on its own and never reaches this
+        -- hook at all (no onVehicleResetted listener exists in this file, on purpose : Infected
+        -- has no reset penalty). A real respawn is different, it's a brand new object with none
+        -- of that override, and no snapshot of ITS own default color either, so both need
+        -- redoing from scratch, same as a fresh round start.
+        M.myVehicleVid = vid
+        M.originalPaints = nil
+        applyRoleColor(participant.role)
+        return
+    end
+    if M.session.state ~= "COUNTDOWN" then return end
 
     M.myVehicleVid = vid
     if participant.spawnPos then
