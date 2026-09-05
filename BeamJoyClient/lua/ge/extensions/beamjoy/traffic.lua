@@ -488,6 +488,23 @@ local function spawnNewTrafficVehicles(amount)
                 -- job.sleep gives beamjoy_vehicles.registerVehicle's own async job a chance to
                 -- classify this vid first.
                 beamjoy_vehicles.markVehicleAsAi(veh:getID())
+                -- Real bug, only ever visible with actual multiplayer load (never showed up spawning
+                -- traffic solo): setAIMode("traffic") below only tells the vehicle's OWN vlua ai.lua
+                -- which personality to run. It does nothing on the GE side, and GE side is where the
+                -- actual driving happens : native gameplay_traffic.lua's doTraffic() is what feeds
+                -- every traffic vehicle a route, a speed target and steering input, every frame, and
+                -- it only ever runs (`if state == 'on'`) once at least one vehicle has been
+                -- registered into that module's own traffic[]/trafficAiVehsList tables via its
+                -- insertTraffic() - that registration is also the ONLY thing that ever flips its
+                -- internal state from 'off' to 'on' in the first place. Spawning here via
+                -- spawn.spawnVehicle() directly (instead of going through native's own
+                -- activate()/spawnTraffic() flow) skipped that registration entirely, so every
+                -- traffic vehicle had its AI mode set with nobody ever actually driving it : it just
+                -- sat there braked the instant it spawned. Mirrors exactly what native
+                -- activate(vehList) itself does per vehicle (see traffic.lua:925-948 in the game's
+                -- own install).
+                map.request(veh:getID(), -1) -- force mapmgr to read map, same as native activate()
+                extensions.gameplay_traffic.insertTraffic(veh:getID(), false)
                 job.sleep(.01)
                 extensions.hook("onBJTrafficVehicleSpawned", veh)
                 core_vehicleBridge.executeAction(veh, 'setAIMode', "traffic")

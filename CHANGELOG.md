@@ -6,6 +6,26 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.71] - 2026-09-05
+
+### Fixed
+- **Real bug found in live multiplayer testing: traffic vehicles braked to a stop the instant they
+  spawned.** Traffic is spawned directly via `spawn.spawnVehicle` and then given
+  `setAIMode("traffic")`, which only tells a vehicle's own vlua AI which personality to run.
+  Actually driving it (route, speed target, steering, every frame) is native `gameplay_traffic.lua`'s
+  job, and that logic only ever runs for vehicles registered into that module's own internal
+  tracking via its `insertTraffic` call, which is also the only thing that flips its internal state
+  from "off" to "on" in the first place. Spawning outside its own `activate()`/`spawnTraffic()` flow
+  skipped that registration entirely, so every traffic vehicle had an AI mode set with nothing ever
+  actually driving it. Each spawn now also registers itself the same way native's own `activate()`
+  does per vehicle, so the vehicle actually gets driven from the moment it lands. *(client only)*
+- **Real bug: `beamjoy_nametags`' per-frame update was the single largest source of garbage
+  collection pressure in the mod**, showing up as the reported "massive lag while moving the mouse"
+  and intermittent stutter, worse the more vehicles were in play (traffic included). It rebuilt a
+  whole throwaway list through two freshly-allocated closures and a full extra array copy every
+  single frame; both branches now use a plain loop with the exact same filtering logic and zero
+  per-frame allocation. *(client only)*
+
 ## [1.8.70] - 2026-09-02
 
 ### Fixed

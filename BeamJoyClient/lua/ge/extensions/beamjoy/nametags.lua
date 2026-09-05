@@ -261,58 +261,71 @@ local function onUpdate()
     table.clear(drawn)
     if not M.state.hideNameTags then
         -- draw all
-        ---@param v BJVehicle
-        beamjoy_vehicles.vehicles:filter(function(v)
+        --
+        -- Real bug: this used to be beamjoy_vehicles.vehicles:filter(fn):forEach(fn), i.e. two
+        -- function-literal closures re-allocated fresh every single call (this runs every render
+        -- frame), table.filter() building and returning a whole new intermediate array on top of
+        -- that AND running every element through pcall(). Profiling during a real multiplayer
+        -- session (more vehicles in play, several from traffic) showed this exact function as by
+        -- far the single largest per-frame GC allocator in the whole mod, which reads as the
+        -- "massive lag while moving the mouse" / intermittent stutter players reported : a bigger
+        -- vehicle count means a bigger throwaway array plus more pcall'd closure calls, EVERY
+        -- frame, and the resulting GC pressure is what actually stalls the frame. A plain loop
+        -- with the exact same branching (isAi still short-circuits every later check, matching the
+        -- old filter callback's early returns) does zero allocation here regardless of vehicle
+        -- count.
+        for vid, v in pairs(beamjoy_vehicles.vehicles) do ---@type integer, BJVehicle
+            local include = true
             if v.isAi then
-                if DEBUG ~= nil then return true end
-                return beamjoy_pursuit.fugitives[v.vid] ~= nil and
-                    beamjoy_pursuit.isPolice
-            end
-            if v.type == beamjoy_vehicles.TYPES.PROP and
-                v.jbeam ~= beamjoy_vehicles.WALKING then
-                return false
-            end
-            if v.type == beamjoy_vehicles.TYPES.TRAILER then
-                -- see updateTagName's comment: getSelf() can be nil briefly right after connecting.
-                local self = beamjoy_players.getSelf()
-                if not self or v.ownerName ~= self.playerName then
-                    -- not own trailer
-                    return false
+                include = DEBUG ~= nil or
+                    (beamjoy_pursuit.fugitives[v.vid] ~= nil and beamjoy_pursuit.isPolice)
+            else
+                if v.type == beamjoy_vehicles.TYPES.PROP and
+                    v.jbeam ~= beamjoy_vehicles.WALKING then
+                    include = false
+                elseif v.type == beamjoy_vehicles.TYPES.TRAILER then
+                    -- see updateTagName's comment: getSelf() can be nil briefly right after connecting.
+                    local self = beamjoy_players.getSelf()
+                    if not self or v.ownerName ~= self.playerName then
+                        include = false -- not own trailer
+                    elseif M.towedTrailerVids[v.vid] then
+                        include = false -- some vehicle is tracting it
+                    end
                 end
-                if M.towedTrailerVids[v.vid] then
-                    -- some vehicle is tracting it
-                    return false
+                if include and ctxt.camera ~= camera.CAMERAS.FREE and
+                    ctxt.mpVeh and ctxt.mpVeh.isLocal and
+                    ctxt.mpVeh.vid == v.vid then
+                    include = false
+                end
+                if include and replay.replayPlayers[v.ownerName] then
+                    include = false
+                end
+                -- Hunter mode: the currently-hunted fugitive's real nametag is suppressed for every
+                -- OTHER client until a reveal trigger fires (proximity / near-final-waypoint /
+                -- post-reset, see hunterRunner.lua's own isHiddenFugitiveVehicle). Never hidden on
+                -- the fugitive's own client, which already doesn't see its own tag while driving
+                -- normally via the ctxt.mpVeh check just above.
+                if include and beamjoy_hunterRunner.isHiddenFugitiveVehicle(v) then
+                    include = false
                 end
             end
-            if ctxt.camera ~= camera.CAMERAS.FREE and
-                ctxt.mpVeh and ctxt.mpVeh.isLocal and
-                ctxt.mpVeh.vid == v.vid then
-                return false
+            if include then
+                drawn[vid] = true
+                drawNametag(beamjoy_vehicles.getVehicle(vid) or {}, orig)
             end
-            if replay.replayPlayers[v.ownerName] then return false end
-            -- Hunter mode: the currently-hunted fugitive's real nametag is suppressed for every
-            -- OTHER client until a reveal trigger fires (proximity / near-final-waypoint /
-            -- post-reset, see hunterRunner.lua's own isHiddenFugitiveVehicle). Never hidden on the
-            -- fugitive's own client, which already doesn't see its own tag while driving normally
-            -- via the ctxt.mpVeh check just above.
-            if beamjoy_hunterRunner.isHiddenFugitiveVehicle(v) then return false end
-            return true
-        end):forEach(function(v) ---@param v BJVehicle
-            drawn[v.vid] = true
-            drawNametag(beamjoy_vehicles.getVehicle(v.vid) or {}, orig)
-        end)
+        end
     else
         -- Nametags globally disabled for this viewer, but Hunter's reveal mechanic is core
         -- gameplay (how a hunter actually spots the fugitive once revealed), not cosmetic. Don't
         -- let it silently stop working just because this player turned nametags off for unrelated
         -- reasons. Deliberately narrow: this is the ONLY tag force-drawn here, every other vehicle
-        -- stays hidden exactly per the viewer's own preference.
-        beamjoy_vehicles.vehicles:filter(function(v)
-            return beamjoy_hunterRunner.isRevealedFugitiveVehicle(v)
-        end):forEach(function(v) ---@param v BJVehicle
-            drawn[v.vid] = true
-            drawNametag(beamjoy_vehicles.getVehicle(v.vid) or {}, orig)
-        end)
+        -- stays hidden exactly per the viewer's own preference. Same allocation-avoidance as above.
+        for vid, v in pairs(beamjoy_vehicles.vehicles) do ---@type integer, BJVehicle
+            if beamjoy_hunterRunner.isRevealedFugitiveVehicle(v) then
+                drawn[vid] = true
+                drawNametag(beamjoy_vehicles.getVehicle(vid) or {}, orig)
+            end
+        end
     end
 
     -- Mouse hover nametag: disableCollision()/enableCollision() here is purely to keep the
