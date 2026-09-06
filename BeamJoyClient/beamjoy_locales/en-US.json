@@ -458,6 +458,8 @@
     "beamjoy.window.config.tabs.infectedArena.enableColors.tooltip": "Repaints every participant's vehicle to a flat role color and disables free paint choice while a round is active.",
     "beamjoy.window.config.tabs.infectedArena.survivorColor": "Survivor color",
     "beamjoy.window.config.tabs.infectedArena.infectedColor": "Infected color",
+    "beamjoy.window.config.tabs.infectedArena.hideInfectedNametags": "Hide infected nametags from survivors",
+    "beamjoy.window.config.tabs.infectedArena.hideInfectedNametags.tooltip": "Survivors won't see an infected participant's nametag at all (staff and other infected still do). Off by default.",
     "beamjoy.window.config.tabs.infectedArena.gridTimeout": "Lobby timeout",
     "beamjoy.window.config.tabs.infectedArena.gridTimeout.tooltip": "Hard deadline for the lobby: anyone still unready is dropped and the round starts (or the lobby closes) regardless.",
     "beamjoy.window.config.tabs.infectedArena.gridReadyTimeout": "Ready floor",

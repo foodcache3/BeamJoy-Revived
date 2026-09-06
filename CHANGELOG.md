@@ -6,6 +6,19 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.77] - 2026-09-06
+
+Client v1.8.77, server v1.8.61. Server-side change in this range needs deploying to the live
+server separately; the client is a straight mod update.
+
+### Added
+- **New Infected Arena setting: "Hide infected nametags from survivors"** (Config > Infected
+  Arena, off by default). Fixes a real bug: an infected participant's nametag was unconditionally
+  colored by their role, visible to every viewer, so a survivor could tell exactly who's infected
+  just from nametag color alone, trivially defeating the point of the mode. Turning this setting
+  on hides an infected participant's whole nametag from survivor viewers specifically; staff,
+  spectators, and other infected still see it normally. *(server + client)*
+
 ## [1.8.76] - 2026-09-06
 
 ### Fixed

@@ -111,6 +111,12 @@ local function sanitizeArena(arena)
     arena.defaults.countdown = math.clamp(tonumber(arena.defaults.countdown) or 10, 0, 600)
     arena.defaults.endTimeout = math.max(3, tonumber(arena.defaults.endTimeout) or 10)
     arena.defaults.enableColors = arena.defaults.enableColors == true
+    -- default OFF: survivors seeing an infected participant's nametag rendered in the "infected"
+    -- color, unconditionally, was reported as an actual bug (trivially reveals who's infected to
+    -- everyone, defeating the point of the mode) - but always hiding it isn't necessarily what
+    -- every host wants either, so this is a host-configurable choice, not a hardcoded behavior
+    -- change; see infectedRunner.lua's own isHiddenInfectedVehicle for the actual effect.
+    arena.defaults.hideInfectedNametags = arena.defaults.hideInfectedNametags == true
     if type(arena.defaults.survivorColor) ~= "table" then arena.defaults.survivorColor = nil end
     if type(arena.defaults.infectedColor) ~= "table" then arena.defaults.infectedColor = nil end
     if type(arena.defaults.config) ~= "table" or type(arena.defaults.config.model) ~= "string" or

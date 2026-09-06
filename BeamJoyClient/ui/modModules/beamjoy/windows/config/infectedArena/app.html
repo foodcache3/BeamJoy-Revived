@@ -88,6 +88,12 @@
                 <td class="text-right">{{'beamjoy.window.config.tabs.infectedArena.infectedColor' | translate}}</td>
                 <td><bj-color-picker ng-model="$ctrl.defaults.infectedColor"></bj-color-picker></td>
             </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.hideInfectedNametags.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.infectedArena.hideInfectedNametags' | translate}}
+                </td>
+                <td><bj-toggle ng-model="$ctrl.defaults.hideInfectedNametags"></bj-toggle></td>
+            </tr>
         </table>
     </accordion-content>
 </bj-accordion>

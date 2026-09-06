@@ -52,6 +52,8 @@
 ---@field enableColors boolean
 ---@field survivorColor BJColor?
 ---@field infectedColor BJColor?
+---@field hideInfectedNametags boolean hides an infected participant's whole nametag from
+---survivor viewers specifically ; see infectedRunner.lua's own isHiddenInfectedVehicle
 ---@field config table?
 
 ---@class BJInfectedSession
@@ -280,6 +282,9 @@ local function buildSettings(arena, overrides)
     local enableColors = overrides.enableColors
     if enableColors == nil then enableColors = defaults.enableColors == true end
 
+    local hideInfectedNametags = overrides.hideInfectedNametags
+    if hideInfectedNametags == nil then hideInfectedNametags = defaults.hideInfectedNametags == true end
+
     local config = overrides.config
     if type(config) ~= "table" or type(config.model) ~= "string" or type(config.config) ~= "string" then
         config = defaults.config
@@ -303,6 +308,7 @@ local function buildSettings(arena, overrides)
             defaults.survivorColor) or nil,
         infectedColor = enableColors and (type(overrides.infectedColor) == "table" and overrides.infectedColor or
             defaults.infectedColor) or nil,
+        hideInfectedNametags = hideInfectedNametags == true,
         config = type(config) == "table" and config or nil,
     }
 end

@@ -308,6 +308,13 @@ local function onUpdate()
                 if include and beamjoy_hunterRunner.isHiddenFugitiveVehicle(v) then
                     include = false
                 end
+                -- Infected mode, host-configurable (hideInfectedNametags, default off): an
+                -- infected participant's whole nametag is hidden from a SURVIVOR viewer
+                -- specifically (see infectedRunner.lua's own isHiddenInfectedVehicle for the
+                -- exact scope) - staff/spectators/other infected still see it normally.
+                if include and beamjoy_infectedRunner.isHiddenInfectedVehicle(v) then
+                    include = false
+                end
             end
             if include then
                 drawn[vid] = true

@@ -223,6 +223,24 @@ local function infectedNametagColor(mpVeh)
     return true, roleColor(session, participant.role), BJColor(0, 0, 0, .5)
 end
 
+--- Real bug: the color override above used to be unconditional, meaning a survivor could tell
+--- exactly who's infected just by nametag color alone, trivially defeating the point of the mode.
+--- Host-configurable (session.settings.hideInfectedNametags, default off) rather than a hardcoded
+--- behavior change. Only ever hides the tag from a viewer who is THEMSELVES a survivor in this
+--- same session: staff/spectators/other infected are unaffected, mirroring how
+--- hunterRunner.lua's own isHiddenFugitiveVehicle is likewise narrow in scope.
+---@param mpVeh BJVehicle
+---@return boolean
+local function isHiddenInfectedVehicle(mpVeh)
+    local session = M.session or M.spectatingSession
+    if not session or (session.state ~= "COUNTDOWN" and session.state ~= "GAME") then return false end
+    if not session.settings.hideInfectedNametags then return false end
+    local self = M.session and getSelfParticipant()
+    if not self or self.role ~= "survivor" then return false end
+    local target = table.find(session.participants, function(p) return p.playerName == mpVeh.ownerName end)
+    return target ~= nil and target.role == "infected"
+end
+
 ---@param req RequestAuthorization
 ---@param model string
 ---@param config string?
@@ -980,5 +998,6 @@ M.spectateSession = spectateSession
 M.stopSpectating = stopSpectating
 
 M.infectedNametagColor = infectedNametagColor
+M.isHiddenInfectedVehicle = isHiddenInfectedVehicle
 
 return M
