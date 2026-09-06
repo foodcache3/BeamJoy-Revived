@@ -483,6 +483,7 @@
     "beamjoy.window.main.tabs.infected.states.FINISHED": "Finished",
     "beamjoy.window.main.tabs.infected.startingIn": "Starting in",
     "beamjoy.window.main.tabs.infected.lobbyClosesIn": "Lobby closes in",
+    "beamjoy.window.main.tabs.infected.needMorePlayers": "Need more players to start",
     "beamjoy.window.main.tabs.infected.forceInfected.tooltip": "Pre-assign this player as infected",
     "beamjoy.window.main.tabs.infected.yourRole": "Your role:",
     "beamjoy.window.main.tabs.infected.roleUndecided": "The starting infected are chosen randomly once the round starts.",

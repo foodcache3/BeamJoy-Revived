@@ -27,6 +27,7 @@ angular.module("beamjoy").component("bjMainInfected", {
         this.status = null;
         this.showPlayers = false;
         this.allReady = false;
+        this.enoughParticipants = false;
         $rootScope.$on("BJInfectedSessionStatus", (_, status) => {
             this.status = status || null;
             if (!this.status) {
@@ -38,6 +39,13 @@ angular.module("beamjoy").component("bjMainInfected", {
                 Array.isArray(this.status.participants) &&
                 this.status.participants.length > 0 &&
                 this.status.participants.every((p) => p.ready);
+            // Real bug: everyone ready is not, on its own, enough to actually leave LOBBY (see
+            // infectedGrid.lua's tryStartFromLobby) - below minParticipants the server refuses
+            // forever, but the "Starting in Xs" badge used to show and count down regardless,
+            // with nothing telling the player why it never actually started.
+            this.enoughParticipants =
+                !!this.status &&
+                (this.status.minParticipants == null || this.status.participantCount >= this.status.minParticipants);
         });
         this.togglePlayers = (event) => {
             event.stopPropagation();

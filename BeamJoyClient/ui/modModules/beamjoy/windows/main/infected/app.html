@@ -45,7 +45,7 @@
         <span
             class="opacity-70"
             ng-if="!($ctrl.status.state === 'COUNTDOWN' && $ctrl.countdownSeconds !== null) &&
-                   !($ctrl.status.state === 'LOBBY' && $ctrl.allReady && $ctrl.status.gridReadySecondsLeft != null)"
+                   !($ctrl.status.state === 'LOBBY' && $ctrl.allReady && $ctrl.enoughParticipants && $ctrl.status.gridReadySecondsLeft != null)"
         >
             {{('beamjoy.window.main.tabs.infected.states.' + $ctrl.status.state) | translate}}
         </span>
@@ -54,10 +54,22 @@
         </span>
         <span
             class="countdown-badge"
-            ng-if="$ctrl.status.state === 'LOBBY' && $ctrl.allReady && $ctrl.status.gridReadySecondsLeft != null"
+            ng-if="$ctrl.status.state === 'LOBBY' && $ctrl.allReady && $ctrl.enoughParticipants && $ctrl.status.gridReadySecondsLeft != null"
         >
             {{'beamjoy.window.main.tabs.infected.startingIn' | translate}} {{$ctrl.status.gridReadySecondsLeft}}s
         </span>
+    </div>
+    <!-- Real bug: with exactly the minimum-minus-one people readied (2, Infected needs 3, unlike
+         Hunter's floor of 2), the badge above used to tick down to 0 and sit there forever with no
+         explanation - the server was silently refusing to ever leave LOBBY. Shown instead of (never
+         alongside) the countdown badge whenever ready alone isn't actually enough to start. -->
+    <div
+        class="opacity-70 small mb-1"
+        ng-if="$ctrl.status.state === 'LOBBY' && $ctrl.status.minParticipants != null &&
+               $ctrl.status.participantCount < $ctrl.status.minParticipants"
+    >
+        {{'beamjoy.window.main.tabs.infected.needMorePlayers' | translate}}
+        ({{$ctrl.status.participantCount}}/{{$ctrl.status.minParticipants}})
     </div>
     <div
         class="opacity-70 small mb-1"

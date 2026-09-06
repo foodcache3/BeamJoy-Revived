@@ -206,6 +206,12 @@ local function buildBasePayload(session)
         local elapsedSec = GetCurrentTime() - session.createdAt
         payload.gridReadySecondsLeft = math.max(0, math.ceil(session.settings.gridReadyTimeout - elapsedSec))
         payload.gridTimeoutSecondsLeft = math.max(0, math.ceil(session.settings.gridTimeout - elapsedSec))
+        -- Real bug: tryStartFromLobby silently refuses to leave LOBBY below this floor (session
+        -- never starts, not even once gridReadyTimeout elapses), but the UI's own "Starting in Xs"
+        -- countdown had nothing telling it that floor exists, so it happily ticked down to 0 and
+        -- sat there forever whenever exactly 2 people readied up (Infected needs 3, unlike Hunter's
+        -- 2). Exposed here so the client can gate that countdown on actually having enough people.
+        payload.minParticipants = services_infected.MINIMUM_PARTICIPANTS
     end
     return payload
 end

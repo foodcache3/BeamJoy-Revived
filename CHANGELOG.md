@@ -6,6 +6,21 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.75] - 2026-09-06
+
+Client v1.8.75, server v1.8.59. Server-side change in this range needs deploying to the live
+server separately; the client is a straight mod update.
+
+### Fixed
+- **Real bug: Infected never actually started even after both players readied up**, showing
+  "Starting in 0s" that just sat there forever. Infected requires a real minimum of 3
+  participants (Hunter's own floor is 2), so a 2-player lobby can never leave LOBBY no matter how
+  long everyone waits, but the UI's countdown badge had no way to know that floor existed and
+  happily ticked down to 0 regardless. The lobby now tells the client its actual minimum
+  participant count, the countdown badge only shows once there are actually enough people to
+  start, and a "Need more players to start (2/3)" message explains the wait instead.
+  *(server + client)*
+
 ## [1.8.74] - 2026-09-06
 
 ### Fixed

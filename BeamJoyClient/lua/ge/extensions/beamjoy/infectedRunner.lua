@@ -381,6 +381,9 @@ local function pushSessionStatus_impl(session)
         participantCount = #session.participants,
         maxParticipants = #(arena.survivorSpawns or {}) +
             math.min(session.settings.initialInfectedCount, #(arena.infectedSpawns or {})),
+        -- see infectedGrid.lua's own buildBasePayload comment: tryStartFromLobby silently refuses
+        -- to start below this floor even once everyone is ready, so the UI needs it to know why
+        minParticipants = session.minParticipants,
         participants = table.map(session.participants, function(p)
             return {
                 playerName = p.playerName,
