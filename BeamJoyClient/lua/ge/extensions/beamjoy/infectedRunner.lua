@@ -803,6 +803,18 @@ local function updateGpsGuidance()
     end
 end
 
+--- Real bug: getCurrentOwn() (ultimately be:getPlayerVehicle(0)) can itself go nil for stretches
+--- of gameplay unrelated to genuinely having no vehicle - the exact same native call a third-party
+--- mod crashed on elsewhere this session, right around vehicle-attach transitions - which broke
+--- tag detection outright for anyone caught in that window (most visibly: someone just converted
+--- by a tag could never land one themselves afterward). M.myVehicleVid is BJS's own bookkeeping,
+--- kept up to date independent of that native call (COUNTDOWN teleport-in, onBJVehicleInstantiated),
+--- so falling back to it here keeps tag detection working even while the native query is stuck.
+---@return BJVehicle?
+local function myCurrentVehicle()
+    return beamjoy_vehicles.getCurrentOwn() or (M.myVehicleVid and beamjoy_vehicles.getVehicle(M.myVehicleVid))
+end
+
 --- slow-tick coarse cull (BJI's own two-tier convention) : rebuilds the small nearby-survivor
 --- candidate list a fast per-frame precise check can then afford to run against every tick. A no-op
 --- (empty list) whenever the local player isn't currently an infected participant in an active GAME.
@@ -811,7 +823,7 @@ local function refreshTagCandidates()
     if not M.session or M.session.state ~= "GAME" then return end
     local participant = getSelfParticipant()
     if not participant or participant.role ~= "infected" then return end
-    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    local myVeh = myCurrentVehicle()
     if not myVeh then return end
     local myFresh = beamjoy_vehicles.getVehicle(myVeh.vid)
     if not myFresh or not myFresh.position then return end
@@ -842,7 +854,7 @@ end
 --- authority (idempotent role check), this is purely "what should I even bother sending".
 local function updateTagDetection()
     if #M.nearbySurvivorVids == 0 then return end
-    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    local myVeh = myCurrentVehicle()
     if not myVeh then return end
     local myFresh = beamjoy_vehicles.getVehicle(myVeh.vid)
     if not myFresh or not myFresh.position then return end
@@ -918,11 +930,30 @@ local function onBJVehicleInstantiated(vid)
     end
 end
 
+--- Real bug: getting tagged (or tagging someone) could leave the camera stuck in free cam with no
+--- manual camera switch able to reach a working one again, and the exact native trigger couldn't
+--- be pinned down (no vehicle recreate is actually involved in a plain tag - beamjoy_vehicles.paint
+--- only ever calls core_vehicle_manager.liveUpdateVehicleColors, a live update, confirmed by
+--- reading the installed game's own core/vehicle/manager.lua). Rather than chase every possible
+--- native trigger, this is a continuous per-frame watchdog: camera.blockCameras' own
+--- implementation already kicks OUT of an already-active blocked camera the instant it's called
+--- (see camera.lua), so calling it every frame while game-locked is a cheap, unconditional
+--- guarantee that the camera can never stay stuck in FREE/BIG_MAP/etc. for more than one frame,
+--- regardless of what actually knocked it there. A genuine no-op whenever the camera's already
+--- fine (blockCameras' own internal check bails out immediately).
 local function onUpdate()
     if M.scenarioLocked then
         updateCountdown()
     end
     updateTagDetection()
+    -- Deliberately NOT gated on beamjoy_vehicles.getCurrentOwn(): be:getPlayerVehicle(0) (what
+    -- that ultimately reads) can itself go nil during the exact same stuck window this is meant
+    -- to fix (confirmed elsewhere this session - a third-party mod crashed on that same nil, right
+    -- around vehicle-attach transitions), so requiring it here would skip the correction exactly
+    -- when it's needed most.
+    if isGameLocked() then
+        camera.blockCameras(table.unpack(gameBlockedCameras()))
+    end
 end
 
 local function onSlowUpdate()
@@ -999,5 +1030,6 @@ M.stopSpectating = stopSpectating
 
 M.infectedNametagColor = infectedNametagColor
 M.isHiddenInfectedVehicle = isHiddenInfectedVehicle
+M.isGameLocked = isGameLocked
 
 return M

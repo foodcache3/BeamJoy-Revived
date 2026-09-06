@@ -6,6 +6,20 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.78] - 2026-09-06
+
+### Fixed
+- **Real bug: getting tagged (or tagging someone) in Infected could leave the camera stuck in
+  free cam, with no manual camera switch able to reach a working one again, and could also leave
+  a just-converted participant unable to tag anyone themselves afterward.** No vehicle recreate is
+  actually involved in a plain tag (the repaint only ever does a live color update), so the exact
+  native trigger couldn't be pinned down; both symptoms trace back to the same native vehicle
+  query (`be:getPlayerVehicle(0)`) going stale around vehicle-attach transitions. Camera
+  restrictions are now continuously re-applied every frame while a round is locked in, which
+  self-corrects a stuck camera within one frame regardless of what caused it; tag detection now
+  falls back to this mod's own vehicle bookkeeping instead of solely that native query, so it
+  keeps working through the same stuck window. *(client only)*
+
 ## [1.8.77] - 2026-09-06
 
 Client v1.8.77, server v1.8.61. Server-side change in this range needs deploying to the live
