@@ -6,6 +6,18 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.74] - 2026-09-06
+
+### Fixed
+- **Real bug: opening the Legacy Import preview (Hunter, Infected, or Races) crashed with
+  "results.filter is not a function" whenever the scan found nothing to import.** An empty scan
+  result is correctly sent from server to client as a JSON array, but the client then re-forwards
+  it to the UI through BeamNG's own native `guihooks` bridge, a second, separate JSON encode pass
+  that can't tell an empty Lua table was meant to be an array and turns it into a plain object
+  instead. The UI's own "nothing to import" guard checked `results.length === 0`, which is
+  `undefined` (not `0`) on a plain object, so it fell through to `.filter()` on a non-array and
+  threw. All three preview handlers now check real arrayness first. *(client only)*
+
 ## [1.8.73] - 2026-09-05
 
 ### Fixed

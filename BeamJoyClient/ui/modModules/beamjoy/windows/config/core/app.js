@@ -68,7 +68,12 @@ angular.module("beamjoy").component("bjConfigCore", {
             beamjoyStore.send("BJHunterLegacyImportPreviewRequest");
         };
         $rootScope.$on("BJHunterLegacyImportPreview", (_, results) => {
-            if (!results || results.length === 0) {
+            // Real bug: an empty scan result ({} in Lua) round-trips through the GE->UI native
+            // guihooks bridge (a second, separate JSON encode from BJS's own server->client one)
+            // and can come out the other side as a plain object rather than []. `.length` on that
+            // is undefined, not 0, so the guard below has to check real arrayness too or this
+            // falls through to results.filter() on a non-array and throws.
+            if (!Array.isArray(results) || results.length === 0) {
                 this.hunterLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.hunter.none";
                 return;
             }
@@ -99,7 +104,8 @@ angular.module("beamjoy").component("bjConfigCore", {
             beamjoyStore.send("BJInfectedLegacyImportPreviewRequest");
         };
         $rootScope.$on("BJInfectedLegacyImportPreview", (_, results) => {
-            if (!results || results.length === 0) {
+            // see BJHunterLegacyImportPreview's own comment above: same guihooks round-trip gap
+            if (!Array.isArray(results) || results.length === 0) {
                 this.infectedLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.infected.none";
                 return;
             }
@@ -132,7 +138,8 @@ angular.module("beamjoy").component("bjConfigCore", {
             beamjoyStore.send("BJRaceLegacyImportPreviewRequest");
         };
         $rootScope.$on("BJRaceLegacyImportPreview", (_, results) => {
-            if (!results || results.length === 0) {
+            // see BJHunterLegacyImportPreview's own comment above: same guihooks round-trip gap
+            if (!Array.isArray(results) || results.length === 0) {
                 this.raceLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.races.none";
                 return;
             }
