@@ -12,7 +12,12 @@ local function updateTrafficLights(ToD)
     ToD = ToD or extensions.core_environment.getTimeOfDay().time
 
     beamjoy_vehicles.vehicles:filter(function(v) ---@param v BJVehicle
-        return v.isLocal and v.isAi
+        -- Real bug: v.isAi alone can't tell moving traffic apart from a parked one, they're the
+        -- same simple_traffic model and beamjoy_vehicles' own isAi() only ever looks at the model
+        -- name. Without excluding beamjoy_traffic's own parkedVehs (the only place that distinction
+        -- actually exists), every dusk/dawn transition, and every moving-traffic amount change,
+        -- flipped headlights on for literally every AI vehicle in the world, parked ones included.
+        return v.isLocal and v.isAi and not beamjoy_traffic.parkedVehs:includes(v.vid)
     end):forEach(function(v) ---@param v BJVehicle
         beamjoy_vehicles.setLights(v.vid, ToD >= M.dusk and ToD < M.dawn)
     end)
@@ -70,7 +75,14 @@ end
 local function onBJVehicleInstantiated(vid)
     if localStorage.get(localStorage.GLOBAL_VALUES.AUTOMATIC_LIGHTS) then
         local mpVeh = beamjoy_vehicles.vehicles[vid]
-        if mpVeh and mpVeh.isLocal then
+        -- Real bug: onBJVehicleInstantiated fires for every vehicle THIS client spawns, not just
+        -- the player's own driven car, so mpVeh.isLocal is equally true for any traffic or parked
+        -- vehicle this client just spawned. Without the isAi guard, having "Automatic Lights"
+        -- enabled meant every parked/traffic vehicle got its headlights force-set to match time of
+        -- day the instant it spawned, i.e. parked cars visibly spawning with headlights on at
+        -- night. updateTrafficLights (the periodic sweep) already owns AI vehicles' lights on its
+        -- own schedule; this hook is only meant for the vehicle the player is actually driving.
+        if mpVeh and mpVeh.isLocal and not mpVeh.isAi then
             update(mpVeh)
         end
     end

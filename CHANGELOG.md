@@ -6,6 +6,18 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.73] - 2026-09-05
+
+### Fixed
+- **Real bug: parked traffic vehicles spawned, and stayed, with their headlights on at night.**
+  `automaticLights.lua` has no way to tell a parked car apart from moving traffic, both are the
+  same `simple_traffic` model and `isAi` alone doesn't distinguish them: its periodic day/night
+  sweep force-set headlights on every AI vehicle in the world, parked ones included, and a second,
+  separate spot (its per-vehicle spawn hook) applied the player's own "Automatic Lights" preference
+  to every vehicle this client spawned, again with no distinction between the player's own car and
+  an AI one. The sweep now excludes traffic's own parked set, and the spawn hook now only ever
+  touches the vehicle the player is actually driving. *(client only)*
+
 ## [1.8.72] - 2026-09-05
 
 ### Fixed
