@@ -711,6 +711,10 @@ local function onSessionUpdate(session)
     -- whose role just changed while already in GAME (a successful tag against them)
     if session.state == "GAME" and wasGame and participant.role == "infected" and not wasInfected then
         applyRoleColor("infected")
+        -- see updateTagDetection's own comment on the exact same call: the real, full-force
+        -- collision this contact-based tag required (non-ghosted on purpose) can leave the
+        -- camera visually detached on the tagged side too, so re-force a reattachment here as well
+        camera.setCamera(camera.getCamera(), false)
     end
 
     if session.state == "GAME" and beamjoy_vehicles.getCurrentOwn() then
@@ -875,6 +879,19 @@ local function updateTagDetection()
                 if fresh.position:distance(myFresh.position) < (M.selfDiag + otherDiag) then
                     M.taggedVids[vid] = true
                     beamjoy_communications.send("infectedTag", M.session.id, mpVeh.ownerID)
+                    -- Real bug, root cause: tagging requires actual contact, and players are
+                    -- deliberately non-ghosted for exactly that reason (see setGhostReason's own
+                    -- comments elsewhere in this file), so a successful tag always coincides with
+                    -- a real, full-force BeamNG vehicle-vehicle collision against a network-synced
+                    -- remote vehicle. That collision can leave the camera visually detached from
+                    -- the vehicle on BOTH sides of the hit - fully drivable, camera mode/name
+                    -- unchanged, but the rendered view stops tracking it. Re-issuing the current
+                    -- camera mode forces a real reattachment (core_camera.setByName re-binds the
+                    -- camera to the vehicle) rather than just resetCamera()'s rotation-only recenter,
+                    -- which is why this uses setCamera instead. Fired here (the tagger) and in the
+                    -- mid-round repaint block below (the tagged), since both sides of the same
+                    -- collision are affected.
+                    camera.setCamera(camera.getCamera(), false)
                 end
             end
         end
@@ -946,14 +963,6 @@ local function onUpdate()
         updateCountdown()
     end
     updateTagDetection()
-    -- Deliberately NOT gated on beamjoy_vehicles.getCurrentOwn(): be:getPlayerVehicle(0) (what
-    -- that ultimately reads) can itself go nil during the exact same stuck window this is meant
-    -- to fix (confirmed elsewhere this session - a third-party mod crashed on that same nil, right
-    -- around vehicle-attach transitions), so requiring it here would skip the correction exactly
-    -- when it's needed most.
-    if isGameLocked() then
-        camera.blockCameras(table.unpack(gameBlockedCameras()))
-    end
 end
 
 local function onSlowUpdate()

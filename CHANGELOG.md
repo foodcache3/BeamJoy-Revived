@@ -6,6 +6,21 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.79] - 2026-09-06
+
+### Fixed
+- **Corrects 1.8.78's own fix below, which didn't actually address the reported symptom.** Real
+  root cause, found from further testing: tagging in Infected requires actual contact, and
+  players are deliberately non-ghosted for exactly that reason, so a successful tag always
+  coincides with a real, full-force collision against a network-synced remote vehicle. That
+  collision can leave the camera visually detached from the vehicle on BOTH sides of the hit -
+  fully drivable, camera name/mode unchanged, but the rendered view stops tracking it entirely.
+  1.8.78's per-frame check only ever corrected being stuck on a *blocked* camera name (Free/Big
+  Map/etc.), which never applied here since the displayed camera name was normal the whole time;
+  that check has been removed. Both the tagger and the tagged side now force a real camera
+  reattachment (re-issuing the current camera mode) at the exact moment of a successful tag.
+  *(client only)*
+
 ## [1.8.78] - 2026-09-06
 
 ### Fixed
