@@ -21,6 +21,12 @@ local M = {
     roundDeadlineTargetMs = nil,
     gridReadyTargetMs = nil,
     gridTimeoutTargetMs = nil,
+    ---@type integer? GetCurrentTimeMillis domain: when the GAME-start release-freeze delay
+    ---(survivorsStartDelay/infectedStartDelay) actually unfreezes this client, nil once released
+    ---or whenever no hold is in effect. Real bug: this delay used to have no HUD indicator at
+    ---all, so a held participant had no way to tell they were frozen on purpose (working as
+    ---intended) rather than stuck/bugged.
+    holdReleaseTargetMs = nil,
 
     -- COUNTDOWN camera-lock/freeze state, same technique as hunterRunner.lua's own, minus the
     -- vehicle-confirm wait (Infected has nothing per-role to confirm ; see this file's own header)
@@ -347,6 +353,8 @@ local function clearGameState()
     M.roundDeadlineTargetMs = nil
     M.gridReadyTargetMs = nil
     M.gridTimeoutTargetMs = nil
+    M.holdReleaseTargetMs = nil
+    async.removeTask("BJInfectedReleaseFreeze")
     M.nearbySurvivorVids = {}
     M.selfDiag = nil
     M.survivorDiagCache = {}
@@ -472,6 +480,12 @@ local function pushHud()
     local targetMs = M.session and M.roundDeadlineTargetMs or
         (M.spectatingSession and M.spectatingRoundDeadlineTargetMs)
     local roundSecondsLeft = targetMs and math.max(0, math.ceil((targetMs - GetCurrentTimeMillis()) / 1000)) or nil
+    -- Real bug: the GAME-start release-freeze delay had no HUD indicator at all, so a held
+    -- participant (asymmetric release, see the GAME-start block's own comment) had no way to
+    -- tell they were frozen ON PURPOSE rather than stuck/bugged. Spectator-only, no M.session:
+    -- never held themselves, so no equivalent target to read.
+    local holdSecondsLeft = M.holdReleaseTargetMs and
+        math.max(0, math.ceil((M.holdReleaseTargetMs - GetCurrentTimeMillis()) / 1000)) or nil
 
     beamjoy_communications_ui.send("BJInfectedHud", {
         active = true,
@@ -481,6 +495,7 @@ local function pushHud()
         infectedCount = infectedCount,
         role = participant and participant.role or nil,
         tagCount = participant and participant.tagCount or nil,
+        holdSecondsLeft = holdSecondsLeft,
     })
 end
 
@@ -598,6 +613,13 @@ local function onSessionUpdate(session)
                 LogWarn("beamjoy_infectedRunner: no spawn position to teleport to")
             end
             beamjoy_vehicles.setGhostReason(myVeh.vid, "infected", true)
+            -- Real bug: this used to only ever run once GAME started, so a participant's role
+            -- color (enableColors) stayed invisible for the entire COUNTDOWN even though roles
+            -- are already committed and known by this point. Fresh per-round snapshot here (a
+            -- leftover M.originalPaints from an earlier round, should never happen but cheap
+            -- insurance) since this is now the real "first paint of the round" moment.
+            M.originalPaints = nil
+            applyRoleColor(participant.role)
         end
 
         M.scenarioLocked = true
@@ -630,7 +652,10 @@ local function onSessionUpdate(session)
         if myVeh then
             beamjoy_vehicles.setFreeze(myVeh.vid, true)
         end
+        M.holdReleaseTargetMs = GetCurrentTimeMillis() + math.max(0, delaySec) * 1000
         async.delayTask(function()
+            M.holdReleaseTargetMs = nil
+            pushHud()
             local currVeh = beamjoy_vehicles.getCurrentOwn()
             if currVeh then beamjoy_vehicles.setFreeze(currVeh.vid, false) end
             local vid = currVeh and currVeh.vid or (myVeh and myVeh.vid)
@@ -650,12 +675,16 @@ local function onSessionUpdate(session)
         M.selfDiag = nil
         M.survivorDiagCache = {}
         M.taggedVids = {}
-        -- fresh per-round snapshot : a leftover M.originalPaints from an earlier round (should
-        -- never happen, restoreOriginalPaint already clears it at FINISHED/leave, but this is
-        -- cheap insurance) would otherwise make this round's own restore hand back the WRONG
-        -- paint once it ends
-        M.originalPaints = nil
-        applyRoleColor(participant.role)
+        -- Color is applied at COUNTDOWN start now (see that block above), not here, so it's
+        -- visible during the countdown rather than only once it ends. Only re-applied here as a
+        -- fallback for a client that never saw this round's own COUNTDOWN at all (joining
+        -- mid-round): M.originalPaints is still nil precisely because that block never ran for
+        -- them. For the normal case (present since COUNTDOWN) this is a no-op - resetting
+        -- M.originalPaints unconditionally here would otherwise re-snapshot the ALREADY-recolored
+        -- vehicle as if it were "original", breaking the restore at round end.
+        if not M.originalPaints then
+            applyRoleColor(participant.role)
+        end
         beamjoy_communications_ui.uiBroadcast("beamjoy.infected.gameStarted", nil, "green", 3)
     end
 
@@ -841,6 +870,13 @@ local function onBJVehicleInstantiated(vid)
         M.myVehicleVid = vid
         M.originalPaints = nil
         applyRoleColor(participant.role)
+        -- Real bug: a fresh vehicle object mid-round (this same respawn) can leave the camera
+        -- pointed at the old, now-destroyed one, which BeamNG falls back to FREE cam for - and
+        -- since nothing else re-targets the camera at the NEW object afterward, cycling cameras
+        -- manually never reaches a working one either. blockCameras both re-disallows FREE and,
+        -- per its own implementation, immediately kicks out of it if it's already active.
+        camera.blockCameras(table.unpack(gameBlockedCameras()))
+        camera.resetCamera()
         return
     end
     if M.session.state ~= "COUNTDOWN" then return end

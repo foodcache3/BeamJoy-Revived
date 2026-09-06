@@ -6,6 +6,23 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.76] - 2026-09-06
+
+### Fixed
+- **Real bug: getting tagged (or otherwise respawning) mid-round could leave the camera stuck in
+  free cam, with no manual camera switch able to reach a working one again.** A fresh vehicle
+  object mid-round (the same respawn this repaint already accounts for) can leave BeamNG's camera
+  system pointed at the old, now-destroyed vehicle, which the engine falls back to free cam for;
+  nothing was re-targeting the camera at the new object afterward. Camera restrictions are now
+  re-applied and reset the moment the new vehicle appears. *(client only)*
+- **Real bug: the release-freeze delay at round start had no indicator at all.** Survivors and
+  infected each freeze briefly at GAME start (the infected's built-in head start for survivors),
+  but a held participant had no way to tell they were frozen on purpose rather than stuck. The HUD
+  now shows "Held, released in Xs" for as long as the hold lasts. *(client only)*
+- **Real bug: a participant's role color (Force role paint) only became visible once the
+  countdown ended, instead of during it**, even though roles are already assigned and known the
+  moment the countdown begins. Colors are now applied at countdown start. *(client only)*
+
 ## [1.8.60] - 2026-09-06 (server only, TEMPORARY)
 
 Server v1.8.60. No client changes.

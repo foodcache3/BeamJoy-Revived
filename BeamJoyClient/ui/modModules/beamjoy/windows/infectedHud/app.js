@@ -8,6 +8,7 @@ angular.module("beamjoy").component("bjInfectedHud", {
         this.survivorsLeft = 0;
         this.infectedCount = 0;
         this.tagCount = null;
+        this.holdSecondsLeft = null;
 
         $rootScope.$on("BJInfectedHud", (_, data) => {
             this.active = !!data.active;
@@ -18,6 +19,7 @@ angular.module("beamjoy").component("bjInfectedHud", {
             this.survivorsLeft = data.survivorsLeft || 0;
             this.infectedCount = data.infectedCount || 0;
             this.tagCount = data.tagCount ?? null;
+            this.holdSecondsLeft = data.holdSecondsLeft ?? null;
         });
 
         this.$onInit = () => {

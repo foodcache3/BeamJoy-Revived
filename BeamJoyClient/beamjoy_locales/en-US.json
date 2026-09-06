@@ -471,6 +471,7 @@
     "beamjoy.window.infectedHud.role.survivor": "Survivor",
     "beamjoy.window.infectedHud.role.infected": "Infected",
     "beamjoy.window.infectedHud.roundTimeLeft": "Time left",
+    "beamjoy.window.infectedHud.releasedIn": "Held, released in",
     "beamjoy.window.infectedHud.survivorsLeft": "Survivors",
     "beamjoy.window.infectedHud.infectedCount": "Infected",
     "beamjoy.window.infectedHud.tagCount": "Infections",

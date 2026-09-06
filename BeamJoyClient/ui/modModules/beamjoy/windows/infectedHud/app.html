@@ -47,6 +47,16 @@
     #beamjoy-infected-hud .hud-row.timer {
         color: #ffd54f;
     }
+
+    #beamjoy-infected-hud .hud-held {
+        text-align: center;
+        font-weight: bold;
+        color: #ffd54f;
+        background: rgba(255, 213, 79, 0.15);
+        border-radius: 0.3em;
+        padding: 0.25em 0.4em;
+        margin-bottom: 0.35em;
+    }
 </style>
 
 <div id="beamjoy-infected-hud" ng-if="$ctrl.active">
@@ -55,6 +65,11 @@
         <span class="hud-role" ng-class="$ctrl.role">
             {{('beamjoy.window.infectedHud.role.' + ($ctrl.role || 'survivor')) | translate}}
         </span>
+    </div>
+    <!-- Real bug: the release-freeze delay at round start had no indicator at all, so a held
+         participant had no way to tell they were frozen on purpose rather than stuck/bugged. -->
+    <div class="hud-held" ng-if="$ctrl.holdSecondsLeft != null">
+        {{'beamjoy.window.infectedHud.releasedIn' | translate}} {{$ctrl.holdSecondsLeft}}s
     </div>
     <div class="hud-timer">{{$ctrl.formatTime($ctrl.gameElapsedMs)}}</div>
     <div class="hud-row timer" ng-if="$ctrl.roundSecondsLeft != null">
