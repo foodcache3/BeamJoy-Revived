@@ -6,6 +6,16 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.60] - 2026-09-06 (server only, TEMPORARY)
+
+Server v1.8.60. No client changes.
+
+### Changed
+- **TEMPORARY, for 2-player testing:** Infected's minimum participant count lowered from 3 to 2
+  (`services_infected.MINIMUM_PARTICIPANTS`), so a 2-player lobby can actually reach GAME instead
+  of being permanently blocked by the floor described in 1.8.75 below. Revert to 3 once real
+  3+-player testing resumes; this is not meant to ship as a permanent lower floor. *(server only)*
+
 ## [1.8.75] - 2026-09-06
 
 Client v1.8.75, server v1.8.59. Server-side change in this range needs deploying to the live

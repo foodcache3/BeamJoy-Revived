@@ -66,7 +66,10 @@ local M = {
 
     -- matches BJI's own hardcoded floor (a round needs someone to chase and someone left to catch);
     -- not host-configurable, same as BJI never exposed this as a setting either
-    MINIMUM_PARTICIPANTS = 3,
+    -- TEMPORARY (requested 2026-09-06): lowered to 2 so 2-player testing can actually reach GAME.
+    -- resolveInfectedCount already handles 2 participants fine (1 infected, 1 survivor). Revert to
+    -- 3 once real 3+-player testing resumes.
+    MINIMUM_PARTICIPANTS = 2,
     MIN_SURVIVOR_SPAWNS = 2,
     MIN_INFECTED_SPAWNS = 1,
 
