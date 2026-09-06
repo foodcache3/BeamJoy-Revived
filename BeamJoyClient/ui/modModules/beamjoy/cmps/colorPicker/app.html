@@ -15,6 +15,17 @@
         width: 4em;
         height: 1.5em;
     }
+    .color-picker-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 0.3em;
+    }
+    .color-picker-wrapper .clear-btn {
+        opacity: 0.6;
+    }
+    .color-picker-wrapper .clear-btn:hover {
+        opacity: 1;
+    }
 </style>
 
 <div
@@ -26,4 +37,15 @@
         class="color-preview"
         ng-style="{'background-color': $ctrl.ngModel}"
     ></div>
+    <!-- Real gap: there was no way to go back to "no color set" (free paint choice for that
+         role) once a color had been picked - clearing was only ever possible by editing the raw
+         saved data directly. -->
+    <button
+        class="btn icon clear-btn"
+        ng-if="$ctrl.ngModel && $ctrl.disabled !== true"
+        ng-click="$ctrl.clear($event)"
+        title="{{'beamjoy.cmps.colorPicker.clear' | translate}}"
+    >
+        <icon name="remove"></icon>
+    </button>
 </div>

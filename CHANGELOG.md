@@ -6,6 +6,27 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.80] - 2026-09-06
+
+### Fixed
+- **Real bug: locked-in Hunter/Infected participants could still swap to a completely different
+  vehicle mid-round with zero consequence.** The vehicle-spawn authorization hook only ever
+  rejected "clone" and "spawn" (leaving a second vehicle behind), never a normal vehicle-selector
+  tile pick ("replace"), which deletes the old vehicle and swaps in a new one instead. A locked-in
+  participant can no longer change vehicle at all once the countdown starts, in either mode.
+  *(client only)*
+- **Real bug: an Infected participant's role paint color, once cleared back to unset, still got
+  forced to a hardcoded fallback color instead of actually freeing that role to choose any paint.**
+  The vehicle repaint now checks the raw configured color directly and skips entirely when unset,
+  rather than falling through to a default; the always-on nametag color (a separate, always-on
+  feature) is unaffected and keeps its own default. *(client only)*
+
+### Added
+- **Color pickers (Config > Infected Arena's survivor/infected colors) can now be cleared back to
+  "unset"** via a small clear button next to the swatch, shown whenever a color is actually set.
+  Paired with the fix above, clearing a role's color now genuinely lets that role choose any paint
+  of their own instead of being forced to a fallback. *(client only)*
+
 ## [1.8.79] - 2026-09-06
 
 ### Fixed

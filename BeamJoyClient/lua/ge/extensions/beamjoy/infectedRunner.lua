@@ -102,9 +102,12 @@ end
 --- (Lua's BJColor is never anything more than that shape ; see services/infected.lua's own
 --- BJInfectedDefaults doc), not real BJColor() objects with their metatable/methods attached
 --- (JSON round-tripping never reconstructs those, same reason localStorage.lua's own color reads
---- come back as plain tables too). Normalizes into a real BJColor so every caller (nametag
---- override, vehicle repaint) gets a consistent, always-valid object with a real default alpha,
---- falling back to `fallback` (itself a real BJColor) whenever the setting is unset/malformed.
+--- come back as plain tables too). Normalizes into a real BJColor so every caller gets a
+--- consistent, always-valid object with a real default alpha, falling back to `fallback` (itself
+--- a real BJColor) whenever the setting is unset/malformed. In practice only the always-on
+--- nametag override (infectedNametagColor) still relies on that fallback: applyRoleColor's own
+--- vehicle repaint checks the RAW setting itself first and skips entirely on nil, so a cleared
+--- color means free paint there, not "forced to this fallback instead".
 ---@param raw table?
 ---@param fallback BJColor
 ---@return BJColor
@@ -176,6 +179,15 @@ end
 ---@param role BJInfectedRole
 local function applyRoleColor(role)
     if not M.session or not M.session.settings.enableColors then return end
+    -- Real gap: an unset color (survivorColor/infectedColor both start nil) fell through to
+    -- roleColor's own hardcoded green/red fallback, which is right for the nametag color above
+    -- (always-on, needs SOME color regardless) but wrong here - clearing a role's color is
+    -- supposed to mean that role keeps free paint choice, not "force a different hardcoded
+    -- color instead". Checked against the RAW setting, not roleColor's own fallback-applying
+    -- return value, specifically so this function alone can skip the repaint while nametags
+    -- still get their default color.
+    local rawColor = role == "infected" and M.session.settings.infectedColor or M.session.settings.survivorColor
+    if not rawColor then return end
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if not myVeh then return end
     local veh = myVeh.veh
@@ -268,6 +280,16 @@ local function onBJRequestCanSpawnVehicle(req, model, config, action)
         if myVeh and myVeh.veh.jbeam ~= beamjoy_vehicles.WALKING then
             req.state = false
         end
+    end
+    -- Real bug: "replace" (a normal vehicle-selector tile pick) was never rejected here at all,
+    -- regardless of isGameLocked() - only clone/spawn were, since a replace deletes the existing
+    -- vehicle itself rather than leaving two around, which is all this function originally cared
+    -- about. That left a participant free to swap to a completely different vehicle mid-round with
+    -- zero consequence once COUNTDOWN starts, since a replace goes through the vehicle selector,
+    -- not "spawn"/"clone". Per direct request: a locked-in participant shouldn't be able to change
+    -- vehicle at all once the countdown has started, not just be prevented from having two at once.
+    if action == "replace" then
+        req.state = false
     end
 end
 

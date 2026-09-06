@@ -320,6 +320,17 @@ local function onBJRequestCanSpawnVehicle(req, model, config, action)
             req.state = false
         end
     end
+    -- Real bug: "replace" (a normal vehicle-selector tile pick) was never rejected here at all,
+    -- regardless of isHuntLocked() - only clone/spawn were, since a replace deletes the existing
+    -- vehicle itself rather than leaving two around, which is all this function originally cared
+    -- about. Even with an activeVehiclePool() restricting WHICH vehicle, that still let a
+    -- locked-in participant swap to any other pool-allowed vehicle mid-hunt with zero consequence.
+    -- Per direct request: a locked-in participant shouldn't be able to change vehicle at all once
+    -- the countdown has started, not just be prevented from having two at once or from leaving an
+    -- allowed pool. See infectedRunner.lua's own identical addition.
+    if action == "replace" then
+        req.state = false
+    end
 end
 
 local function onInit()

@@ -6,6 +6,7 @@
     "beamjoy.common.disabled": "Disabled",
     "beamjoy.common.invalid": "Invalid",
     "beamjoy.common.reset": "Reset",
+    "beamjoy.cmps.colorPicker.clear": "Clear color",
     "beamjoy.common.preview": "Preview",
     "beamjoy.common.confirm": "Confirm",
     "beamjoy.common.cancel": "Cancel",

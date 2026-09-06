@@ -210,6 +210,15 @@ angular
                     open();
                 }
             };
+            // Real gap: no way to go back to "no color set" (free paint choice for that role)
+            // once one had been picked, short of editing the saved data directly.
+            this.clear = (event) => {
+                event.stopPropagation();
+                if (this.disabled) return;
+                if (colorPicker.ctrl === this) close();
+                this.ngModel = null;
+                $scope.$applyAsync();
+            };
             $scope.$watch(
                 () => this.ngModel,
                 () => {
