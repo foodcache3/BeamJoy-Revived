@@ -6,6 +6,17 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.72] - 2026-09-05
+
+### Fixed
+- **Traffic could still land a vehicle overlapping another one, mostly in multiplayer.** The
+  spawn-point search already rejects any point within 15m of a known vehicle (further ahead of a
+  fast-moving one), but that check runs before the point gets snapped to a random lane, and every
+  connected player spawns their own traffic independently, so a spot that looked clear on one
+  client can already be filled by another player's just-spawned vehicle before it network-syncs.
+  The actual final position is now re-checked immediately before committing to it, and simply
+  discarded (the existing retry loop tries again) rather than used, on a miss. *(client only)*
+
 ## [1.8.71] - 2026-09-05
 
 ### Fixed

@@ -307,6 +307,22 @@ local function getNewRandomSpawn(job)
                 legalDirection = true,
             })
         if job then job.sleep(.01) end
+        -- Real gap, shared with native's own live traffic (it calls findSafeSpawnPoint then
+        -- finalizeSpawnPoint the same two-step way): the vehicle-conflict check above ran against
+        -- spawnData.pos, the pre-lane route point, not the actual lane finalizeSpawnPoint just
+        -- randomly picked, so a wide multi-lane road can still land a vehicle a few meters into
+        -- whatever already occupies that lane. Multiplayer widens this further: every connected
+        -- player spawns their own traffic independently and concurrently, so a spot that looked
+        -- clear on THIS client a moment ago can already be filled by another player's just-spawned
+        -- vehicle that hasn't network-synced here yet. Re-checking the real final position right
+        -- before committing to it, as late as this client can possibly detect a conflict, and
+        -- simply giving up on this candidate (spawnNewTrafficVehicles' own `while not pos do`
+        -- caller already retries) instead of returning a bad point, closes both gaps as far as a
+        -- single client's own view of the world allows.
+        if not extensions.gameplay_traffic_trafficUtils.checkSpawnPoint(pos, origin.pos,
+                origin.minDistance, origin.maxDistance, 15, spawnData.n1, spawnData.n2) then
+            return
+        end
         local normal = map.surfaceNormal(pos, 1)
         return pos, quatFromDir(vec3(0, 1, 0):rotated(quatFromDir(dir, normal)), normal)
     end
