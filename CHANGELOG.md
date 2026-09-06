@@ -6,6 +6,16 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.81] - 2026-09-06
+
+### Changed
+- **Hunter and Infected arena editors split into Settings/Spawns(/Waypoints) tabs**, matching the
+  race editor's own already-established Settings/Waypoints/Starts split instead of scrolling
+  gameplay settings and spawn-point placement together in one long view. Infected gets
+  Settings/Spawns; Hunter gets Settings/Spawns/Waypoints (hunter/prey spawns and respawn hubs
+  under Spawns, the route under its own Waypoints tab). Editing itself is unchanged - this only
+  reorganizes how the editor is laid out. *(client only)*
+
 ## [1.8.80] - 2026-09-06
 
 ### Fixed

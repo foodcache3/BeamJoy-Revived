@@ -10,6 +10,16 @@ angular.module("beamjoy").component("bjConfigInfectedArena", {
     ) {
         const translate = $filter("translate");
 
+        // Real gap: settings and spawn placement used to live scrolled together in one long view.
+        // Split into tabs, mirroring the race editor's own already-established section split
+        // (windows/config/races/editor/app.js's own SECTIONS/activeSection/changeSection).
+        this.SECTIONS = ["settings", "spawns"];
+        this.activeSection = "settings";
+        this.changeSection = (event, section) => {
+            event.stopPropagation();
+            this.activeSection = section;
+        };
+
         // config for the shared <bj-point-list-editor>; see cmps/pointListEditor/ for what each
         // field means ; color/hasDir are Lua-only rendering concerns and live in
         // ui/infectedEditor.lua's own list specs instead, not duplicated here

@@ -22,6 +22,24 @@
         min-height: 0;
         overflow-y: auto;
     }
+    bj-config-hunter-arena .section-bar {
+        border-bottom: thin solid gray;
+    }
+    bj-config-hunter-arena .section-tab {
+        padding: 0.3em 0.6em;
+        border: thin solid gray;
+        border-radius: 0.3em;
+        border-bottom-left-radius: unset;
+        border-bottom-right-radius: unset;
+        background-color: rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease-in-out;
+    }
+    bj-config-hunter-arena .section-tab.active {
+        background-color: rgba(230, 92, 0, 0.44);
+    }
+    bj-config-hunter-arena .section-tab:hover {
+        color: rgb(241 255 164);
+    }
 </style>
 
 <div class="editor-root">
@@ -41,12 +59,35 @@
                 <icon name="save"></icon>
             </button>
         </div>
-        <bj-point-list-editor-toolbar events="$ctrl.pointListEvents"></bj-point-list-editor-toolbar>
+
+        <!-- Real gap: settings, spawn placement, and waypoints used to live scrolled together in
+             one long view, matching the race editor's own already-established Settings/Waypoints/
+             Starts split (windows/config/races/editor/app.html) instead of duplicating it here. -->
+        <div class="section-bar d-flex flex-wrap">
+            <div
+                class="section-tab cursor-pointer"
+                ng-repeat="section in $ctrl.SECTIONS"
+                ng-class="{active: $ctrl.activeSection === section}"
+                ng-click="$ctrl.changeSection($event, section)"
+            >
+                {{('beamjoy.window.config.tabs.hunterArena.sections.' + section) | translate}}
+            </div>
+        </div>
+        <bj-point-list-editor-toolbar
+            ng-if="$ctrl.activeSection === 'spawns' || $ctrl.activeSection === 'waypoints'"
+            events="$ctrl.pointListEvents"
+        ></bj-point-list-editor-toolbar>
     </div>
 
-    <div class="section-panel">
-    <bj-point-list-editor lists="$ctrl.pointLists" events="$ctrl.pointListEvents"></bj-point-list-editor>
+    <div class="section-panel" ng-if="$ctrl.activeSection === 'spawns'">
+    <bj-point-list-editor lists="$ctrl.spawnPointLists" events="$ctrl.pointListEvents"></bj-point-list-editor>
+    </div>
 
+    <div class="section-panel" ng-if="$ctrl.activeSection === 'waypoints'">
+    <bj-point-list-editor lists="$ctrl.waypointPointLists" events="$ctrl.pointListEvents"></bj-point-list-editor>
+    </div>
+
+    <div class="section-panel" ng-if="$ctrl.activeSection === 'settings'">
     <bj-accordion id="hunter-arena-defaults-roles" no-border-bottom="true">
     <accordion-title>
         <h5>{{'beamjoy.window.config.tabs.hunterArena.sections.rolesAndReveal' | translate}}</h5>
@@ -242,5 +283,6 @@
         </table>
     </accordion-content>
 </bj-accordion>
+    </div>
     </div>
 </div>

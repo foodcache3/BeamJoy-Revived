@@ -10,15 +10,31 @@ angular.module("beamjoy").component("bjConfigHunterArena", {
     ) {
         const translate = $filter("translate");
 
+        // Real gap: settings, spawn placement, and waypoints used to live scrolled together in
+        // one long view. Split into tabs, mirroring the race editor's own already-established
+        // section split (windows/config/races/editor/app.js's own SECTIONS/activeSection/
+        // changeSection).
+        this.SECTIONS = ["settings", "spawns", "waypoints"];
+        this.activeSection = "settings";
+        this.changeSection = (event, section) => {
+            event.stopPropagation();
+            this.activeSection = section;
+        };
+
         // config for the shared <bj-point-list-editor>; see cmps/pointListEditor/ for what each
         // field means ; color/hasDir/defaultRadius are Lua-only rendering concerns and live in
-        // ui/hunterEditor.lua's own list specs instead, not duplicated here
-        this.pointLists = [
+        // ui/hunterEditor.lua's own list specs instead, not duplicated here. Split across the
+        // Spawns/Waypoints tabs above (bjPointListEditor only ever renders whichever list keys are
+        // actually in the array passed to it - see that component's own comment - so this split is
+        // purely which keys each tab's own instance is handed, nothing else changes).
+        this.spawnPointLists = [
             { key: "hunterSpawns", labelKey: "beamjoy.window.config.tabs.hunterArena.hunterSpawn", min: 2 },
             { key: "preySpawns", labelKey: "beamjoy.window.config.tabs.hunterArena.preySpawn", min: 2 },
-            { key: "waypoints", labelKey: "beamjoy.window.config.tabs.hunterArena.waypoint", min: 2, hasRadius: true },
             // no minimum : entirely optional, only consulted when hunterRespawnStrategy === "hubs"
             { key: "respawnHubs", labelKey: "beamjoy.window.config.tabs.hunterArena.respawnHub" },
+        ];
+        this.waypointPointLists = [
+            { key: "waypoints", labelKey: "beamjoy.window.config.tabs.hunterArena.waypoint", min: 2, hasRadius: true },
         ];
         this.pointListEvents = {
             listsUpdate: "BJEditorHunterArenaListsUpdate",
