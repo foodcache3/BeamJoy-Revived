@@ -6,6 +6,18 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.83] - 2026-09-07
+
+### Removed
+- **Infected's native-GPS beacon to the sole remaining survivor, entirely, per direct request.**
+  This was also the confirmed root cause of the camera issue reported around getting tagged/
+  infected (see 1.8.82 below for the full mechanism): it passed a raw vehicle ID to
+  `core_groundMarkers.setPath`, which only ever accepts a navgraph node name, a `{x,y,z}` table, or
+  a vec3 position, crashing native route-building code right at the end of the countdown whenever
+  exactly one survivor was left. Rather than keep a fixed version of a feature that wasn't wanted,
+  it's been removed outright. Hunter's own equivalent (GPS guidance to the fugitive's next
+  waypoint) already passed a real position and is unaffected. *(client only)*
+
 ## [1.8.82] - 2026-09-07
 
 ### Fixed

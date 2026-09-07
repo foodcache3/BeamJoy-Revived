@@ -70,11 +70,6 @@ local M = {
     ---@type integer? same anchor treatment for the round-survival countdown, spectator side
     spectatingRoundDeadlineTargetMs = nil,
 
-    ---@type integer? gameVehID the native GPS is currently pointed at (the sole remaining
-    ---survivor's own vehicle), tracked so updateGpsGuidance only re-issues setPath when the actual
-    ---target changes, not every slow tick
-    lastGpsTargetVid = nil,
-
     lastHudPushMs = nil,
 
     ---@type BJInfectedSession? a session being watched as a pure non-participant, mirrors
@@ -400,10 +395,6 @@ local function clearGameState()
     M.survivorDiagCache = {}
     M.taggedVids = {}
     M.myVehicleVid = nil
-    if M.lastGpsTargetVid ~= nil then
-        M.lastGpsTargetVid = nil
-        extensions.core_groundMarkers.setPath(nil)
-    end
     restoreOriginalPaint()
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if myVeh then
@@ -799,58 +790,23 @@ local function pushCountdown()
     end
 end
 
---- native-GPS beacon to the sole remaining survivor, for every infected participant and every
---- spectator, once exactly one survivor is left. Ported from BJI's own equivalent (see
---- ScenarioInfected.lua's slowTick), an endgame-tension nicety that also keeps a round from
---- dragging on in a genuinely huge, empty map once the chase is already effectively decided.
---- Re-issued only when the actual target changes, same "setPath renders on its own every frame,
---- nothing here needs to re-call it just to keep it visible" reasoning as hunterRunner.lua's own
---- updateGpsGuidance.
---- Real bug, root cause of "camera goes stuck right at the end of the countdown as infected":
---- core_groundMarkers.setPath(wp, options) (confirmed by reading the installed game's own
---- core/groundMarkers.lua) only ever accepts a navgraph node NAME (string), a {x,y,z} position
---- table, or an already-vec3 position - never a raw game vehicle ID. This passed the survivor's
---- bare vid straight through; native route-building code tried to treat that number as a
---- position and threw ("attempt to index local 'b' (a number value)", lua/common/mathlib.lua) from
---- deep inside a route/pathfinding call. Critically, that throw happens INSIDE this file's own
---- onSlowUpdate, called via extensions.hook's plain `func(...)` loop with no pcall anywhere in the
---- chain (confirmed by reading the installed game's own common/extensions.lua) - so the exception
---- doesn't just fail this one feature, it unwinds straight up through main.lua's own onUpdate and
---- out into whatever native per-frame work was scheduled to run right after it that same frame,
---- which lines up with a camera update going missing for the rest of the round rather than just
---- this GPS marker failing quietly.
----
---- Fixed by resolving the vid to its actual live position before ever calling setPath, and by
---- refreshing that position every tick while relevant instead of only on a target-identity change:
---- passing a vid was never capable of live-following a moving target either (setPath has no
---- concept of "track this vehicle"), so the old identity-only guard would have frozen the marker
---- at the survivor's spawn position for the whole round even without the crash.
-local function updateGpsGuidance()
-    local session = M.session or M.spectatingSession
-    local participant = M.session and getSelfParticipant() or nil
-    local relevant = session and session.state == "GAME" and (not M.session or
-        (participant and participant.role == "infected"))
-    local targetVid, targetPos
-    if relevant then
-        local survivors = table.filter(session.participants, function(p) return p.role == "survivor" end)
-        if #survivors == 1 then
-            local mpVeh = beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == survivors[1].playerName end)
-            local fresh = mpVeh and beamjoy_vehicles.getVehicle(mpVeh.vid)
-            if fresh and fresh.position then
-                targetVid = mpVeh.vid
-                targetPos = fresh.position
-            end
-        end
-    end
-    if targetPos then
-        M.lastGpsTargetVid = targetVid
-        extensions.core_groundMarkers.setPath({ targetPos.x, targetPos.y, targetPos.z })
-    elseif M.lastGpsTargetVid then
-        M.lastGpsTargetVid = nil
-        extensions.core_groundMarkers.setPath(nil)
-    end
-end
-
+--- Real bug, removed entirely per direct request (this feature was never wanted): the native-GPS
+--- beacon to the sole remaining survivor used to live here, ported from BJI's own equivalent. It
+--- was also the actual root cause of "camera goes stuck right at the end of the countdown as
+--- infected" - core_groundMarkers.setPath(wp, options) (confirmed by reading the installed game's
+--- own core/groundMarkers.lua) only ever accepts a navgraph node NAME (string), a {x,y,z} position
+--- table, or an already-vec3 position, never a raw game vehicle ID, but this passed the survivor's
+--- bare vid straight through. Native route-building code tried to treat that number as a position
+--- and threw ("attempt to index local 'b' (a number value)", lua/common/mathlib.lua) from deep
+--- inside a route/pathfinding call, called via extensions.hook's plain `func(...)` loop with no
+--- pcall anywhere in the chain (confirmed by reading the installed game's own common/
+--- extensions.lua). Confirmed from a real BeamNG.log capture that this left core_groundMarkers'
+--- own internal route state permanently corrupted afterward: its own onPreRender hook
+--- (generateRouteDecals) then threw on every single subsequent render frame for the rest of the
+--- round, and since it sits earlier than this mod's own per-frame hook in that same dispatch list,
+--- everything scheduled after it - including this mod's own onUpdate/onSlowUpdate cascade, which
+--- native camera tracking effectively depends on working correctly - silently stopped running for
+--- the whole rest of the round instead of just this one feature failing quietly.
 --- Real bug: getCurrentOwn() (ultimately be:getPlayerVehicle(0)) can itself go nil for stretches
 --- of gameplay unrelated to genuinely having no vehicle - the exact same native call a third-party
 --- mod crashed on elsewhere this session, right around vehicle-attach transitions - which broke
@@ -1012,7 +968,6 @@ end
 local function onSlowUpdate()
     updateGridCountdown()
     refreshTagCandidates()
-    updateGpsGuidance()
     local now = GetCurrentTimeMillis()
     if not M.lastHudPushMs or now - M.lastHudPushMs > 900 then
         M.lastHudPushMs = now
