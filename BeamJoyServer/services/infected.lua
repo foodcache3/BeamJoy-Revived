@@ -38,6 +38,15 @@
 ---default false
 ---@field survivorColor BJColor? RGBA 0-1, default a soft green
 ---@field infectedColor BJColor? RGBA 0-1, default red
+---@field hideInfectedNametags boolean? hides an infected participant's whole nametag from
+---survivor viewers specifically ; default false ; see infectedRunner.lua's own
+---isHiddenInfectedVehicle
+---@field resetRelockSeconds integer? seconds resetting is blocked for, right after any reset
+---actually happens ; default 1, matching BJI's own resetLock convention there (a fixed,
+---non-configurable 1s window) ; 0 disables the relock entirely. Independent of, and on top of,
+---the always-on speed gate (RESET_MAX_SPEED in infectedRunner.lua, not host-configurable) that
+---blocks resetting outright while moving, matching the community "Outbreak" mod's own default
+---disableResetsWhenMoving/maxResetMovingSpeed behavior
 ---@field config {model: string, config: string, label: string?, parts: table?}? optional forced
 ---vehicle, applied to every participant instead of letting them pick freely ; nil = free choice.
 ---Same {model, config, label, parts} shape services/vehiclePresets.lua's own preset entries already
@@ -117,6 +126,7 @@ local function sanitizeArena(arena)
     -- every host wants either, so this is a host-configurable choice, not a hardcoded behavior
     -- change; see infectedRunner.lua's own isHiddenInfectedVehicle for the actual effect.
     arena.defaults.hideInfectedNametags = arena.defaults.hideInfectedNametags == true
+    arena.defaults.resetRelockSeconds = math.max(0, tonumber(arena.defaults.resetRelockSeconds) or 1)
     if type(arena.defaults.survivorColor) ~= "table" then arena.defaults.survivorColor = nil end
     if type(arena.defaults.infectedColor) ~= "table" then arena.defaults.infectedColor = nil end
     if type(arena.defaults.config) ~= "table" or type(arena.defaults.config.model) ~= "string" or

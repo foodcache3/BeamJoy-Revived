@@ -460,6 +460,8 @@
     "beamjoy.window.config.tabs.infectedArena.survivorsStartDelay.tooltip": "Seconds before survivors are released once the round starts.",
     "beamjoy.window.config.tabs.infectedArena.infectedStartDelay": "Infected release delay",
     "beamjoy.window.config.tabs.infectedArena.infectedStartDelay.tooltip": "Seconds before the round's original infected are released, their head start over the infected.",
+    "beamjoy.window.config.tabs.infectedArena.resetRelockSeconds": "Reset relock",
+    "beamjoy.window.config.tabs.infectedArena.resetRelockSeconds.tooltip": "Seconds resetting is blocked for right after any reset actually happens. 0 disables it. Independent of the always-on rule that resetting is only ever allowed while nearly stationary.",
     "beamjoy.window.config.tabs.infectedArena.enableColors": "Force role paint",
     "beamjoy.window.config.tabs.infectedArena.enableColors.tooltip": "Repaints every participant's vehicle to a flat role color and disables free paint choice while a round is active.",
     "beamjoy.window.config.tabs.infectedArena.survivorColor": "Survivor color",

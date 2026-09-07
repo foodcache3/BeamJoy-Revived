@@ -11,6 +11,13 @@
 
 local CAMERA_RELEASE_SECONDS = 3
 local TAG_CANDIDATE_RADIUS = 50 -- slow-tick coarse cull distance, matching BJI's own equivalent
+-- Real gap, per direct request: resetting mid-round used to be entirely free (no gate at all),
+-- unlike Races (host-configurable ghost+freeze penalty, or an outright block under "norespawn")
+-- and Hunter (never blocked, but a host-configurable escalating freeze). Matches the community
+-- "Outbreak" mod's own default (disableResetsWhenMoving/maxResetMovingSpeed, both default true/2
+-- in its Server/OutBreak/main.lua) : resetting is only ever allowed below this speed, so it can't
+-- be used to instantly escape being chased/rammed.
+local RESET_MAX_SPEED = 2
 
 local M = {
     dependencies = { "beamjoy_infected", "beamjoy_vehicles", "beamjoy_players", "camera" },
@@ -78,6 +85,16 @@ local M = {
 
     ---@type table[] last-known open/joinable infected lobby list, for the remount-gap request-replay
     openSessions = {},
+
+    ---@type boolean true while the local vehicle is moving faster than RESET_MAX_SPEED, updated
+    ---every frame ; resets are blocked while this is true (see onBJRequestRestrictions), same
+    ---policy as the community "Outbreak" mod's own default
+    movingTooFastToReset = false,
+    ---@type integer? GetCurrentTimeMillis domain: resets are blocked until this passes, set right
+    ---after any reset actually happens (see onVehicleResetted) for session.settings.resetRelockSeconds
+    ---- a flat anti-spam debounce, not an escalating penalty, matching BJI's own resetLock
+    ---convention (there: a fixed, non-configurable 1s ; here: host-configurable)
+    resetRelockUntilMs = nil,
 }
 
 ---@return BJInfectedParticipant?
@@ -338,13 +355,29 @@ local function onBJRequestRestrictions(restrictions)
     restrictions:addAll({ "toggle_slow_motion", "slower_motion", "faster_motion", "pause" }, true)
 
     -- Resetting/recovering during COUNTDOWN (frozen at the grid) is always blocked, same as
-    -- races'/hunter's own COUNTDOWN block. No GAME-time reset restriction at all : unlike Hunter,
-    -- crashing has no special penalty here, a survivor or infected can reset freely mid-round.
+    -- races'/hunter's own COUNTDOWN block.
     if M.session.state == "COUNTDOWN" then
         restrictions:addAll({
             "recover_vehicle", "recover_vehicle_alt", "recover_to_last_road",
             "reset_physics", "reset_all_physics", "reload_vehicle",
         }, true)
+    elseif M.session.state == "GAME" then
+        -- Real gap, per direct request: these three all explicitly search for (and can teleport
+        -- a meaningful distance to) a different "safe" spot (confirmed by reading the installed
+        -- game's own core/input/actions/gameplay.json: recover_vehicle -> recovery.startRecovering,
+        -- recover_to_last_road -> spawn.teleportToLastRoad), which would let a reset be used to
+        -- simply escape a chase. Always blocked now, GAME-wide, with no exception - "forced to
+        -- reset in place" per direct request.
+        restrictions:addAll({ "recover_vehicle", "recover_vehicle_alt", "recover_to_last_road" }, true)
+
+        -- reset_physics/reset_all_physics/reload_vehicle, by contrast, all resolve to
+        -- be:resetVehicle() (confirmed by reading freeroam.lua's own onResetGameplay) - an
+        -- in-place physics/damage reset with no repositioning search, so these are the ones
+        -- actually left reachable, gated on speed and the post-reset relock instead of blocked
+        -- outright.
+        if M.movingTooFastToReset or (M.resetRelockUntilMs and GetCurrentTimeMillis() < M.resetRelockUntilMs) then
+            restrictions:addAll({ "reset_physics", "reset_all_physics", "reload_vehicle" }, true)
+        end
     end
 end
 
@@ -390,6 +423,9 @@ local function clearGameState()
     M.gridTimeoutTargetMs = nil
     M.holdReleaseTargetMs = nil
     async.removeTask("BJInfectedReleaseFreeze")
+    M.movingTooFastToReset = false
+    M.resetRelockUntilMs = nil
+    async.removeTask("BJInfectedResetRelock")
     M.nearbySurvivorVids = {}
     M.selfDiag = nil
     M.survivorDiagCache = {}
@@ -898,7 +934,41 @@ local function updateTagDetection()
     end
 end
 
+--- Real gap, per direct request: this file never had an onVehicleResetted hook at all before.
+--- Two separate real gaps fixed here, both only reachable via a mid-round reset (see
+--- onBJRequestRestrictions' own GAME-state block for the speed gate itself, checked live rather
+--- than here since it needs to hold BEFORE a reset is even allowed, not just react after one):
+--- 1) "ghosting needs to be fully disabled for infected" - a mid-round reset/recover is also the
+---    moment vehicles.lua's own generic Freeroam respawn-ghost protection (applyRespawnProtection,
+---    host-configurable duration) gets re-applied, and with no hook here to strip it back off, a
+---    reset genuinely left a participant non-collidable (breaking contact-based tagging) for
+---    however long that's configured. Same fix, same reasoning as hunterRunner.lua's own
+---    identical treatment; vehicles.lua's own onVehicleResetted (which applies the generic
+---    protection) runs first, ahead of this one, per main.lua's dependency load order.
+--- 2) a customizable relock after any reset actually happens, on top of (not instead of) the
+---    speed gate, matching BJI's own resetLock convention (there: a fixed, non-configurable 1s
+---    window after every reset ; here: host-configurable, 0 to disable).
 ---@param vid integer
+local function onVehicleResetted(vid)
+    if not M.session or M.session.state ~= "GAME" then return end
+    local participant = getSelfParticipant()
+    if not participant then return end
+    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    if not myVeh or myVeh.vid ~= vid then return end
+
+    beamjoy_vehicles.setGhostReason(vid, "respawn", false)
+
+    local relockSec = M.session.settings.resetRelockSeconds or 0
+    async.removeTask("BJInfectedResetRelock")
+    if relockSec > 0 then
+        M.resetRelockUntilMs = GetCurrentTimeMillis() + relockSec * 1000
+        extensions.beamjoy_restrictions.update()
+        async.delayTask(function()
+            extensions.beamjoy_restrictions.update()
+        end, relockSec * 1000, "BJInfectedResetRelock")
+    end
+end
+
 local function onBJVehicleInstantiated(vid)
     if not M.session then return end
     local participant = getSelfParticipant()
@@ -910,10 +980,10 @@ local function onBJVehicleInstantiated(vid)
         -- a genuinely new vehicle object appeared mid-round (reload_vehicle, or any other full
         -- respawn) : ordinary reset/recover keeps the same object, so the live NGPaint override
         -- applyRoleColor already applied survives those fine on its own and never reaches this
-        -- hook at all (no onVehicleResetted listener exists in this file, on purpose : Infected
-        -- has no reset penalty). A real respawn is different, it's a brand new object with none
-        -- of that override, and no snapshot of ITS own default color either, so both need
-        -- redoing from scratch, same as a fresh round start.
+        -- hook at all - onVehicleResetted above only ever fires for an ordinary in-place reset,
+        -- the same object surviving intact. A real respawn is different, it's a brand new object
+        -- with none of that override, and no snapshot of ITS own default color either, so both
+        -- need redoing from scratch, same as a fresh round start.
         M.myVehicleVid = vid
         M.originalPaints = nil
         applyRoleColor(participant.role)
@@ -947,22 +1017,32 @@ local function onBJVehicleInstantiated(vid)
     end
 end
 
---- Real bug: getting tagged (or tagging someone) could leave the camera stuck in free cam with no
---- manual camera switch able to reach a working one again, and the exact native trigger couldn't
---- be pinned down (no vehicle recreate is actually involved in a plain tag - beamjoy_vehicles.paint
---- only ever calls core_vehicle_manager.liveUpdateVehicleColors, a live update, confirmed by
---- reading the installed game's own core/vehicle/manager.lua). Rather than chase every possible
---- native trigger, this is a continuous per-frame watchdog: camera.blockCameras' own
---- implementation already kicks OUT of an already-active blocked camera the instant it's called
---- (see camera.lua), so calling it every frame while game-locked is a cheap, unconditional
---- guarantee that the camera can never stay stuck in FREE/BIG_MAP/etc. for more than one frame,
---- regardless of what actually knocked it there. A genuine no-op whenever the camera's already
---- fine (blockCameras' own internal check bails out immediately).
+--- Real gap, per direct request: resetting used to have no speed gate at all. Checked every frame
+--- (not just on the discrete events restrictions.lua's own update() normally reacts to, since
+--- speed changes continuously), but only actually recomputes restrictions when the gate's own
+--- state changes, not every frame - matching the community "Outbreak" mod's own identical
+--- "only touch the action filter on an actual isStopped flip" approach in its own onPreRender.
+local function updateResetGate()
+    if not M.session or M.session.state ~= "GAME" then
+        if M.movingTooFastToReset then
+            M.movingTooFastToReset = false
+        end
+        return
+    end
+    local myVeh = myCurrentVehicle()
+    local tooFast = myVeh ~= nil and myVeh.veh:getVelocity():length() > RESET_MAX_SPEED or false
+    if tooFast ~= M.movingTooFastToReset then
+        M.movingTooFastToReset = tooFast
+        extensions.beamjoy_restrictions.update()
+    end
+end
+
 local function onUpdate()
     if M.scenarioLocked then
         updateCountdown()
     end
     updateTagDetection()
+    updateResetGate()
 end
 
 local function onSlowUpdate()
@@ -1015,6 +1095,7 @@ M.onSlowUpdate = onSlowUpdate
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onBJRequestCanSpawnVehicle = onBJRequestCanSpawnVehicle
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
+M.onVehicleResetted = onVehicleResetted
 
 M.onSessionUpdate = onSessionUpdate
 M.onSessionsList = onSessionsList

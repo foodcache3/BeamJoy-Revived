@@ -6,6 +6,35 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.84] - 2026-09-07
+
+Client v1.8.84, server v1.8.63. Server-side change in this range needs deploying to the live
+server separately; the client is a straight mod update.
+
+### Added
+- **Reworked Infected's reset policy, per direct request.** Resetting used to be entirely free
+  mid-round, the most permissive of any mode in this project. Researched against both reference
+  mods this project is based on (BJI/BeamJoy Free's ScenarioInfected.lua, and the community
+  "Outbreak" mod's own outbreak.lua) to inform the new behavior:
+  - Recovering/teleporting to a different spot (`recover_vehicle`, `recover_vehicle_alt`,
+    `recover_to_last_road` - confirmed by reading the installed game's own
+    core/input/actions/gameplay.json that these explicitly search for or teleport to a different
+    location) is now always blocked during GAME. Resetting always happens in place.
+  - The remaining in-place reset actions (`reset_physics`, `reset_all_physics`, `reload_vehicle` -
+    confirmed these resolve to `be:resetVehicle()`, no repositioning) are only allowed while
+    moving slower than a fixed threshold, matching the community "Outbreak" mod's own default
+    `disableResetsWhenMoving`/`maxResetMovingSpeed` behavior, so a reset can't be used to
+    instantly escape a chase.
+  - New host-configurable "Reset relock" setting (Config > Infected Arena, default 1 second, 0 to
+    disable): resetting is additionally blocked for this long right after any reset actually
+    happens, matching BJI's own resetLock convention (there, a fixed non-configurable 1s window).
+  - **Real bug, found during this same research: a mid-round reset left a participant genuinely
+    non-collidable for a while afterward.** Infected never had its own `onVehicleResetted` hook
+    (unlike Hunter, which already needed one for the same reason) to strip back off the generic
+    Freeroam respawn-ghost protection every vehicle reset re-applies by default, so a reset
+    actually broke contact-based tagging for however long that protection is configured to last.
+    Fixed alongside the above. *(server + client)*
+
 ## [1.8.62] - 2026-09-07 (server only)
 
 Server v1.8.62. No client changes.

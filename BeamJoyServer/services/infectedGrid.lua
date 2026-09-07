@@ -54,6 +54,9 @@
 ---@field infectedColor BJColor?
 ---@field hideInfectedNametags boolean hides an infected participant's whole nametag from
 ---survivor viewers specifically ; see infectedRunner.lua's own isHiddenInfectedVehicle
+---@field resetRelockSeconds integer seconds resetting is blocked for right after any reset
+---actually happens ; 0 disables it. Independent of the always-on speed gate, see
+---infectedRunner.lua's own RESET_MAX_SPEED
 ---@field config table?
 
 ---@class BJInfectedSession
@@ -309,6 +312,8 @@ local function buildSettings(arena, overrides)
         infectedColor = enableColors and (type(overrides.infectedColor) == "table" and overrides.infectedColor or
             defaults.infectedColor) or nil,
         hideInfectedNametags = hideInfectedNametags == true,
+        resetRelockSeconds = math.max(0, tonumber(overrides.resetRelockSeconds) or
+            defaults.resetRelockSeconds or 1),
         config = type(config) == "table" and config or nil,
     }
 end

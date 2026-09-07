@@ -112,6 +112,12 @@
                 <td><bj-slider ng-model="$ctrl.defaults.infectedStartDelay" min="0" max="30" hard-max="60" step="1"></bj-slider></td>
             </tr>
             <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.resetRelockSeconds.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.infectedArena.resetRelockSeconds' | translate}}
+                </td>
+                <td><bj-slider ng-model="$ctrl.defaults.resetRelockSeconds" min="0" max="10" hard-max="60" step="1"></bj-slider></td>
+            </tr>
+            <tr>
                 <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.enableColors.tooltip' | translate}}">
                     {{'beamjoy.window.config.tabs.infectedArena.enableColors' | translate}}
                 </td>
