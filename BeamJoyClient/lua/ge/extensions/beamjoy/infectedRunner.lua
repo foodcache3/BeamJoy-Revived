@@ -806,26 +806,48 @@ end
 --- Re-issued only when the actual target changes, same "setPath renders on its own every frame,
 --- nothing here needs to re-call it just to keep it visible" reasoning as hunterRunner.lua's own
 --- updateGpsGuidance.
+--- Real bug, root cause of "camera goes stuck right at the end of the countdown as infected":
+--- core_groundMarkers.setPath(wp, options) (confirmed by reading the installed game's own
+--- core/groundMarkers.lua) only ever accepts a navgraph node NAME (string), a {x,y,z} position
+--- table, or an already-vec3 position - never a raw game vehicle ID. This passed the survivor's
+--- bare vid straight through; native route-building code tried to treat that number as a
+--- position and threw ("attempt to index local 'b' (a number value)", lua/common/mathlib.lua) from
+--- deep inside a route/pathfinding call. Critically, that throw happens INSIDE this file's own
+--- onSlowUpdate, called via extensions.hook's plain `func(...)` loop with no pcall anywhere in the
+--- chain (confirmed by reading the installed game's own common/extensions.lua) - so the exception
+--- doesn't just fail this one feature, it unwinds straight up through main.lua's own onUpdate and
+--- out into whatever native per-frame work was scheduled to run right after it that same frame,
+--- which lines up with a camera update going missing for the rest of the round rather than just
+--- this GPS marker failing quietly.
+---
+--- Fixed by resolving the vid to its actual live position before ever calling setPath, and by
+--- refreshing that position every tick while relevant instead of only on a target-identity change:
+--- passing a vid was never capable of live-following a moving target either (setPath has no
+--- concept of "track this vehicle"), so the old identity-only guard would have frozen the marker
+--- at the survivor's spawn position for the whole round even without the crash.
 local function updateGpsGuidance()
     local session = M.session or M.spectatingSession
     local participant = M.session and getSelfParticipant() or nil
     local relevant = session and session.state == "GAME" and (not M.session or
         (participant and participant.role == "infected"))
-    local targetVid
+    local targetVid, targetPos
     if relevant then
         local survivors = table.filter(session.participants, function(p) return p.role == "survivor" end)
         if #survivors == 1 then
             local mpVeh = beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == survivors[1].playerName end)
-            targetVid = mpVeh and mpVeh.vid
+            local fresh = mpVeh and beamjoy_vehicles.getVehicle(mpVeh.vid)
+            if fresh and fresh.position then
+                targetVid = mpVeh.vid
+                targetPos = fresh.position
+            end
         end
     end
-    if targetVid ~= M.lastGpsTargetVid then
+    if targetPos then
         M.lastGpsTargetVid = targetVid
-        if targetVid then
-            extensions.core_groundMarkers.setPath(targetVid)
-        else
-            extensions.core_groundMarkers.setPath(nil)
-        end
+        extensions.core_groundMarkers.setPath({ targetPos.x, targetPos.y, targetPos.z })
+    elseif M.lastGpsTargetVid then
+        M.lastGpsTargetVid = nil
+        extensions.core_groundMarkers.setPath(nil)
     end
 end
 

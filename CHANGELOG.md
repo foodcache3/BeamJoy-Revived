@@ -6,6 +6,25 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.82] - 2026-09-07
+
+### Fixed
+- **Real bug, actual root cause of the camera issue reported around getting tagged/infected:
+  a fatal Lua error was thrown from Infected's own GPS-guidance-to-the-last-survivor feature right
+  at the end of the countdown (the moment GAME starts and this first has something to point at).**
+  `core_groundMarkers.setPath` only ever accepts a navgraph node name, a `{x,y,z}` table, or a
+  vec3 position, never a raw game vehicle ID; this passed the survivor's bare vehicle ID straight
+  through, which native route-building code choked on ("attempt to index local 'b' (a number
+  value)"), confirmed from a real BeamNG.log capture. Critically, that exception was thrown from
+  inside this mod's own `onSlowUpdate`, which the engine calls with no error-catching anywhere in
+  the chain, so it didn't just break the GPS marker quietly - it unwound straight up through the
+  main per-frame update loop, plausibly explaining why a camera update went missing for the rest
+  of the round instead of just failing silently. Fixed by resolving the vehicle ID to its actual
+  live position before calling setPath, and refreshing that position every tick instead of only
+  once (passing a raw vid was never capable of live-following a moving survivor either - the
+  marker would have stayed frozen at their spawn position all round even without the crash).
+  *(client only)*
+
 ## [1.8.81] - 2026-09-06
 
 ### Changed
