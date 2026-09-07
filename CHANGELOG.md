@@ -6,6 +6,15 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.62] - 2026-09-07 (server only)
+
+Server v1.8.62. No client changes.
+
+### Changed
+- **Infected's "Survivors release delay" now defaults to 0** (no head start freeze for survivors
+  at round start) instead of 5 seconds. Only affects new/never-configured arenas; an arena that
+  already has an explicit value saved keeps it. *(server only)*
+
 ## [1.8.83] - 2026-09-07
 
 ### Removed

@@ -15,7 +15,7 @@
 ---@field initialInfectedCount integer? how many participants start the round already infected,
 ---drawn randomly at COUNTDOWN unless staff force-assigns specific ones first ; default 1, clamped
 ---[1, participantCount - 1] at session-build time (needs at least 1 real survivor left over)
----@field survivorsStartDelay integer? seconds survivors stay frozen after GAME start ; default 5
+---@field survivorsStartDelay integer? seconds survivors stay frozen after GAME start ; default 0
 ---@field infectedStartDelay integer? seconds the round's ORIGINAL infected stay frozen after GAME
 ---start (their head start for survivors) ; default 10. A survivor tagged mid-round is never frozen
 ---at all, they're already driving
@@ -103,7 +103,7 @@ local function sanitizeArena(arena)
 
     arena.defaults = arena.defaults or {}
     arena.defaults.initialInfectedCount = math.max(1, math.floor(tonumber(arena.defaults.initialInfectedCount) or 1))
-    arena.defaults.survivorsStartDelay = math.max(0, tonumber(arena.defaults.survivorsStartDelay) or 5)
+    arena.defaults.survivorsStartDelay = math.max(0, tonumber(arena.defaults.survivorsStartDelay) or 0)
     arena.defaults.infectedStartDelay = math.max(0, tonumber(arena.defaults.infectedStartDelay) or 10)
     arena.defaults.roundDuration = math.clamp(math.floor(tonumber(arena.defaults.roundDuration) or 10), 1, 120)
     arena.defaults.gridReadyTimeout = math.max(0, tonumber(arena.defaults.gridReadyTimeout) or 15)

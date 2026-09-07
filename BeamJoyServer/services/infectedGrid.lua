@@ -294,7 +294,7 @@ local function buildSettings(arena, overrides)
         initialInfectedCount = math.max(1, math.floor(tonumber(overrides.initialInfectedCount) or
             defaults.initialInfectedCount or 1)),
         survivorsStartDelay = math.max(0, tonumber(overrides.survivorsStartDelay) or
-            defaults.survivorsStartDelay or 5),
+            defaults.survivorsStartDelay or 0),
         infectedStartDelay = math.max(0, tonumber(overrides.infectedStartDelay) or
             defaults.infectedStartDelay or 10),
         roundDuration = math.clamp(math.floor(tonumber(overrides.roundDuration) or
