@@ -758,9 +758,8 @@ local function onBJRequestCanSpawnVehicle(req, model, config, action)
     end
 
     -- per direct request : reject a genuinely ADDITIONAL simultaneous vehicle for any active
-    -- (not finished/dnf'd) participant, regardless of vehicle restriction. A normal tile pick
-    -- (action == "replace") is unaffected, since that always deletes the old vehicle itself ; same
-    -- reasoning/scope as hunterRunner.lua's own identical check
+    -- (not finished/dnf'd) participant, regardless of vehicle restriction. Same reasoning/scope as
+    -- hunterRunner.lua's own identical check.
     if isRaceLocked() then
         local participant = getSelfParticipant()
         if participant and not participant.finished and not participant.dnf then
@@ -773,6 +772,19 @@ local function onBJRequestCanSpawnVehicle(req, model, config, action)
                 if myVeh and myVeh.veh.jbeam ~= beamjoy_vehicles.WALKING then
                     req.state = false
                 end
+            end
+            -- Real bug: "replace" (a normal vehicle-selector tile pick) was never rejected here at
+            -- all, regardless of isRaceLocked() - only clone/spawn were, since a replace deletes
+            -- the existing vehicle itself rather than leaving two around, which is all this
+            -- function originally cared about. Even with an activeVehicleRestriction() limiting
+            -- WHICH vehicle, that still let a locked-in participant swap to any other
+            -- restriction-allowed vehicle mid-race with zero consequence. Per direct request : a
+            -- locked-in participant shouldn't be able to change vehicle at all once the countdown
+            -- has started, not just be prevented from having two at once or from leaving an
+            -- allowed restriction - matching hunterRunner.lua's/infectedRunner.lua's own identical
+            -- treatment.
+            if action == "replace" then
+                req.state = false
             end
         end
     end

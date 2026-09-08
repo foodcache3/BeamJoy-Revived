@@ -6,6 +6,28 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.94] - 2026-09-08
+
+Client v1.8.94. Client-only, no server-side change in this range.
+
+### Fixed
+- **Big Map wasn't actually blocked during Infected, unlike Races and Hunter.** `lua/ge/extensions/
+  bigmap.lua`'s own `getCurrentTaskdataTypeOrNil` override (the real, non-reactive fix - it makes
+  `enterBigMap` refuse outright at its own native entry point, the same check a vanilla mission
+  already relies on to block Big Map for itself, rather than the old approach of reactively
+  switching the camera back a frame after it had already started opening) already had the Infected
+  check written into it locally, but had never actually been deployed - the real repo and the
+  shipped zip still only had the original Race/Hunter-only version from v1.8.39. Deployed now, so
+  Infected gets the same clean block Races and Hunter already had, instead of the camera-block
+  layer's own unavoidable one-frame-late "zoom in, then get yanked back" glitch.
+- **Vehicle switching mid-race was never actually blocked in Races**, unlike Hunter/Infected (see
+  v1.8.80's identical fix there). `onBJRequestCanSpawnVehicle` rejected spawning an additional
+  vehicle or cloning one, but a normal vehicle-selector tile pick ("replace") was deliberately left
+  alone since it deletes the existing vehicle rather than leaving two around - which is a real
+  distinction for the "second vehicle" concern that check exists for, but still let a locked-in
+  racer freely swap to any other allowed vehicle mid-race with zero consequence. Blocked now too,
+  matching Hunter/Infected's own treatment exactly.
+
 ## [1.8.93] - 2026-09-08
 
 Client v1.8.93. Client-only, no server-side change in this range.

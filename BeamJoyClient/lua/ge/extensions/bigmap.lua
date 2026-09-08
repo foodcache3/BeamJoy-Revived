@@ -101,14 +101,19 @@ end
 --- refuses outright the instant `gameplay_missions_missionManager.getCurrentTaskdataTypeOrNil()`
 --- returns anything truthy (the same check a vanilla mission/scenario already relies on to block
 --- big map for itself). That function has exactly one caller in the entire game (confirmed by
---- search), so wrapping it here to also return truthy while race/hunt-locked covers every real
---- entry path at once, with zero side effects anywhere else. The camera-level block in
---- raceRunner.lua/hunterRunner.lua stays in place too, as a second, independent layer, in case
---- some other path ever manages to switch the active camera to "bigMap" regardless.
+--- search), so wrapping it here to also return truthy while race/hunt/infected-locked covers every
+--- real entry path at once, with zero side effects anywhere else. The camera-level block in
+--- raceRunner.lua/hunterRunner.lua/infectedRunner.lua stays in place too, as a second, independent
+--- layer, in case some other path ever manages to switch the active camera to "bigMap" regardless.
+---
+--- Real bug: this never got updated when Infected mode was added, so the map stayed fully
+--- openable (transition animation, UI overlay, and all) during an active Infected round, unlike
+--- Races and Hunter, both of which were already covered here.
 ---@return string?
 local function getCurrentTaskdataTypeOrNil()
     if (beamjoy_raceRunner and beamjoy_raceRunner.isRaceLocked()) or
-        (beamjoy_hunterRunner and beamjoy_hunterRunner.isHuntLocked()) then
+        (beamjoy_hunterRunner and beamjoy_hunterRunner.isHuntLocked()) or
+        (beamjoy_infectedRunner and beamjoy_infectedRunner.isGameLocked()) then
         return "beamjoySandbox"
     end
     return M.baseFunctions.gameplay_missions_missionManager.getCurrentTaskdataTypeOrNil()
