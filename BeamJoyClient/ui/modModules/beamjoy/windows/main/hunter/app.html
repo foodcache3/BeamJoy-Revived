@@ -310,7 +310,12 @@
     </div>
 </div>
 
-<div ng-if="!$ctrl.status && $ctrl.sessions.length > 0" class="mt-2">
+<!-- Real bug (same fix as infected/app.html): this used to show/allow joining any already-open
+     lobby regardless of $ctrl.arena.enabled, so a lobby created while the arena was valid stayed
+     fully joinable even after the arena got disabled (or its spawns dropped below minimum) out
+     from under it. Gating this on arena.enabled too keeps the tab honest: disabled means disabled,
+     not "disabled, but you can still join a game". -->
+<div ng-if="!$ctrl.status && $ctrl.arena.enabled && $ctrl.sessions.length > 0" class="mt-2">
     <h5>{{'beamjoy.window.main.tabs.hunter.openLobbies' | translate}}</h5>
     <div class="session-row d-flex align-center gap-1 p-1" ng-repeat="session in $ctrl.sessions">
         <span class="flex-grow-1">

@@ -6,6 +6,22 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.86] - 2026-09-08
+
+Client v1.8.86, server v1.8.65. Server-side change in this range needs deploying to the live
+server separately; the client is a straight mod update.
+
+### Fixed
+- **Applied the same two Infected arena-editor fixes (v1.8.85) to Hunter.** Hunter's arena save
+  and lobby-join code was a direct structural mirror of Infected's, so it had the exact same two
+  bugs: a rejected `hunterArenaSave` never sent a definitive response, leaving the editor's
+  enabled toggle and all four point lists stuck showing an unsaved attempt forever even though the
+  server's real arena was untouched; and the "Open Lobbies" list never checked `arena.enabled`, so
+  a lobby stayed joinable by new players even after its arena got disabled. Same fix in both
+  places: the server always answers the save now (and the editor resyncs + shows the real error on
+  failure), and `hunterJoin` now applies the same enabled/spawn-minimum gate `hunterStart` already
+  did, alongside hiding the list client-side while the arena's disabled.
+
 ## [1.8.85] - 2026-09-08
 
 Client v1.8.85, server v1.8.64. Server-side change in this range needs deploying to the live

@@ -667,6 +667,20 @@ local function hunterJoin(ctxt, sessionId)
     if not ctxt.sender then return end
     local session = M.sessions[sessionId]
     if not session or session.state ~= "LOBBY" or not session.joinable then return end
+    -- Real bug (same fix as infectedGrid.lua's own infectedJoin): a session already open (still
+    -- using its own frozen arenaSnapshot for the actual round, same as always) used to stay
+    -- joinable by brand-new players even after the LIVE arena got disabled or dropped below the
+    -- spawn minimums out from under it - the client UI now hides the "Open Lobbies" list in that
+    -- case (see hunter/app.html), but a modified client could still send this event directly, so
+    -- the same gate hunterStart already applies to creating a session belongs here too, for anyone
+    -- trying to join one that already exists.
+    local arena = services_hunter.getArena()
+    if not arena or not arena.enabled then return end
+    if #arena.hunterSpawns < services_hunter.MIN_HUNTER_SPAWNS or
+        #arena.preySpawns < services_hunter.MIN_PREY_SPAWNS or
+        #arena.waypoints < services_hunter.MIN_WAYPOINTS then
+        return
+    end
     if session.participants[ctxt.senderID] then return end
     if findSessionByParticipant(ctxt.senderID) then
         return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",

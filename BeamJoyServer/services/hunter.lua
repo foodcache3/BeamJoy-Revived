@@ -274,8 +274,16 @@ end
 local function hunterArenaSave(ctxt, arena)
     if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
             BJ_PERMISSIONS.EditHunterArenas) then
-        return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
-            services_lang.get("error.insufficientPermissions", ctxt.sender.lang))
+        local permErr = services_lang.get("error.insufficientPermissions", ctxt.sender.lang)
+        communications_tx.sendToPlayer(ctxt.senderID, "toast", "error", permErr)
+        -- Real bug (same one infected.lua's own infectedArenaSave had): this used to return here
+        -- with no "hunterArenaSaved" response at all, so the editor's one-use handler for it just
+        -- expired silently 5s later (see communications.lua's own addOneUseHandler : a timed-out
+        -- handler is dropped, never called with a failure value) - the editor kept showing
+        -- whatever unsaved edit the player just tried to make forever, with no indication the
+        -- server never actually accepted it. Always answering explicitly lets onSave resync the
+        -- editor back to the real, still-untouched server data instead.
+        return communications_tx.sendToPlayer(ctxt.senderID, "hunterArenaSaved", false, permErr)
     end
 
     local err = sanitizeArena(arena)
@@ -284,7 +292,8 @@ local function hunterArenaSave(ctxt, arena)
             ctxt.sender and (" from " .. ctxt.sender.playerName) or "", err))
         dump(arena)
         if ctxt.sender then
-            return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error", err)
+            communications_tx.sendToPlayer(ctxt.senderID, "toast", "error", err)
+            return communications_tx.sendToPlayer(ctxt.senderID, "hunterArenaSaved", false, err)
         end
         return
     end

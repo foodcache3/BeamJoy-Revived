@@ -145,11 +145,18 @@ local function onSave()
         defaults = M.defaults,
     }
     beamjoy_communications.send("hunterArenaSave", payload)
-    beamjoy_communications.addOneUseHandler("hunterArenaSaved", function(status)
+    beamjoy_communications.addOneUseHandler("hunterArenaSaved", function(status, err)
         if status then
             listEditor.clearDirty()
         else
-            toast.error("Failed to save data")
+            -- Real bug (same fix as infectedEditor.lua's own onSave): a rejected save used to
+            -- leave this editor showing the attempted, never-actually-committed edit forever - the
+            -- server keeps its last valid arena untouched on rejection, but nothing here reflected
+            -- that. refresh() re-pulls enabled/defaults/every point list straight from the real
+            -- synced arena (beamjoy_hunter.data), making this editor honest again instead of just
+            -- stuck dirty.
+            refresh()
+            toast.error(err or "Failed to save data")
         end
     end, 5000)
 end
