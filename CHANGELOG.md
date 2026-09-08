@@ -6,6 +6,31 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.85] - 2026-09-08
+
+Client v1.8.85, server v1.8.64. Server-side change in this range needs deploying to the live
+server separately; the client is a straight mod update.
+
+### Fixed
+- **A rejected Infected arena save used to leave the arena editor lying to you.** Enabling the
+  arena with too few spawns configured (or any other save the server refuses) got silently
+  dropped: the server sent a toast with the real error but never answered the editor's own
+  save-result event at all, and that event's client-side handler just expired 5 seconds later
+  with no callback firing either way. The editor's "enabled" toggle and both spawn lists never
+  got reverted, so it kept showing whatever was just attempted - including "enabled" sitting on
+  top of an empty spawn list - forever, even though the server's real arena (the one actually
+  used to gate starting/joining a round) was never touched and still held its last valid state.
+  The server now always answers explicitly on both success and failure, and the editor resyncs
+  itself back to the real, still-valid arena and shows the actual error on a rejection instead of
+  sitting there dirty.
+- **A lobby stayed joinable by new players even after its arena got disabled out from under it.**
+  Infected's "Open Lobbies" list only checked whether a lobby existed, never whether the arena was
+  currently enabled - so it could sit right below a "not currently available" message and still
+  let someone join. Existing sessions keep running fine off their own frozen spawn snapshot either
+  way (that part was never broken), but new joins are now blocked, both in the UI (list hidden
+  while the arena's disabled) and on the server (mirrors the same check `infectedStart` already
+  applies to creating a session, so a modified client can't bypass the UI-only gate).
+
 ## [1.8.84] - 2026-09-07
 
 Client v1.8.84, server v1.8.63. Server-side change in this range needs deploying to the live

@@ -117,11 +117,19 @@ local function onSave()
         defaults = M.defaults,
     }
     beamjoy_communications.send("infectedArenaSave", payload)
-    beamjoy_communications.addOneUseHandler("infectedArenaSaved", function(status)
+    beamjoy_communications.addOneUseHandler("infectedArenaSaved", function(status, err)
         if status then
             listEditor.clearDirty()
         else
-            toast.error("Failed to save data")
+            -- Real bug: a rejected save (e.g. enabling with too few spawns) used to leave this
+            -- editor showing the attempted, never-actually-committed edit forever - the server
+            -- keeps its last valid arena untouched on rejection, but nothing here reflected that,
+            -- so the editor could show an impossible "enabled" + empty-spawn-list combination that
+            -- never actually existed server-side. refresh() re-pulls enabled/defaults/both spawn
+            -- lists straight from the real synced arena (beamjoy_infected.data), making this
+            -- editor honest again instead of just stuck dirty.
+            refresh()
+            toast.error(err or "Failed to save data")
         end
     end, 5000)
 end

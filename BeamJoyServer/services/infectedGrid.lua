@@ -435,6 +435,17 @@ local function infectedJoin(ctxt, sessionId)
     if not ctxt.sender then return end
     local session = M.sessions[sessionId]
     if not session or session.state ~= "LOBBY" or not session.joinable then return end
+    -- Real bug: a session already open (and still using its own frozen arenaSnapshot for the
+    -- actual round, same as always) used to stay joinable by brand-new players even after the
+    -- LIVE arena got disabled or dropped below the spawn minimums out from under it - the client
+    -- UI now hides the "Open Lobbies" list in that case (see infected/app.html), but a modified
+    -- client could still send this event directly, so the same gate infectedStart already applies
+    -- to creating a session belongs here too, for anyone trying to join one that already exists.
+    local arena = services_infected.getArena()
+    if not arena or not arena.enabled or #arena.survivorSpawns < services_infected.MIN_SURVIVOR_SPAWNS or
+        #arena.infectedSpawns < services_infected.MIN_INFECTED_SPAWNS then
+        return
+    end
     if session.participants[ctxt.senderID] then return end
     if findSessionByParticipant(ctxt.senderID) then
         return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
