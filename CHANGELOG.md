@@ -6,6 +6,26 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.93] - 2026-09-08
+
+Client v1.8.93. Client-only, no server-side change in this range.
+
+### Changed
+- **reset_physics/reset_all_physics (default key "R") now redirect to recover_vehicle's own
+  in-place recovery, instead of being blocked outright.** Done by overriding the GLOBAL
+  `resetGameplay` function (`lua/ge/main.lua`'s own definition - confirmed by reading the
+  installed game's source it's a plain one-line reassignable global with no other side effect:
+  `function resetGameplay(playerID) extensions.hook('onResetGameplay', playerID) end`), not by
+  watching input at all: both actions, and quickAccess's own camelCase `resetVehicle` binding,
+  execute this exact function directly, so overriding it catches every caller uniformly regardless
+  of what triggered it. The redirect applies the identical speed/relock gate `recover_vehicle`
+  itself is already held to, and is installed only while the local player is an active participant
+  in an Infected GAME round, removed the instant that's no longer true - and is self-gating on top
+  of that (checks its own applicability on every call), so even a missed removal on some round-end
+  path would just leave a harmless pass-through wrapper, not resets staying redirected outside
+  Infected. `reload_vehicle` and quickAccess's own camelCase `recoverVehicle` binding aren't
+  reachable through this mechanism (neither calls `resetGameplay`), so they remain simply blocked.
+
 ## [1.8.92] - 2026-09-08
 
 Client v1.8.92. Client-only, no server-side change in this range.

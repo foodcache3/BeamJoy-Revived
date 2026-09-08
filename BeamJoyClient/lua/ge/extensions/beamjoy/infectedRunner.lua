@@ -18,6 +18,22 @@ local TAG_CANDIDATE_RADIUS = 50 -- slow-tick coarse cull distance, matching BJI'
 -- in its Server/OutBreak/main.lua) : resetting is only ever allowed below this speed, so it can't
 -- be used to instantly escape being chased/rammed.
 local RESET_MAX_SPEED = 2
+-- Per direct request: reset_physics/reset_all_physics (whatever key triggers them, "R" by
+-- default) get redirected to actually perform the same in-place recovery recover_vehicle itself
+-- does, rather than just being blocked outright. Achieved by overriding the GLOBAL `resetGameplay`
+-- function (lua/ge/main.lua's own definition, confirmed by reading the installed game's source:
+-- `function resetGameplay(playerID) extensions.hook('onResetGameplay', playerID) end` - a plain,
+-- reassignable global, one line, no other side effect to replicate), NOT by watching input at all
+-- - both reset_physics and reset_all_physics execute this exact function directly as their
+-- native "onDown" Lua (see core/input/actions/gameplay.json), so overriding it here intercepts
+-- every caller uniformly regardless of what triggered it. See redirectedResetGameplay/
+-- installResetGameplayRedirect/uninstallResetGameplayRedirect further down this file (after
+-- myCurrentVehicle/getSelfParticipant, which the redirect itself needs to already be in scope)
+-- for the actual mechanism.
+-- reload_vehicle deliberately NOT covered by this : it's a different, heavier native operation
+-- (core_vehicle_manager.reloadVehicle -> a genuine vehicle respawn, not just a physics reset) on
+-- a debug-category action unlikely to have a real default keybind, so it stays simply blocked
+-- (see onBJRequestRestrictions) rather than redirected too.
 
 local M = {
     dependencies = { "beamjoy_infected", "beamjoy_vehicles", "beamjoy_players", "camera" },
@@ -375,32 +391,31 @@ local function onBJRequestRestrictions(restrictions)
     restrictions:addAll({ "toggle_slow_motion", "slower_motion", "faster_motion", "pause" }, true)
 
     -- Reworked per direct request, after live testing of the original "in-place always ok,
-    -- reposition always blocked" policy: recover_vehicle (BeamNG's classic hold-to-recover, a
-    -- sustained in-place-ish nudge rather than an instant teleport) is now the ONE reset method
-    -- actually left reachable, velocity-gated exactly like reset_physics used to be. Every OTHER
-    -- reset/recover/reposition path is unconditionally blocked instead - including two native UI
-    -- paths that bypass core_input_actionFilter entirely otherwise, confirmed by reading the
-    -- installed game's own source:
+    -- reposition always blocked" policy, then again to redirect rather than just block:
+    -- recover_vehicle (BeamNG's classic hold-to-recover, a sustained in-place-ish nudge rather
+    -- than an instant teleport) is the one reset BEHAVIOR available during GAME - reachable either
+    -- by using it directly (velocity-gated below) or by pressing reset_physics/reset_all_physics/
+    -- quickAccess's own resetVehicle binding, which M.installResetGameplayRedirect (see
+    -- RESET_MAX_SPEED's own doc comment near the top of this file) transparently redirects into
+    -- the exact same recover_vehicle behavior instead of letting them perform their own real,
+    -- instant reset. Every genuinely DIFFERENT reset/recover/reposition path stays unconditionally
+    -- blocked - including two native UI paths that bypass core_input_actionFilter entirely
+    -- otherwise, confirmed by reading the installed game's own source:
     --   - lua/ge/extensions/ui/pause/providers/vehicleTabInteractions.lua's own tryResetVehicle
     --     (the ESC-menu "Reset" tile per spawned vehicle) calls vehicle:requestReset(RESET_PHYSICS)
-    --     directly - no core_input_actionFilter.isActionBlocked call anywhere in it. It CAN'T be
-    --     targeted directly through this restriction system at all (there's no action name to
-    --     block - the call is unconditional). It's only reachable at all while
-    --     canModifyVehicles() (that same file) returns true, which itself checks
-    --     switch_next_vehicle/switch_previous_vehicle - so blocking those two also disables this
-    --     whole panel (Reset/Repair/Clone/Delete) as a side effect, which is the only lever this
-    --     restriction system actually has over it. Since that tile's own reset is the same instant
-    --     physics reset reset_physics is (not the gradual recovery recover_vehicle does), it needs
-    --     to be unconditionally closed too, not just gated.
+    --     directly - no core_input_actionFilter.isActionBlocked call anywhere in it, and no
+    --     resetGameplay call either, so neither the block list nor the redirect can reach it. It's
+    --     only reachable at all while canModifyVehicles() (that same file) returns true, which
+    --     itself checks switch_next_vehicle/switch_previous_vehicle - so blocking those two also
+    --     disables this whole panel (Reset/Repair/Clone/Delete) as a side effect, which is the
+    --     only lever this restriction system actually has over it.
     --   - lua/ge/extensions/core/quickAccess.lua's own radial-menu "Go Home" entry
     --     (recovery.loadHome) IS gated by isActionBlocked, but under "loadHome" - never included
     --     here before, so a player could bookmark an arbitrary point (saveHome) and teleport back
     --     to it anytime, fully bypassing this restriction entirely.
-    --   - that same file's own M.tryAction("recoverVehicle"/"resetVehicle") binding layer (used by
-    --     some UI apps/buttons) ALSO checks isActionBlocked, but under those literal camelCase
-    --     names - never the native underscored ones, so they were silently never covered either.
-    --     Both resolve to in-place resets (spawn.safeTeleport to the vehicle's OWN current
-    --     position, or resetGameplay(0)), same category as reset_physics, not recover_vehicle.
+    --   - that same file's own M.tryAction("recoverVehicle") binding (a direct spawn.safeTeleport
+    --     call, NOT a resetGameplay call, unlike its "resetVehicle" sibling) also can't be reached
+    --     by the redirect, so it's blocked outright under its own camelCase name too.
     if M.session.state == "COUNTDOWN" then
         -- Resetting/recovering during COUNTDOWN (frozen at the grid) is always blocked, same as
         -- races'/hunter's own COUNTDOWN block - recover_vehicle included, unlike during GAME below.
@@ -413,19 +428,27 @@ local function onBJRequestRestrictions(restrictions)
         -- recover_vehicle_alt/recover_to_last_road/loadHome all explicitly search for (or teleport
         -- a meaningful distance to) a different "safe" spot (confirmed by reading the installed
         -- game's own core/input/actions/gameplay.json) - unlike recover_vehicle itself (below),
-        -- these stay unconditionally blocked. reset_physics/reset_all_physics/reload_vehicle (and
-        -- their quickAccess-binding-layer equivalents recoverVehicle/resetVehicle) are an instant
-        -- in-place physics/damage reset, no longer the allowed exception per direct request -
-        -- blocked outright now too, alongside switch_next/previous_vehicle (the ESC-menu panel
-        -- reasoning above).
+        -- these stay unconditionally blocked. reload_vehicle (a genuine vehicle respawn, heavier
+        -- than a physics reset) and quickAccess's own camelCase recoverVehicle binding (a direct
+        -- spawn.safeTeleport call, no resetGameplay involved - see RESET_MAX_SPEED's own doc
+        -- comment) can't be redirected the same way reset_physics/reset_all_physics/resetVehicle
+        -- are below, so they stay blocked outright too, alongside switch_next/previous_vehicle
+        -- (the ESC-menu panel reasoning above).
         restrictions:addAll({
             "recover_vehicle_alt", "recover_to_last_road", "loadHome",
-            "reset_physics", "reset_all_physics", "reload_vehicle", "recoverVehicle", "resetVehicle",
+            "reload_vehicle", "recoverVehicle",
             "switch_next_vehicle", "switch_previous_vehicle",
         }, true)
 
         -- recover_vehicle itself is the one gated on speed and the post-use relock instead of
         -- blocked outright - a sustained hold-based recovery, not an instant teleport.
+        -- reset_physics/reset_all_physics/resetVehicle (quickAccess's own camelCase binding, which
+        -- also just calls resetGameplay(0)) are deliberately NOT listed here at all anymore: they
+        -- all resolve to the SAME global `resetGameplay` function, which M.installResetGameplayRedirect
+        -- (called at the GAME transition, see below) has already redirected to perform this exact
+        -- recover_vehicle behavior instead - see RESET_MAX_SPEED's own doc comment near the top of
+        -- this file. Blocking them here too would be pointless (the redirect would just never run)
+        -- and wrong (the redirect already applies this same speed/relock gate itself).
         if M.movingTooFastToReset or (M.resetRelockUntilMs and GetCurrentTimeMillis() < M.resetRelockUntilMs) then
             restrictions:addAll({ "recover_vehicle" }, true)
         end
@@ -478,6 +501,11 @@ local function clearGameState()
     M.movingTooFastToReset = false
     M.resetRelockUntilMs = nil
     async.removeTask("BJInfectedResetRelock")
+    -- see RESET_MAX_SPEED's own doc comment near the top of this file. Belt-and-suspenders: the
+    -- redirect is self-gating anyway (checks M.session.state == "GAME" on every call), so even a
+    -- missed uninstall here would just leave a harmless pass-through wrapper, not resets staying
+    -- redirected outside Infected.
+    M.uninstallResetGameplayRedirect()
     M.nearbySurvivorVids = {}
     M.selfDiag = nil
     M.survivorDiagCache = {}
@@ -756,6 +784,8 @@ local function onSessionUpdate(session)
     end
 
     if session.state == "GAME" and not wasGame then
+        -- see RESET_MAX_SPEED's own doc comment near the top of this file
+        M.installResetGameplayRedirect()
         -- Asymmetric release, exactly mirroring hunterRunner.lua's own huntedStartDelay/
         -- huntersStartDelay treatment: both roles freeze at the exact GAME-start instant
         -- server-side, unfreezing locally after their own role's own delay (infected's built-in
@@ -931,6 +961,57 @@ end
 local function myCurrentVehicle()
     return beamjoy_vehicles.getCurrentOwn() or (M.myVehicleVid and beamjoy_vehicles.getVehicle(M.myVehicleVid))
 end
+
+-- See RESET_MAX_SPEED's own doc comment near the top of this file for the full "why" and "how".
+---@type function? the real, native resetGameplay, saved while overridden ; nil whenever not
+---installed, which doubles as this mechanism's own "is it currently installed" flag
+local originalResetGameplay = nil
+
+---@param playerID integer|string 0 for "my own vehicle" (reset_physics), -1 for "every vehicle"
+---(reset_all_physics) - both treated identically here, matching how the restriction system
+---already treated them identically before this redirect existed (always blocked together).
+---Self-gating: checks whether it's actually relevant on EVERY call, so even if
+---uninstallResetGameplayRedirect() is somehow never reached on a particular round's end (a missed
+---teardown path), the worst case is a harmless permanent pass-through wrapper, not resets staying
+---redirected outside Infected.
+local function redirectedResetGameplay(playerID)
+    local id = tonumber(playerID)
+    if M.session and M.session.state == "GAME" and (id == 0 or id == -1) then
+        local participant = getSelfParticipant()
+        if participant then
+            local myVeh = myCurrentVehicle()
+            -- same speed/relock gate recover_vehicle's own actionFilter entry is held to (see
+            -- onBJRequestRestrictions) - this is reached via reset_physics's OWN key/menu, still
+            -- performing recover_vehicle's exact behavior, so it must respect the exact same gate
+            -- rather than becoming a way around it. Silently does nothing when gated, matching
+            -- how a genuinely blocked action would feel (key press, nothing happens).
+            if myVeh and not (M.movingTooFastToReset or
+                    (M.resetRelockUntilMs and GetCurrentTimeMillis() < M.resetRelockUntilMs)) then
+                myVeh.veh:queueLuaCommand("recovery.recoverInPlace()")
+            end
+            return
+        end
+    end
+    originalResetGameplay(playerID)
+end
+
+local function installResetGameplayRedirect()
+    if originalResetGameplay then return end -- already installed
+    originalResetGameplay = resetGameplay
+    resetGameplay = redirectedResetGameplay
+end
+
+local function uninstallResetGameplayRedirect()
+    if not originalResetGameplay then return end
+    resetGameplay = originalResetGameplay
+    originalResetGameplay = nil
+end
+-- exported on M (not just left as plain locals) specifically so clearGameState/the GAME-transition
+-- block above - both defined earlier in this file, textually before these two - can reach them: a
+-- table field lookup resolves at call time, unlike a bare local reference, which Lua resolves by
+-- textual order at parse time and would otherwise see these two as not-yet-declared
+M.installResetGameplayRedirect = installResetGameplayRedirect
+M.uninstallResetGameplayRedirect = uninstallResetGameplayRedirect
 
 --- slow-tick coarse cull (BJI's own two-tier convention) : rebuilds the small nearby-survivor
 --- candidate list a fast per-frame precise check can then afford to run against every tick. A no-op
