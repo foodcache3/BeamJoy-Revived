@@ -10,6 +10,10 @@
 
 local CAMERA_RELEASE_SECONDS = 3
 local STUCK_WARNING_SECONDS = 5
+-- Same fixed, not host-configurable threshold as infectedRunner.lua's own RESET_MAX_SPEED, only
+-- actually applied here when the host opts into session.settings.velocityGatedResets (see that
+-- setting's own doc comment in services/hunter.lua for the full "why").
+local RESET_MAX_SPEED = 2
 
 local M = {
     dependencies = { "beamjoy_hunter", "beamjoy_vehicles", "beamjoy_players", "camera" },
@@ -88,6 +92,11 @@ local M = {
     ---@type boolean fugitive-only : whether any hunter is currently within
     ---huntedResetDistanceThreshold, gating the reset/recover restriction in onBJRequestRestrictions
     huntedResetLocked = false,
+    ---@type boolean true while the local vehicle is moving faster than RESET_MAX_SPEED, updated
+    ---every frame while session.settings.velocityGatedResets is on ; every reset type is blocked
+    ---while this is true (see onBJRequestRestrictions), same mechanism as infectedRunner.lua's own
+    ---identically-named field
+    movingTooFastToReset = false,
 
     lastHudPushMs = nil,
 
@@ -359,6 +368,7 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJHunterOpenSessionsRequest", M.pushOpenSessions)
     beamjoy_communications_ui.addHandler("BJHunterCountdownRequest", M.pushCountdown)
     beamjoy_communications_ui.addHandler("BJHunterHudRequest", M.pushHud)
+    beamjoy_communications_ui.addHandler("BJHunterUnstuck", M.onUnstuckRequest)
 end
 
 --- cameras a participant shouldn't be able to reach while hunt-locked: unlike races, this isn't
@@ -403,6 +413,16 @@ local function onBJRequestRestrictions(restrictions)
     -- freely during HUNT; crashing just costs them the huntersRespawnDelay penalty.
     if M.session.state == "COUNTDOWN" or
         (M.session.state == "HUNT" and participant.role == "hunted" and M.huntedResetLocked) then
+        restrictions:addAll({
+            "recover_vehicle", "recover_vehicle_alt", "recover_to_last_road",
+            "reset_physics", "reset_all_physics", "reload_vehicle",
+        }, true)
+    end
+
+    -- opt-in, applies to every reset type for either role (see services/hunter.lua's own
+    -- velocityGatedResets doc comment) : ON TOP OF the distance/delay gates above, not instead of
+    -- them, so this only ever adds restriction, never removes one the checks above already applied.
+    if M.session.state == "HUNT" and M.session.settings.velocityGatedResets and M.movingTooFastToReset then
         restrictions:addAll({
             "recover_vehicle", "recover_vehicle_alt", "recover_to_last_road",
             "reset_physics", "reset_all_physics", "reload_vehicle",
@@ -475,6 +495,7 @@ local function clearHuntState()
     M.hunterResetLockedUntilMs = nil
     M.hunterResetCount = 0
     M.huntedResetLocked = false
+    M.movingTooFastToReset = false
     M.selfVehicleConfirmed = false
     M.myVehicleVid = nil
     if M.lastGpsWaypointIndex ~= nil then
@@ -1434,6 +1455,50 @@ local function updateHunterResetLock()
     end
 end
 
+--- Hold-to-confirm Unstuck button (hunterHud/app.js) : teleports the local vehicle to the last
+--- known road, routed through beamjoy_inputs.onReset (see that file's own onReset/M.RESET table)
+--- with RECOVER_LAST_ROAD - the exact same call chain the real recover_to_last_road key/menu entry
+--- itself goes through (inputs.lua permanently redirects the native spawn.teleportToLastRoad into
+--- that same pipeline), rather than reaching for the native function directly and either missing
+--- that redirect or double-triggering it. Only raceRunner.lua actually implements
+--- onBJRequestCurrentVehicleReset (that pipeline's own veto hook), so this passes through cleanly
+--- for Hunter. The 5-second hold itself is the anti-abuse gate, so this deliberately skips the
+--- velocity gate too. Still respects huntedResetLocked though: a fugitive being actively pressed
+--- by a nearby hunter shouldn't get a free escape hatch just by holding a button - same reasoning
+--- the native distance gate already applies to every other reset type. Hunters have no equivalent
+--- gate here, matching their own "always allowed, just costs a delay" treatment elsewhere in this
+--- file.
+local function onUnstuckRequest()
+    if not M.session or M.session.state ~= "HUNT" then return end
+    local participant = getSelfParticipant()
+    if not participant then return end
+    if participant.role == "hunted" and M.huntedResetLocked then return end
+    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    if not myVeh then return end
+    beamjoy_inputs.onReset(beamjoy_inputs.RESET.RECOVER_LAST_ROAD)
+end
+M.onUnstuckRequest = onUnstuckRequest
+
+-- Checked every frame (speed changes continuously), but only actually recomputes restrictions when
+-- the gate's own state changes, not every frame - same technique as infectedRunner.lua's own
+-- updateResetGate. Only meaningful while session.settings.velocityGatedResets is on; a no-op
+-- (and keeps the flag cleared) otherwise, so turning the option off mid-session can never leave a
+-- stale block behind.
+local function updateVelocityResetGate()
+    if not M.session or M.session.state ~= "HUNT" or not M.session.settings.velocityGatedResets then
+        if M.movingTooFastToReset then
+            M.movingTooFastToReset = false
+        end
+        return
+    end
+    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    local tooFast = myVeh ~= nil and myVeh.veh:getVelocity():length() > RESET_MAX_SPEED or false
+    if tooFast ~= M.movingTooFastToReset then
+        M.movingTooFastToReset = tooFast
+        extensions.beamjoy_restrictions.update()
+    end
+end
+
 local function onUpdate()
     if M.session and M.session.state == "LOBBY" then
         updateGridCountdown()
@@ -1444,6 +1509,7 @@ local function onUpdate()
     if M.hunterResetLockedUntilMs then
         updateHunterResetLock()
     end
+    updateVelocityResetGate()
 
     -- always on, not host-configurable (matching races' own anticheat parity, per direct
     -- request): gravity has no native keybind to block, so it's actively reasserted every frame

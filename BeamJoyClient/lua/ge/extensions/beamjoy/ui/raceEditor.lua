@@ -591,6 +591,7 @@ local function backfillRaceDefaults(race)
     race.sectorCount = race.sectorCount or 3
     if race.vehicleRestrictionMode == nil then race.vehicleRestrictionMode = "free" end
     if race.branchingEnabled == nil then race.branchingEnabled = false end
+    if race.oneWayGates == nil then race.oneWayGates = false end
     table.forEach(race.gates, function(g, i)
         if type(g.step) ~= "number" then g.step = i end
         if not table.isArray(g.parents) then g.parents = { i - 1 } end
@@ -620,6 +621,7 @@ local function onOpen(raceId)
             sectorCount = 3,
             manualSectors = false,
             branchingEnabled = false,
+            oneWayGates = false,
             vehicleRestrictionMode = "free",
             gates = {},
             startPositions = {},
@@ -1212,6 +1214,7 @@ local function onImportCode(race)
         sectorCount = race.sectorCount,
         manualSectors = race.manualSectors,
         branchingEnabled = race.branchingEnabled,
+        oneWayGates = race.oneWayGates,
         vehicleRestrictionMode = nil, -- never travels in a code (an author-local capture/preset ref)
         gates = race.gates,
         startPositions = race.startPositions,

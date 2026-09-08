@@ -38,6 +38,10 @@
 ---@field tagCount integer how many OTHER participants this one has personally infected so far this
 ---round (self-inflicted stat, shown on the live roster ; see BJIWindowInfected's own
 ---infectedSurvivors precedent)
+---@field survivedMs integer? only set once, by endGame, when the session reaches FINISHED : how
+---long (ms) this participant lasted as a survivor this round - 0 for the round's original infected
+---(never a survivor at all), time-to-tag for anyone converted mid-round, the whole round's own
+---duration for anyone never caught. Drives the Infected results screen (time survived + tagCount)
 
 ---@class BJInfectedSessionSettings host-configurable at game-start time, seeded from
 ---BJInfectedDefaults ; see services/infected.lua for full field docs, mirrored here 1:1
@@ -56,6 +60,8 @@
 ---@field resetRelockSeconds integer seconds resetting is blocked for right after any reset
 ---actually happens ; 0 disables it. Independent of the always-on speed gate, see
 ---infectedRunner.lua's own RESET_MAX_SPEED
+---@field disableResets boolean when true, resetting is blocked outright during GAME, recover_vehicle
+---included ; see infectedRunner.lua's own onBJRequestRestrictions
 ---@field config table?
 
 ---@class BJInfectedSession
@@ -269,6 +275,25 @@ local function endGame(session, winner)
     utils_async.removeTask("BJInfectedGrid-" .. session.id .. "-roundTimeout")
     session.state = "FINISHED"
     session.winner = winner
+    -- computed once, here, rather than left as raw timestamps for the results screen to diff
+    -- itself: same "push a duration, not a timestamp" reasoning as gameElapsedMs above,
+    -- session.startedAt/infectedAt are in the server's own GetCurrentTime() clock domain,
+    -- meaningless compared directly against a client's GetCurrentTimeMillis(). A participant
+    -- tagged mid-round survived from round start until their own tag ; the round's original
+    -- infected (never a survivor at all) gets a flat 0 ; anyone never tagged survived the whole
+    -- round, start to end.
+    if session.startedAt then
+        local endedAt = GetCurrentTime()
+        session.participants:forEach(function(p)
+            if p.originalInfected then
+                p.survivedMs = 0
+            elseif p.infectedAt then
+                p.survivedMs = math.max(0, math.floor((p.infectedAt - session.startedAt) * 1000))
+            else
+                p.survivedMs = math.max(0, math.floor((endedAt - session.startedAt) * 1000))
+            end
+        end)
+    end
     pushSessionUpdate(session)
     utils_async.delayTask(function() removeSession(session) end,
         session.settings.endTimeout, "BJInfectedGrid-" .. session.id .. "-cleanup")
@@ -314,6 +339,8 @@ local function buildSettings(arena, overrides)
         hideInfectedNametags = hideInfectedNametags == true,
         resetRelockSeconds = math.max(0, tonumber(overrides.resetRelockSeconds) or
             defaults.resetRelockSeconds or 1),
+        disableResets = (overrides.disableResets ~= nil and overrides.disableResets or
+            defaults.disableResets) == true,
         config = type(config) == "table" and config or nil,
     }
 end

@@ -145,6 +145,14 @@
 ---too (a sliding "next N gates" window has no meaning for a plain linear index once a route can
 ---fork), but raceMarkers.lua's own visibleGateSetBranching now walks the real `parents` graph
 ---instead, so it's meaningful (and left as configured) for a branching race as well
+---@field oneWayGates boolean? per-race, author-level toggle (default off): while off, a gate
+---registers as crossed the moment a participant passes through its plane in EITHER direction (so
+---backing through a missed gate and driving forward through it again is no longer required : just
+---reversing back through it once is enough to count). While on, only a forward crossing (matching
+---the gate's own authored `dir`) registers, exactly reproducing the previous hardcoded-only
+---behavior. Purely about which crossings register as valid progress at all; no penalty of any kind
+---is attached to a "wrong-way" crossing in either state, since a wrong-way crossing while this is
+---on simply never registers as anything, same as before this option existed.
 ---@field startPositions {pos: {x: number, y: number, z: number}, dir: {x: number, y: number, z: number}}[]
 ---grid-slot placements for `grid` mode with multiple participants; index 1 is also used as the
 ---single spawn point for a solo/passive attempt. `dir` (not a quaternion) matches
@@ -399,6 +407,7 @@ local function sanitizeRace(race, existingRaces)
 
     race.sectorCount = math.max(1, math.min(math.floor(tonumber(race.sectorCount) or 3), #race.gates, 12))
     race.manualSectors = race.manualSectors == true
+    race.oneWayGates = race.oneWayGates == true
     table.forEach(race.gates, function(g)
         g.sector = g.sector == true or nil
         -- mandatory-stop was removed outright (never actually implemented, see raceRunner.lua/

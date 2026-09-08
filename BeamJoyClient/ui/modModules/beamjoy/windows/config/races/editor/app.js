@@ -48,6 +48,7 @@ const raceShareStrip = (race) => {
         sectorCount: race.sectorCount,
         manualSectors: race.manualSectors,
         branchingEnabled: race.branchingEnabled,
+        oneWayGates: race.oneWayGates,
         gates: race.gates,
         startPositions: race.startPositions,
         defaults: race.defaults,
@@ -262,7 +263,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             // the same "diff against an accurate baseline" mechanism the "every other update" fix
             // below already established for *sending* diffs, extended here to what's *displayed*.
             if (this.race && race && this.race.id === race.id && previous) {
-                ["name", "mode", "loopable", "sectorCount", "manualSectors", "branchingEnabled", "vehicleRestrictionMode", "vehicleRestrictionPoolPresetId"].forEach((k) => {
+                ["name", "mode", "loopable", "sectorCount", "manualSectors", "branchingEnabled", "oneWayGates", "vehicleRestrictionMode", "vehicleRestrictionPoolPresetId"].forEach((k) => {
                     if (angular.equals(this.race[k], previous[k])) this.race[k] = race[k];
                 });
                 if (angular.equals(this.race.defaults, previous.defaults)) {
@@ -363,7 +364,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             if (!race || !previous) return;
 
             const metaPartial = {};
-            ["name", "mode", "loopable", "sectorCount", "manualSectors", "branchingEnabled", "vehicleRestrictionMode", "vehicleRestrictionPoolPresetId"].forEach((k) => {
+            ["name", "mode", "loopable", "sectorCount", "manualSectors", "branchingEnabled", "oneWayGates", "vehicleRestrictionMode", "vehicleRestrictionPoolPresetId"].forEach((k) => {
                 if (!angular.equals(race[k], previous[k])) {
                     // same reasoning as gate width/height below : bj-slider's typable number-box
                     // can hand back a string in this CEF build, which silently breaks arithmetic

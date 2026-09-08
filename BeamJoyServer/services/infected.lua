@@ -46,6 +46,11 @@
 ---the always-on speed gate (RESET_MAX_SPEED in infectedRunner.lua, not host-configurable) that
 ---blocks resetting outright while moving, matching the community "Outbreak" mod's own default
 ---disableResetsWhenMoving/maxResetMovingSpeed behavior
+---@field disableResets boolean? when true, every reset/recover/reposition path is blocked
+---outright during GAME, including recover_vehicle itself (the one reset method otherwise always
+---left available, speed/relock-gated ; see infectedRunner.lua's own RESET_MAX_SPEED doc comment).
+---Purely an opt-in, harder mode for a host who wants resetting off the table entirely instead of
+---just gated ; default false
 ---@field config {model: string, config: string, label: string?, parts: table?}? optional forced
 ---vehicle, applied to every participant instead of letting them pick freely ; nil = free choice.
 ---Same {model, config, label, parts} shape services/vehiclePresets.lua's own preset entries already
@@ -129,6 +134,7 @@ local function sanitizeArena(arena)
     -- change; see infectedRunner.lua's own isHiddenInfectedVehicle for the actual effect.
     arena.defaults.hideInfectedNametags = arena.defaults.hideInfectedNametags == true
     arena.defaults.resetRelockSeconds = math.max(0, tonumber(arena.defaults.resetRelockSeconds) or 1)
+    arena.defaults.disableResets = arena.defaults.disableResets == true
     if type(arena.defaults.survivorColor) ~= "table" then arena.defaults.survivorColor = nil end
     if type(arena.defaults.infectedColor) ~= "table" then arena.defaults.infectedColor = nil end
     if type(arena.defaults.config) ~= "table" or type(arena.defaults.config.model) ~= "string" or

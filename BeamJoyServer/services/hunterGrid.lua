@@ -50,6 +50,8 @@
 ---@field revealResetDuration integer
 ---@field revealOnFinalWaypoint boolean
 ---@field huntedResetDistanceThreshold number
+---@field velocityGatedResets boolean applies Infected's own always-on speed gate to every reset
+---type, for both roles; see services/hunter.lua's own field doc
 ---@field huntedVehiclePresetId integer?
 ---@field huntedVehiclePool BJVehiclePresetEntry[]? resolved once from huntedVehiclePresetId at
 ---session-build time, same "snapshot at session start, never re-read the preset live again"
@@ -460,6 +462,8 @@ local function buildSettings(arena, overrides)
         -- same "Increments of 10m" tooltip promise as revealProximityDistance above, same gap
         huntedResetDistanceThreshold = math.max(0, math.round((tonumber(overrides.huntedResetDistanceThreshold) or
             defaults.huntedResetDistanceThreshold or 150) / 10) * 10),
+        velocityGatedResets = (overrides.velocityGatedResets ~= nil and overrides.velocityGatedResets or
+            defaults.velocityGatedResets) == true,
         huntedVehiclePresetId = huntedVehiclePresetId,
         huntedVehiclePool = huntedVehiclePool,
         huntedVehicleLabel = huntedVehicleLabel,

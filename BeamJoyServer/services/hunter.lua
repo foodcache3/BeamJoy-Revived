@@ -37,6 +37,15 @@
 ---default true
 ---@field huntedResetDistanceThreshold number? meters ; the fugitive cannot reset/recover their own
 ---vehicle while any hunter is within this distance (0 = never allowed to reset at all) ; default 150
+---@field velocityGatedResets boolean? opt-in, matching Infected's own always-on speed gate
+---(RESET_MAX_SPEED in infectedRunner.lua): when true, EVERY reset/recover type (recover_vehicle,
+---recover_vehicle_alt, recover_to_last_road, reset_physics, reset_all_physics) is blocked outright
+---for whichever role is resetting while that participant's own vehicle is moving faster than
+---hunterRunner.lua's RESET_MAX_SPEED, for both hunter and hunted alike. Applies ON TOP OF the
+---existing distance gate (hunted) and respawn-delay penalty (hunters) below, not instead of either
+---; default false, since (unlike Infected, which never had a plain "always allowed" reset in the
+---first place) this changes hunters' own long-standing "reset freely, just pay the delay" behavior
+---for anyone who turns it on
 ---@field huntedVehiclePresetId integer? optional BJVehiclePreset id restricting which vehicle the
 ---fugitive may spawn in (see services/vehiclePresets.lua) ; nil = free choice
 ---@field huntersVehiclePresetId integer? optional BJVehiclePreset id restricting hunter vehicles ;
@@ -165,6 +174,7 @@ local function sanitizeArena(arena)
     -- same "Increments of 10m" tooltip promise as revealProximityDistance above, same gap
     arena.defaults.huntedResetDistanceThreshold = math.max(0,
         math.round((tonumber(arena.defaults.huntedResetDistanceThreshold) or 150) / 10) * 10)
+    arena.defaults.velocityGatedResets = arena.defaults.velocityGatedResets == true
     if arena.defaults.huntedVehiclePresetId ~= nil then
         arena.defaults.huntedVehiclePresetId = tonumber(arena.defaults.huntedVehiclePresetId)
         if not arena.defaults.huntedVehiclePresetId or

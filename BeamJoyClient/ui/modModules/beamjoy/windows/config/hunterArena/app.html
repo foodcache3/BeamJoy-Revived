@@ -203,6 +203,12 @@
                 <td><bj-slider ng-model="$ctrl.defaults.huntedResetDistanceThreshold" min="0" max="300" hard-max="1000" step="10"></bj-slider></td>
             </tr>
             <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.hunterArena.velocityGatedResets.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.hunterArena.velocityGatedResets' | translate}}
+                </td>
+                <td><bj-toggle ng-model="$ctrl.defaults.velocityGatedResets"></bj-toggle></td>
+            </tr>
+            <tr>
                 <td class="text-right" title="{{'beamjoy.window.config.tabs.hunterArena.hunterNametagFadeDistance.tooltip' | translate}}">
                     {{'beamjoy.window.config.tabs.hunterArena.hunterNametagFadeDistance' | translate}}
                 </td>

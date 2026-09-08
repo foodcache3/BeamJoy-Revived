@@ -69,6 +69,37 @@
     #beamjoy-hunter-hud .hud-row.timed {
         color: #ffd54f;
     }
+
+    #beamjoy-hunter-hud .hud-unstuck-btn {
+        position: relative;
+        display: block;
+        width: 100%;
+        margin-top: 0.5em;
+        padding: 0.35em 0.5em;
+        text-align: center;
+        font-size: 0.85em;
+        font-weight: bold;
+        color: white;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 0.3em;
+        overflow: hidden;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    #beamjoy-hunter-hud .hud-unstuck-fill {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        background: rgba(255, 213, 79, 0.45);
+        transition: width 0.1s linear;
+    }
+
+    #beamjoy-hunter-hud .hud-unstuck-label {
+        position: relative;
+    }
 </style>
 
 <div id="beamjoy-hunter-hud" ng-if="$ctrl.active">
@@ -104,4 +135,14 @@
     <div class="hud-reset-locked" ng-if="$ctrl.huntedResetLocked">
         {{'beamjoy.window.hunterHud.resetLocked' | translate}}
     </div>
+    <button
+        class="hud-unstuck-btn"
+        ng-mousedown="$ctrl.startUnstuckHold()"
+        ng-mouseup="$ctrl.cancelUnstuckHold()"
+        ng-mouseleave="$ctrl.cancelUnstuckHold()"
+        title="{{'beamjoy.window.hunterHud.unstuck.tooltip' | translate}}"
+    >
+        <div class="hud-unstuck-fill" style="width: {{$ctrl.unstuckProgressPercent()}}%"></div>
+        <span class="hud-unstuck-label">{{'beamjoy.window.hunterHud.unstuck' | translate}}</span>
+    </button>
 </div>

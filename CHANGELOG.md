@@ -6,6 +6,50 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.95] - 2026-09-08
+
+Client v1.8.95, server v1.8.69. Server-side settings additions here need redeploying
+`BeamJoyServer/` to the live server, not just the client mod, or the new options won't actually
+apply.
+
+### Added
+- **Race editor: "One-way gates" option, off by default.** `BJRace.oneWayGates` (author-level,
+  per-race, sanitized/normalized in `services/races.lua` exactly like `branchingEnabled`). While
+  off (the new default), a gate registers as crossed the instant a participant passes through its
+  plane in EITHER direction - so a missed gate no longer needs backing through AND then driving
+  forward through again, just backing through it once now counts. While on, only a forward
+  crossing (matching the gate's own authored `dir`) registers, exactly reproducing every race's
+  prior hardcoded-only behavior. Purely about which crossings register as progress at all: no
+  penalty of any kind is attached to a wrong-way crossing in either state.
+- **Infected: "Disable resets" arena option, off by default.** `BJInfectedDefaults.disableResets`.
+  When on, every reset/recover/reposition path is blocked outright during GAME, including
+  `recover_vehicle` itself - the one method the existing policy always otherwise leaves available,
+  speed/relock-gated. A genuinely harder opt-in mode for a host who wants resetting off the table
+  entirely, not just gated.
+- **Hunter: "Velocity-gated resets" arena option, off by default.** `BJHunterDefaults.
+  velocityGatedResets`. When on, every reset type (recover_vehicle, recover_vehicle_alt,
+  recover_to_last_road, reset_physics, reset_all_physics) is blocked outright for whichever role is
+  resetting while that participant's own vehicle is moving faster than
+  `hunterRunner.lua`'s own fixed `RESET_MAX_SPEED` (2 m/s, same threshold Infected already uses,
+  not host-configurable), for both hunter and hunted alike - applied ON TOP OF the existing
+  distance gate (hunted) and respawn-delay penalty (hunters), not instead of either.
+- **Infected/Hunter HUD: hold-to-confirm "Unstuck" button.** Holding it for 5 seconds teleports the
+  local vehicle to the last known road (the same native behavior `recover_to_last_road` provides,
+  which is otherwise unconditionally blocked while a round is active) - a controlled, deliberately
+  hard-to-abuse-mid-chase escape hatch for a genuinely stuck vehicle. Routed through
+  `beamjoy_inputs.onReset`'s own existing reset-authorization pipeline (the exact same call chain
+  the real key/menu action itself goes through), rather than reaching for the native
+  `spawn.teleportToLastRoad` directly, which `beamjoy_inputs` permanently redirects into that same
+  pipeline anyway. Respects Infected's own new `disableResets` (blocked outright when that's on)
+  and Hunter's existing `huntedResetDistanceThreshold` fugitive-proximity lock; does not apply
+  either mode's speed gate, since the 5-second hold is itself the anti-abuse mechanism.
+- **Infected results screen.** The FINISHED state's session status panel now shows a full
+  leaderboard - one row per participant, longest survival first - with time survived and how many
+  others each one personally infected (`tagCount`, already tracked live). `survivedMs` is computed
+  once, server-side, the moment a round actually ends (`infectedGrid.lua`'s `endGame`): 0 for the
+  round's original infected (never a survivor at all), time-to-tag for anyone converted mid-round,
+  the round's own full duration for anyone never caught.
+
 ## [1.8.94] - 2026-09-08
 
 Client v1.8.94. Client-only, no server-side change in this range.

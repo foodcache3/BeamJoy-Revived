@@ -34,6 +34,9 @@ angular.module("beamjoy").component("bjMainInfected", {
                 this.showPlayers = false;
                 this.showSettings = false;
             }
+            if (this.status && this.status.state === "FINISHED") {
+                this.showPlayers = true;
+            }
             this.allReady =
                 !!this.status &&
                 Array.isArray(this.status.participants) &&
@@ -50,6 +53,24 @@ angular.module("beamjoy").component("bjMainInfected", {
         this.togglePlayers = (event) => {
             event.stopPropagation();
             this.showPlayers = !this.showPlayers;
+        };
+
+        // FINISHED-only results ordering: longest survival first, matching a standard results
+        // leaderboard rather than plain join order. Participants without a survivedMs yet (a stale
+        // push mid-teardown, shouldn't really happen) sort last instead of crashing the compare.
+        this.resultsParticipants = () => {
+            if (!this.status || !Array.isArray(this.status.participants)) return [];
+            return this.status.participants
+                .slice()
+                .sort((a, b) => (b.survivedMs ?? -1) - (a.survivedMs ?? -1));
+        };
+
+        this.formatTime = (ms) => {
+            if (typeof ms !== "number" || ms < 0) return "-";
+            const totalSec = ms / 1000;
+            const min = Math.floor(totalSec / 60);
+            const sec = (totalSec % 60).toFixed(0).padStart(2, "0");
+            return `${min}:${sec}`;
         };
 
         // per the same reasoning as Hunter's own equivalent : lobby/countdown/game participants can

@@ -360,6 +360,7 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJInfectedOpenSessionsRequest", M.pushOpenSessions)
     beamjoy_communications_ui.addHandler("BJInfectedCountdownRequest", M.pushCountdown)
     beamjoy_communications_ui.addHandler("BJInfectedHudRequest", M.pushHud)
+    beamjoy_communications_ui.addHandler("BJInfectedUnstuck", M.onUnstuckRequest)
 end
 
 --- cameras a participant shouldn't be able to reach while game-locked : unlike races, this isn't
@@ -419,6 +420,15 @@ local function onBJRequestRestrictions(restrictions)
     if M.session.state == "COUNTDOWN" then
         -- Resetting/recovering during COUNTDOWN (frozen at the grid) is always blocked, same as
         -- races'/hunter's own COUNTDOWN block - recover_vehicle included, unlike during GAME below.
+        restrictions:addAll({
+            "recover_vehicle", "recover_vehicle_alt", "recover_to_last_road", "loadHome",
+            "reset_physics", "reset_all_physics", "reload_vehicle", "recoverVehicle", "resetVehicle",
+            "switch_next_vehicle", "switch_previous_vehicle",
+        }, true)
+    elseif M.session.state == "GAME" and M.session.settings.disableResets then
+        -- host opt-in, harder mode: every reset/recover/reposition path blocked outright, including
+        -- recover_vehicle itself - the one method the policy below otherwise always leaves
+        -- available. Same full list COUNTDOWN already blocks unconditionally above.
         restrictions:addAll({
             "recover_vehicle", "recover_vehicle_alt", "recover_to_last_road", "loadHome",
             "reset_physics", "reset_all_physics", "reload_vehicle", "recoverVehicle", "resetVehicle",
@@ -1012,6 +1022,29 @@ end
 -- textual order at parse time and would otherwise see these two as not-yet-declared
 M.installResetGameplayRedirect = installResetGameplayRedirect
 M.uninstallResetGameplayRedirect = uninstallResetGameplayRedirect
+
+--- Hold-to-confirm Unstuck button (infectedHud/app.js) : teleports the local vehicle to the last
+--- known road, routed through beamjoy_inputs.onReset (see that file's own onReset/M.RESET table)
+--- with RECOVER_LAST_ROAD - the exact same call chain the real recover_to_last_road key/menu entry
+--- itself goes through (inputs.lua permanently redirects the native spawn.teleportToLastRoad into
+--- that same pipeline), rather than reaching for the native function directly and either missing
+--- that redirect or double-triggering it. Only raceRunner.lua actually implements
+--- onBJRequestCurrentVehicleReset (that pipeline's own veto hook), so this passes through cleanly
+--- for Infected. The 5-second hold itself is the anti-abuse gate - nobody can hold a UI button for
+--- 5s while actively fleeing/chasing - so this deliberately does NOT also apply the speed/relock
+--- gate recover_vehicle's own actionFilter entry is held to. Still respects disableResets though: a
+--- host who's opted into that harder mode wants no way out at all, not just the native reset keys
+--- closed off.
+local function onUnstuckRequest()
+    if not M.session or M.session.state ~= "GAME" then return end
+    if M.session.settings.disableResets then return end
+    local participant = getSelfParticipant()
+    if not participant then return end
+    local myVeh = myCurrentVehicle()
+    if not myVeh then return end
+    beamjoy_inputs.onReset(beamjoy_inputs.RESET.RECOVER_LAST_ROAD)
+end
+M.onUnstuckRequest = onUnstuckRequest
 
 --- slow-tick coarse cull (BJI's own two-tier convention) : rebuilds the small nearby-survivor
 --- candidate list a fast per-frame precise check can then afford to run against every tick. A no-op

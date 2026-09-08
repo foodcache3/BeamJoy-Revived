@@ -92,14 +92,32 @@
     <div ng-if="$ctrl.status.state === 'FINISHED' && $ctrl.status.winner" class="mb-1">
         <b>{{('beamjoy.window.main.tabs.infected.winner.' + $ctrl.status.winner) | translate}}</b>
     </div>
+    <!-- Results screen: one row per participant, longest survival first, time survived + how many
+         others each one personally infected (tagCount, already tracked live on the roster below;
+         survivedMs is only ever populated once, by endGame, at the moment FINISHED is reached). -->
+    <div class="player-list results-list" ng-if="$ctrl.status.state === 'FINISHED'">
+        <div ng-repeat="p in $ctrl.resultsParticipants()" class="d-flex align-center gap-1">
+            <span class="opacity-70">{{$index + 1}}.</span>
+            <span class="flex-grow-1" ng-class="{'role-infected': p.role === 'infected'}">
+                {{p.playerName}}
+            </span>
+            <span class="small opacity-70" title="{{'beamjoy.window.main.tabs.infected.results.survived.tooltip' | translate}}">
+                {{$ctrl.formatTime(p.survivedMs)}}
+            </span>
+            <span class="small opacity-70" title="{{'beamjoy.window.main.tabs.infected.results.tagCount.tooltip' | translate}}">
+                {{'beamjoy.window.main.tabs.infected.results.infectedCount' | translate}} {{p.tagCount || 0}}
+            </span>
+        </div>
+    </div>
     <div
         class="opacity-70 small cursor-pointer"
         ng-click="$ctrl.togglePlayers($event)"
+        ng-if="$ctrl.status.state !== 'FINISHED'"
     >
         {{$ctrl.status.participantCount}}/{{$ctrl.status.maxParticipants}}
         {{'beamjoy.window.main.tabs.infected.joined' | translate}}
     </div>
-    <div class="player-list" ng-if="$ctrl.showPlayers">
+    <div class="player-list" ng-if="$ctrl.showPlayers && $ctrl.status.state !== 'FINISHED'">
         <div ng-repeat="p in $ctrl.status.participants" class="d-flex align-center gap-1">
             <span class="flex-grow-1" ng-class="{'role-infected': p.role === 'infected'}">
                 {{p.playerName}}

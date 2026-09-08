@@ -2250,7 +2250,15 @@ local function onUpdate()
             local leniencyZ = myVeh.veh:getInitialHeight() / 4
 
             local prevLy = M.lastLy[gateIdx]
-            local crossed = prevLy ~= nil and prevLy < 0 and ly >= 0 and
+            -- oneWayGates off (default): either direction counts, so a player who missed a gate
+            -- can just back through it once instead of backing through AND driving forward again.
+            -- oneWayGates on: only the forward crossing (matching the gate's own authored `dir`)
+            -- counts, exactly reproducing the old hardcoded-only behavior. Either way this is only
+            -- about which crossing registers as progress at all: no penalty of any kind is attached
+            -- to a wrong-way crossing in either state.
+            local signChanged = prevLy ~= nil and ((prevLy < 0 and ly >= 0) or (prevLy >= 0 and ly < 0))
+            local directionOk = not race.oneWayGates or (prevLy ~= nil and prevLy < 0 and ly >= 0)
+            local crossed = signChanged and directionOk and
                 math.abs(lx) <= gate.width / 2 + leniencyX and
                 lz >= -leniencyZ and lz <= gate.height + leniencyZ
             if crossed then
