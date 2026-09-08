@@ -6,6 +6,20 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.92] - 2026-09-08
+
+Client v1.8.92. Client-only, no server-side change in this range.
+
+### Fixed
+- **The actual cause of "clearing one role's color paints the other role's color instead" -
+  found at last.** `applyRoleColor`'s own `role == "infected" and settings.infectedColor or
+  settings.survivorColor` was a classic Lua and/or-as-ternary trap: that pattern is only safe when
+  the middle value can never itself be falsy. The instant `infectedColor` is `nil` (exactly the
+  "cleared" case), the `and` short-circuits to `nil` and the `or` falls through to
+  `survivorColor` regardless of which role it actually is. Confirmed via a live save-data dump
+  (arena data itself was always correct and independent - this was purely a runtime paint-lookup
+  bug) and fixed with an explicit if/else, which has no such trap.
+
 ## [1.8.91] - 2026-09-08
 
 Client v1.8.91. Client-only, no server-side change in this range.

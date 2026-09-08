@@ -207,7 +207,18 @@ local function applyRoleColor(role)
     -- color instead". Checked against the RAW setting, not roleColor's own fallback-applying
     -- return value, specifically so this function alone can skip the repaint while nametags
     -- still get their default color.
-    local rawColor = role == "infected" and M.session.settings.infectedColor or M.session.settings.survivorColor
+    -- Real bug (the actual cause of "clearing one role's color paints the other role's color
+    -- instead"): `role == "infected" and settings.infectedColor or settings.survivorColor` is the
+    -- classic Lua and/or-as-ternary trap - it's only safe when the middle value can never itself
+    -- be falsy. The instant infectedColor is nil (exactly the "cleared" case this comment is
+    -- about), the `and` short-circuits to nil, and the `or` falls through to survivorColor
+    -- regardless of which role this actually is. An explicit if/else has no such trap.
+    local rawColor
+    if role == "infected" then
+        rawColor = M.session.settings.infectedColor
+    else
+        rawColor = M.session.settings.survivorColor
+    end
     if not rawColor then return end
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if not myVeh then return end
