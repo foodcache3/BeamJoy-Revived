@@ -6,6 +6,18 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.90] - 2026-09-08
+
+Client v1.8.90. Client-only, no server-side change in this range.
+
+### Changed
+- **Infected's countdown now also extends through infectedStartDelay**, same mechanism just
+  applied to Hunter in v1.8.88 (missed doing both at the time). The overlay keeps ticking
+  continuously through the post-countdown release delay instead of vanishing at 0 and freezing
+  again with no visible timer; survivors are unaffected (no delay at all, per the earlier change
+  removing that option). Infected's own separate HUD hold-indicator is unchanged, this is about
+  the same big countdown overlay experience Hunter now has too.
+
 ## [1.8.89] - 2026-09-08
 
 Client v1.8.89. Client-only, no server-side change in this range.

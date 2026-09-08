@@ -40,6 +40,15 @@ local M = {
     scenarioLocked = false,
     countdownStartMs = nil,
     countdownTotal = nil,
+    ---@type boolean per direct request (mirroring hunterRunner.lua's own identical mechanism): the
+    ---countdown overlay stays ticking through this round's own infectedStartDelay instead of
+    ---vanishing at 0 and freezing again with no visible timer (Infected already had a SEPARATE,
+    ---smaller HUD indicator for this via holdReleaseTargetMs/pushHud - this is about the same big
+    ---overlay experience Hunter now gets too, not a replacement for that). When true,
+    ---updateCountdown()'s own per-tick freeze-(re)assertion is skipped - this phase's
+    ---freeze/unfreeze is driven entirely by the explicit calls around the GAME-transition block,
+    ---not that loop, so it can't fight the delayed release at the exact moment it fires.
+    countdownDisplayOnly = false,
     lastSentSeconds = nil,
     cameraReleased = false,
     ---@type string? camera mode the player was on before it got forced to EXTERNAL
@@ -427,6 +436,7 @@ local function unlockScenario()
     if not M.scenarioLocked then return end
     M.scenarioLocked = false
     M.cameraReleased = false
+    M.countdownDisplayOnly = false
     M.countdownStartMs = nil
     restorePreviousCamera()
     local myVeh = beamjoy_vehicles.getCurrentOwn()
@@ -730,10 +740,6 @@ local function onSessionUpdate(session)
     end
 
     if session.state == "GAME" and not wasGame then
-        if M.scenarioLocked then
-            unlockScenario()
-            beamjoy_communications_ui.send("BJInfectedCountdown", { active = false })
-        end
         -- Asymmetric release, exactly mirroring hunterRunner.lua's own huntedStartDelay/
         -- huntersStartDelay treatment: both roles freeze at the exact GAME-start instant
         -- server-side, unfreezing locally after their own role's own delay (infected's built-in
@@ -743,16 +749,38 @@ local function onSessionUpdate(session)
         -- previously defaulted to 0 but still host-configurable ; now hardcoded) - they always
         -- release the instant GAME starts, same as a survivor created mid-round by a tag.
         local myVeh = beamjoy_vehicles.getCurrentOwn()
-        local delaySec = participant.role == "infected" and session.settings.infectedStartDelay or 0
+        local delaySec = math.max(0, participant.role == "infected" and session.settings.infectedStartDelay or 0)
+        -- Per direct request, same mechanism as hunterRunner.lua's own: keep the countdown overlay
+        -- ticking continuously through infectedStartDelay instead of vanishing at 0 and freezing
+        -- again with no visible timer. delaySec == 0 (survivors, always) keeps the exact prior
+        -- behavior: unlock immediately, no second phase.
+        if delaySec > 0 then
+            M.scenarioLocked = true
+            M.countdownDisplayOnly = true
+            M.countdownStartMs = GetCurrentTimeMillis()
+            M.countdownTotal = delaySec
+            M.lastSentSeconds = nil
+        elseif M.scenarioLocked then
+            unlockScenario()
+            beamjoy_communications_ui.send("BJInfectedCountdown", { active = false })
+        end
         if myVeh then
             beamjoy_vehicles.setFreeze(myVeh.vid, true)
         end
-        M.holdReleaseTargetMs = GetCurrentTimeMillis() + math.max(0, delaySec) * 1000
+        M.holdReleaseTargetMs = GetCurrentTimeMillis() + delaySec * 1000
         async.delayTask(function()
             M.holdReleaseTargetMs = nil
             pushHud()
             local currVeh = beamjoy_vehicles.getCurrentOwn()
             if currVeh then beamjoy_vehicles.setFreeze(currVeh.vid, false) end
+            -- ends the extended countdown display (if delaySec > 0 started one above) in the SAME
+            -- tick as the actual unfreeze, so updateCountdown()'s own freeze-enforcement loop can
+            -- never re-freeze on the very next frame
+            if M.scenarioLocked then
+                unlockScenario()
+                beamjoy_communications_ui.send("BJInfectedCountdown", { active = false })
+            end
+            M.countdownDisplayOnly = false
             local vid = currVeh and currVeh.vid or (myVeh and myVeh.vid)
             if not vid then return end
             -- same distance-safe release + bounded force-fallback as hunterRunner.lua's own
@@ -764,7 +792,7 @@ local function onSessionUpdate(session)
             async.delayTask(function()
                 beamjoy_vehicles.setGhostReason(vid, "infected", false, true)
             end, 2000, forceTaskName)
-        end, math.max(0, delaySec) * 1000, "BJInfectedReleaseFreeze")
+        end, delaySec * 1000, "BJInfectedReleaseFreeze")
         M.gameStartTimeMs = GetCurrentTimeMillis()
         M.nearbySurvivorVids = {}
         M.selfDiag = nil
@@ -827,9 +855,14 @@ end
 
 local function updateCountdown()
     if not M.scenarioLocked or not M.countdownStartMs or not M.countdownTotal then return end
-    local myVeh = beamjoy_vehicles.getCurrentOwn()
-    if myVeh and myVeh.veh.froze ~= "1" then
-        beamjoy_vehicles.setFreeze(myVeh.vid, true)
+    -- see countdownDisplayOnly's own doc comment: this phase's freeze/unfreeze is driven entirely
+    -- by the explicit calls around the GAME-transition block, not this loop, so it can't re-freeze
+    -- the vehicle in the same window the delayed release is trying to let it go
+    if not M.countdownDisplayOnly then
+        local myVeh = beamjoy_vehicles.getCurrentOwn()
+        if myVeh and myVeh.veh.froze ~= "1" then
+            beamjoy_vehicles.setFreeze(myVeh.vid, true)
+        end
     end
 
     local elapsedSec = (GetCurrentTimeMillis() - M.countdownStartMs) / 1000
