@@ -27,6 +27,13 @@ local M = {
     scenarioLocked = false,
     countdownStartMs = nil,
     countdownTotal = nil,
+    ---@type boolean per direct request: the countdown overlay stays ticking through this role's
+    ---own HUNT-start release delay (huntedStartDelay/huntersStartDelay) instead of vanishing at 0
+    ---and freezing again with no visible timer. When true, updateCountdown()'s own per-tick
+    ---freeze-(re)assertion is skipped - this phase's freeze/unfreeze is driven entirely by the
+    ---explicit calls around the HUNT-transition block, not that loop, so it can't fight the
+    ---delayed release at the exact moment it fires.
+    countdownDisplayOnly = false,
     lastSentSeconds = nil,
     sentWaitingBroadcast = false,
     ---@type boolean whether THIS client has already sent its own hunterVehicleConfirmed this
@@ -434,6 +441,7 @@ local function unlockScenario()
     if not M.scenarioLocked then return end
     M.scenarioLocked = false
     M.cameraReleased = false
+    M.countdownDisplayOnly = false
     M.countdownStartMs = nil
     M.sentWaitingBroadcast = false
     M.lastWaitingChoosingOwn = nil
@@ -833,6 +841,7 @@ local function onSessionUpdate(session)
 
         M.scenarioLocked = true
         M.cameraReleased = false
+        M.countdownDisplayOnly = false
         -- deliberately NOT started yet: see session.countdownTicking below, this only begins
         -- ticking once every participant has confirmed a matching vehicle
         M.countdownStartMs = nil
@@ -871,16 +880,27 @@ local function onSessionUpdate(session)
         -- for huntersStartDelay/huntedStartDelay seconds on every unrelated update, reported as
         -- "forcing on my brakes randomly". Gating on `not wasHunt`, mirroring the COUNTDOWN block
         -- above, makes this one-time setup actually run once.
-        if M.scenarioLocked then
-            unlockScenario()
-            beamjoy_communications_ui.send("BJHunterCountdown", { active = false })
-        end
         -- Asymmetric release: both roles are frozen at the exact HUNT-start instant server-side
         -- (huntStartTimeMs, below), unfreezing locally after their own role's start delay: the
         -- fugitive's built-in head start (see BJHunterDefaults.huntedStartDelay/huntersStartDelay).
         local myVeh = beamjoy_vehicles.getCurrentOwn()
-        local delaySec = participant.role == "hunted" and session.settings.huntedStartDelay or
-            session.settings.huntersStartDelay
+        local delaySec = math.max(0, participant.role == "hunted" and session.settings.huntedStartDelay or
+            session.settings.huntersStartDelay)
+        -- Per direct request: rather than the pre-round countdown vanishing at 0 and this role's
+        -- own start delay then freezing them again with no visible timer at all, keep the SAME
+        -- overlay ticking continuously through both phases - see countdownDisplayOnly's own doc
+        -- comment. delaySec == 0 (the default for "hunted") keeps the exact prior behavior:
+        -- unlock immediately, no second phase.
+        if delaySec > 0 then
+            M.scenarioLocked = true
+            M.countdownDisplayOnly = true
+            M.countdownStartMs = GetCurrentTimeMillis()
+            M.countdownTotal = delaySec
+            M.lastSentSeconds = nil
+        elseif M.scenarioLocked then
+            unlockScenario()
+            beamjoy_communications_ui.send("BJHunterCountdown", { active = false })
+        end
         if myVeh then
             beamjoy_vehicles.setFreeze(myVeh.vid, true)
         end
@@ -893,6 +913,15 @@ local function onSessionUpdate(session)
         async.delayTask(function()
             local currVeh = beamjoy_vehicles.getCurrentOwn()
             if currVeh then beamjoy_vehicles.setFreeze(currVeh.vid, false) end
+            -- ends the extended countdown display (if delaySec > 0 started one above) in the SAME
+            -- tick as the actual unfreeze, so updateCountdown()'s own freeze-enforcement loop
+            -- (skipped while countdownDisplayOnly, but that flag itself needs clearing here too)
+            -- can never re-freeze on the very next frame
+            if M.scenarioLocked then
+                unlockScenario()
+                beamjoy_communications_ui.send("BJHunterCountdown", { active = false })
+            end
+            M.countdownDisplayOnly = false
             local vid = currVeh and currVeh.vid or (myVeh and myVeh.vid)
             if not vid then return end
             -- checkGhostedBystanders=false + a bounded force-fallback, mirroring raceRunner.lua's
@@ -908,7 +937,7 @@ local function onSessionUpdate(session)
             async.delayTask(function()
                 beamjoy_vehicles.setGhostReason(vid, "hunter", false, true)
             end, 2000, forceTaskName)
-        end, math.max(0, delaySec) * 1000, "BJHunterReleaseFreeze")
+        end, delaySec * 1000, "BJHunterReleaseFreeze")
         M.huntStartTimeMs = GetCurrentTimeMillis()
         M.lastProgressPos = nil
         M.lastProgressCheckMs = nil
@@ -967,9 +996,14 @@ end
 
 local function updateCountdown()
     if not M.scenarioLocked or not M.countdownTotal then return end
-    local myVeh = beamjoy_vehicles.getCurrentOwn()
-    if myVeh and myVeh.veh.froze ~= "1" then
-        beamjoy_vehicles.setFreeze(myVeh.vid, true)
+    -- see countdownDisplayOnly's own doc comment: this phase's freeze/unfreeze is driven entirely
+    -- by the explicit calls around the HUNT-transition block, not this loop, so it can't re-freeze
+    -- the vehicle in the same window the delayed release is trying to let it go
+    if not M.countdownDisplayOnly then
+        local myVeh = beamjoy_vehicles.getCurrentOwn()
+        if myVeh and myVeh.veh.froze ~= "1" then
+            beamjoy_vehicles.setFreeze(myVeh.vid, true)
+        end
     end
 
     -- Still waiting on vehicle confirmations: the real timer hasn't started yet (see the

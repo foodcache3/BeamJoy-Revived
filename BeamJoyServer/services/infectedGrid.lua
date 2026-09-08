@@ -29,8 +29,8 @@
 ---@field spawnDir {x: number, y: number, z: number}?
 ---@field vehicleModel string? reported at ready, same pattern as races'/hunter's own equivalent field
 ---@field originalInfected boolean? true if this participant started the round already infected
----(the random draw, or a staff force-assignment), as opposed to being tagged mid-round ; drives the
----asymmetric survivorsStartDelay/infectedStartDelay freeze release client-side
+---(the random draw, or a staff force-assignment), as opposed to being tagged mid-round ; drives
+---infectedStartDelay's freeze release client-side (survivors have no such delay)
 ---@field infectedAt integer? GetCurrentTime() timestamp of the tag that infected this participant ;
 ---nil for both survivors and the round's original infected (who were never "tagged" at all)
 ---@field infectedBy integer? playerID of whoever tagged this participant ; nil for survivors and
@@ -42,7 +42,6 @@
 ---@class BJInfectedSessionSettings host-configurable at game-start time, seeded from
 ---BJInfectedDefaults ; see services/infected.lua for full field docs, mirrored here 1:1
 ---@field initialInfectedCount integer
----@field survivorsStartDelay integer
 ---@field infectedStartDelay integer
 ---@field roundDuration integer minutes
 ---@field gridReadyTimeout integer
@@ -296,8 +295,9 @@ local function buildSettings(arena, overrides)
     return {
         initialInfectedCount = math.max(1, math.floor(tonumber(overrides.initialInfectedCount) or
             defaults.initialInfectedCount or 1)),
-        survivorsStartDelay = math.max(0, tonumber(overrides.survivorsStartDelay) or
-            defaults.survivorsStartDelay or 0),
+        -- survivorsStartDelay removed entirely per direct request : survivors always release the
+        -- instant GAME starts, not host-configurable (see infectedRunner.lua's own GAME-transition
+        -- block client-side)
         infectedStartDelay = math.max(0, tonumber(overrides.infectedStartDelay) or
             defaults.infectedStartDelay or 10),
         roundDuration = math.clamp(math.floor(tonumber(overrides.roundDuration) or

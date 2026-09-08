@@ -12,12 +12,13 @@
 ---    same trust model as any LAN-party "just type a name" convention. Only prevents two people
 ---    CURRENTLY connected from colliding on the same nickname at once.
 ---
---- 2) Chat-command staff/owner login (`/staff <password>`, `/owner <password>`), gated by a
----    single shared password per tier, set from the server console (never in a chat message or a
----    config file a player could read). Grants the group for the CURRENT session only, exactly
----    like any other group change (services_players.setGroup already persists/broadcasts it) -
----    there's deliberately no separate revocation command here; use the existing `/bj group` or
----    `/setgroup` to demote someone back down.
+--- 2) A single `/login <password>` chat command covering both staff and owner, gated by two
+---    independent shared passwords (one per tier) set from the server console (never in a chat
+---    message or a config file a player could read). Tried against the owner password first,
+---    then staff, so a password that happens to match both grants the higher tier. Grants the
+---    real group, persisted exactly like any other group change (services_players.setGroup
+---    already persists/broadcasts it) - there's deliberately no separate revocation command here;
+---    use the existing `/bj group` or `/setgroup` to demote someone back down.
 
 local M = {
     dependencies = { "dao_staffAuth", "services_players", "services_groups",
@@ -112,19 +113,25 @@ end
 ---@param ctxt BJSContext
 ---@param args string[] "<password...>"
 ---@param command BJChatCommand
----@param hashField "staffHash"|"ownerHash"
----@param groupName string?
-local function chatPasswordLogin(ctxt, args, command, hashField, groupName)
+local function chatLogin(ctxt, args, command)
     if #args < 1 then return chatUsage(ctxt, command) end
-    if not groupName then return end
     local auth = dao_staffAuth.get() or {}
-    if not auth[hashField] then
+    if not auth.staffHash and not auth.ownerHash then
         return services_chat.directSend(ctxt.senderID,
             services_lang.get("chat.command.login.notConfigured", ctxt.sender.lang),
             services_chat.COLORS.ERROR)
     end
     local password = table.join(args, " ")
-    if utils_sha.sha256(password) ~= auth[hashField] then
+    local hash = utils_sha.sha256(password)
+    -- owner checked first : a password that happens to match both tiers (e.g. left identical by
+    -- mistake) grants the higher one, never the lower
+    local groupName
+    if auth.ownerHash and hash == auth.ownerHash then
+        groupName = getOwnerGroupName()
+    elseif auth.staffHash and hash == auth.staffHash then
+        groupName = getStaffGroupName()
+    end
+    if not groupName then
         return services_chat.directSend(ctxt.senderID,
             services_lang.get("chat.command.login.wrongPassword", ctxt.sender.lang),
             services_chat.COLORS.ERROR)
@@ -135,20 +142,6 @@ local function chatPasswordLogin(ctxt, args, command, hashField, groupName)
     services_players.setGroup(InitContext(), ctxt.sender.playerName, groupName)
     services_chat.directSend(ctxt.senderID,
         services_lang.get("chat.command.login.success", ctxt.sender.lang):var({ group = groupName }))
-end
-
----@param ctxt BJSContext
----@param args string[]
----@param command BJChatCommand
-local function chatStaffLogin(ctxt, args, command)
-    chatPasswordLogin(ctxt, args, command, "staffHash", getStaffGroupName())
-end
-
----@param ctxt BJSContext
----@param args string[]
----@param command BJChatCommand
-local function chatOwnerLogin(ctxt, args, command)
-    chatPasswordLogin(ctxt, args, command, "ownerHash", getOwnerGroupName())
 end
 
 ---@param args string[]
@@ -187,13 +180,11 @@ local function onInit()
     services_consoleCommands.register("ownerpassword", "commands.bjownerpassword.args",
         "commands.bjownerpassword.desc", M.consoleSetOwnerPassword)
 
-    -- deliberately no `permissions` field on either command : the entire point is that a player
-    -- with NO permissions yet can use these to gain some, same as /help and /pm which are the
-    -- only other two chat commands registered with no permission gate
-    services_chatCommands.addCommand("staff", "chat.command.staff.desc", M.chatStaffLogin,
-        { commandKey = "chat.command.staff.command" })
-    services_chatCommands.addCommand("owner", "chat.command.owner.desc", M.chatOwnerLogin,
-        { commandKey = "chat.command.owner.command" })
+    -- deliberately no `permissions` field : the entire point is that a player with NO permissions
+    -- yet can use this to gain some, same as /help and /pm which are the only other two chat
+    -- commands registered with no permission gate
+    services_chatCommands.addCommand("login", "chat.command.login.desc", M.chatLogin,
+        { commandKey = "chat.command.login.command" })
 end
 
 M.onInit = onInit
@@ -201,8 +192,7 @@ M.onInit = onInit
 M.login = login
 M.getIdentityKey = getIdentityKey
 
-M.chatStaffLogin = chatStaffLogin
-M.chatOwnerLogin = chatOwnerLogin
+M.chatLogin = chatLogin
 M.consoleSetStaffPassword = consoleSetStaffPassword
 M.consoleSetOwnerPassword = consoleSetOwnerPassword
 

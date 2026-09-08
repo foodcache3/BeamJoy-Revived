@@ -29,8 +29,8 @@ local M = {
     gridReadyTargetMs = nil,
     gridTimeoutTargetMs = nil,
     ---@type integer? GetCurrentTimeMillis domain: when the GAME-start release-freeze delay
-    ---(survivorsStartDelay/infectedStartDelay) actually unfreezes this client, nil once released
-    ---or whenever no hold is in effect. Real bug: this delay used to have no HUD indicator at
+    ---(infectedStartDelay ; survivors have no such delay) actually unfreezes this client, nil once
+    ---released or whenever no hold is in effect. Real bug: this delay used to have no HUD indicator at
     ---all, so a held participant had no way to tell they were frozen on purpose (working as
     ---intended) rather than stuck/bugged.
     holdReleaseTargetMs = nil,
@@ -354,29 +354,55 @@ local function onBJRequestRestrictions(restrictions)
 
     restrictions:addAll({ "toggle_slow_motion", "slower_motion", "faster_motion", "pause" }, true)
 
-    -- Resetting/recovering during COUNTDOWN (frozen at the grid) is always blocked, same as
-    -- races'/hunter's own COUNTDOWN block.
+    -- Real gap found while verifying "forced reset in place" actually held up: the restriction
+    -- system only ever blocks NATIVE INPUT ACTIONS (core_input_actionFilter, a keybind/ActionMap
+    -- -level filter), but at least two other native UI paths reposition/reset a vehicle WITHOUT
+    -- ever going through that filter at all, confirmed by reading the installed game's own source:
+    --   - lua/ge/extensions/ui/pause/providers/vehicleTabInteractions.lua's own tryResetVehicle
+    --     (the ESC-menu "Reset" tile per spawned vehicle) calls vehicle:requestReset(RESET_PHYSICS)
+    --     directly - no core_input_actionFilter.isActionBlocked call anywhere in it. It CAN'T be
+    --     targeted directly through this restriction system at all (there's no action name to
+    --     block - the call is unconditional). It's only reachable at all while
+    --     canModifyVehicles() (that same file) returns true, which itself checks
+    --     switch_next_vehicle/switch_previous_vehicle - so blocking those two also disables this
+    --     whole panel (Reset/Repair/Clone/Delete) as a side effect, which is the only lever this
+    --     restriction system actually has over it.
+    --   - lua/ge/extensions/core/quickAccess.lua's own radial-menu "Set Home"/"Go Home" entries
+    --     (recovery.saveHome/recovery.loadHome) ARE gated by isActionBlocked, but under "loadHome"/
+    --     "saveHome" - never included here before, so a player could bookmark an arbitrary point
+    --     and teleport back to it anytime, fully bypassing the speed gate and the reposition block
+    --     just below.
+    --   - that same file's own M.tryAction("recoverVehicle"/"resetVehicle") binding layer (used by
+    --     some UI apps/buttons) ALSO checks isActionBlocked, but under those literal camelCase
+    --     names - never the native underscored ones this file already blocks, so they were
+    --     silently never covered either. Both resolve to in-place resets (spawn.safeTeleport to the
+    --     vehicle's OWN current position, or resetGameplay(0)), same category as reset_physics.
     if M.session.state == "COUNTDOWN" then
+        -- Resetting/recovering during COUNTDOWN (frozen at the grid) is always blocked, same as
+        -- races'/hunter's own COUNTDOWN block.
         restrictions:addAll({
-            "recover_vehicle", "recover_vehicle_alt", "recover_to_last_road",
-            "reset_physics", "reset_all_physics", "reload_vehicle",
+            "recover_vehicle", "recover_vehicle_alt", "recover_to_last_road", "loadHome",
+            "reset_physics", "reset_all_physics", "reload_vehicle", "recoverVehicle", "resetVehicle",
+            "switch_next_vehicle", "switch_previous_vehicle",
         }, true)
     elseif M.session.state == "GAME" then
-        -- Real gap, per direct request: these three all explicitly search for (and can teleport
-        -- a meaningful distance to) a different "safe" spot (confirmed by reading the installed
-        -- game's own core/input/actions/gameplay.json: recover_vehicle -> recovery.startRecovering,
-        -- recover_to_last_road -> spawn.teleportToLastRoad), which would let a reset be used to
-        -- simply escape a chase. Always blocked now, GAME-wide, with no exception - "forced to
-        -- reset in place" per direct request.
-        restrictions:addAll({ "recover_vehicle", "recover_vehicle_alt", "recover_to_last_road" }, true)
+        -- recover_vehicle/recover_vehicle_alt/recover_to_last_road/loadHome all explicitly search
+        -- for (or teleport a meaningful distance to) a different "safe" spot (confirmed by reading
+        -- the installed game's own core/input/actions/gameplay.json), which would let a reset be
+        -- used to simply escape a chase. Always blocked now, GAME-wide, with no exception -
+        -- "forced to reset in place" per direct request.
+        restrictions:addAll({ "recover_vehicle", "recover_vehicle_alt", "recover_to_last_road", "loadHome" }, true)
 
-        -- reset_physics/reset_all_physics/reload_vehicle, by contrast, all resolve to
-        -- be:resetVehicle() (confirmed by reading freeroam.lua's own onResetGameplay) - an
-        -- in-place physics/damage reset with no repositioning search, so these are the ones
-        -- actually left reachable, gated on speed and the post-reset relock instead of blocked
-        -- outright.
+        -- reset_physics/reset_all_physics/reload_vehicle (and their quickAccess-binding-layer
+        -- equivalents recoverVehicle/resetVehicle, and switch_next/previous_vehicle for the
+        -- pause-menu panel reasoning above), by contrast, all resolve to an in-place physics/
+        -- damage reset with no repositioning search, so these are the ones actually left
+        -- reachable, gated on speed and the post-reset relock instead of blocked outright.
         if M.movingTooFastToReset or (M.resetRelockUntilMs and GetCurrentTimeMillis() < M.resetRelockUntilMs) then
-            restrictions:addAll({ "reset_physics", "reset_all_physics", "reload_vehicle" }, true)
+            restrictions:addAll({
+                "reset_physics", "reset_all_physics", "reload_vehicle", "recoverVehicle", "resetVehicle",
+                "switch_next_vehicle", "switch_previous_vehicle",
+            }, true)
         end
     end
 end
@@ -713,9 +739,11 @@ local function onSessionUpdate(session)
         -- server-side, unfreezing locally after their own role's own delay (infected's built-in
         -- delay is the survivors' head start). A survivor tagged mid-round is never frozen at all;
         -- this block only ever runs once, at the real LOBBY/COUNTDOWN -> GAME transition.
+        -- Survivors deliberately have NO configurable delay at all, per direct request (was
+        -- previously defaulted to 0 but still host-configurable ; now hardcoded) - they always
+        -- release the instant GAME starts, same as a survivor created mid-round by a tag.
         local myVeh = beamjoy_vehicles.getCurrentOwn()
-        local delaySec = participant.role == "infected" and session.settings.infectedStartDelay or
-            session.settings.survivorsStartDelay
+        local delaySec = participant.role == "infected" and session.settings.infectedStartDelay or 0
         if myVeh then
             beamjoy_vehicles.setFreeze(myVeh.vid, true)
         end

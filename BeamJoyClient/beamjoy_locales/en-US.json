@@ -467,8 +467,6 @@
     "beamjoy.window.config.tabs.infectedArena.initialInfectedCount.tooltip": "How many participants start the round already infected, drawn randomly unless staff pre-assigns specific players first.",
     "beamjoy.window.config.tabs.infectedArena.roundDuration": "Round length",
     "beamjoy.window.config.tabs.infectedArena.roundDuration.tooltip": "Minutes survivors have to outlast the infected before automatically winning by survival.",
-    "beamjoy.window.config.tabs.infectedArena.survivorsStartDelay": "Survivors release delay",
-    "beamjoy.window.config.tabs.infectedArena.survivorsStartDelay.tooltip": "Seconds before survivors are released once the round starts.",
     "beamjoy.window.config.tabs.infectedArena.infectedStartDelay": "Infected release delay",
     "beamjoy.window.config.tabs.infectedArena.infectedStartDelay.tooltip": "Seconds before the round's original infected are released, their head start over the infected.",
     "beamjoy.window.config.tabs.infectedArena.resetRelockSeconds": "Reset relock",

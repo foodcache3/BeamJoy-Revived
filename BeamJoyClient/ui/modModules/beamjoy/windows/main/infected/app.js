@@ -81,7 +81,6 @@ angular.module("beamjoy").component("bjMainInfected", {
             this.startOptions = {
                 initialInfectedCount: d.initialInfectedCount || 1,
                 roundDuration: d.roundDuration || 10,
-                survivorsStartDelay: d.survivorsStartDelay ?? 5,
                 infectedStartDelay: d.infectedStartDelay ?? 10,
                 enableColors: d.enableColors === true,
                 survivorColor: d.survivorColor || null,

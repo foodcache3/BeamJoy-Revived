@@ -6,6 +6,44 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.88] - 2026-09-08
+
+Client v1.8.88, server v1.8.68. Server-side change in this range needs deploying to the live
+server separately; the client is a straight mod update.
+
+### Changed
+- **`/staff` and `/owner` chat commands merged into a single `/login <password>`.** Tried against
+  the owner password first, then staff, so a password that happens to match both grants the higher
+  tier. Console commands to set each password are unchanged (`bj staffpassword`/`bj
+  ownerpassword`) - still two independent passwords, just one command to log in with either.
+- **Infected survivors' release delay removed entirely, not just defaulted to 0.** It's no longer
+  a host-configurable option at all (removed from both the arena Settings tab and the per-session
+  Start options) - survivors always release the instant GAME starts, same as a survivor created
+  mid-round by a tag.
+- **Hunter's countdown now extends through the post-countdown release delay instead of vanishing
+  at 0 and freezing again with no visible timer.** Hunters (default 5s head start held back for
+  the fugitive) used to see the countdown overlay disappear the instant COUNTDOWN hit zero, then
+  sit frozen for their own start delay with nothing on screen explaining why. The same overlay now
+  keeps ticking continuously through both phases for whichever role actually has a delay (fugitive
+  defaults to 0, so this is a no-op for them); this player's own vehicle freeze/release timing is
+  completely unchanged, only the display.
+
+### Fixed
+- **Forced "reset in place" during Infected didn't actually hold up.** Two native paths reposition
+  or reset a vehicle without ever going through the restriction system BJS uses at all, confirmed
+  by reading the installed game's own source: the ESC-menu's per-vehicle "Reset" tile calls
+  `vehicle:requestReset()` directly with no filter check whatsoever (only closable as a side effect
+  of also blocking vehicle-switching, since that pause-menu panel is gated behind that check
+  instead); and the radial menu's "Go Home" (teleport to a player-bookmarked point) was never
+  included in the blocked-action list at all, letting a bookmarked spot bypass the reposition block
+  entirely. Both are now covered - see infectedRunner.lua's own onBJRequestRestrictions for the
+  full breakdown of what's closed and what's an unavoidable native-UI limitation.
+- **Clearing one role's color in the Infected arena editor could corrupt both.** A cleared color
+  never round-tripped back to a clean "unset" state on the live-editing path (only the actual Save
+  action sanitized it) - it could sit as a value that was neither a valid color nor recognized as
+  properly cleared, which kept re-triggering its own resend indefinitely instead of settling.
+  Sanitized the same way at every hand-off point now, both client Lua and Angular.
+
 ## [1.8.67] - 2026-09-08
 
 Server v1.8.67. Server-only, no client change in this range - just deploy the updated server
