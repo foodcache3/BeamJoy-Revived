@@ -407,6 +407,14 @@ local function onBJRequestRestrictions(restrictions)
     -- panel reaches simTimeAuthority directly, bypassing this action filter entirely.
     restrictions:addAll({ "toggle_slow_motion", "slower_motion", "faster_motion", "pause" }, true)
 
+    -- Always on, not host-configurable : blocking these two also closes the ESC-menu's own
+    -- Repair/Reset/Clone/Delete vehicle panel entirely (confirmed by reading the installed game's
+    -- own ui/pause/providers/vehicleTabInteractions.lua : canModifyVehicles(), which every tile in
+    -- that panel is gated behind, checks nothing but these two action IDs). Real gap fixed here:
+    -- without this, "Repair" stayed reachable through the pause menu regardless of speed or any
+    -- other restriction here, letting a participant erase crash damage mid-hunt for free.
+    restrictions:addAll({ "switch_next_vehicle", "switch_previous_vehicle" }, true)
+
     -- Resetting/recovering during COUNTDOWN (frozen at the grid) is always blocked, same as races'
     -- own COUNTDOWN block. During HUNT, the fugitive's own reset is additionally gated by
     -- huntedResetDistanceThreshold (see updateStuckAndReveal below). Hunters can always reset
@@ -528,6 +536,7 @@ local function pushSessionStatus_impl(session)
         participants = table.map(session.participants, function(p)
             return {
                 playerName = p.playerName,
+                displayName = p.displayName,
                 playerID = p.playerID,
                 ready = p.ready,
                 role = p.role,
@@ -1455,14 +1464,14 @@ local function updateHunterResetLock()
     end
 end
 
---- Hold-to-confirm Unstuck button (hunterHud/app.js) : teleports the local vehicle to the last
---- known road, routed through beamjoy_inputs.onReset (see that file's own onReset/M.RESET table)
---- with RECOVER_LAST_ROAD - the exact same call chain the real recover_to_last_road key/menu entry
---- itself goes through (inputs.lua permanently redirects the native spawn.teleportToLastRoad into
---- that same pipeline), rather than reaching for the native function directly and either missing
---- that redirect or double-triggering it. Only raceRunner.lua actually implements
---- onBJRequestCurrentVehicleReset (that pipeline's own veto hook), so this passes through cleanly
---- for Hunter. The 5-second hold itself is the anti-abuse gate, so this deliberately skips the
+--- Hold-to-confirm Unstuck button (hunterHud/app.js) : per direct request ("unstuck should just
+--- teleport you to the nearest spawn"), teleports the local vehicle to whichever of this round's
+--- own spawn points - hunterSpawns for a hunter (reusing nearestHunterSpawnClearOfFugitive, the
+--- exact same "prefer a spawn clear of the fugitive's own reset-lock" refinement the crash-respawn
+--- strategy above already applies), preySpawns for the fugitive - is closest to their current
+--- position, rather than recover_to_last_road's own "nearest road, wherever that happens to be"
+--- behavior, which can leave a participant far outside the actual arena on a track that borders
+--- open terrain. The 5-second hold itself is the anti-abuse gate, so this deliberately skips the
 --- velocity gate too. Still respects huntedResetLocked though: a fugitive being actively pressed
 --- by a nearby hunter shouldn't get a free escape hatch just by holding a button - same reasoning
 --- the native distance gate already applies to every other reset type. Hunters have no equivalent
@@ -1475,7 +1484,19 @@ local function onUnstuckRequest()
     if participant.role == "hunted" and M.huntedResetLocked then return end
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if not myVeh then return end
-    beamjoy_inputs.onReset(beamjoy_inputs.RESET.RECOVER_LAST_ROAD)
+    local arena = M.session.arenaSnapshot or {}
+    local pos = beamjoy_vehicles.getVehiclePositionRotation(myVeh.veh)
+    local target
+    if participant.role == "hunter" then
+        target = nearestHunterSpawnClearOfFugitive(arena.hunterSpawns or {}, pos)
+    else
+        target = nearestSpawnPoint(arena.preySpawns or {}, pos)
+    end
+    if not target then return end
+    beamjoy_vehicles.setVehiclePositionRotation(myVeh.veh,
+        vec3(target.pos.x, target.pos.y, target.pos.z),
+        vec3(target.dir.x, target.dir.y, target.dir.z),
+        vec3(0, 0, 1), { cling = false })
 end
 M.onUnstuckRequest = onUnstuckRequest
 

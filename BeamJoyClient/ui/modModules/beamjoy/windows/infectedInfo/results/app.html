@@ -1,0 +1,57 @@
+<style>
+    bj-infected-info-results {
+        display: block;
+        height: 100%;
+        overflow: auto;
+    }
+    bj-infected-info-results tr.winner {
+        color: #ba68f8;
+    }
+    bj-infected-info-results tr.role-infected {
+        color: #ff5252;
+    }
+    bj-infected-info-results h5 {
+        margin: 0.6em 0 0.3em;
+        opacity: 0.8;
+    }
+</style>
+
+<div ng-if="!$ctrl.active" class="opacity-70 p-2">
+    {{'beamjoy.window.main.tabs.infected.results.noActiveRound' | translate}}
+</div>
+
+<div ng-if="$ctrl.active">
+    <div ng-if="!$ctrl.finished" class="opacity-70 mb-2">
+        {{'beamjoy.window.main.tabs.infected.results.stillRunning' | translate}}
+    </div>
+    <div ng-if="$ctrl.finished && $ctrl.winner" class="mb-2">
+        <b>{{('beamjoy.window.main.tabs.infected.winner.' + $ctrl.winner) | translate}}</b>
+    </div>
+
+    <h5>{{'beamjoy.window.main.tabs.infected.results.title' | translate}}</h5>
+    <table class="race-info-table">
+        <thead>
+            <tr>
+                <th class="text-center">#</th>
+                <th class="text-left">{{'beamjoy.window.main.tabs.infected.results.player' | translate}}</th>
+                <th>{{'beamjoy.window.main.tabs.infected.results.survived' | translate}}</th>
+                <th>{{'beamjoy.window.main.tabs.infected.results.infectedCount' | translate}}</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr
+                ng-repeat="p in $ctrl.participants track by $index"
+                ng-class="{winner: $index === 0, 'role-infected': p.role === 'infected'}"
+            >
+                <td class="text-center">{{$index + 1}}</td>
+                <td class="text-left">{{p.displayName || p.playerName}}</td>
+                <td title="{{'beamjoy.window.main.tabs.infected.results.survived.tooltip' | translate}}">
+                    {{$ctrl.formatTime(p.survivedMs)}}
+                </td>
+                <td title="{{'beamjoy.window.main.tabs.infected.results.tagCount.tooltip' | translate}}">
+                    {{p.tagCount || 0}}
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>

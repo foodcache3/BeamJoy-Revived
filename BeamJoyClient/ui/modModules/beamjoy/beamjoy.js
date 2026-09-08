@@ -58,6 +58,7 @@ await import(`/ui/modModules/beamjoy/windows/kickVote/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceInfo/live/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceInfo/results/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceLeaderboard/app.js`);
+await import(`/ui/modModules/beamjoy/windows/infectedInfo/results/app.js`);
 
 beamjoyModule.component("beamjoy", {
     template: ``,

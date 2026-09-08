@@ -518,6 +518,15 @@ local function onBJRequestRestrictions(restrictions)
     -- this action filter at all.
     restrictions:addAll({ "toggle_slow_motion", "slower_motion", "faster_motion", "pause" }, true)
 
+    -- Always on, not host-configurable : blocking these two also closes the ESC-menu's own
+    -- Repair/Reset/Clone/Delete vehicle panel entirely (confirmed by reading the installed game's
+    -- own ui/pause/providers/vehicleTabInteractions.lua : canModifyVehicles(), which every tile in
+    -- that panel is gated behind, checks nothing but these two action IDs). Real gap fixed here:
+    -- without this, "Repair" stayed reachable through the pause menu regardless of any other
+    -- restriction here, letting a participant erase crash damage mid-race for free, same fix as
+    -- Hunter/Infected's own identical treatment.
+    restrictions:addAll({ "switch_next_vehicle", "switch_previous_vehicle" }, true)
+
     -- resetting/recovering (BeamNG's own "rewind to last safe position" / reset inputs) only
     -- actually matters as a norespawn-specific concern once there's real race progress to protect
     -- during RACE itself: other respawn strategies deliberately allow it there. COUNTDOWN is a
@@ -985,7 +994,7 @@ end
 ---how close the field still is at that moment.
 ---@return {playerName: string, finished: boolean, dnf: boolean, gapMs: integer?, lapsDiff: integer?}
 local function describeOpponent(self, other, totalGates)
-    local desc = { playerName = other.playerName, finished = other.finished, dnf = other.dnf }
+    local desc = { playerName = other.playerName, displayName = other.displayName, finished = other.finished, dnf = other.dnf }
     if self.dnf or other.dnf or self.finished ~= other.finished then
         return desc
     end
@@ -1120,6 +1129,7 @@ local function pushHud()
         elapsedMs = elapsedMs,
         self = {
             playerName = participant.playerName,
+            displayName = participant.displayName,
             currentLap = participant.currentLap,
             currentGate = participant.currentGate,
             currentSector = participant.currentSector,
@@ -1238,6 +1248,7 @@ local function pushRaceInfo()
                 local aheadGap = (ahead and ahead ~= p) and describeOpponent(ahead, p, totalSteps(race)) or nil
                 return {
                     playerName = p.playerName,
+                    displayName = p.displayName,
                     vehicleModel = p.vehicleModel,
                     finished = p.finished,
                     dnf = p.dnf,
@@ -1414,6 +1425,7 @@ local function pushSessionStatus()
             return {
                 playerID = p.playerID,
                 playerName = p.playerName,
+                displayName = p.displayName,
                 ready = p.ready,
                 vehicleModel = p.vehicleModel,
                 gridSlot = p.gridSlot,

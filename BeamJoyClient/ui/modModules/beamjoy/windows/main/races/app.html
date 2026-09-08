@@ -182,7 +182,7 @@
                 #{{player.gridSlot}}
             </span>
             <span class="flex-grow-1">
-                {{player.playerName}}
+                {{player.displayName || player.playerName}}
                 <span ng-if="player.vehicleModel" class="small opacity-70">({{player.vehicleModel}})</span>
             </span>
             <span ng-if="player.ready" class="ready small">

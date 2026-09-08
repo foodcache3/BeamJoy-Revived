@@ -113,7 +113,7 @@
 ---only ever true via the debug chat command, which independently re-checks isStaff itself
 
 local M = {
-    dependencies = { "services_hunter", "services_vehiclePresets", "utils_async" },
+    dependencies = { "services_hunter", "services_vehiclePresets", "utils_async", "services_identity" },
 
     ---@type tablelib<string, BJHunterSession>
     sessions = Table(),
@@ -250,13 +250,23 @@ local function pickWaypointRoute(arena, count, fromPos)
     return route
 end
 
+--- see raceGrid.lua's own identical resolveDisplayName/withDisplayName for the full "why" : a
+--- logged-in nickname (services/identity.lua) never reaches an independent session's own
+--- `participants` table on its own, only the general player cache.
+---@param playerID integer
+---@param fallbackName string
+---@return string
+local function resolveDisplayName(playerID, fallbackName)
+    return services_identity.getIdentityKey(playerID) or fallbackName
+end
+
 ---@param session BJHunterSession
 ---@return table
 local function summarize(session)
     local starter = session.participants[session.starterID]
     return {
         id = session.id,
-        starterName = starter and starter.playerName or "?",
+        starterName = starter and resolveDisplayName(starter.playerID, starter.playerName) or "?",
         joinable = session.joinable,
         participantCount = session.participants:length(),
         maxParticipants = 1 + #session.arenaSnapshot.hunterSpawns,
@@ -275,6 +285,7 @@ local function buildBasePayload(session)
     payload.participants = table.map(session.participants:values(), function(p)
         local trimmed = table.clone(p)
         trimmed.waypointsReached = nil
+        trimmed.displayName = resolveDisplayName(p.playerID, p.playerName)
         return trimmed
     end)
     payload.route = nil

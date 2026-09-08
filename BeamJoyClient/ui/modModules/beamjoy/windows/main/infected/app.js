@@ -1,6 +1,8 @@
 angular.module("beamjoy").component("bjMainInfected", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/infected/app.html",
-    controller: function ($rootScope, beamjoyStore) {
+    controller: function ($rootScope, $timeout, $filter, beamjoyStore, beamjoyInfoPanel) {
+        const translate = $filter("translate");
+
         this.canEditArena = () =>
             beamjoyStore.permissions.hasAllPermissions(undefined, "EditInfectedArenas");
         this.isStaff = () => beamjoyStore.permissions.isStaff(undefined);
@@ -34,9 +36,6 @@ angular.module("beamjoy").component("bjMainInfected", {
                 this.showPlayers = false;
                 this.showSettings = false;
             }
-            if (this.status && this.status.state === "FINISHED") {
-                this.showPlayers = true;
-            }
             this.allReady =
                 !!this.status &&
                 Array.isArray(this.status.participants) &&
@@ -55,23 +54,29 @@ angular.module("beamjoy").component("bjMainInfected", {
             this.showPlayers = !this.showPlayers;
         };
 
-        // FINISHED-only results ordering: longest survival first, matching a standard results
-        // leaderboard rather than plain join order. Participants without a survivedMs yet (a stale
-        // push mid-teardown, shouldn't really happen) sort last instead of crashing the compare.
-        this.resultsParticipants = () => {
-            if (!this.status || !Array.isArray(this.status.participants)) return [];
-            return this.status.participants
-                .slice()
-                .sort((a, b) => (b.survivedMs ?? -1) - (a.survivedMs ?? -1));
+        // Reusable info-panel framework (see cmps/infoPanel/app.js and races' own identical first
+        // consumer, windows/main/races/app.js's openRaceInfoPanel): a single "results" tab showing
+        // time survived + tagCount per participant, longest survival first.
+        this.openInfectedInfoPanel = () => {
+            beamjoyInfoPanel.open(translate("beamjoy.window.main.tabs.infected.title"), [
+                {
+                    id: "results",
+                    title: "beamjoy.window.main.tabs.infected.results.title",
+                    template: "<bj-infected-info-results></bj-infected-info-results>",
+                },
+            ], "results");
         };
-
-        this.formatTime = (ms) => {
-            if (typeof ms !== "number" || ms < 0) return "-";
-            const totalSec = ms / 1000;
-            const min = Math.floor(totalSec / 60);
-            const sec = (totalSec % 60).toFixed(0).padStart(2, "0");
-            return `${min}:${sec}`;
+        this.openResults = (event) => {
+            event.stopPropagation();
+            this.openInfectedInfoPanel();
         };
+        // fired once, server-side, the moment the round actually finishes: auto-surfaces the
+        // results instead of requiring a manual click. Delayed a few seconds per the same reasoning
+        // as races' own identical BJRaceInfoAutoOpen handler - popping the panel open the INSTANT
+        // the round ends collides visually with the "Round over!"/winner popup also on screen then.
+        $rootScope.$on("BJInfectedInfoAutoOpen", () => {
+            $timeout(() => this.openInfectedInfoPanel(), 3000);
+        });
 
         // per the same reasoning as Hunter's own equivalent : lobby/countdown/game participants can
         // see what actually applies to this round, not just when starting a fresh one
@@ -106,6 +111,7 @@ angular.module("beamjoy").component("bjMainInfected", {
                 enableColors: d.enableColors === true,
                 survivorColor: d.survivorColor || null,
                 infectedColor: d.infectedColor || null,
+                disableResets: d.disableResets === true,
             };
         };
         this.cancelStart = (event) => {

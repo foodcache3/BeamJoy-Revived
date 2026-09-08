@@ -201,11 +201,11 @@
 
     <div class="hud-gaps" ng-if="$ctrl.position">
         <div class="hud-gap-row" ng-if="$ctrl.ahead" ng-click="$ctrl.toggleExpanded()">
-            <span class="name">▲ {{$ctrl.ahead.playerName}}</span>
+            <span class="name">▲ {{$ctrl.ahead.displayName || $ctrl.ahead.playerName}}</span>
             <span class="gap">{{$ctrl.opponentLabel($ctrl.ahead)}}</span>
         </div>
         <div class="hud-gap-row" ng-if="$ctrl.behind" ng-click="$ctrl.toggleExpanded()">
-            <span class="name">▼ {{$ctrl.behind.playerName}}</span>
+            <span class="name">▼ {{$ctrl.behind.displayName || $ctrl.behind.playerName}}</span>
             <span class="gap">{{$ctrl.opponentLabel($ctrl.behind)}}</span>
         </div>
         <div
@@ -224,7 +224,7 @@
                     ng-class="{finished: row.finished, dnf: row.dnf, self: row.playerName === $ctrl.self.playerName}"
                 >
                     <td class="rank">{{$index + 1}}</td>
-                    <td>{{row.playerName}}</td>
+                    <td>{{row.displayName || row.playerName}}</td>
                     <td class="gap">{{$ctrl.opponentLabel(row)}}</td>
                 </tr>
             </table>

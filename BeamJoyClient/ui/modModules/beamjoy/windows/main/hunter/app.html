@@ -99,7 +99,7 @@
     <div class="player-list" ng-if="$ctrl.showPlayers">
         <div ng-repeat="p in $ctrl.status.participants" class="d-flex align-center gap-1">
             <span class="flex-grow-1" ng-class="{'role-hunted': p.role === 'hunted'}">
-                {{p.playerName}}
+                {{p.displayName || p.playerName}}
                 <span ng-if="p.vehicleModel" class="small opacity-70">({{p.vehicleModel}})</span>
             </span>
             <span ng-if="p.ready" class="ready">✓</span>

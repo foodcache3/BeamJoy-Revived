@@ -6,6 +6,57 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.96] - 2026-09-08
+
+Client v1.8.96, server v1.8.70. Server-side changes here need redeploying `BeamJoyServer/` to the
+live server, not just the client mod, or the fixes/new option won't actually apply.
+
+### Fixed
+- **The ESC-menu "Repair" tile (and the rest of that same panel: Reset/Clone/Delete) stayed usable
+  mid-race/mid-hunt regardless of speed or any other restriction, in Races and Hunter.** Confirmed
+  by reading the installed game's own `ui/pause/providers/vehicleTabInteractions.lua`:
+  `canModifyVehicles()`, which every tile in that panel is gated behind, checks nothing but whether
+  `switch_next_vehicle`/`switch_previous_vehicle` are currently blocked - and neither Races nor
+  Hunter's own restriction list ever blocked those two at all (only Infected did). Blocked now in
+  both, unconditionally whenever the round/hunt is locked, closing off a free way to erase crash
+  damage mid-round.
+- **Infected's tag detection used a bounding-CIRCLE touch test (sum of half-diagonals vs center
+  distance), not an actual collision.** A circle always overestimates a rectangular footprint,
+  worst for long vehicles approached at an angle - two such vehicles could register a tag well
+  before their actual bodies were anywhere near each other. Replaced with a real oriented-
+  bounding-box overlap test (Separating Axis Theorem, on each vehicle's own real length x width
+  footprint at its own current heading, plus a vertical check) - still not a true physics contact
+  query (this mechanic stays deliberately self-reported/client-side, same as every other mechanic
+  of its kind in this codebase), but a far tighter proxy for one than a circle ever was.
+- **A logged-in nickname (services/identity.lua's own player-chosen display identity) never showed
+  up in the Races/Hunter/Infected lobby roster, live HUD opponent names, or the race
+  results/leaderboard panels** - only the general player list and nametags ever resolved it. Each
+  affected session (`raceGrid.lua`/`hunterGrid.lua`/`infectedGrid.lua`) now resolves every
+  broadcast participant/starter name through the same `services_identity.getIdentityKey` lookup the
+  race leaderboard already used internally, and every client-side re-map/template that was
+  independently dropping the field along the way (session-status panels, `raceHud`'s ahead/behind/
+  standings, `raceInfo`'s live/results tables) now carries and displays it too.
+
+### Added
+- **Infected's "Disable resets" option is now also selectable at start time**, not just in the
+  arena editor's own defaults - same override->default resolution every other per-start option
+  here already has.
+- **Infected's own results screen**, matching Races' existing auto-popup convention instead of
+  living inline in the activity tab: a floating panel (the same reusable `beamjoyInfoPanel`
+  framework Races' own Live/Results tabs already use) auto-opens ~3 seconds after a round actually
+  finishes, showing every participant's time survived and how many others they personally infected,
+  longest survival first. Also reachable manually via a new "Show results" button on the FINISHED
+  status panel.
+
+### Changed
+- **The Unstuck button (Infected/Hunter HUD) now teleports to the nearest arena spawn point**
+  instead of the nearest road, per direct request - a known-good, always-on-track location, unlike
+  `recover_to_last_road`'s own "nearest road, wherever that happens to be" behavior, which could
+  land a participant far outside the actual arena on a track bordering open terrain. Infected picks
+  from the participant's own role's spawn list; Hunter reuses the exact same "prefer a spawn clear
+  of the fugitive's own reset-lock" refinement (for a hunter) or the fugitive's own spawn list (for
+  the hunted) the crash-respawn strategy already established.
+
 ## [1.8.95] - 2026-09-08
 
 Client v1.8.95, server v1.8.69. Server-side settings additions here need redeploying

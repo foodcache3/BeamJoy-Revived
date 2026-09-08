@@ -82,14 +82,15 @@ local M = {
     originalPaints = nil,
 
     -- infected-only, local tag-detection state : nearbySurvivorVids is the slow-tick coarse cull
-    -- (BJI's own two-tier convention), refreshed roughly once a second ; selfDiag/survivorDiagCache
-    -- avoid recomputing each vehicle's own bounding radius every frame
+    -- (BJI's own two-tier convention), refreshed roughly once a second ; selfDims/survivorDimsCache
+    -- avoid recomputing each vehicle's own footprint dimensions every frame
     ---@type integer[] gameVehIDs, refreshed by refreshTagCandidates (onSlowUpdate)
     nearbySurvivorVids = {},
-    ---@type number? local player's own current vehicle bounding radius (half-diagonal)
-    selfDiag = nil,
-    ---@type table<integer, number> vid -> half-diagonal, cached once per vehicle
-    survivorDiagCache = {},
+    ---@type {len: number, wid: number, height: number}? local player's own current vehicle dims
+    selfDims = nil,
+    ---@type table<integer, {len: number, wid: number, height: number}> vid -> dims, cached once per
+    ---vehicle
+    survivorDimsCache = {},
     ---@type table<integer, boolean> vid -> true, survivors already reported this round : without
     ---this, staying in contact for more than one frame would resend infectedTag every single frame
     ---for as long as the touch lasts, instead of exactly once per target (the server itself is
@@ -103,6 +104,11 @@ local M = {
     spectatingRoundDeadlineTargetMs = nil,
 
     lastHudPushMs = nil,
+
+    ---@type table? the last "active=true" payload pushInfectedInfo sent, kept around so a freshly
+    ---(re)mounted results panel can replay it even after M.session has already gone nil (post-round
+    ---teardown) ; see pushInfectedInfo's own doc comment
+    lastInfectedInfoPayload = nil,
 
     ---@type BJInfectedSession? a session being watched as a pure non-participant, mirrors
     ---hunterRunner.lua's own spectatingSession (entirely separate from M.session)
@@ -361,6 +367,7 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJInfectedCountdownRequest", M.pushCountdown)
     beamjoy_communications_ui.addHandler("BJInfectedHudRequest", M.pushHud)
     beamjoy_communications_ui.addHandler("BJInfectedUnstuck", M.onUnstuckRequest)
+    beamjoy_communications_ui.addHandler("BJInfectedInfoRequest", M.pushInfectedInfo)
 end
 
 --- cameras a participant shouldn't be able to reach while game-locked : unlike races, this isn't
@@ -517,8 +524,8 @@ local function clearGameState()
     -- redirected outside Infected.
     M.uninstallResetGameplayRedirect()
     M.nearbySurvivorVids = {}
-    M.selfDiag = nil
-    M.survivorDiagCache = {}
+    M.selfDims = nil
+    M.survivorDimsCache = {}
     M.taggedVids = {}
     M.myVehicleVid = nil
     restoreOriginalPaint()
@@ -552,6 +559,7 @@ local function pushSessionStatus_impl(session)
         participants = table.map(session.participants, function(p)
             return {
                 playerName = p.playerName,
+                displayName = p.displayName,
                 playerID = p.playerID,
                 ready = p.ready,
                 role = p.role,
@@ -656,6 +664,45 @@ local function pushHud()
     })
 end
 
+--- Feeds the results panel (windows/infectedInfo/results/), mirroring raceRunner.lua's own
+--- pushRaceInfo exactly, replay-on-remount included: bj-tabs/the info-panel framework destroy and
+--- recreate the results component on every open/close, so a freshly mounted one always fires a
+--- fresh BJInfectedInfoRequest, which would otherwise get silently ignored once M.session goes nil
+--- (post-round teardown) even though a real FINISHED result existed moments earlier. Falls back to
+--- M.spectatingSession too, same as pushHud above.
+local function pushInfectedInfo()
+    local session = M.session or M.spectatingSession
+    if not session then
+        if M.lastInfectedInfoPayload then
+            beamjoy_communications_ui.send("BJInfectedInfo", M.lastInfectedInfoPayload)
+        end
+        return
+    end
+    if session.state == "LOBBY" or session.state == "COUNTDOWN" then
+        M.lastInfectedInfoPayload = nil
+        return beamjoy_communications_ui.send("BJInfectedInfo", { active = false })
+    end
+    local payload = {
+        active = true,
+        state = session.state,
+        winner = session.winner,
+        participants = table.map(session.participants, function(p)
+            return {
+                playerName = p.playerName,
+                displayName = p.displayName,
+                role = p.role,
+                originalInfected = p.originalInfected,
+                tagCount = p.tagCount,
+                survivedMs = p.survivedMs,
+            }
+        end),
+    }
+    if M.session then
+        M.lastInfectedInfoPayload = payload
+    end
+    beamjoy_communications_ui.send("BJInfectedInfo", payload)
+end
+
 ---@param session BJInfectedSession
 local function onSpectateUpdate(session)
     M.spectatingSession = session
@@ -731,6 +778,7 @@ local function onSessionUpdate(session)
         extensions.hook("onBJScenarioChanged")
         pushHud()
         pushSessionStatus()
+        pushInfectedInfo()
         return
     end
     pushSessionStatus()
@@ -851,8 +899,8 @@ local function onSessionUpdate(session)
         end, delaySec * 1000, "BJInfectedReleaseFreeze")
         M.gameStartTimeMs = GetCurrentTimeMillis()
         M.nearbySurvivorVids = {}
-        M.selfDiag = nil
-        M.survivorDiagCache = {}
+        M.selfDims = nil
+        M.survivorDimsCache = {}
         M.taggedVids = {}
         -- Color is applied at COUNTDOWN start now (see that block above), not here, so it's
         -- visible during the countdown rather than only once it ends. Only re-applied here as a
@@ -898,6 +946,14 @@ local function onSessionUpdate(session)
     end
 
     pushHud()
+    pushInfectedInfo()
+
+    -- auto-surface the results once the round is actually over. Fires once, on the real
+    -- transition, not on every subsequent push during the FINISHED grace period ; same mechanism
+    -- as raceRunner.lua's own identical BJRaceInfoAutoOpen.
+    if session.state == "FINISHED" and not wasFinished then
+        beamjoy_communications_ui.send("BJInfectedInfoAutoOpen", {})
+    end
 end
 
 ---@param sessionId string
@@ -1023,18 +1079,35 @@ end
 M.installResetGameplayRedirect = installResetGameplayRedirect
 M.uninstallResetGameplayRedirect = uninstallResetGameplayRedirect
 
---- Hold-to-confirm Unstuck button (infectedHud/app.js) : teleports the local vehicle to the last
---- known road, routed through beamjoy_inputs.onReset (see that file's own onReset/M.RESET table)
---- with RECOVER_LAST_ROAD - the exact same call chain the real recover_to_last_road key/menu entry
---- itself goes through (inputs.lua permanently redirects the native spawn.teleportToLastRoad into
---- that same pipeline), rather than reaching for the native function directly and either missing
---- that redirect or double-triggering it. Only raceRunner.lua actually implements
---- onBJRequestCurrentVehicleReset (that pipeline's own veto hook), so this passes through cleanly
---- for Infected. The 5-second hold itself is the anti-abuse gate - nobody can hold a UI button for
---- 5s while actively fleeing/chasing - so this deliberately does NOT also apply the speed/relock
---- gate recover_vehicle's own actionFilter entry is held to. Still respects disableResets though: a
---- host who's opted into that harder mode wants no way out at all, not just the native reset keys
---- closed off.
+--- respawn-strategy-style helper, same primitive hunterRunner.lua's own nearestSpawnPoint already
+--- established there (straight-line distance, no navgraph needed - this codebase's own established
+--- "good enough" convention for this class of pick) ; duplicated here rather than shared since
+--- each gamemode file is otherwise self-contained (matches RESET_MAX_SPEED's own precedent)
+---@param list {pos: {x: number, y: number, z: number}, dir: {x: number, y: number, z: number}}[]
+---@param pos vec3
+---@return {pos: {x: number, y: number, z: number}, dir: {x: number, y: number, z: number}}?
+local function nearestSpawnPoint(list, pos)
+    local best, bestDist
+    for _, s in ipairs(list) do
+        local d = (vec3(s.pos.x, s.pos.y, s.pos.z) - pos):length()
+        if not bestDist or d < bestDist then
+            best, bestDist = s, d
+        end
+    end
+    return best
+end
+
+--- Hold-to-confirm Unstuck button (infectedHud/app.js) : per direct request ("unstuck should just
+--- teleport you to the nearest spawn"), teleports the local vehicle to whichever of this round's
+--- own spawn points (this participant's own role's list; survivor spawns are the far more populous
+--- pool, so an infected participant's own dedicated infectedSpawns list is used only for that role)
+--- is closest to their current position - a known-good, always-on-track location, unlike
+--- recover_to_last_road's own "nearest road, wherever that happens to be" behavior, which can leave
+--- a participant far outside the actual arena on a track that borders open terrain. The 5-second
+--- hold itself is the anti-abuse gate - nobody can hold a UI button for 5s while actively fleeing/
+--- chasing - so this deliberately does NOT also apply the speed/relock gate recover_vehicle's own
+--- actionFilter entry is held to. Still respects disableResets though: a host who's opted into that
+--- harder mode wants no way out at all, not just the native reset keys closed off.
 local function onUnstuckRequest()
     if not M.session or M.session.state ~= "GAME" then return end
     if M.session.settings.disableResets then return end
@@ -1042,7 +1115,19 @@ local function onUnstuckRequest()
     if not participant then return end
     local myVeh = myCurrentVehicle()
     if not myVeh then return end
-    beamjoy_inputs.onReset(beamjoy_inputs.RESET.RECOVER_LAST_ROAD)
+    local arena = M.session.arenaSnapshot or {}
+    local list = participant.role == "infected" and arena.infectedSpawns or arena.survivorSpawns
+    if not list or #list == 0 then
+        list = arena.survivorSpawns or arena.infectedSpawns or {}
+    end
+    if #list == 0 then return end
+    local pos = beamjoy_vehicles.getVehiclePositionRotation(myVeh.veh)
+    local target = nearestSpawnPoint(list, pos)
+    if not target then return end
+    beamjoy_vehicles.setVehiclePositionRotation(myVeh.veh,
+        vec3(target.pos.x, target.pos.y, target.pos.z),
+        vec3(target.dir.x, target.dir.y, target.dir.z),
+        vec3(0, 0, 1), { cling = false })
 end
 M.onUnstuckRequest = onUnstuckRequest
 
@@ -1074,36 +1159,95 @@ local function refreshTagCandidates()
 end
 
 ---@param veh NGVehicle
----@return number half-diagonal, matching BJI's own bounding-radius convention
-local function vehicleDiag(veh)
-    return math.sqrt((veh:getInitialLength() / 2) ^ 2 + (veh:getInitialWidth() / 2) ^ 2)
+---@return {len: number, wid: number, height: number}
+local function vehicleDims(veh)
+    return { len = veh:getInitialLength(), wid = veh:getInitialWidth(), height = veh:getInitialHeight() }
 end
 
---- fast per-frame precise check against whatever refreshTagCandidates last found nearby : a plain
---- bounding-radius touch (self diag + target diag vs actual distance), same primitive BJI's own
---- fastTick uses. Reports a successful touch to the server via infectedTag ; the server is the real
+--- Flattens a (possibly pitched, e.g. on a slope) forward vector onto the horizontal plane and
+--- renormalizes, so the footprint box built from it stays a clean, unskewed rectangle regardless
+--- of the vehicle's own pitch/roll - only heading actually matters for a ground footprint. Falls
+--- back to a fixed direction in the degenerate near-vertical case (nose-down/up) rather than
+--- returning a zero-length vector, which would otherwise poison every dot product below.
+---@param dir vec3
+---@return vec3
+local function flattenHeading(dir)
+    local flat = vec3(dir.x, dir.y, 0)
+    if flat:length() < 1e-4 then return vec3(1, 0, 0) end
+    return flat:normalized()
+end
+
+--- Oriented-bounding-box overlap test, replacing the previous bounding-CIRCLE touch test (sum of
+--- half-diagonals vs center distance) per direct request: "the infection seems to happen on a
+--- radius rather than collision, it needs to be a collision." A circle always overestimates a
+--- rectangular footprint, worst for long vehicles (trucks, vans) approached from an angle - two
+--- such vehicles could register a touch well before their actual bodies were anywhere near each
+--- other. This instead tests the real length x width footprint at each vehicle's own current
+--- heading for genuine overlap, via the standard Separating Axis Theorem for two 2D oriented
+--- rectangles: for each of the 4 candidate separating axes (each box's own two edge normals), if
+--- the two boxes' half-extents projected onto that axis are farther apart than the center-to-center
+--- distance projected onto the same axis, that axis separates them and there is no overlap; no
+--- separating axis found among all 4 means the footprints genuinely overlap. A cheap vertical check
+--- (center heights within the combined half-heights, plus a little leniency for suspension
+--- travel/uneven ground) runs first, so two footprints that overlap in plan view but sit at
+--- completely different heights (a ramp, different floors of a structure) don't falsely register.
+--- Still not a true physics contact query (this whole mechanic is deliberately self-reported,
+--- client-side - see hunterRunner.lua's own accepted-limitation note for the same convention
+--- elsewhere in this codebase), just a far tighter proxy for one than a circle ever was.
+---@param posA vec3
+---@param dirA vec3
+---@param dimsA {len: number, wid: number, height: number}
+---@param posB vec3
+---@param dirB vec3
+---@param dimsB {len: number, wid: number, height: number}
+---@return boolean
+local function footprintsOverlap(posA, dirA, dimsA, posB, dirB, dimsB)
+    if math.abs(posA.z - posB.z) > (dimsA.height + dimsB.height) / 2 + 0.3 then
+        return false
+    end
+    local worldUp = vec3(0, 0, 1)
+    local fDirA, fDirB = flattenHeading(dirA), flattenHeading(dirB)
+    local rightA, rightB = fDirA:cross(worldUp), fDirB:cross(worldUp)
+    local halfA1, halfA2 = fDirA * (dimsA.len / 2), rightA * (dimsA.wid / 2)
+    local halfB1, halfB2 = fDirB * (dimsB.len / 2), rightB * (dimsB.wid / 2)
+    local d = vec3(posB.x - posA.x, posB.y - posA.y, 0)
+    for _, axis in ipairs({ fDirA, rightA, fDirB, rightB }) do
+        local distOnAxis = math.abs(d:dot(axis))
+        local extent = math.abs(halfA1:dot(axis)) + math.abs(halfA2:dot(axis)) +
+            math.abs(halfB1:dot(axis)) + math.abs(halfB2:dot(axis))
+        if distOnAxis > extent then
+            return false
+        end
+    end
+    return true
+end
+
+--- fast per-frame precise check against whatever refreshTagCandidates last found nearby : a real
+--- footprint-overlap touch (see footprintsOverlap above), replacing the old bounding-radius
+--- primitive. Reports a successful touch to the server via infectedTag ; the server is the real
 --- authority (idempotent role check), this is purely "what should I even bother sending".
 local function updateTagDetection()
     if #M.nearbySurvivorVids == 0 then return end
     local myVeh = myCurrentVehicle()
     if not myVeh then return end
     local myFresh = beamjoy_vehicles.getVehicle(myVeh.vid)
-    if not myFresh or not myFresh.position then return end
-    if not M.selfDiag then
-        M.selfDiag = vehicleDiag(myVeh.veh)
+    if not myFresh or not myFresh.position or not myFresh.rotation then return end
+    if not M.selfDims then
+        M.selfDims = vehicleDims(myVeh.veh)
     end
 
     for _, vid in ipairs(M.nearbySurvivorVids) do
         local mpVeh = not M.taggedVids[vid] and beamjoy_vehicles.vehicles[vid]
         if mpVeh then
             local fresh = beamjoy_vehicles.getVehicle(vid)
-            if fresh and fresh.position then
-                local otherDiag = M.survivorDiagCache[vid]
-                if not otherDiag then
-                    otherDiag = vehicleDiag(fresh.veh)
-                    M.survivorDiagCache[vid] = otherDiag
+            if fresh and fresh.position and fresh.rotation then
+                local otherDims = M.survivorDimsCache[vid]
+                if not otherDims then
+                    otherDims = vehicleDims(fresh.veh)
+                    M.survivorDimsCache[vid] = otherDims
                 end
-                if fresh.position:distance(myFresh.position) < (M.selfDiag + otherDiag) then
+                if footprintsOverlap(myFresh.position, myFresh.rotation, M.selfDims,
+                        fresh.position, fresh.rotation, otherDims) then
                     M.taggedVids[vid] = true
                     beamjoy_communications.send("infectedTag", M.session.id, mpVeh.ownerID)
                     -- Real bug, root cause: tagging requires actual contact, and players are
@@ -1297,6 +1441,7 @@ M.pushSessionStatus = pushSessionStatus
 M.pushOpenSessions = pushOpenSessions
 M.pushCountdown = pushCountdown
 M.pushHud = pushHud
+M.pushInfectedInfo = pushInfectedInfo
 M.pushSpectateStatus = pushSpectateStatus
 
 M.startInfected = startInfected

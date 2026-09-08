@@ -361,6 +361,28 @@ local function sectorEndGates(race)
     return gates
 end
 
+--- The nickname system (services/identity.lua) only ever stamps `displayName` onto the general
+--- player cache/live connection object, never onto a race/hunter/infected session's own
+--- independent `participants` table - so a logged-in nickname never reached any of these session
+--- payloads on its own. Real gap fixed here: every outbound participant/starter name in this file
+--- now resolves through services_identity.getIdentityKey the same way the leaderboard already did
+--- (see this file's own raceGateCrossed), falling back to the raw connection playerName exactly
+--- like getIdentityKey itself does for a never-logged-in player.
+---@param playerID integer
+---@param fallbackName string
+---@return string
+local function resolveDisplayName(playerID, fallbackName)
+    return services_identity.getIdentityKey(playerID) or fallbackName
+end
+
+---@param p BJRaceParticipant
+---@return table clone of p with a `displayName` field added
+local function withDisplayName(p)
+    local c = table.clone(p)
+    c.displayName = resolveDisplayName(p.playerID, p.playerName)
+    return c
+end
+
 ---@param session BJRaceSession
 ---@return {id: string, raceId: integer, raceName: string, starterName: string, joinable: boolean,
 ---participantCount: integer, maxParticipants: integer, state: BJRaceSessionState}
@@ -371,7 +393,7 @@ local function summarize(session)
         id = session.id,
         raceId = session.raceId,
         raceName = race and race.name or "?",
-        starterName = starter and starter.playerName or "?",
+        starterName = starter and resolveDisplayName(starter.playerID, starter.playerName) or "?",
         joinable = session.joinable,
         participantCount = session.participants:length(),
         maxParticipants = race and #race.startPositions or 0,
@@ -390,7 +412,7 @@ end
 ---@return table
 local function buildSessionPayload(session)
     local payload = table.clone(session)
-    payload.participants = session.participants:values()
+    payload.participants = table.map(session.participants:values(), withDisplayName)
     payload.leaderboard = M.computeLeaderboard(session)
     if session.state == "RACE" and session.startedAt then
         payload.raceElapsedMs = math.floor((GetCurrentTime() - session.startedAt) * 1000)
@@ -505,7 +527,7 @@ end
 ---@param session BJRaceSession
 ---@return BJRaceParticipant[]
 local function computeLeaderboard(session)
-    local list = session.participants:values()
+    local list = table.map(session.participants:values(), withDisplayName)
     table.sort(list, function(a, b)
         if a.dnf ~= b.dnf then return not a.dnf end
         if a.finished ~= b.finished then return a.finished end

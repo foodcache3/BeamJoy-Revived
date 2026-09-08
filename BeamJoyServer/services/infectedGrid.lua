@@ -95,7 +95,7 @@
 ---re-checks isStaff itself
 
 local M = {
-    dependencies = { "services_infected", "utils_async" },
+    dependencies = { "services_infected", "utils_async", "services_identity" },
 
     ---@type tablelib<string, BJInfectedSession>
     sessions = Table(),
@@ -182,6 +182,16 @@ local function assignSpawns(session)
     end)
 end
 
+--- see raceGrid.lua's own identical resolveDisplayName/withDisplayName for the full "why" : a
+--- logged-in nickname (services/identity.lua) never reaches an independent session's own
+--- `participants` table on its own, only the general player cache.
+---@param playerID integer
+---@param fallbackName string
+---@return string
+local function resolveDisplayName(playerID, fallbackName)
+    return services_identity.getIdentityKey(playerID) or fallbackName
+end
+
 ---@param session BJInfectedSession
 ---@return table
 local function summarize(session)
@@ -189,7 +199,7 @@ local function summarize(session)
     local arena = session.arenaSnapshot
     return {
         id = session.id,
-        starterName = starter and starter.playerName or "?",
+        starterName = starter and resolveDisplayName(starter.playerID, starter.playerName) or "?",
         joinable = session.joinable,
         participantCount = session.participants:length(),
         maxParticipants = #arena.survivorSpawns +
@@ -202,7 +212,11 @@ end
 ---@return table
 local function buildBasePayload(session)
     local payload = table.clone(session)
-    payload.participants = session.participants:values()
+    payload.participants = table.map(session.participants:values(), function(p)
+        local c = table.clone(p)
+        c.displayName = resolveDisplayName(p.playerID, p.playerName)
+        return c
+    end)
     if session.state == "GAME" and session.startedAt then
         -- same "push a duration, not a timestamp" reasoning as hunterGrid.lua's own huntElapsedMs:
         -- session.startedAt is in the server's own GetCurrentTime() clock domain, meaningless

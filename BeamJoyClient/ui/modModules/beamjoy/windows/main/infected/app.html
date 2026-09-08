@@ -92,23 +92,13 @@
     <div ng-if="$ctrl.status.state === 'FINISHED' && $ctrl.status.winner" class="mb-1">
         <b>{{('beamjoy.window.main.tabs.infected.winner.' + $ctrl.status.winner) | translate}}</b>
     </div>
-    <!-- Results screen: one row per participant, longest survival first, time survived + how many
-         others each one personally infected (tagCount, already tracked live on the roster below;
-         survivedMs is only ever populated once, by endGame, at the moment FINISHED is reached). -->
-    <div class="player-list results-list" ng-if="$ctrl.status.state === 'FINISHED'">
-        <div ng-repeat="p in $ctrl.resultsParticipants()" class="d-flex align-center gap-1">
-            <span class="opacity-70">{{$index + 1}}.</span>
-            <span class="flex-grow-1" ng-class="{'role-infected': p.role === 'infected'}">
-                {{p.playerName}}
-            </span>
-            <span class="small opacity-70" title="{{'beamjoy.window.main.tabs.infected.results.survived.tooltip' | translate}}">
-                {{$ctrl.formatTime(p.survivedMs)}}
-            </span>
-            <span class="small opacity-70" title="{{'beamjoy.window.main.tabs.infected.results.tagCount.tooltip' | translate}}">
-                {{'beamjoy.window.main.tabs.infected.results.infectedCount' | translate}} {{p.tagCount || 0}}
-            </span>
-        </div>
-    </div>
+    <button
+        class="btn info"
+        ng-if="$ctrl.status.state === 'FINISHED'"
+        ng-click="$ctrl.openResults($event)"
+    >
+        {{'beamjoy.window.main.tabs.infected.results.open' | translate}}
+    </button>
     <div
         class="opacity-70 small cursor-pointer"
         ng-click="$ctrl.togglePlayers($event)"
@@ -120,7 +110,7 @@
     <div class="player-list" ng-if="$ctrl.showPlayers && $ctrl.status.state !== 'FINISHED'">
         <div ng-repeat="p in $ctrl.status.participants" class="d-flex align-center gap-1">
             <span class="flex-grow-1" ng-class="{'role-infected': p.role === 'infected'}">
-                {{p.playerName}}
+                {{p.displayName || p.playerName}}
                 <span ng-if="p.tagCount" class="small opacity-70">({{p.tagCount}})</span>
             </span>
             <span ng-if="p.ready" class="ready">✓</span>
@@ -223,6 +213,12 @@
                     {{'beamjoy.window.config.tabs.infectedArena.enableColors' | translate}}
                 </td>
                 <td><bj-toggle ng-model="$ctrl.startOptions.enableColors"></bj-toggle></td>
+            </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.disableResets.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.infectedArena.disableResets' | translate}}
+                </td>
+                <td><bj-toggle ng-model="$ctrl.startOptions.disableResets"></bj-toggle></td>
             </tr>
         </table>
         <div class="d-flex gap-1 mt-1">

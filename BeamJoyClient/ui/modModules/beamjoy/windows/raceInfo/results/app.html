@@ -59,7 +59,7 @@
             >
                 <td class="text-center">{{$index + 1}}</td>
                 <td class="text-left">
-                    {{p.playerName}}
+                    {{p.displayName || p.playerName}}
                     <span ng-if="p.vehicleModel" class="small opacity-70">({{p.vehicleModel}})</span>
                 </td>
                 <td>
