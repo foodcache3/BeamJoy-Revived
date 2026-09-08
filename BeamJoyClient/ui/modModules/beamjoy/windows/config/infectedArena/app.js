@@ -72,19 +72,10 @@ angular.module("beamjoy").component("bjConfigInfectedArena", {
         // itself only ever speaks hex strings, so both directions convert right at this component's
         // own edge, keeping $ctrl.defaults itself always hex while it's on screen.
         const COLOR_KEYS = ["survivorColor", "infectedColor"];
-        // Real bug: a cleared color used to just leave this key `undefined` (absent) instead of
-        // an explicit `null`, since Lua only ever drops a nil key rather than sending one back.
-        // That inconsistency (undefined vs. null, from one round-trip to the next) was enough to
-        // make the deep $watch below think a fully-settled "cleared" state was still changing,
-        // scheduling another send every debounce cycle indefinitely. Always normalizing to an
-        // explicit null here (never left undefined) gives the watch/color-picker a single, stable
-        // "unset" representation to compare against and display.
         const toHexColors = (defaults) => {
             COLOR_KEYS.forEach((key) => {
                 if (defaults[key] && typeof defaults[key] === "object") {
                     defaults[key] = beamjoyStore.utils.rgbToHex(defaults[key]);
-                } else {
-                    defaults[key] = null;
                 }
             });
             return defaults;

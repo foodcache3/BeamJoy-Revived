@@ -26,7 +26,11 @@ angular.module("beamjoy").component("bjConfigVehiclePresetsEditor", {
         };
 
         $rootScope.$on("BJVehiclePresetList", (_, presets) => {
-            this.allPresets = presets || [];
+            // Real bug: Lua can't distinguish an empty table from an empty object, so an
+            // emptied-out preset list can arrive as `{}` instead of `[]` - truthy, so `presets ||
+            // []` kept it as-is. Same fix already established elsewhere in this codebase (see
+            // cmps/pointListEditor/app.js's own listsUpdate handler).
+            this.allPresets = Array.isArray(presets) ? presets : [];
             // an existing preset being edited elsewhere (or by this same save round-tripping back)
             // shouldn't reset in-progress local edits; only seed once, on first data arrival
             if (!original) seed();

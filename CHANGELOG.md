@@ -6,6 +6,21 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.89] - 2026-09-08
+
+Client v1.8.89. Client-only, no server-side change in this range.
+
+### Fixed
+- **Reverted v1.8.88's color-clear round-trip "fix" - it made things worse, not better.**
+  Picking a new color in the Infected arena editor became impossible (cleared itself back to unset
+  almost immediately) after that change. Reverted both sides of it back to the prior behavior
+  while the actual round-trip issue gets properly root-caused instead of guessed at again.
+- **Hunter/Races vehicle-preset dropdowns could crash with "presets.map is not a function".** An
+  emptied-out preset list can arrive from Lua as `{}` instead of `[]` (Lua can't distinguish an
+  empty table from an empty object), which `presets || []` doesn't catch since `{}` is truthy.
+  Fixed in all six places this same copy-pasted pattern appeared (hunter/races arena+main-tab
+  vehicle pool pickers, the vehicle presets manager and its editor).
+
 ## [1.8.88] - 2026-09-08
 
 Client v1.8.88, server v1.8.68. Server-side change in this range needs deploying to the live

@@ -103,21 +103,7 @@ end
 ---@param defaults BJInfectedDefaults
 local function onSetDefaults(defaults)
     if not parent or parent.activeEditor ~= M then return end
-    defaults = defaults or {}
-    -- Real bug: a cleared color used to reach here as whatever a "cleared" JS value round-trips
-    -- to (not necessarily real Lua nil, depending on the exact bridge - and definitely NOT real
-    -- nil once it comes back the other way through the actual server save's own JSON encoding :
-    -- see utils/jsonOld.lua's own json.null, a plain string sentinel since JSON has no way to
-    -- represent nil-in-a-table). Only sanitizeArena (real SAVE time, services/infected.lua) ever
-    -- normalized survivorColor/infectedColor back to a real table-or-nil ; this live-edit path
-    -- never did, so a cleared color could sit here as a bogus non-color value, get echoed straight
-    -- back to Angular via pushMeta() below, and get treated as neither "a real color" nor
-    -- "properly unset" by toHexColors/toRgbColors there - which could keep re-triggering its own
-    -- send right back here, never actually settling. Same two-line sanitize as sanitizeArena's own,
-    -- run here too so M.defaults only ever holds a real color table or true nil from this point on.
-    if type(defaults.survivorColor) ~= "table" then defaults.survivorColor = nil end
-    if type(defaults.infectedColor) ~= "table" then defaults.infectedColor = nil end
-    M.defaults = defaults
+    M.defaults = defaults or {}
     pushMeta()
     listEditor.markDirty()
 end

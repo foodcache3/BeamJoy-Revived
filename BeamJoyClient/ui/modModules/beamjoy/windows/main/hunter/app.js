@@ -30,7 +30,12 @@ angular.module("beamjoy").component("bjMainHunter", {
             ];
         };
         $rootScope.$on("BJVehiclePresetList", (_, presets) => {
-            this.vehiclePresets = presets || [];
+            // Real bug: Lua can't distinguish an empty table from an empty object, so an
+            // emptied-out preset list can arrive as `{}` instead of `[]` - truthy, so `presets ||
+            // []` kept it as-is, and `{}.map`/`{}.find` isn't a function. Same fix already
+            // established elsewhere in this codebase (see cmps/pointListEditor/app.js's own
+            // listsUpdate handler).
+            this.vehiclePresets = Array.isArray(presets) ? presets : [];
             rebuildVehiclePresetOptions();
         });
         this.presetById = (id) => this.vehiclePresets.find((p) => p.id === id);

@@ -11,7 +11,11 @@ angular.module("beamjoy").component("bjConfigVehiclePresets", {
         // of vehicles ; this tab is where they're actually created/named/managed.
         this.presets = [];
         $rootScope.$on("BJVehiclePresetList", (_, presets) => {
-            this.presets = presets || [];
+            // Real bug: Lua can't distinguish an empty table from an empty object, so an
+            // emptied-out preset list can arrive as `{}` instead of `[]` - truthy, so `presets ||
+            // []` kept it as-is. Same fix already established elsewhere in this codebase (see
+            // cmps/pointListEditor/app.js's own listsUpdate handler).
+            this.presets = Array.isArray(presets) ? presets : [];
         });
         this.$onInit = () => {
             beamjoyStore.send("BJVehiclePresetListRequest");
