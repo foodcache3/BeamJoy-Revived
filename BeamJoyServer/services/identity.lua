@@ -55,6 +55,15 @@ local function login(ctxt, nickname)
         return communications_tx.sendToPlayer(ctxt.senderID, "identityLoginResult", false, "nicknameTaken")
     end
     ctxt.sender.identityNickname = clean
+    -- Real bug: a few places (vehicles.lua's own onVehicleSpawn, services_players.savePlayer)
+    -- broadcast the raw live player object directly via "updatePlayer" instead of going through
+    -- onBJRequestCache's own enrichment - which is where displayName used to be computed. The
+    -- client's updatePlayer handler REPLACES its whole cached copy of this player with whatever
+    -- arrives, so any of those raw broadcasts (e.g. the very next vehicle spawn) clobbered the
+    -- nickname right back to the raw connection name. Stamping displayName directly onto the live
+    -- object itself here means every broadcast path carries it correctly, not just the ones that
+    -- happen to go through onBJRequestCache.
+    ctxt.sender.displayName = clean
     -- refreshes every connected client's view of THIS player (their nametag/roster entry now
     -- shows the chosen nickname instead of the raw connection name), not just the sender's own
     services_players.sendCacheUpdate()

@@ -6,6 +6,23 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.67] - 2026-09-08
+
+Server v1.8.67. Server-only, no client change in this range - just deploy the updated server
+files, no need to touch Client/BJ.zip.
+
+### Fixed
+- **Login nickname reverted to the raw connection name as soon as anything else touched player
+  data (spawning a vehicle, `/staff`/`/owner`, mute/kick/etc.).** `displayName` was only ever
+  computed on the fly inside `onBJRequestCache`, never stored on the player object itself. Several
+  places (`vehicles.lua`'s own `onVehicleSpawn`, `services_players.savePlayer`) broadcast that raw
+  object directly via `updatePlayer` instead of going through `onBJRequestCache` - the client's own
+  handler for that event replaces its whole cached copy of the player, so any of those raw
+  broadcasts silently clobbered the nickname back to the connection name. `displayName` is now a
+  real field set directly on the player object at login, alongside `identityNickname`, so every
+  broadcast path carries it correctly instead of just the ones that happen to go through the cache
+  builder.
+
 ## [1.8.87] - 2026-09-08
 
 Client v1.8.87, server v1.8.66. Server-side change in this range needs deploying to the live

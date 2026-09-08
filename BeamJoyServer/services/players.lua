@@ -231,15 +231,19 @@ local function onBJRequestCache(caches, targetID)
                     player.beammpID = nil
                     player.ip = nil
                     -- see services/identity.lua's own doc comment: a pure display convenience
-                    -- (nametags/roster), never used for anything identity-critical
-                    player.displayName = p.identityNickname or p.playerName
+                    -- (nametags/roster), never used for anything identity-critical. Already a
+                    -- real field on `p` itself (set at login, alongside identityNickname) so it
+                    -- survives the OTHER places that broadcast this raw object directly instead
+                    -- of going through this function - table.assign above already copied it, this
+                    -- is just the (harmless, idempotent) fallback for a never-logged-in player
+                    player.displayName = p.displayName or p.playerName
                     return player
                 end
 
                 return {
                     playerID = p.playerID,
                     playerName = p.playerName,
-                    displayName = p.identityNickname or p.playerName,
+                    displayName = p.displayName or p.playerName,
                     group = p.group,
                     currentVehicle = p.currentVehicle,
                     activity = p.activity,
