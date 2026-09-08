@@ -363,10 +363,13 @@ local function onBJRequestRestrictions(restrictions)
 
     restrictions:addAll({ "toggle_slow_motion", "slower_motion", "faster_motion", "pause" }, true)
 
-    -- Real gap found while verifying "forced reset in place" actually held up: the restriction
-    -- system only ever blocks NATIVE INPUT ACTIONS (core_input_actionFilter, a keybind/ActionMap
-    -- -level filter), but at least two other native UI paths reposition/reset a vehicle WITHOUT
-    -- ever going through that filter at all, confirmed by reading the installed game's own source:
+    -- Reworked per direct request, after live testing of the original "in-place always ok,
+    -- reposition always blocked" policy: recover_vehicle (BeamNG's classic hold-to-recover, a
+    -- sustained in-place-ish nudge rather than an instant teleport) is now the ONE reset method
+    -- actually left reachable, velocity-gated exactly like reset_physics used to be. Every OTHER
+    -- reset/recover/reposition path is unconditionally blocked instead - including two native UI
+    -- paths that bypass core_input_actionFilter entirely otherwise, confirmed by reading the
+    -- installed game's own source:
     --   - lua/ge/extensions/ui/pause/providers/vehicleTabInteractions.lua's own tryResetVehicle
     --     (the ESC-menu "Reset" tile per spawned vehicle) calls vehicle:requestReset(RESET_PHYSICS)
     --     directly - no core_input_actionFilter.isActionBlocked call anywhere in it. It CAN'T be
@@ -375,43 +378,45 @@ local function onBJRequestRestrictions(restrictions)
     --     canModifyVehicles() (that same file) returns true, which itself checks
     --     switch_next_vehicle/switch_previous_vehicle - so blocking those two also disables this
     --     whole panel (Reset/Repair/Clone/Delete) as a side effect, which is the only lever this
-    --     restriction system actually has over it.
-    --   - lua/ge/extensions/core/quickAccess.lua's own radial-menu "Set Home"/"Go Home" entries
-    --     (recovery.saveHome/recovery.loadHome) ARE gated by isActionBlocked, but under "loadHome"/
-    --     "saveHome" - never included here before, so a player could bookmark an arbitrary point
-    --     and teleport back to it anytime, fully bypassing the speed gate and the reposition block
-    --     just below.
+    --     restriction system actually has over it. Since that tile's own reset is the same instant
+    --     physics reset reset_physics is (not the gradual recovery recover_vehicle does), it needs
+    --     to be unconditionally closed too, not just gated.
+    --   - lua/ge/extensions/core/quickAccess.lua's own radial-menu "Go Home" entry
+    --     (recovery.loadHome) IS gated by isActionBlocked, but under "loadHome" - never included
+    --     here before, so a player could bookmark an arbitrary point (saveHome) and teleport back
+    --     to it anytime, fully bypassing this restriction entirely.
     --   - that same file's own M.tryAction("recoverVehicle"/"resetVehicle") binding layer (used by
     --     some UI apps/buttons) ALSO checks isActionBlocked, but under those literal camelCase
-    --     names - never the native underscored ones this file already blocks, so they were
-    --     silently never covered either. Both resolve to in-place resets (spawn.safeTeleport to the
-    --     vehicle's OWN current position, or resetGameplay(0)), same category as reset_physics.
+    --     names - never the native underscored ones, so they were silently never covered either.
+    --     Both resolve to in-place resets (spawn.safeTeleport to the vehicle's OWN current
+    --     position, or resetGameplay(0)), same category as reset_physics, not recover_vehicle.
     if M.session.state == "COUNTDOWN" then
         -- Resetting/recovering during COUNTDOWN (frozen at the grid) is always blocked, same as
-        -- races'/hunter's own COUNTDOWN block.
+        -- races'/hunter's own COUNTDOWN block - recover_vehicle included, unlike during GAME below.
         restrictions:addAll({
             "recover_vehicle", "recover_vehicle_alt", "recover_to_last_road", "loadHome",
             "reset_physics", "reset_all_physics", "reload_vehicle", "recoverVehicle", "resetVehicle",
             "switch_next_vehicle", "switch_previous_vehicle",
         }, true)
     elseif M.session.state == "GAME" then
-        -- recover_vehicle/recover_vehicle_alt/recover_to_last_road/loadHome all explicitly search
-        -- for (or teleport a meaningful distance to) a different "safe" spot (confirmed by reading
-        -- the installed game's own core/input/actions/gameplay.json), which would let a reset be
-        -- used to simply escape a chase. Always blocked now, GAME-wide, with no exception -
-        -- "forced to reset in place" per direct request.
-        restrictions:addAll({ "recover_vehicle", "recover_vehicle_alt", "recover_to_last_road", "loadHome" }, true)
+        -- recover_vehicle_alt/recover_to_last_road/loadHome all explicitly search for (or teleport
+        -- a meaningful distance to) a different "safe" spot (confirmed by reading the installed
+        -- game's own core/input/actions/gameplay.json) - unlike recover_vehicle itself (below),
+        -- these stay unconditionally blocked. reset_physics/reset_all_physics/reload_vehicle (and
+        -- their quickAccess-binding-layer equivalents recoverVehicle/resetVehicle) are an instant
+        -- in-place physics/damage reset, no longer the allowed exception per direct request -
+        -- blocked outright now too, alongside switch_next/previous_vehicle (the ESC-menu panel
+        -- reasoning above).
+        restrictions:addAll({
+            "recover_vehicle_alt", "recover_to_last_road", "loadHome",
+            "reset_physics", "reset_all_physics", "reload_vehicle", "recoverVehicle", "resetVehicle",
+            "switch_next_vehicle", "switch_previous_vehicle",
+        }, true)
 
-        -- reset_physics/reset_all_physics/reload_vehicle (and their quickAccess-binding-layer
-        -- equivalents recoverVehicle/resetVehicle, and switch_next/previous_vehicle for the
-        -- pause-menu panel reasoning above), by contrast, all resolve to an in-place physics/
-        -- damage reset with no repositioning search, so these are the ones actually left
-        -- reachable, gated on speed and the post-reset relock instead of blocked outright.
+        -- recover_vehicle itself is the one gated on speed and the post-use relock instead of
+        -- blocked outright - a sustained hold-based recovery, not an instant teleport.
         if M.movingTooFastToReset or (M.resetRelockUntilMs and GetCurrentTimeMillis() < M.resetRelockUntilMs) then
-            restrictions:addAll({
-                "reset_physics", "reset_all_physics", "reload_vehicle", "recoverVehicle", "resetVehicle",
-                "switch_next_vehicle", "switch_previous_vehicle",
-            }, true)
+            restrictions:addAll({ "recover_vehicle" }, true)
         end
     end
 end

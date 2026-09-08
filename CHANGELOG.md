@@ -6,6 +6,22 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.91] - 2026-09-08
+
+Client v1.8.91. Client-only, no server-side change in this range.
+
+### Changed
+- **Infected's allowed-reset policy reworked again, per direct request after live testing.**
+  `recover_vehicle` (BeamNG's classic hold-to-recover) is now the ONE reset method actually left
+  reachable during GAME, velocity-gated exactly like `reset_physics` used to be. Every other
+  reset/recover/reposition path is unconditionally blocked instead - `recover_vehicle_alt`,
+  `recover_to_last_road`, `loadHome`, and now also `reset_physics`/`reset_all_physics`/
+  `reload_vehicle` themselves (an instant physics/damage reset, no longer the allowed exception),
+  along with the ESC-menu Reset-tile bypass and the quickAccess binding layer's own camelCase
+  action names. Redirecting whichever key triggers those to actually perform `recover_vehicle`
+  instead wasn't attempted - too fragile to guess at blind without live testing - so they're simply
+  blocked now, per the accepted fallback.
+
 ## [1.8.90] - 2026-09-08
 
 Client v1.8.90. Client-only, no server-side change in this range.
