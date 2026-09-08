@@ -64,6 +64,17 @@
     "beamjoy.menu.about.continuedBy": "Continued by Captain Nugget",
     "beamjoy.menu.about.computerTime": "Computer time : {time}",
 
+    // LOGIN WINDOW (nickname workaround, shown before the rest of the UI - see
+    // communications/ui.lua's own onUIReady/proceedAfterLogin)
+    "beamjoy.window.login.title": "Choose a nickname",
+    "beamjoy.window.login.message": "Until BeamMP accounts are back, this is used for your nametag and race leaderboard entries. You can skip this and play as a guest, but your leaderboard times won't be saved under a consistent name.",
+    "beamjoy.window.login.placeholder": "Nickname",
+    "beamjoy.window.login.skip": "Continue as guest",
+    "beamjoy.window.login.continue": "Continue",
+    "beamjoy.window.login.error.invalidNickname": "That nickname isn't valid (2-24 characters)",
+    "beamjoy.window.login.error.nicknameTaken": "Someone else is currently using that nickname",
+    "beamjoy.window.login.error.unknown": "Something went wrong, try again",
+
     // MAIN WINDOW
     "beamjoy.window.main": "BeamJoy Main",
     "beamjoy.window.main.title": "BeamJoy",

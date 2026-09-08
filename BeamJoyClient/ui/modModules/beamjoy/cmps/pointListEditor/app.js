@@ -83,6 +83,19 @@ angular.module("beamjoy").component("bjPointListEditor", {
             beamjoyStore.send(this.events.setRadius, [list, index + 1, Number(radius)]);
         };
 
+        // Real bug: this component gets torn down and recreated every time its host switches away
+        // from and back to the tab/section it lives in (an ng-if, not ng-show - see e.g.
+        // infectedArena/app.html's own Settings<->Spawns split), losing whatever `this.data` it
+        // had. Lua only ever pushes listsUpdate on an actual mutation (or the original open()), so
+        // a freshly remounted instance sat empty in the 3D world's own world-space markers still
+        // rendered fine, since those come from Lua's own separate renderAll(), unrelated to this
+        // component) until the player happened to move a point and trigger a fresh push. Asking
+        // for a re-push on mount (same fix as windows/versionCheck's own BJVersionRequest) fixes
+        // it regardless of mount timing.
+        if (this.events.requestState) {
+            beamjoyStore.send(this.events.requestState);
+        }
+
         // "(1)" once at/above the list's own minimum, "(0 - minimum 2)" while under it: the bare
         // slash version this was built from read like a cap/maximum, not a minimum-to-enable
         this.countLabel = (list) => {

@@ -44,6 +44,7 @@ local M = {
         "services_vehiclePresets", "services_races", "services_raceGrid",
         "services_hunter", "services_hunterGrid",
         "services_infected", "services_infectedGrid",
+        "services_identity",
         "communications_rx", "communications_tx" },
 }
 

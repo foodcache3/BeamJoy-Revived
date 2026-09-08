@@ -107,7 +107,9 @@ local function onSlowUpdate()
     end
 end
 
----@param playerName string
+---@param playerName string raw connection name : used as both the cache key and the identity
+---this looks up against (self-check, and the login-nickname fallback below), never itself
+---overridden by a chosen nickname - only the RENDERED text can be
 ---@return string
 local function updateTagName(playerName)
     -- getSelf() is nil for a short window right after connecting, before the server's player-list
@@ -120,13 +122,23 @@ local function updateTagName(playerName)
         M.tagNames[playerName] = beamjoy_lang.translate("beamjoy.nametags.you")
         return M.tagNames[playerName]
     end
+    -- login workaround (see services/identity.lua's own doc comment): a player who's logged in
+    -- with a chosen nickname is rendered by that instead of their raw, possibly-volatile BeamMP
+    -- name, everywhere this function is the one building the rendered text - the vehicle's own
+    -- real ownerName (used above for the self-check, and everywhere else in this file/codebase
+    -- for identity comparisons) is completely untouched by this, this only changes what gets drawn
+    local displayName = playerName
+    local player = beamjoy_players.players[playerName]
+    if player and player.displayName then
+        displayName = player.displayName
+    end
     if M.state.shortenNametags then
-        M.tagNames[playerName] = string.sub(playerName, 1, M.state.nametagCharLimit)
-        if M.tagNames[playerName] ~= playerName then
+        M.tagNames[playerName] = string.sub(displayName, 1, M.state.nametagCharLimit)
+        if M.tagNames[playerName] ~= displayName then
             M.tagNames[playerName] = M.tagNames[playerName] .. "..."
         end
     else
-        M.tagNames[playerName] = playerName
+        M.tagNames[playerName] = displayName
     end
     return M.tagNames[playerName]
 end

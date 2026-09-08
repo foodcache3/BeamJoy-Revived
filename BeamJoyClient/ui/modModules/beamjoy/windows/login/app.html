@@ -1,0 +1,77 @@
+<style>
+    /* same reasoning as bj-confirm's own #beamjoy-confirm : fixed + viewport units (<beamjoy>'s
+       parent has no explicit size), z-index high enough to always win regardless of mount order */
+    #beamjoy-login {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 999999;
+        background: rgba(0, 0, 0, 0.75);
+    }
+
+    #beamjoy-login .login-box {
+        min-width: 22em;
+        max-width: 28em;
+        display: flex;
+        flex-direction: column;
+        background: #1c1c1c;
+        border: thin solid gray;
+        border-radius: 0.4em;
+        padding: 1.5em;
+        box-shadow: 0 0.3em 1em rgba(0, 0, 0, 0.6);
+    }
+
+    #beamjoy-login .login-title {
+        color: white;
+        font-size: 1.2em;
+        font-weight: bold;
+        margin-bottom: 0.5em;
+    }
+
+    #beamjoy-login .login-message {
+        color: #ccc;
+        margin-bottom: 1em;
+        white-space: pre-line;
+    }
+
+    #beamjoy-login .login-input {
+        width: 100%;
+        margin-bottom: 0.5em;
+    }
+
+    #beamjoy-login .login-error {
+        color: #ff6b6b;
+        margin-bottom: 0.5em;
+    }
+</style>
+
+<div id="beamjoy-login" class="d-flex align-center justify-center" ng-if="$ctrl.visible">
+    <div class="login-box">
+        <div class="login-title">{{'beamjoy.window.login.title' | translate}}</div>
+        <div class="login-message">{{'beamjoy.window.login.message' | translate}}</div>
+        <input
+            type="text"
+            class="login-input"
+            ng-model="$ctrl.nickname"
+            placeholder="{{'beamjoy.window.login.placeholder' | translate}}"
+            maxlength="24"
+            ng-keydown="$event.key === 'Enter' && $ctrl.submit($event)"
+            autofocus
+        />
+        <div class="login-error" ng-if="$ctrl.error">{{$ctrl.error | translate}}</div>
+        <div class="d-flex gap-1 justify-end">
+            <button class="btn info" ng-click="$ctrl.skip($event)">
+                {{'beamjoy.window.login.skip' | translate}}
+            </button>
+            <button
+                class="btn success"
+                ng-disabled="!$ctrl.nickname.trim() || $ctrl.submitting"
+                ng-click="$ctrl.submit($event)"
+            >
+                {{'beamjoy.window.login.continue' | translate}}
+            </button>
+        </div>
+    </div>
+</div>

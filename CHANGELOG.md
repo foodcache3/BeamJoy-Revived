@@ -6,6 +6,53 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.87] - 2026-09-08
+
+Client v1.8.87, server v1.8.66. Server-side change in this range needs deploying to the live
+server separately; the client is a straight mod update. (The 1.9.x version line is reserved for
+the Infected-mode-complete release; everything until then stays under 1.8.x.)
+
+### Added
+- **Nickname "login" workaround, until BeamMP's own account system is reliable again.** A new
+  prompt shows before the rest of the mod's UI unlocks (right after connecting, before the
+  welcome message/main window), letting a player type a nickname. Skippable ("continue as guest")
+  - this is a convenience, not a requirement, and has no password of its own (a deliberate choice:
+  anyone can type anyone else's nickname and inherit their tag/leaderboard history, same trust
+  model as any LAN-party "just type a name" convention). Once logged in, that nickname becomes
+  what's shown as this player's nametag and in race leaderboard rows going forward, instead of
+  their raw, possibly-volatile BeamMP connection name. Nothing identity-critical is affected by
+  this: bans, mutes, permissions, vehicle ownership, and BeamMP's own native chat all still use the
+  real connection name, completely unchanged. A 45-second safety timeout automatically proceeds
+  as a guest if the prompt is never resolved, so a rendering surprise or an inactive player can't
+  get stuck unable to connect.
+- **`/staff <password>` and `/owner <password>` chat commands**, gated by a single shared password
+  per tier set from the server console (`bj staffpassword <password>`, `bj ownerpassword
+  <password>`) - never typed in a chat message or stored anywhere but a hashed (SHA-256) file. On
+  a correct password, directly assigns the player's group to the lowest staff-flagged group (or
+  the single highest-ranked group for owner), the same persisted group change as any other -
+  there's deliberately no separate revocation command; demote with the existing `/setgroup` or
+  console `group` command. No password set for a tier yet just tells the player that, rather than
+  silently failing.
+
+### Fixed
+- **Infected/Hunter arena editor: spawn list showed empty until you moved a point.** The
+  `<bj-point-list-editor>` sidebar list is torn down and recreated every time its host switches
+  section tabs (Settings <-> Spawns, or Hunter's Waypoints too) - real `ng-if`, not just hidden.
+  Lua only ever pushes the current list data on an actual mutation (or the editor's initial open),
+  so a freshly recreated instance had no way to learn what was already there and just sat empty
+  until some other action happened to trigger a fresh push. The 3D world markers were never
+  affected (Lua's own rendering is separate from this), which is why it looked like only the
+  sidebar list was broken. Reproducible on a totally fresh, untouched editor open too, since both
+  arenas default to the Settings tab first - the very first push was always missed. Fixed at the
+  shared toolkit (`ui/pointListEditor.lua` / `cmps/pointListEditor/app.js`) both editors are built
+  on: a freshly mounted list now asks Lua to re-announce its current state instead of only ever
+  listening passively.
+- **Login nickname wasn't showing in the Main window's player list.** The roster row component
+  (`windows/main/main/player-line/app.html`) still rendered the raw `playerName` directly instead
+  of the `displayName` field players.lua's cache already exposes (this same entry's own login
+  feature above) - nametags and the race leaderboard already picked this up correctly, this one
+  template was just missed.
+
 ## [1.8.86] - 2026-09-08
 
 Client v1.8.86, server v1.8.65. Server-side change in this range needs deploying to the live

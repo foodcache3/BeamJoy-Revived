@@ -42,6 +42,7 @@ await import(`/ui/modModules/beamjoy/cmps/infoPanel/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/pointListEditorToolbar/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/pointListEditor/app.js`);
 
+await import(`/ui/modModules/beamjoy/windows/login/app.js`);
 await import(`/ui/modModules/beamjoy/windows/versionCheck/app.js`);
 await import(`/ui/modModules/beamjoy/windows/hud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/app.js`);
@@ -73,6 +74,7 @@ beamjoyModule.component("beamjoy", {
                 const el = angular.element(`
                         <bj-style></bj-style>
                         <bj-context-menu></bj-context-menu>
+                        <bj-login></bj-login>
                         <bj-version-check></bj-version-check>
 
                         <bj-hud></bj-hud>

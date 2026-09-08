@@ -211,7 +211,7 @@ local M = {
     -- file's own legacy race importer (see convertLegacyStartPositions and convertLegacyRaceGates
     -- below) rather than re-deriving the same fragile quaternion math a second time
     dependencies = { "dao_activity", "dao_bundled", "services_core", "services_config",
-        "services_vehiclePresets", "services_hunter" },
+        "services_vehiclePresets", "services_hunter", "services_identity" },
 
     ACTIVITY_TYPE = "races",
 
@@ -1271,20 +1271,26 @@ local function onRaceLeaderboardRequest(ctxt, raceId)
     local race = M.getById(raceId)
     if not race then return end
 
+    -- login workaround (services/identity.lua's own doc comment): entries got written under the
+    -- sender's chosen nickname if they were logged in with one at submit time, so matching against
+    -- that same key here (falling back to their raw playerName otherwise) is what actually finds
+    -- their own PB - matching ctxt.sender.playerName alone would silently miss it for anyone
+    -- logged in.
+    local selfKey = services_identity.getIdentityKey(ctxt.senderID) or ctxt.sender.playerName
     local entries = getLeaderboard(raceId, 100)
-    local selfEntry = table.find(entries, function(e) return e.playerName == ctxt.sender.playerName end)
-    if not selfEntry and race.leaderboard and race.leaderboard[ctxt.sender.playerName] then
+    local selfEntry = table.find(entries, function(e) return e.playerName == selfKey end)
+    if not selfEntry and race.leaderboard and race.leaderboard[selfKey] then
         -- own PB exists but fell outside the returned top N ; still worth showing, with a real
         -- rank computed against the full (untrimmed) leaderboard rather than just "> 100"
-        local pb = race.leaderboard[ctxt.sender.playerName]
+        local pb = race.leaderboard[selfKey]
         local rank = 1
         for otherName, entry in pairs(race.leaderboard) do
-            if otherName ~= ctxt.sender.playerName and entry.time < pb.time then
+            if otherName ~= selfKey and entry.time < pb.time then
                 rank = rank + 1
             end
         end
         selfEntry = {
-            playerName = ctxt.sender.playerName,
+            playerName = selfKey,
             time = pb.time,
             model = pb.model,
             date = pb.date,

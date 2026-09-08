@@ -40,6 +40,7 @@ angular.module("beamjoy").component("bjConfigInfectedArena", {
             snapMethod: "BJEditorInfectedArenaSnapMethod",
             setSnapToGround: "BJEditorInfectedArenaSetSnapToGround",
             setSnapMethod: "BJEditorInfectedArenaSetSnapMethod",
+            requestState: "BJEditorInfectedArenaRequestState",
         };
 
         this.$onInit = () => {

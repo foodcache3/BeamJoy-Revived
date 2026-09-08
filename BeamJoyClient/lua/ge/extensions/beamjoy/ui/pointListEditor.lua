@@ -50,6 +50,12 @@
 ---@field snapMethod string Lua -> Angular : ("terrain"|"raycast")
 ---@field setSnapToGround string Angular -> Lua : (boolean)
 ---@field setSnapMethod string Angular -> Lua : ("terrain"|"raycast")
+---@field requestState string? Angular -> Lua : () re-sends the current lists/active/dirty/snap
+---state as-is, without resetting anything (unlike open()). Optional, but every consumer should
+---wire it up: `<bj-point-list-editor>` gets torn down and recreated by its host's own `ng-if`
+---section-tab switching (e.g. Infected/Hunter's Settings<->Spawns tabs), and a freshly mounted
+---instance has no other way to learn state that was already pushed before it existed to hear it -
+---see cmps/pointListEditor/app.js's own $onInit for the Angular side of this.
 
 ---@class BJPointListEditorConfig
 ---@field lists BJPointListSpec[]
@@ -114,6 +120,16 @@ local function new(config)
         -- beamjoy_communications_ui.send only ever takes ONE payload (unlike the variadic
         -- server-facing beamjoy_communications.send). Must be a single table, not two args
         beamjoy_communications_ui.send(config.events.activeUpdate, { list = state.activeList, index = state.activeIndex })
+    end
+    --- everything a freshly (re)mounted Angular side needs to reconstruct the current state from
+    --- scratch : called both by open() (a real reset) and by the requestState handler below (no
+    --- reset, just re-announcing whatever's already there)
+    local function pushFullState()
+        pushListsUpdate()
+        pushActive()
+        beamjoy_communications_ui.send("BJEditorDirty", state.dirty)
+        beamjoy_communications_ui.send(config.events.snapToGround, state.snapToGroundEnabled)
+        beamjoy_communications_ui.send(config.events.snapMethod, state.snapMethod)
     end
     local function markDirty()
         if not state.dirty then
@@ -339,11 +355,7 @@ local function new(config)
         state.activeList, state.activeIndex = nil, nil
         state.dirty = false
         renderAll()
-        pushListsUpdate()
-        pushActive()
-        beamjoy_communications_ui.send("BJEditorDirty", false)
-        beamjoy_communications_ui.send(config.events.snapToGround, state.snapToGroundEnabled)
-        beamjoy_communications_ui.send(config.events.snapMethod, state.snapMethod)
+        pushFullState()
     end
 
     local function close()
@@ -365,6 +377,9 @@ local function new(config)
         end
         beamjoy_communications_ui.addHandler(config.events.setSnapToGround, onSetSnapToGround)
         beamjoy_communications_ui.addHandler(config.events.setSnapMethod, onSetSnapMethod)
+        if config.events.requestState then
+            beamjoy_communications_ui.addHandler(config.events.requestState, pushFullState)
+        end
     end
 
     return {

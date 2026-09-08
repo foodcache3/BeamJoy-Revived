@@ -64,6 +64,7 @@ local listEditor = pointListEditor.new({
         snapMethod = "BJEditorHunterArenaSnapMethod",
         setSnapToGround = "BJEditorHunterArenaSetSnapToGround",
         setSnapMethod = "BJEditorHunterArenaSetSnapMethod",
+        requestState = "BJEditorHunterArenaRequestState",
     },
     isActive = function() return parent ~= nil and parent.activeEditor == M end,
 })

@@ -35,6 +35,10 @@ local M = {
         config = false,
     },
 
+    -- true from the moment the UI is ready until the player has either logged in with a nickname
+    -- or explicitly skipped ; see onUIReady/proceedAfterLogin/onLoginRequestState below
+    loginPending = false,
+
     EVENT = "BJEvent",
     handlers = Table(),
 }
@@ -48,8 +52,11 @@ local function sendVersion()
     M.send("BJVersion", { version = beamjoy_main.VERSION, build = beamjoy_main.BUILD })
 end
 
-local function onUIReady()
-    beamjoy_lang.initLang()
+--- Everything onUIReady used to do unconditionally, now deferred until after the nickname login
+--- prompt (windows/login) is resolved (login succeeded, or the player skipped it). Unchanged from
+--- before this gating existed, aside from no longer calling beamjoy_lang.initLang() itself (that
+--- still has to happen up front, in onUIReady, so the login prompt's own text is translated).
+local function proceedAfterLogin()
     beamjoy_communications.send("clientConnection", beamjoy_lang.lang)
     core_jobsystem.create(function(job)
         job.sleep(2)
@@ -79,6 +86,59 @@ local function onUIReady()
     end)
 end
 
+-- Safety net for the login gate below: this couldn't be live-tested ahead of time against every
+-- possible rendering surprise (an unmounted component, a z-index fight with something else), and
+-- a player who just never interacts with it shouldn't be stuck on the loading screen forever
+-- either. Proceeds exactly as if "continue as guest" was pressed if nothing resolved it in time.
+local LOGIN_TIMEOUT_MS = 45000
+
+--- Nickname login workaround (see services/identity.lua's own doc comment for the full,
+--- server-side story) : shown before any of the above proceeds, so a chosen nickname is already
+--- known before onPlayerReady/the welcome message/other players ever see this connection. Purely
+--- a display convenience, not a requirement - windows/login has its own "continue as guest" skip.
+local function onUIReady()
+    beamjoy_lang.initLang()
+    M.loginPending = true
+    async.delayTask(function()
+        if M.loginPending then
+            M.loginPending = false
+            proceedAfterLogin()
+        end
+    end, LOGIN_TIMEOUT_MS, "BJLoginTimeout")
+end
+
+--- windows/login's own $onInit calls this on mount rather than relying solely on the one-time
+--- "BJLoginShow" push below, since that component can easily mount AFTER onUIReady already ran
+--- (beamjoy.js's own 1000ms child-mount delay vs. beamjoyStore's 500ms "BJReady" timer) - same
+--- race, and the same fix, as windows/versionCheck's own BJVersionRequest.
+local function onLoginRequestState()
+    if M.loginPending then
+        M.send("BJLoginShow")
+    end
+end
+
+---@param nickname string
+local function onLoginSubmit(nickname)
+    beamjoy_communications.send("identityLogin", nickname)
+end
+
+local function onLoginSkip()
+    M.loginPending = false
+    async.removeTask("BJLoginTimeout")
+    proceedAfterLogin()
+end
+
+---@param success boolean
+---@param reason string nickname on success, an error key on failure
+local function onLoginResult(success, reason)
+    M.send("BJLoginResult", { success = success, reason = not success and reason or nil })
+    if success then
+        M.loginPending = false
+        async.removeTask("BJLoginTimeout")
+        proceedAfterLogin()
+    end
+end
+
 local function onInit()
     InitPreloadedDependencies(M)
     M.addHandler("BJRequestWindowsSizesAndPositions", M.sendWindowsSizesAndPositions)
@@ -86,6 +146,11 @@ local function onInit()
     M.addHandler("BJRequestOpenWindow", M.requestOpenWindow)
     M.addHandler("BJReady", onUIReady)
     M.addHandler("BJVersionRequest", sendVersion)
+
+    M.addHandler("BJLoginRequestState", onLoginRequestState)
+    M.addHandler("BJLoginSubmit", onLoginSubmit)
+    M.addHandler("BJLoginSkip", onLoginSkip)
+    beamjoy_communications.addHandler("identityLoginResult", onLoginResult)
 
     M.addHandler("BJRequestIntroPanelData", M.getIntroPanelData)
     M.addHandler("BJSaveIntroPanelData", M.saveIntroPanelData)

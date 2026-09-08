@@ -230,12 +230,16 @@ local function onBJRequestCache(caches, targetID)
                     -- REMOVE SENSITIVE DATA FROM CACHE
                     player.beammpID = nil
                     player.ip = nil
+                    -- see services/identity.lua's own doc comment: a pure display convenience
+                    -- (nametags/roster), never used for anything identity-critical
+                    player.displayName = p.identityNickname or p.playerName
                     return player
                 end
 
                 return {
                     playerID = p.playerID,
                     playerName = p.playerName,
+                    displayName = p.identityNickname or p.playerName,
                     group = p.group,
                     currentVehicle = p.currentVehicle,
                     activity = p.activity,

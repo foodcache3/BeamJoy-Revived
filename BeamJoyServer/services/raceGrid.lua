@@ -165,7 +165,7 @@
 ---@field participants tablelib<integer, BJRaceParticipant> index playerID
 
 local M = {
-    dependencies = { "services_races", "services_vehiclePresets", "utils_async" },
+    dependencies = { "services_races", "services_vehiclePresets", "utils_async", "services_identity" },
 
     ---@type tablelib<string, BJRaceSession>
     sessions = Table(),
@@ -892,8 +892,14 @@ local function trySubmitTime(session, participant, timeMs)
     if race and race.vehicleRestrictionMode ~= "free" and s.vehicleRestrictionStartMode ~= "raceDefined" then
         return
     end
+    -- login workaround (services/identity.lua's own doc comment): credits the leaderboard entry
+    -- to the participant's chosen nickname if they've logged in with one, same raw connection
+    -- playerName as before otherwise. Only the leaderboard's own key changes here - this session's
+    -- OWN bookkeeping (participant.playerName itself, used everywhere else in this file) is
+    -- untouched.
     participant.isNewPB, participant.isNewRecord = services_races.submitTime(
-        session.raceId, participant.playerName, participant.vehicleModel or "", timeMs)
+        session.raceId, services_identity.getIdentityKey(participant.playerID) or participant.playerName,
+        participant.vehicleModel or "", timeMs)
 end
 
 ---@param session BJRaceSession

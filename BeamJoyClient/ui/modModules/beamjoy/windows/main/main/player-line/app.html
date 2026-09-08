@@ -1,4 +1,4 @@
-<span>{{$ctrl.player.playerName}} ({{$ctrl.groupLabel}})</span>
+<span>{{$ctrl.player.displayName || $ctrl.player.playerName}} ({{$ctrl.groupLabel}})</span>
 
 <div
     ng-hide="$ctrl.actions.focus === undefined"
