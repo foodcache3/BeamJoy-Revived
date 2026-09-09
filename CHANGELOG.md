@@ -6,6 +6,24 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.99] - 2026-09-09
+
+Client v1.8.99. Client-only, no server-side change in this range.
+
+### Fixed
+- **"Loading" spinner stuck on screen (until a full UI reload) when spawning traffic, worse with
+  more players connected.** Root cause: `spawnNewTrafficVehicles`'s whole spawn job
+  (`core_jobsystem.create`) never wrapped its body in a `pcall` anywhere - `uiHelpers.applyLoading(
+  true)` ran unconditionally near the top, but any uncaught Lua error partway through the per-
+  vehicle spawn loop (a config missing paints, a spawn call returning nil, any other edge case
+  more likely to actually get hit once there's real multiplayer load/traffic volume) killed the
+  whole coroutine outright and skipped every line after it, including the matching
+  `applyLoading(false)` at the end - permanently wedging the spinner AND `spawnLock` (silently
+  blocking every future traffic setting change too) until a full client restart. The entire job
+  body is now wrapped in a `pcall`; `applyLoading(false)`/`spawnLock = false`/the
+  `onBJTrafficUpdated` hook now always run regardless of whether the spawn actually succeeded, and
+  a caught error is logged instead of silently swallowed.
+
 ## [1.8.98] - 2026-09-09
 
 Client v1.8.98. Client-only, no server-side change in this range.

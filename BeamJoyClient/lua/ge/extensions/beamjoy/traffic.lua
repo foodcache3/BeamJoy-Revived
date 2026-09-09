@@ -434,109 +434,124 @@ local function spawnNewTrafficVehicles(amount)
     spawnLock = true
     amount = amount or 1
     core_jobsystem.create(function(job)
-        local vehConfigs = createGroup(job, amount)
-        uiHelpers.toastInfo(beamjoy_lang.translate("beamjoy.toast.traffic.waitForSpawn"))
-        uiHelpers.applyLoading(true)
-        job.sleep(.3)
-        for i = 1, amount do
-            local vehConfig = vehConfigs[i]
-            if vehConfig then
-                local options = {}
-                options.vehicleName = "traffic"
-                options.cling = true
-                options.autoEnterVehicle = false
+        -- Real, confirmed bug ("loading symbol stuck on screen until the UI is reloaded", worse
+        -- with more players/traffic load): nothing in this whole job ever wrapped its body in a
+        -- pcall, so ANY uncaught Lua error partway through (a config missing paints, a spawn
+        -- returning nil, any other edge case more likely to actually get hit once there's real
+        -- multiplayer load) killed the coroutine outright and skipped every line after it -
+        -- including applyLoading(false) and spawnLock = false below, permanently wedging the
+        -- loading spinner AND every future traffic setting change (spawnLock never released) until
+        -- a full UI/client restart. Wrapping the whole body guarantees both always run regardless
+        -- of whether the spawn actually succeeded, and surfaces the real error instead of silently
+        -- swallowing it.
+        local ok, err = pcall(function()
+            local vehConfigs = createGroup(job, amount)
+            uiHelpers.toastInfo(beamjoy_lang.translate("beamjoy.toast.traffic.waitForSpawn"))
+            uiHelpers.applyLoading(true)
+            job.sleep(.3)
+            for i = 1, amount do
+                local vehConfig = vehConfigs[i]
+                if vehConfig then
+                    local options = {}
+                    options.vehicleName = "traffic"
+                    options.cling = true
+                    options.autoEnterVehicle = false
 
-                local pos, rot
-                while not pos do
-                    pos, rot = getNewRandomSpawn(job)
-                    if not pos then job.sleep(.01) end
-                end
-                job.sleep(.01)
-                local coreModel = extensions.core_vehicles.getModel(vehConfig.model)
-                job.sleep(.01)
-                local paintNames = table.keys(coreModel.model.paints or {})
-                for j = 1, 3 do
-                    local pickName
-                    if j == 1 and vehConfig.paintName and coreModel.model.paints[vehConfig.paintName] then
-                        -- vehGroup-provided override for the primary paint slot
-                        pickName = vehConfig.paintName
-                    else
-                        pickName = table.random(paintNames)
+                    local pos, rot
+                    while not pos do
+                        pos, rot = getNewRandomSpawn(job)
+                        if not pos then job.sleep(.01) end
                     end
-                    if coreModel.model.paints[pickName] then
-                        local key = "paintName"
-                        if j > 1 then key = key .. tostring(j) end
-                        options[key] = pickName
-                        key = "paint"
-                        if j > 1 then key = key .. tostring(j) end
-                        options[key] = coreModel.model.paints[pickName]
+                    job.sleep(.01)
+                    local coreModel = extensions.core_vehicles.getModel(vehConfig.model)
+                    job.sleep(.01)
+                    local paintNames = table.keys(coreModel.model.paints or {})
+                    for j = 1, 3 do
+                        local pickName
+                        if j == 1 and vehConfig.paintName and coreModel.model.paints[vehConfig.paintName] then
+                            -- vehGroup-provided override for the primary paint slot
+                            pickName = vehConfig.paintName
+                        else
+                            pickName = table.random(paintNames)
+                        end
+                        if coreModel.model.paints[pickName] then
+                            local key = "paintName"
+                            if j > 1 then key = key .. tostring(j) end
+                            options[key] = pickName
+                            key = "paint"
+                            if j > 1 then key = key .. tostring(j) end
+                            options[key] = coreModel.model.paints[pickName]
+                        end
                     end
-                end
-                job.sleep(.01)
-                local pathConfig = string.format("vehicles/%s/%s.pc", vehConfig.model, vehConfig.config)
-                -- spawn.lua's own setVehicleObject accepts either a file path string here or an
-                -- in-memory config table (which it serializes itself), confirmed straight from
-                -- ge/spawn.lua : type(options.config) == 'table' then pc = serialize(options.config)
-                -- end. Loading the config ourselves and mutating its parts table is what lets
-                -- plate overrides apply without needing a different spawn API.
-                local spawnConfig = pathConfig
-                -- jsonReadFile needs the FS-rooted form (leading slash), unlike spawn.spawnVehicle
-                -- itself which tolerates the relative one above; matches Agent's own Traffic Tool
-                -- reading a config the same way ("/vehicles/" .. model .. "/" .. config .. ".pc")
-                local ok, baseConfig = pcall(jsonReadFile, "/" .. pathConfig)
-                if ok and type(baseConfig) == "table" and type(baseConfig.parts) == "table" then
-                    preparePlateParts(baseConfig.parts, {
-                        shape = M.data.plateShape,
-                        frontUsage = M.data.plateFrontUsage,
-                        designId = M.data.plateDesign,
-                    })
-                    spawnConfig = baseConfig
-                end
-                local veh = spawn.spawnVehicle(vehConfig.model, spawnConfig, pos, rot, options)
-                -- beamjoy_vehicles' own isAi() only recognizes a model as traffic by its name
-                -- containing "traffic" (simple_traffic, agent_traffic_eu2, ...), which a vehGroup
-                -- can easily name off a model that doesn't follow that convention at all (e.g.
-                -- SimpleNG's SNG_120a). Without this, that spawn gets treated exactly like the
-                -- local player spawning their own car (forced out of free cam, respawn protection
-                -- applied, an orange "You" nametag), and traffic.lua's own wait loop below never
-                -- sees it land in M.vehs, spinning forever and leaking spawnLock=true, wedging
-                -- every future traffic setting change. Called unconditionally, before any
-                -- job.sleep gives beamjoy_vehicles.registerVehicle's own async job a chance to
-                -- classify this vid first.
-                beamjoy_vehicles.markVehicleAsAi(veh:getID())
-                -- Real bug, only ever visible with actual multiplayer load (never showed up spawning
-                -- traffic solo): setAIMode("traffic") below only tells the vehicle's OWN vlua ai.lua
-                -- which personality to run. It does nothing on the GE side, and GE side is where the
-                -- actual driving happens : native gameplay_traffic.lua's doTraffic() is what feeds
-                -- every traffic vehicle a route, a speed target and steering input, every frame, and
-                -- it only ever runs (`if state == 'on'`) once at least one vehicle has been
-                -- registered into that module's own traffic[]/trafficAiVehsList tables via its
-                -- insertTraffic() - that registration is also the ONLY thing that ever flips its
-                -- internal state from 'off' to 'on' in the first place. Spawning here via
-                -- spawn.spawnVehicle() directly (instead of going through native's own
-                -- activate()/spawnTraffic() flow) skipped that registration entirely, so every
-                -- traffic vehicle had its AI mode set with nobody ever actually driving it : it just
-                -- sat there braked the instant it spawned. Mirrors exactly what native
-                -- activate(vehList) itself does per vehicle (see traffic.lua:925-948 in the game's
-                -- own install).
-                map.request(veh:getID(), -1) -- force mapmgr to read map, same as native activate()
-                extensions.gameplay_traffic.insertTraffic(veh:getID(), false)
-                job.sleep(.01)
-                extensions.hook("onBJTrafficVehicleSpawned", veh)
-                core_vehicleBridge.executeAction(veh, 'setAIMode', "traffic")
-                job.sleep(.01)
-                createPostSpawnMergeCheck(veh:getID())
-                -- Bounded defensively: this used to wait unconditionally, and any future gap in
-                -- getting a spawned vid recognized as AI (like the SimpleNG case above) would spin
-                -- forever here, never releasing spawnLock and permanently wedging every later
-                -- traffic setting change until a restart. 10s is generous for a single registration
-                -- that normally completes in well under a second.
-                local waitDeadline = GetCurrentTimeMillis() + 10000
-                while i == amount and not M.vehs:includes(veh:getID()) and
-                    GetCurrentTimeMillis() < waitDeadline do
-                    job.sleep(.2)
+                    job.sleep(.01)
+                    local pathConfig = string.format("vehicles/%s/%s.pc", vehConfig.model, vehConfig.config)
+                    -- spawn.lua's own setVehicleObject accepts either a file path string here or an
+                    -- in-memory config table (which it serializes itself), confirmed straight from
+                    -- ge/spawn.lua : type(options.config) == 'table' then pc = serialize(options.config)
+                    -- end. Loading the config ourselves and mutating its parts table is what lets
+                    -- plate overrides apply without needing a different spawn API.
+                    local spawnConfig = pathConfig
+                    -- jsonReadFile needs the FS-rooted form (leading slash), unlike spawn.spawnVehicle
+                    -- itself which tolerates the relative one above; matches Agent's own Traffic Tool
+                    -- reading a config the same way ("/vehicles/" .. model .. "/" .. config .. ".pc")
+                    local ok, baseConfig = pcall(jsonReadFile, "/" .. pathConfig)
+                    if ok and type(baseConfig) == "table" and type(baseConfig.parts) == "table" then
+                        preparePlateParts(baseConfig.parts, {
+                            shape = M.data.plateShape,
+                            frontUsage = M.data.plateFrontUsage,
+                            designId = M.data.plateDesign,
+                        })
+                        spawnConfig = baseConfig
+                    end
+                    local veh = spawn.spawnVehicle(vehConfig.model, spawnConfig, pos, rot, options)
+                    -- beamjoy_vehicles' own isAi() only recognizes a model as traffic by its name
+                    -- containing "traffic" (simple_traffic, agent_traffic_eu2, ...), which a vehGroup
+                    -- can easily name off a model that doesn't follow that convention at all (e.g.
+                    -- SimpleNG's SNG_120a). Without this, that spawn gets treated exactly like the
+                    -- local player spawning their own car (forced out of free cam, respawn protection
+                    -- applied, an orange "You" nametag), and traffic.lua's own wait loop below never
+                    -- sees it land in M.vehs, spinning forever and leaking spawnLock=true, wedging
+                    -- every future traffic setting change. Called unconditionally, before any
+                    -- job.sleep gives beamjoy_vehicles.registerVehicle's own async job a chance to
+                    -- classify this vid first.
+                    beamjoy_vehicles.markVehicleAsAi(veh:getID())
+                    -- Real bug, only ever visible with actual multiplayer load (never showed up spawning
+                    -- traffic solo): setAIMode("traffic") below only tells the vehicle's OWN vlua ai.lua
+                    -- which personality to run. It does nothing on the GE side, and GE side is where the
+                    -- actual driving happens : native gameplay_traffic.lua's doTraffic() is what feeds
+                    -- every traffic vehicle a route, a speed target and steering input, every frame, and
+                    -- it only ever runs (`if state == 'on'`) once at least one vehicle has been
+                    -- registered into that module's own traffic[]/trafficAiVehsList tables via its
+                    -- insertTraffic() - that registration is also the ONLY thing that ever flips its
+                    -- internal state from 'off' to 'on' in the first place. Spawning here via
+                    -- spawn.spawnVehicle() directly (instead of going through native's own
+                    -- activate()/spawnTraffic() flow) skipped that registration entirely, so every
+                    -- traffic vehicle had its AI mode set with nobody ever actually driving it : it just
+                    -- sat there braked the instant it spawned. Mirrors exactly what native
+                    -- activate(vehList) itself does per vehicle (see traffic.lua:925-948 in the game's
+                    -- own install).
+                    map.request(veh:getID(), -1) -- force mapmgr to read map, same as native activate()
+                    extensions.gameplay_traffic.insertTraffic(veh:getID(), false)
+                    job.sleep(.01)
+                    extensions.hook("onBJTrafficVehicleSpawned", veh)
+                    core_vehicleBridge.executeAction(veh, 'setAIMode', "traffic")
+                    job.sleep(.01)
+                    createPostSpawnMergeCheck(veh:getID())
+                    -- Bounded defensively: this used to wait unconditionally, and any future gap in
+                    -- getting a spawned vid recognized as AI (like the SimpleNG case above) would spin
+                    -- forever here, never releasing spawnLock and permanently wedging every later
+                    -- traffic setting change until a restart. 10s is generous for a single registration
+                    -- that normally completes in well under a second.
+                    local waitDeadline = GetCurrentTimeMillis() + 10000
+                    while i == amount and not M.vehs:includes(veh:getID()) and
+                        GetCurrentTimeMillis() < waitDeadline do
+                        job.sleep(.2)
+                    end
                 end
             end
+        end)
+        if not ok then
+            LogError("beamjoy_traffic: spawnNewTrafficVehicles failed: " .. tostring(err))
         end
         uiHelpers.applyLoading(false)
         spawnLock = false
