@@ -11,6 +11,17 @@ local M = {
         RESET_ALL_PHYSICS = "reset_all_physics",
         RELOAD = "reload_vehicle",
         RELOAD_ALL = "reload_all_vehicles",
+        -- Not a real BeamNG input action id (no keybind/actionFilter entry exists for it at all):
+        -- the ESC-menu pause UI's own "Repair" tile (ui/pause/providers/vehicleTabInteractions.lua's
+        -- tryRepairVehicleHere) calls spawn.safeTeleport(vehicle, itsOwnCurrentPos, itsOwnCurrentRot,
+        -- nil, nil, nil, nil, true) directly - a dead giveaway "reset in place via teleport" call,
+        -- confirmed by reading safeTeleport's own body (resetVehicle=true does veh:setPosRot(...)
+        -- then veh:resetBrokenFlexMesh(), exactly recover_vehicle's own effect) - with ZERO gating
+        -- of its own: not through resetGameplay, not through the action filter (there's no key
+        -- press here at all), and the tile's own "disabled" flag (see canModifyVehicles) is purely
+        -- cosmetic - the click callback never re-checks it. See overrideSafeTeleport's own doc
+        -- comment for how this is actually caught.
+        REPAIR = "repairVehicleHere",
     },
 
     baseFunctions = {},
@@ -125,6 +136,7 @@ local function overrideResetInputs()
             },
             spawn = {
                 teleportToLastRoad = extensions.spawn.teleportToLastRoad,
+                safeTeleport = extensions.spawn.safeTeleport,
             },
         },
     }
@@ -155,6 +167,35 @@ local function overrideResetInputs()
     end
     extensions.spawn.teleportToLastRoad = function(veh, options)
         override(M.RESET.RECOVER_LAST_ROAD)
+    end
+
+    -- See M.RESET.REPAIR's own doc comment for the full "why" this exists at all: the ESC-menu
+    -- Repair tile reaches this function directly, with no keybind/action-filter/resetGameplay
+    -- involved anywhere in its call chain. Narrow fingerprint match only : any call that doesn't
+    -- look EXACTLY like tryRepairVehicleHere's own "teleport my own current vehicle to its own
+    -- current position/rotation with resetVehicle=true" signature passes straight through
+    -- completely unmodified below, since safeTeleport is used constantly for entirely unrelated,
+    -- legitimate purposes (native vehicle spawning, traffic, this mod's own
+    -- beamjoy_vehicles.setVehiclePositionRotation) that must never be affected by this.
+    extensions.spawn.safeTeleport = function(veh, pos, rot, checkOnlyStatics_, visibilityPoint_,
+            removeTraffic_, centeredPosition, resetVehicle, player, unlimitedSafeSpawnRange)
+        local looksLikeRepairCall = resetVehicle == true and checkOnlyStatics_ == nil and
+            visibilityPoint_ == nil and removeTraffic_ == nil and centeredPosition == nil and
+            player == nil and unlimitedSafeSpawnRange == nil
+        local myVeh = looksLikeRepairCall and be and be:getPlayerVehicle(0) or nil
+        local isOwnVehicle = myVeh and veh and veh:getID() == myVeh:getID()
+        local isNearOwnCurrentPos = isOwnVehicle and pos and
+            (pos - myVeh:getPosition()):length() < 3
+        if isNearOwnCurrentPos then
+            local mpVeh = beamjoy_vehicles.getCurrent()
+            local req = CreateRequestAuthorization(true)
+            extensions.hook("onBJRequestCurrentVehicleReset", req, M.RESET.REPAIR, mpVeh)
+            -- denied : silently swallowed, same "key press, nothing happens" feel every other
+            -- blocked reset type here already has - the real safeTeleport never runs at all
+            if not req.state then return end
+        end
+        return M.baseFunctions.extensions.spawn.safeTeleport(veh, pos, rot, checkOnlyStatics_,
+            visibilityPoint_, removeTraffic_, centeredPosition, resetVehicle, player, unlimitedSafeSpawnRange)
     end
 
     ---@diagnostic disable-next-line: lowercase-global

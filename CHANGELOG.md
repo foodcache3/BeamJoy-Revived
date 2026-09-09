@@ -6,6 +6,37 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.97] - 2026-09-09
+
+Client v1.8.97. Client-only, no server-side change in this range.
+
+### Fixed
+- **The pause menu's "Repair" tile still worked mid-round regardless of speed or disableResets, in
+  Races, Hunter, and Infected** - v1.8.96's switch_next_vehicle/switch_previous_vehicle fix never
+  actually reached it. Root cause, confirmed by reading the installed game's own source: the tile's
+  click handler (`ui/pause/providers/vehicleTabInteractions.lua`'s `tryRepairVehicleHere`) calls
+  `spawn.safeTeleport(vehicle, itsOwnCurrentPos, itsOwnCurrentRot, nil, nil, nil, nil, true)`
+  directly - the exact same "reset in place" effect as recover_vehicle, just reached through a
+  completely different call chain that goes through neither the action filter (no key press exists
+  here) nor `resetGameplay`, and the tile's own "disabled" flag is purely a cosmetic render-time
+  hint the click callback never actually re-checks. `beamjoy_inputs.lua` now recognizes this exact
+  call shape (own vehicle, position within 3m of its own current position, `resetVehicle=true`,
+  every other optional argument nil) and routes it through the same `onBJRequestCurrentVehicleReset`
+  authorization hook every other reset type already goes through, before the real teleport ever
+  runs - any other `spawn.safeTeleport` call (vehicle spawning, traffic, this mod's own
+  `beamjoy_vehicles.setVehiclePositionRotation`) passes through completely unaffected. Races blocks
+  it outright whenever the race is locked ; Infected mirrors recover_vehicle's exact policy
+  (COUNTDOWN blocks it, GAME blocks it when disableResets is on or applies the same speed/relock
+  gate otherwise) ; Hunter mirrors its own recover_vehicle policy too (COUNTDOWN blocks it, the
+  fugitive's own huntedResetDistanceThreshold gate applies, velocityGatedResets applies to either
+  role when on).
+
+**Known related gap, not fixed here**: the same pause-menu panel's "Reset" tile
+(`tryResetVehicle`) has an identical hole - it calls `vehicle:requestReset(RESET_PHYSICS)` +
+`vehicle:resetBrokenFlexMesh()` directly, a third code path distinct from both `resetGameplay` and
+`spawn.safeTeleport`, so none of the reset-blocking machinery in this codebase (this fix included)
+catches it yet.
+
 ## [1.8.96] - 2026-09-08
 
 Client v1.8.96, server v1.8.70. Server-side changes here need redeploying `BeamJoyServer/` to the

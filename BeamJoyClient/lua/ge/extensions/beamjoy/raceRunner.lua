@@ -2367,8 +2367,23 @@ end
 ---@param resetType string
 ---@param mpVeh BJVehicle?
 local function onBJRequestCurrentVehicleReset(req, resetType, mpVeh)
-    if not M.session or M.session.state ~= "RACE" then return end
-    if not mpVeh or not mpVeh.isLocal then return end
+    if not M.session or not mpVeh or not mpVeh.isLocal then return end
+
+    -- Repair (see beamjoy_inputs.lua's own M.RESET.REPAIR doc comment: the ESC-menu tile bypasses
+    -- both the action filter AND resetGameplay entirely, reaching spawn.safeTeleport directly) has
+    -- its own, simpler, unconditional policy - unlike every other reset type here, it never
+    -- repositions the vehicle at all, only erases crash damage, so there's no respawnStrategy/
+    -- checkpoint-redirect logic that could ever apply to it: it's just blocked outright whenever
+    -- the race is locked (COUNTDOWN or RACE, matching the action-filter block's own COUNTDOWN
+    -- coverage and the disableNodegrabber-style "erase crash consequences" reasoning switch_next_
+    -- vehicle/switch_previous_vehicle are already blocked for), same as every other reset type here
+    -- gets during COUNTDOWN, regardless of strategy.
+    if resetType == beamjoy_inputs.RESET.REPAIR then
+        if isRaceLocked() then req.state = false end
+        return
+    end
+
+    if M.session.state ~= "RACE" then return end
     local participant = getSelfParticipant()
     if not participant or participant.finished or participant.dnf then return end
 

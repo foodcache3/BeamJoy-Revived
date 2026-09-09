@@ -1520,6 +1520,30 @@ local function updateVelocityResetGate()
     end
 end
 
+--- Repair (see beamjoy_inputs.lua's own M.RESET.REPAIR doc comment: the ESC-menu tile bypasses
+--- the action filter entirely, reaching spawn.safeTeleport directly, so onBJRequestRestrictions
+--- above never sees it at all) gets its own real gate here, mirroring recover_vehicle's own exact
+--- policy - COUNTDOWN blocks it unconditionally ; during HUNT, the fugitive is additionally gated
+--- by huntedResetDistanceThreshold (same as every other reset type), and velocityGatedResets (if
+--- on) applies to either role, same as it does for every other reset type. Hunters otherwise stay
+--- "always allowed", matching their own long-standing "reset freely, just pay the delay" policy -
+--- repair doesn't reposition the vehicle at all, so there's no position/progress concern here for
+--- either role beyond what those two existing gates already cover.
+---@param req RequestAuthorization
+---@param resetType string
+local function onBJRequestCurrentVehicleReset(req, resetType)
+    if resetType ~= beamjoy_inputs.RESET.REPAIR then return end
+    if not M.session then return end
+    local participant = getSelfParticipant()
+    if M.session.state == "COUNTDOWN" or
+        (M.session.state == "HUNT" and participant and participant.role == "hunted" and M.huntedResetLocked) then
+        req.state = false
+    elseif M.session.state == "HUNT" and M.session.settings.velocityGatedResets and M.movingTooFastToReset then
+        req.state = false
+    end
+end
+M.onBJRequestCurrentVehicleReset = onBJRequestCurrentVehicleReset
+
 local function onUpdate()
     if M.session and M.session.state == "LOBBY" then
         updateGridCountdown()

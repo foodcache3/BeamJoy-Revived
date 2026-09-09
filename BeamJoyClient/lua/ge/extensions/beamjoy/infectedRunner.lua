@@ -1028,6 +1028,27 @@ local function myCurrentVehicle()
     return beamjoy_vehicles.getCurrentOwn() or (M.myVehicleVid and beamjoy_vehicles.getVehicle(M.myVehicleVid))
 end
 
+--- Repair (see beamjoy_inputs.lua's own M.RESET.REPAIR doc comment: the ESC-menu tile bypasses
+--- both the action filter AND resetGameplay entirely, reaching spawn.safeTeleport directly, so
+--- neither onBJRequestRestrictions above nor the resetGameplay redirect below ever see it at all)
+--- gets its own real gate here, mirroring recover_vehicle's own exact policy - COUNTDOWN blocks it
+--- unconditionally, GAME blocks it outright when disableResets is on, and otherwise applies the
+--- exact same speed/relock gate recover_vehicle's own actionFilter entry is held to.
+---@param req RequestAuthorization
+---@param resetType string
+local function onBJRequestCurrentVehicleReset(req, resetType)
+    if resetType ~= beamjoy_inputs.RESET.REPAIR then return end
+    if not M.session then return end
+    if M.session.state == "COUNTDOWN" then
+        req.state = false
+    elseif M.session.state == "GAME" then
+        if M.session.settings.disableResets or M.movingTooFastToReset or
+                (M.resetRelockUntilMs and GetCurrentTimeMillis() < M.resetRelockUntilMs) then
+            req.state = false
+        end
+    end
+end
+
 -- See RESET_MAX_SPEED's own doc comment near the top of this file for the full "why" and "how".
 ---@type function? the real, native resetGameplay, saved while overridden ; nil whenever not
 ---installed, which doubles as this mechanism's own "is it currently installed" flag
@@ -1428,6 +1449,7 @@ M.onInit = onInit
 M.onUpdate = onUpdate
 M.onSlowUpdate = onSlowUpdate
 M.onBJRequestRestrictions = onBJRequestRestrictions
+M.onBJRequestCurrentVehicleReset = onBJRequestCurrentVehicleReset
 M.onBJRequestCanSpawnVehicle = onBJRequestCanSpawnVehicle
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
 M.onVehicleResetted = onVehicleResetted
