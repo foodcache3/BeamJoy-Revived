@@ -6,6 +6,18 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.100] - 2026-09-09
+
+Client v1.8.100. Client-only, no server-side change in this range.
+
+### Changed
+- **Race gates now render as just their four edges (a thin wireframe rectangle) during a live race,
+  instead of a solid filled quad**, per direct request - less visually cluttering with several
+  gates on screen at once, and reads more like a gate to drive through than a wall. Uses the same
+  `shape.addLine` primitive the race editor's own selection-highlight outline already draws with,
+  just lighter. The editor and test-builder preview keep the solid quad, still useful there for a
+  clear sense of the gate's own plane while actually placing/sizing one.
+
 ## [1.8.99] - 2026-09-09
 
 Client v1.8.99. Client-only, no server-side change in this range.

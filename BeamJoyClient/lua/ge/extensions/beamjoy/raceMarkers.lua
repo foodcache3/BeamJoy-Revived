@@ -242,7 +242,15 @@ end
 ---editor/test-builder (authoring needs the labels regardless of any race setting), gated on the
 ---live session's own showGateNametags setting for the racing path ; default true
 ---@param sectorNumber integer? appends "(Sector N)" to the label, per sectorNumberForGate() above
-local function drawGate(gate, index, color, showDirection, role, showLabel, sectorNumber)
+---@param edgesOnly boolean? per direct request: draws just the four edges (a thin wireframe
+---rectangle, same shape.addLine/SquarePrism primitive drawGateHandles below already uses for the
+---editor's own selection highlight, just lighter here) instead of a solid filled quad - less
+---visually cluttering during an actual race with several gates on screen at once, and reads more
+---like a gate to drive through than a wall. Only the live-session render path passes this ; the
+---editor/test-builder paths keep the solid quad, still useful there for a clear sense of the
+---gate's own plane while actually placing/sizing one. Default false (solid quad), matching the
+---prior always-filled behavior.
+local function drawGate(gate, index, color, showDirection, role, showLabel, sectorNumber, edgesOnly)
     local pos = vec3(gate.pos.x, gate.pos.y, gate.pos.z)
     local dir = vec3(gate.dir.x, gate.dir.y, gate.dir.z):normalized()
     local up = vec3(0, 0, 1)
@@ -254,7 +262,15 @@ local function drawGate(gate, index, color, showDirection, role, showLabel, sect
     local topRight = bottomRight + up * gate.height
     local topLeft = bottomLeft + up * gate.height
 
-    shape.addQuad(bottomLeft, bottomRight, topRight, topLeft, color)
+    if edgesOnly then
+        local EDGE_THICKNESS = .15
+        shape.addLine(bottomLeft, EDGE_THICKNESS, bottomRight, EDGE_THICKNESS, color)
+        shape.addLine(bottomRight, EDGE_THICKNESS, topRight, EDGE_THICKNESS, color)
+        shape.addLine(topRight, EDGE_THICKNESS, topLeft, EDGE_THICKNESS, color)
+        shape.addLine(topLeft, EDGE_THICKNESS, bottomLeft, EDGE_THICKNESS, color)
+    else
+        shape.addQuad(bottomLeft, bottomRight, topRight, topLeft, color)
+    end
     if showDirection then
         -- shape.addArrow centers its arrow ON the given pos (base = pos - dir*radius,
         -- tip = pos + dir*radius per the wrapper's own local names) rather than starting there.
@@ -441,7 +457,7 @@ local function render()
                     local role = gateRole(race, i)
                     local baseColor = role and START_COLOR or GATE_COLOR
                     drawGate(g, i, (nextGateSet and nextGateSet[i]) and GATE_NEXT_COLOR or baseColor, false, role,
-                        showLabel, sectorNumberForGate(race, i))
+                        showLabel, sectorNumberForGate(race, i), true)
                 end)
                 -- both the connecting path and start positions only matter during GRID (picking a
                 -- slot / waiting to ready up). By COUNTDOWN everyone's already been teleported to
