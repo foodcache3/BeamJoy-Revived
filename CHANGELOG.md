@@ -6,6 +6,24 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.9.0] - 2026-09-09
+
+Client v1.9.0, server v1.9.0. Infected mode complete: this release finishes out the Infected
+gamemode work and rolls it up with everything else on the 1.8.x line into one numbered release.
+Server-side changes here need redeploying `BeamJoyServer/` to the live server, not just the client
+mod.
+
+### Changed
+- **Race gates now draw as just their left/right edges (two thin posts) during a live race**,
+  instead of a solid filled quad - less visually cluttering with several gates on screen at once,
+  and reads more like a gate to drive through than a wall. Top/bottom edges dropped too, per
+  follow-up request. The race editor and test-builder preview keep the solid quad.
+- **All 12 non-English locales are now fully translated**, covering every string added throughout
+  the Infected mode work (login/nickname, Infected arena config and HUD, results screen, one-way
+  gates, race share codes, and more). All locales were previously missing these entirely and fell
+  back to English for them.
+- **Several of this release's own tooltips were simplified** to be shorter and more direct.
+
 ## [1.8.100] - 2026-09-09
 
 Client v1.8.100. Client-only, no server-side change in this range.

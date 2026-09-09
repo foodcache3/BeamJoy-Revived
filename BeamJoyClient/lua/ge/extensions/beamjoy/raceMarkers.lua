@@ -242,14 +242,14 @@ end
 ---editor/test-builder (authoring needs the labels regardless of any race setting), gated on the
 ---live session's own showGateNametags setting for the racing path ; default true
 ---@param sectorNumber integer? appends "(Sector N)" to the label, per sectorNumberForGate() above
----@param edgesOnly boolean? per direct request: draws just the four edges (a thin wireframe
----rectangle, same shape.addLine/SquarePrism primitive drawGateHandles below already uses for the
+---@param edgesOnly boolean? per direct request: draws just the left/right edges (two thin upright
+---posts, same shape.addLine/SquarePrism primitive drawGateHandles below already uses for the
 ---editor's own selection highlight, just lighter here) instead of a solid filled quad - less
 ---visually cluttering during an actual race with several gates on screen at once, and reads more
----like a gate to drive through than a wall. Only the live-session render path passes this ; the
----editor/test-builder paths keep the solid quad, still useful there for a clear sense of the
----gate's own plane while actually placing/sizing one. Default false (solid quad), matching the
----prior always-filled behavior.
+---like a gate to drive through than a wall. Top/bottom edges deliberately omitted too, per direct
+---request. Only the live-session render path passes this ; the editor/test-builder paths keep the
+---solid quad, still useful there for a clear sense of the gate's own plane while actually placing/
+---sizing one. Default false (solid quad), matching the prior always-filled behavior.
 local function drawGate(gate, index, color, showDirection, role, showLabel, sectorNumber, edgesOnly)
     local pos = vec3(gate.pos.x, gate.pos.y, gate.pos.z)
     local dir = vec3(gate.dir.x, gate.dir.y, gate.dir.z):normalized()
@@ -263,11 +263,11 @@ local function drawGate(gate, index, color, showDirection, role, showLabel, sect
     local topLeft = bottomLeft + up * gate.height
 
     if edgesOnly then
+        -- left/right edges only, per direct request (top/bottom dropped) - two upright posts read
+        -- as "a gate to drive between" with even less clutter than a full outline.
         local EDGE_THICKNESS = .15
-        shape.addLine(bottomLeft, EDGE_THICKNESS, bottomRight, EDGE_THICKNESS, color)
+        shape.addLine(bottomLeft, EDGE_THICKNESS, topLeft, EDGE_THICKNESS, color)
         shape.addLine(bottomRight, EDGE_THICKNESS, topRight, EDGE_THICKNESS, color)
-        shape.addLine(topRight, EDGE_THICKNESS, topLeft, EDGE_THICKNESS, color)
-        shape.addLine(topLeft, EDGE_THICKNESS, bottomLeft, EDGE_THICKNESS, color)
     else
         shape.addQuad(bottomLeft, bottomRight, topRight, topLeft, color)
     end
