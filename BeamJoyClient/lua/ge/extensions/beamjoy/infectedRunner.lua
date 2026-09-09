@@ -1028,17 +1028,29 @@ local function myCurrentVehicle()
     return beamjoy_vehicles.getCurrentOwn() or (M.myVehicleVid and beamjoy_vehicles.getVehicle(M.myVehicleVid))
 end
 
---- Repair (see beamjoy_inputs.lua's own M.RESET.REPAIR doc comment: the ESC-menu tile bypasses
---- both the action filter AND resetGameplay entirely, reaching spawn.safeTeleport directly, so
---- neither onBJRequestRestrictions above nor the resetGameplay redirect below ever see it at all)
---- gets its own real gate here, mirroring recover_vehicle's own exact policy - COUNTDOWN blocks it
---- unconditionally, GAME blocks it outright when disableResets is on, and otherwise applies the
---- exact same speed/relock gate recover_vehicle's own actionFilter entry is held to.
+--- Repair/Flip-upright (see beamjoy_inputs.lua's own M.RESET.REPAIR/FLIP_UPRIGHT doc comments: both
+--- bypass the action filter AND resetGameplay entirely, reaching spawn.safeTeleport directly, so
+--- neither onBJRequestRestrictions above nor the resetGameplay redirect below ever see either at
+--- all) get their own real gate here, mirroring recover_vehicle's own exact policy - COUNTDOWN
+--- blocks both unconditionally, GAME blocks them outright when disableResets is on, and otherwise
+--- applies the exact same speed/relock gate recover_vehicle's own actionFilter entry is held to.
+--- recover_to_last_road (same bypass concern, when reached via the pause-rail button rather than
+--- the native key its own override already catches) gets its own unconditional GAME/COUNTDOWN
+--- block instead, matching recover_vehicle_alt/loadHome's own unconditional treatment in
+--- onBJRequestRestrictions above - never speed/relock-gated, never allowed under disableResets=false
+--- either, since a reposition-elsewhere action was never the one exception recover_vehicle is.
 ---@param req RequestAuthorization
 ---@param resetType string
 local function onBJRequestCurrentVehicleReset(req, resetType)
-    if resetType ~= beamjoy_inputs.RESET.REPAIR then return end
     if not M.session then return end
+    local RESET = beamjoy_inputs.RESET
+    if resetType == RESET.RECOVER_LAST_ROAD then
+        if M.session.state == "COUNTDOWN" or M.session.state == "GAME" then
+            req.state = false
+        end
+        return
+    end
+    if resetType ~= RESET.REPAIR and resetType ~= RESET.FLIP_UPRIGHT then return end
     if M.session.state == "COUNTDOWN" then
         req.state = false
     elseif M.session.state == "GAME" then

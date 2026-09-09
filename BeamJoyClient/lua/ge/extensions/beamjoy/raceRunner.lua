@@ -2383,6 +2383,22 @@ local function onBJRequestCurrentVehicleReset(req, resetType, mpVeh)
         return
     end
 
+    -- recover_to_last_road/flipVehicleUpright, when reached via a pause-rail BUTTON rather than a
+    -- real key press (see beamjoy_inputs.lua's own M.RESET.FLIP_UPRIGHT doc comment - same bypass
+    -- concern as REPAIR above, a button click never fires a key press for the action filter's own
+    -- COUNTDOWN/norespawn block to catch) : closes that one gap unconditionally here, matching the
+    -- action-filter list's own coverage exactly. Any OTHER strategy during RACE deliberately falls
+    -- through to the general redirect logic below instead of denying outright - that logic already
+    -- treats a non-"light" resetType exactly like a hard reset, redirecting to the last checkpoint
+    -- rather than letting either button's own native effect run.
+    if resetType == beamjoy_inputs.RESET.RECOVER_LAST_ROAD or resetType == beamjoy_inputs.RESET.FLIP_UPRIGHT then
+        if M.session.state == "COUNTDOWN" or
+            (M.session.state == "RACE" and M.session.settings.respawnStrategy == "norespawn") then
+            req.state = false
+            return
+        end
+    end
+
     if M.session.state ~= "RACE" then return end
     local participant = getSelfParticipant()
     if not participant or participant.finished or participant.dnf then return end

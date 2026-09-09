@@ -22,6 +22,12 @@ local M = {
         -- cosmetic - the click callback never re-checks it. See overrideSafeTeleport's own doc
         -- comment for how this is actually caught.
         REPAIR = "repairVehicleHere",
+        -- Same story as REPAIR right above, same fingerprint EXCEPT resetVehicle=false instead of
+        -- true (fixes orientation only, not damage - ui/pause/providers/routeData/vehicle.lua's
+        -- own "Flip the vehicle upright" pause-rail button, and vehicleTabInteractions.lua has no
+        -- equivalent of its own). Distinguished from REPAIR purely by that one flag ; see
+        -- overrideSafeTeleport's own doc comment.
+        FLIP_UPRIGHT = "flipVehicleUpright",
     },
 
     baseFunctions = {},
@@ -169,27 +175,29 @@ local function overrideResetInputs()
         override(M.RESET.RECOVER_LAST_ROAD)
     end
 
-    -- See M.RESET.REPAIR's own doc comment for the full "why" this exists at all: the ESC-menu
-    -- Repair tile reaches this function directly, with no keybind/action-filter/resetGameplay
-    -- involved anywhere in its call chain. Narrow fingerprint match only : any call that doesn't
-    -- look EXACTLY like tryRepairVehicleHere's own "teleport my own current vehicle to its own
-    -- current position/rotation with resetVehicle=true" signature passes straight through
-    -- completely unmodified below, since safeTeleport is used constantly for entirely unrelated,
-    -- legitimate purposes (native vehicle spawning, traffic, this mod's own
-    -- beamjoy_vehicles.setVehiclePositionRotation) that must never be affected by this.
+    -- See M.RESET.REPAIR/FLIP_UPRIGHT's own doc comments for the full "why" this exists at all:
+    -- both the ESC-menu Repair tile and the pause-rail's Repair/Flip-upright buttons reach this
+    -- function directly, with no keybind/action-filter/resetGameplay involved anywhere in their
+    -- call chain. Narrow fingerprint match only : any call that doesn't look EXACTLY like one of
+    -- those two "teleport my own current vehicle to its own current position/rotation" signatures
+    -- (they differ only in resetVehicle: true = repair damage too, false = orientation only)
+    -- passes straight through completely unmodified below, since safeTeleport is used constantly
+    -- for entirely unrelated, legitimate purposes (native vehicle spawning, traffic, this mod's
+    -- own beamjoy_vehicles.setVehiclePositionRotation) that must never be affected by this.
     extensions.spawn.safeTeleport = function(veh, pos, rot, checkOnlyStatics_, visibilityPoint_,
             removeTraffic_, centeredPosition, resetVehicle, player, unlimitedSafeSpawnRange)
-        local looksLikeRepairCall = resetVehicle == true and checkOnlyStatics_ == nil and
+        local matchesShape = type(resetVehicle) == "boolean" and checkOnlyStatics_ == nil and
             visibilityPoint_ == nil and removeTraffic_ == nil and centeredPosition == nil and
             player == nil and unlimitedSafeSpawnRange == nil
-        local myVeh = looksLikeRepairCall and be and be:getPlayerVehicle(0) or nil
+        local myVeh = matchesShape and be and be:getPlayerVehicle(0) or nil
         local isOwnVehicle = myVeh and veh and veh:getID() == myVeh:getID()
         local isNearOwnCurrentPos = isOwnVehicle and pos and
             (pos - myVeh:getPosition()):length() < 3
         if isNearOwnCurrentPos then
+            local resetType = resetVehicle and M.RESET.REPAIR or M.RESET.FLIP_UPRIGHT
             local mpVeh = beamjoy_vehicles.getCurrent()
             local req = CreateRequestAuthorization(true)
-            extensions.hook("onBJRequestCurrentVehicleReset", req, M.RESET.REPAIR, mpVeh)
+            extensions.hook("onBJRequestCurrentVehicleReset", req, resetType, mpVeh)
             -- denied : silently swallowed, same "key press, nothing happens" feel every other
             -- blocked reset type here already has - the real safeTeleport never runs at all
             if not req.state then return end

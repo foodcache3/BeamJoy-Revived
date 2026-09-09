@@ -6,6 +6,33 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.8.98] - 2026-09-09
+
+Client v1.8.98. Client-only, no server-side change in this range.
+
+### Fixed
+- **The pause menu's own "Vehicle" rail (top nav System/Freeroam/Vehicle/Environment/BeamMP, a
+  third UI surface distinct from both the ESC "Current vehicle" card and the radial quick-access
+  menu) had two more buttons with the exact same v1.8.97 hole: "Recover vehicle to last road" and
+  "Flip the vehicle upright"**, confirmed by reading the installed game's own
+  `ui/pause/providers/routeData/vehicle.lua`. Recover-to-road calls `spawn.teleportToLastRoad`
+  directly (already overridden client-side, but none of Races/Hunter/Infected's own authorization
+  hooks previously checked it, only the native keybind's action-filter entry did) ; Flip-upright
+  calls `spawn.safeTeleport` with the identical "teleport to my own current position" signature
+  v1.8.97's Repair fix already recognizes, just with `resetVehicle=false` instead of `true` (fixes
+  orientation only, not damage) - now recognized as its own distinct case there too. Both now route
+  through the same per-gamemode authorization every other reset type already goes through: Races
+  closes the one gap its existing checkpoint-redirect logic couldn't reach (a norespawn-strategy
+  button click bypassing the action filter) ; Infected blocks recover-to-road unconditionally
+  during GAME/COUNTDOWN (matching its own existing policy) and gates flip-upright exactly like
+  Repair (disableResets / speed-relock) ; Hunter gates both exactly like Repair (COUNTDOWN,
+  huntedResetDistanceThreshold, velocityGatedResets).
+
+**Still not covered by anything in this codebase**: this same rail's "Vehicle Selector" button (a
+different native entry point, `ui_vehicleSelector_general.openFromPause`, than the one this mod's
+own vehicle-restriction checks currently watch) hasn't been specifically verified yet, and the
+pause menu's separate "Reset" tile (flagged as a known gap in v1.8.97) is still unfixed.
+
 ## [1.8.97] - 2026-09-09
 
 Client v1.8.97. Client-only, no server-side change in this range.

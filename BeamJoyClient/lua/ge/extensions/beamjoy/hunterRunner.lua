@@ -1520,19 +1520,22 @@ local function updateVelocityResetGate()
     end
 end
 
---- Repair (see beamjoy_inputs.lua's own M.RESET.REPAIR doc comment: the ESC-menu tile bypasses
---- the action filter entirely, reaching spawn.safeTeleport directly, so onBJRequestRestrictions
---- above never sees it at all) gets its own real gate here, mirroring recover_vehicle's own exact
---- policy - COUNTDOWN blocks it unconditionally ; during HUNT, the fugitive is additionally gated
---- by huntedResetDistanceThreshold (same as every other reset type), and velocityGatedResets (if
---- on) applies to either role, same as it does for every other reset type. Hunters otherwise stay
---- "always allowed", matching their own long-standing "reset freely, just pay the delay" policy -
---- repair doesn't reposition the vehicle at all, so there's no position/progress concern here for
---- either role beyond what those two existing gates already cover.
+--- Repair/recover_to_last_road/Flip-upright (see beamjoy_inputs.lua's own M.RESET.REPAIR/
+--- FLIP_UPRIGHT doc comments: all three bypass the action filter entirely when reached via a
+--- pause-menu button rather than a real key press, so onBJRequestRestrictions above never sees any
+--- of them at all in that case) get their own real gate here, mirroring recover_vehicle's own
+--- exact policy - the same one recover_vehicle_alt/recover_to_last_road/reset_physics/
+--- reset_all_physics/reload_vehicle already share identically in onBJRequestRestrictions above.
+--- COUNTDOWN blocks all three unconditionally ; during HUNT, the fugitive is additionally gated by
+--- huntedResetDistanceThreshold (same as every other reset type), and velocityGatedResets (if on)
+--- applies to either role, same as it does for every other reset type. Hunters otherwise stay
+--- "always allowed", matching their own long-standing "reset freely, just pay the delay" policy.
 ---@param req RequestAuthorization
 ---@param resetType string
 local function onBJRequestCurrentVehicleReset(req, resetType)
-    if resetType ~= beamjoy_inputs.RESET.REPAIR then return end
+    local RESET = beamjoy_inputs.RESET
+    if resetType ~= RESET.REPAIR and resetType ~= RESET.RECOVER_LAST_ROAD and
+        resetType ~= RESET.FLIP_UPRIGHT then return end
     if not M.session then return end
     local participant = getSelfParticipant()
     if M.session.state == "COUNTDOWN" or
