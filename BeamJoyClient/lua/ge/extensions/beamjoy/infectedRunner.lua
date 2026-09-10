@@ -1061,6 +1061,23 @@ local function onBJRequestCurrentVehicleReset(req, resetType)
     end
 end
 
+--- authorization gate for a freeroam energy-station / garage interaction (see beamjoy_stations).
+--- Fired before the refuel/repair process starts ; `req.state = false` denies. Infected blocks
+--- both kinds for the whole locked window - a refuel would trivially defeat any fuel-pressure the
+--- round has, and a repair is just a reset by another name. See hunterRunner's own copy for the
+--- "why a hook, not a boolean in beamjoy_stations" reasoning.
+---@param req RequestAuthorization
+---@param kind "refuel"|"repair"
+--- Also the gate beamjoy_stations uses for whether station/garage markers show at all during a
+--- round (called with kind == nil), not just whether an interaction may start. Denied for the
+--- whole locked window unless the host set the arena's `allowStations` default.
+local function onBJRequestStationInteraction(req, kind)
+    if isGameLocked() and not (M.session and M.session.settings and M.session.settings.allowStations) then
+        req.state = false
+    end
+end
+M.onBJRequestStationInteraction = onBJRequestStationInteraction
+
 -- See RESET_MAX_SPEED's own doc comment near the top of this file for the full "why" and "how".
 ---@type function? the real, native resetGameplay, saved while overridden ; nil whenever not
 ---installed, which doubles as this mechanism's own "is it currently installed" flag

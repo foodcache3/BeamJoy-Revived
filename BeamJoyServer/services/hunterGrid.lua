@@ -475,6 +475,8 @@ local function buildSettings(arena, overrides)
             defaults.huntedResetDistanceThreshold or 150) / 10) * 10),
         velocityGatedResets = (overrides.velocityGatedResets ~= nil and overrides.velocityGatedResets or
             defaults.velocityGatedResets) == true,
+        allowStations = (overrides.allowStations ~= nil and overrides.allowStations or
+            defaults.allowStations) == true,
         huntedVehiclePresetId = huntedVehiclePresetId,
         huntedVehiclePool = huntedVehiclePool,
         huntedVehicleLabel = huntedVehicleLabel,

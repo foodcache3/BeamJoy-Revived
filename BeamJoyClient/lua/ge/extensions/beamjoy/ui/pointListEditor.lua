@@ -28,6 +28,9 @@
 ---@field hasRadius boolean? pos+radius (plain sphere sized to the radius), no facing/rotation ;
 ---radius itself is edited via an Angular slider/input, not the gizmo's own scale tool (see
 ---raceEditor.lua's own established reasoning for avoiding that tool)
+---@field hasName boolean? each item carries an optional free-text `name`, edited via an Angular
+---text input. Shown in place of "<label> <n>" on the world-space text label when set. The host is
+---still responsible for persisting/sanitizing it (this module just clamps to 40 chars).
 ---@field defaultRadius number? only used when hasRadius ; default 5
 ---@field min integer? default 0, purely informational (the host's own save-time validation is
 ---still authoritative: this module never blocks a mutation over it)
@@ -46,6 +49,8 @@
 ---vehicle to the point, mirroring raceEditor.lua's own onTeleportTo
 ---@field setRadius string? Angular -> Lua : (listKey, 1-based index, radius), only needed if any
 ---list has hasRadius
+---@field setName string? Angular -> Lua : (listKey, 1-based index, name), only needed if any list
+---has hasName
 ---@field snapToGround string Lua -> Angular : (boolean)
 ---@field snapMethod string Lua -> Angular : ("terrain"|"raycast")
 ---@field setSnapToGround string Angular -> Lua : (boolean)
@@ -146,17 +151,19 @@ local function new(config)
                 local pos = vec3(item.pos.x, item.pos.y, item.pos.z)
                 local active = state.activeList == spec.key and state.activeIndex == i
                 local color = active and ACTIVE_COLOR or spec.color
+                local text = (spec.hasName and type(item.name) == "string" and #item.name > 0)
+                    and item.name or string.format("%s %d", label, i)
                 if spec.hasRadius then
                     local radius = item.radius or spec.defaultRadius or 5
                     shape.addSphere(pos, radius, color)
-                    shape.addText(string.format("%s %d", label, i), pos + vec3(0, 0, radius + 1), color, TEXT_BG)
+                    shape.addText(text, pos + vec3(0, 0, radius + 1), color, TEXT_BG)
                 else
                     shape.addSphere(pos, .5, color)
                     if spec.hasDir then
                         shape.addArrow(pos + vec3(0, 0, .5), vec3(item.dir.x, item.dir.y, item.dir.z):normalized(),
                             2, color)
                     end
-                    shape.addText(string.format("%s %d", label, i), pos + vec3(0, 0, 1.5), color, TEXT_BG)
+                    shape.addText(text, pos + vec3(0, 0, 1.5), color, TEXT_BG)
                 end
             end)
         end
@@ -297,6 +304,23 @@ local function new(config)
         markDirty()
     end
 
+    ---@param listKey string
+    ---@param index integer
+    ---@param name string
+    local function onSetName(listKey, index, name)
+        if not config.isActive() then return end
+        local spec = specByKey[listKey]
+        local item = spec and spec.hasName and state.lists[listKey][index]
+        if not item then return end
+        name = type(name) == "string" and name or ""
+        if #name > 40 then name = name:sub(1, 40) end
+        item.name = #name > 0 and name or nil
+        -- no pushListsUpdate : Angular already holds the value via ng-model, and re-pushing on
+        -- every keystroke would fight the text input. renderAll keeps the world label in sync.
+        renderAll()
+        markDirty()
+    end
+
     ---@param stateValue boolean
     local function onSetSnapToGround(stateValue)
         state.snapToGroundEnabled = stateValue == true
@@ -374,6 +398,9 @@ local function new(config)
         beamjoy_communications_ui.addHandler(config.events.teleportTo, onTeleportTo)
         if config.events.setRadius then
             beamjoy_communications_ui.addHandler(config.events.setRadius, onSetRadius)
+        end
+        if config.events.setName then
+            beamjoy_communications_ui.addHandler(config.events.setName, onSetName)
         end
         beamjoy_communications_ui.addHandler(config.events.setSnapToGround, onSetSnapToGround)
         beamjoy_communications_ui.addHandler(config.events.setSnapMethod, onSetSnapMethod)

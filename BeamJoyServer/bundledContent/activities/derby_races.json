@@ -19,6 +19,7 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
             "resetPenaltyEnabled": false,
             "resetPenaltySeconds": 5,
@@ -327,6 +328,7 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
             "resetPenaltyEnabled": false,
             "resetPenaltySeconds": 5,
@@ -563,6 +565,7 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
             "resetPenaltyEnabled": false,
             "resetPenaltySeconds": 5,
@@ -570,7 +573,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 945,
+        "distance": 947,
         "gates": [
             {
                 "dir": {
@@ -610,8 +613,8 @@
             },
             {
                 "dir": {
-                    "x": -0.22963845142476,
-                    "y": -0.97327600485537,
+                    "x": -0.36143201326044,
+                    "y": -0.93239846620986,
                     "z": 0
                 },
                 "height": 12,
@@ -619,17 +622,17 @@
                     2
                 ],
                 "pos": {
-                    "x": -195.6,
-                    "y": -104.388,
+                    "x": -194.99122659783,
+                    "y": -104.5316363176,
                     "z": 88.65625
                 },
                 "step": 3,
-                "width": 12
+                "width": 14.5
             },
             {
                 "dir": {
-                    "x": -0.16009648556302,
-                    "y": 0.98710137033152,
+                    "x": 0.99253723212019,
+                    "y": 0.12194196511128,
                     "z": 0
                 },
                 "height": 19,
@@ -637,12 +640,12 @@
                     3
                 ],
                 "pos": {
-                    "x": -171.58,
-                    "y": -250.24,
-                    "z": 81.717
+                    "x": -171.49566935698,
+                    "y": -250.92640277306,
+                    "z": 80.46875
                 },
                 "step": 4,
-                "width": 19
+                "width": 19.571918418761
             },
             {
                 "dir": {
@@ -673,12 +676,12 @@
                     5
                 ],
                 "pos": {
-                    "x": -262.00380805886,
-                    "y": -8.5198426857799,
-                    "z": 80.918357849121
+                    "x": -262.482979891,
+                    "y": -8.5048752382411,
+                    "z": 80.90625
                 },
                 "step": 6,
-                "width": 17.788674960184
+                "width": 19
             },
             {
                 "dir": {

@@ -11,6 +11,7 @@ local editors = Table({
     require("ge/extensions/beamjoy/ui/raceEditor"),
     require("ge/extensions/beamjoy/ui/hunterEditor"),
     require("ge/extensions/beamjoy/ui/infectedEditor"),
+    require("ge/extensions/beamjoy/ui/stationEditor"),
 })
 
 local function onInit()
@@ -64,11 +65,20 @@ local function onBJInfectedArenaChanged()
     end
 end
 
+--- same forwarding pattern, for freeroamData.lua's own extensions.hook("onBJFreeroamDataChanged")
+--- (only stationEditor.lua defines this)
+local function onBJFreeroamDataChanged()
+    if M.activeEditor and M.activeEditor.onBJFreeroamDataChanged then
+        M.activeEditor.onBJFreeroamDataChanged()
+    end
+end
+
 M.onInit = onInit
 M.onUpdate = onUpdate
 M.onBJClick = onBJClick
 M.onClose = onClose
 M.onBJHunterArenaChanged = onBJHunterArenaChanged
 M.onBJInfectedArenaChanged = onBJInfectedArenaChanged
+M.onBJFreeroamDataChanged = onBJFreeroamDataChanged
 
 return M

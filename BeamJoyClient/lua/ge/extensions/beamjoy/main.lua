@@ -35,7 +35,8 @@ local M = {
         "beamjoy_broadcast", "beamjoy_maps", "beamjoy_mapVote", "beamjoy_kickVote", "beamjoy_automaticLights", "beamjoy_pursuit",
         "beamjoy_vehiclePresets", "beamjoy_races", "beamjoy_raceRunner", "beamjoy_raceMarkers",
         "beamjoy_hunter", "beamjoy_hunterRunner", "beamjoy_hunterMarkers",
-        "beamjoy_infected", "beamjoy_infectedRunner" },
+        "beamjoy_infected", "beamjoy_infectedRunner",
+        "beamjoy_freeroamData", "beamjoy_stations" },
 
     world_ready = false,
     client_ready = false,

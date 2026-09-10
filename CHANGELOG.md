@@ -6,6 +6,58 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.9.1] - 2026-09-10
+
+Client v1.9.1 (build 2378), server v1.9.1. The freeroam energy-station / garage feature (see
+TODO.md for the full plan). Redeploy `BeamJoyServer/` to the live server, not just the client mod.
+
+### Added
+- **Freeroam energy stations (refuel) and garages (repair).** Server-owner-placed points, synced
+  per map. They register as real BeamNG POIs, so the game's own marker system renders them (a
+  floating icon, no ground ring) and drives the drive-up activity-accept prompt (BeamNG styling,
+  controller navigable) - the same path the map's own gas stations use. The button offers
+  Refuel / Repair; the vehicle freezes for a short configurable countdown, then refuels every
+  compatible tank (empty type list = gasoline / diesel / kerosine / n2o, not electric) or repairs
+  in place. All local, no server round-trip. Blocked during a Race / Hunter / Infected round.
+- **Config > Freeroam tab** (needs the new `EditFreeroamData` permission, default rank mod): an
+  in-world editor for placing stations and garages. Drive somewhere, hit Add, drag with the
+  gizmo, set a trigger radius, give it a name, Save. The live markers hide while it's open. The
+  name shows on the world marker label, the drive-up prompt heading, and the Big Map card.
+- Server config (General > Freeroam): `RefuelDuration`, `RepairDuration` (both default 5s).
+- Translations for the new station / garage / Freeroam-tab strings in all 12 non-English
+  client locales.
+
+### Fixed
+- **The map's own gas stations had no world marker or refuel prompt on a BJS server.** The game
+  loads the marker-interaction system lazily via a path nothing triggers in a BeamMP session, and
+  even then it only runs while the game state is "freeroam"/"career", not "multiplayer".
+  `bigmap.lua` now force-loads those extensions and accepts the multiplayer state (BJI patched the
+  same gap). Native gas stations get their pump icons + drive-up refuel prompt, and are blocked
+  during a BJS round like the mod's own.
+- **The Big Map was broken by a BeamNG update.** The game replaced its Big Map POI provider
+  (`freeroam_bigMapPoiProvider` -> `freeroam_vueBigMap`); `bigmap.lua` still tagged its custom
+  POIs as missions, which the new provider fatals on - and the fatal wiped every vanilla POI off
+  the map too. `bigmap.lua` now passes the real POI list through (minus career
+  missions / scenarios / challenges, same as before - a sandbox server doesn't run them) and
+  appends BJS POIs in the shape the new provider expects. Its dead
+  `sendCurrentLevelMissionsToBigmap` / `getMissionById` overrides and the stale BJReady
+  vanilla-POI snapshot are gone.
+
+### Changed
+- **Stations and garages are hidden and unusable during a Race / Hunter / Infected round** (the
+  map's own gas stations included). Infected and Hunter arenas get an **"Allow fuel stations &
+  garages"** default (off) to re-enable them mid-round; races have no opt-in. Previously the
+  garage markers were hidden but the map's gas pumps still worked mid-round.
+- **`beamjoy_context.isScenarioLocked()`** - one place the "is a Race / Hunter / Infected round
+  locking things down" check lives, instead of each caller OR-ing the three runner predicates by
+  hand. `bigmap.lua`'s big-map block now reads it. No behaviour change.
+- Refuel / repair (BJS points and the map's own gas stations) are blocked during a
+  Race / Hunter / Infected round, via a new `onBJRequestStationInteraction` authorization hook
+  each runner implements.
+- Every bundled Infected arena now defaults to role colors on, infected nametags hidden, and the
+  infected color set to a deep purple (0.271, 0.149, 0.569). Bundled `derby` map activities
+  (Infected arena + races) refreshed.
+
 ## [1.9.0] - 2026-09-09
 
 Client v1.9.0, server v1.9.0. Infected mode complete: this release finishes out the Infected

@@ -788,5 +788,31 @@
     "beamjoy.window.config.tabs.races.share.importPlaceholder": "BJRACE1:...",
     "beamjoy.window.config.tabs.races.share.confirmOverwrite": "Ceci remplacera tout le contenu actuel de l'éditeur par la course importée. Continuer ?",
     "beamjoy.window.config.tabs.races.share.invalidCode": "Cela ne ressemble pas à un code de partage de course valide.",
-    "beamjoy.window.config.tabs.races.share.unsupported": "Les codes de partage de course ne sont pas pris en charge par cette version du jeu."
+    "beamjoy.window.config.tabs.races.share.unsupported": "Les codes de partage de course ne sont pas pris en charge par cette version du jeu.",
+
+
+    // NEW: freeroam stations & garages
+    "beamjoy.stations.markerStation": "Station-service",
+    "beamjoy.stations.markerGarage": "Garage",
+    "beamjoy.stations.bigmapGroupStations": "Stations-service",
+    "beamjoy.stations.bigmapGroupGarages": "Garages",
+    "beamjoy.stations.buttonRefuel": "Faire le plein",
+    "beamjoy.stations.buttonRepair": "Réparer",
+    "beamjoy.stations.promptRefuelling": "Plein en cours",
+    "beamjoy.stations.promptRepairing": "Réparation",
+    "beamjoy.stations.toastBlocked": "Indisponible pour le moment",
+    "beamjoy.stations.toastNothingToFill": "Réservoirs déjà pleins",
+    "beamjoy.stations.toastRefuelled": "Véhicule ravitaillé",
+    "beamjoy.stations.toastRepaired": "Véhicule réparé",
+    "beamjoy.window.config.tabs.freeroam.title": "Roue libre",
+    "beamjoy.window.config.tabs.freeroam.tab": "Roue libre",
+    "beamjoy.window.config.tabs.freeroam.station": "Station-service",
+    "beamjoy.window.config.tabs.freeroam.garage": "Garage",
+    "beamjoy.window.config.tabs.freeroam.hint": "Conduisez à l'endroit voulu pour une station ou un garage, puis Ajouter. Les stations font le plein de tous les réservoirs ; les garages réparent.",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "Vous avez des modifications non enregistrées des stations-service et garages. Les abandonner ?",
+    "beamjoy.window.config.tabs.infectedArena.allowStations": "Autoriser stations-service et garages",
+    "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "Désactivé (par défaut) : les stations et garages sont masqués et inutilisables pendant une partie. Activé : les joueurs peuvent faire le plein et réparer en cours de jeu.",
+    "beamjoy.window.config.tabs.hunterArena.allowStations": "Autoriser stations-service et garages",
+    "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "Désactivé (par défaut) : les stations et garages sont masqués et inutilisables pendant une partie. Activé : les joueurs peuvent faire le plein et réparer en cours de jeu.",
+    "beamjoy.window.config.editor.pointList.name.tooltip": "Nom affiché (facultatif)"
 }

@@ -788,5 +788,31 @@
     "beamjoy.window.config.tabs.races.share.importPlaceholder": "BJRACE1:...",
     "beamjoy.window.config.tabs.races.share.confirmOverwrite": "这将用导入的赛道替换编辑器中当前的所有内容。是否继续?",
     "beamjoy.window.config.tabs.races.share.invalidCode": "这看起来不是有效的赛道分享代码。",
-    "beamjoy.window.config.tabs.races.share.unsupported": "此游戏版本不支持赛道分享代码。"
+    "beamjoy.window.config.tabs.races.share.unsupported": "此游戏版本不支持赛道分享代码。",
+
+
+    // NEW: freeroam stations & garages
+    "beamjoy.stations.markerStation": "加油站",
+    "beamjoy.stations.markerGarage": "修理厂",
+    "beamjoy.stations.bigmapGroupStations": "加油站",
+    "beamjoy.stations.bigmapGroupGarages": "修理厂",
+    "beamjoy.stations.buttonRefuel": "加油",
+    "beamjoy.stations.buttonRepair": "维修",
+    "beamjoy.stations.promptRefuelling": "加油中",
+    "beamjoy.stations.promptRepairing": "维修中",
+    "beamjoy.stations.toastBlocked": "当前不可用",
+    "beamjoy.stations.toastNothingToFill": "油箱已满",
+    "beamjoy.stations.toastRefuelled": "车辆已加油",
+    "beamjoy.stations.toastRepaired": "车辆已修复",
+    "beamjoy.window.config.tabs.freeroam.title": "自由驾驶",
+    "beamjoy.window.config.tabs.freeroam.tab": "自由驾驶",
+    "beamjoy.window.config.tabs.freeroam.station": "加油站",
+    "beamjoy.window.config.tabs.freeroam.garage": "修理厂",
+    "beamjoy.window.config.tabs.freeroam.hint": "开到你想放置加油站或修理厂的位置，然后点击添加。加油站为所有油箱加油；修理厂进行维修。",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "加油站和修理厂有未保存的更改。要放弃吗？",
+    "beamjoy.window.config.tabs.infectedArena.allowStations": "允许加油站和修理厂",
+    "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "关闭（默认）：回合期间加油站和修理厂将被隐藏且无法使用。开启：玩家可在游戏中加油和维修。",
+    "beamjoy.window.config.tabs.hunterArena.allowStations": "允许加油站和修理厂",
+    "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "关闭（默认）：回合期间加油站和修理厂将被隐藏且无法使用。开启：玩家可在游戏中加油和维修。",
+    "beamjoy.window.config.editor.pointList.name.tooltip": "显示名称（可选）"
 }

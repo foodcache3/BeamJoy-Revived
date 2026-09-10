@@ -789,5 +789,31 @@
     "beamjoy.window.config.tabs.races.share.importPlaceholder": "BJRACE1:...",
     "beamjoy.window.config.tabs.races.share.confirmOverwrite": "Dies ersetzt alles, was sich derzeit im Editor befindet, durch das importierte Rennen. Fortfahren?",
     "beamjoy.window.config.tabs.races.share.invalidCode": "Das sieht nicht wie ein gültiger Rennen-Freigabecode aus.",
-    "beamjoy.window.config.tabs.races.share.unsupported": "Rennen-Freigabecodes werden von dieser Spielversion nicht unterstützt."
+    "beamjoy.window.config.tabs.races.share.unsupported": "Rennen-Freigabecodes werden von dieser Spielversion nicht unterstützt.",
+
+
+    // NEW: freeroam stations & garages
+    "beamjoy.stations.markerStation": "Tankstelle",
+    "beamjoy.stations.markerGarage": "Werkstatt",
+    "beamjoy.stations.bigmapGroupStations": "Tankstellen",
+    "beamjoy.stations.bigmapGroupGarages": "Werkstätten",
+    "beamjoy.stations.buttonRefuel": "Tanken",
+    "beamjoy.stations.buttonRepair": "Reparieren",
+    "beamjoy.stations.promptRefuelling": "Tanken",
+    "beamjoy.stations.promptRepairing": "Reparatur",
+    "beamjoy.stations.toastBlocked": "Zurzeit nicht verfügbar",
+    "beamjoy.stations.toastNothingToFill": "Tanks bereits voll",
+    "beamjoy.stations.toastRefuelled": "Fahrzeug betankt",
+    "beamjoy.stations.toastRepaired": "Fahrzeug repariert",
+    "beamjoy.window.config.tabs.freeroam.title": "Freies Fahren",
+    "beamjoy.window.config.tabs.freeroam.tab": "Freies Fahren",
+    "beamjoy.window.config.tabs.freeroam.station": "Tankstelle",
+    "beamjoy.window.config.tabs.freeroam.garage": "Werkstatt",
+    "beamjoy.window.config.tabs.freeroam.hint": "Fahre dorthin, wo du eine Tankstelle oder Werkstatt möchtest, dann Hinzufügen. Tankstellen füllen jeden Tank; Werkstätten reparieren.",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "Du hast ungespeicherte Änderungen an den Tankstellen und Werkstätten. Verwerfen?",
+    "beamjoy.window.config.tabs.infectedArena.allowStations": "Tankstellen & Werkstätten erlauben",
+    "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "Aus (Standard): Tankstellen und Werkstätten sind während einer Runde ausgeblendet und nicht nutzbar. An: Spieler können mitten im Spiel tanken und reparieren.",
+    "beamjoy.window.config.tabs.hunterArena.allowStations": "Tankstellen & Werkstätten erlauben",
+    "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "Aus (Standard): Tankstellen und Werkstätten sind während einer Runde ausgeblendet und nicht nutzbar. An: Spieler können mitten im Spiel tanken und reparieren.",
+    "beamjoy.window.config.editor.pointList.name.tooltip": "Anzeigename (optional)"
 }

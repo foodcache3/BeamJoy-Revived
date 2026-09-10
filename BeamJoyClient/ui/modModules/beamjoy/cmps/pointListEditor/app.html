@@ -12,6 +12,9 @@
     bj-point-list-editor .radius-input {
         width: 4em;
     }
+    bj-point-list-editor .name-input {
+        min-width: 0;
+    }
 </style>
 
 <div ng-repeat="list in $ctrl.lists track by list.key" class="mb-2">
@@ -35,9 +38,23 @@
         ng-class="{active: $ctrl.activeList === list.key && $index === $ctrl.activeIndex}"
         ng-click="$ctrl.select($event, list.key, $index)"
     >
-        <span class="point-name flex-grow-1 d-flex align-center">
+        <span
+            class="point-name flex-grow-1 d-flex align-center"
+            ng-if="!list.hasName"
+        >
             {{list.labelKey | translate}} {{$index + 1}}
         </span>
+        <input
+            ng-if="list.hasName"
+            type="text"
+            class="point-name name-input flex-grow-1"
+            maxlength="40"
+            ng-model="point.name"
+            ng-click="$event.stopPropagation()"
+            ng-change="$ctrl.setName(list.key, $index, point.name)"
+            placeholder="{{(list.labelKey | translate) + ' ' + ($index + 1)}}"
+            title="{{'beamjoy.window.config.editor.pointList.name.tooltip' | translate}}"
+        />
         <input
             ng-if="list.hasRadius"
             type="number"

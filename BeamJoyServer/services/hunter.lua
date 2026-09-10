@@ -46,6 +46,9 @@
 ---; default false, since (unlike Infected, which never had a plain "always allowed" reset in the
 ---first place) this changes hunters' own long-standing "reset freely, just pay the delay" behavior
 ---for anyone who turns it on
+---@field allowStations boolean? when true, freeroam energy stations and garages (BJS-placed AND
+---the map's own gas stations) stay usable during a hunt. Default false : a hunt otherwise hides
+---their markers and refuses refuel/repair
 ---@field huntedVehiclePresetId integer? optional BJVehiclePreset id restricting which vehicle the
 ---fugitive may spawn in (see services/vehiclePresets.lua) ; nil = free choice
 ---@field huntersVehiclePresetId integer? optional BJVehiclePreset id restricting hunter vehicles ;
@@ -175,6 +178,7 @@ local function sanitizeArena(arena)
     arena.defaults.huntedResetDistanceThreshold = math.max(0,
         math.round((tonumber(arena.defaults.huntedResetDistanceThreshold) or 150) / 10) * 10)
     arena.defaults.velocityGatedResets = arena.defaults.velocityGatedResets == true
+    arena.defaults.allowStations = arena.defaults.allowStations == true
     if arena.defaults.huntedVehiclePresetId ~= nil then
         arena.defaults.huntedVehiclePresetId = tonumber(arena.defaults.huntedVehiclePresetId)
         if not arena.defaults.huntedVehiclePresetId or

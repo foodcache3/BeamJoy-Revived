@@ -788,5 +788,31 @@
     "beamjoy.window.config.tabs.races.share.importPlaceholder": "BJRACE1:...",
     "beamjoy.window.config.tabs.races.share.confirmOverwrite": "To zastąpi wszystko, co jest obecnie w edytorze, zaimportowanym wyścigiem. Kontynuować?",
     "beamjoy.window.config.tabs.races.share.invalidCode": "To nie wygląda na prawidłowy kod udostępniania wyścigu.",
-    "beamjoy.window.config.tabs.races.share.unsupported": "Kody udostępniania wyścigów nie są obsługiwane w tej wersji gry."
+    "beamjoy.window.config.tabs.races.share.unsupported": "Kody udostępniania wyścigów nie są obsługiwane w tej wersji gry.",
+
+
+    // NEW: freeroam stations & garages
+    "beamjoy.stations.markerStation": "Stacja paliw",
+    "beamjoy.stations.markerGarage": "Warsztat",
+    "beamjoy.stations.bigmapGroupStations": "Stacje paliw",
+    "beamjoy.stations.bigmapGroupGarages": "Warsztaty",
+    "beamjoy.stations.buttonRefuel": "Zatankuj",
+    "beamjoy.stations.buttonRepair": "Napraw",
+    "beamjoy.stations.promptRefuelling": "Tankowanie",
+    "beamjoy.stations.promptRepairing": "Naprawa",
+    "beamjoy.stations.toastBlocked": "Obecnie niedostępne",
+    "beamjoy.stations.toastNothingToFill": "Zbiorniki już pełne",
+    "beamjoy.stations.toastRefuelled": "Pojazd zatankowany",
+    "beamjoy.stations.toastRepaired": "Pojazd naprawiony",
+    "beamjoy.window.config.tabs.freeroam.title": "Swobodna jazda",
+    "beamjoy.window.config.tabs.freeroam.tab": "Swobodna jazda",
+    "beamjoy.window.config.tabs.freeroam.station": "Stacja paliw",
+    "beamjoy.window.config.tabs.freeroam.garage": "Warsztat",
+    "beamjoy.window.config.tabs.freeroam.hint": "Podjedź w miejsce, gdzie chcesz stację lub warsztat, i kliknij Dodaj. Stacje tankują wszystkie zbiorniki; warsztaty naprawiają.",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "Masz niezapisane zmiany stacji paliw i warsztatów. Odrzucić?",
+    "beamjoy.window.config.tabs.infectedArena.allowStations": "Zezwól na stacje paliw i warsztaty",
+    "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "Wyłączone (domyślnie): stacje i warsztaty są ukryte i niedostępne podczas rundy. Włączone: gracze mogą tankować i naprawiać w trakcie gry.",
+    "beamjoy.window.config.tabs.hunterArena.allowStations": "Zezwól na stacje paliw i warsztaty",
+    "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "Wyłączone (domyślnie): stacje i warsztaty są ukryte i niedostępne podczas rundy. Włączone: gracze mogą tankować i naprawiać w trakcie gry.",
+    "beamjoy.window.config.editor.pointList.name.tooltip": "Wyświetlana nazwa (opcjonalnie)"
 }

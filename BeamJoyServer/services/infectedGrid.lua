@@ -62,6 +62,8 @@
 ---infectedRunner.lua's own RESET_MAX_SPEED
 ---@field disableResets boolean when true, resetting is blocked outright during GAME, recover_vehicle
 ---included ; see infectedRunner.lua's own onBJRequestRestrictions
+---@field allowStations boolean when true, freeroam stations/garages stay usable during the round ;
+---default off. See beamjoy/stations.lua's own stationsAllowed
 ---@field config table?
 
 ---@class BJInfectedSession
@@ -355,6 +357,8 @@ local function buildSettings(arena, overrides)
             defaults.resetRelockSeconds or 1),
         disableResets = (overrides.disableResets ~= nil and overrides.disableResets or
             defaults.disableResets) == true,
+        allowStations = (overrides.allowStations ~= nil and overrides.allowStations or
+            defaults.allowStations) == true,
         config = type(config) == "table" and config or nil,
     }
 end

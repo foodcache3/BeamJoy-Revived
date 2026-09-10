@@ -1547,6 +1547,23 @@ local function onBJRequestCurrentVehicleReset(req, resetType)
 end
 M.onBJRequestCurrentVehicleReset = onBJRequestCurrentVehicleReset
 
+--- authorization gate for a freeroam energy-station / garage interaction (see beamjoy_stations).
+--- Fired before the refuel/repair process starts ; `req.state = false` denies. Each mode owns its
+--- own policy here rather than beamjoy_stations hardcoding "scenarios block interaction" - so a
+--- future rule like "Hunter lets the fugitive refuel but never repair" is a change here, not
+--- there. Hunter currently blocks both kinds for the whole locked window, same as its reset gate.
+---@param req RequestAuthorization
+---@param kind "refuel"|"repair"
+--- Also the gate beamjoy_stations uses for whether station/garage markers show at all during a
+--- round (called with kind == nil), not just whether an interaction may start. Denied for the
+--- whole locked window unless the host set the arena's `allowStations` default.
+local function onBJRequestStationInteraction(req, kind)
+    if isHuntLocked() and not (M.session and M.session.settings and M.session.settings.allowStations) then
+        req.state = false
+    end
+end
+M.onBJRequestStationInteraction = onBJRequestStationInteraction
+
 local function onUpdate()
     if M.session and M.session.state == "LOBBY" then
         updateGridCountdown()

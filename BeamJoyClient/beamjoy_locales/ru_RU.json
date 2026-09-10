@@ -788,5 +788,31 @@
     "beamjoy.window.config.tabs.races.share.importPlaceholder": "BJRACE1:...",
     "beamjoy.window.config.tabs.races.share.confirmOverwrite": "Это заменит всё, что сейчас есть в редакторе, импортированной гонкой. Продолжить?",
     "beamjoy.window.config.tabs.races.share.invalidCode": "Это не похоже на действительный код обмена гонки.",
-    "beamjoy.window.config.tabs.races.share.unsupported": "Коды обмена гонками не поддерживаются этой версией игры."
+    "beamjoy.window.config.tabs.races.share.unsupported": "Коды обмена гонками не поддерживаются этой версией игры.",
+
+
+    // NEW: freeroam stations & garages
+    "beamjoy.stations.markerStation": "Заправка",
+    "beamjoy.stations.markerGarage": "Гараж",
+    "beamjoy.stations.bigmapGroupStations": "Заправки",
+    "beamjoy.stations.bigmapGroupGarages": "Гаражи",
+    "beamjoy.stations.buttonRefuel": "Заправить",
+    "beamjoy.stations.buttonRepair": "Починить",
+    "beamjoy.stations.promptRefuelling": "Заправка",
+    "beamjoy.stations.promptRepairing": "Ремонт",
+    "beamjoy.stations.toastBlocked": "Сейчас недоступно",
+    "beamjoy.stations.toastNothingToFill": "Баки уже полны",
+    "beamjoy.stations.toastRefuelled": "Машина заправлена",
+    "beamjoy.stations.toastRepaired": "Машина починена",
+    "beamjoy.window.config.tabs.freeroam.title": "Свободный режим",
+    "beamjoy.window.config.tabs.freeroam.tab": "Свободный режим",
+    "beamjoy.window.config.tabs.freeroam.station": "Заправка",
+    "beamjoy.window.config.tabs.freeroam.garage": "Гараж",
+    "beamjoy.window.config.tabs.freeroam.hint": "Подъедьте туда, где хотите разместить заправку или гараж, затем нажмите «Добавить». Заправки наполняют все баки; гаражи чинят.",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "Есть несохранённые изменения заправок и гаражей. Отменить их?",
+    "beamjoy.window.config.tabs.infectedArena.allowStations": "Разрешить заправки и гаражи",
+    "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "Выкл. (по умолчанию): заправки и гаражи скрыты и недоступны во время раунда. Вкл.: игроки могут заправляться и чиниться по ходу игры.",
+    "beamjoy.window.config.tabs.hunterArena.allowStations": "Разрешить заправки и гаражи",
+    "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "Выкл. (по умолчанию): заправки и гаражи скрыты и недоступны во время раунда. Вкл.: игроки могут заправляться и чиниться по ходу игры.",
+    "beamjoy.window.config.editor.pointList.name.tooltip": "Отображаемое имя (необязательно)"
 }

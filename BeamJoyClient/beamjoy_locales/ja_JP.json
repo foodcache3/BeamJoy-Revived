@@ -789,5 +789,31 @@
     "beamjoy.window.config.tabs.races.share.importPlaceholder": "BJRACE1:...",
     "beamjoy.window.config.tabs.races.share.confirmOverwrite": "エディタ内の現在の内容がすべてインポートしたレースに置き換わります。続行しますか?",
     "beamjoy.window.config.tabs.races.share.invalidCode": "有効なレース共有コードではないようです。",
-    "beamjoy.window.config.tabs.races.share.unsupported": "レース共有コードはこのゲームバージョンではサポートされていません。"
+    "beamjoy.window.config.tabs.races.share.unsupported": "レース共有コードはこのゲームバージョンではサポートされていません。",
+
+
+    // NEW: freeroam stations & garages
+    "beamjoy.stations.markerStation": "給油所",
+    "beamjoy.stations.markerGarage": "整備工場",
+    "beamjoy.stations.bigmapGroupStations": "給油所",
+    "beamjoy.stations.bigmapGroupGarages": "整備工場",
+    "beamjoy.stations.buttonRefuel": "給油",
+    "beamjoy.stations.buttonRepair": "修理",
+    "beamjoy.stations.promptRefuelling": "給油中",
+    "beamjoy.stations.promptRepairing": "修理中",
+    "beamjoy.stations.toastBlocked": "現在利用できません",
+    "beamjoy.stations.toastNothingToFill": "タンクは満タンです",
+    "beamjoy.stations.toastRefuelled": "給油しました",
+    "beamjoy.stations.toastRepaired": "修理しました",
+    "beamjoy.window.config.tabs.freeroam.title": "フリーローム",
+    "beamjoy.window.config.tabs.freeroam.tab": "フリーローム",
+    "beamjoy.window.config.tabs.freeroam.station": "給油所",
+    "beamjoy.window.config.tabs.freeroam.garage": "整備工場",
+    "beamjoy.window.config.tabs.freeroam.hint": "給油所または整備工場を設置したい場所まで運転し、「追加」を押します。給油所は全タンクを給油し、整備工場は修理します。",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "給油所と整備工場に保存されていない変更があります。破棄しますか？",
+    "beamjoy.window.config.tabs.infectedArena.allowStations": "給油所と整備工場を許可",
+    "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "オフ（既定）: ラウンド中は給油所と整備工場が非表示になり使用できません。オン: プレイヤーはゲーム中に給油・修理できます。",
+    "beamjoy.window.config.tabs.hunterArena.allowStations": "給油所と整備工場を許可",
+    "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "オフ（既定）: ラウンド中は給油所と整備工場が非表示になり使用できません。オン: プレイヤーはゲーム中に給油・修理できます。",
+    "beamjoy.window.config.editor.pointList.name.tooltip": "表示名（任意）"
 }

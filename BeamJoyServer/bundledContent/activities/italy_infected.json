@@ -5,10 +5,11 @@
         "endTimeout": 10,
         "gridReadyTimeout": 15,
         "gridTimeout": 180,
+        "hideInfectedNametags": true,
         "infectedColor": {
-            "b": 0,
-            "g": 1,
-            "r": 0.075
+            "b": 0.569,
+            "g": 0.149,
+            "r": 0.271
         },
         "infectedStartDelay": 10,
         "initialInfectedCount": 1,

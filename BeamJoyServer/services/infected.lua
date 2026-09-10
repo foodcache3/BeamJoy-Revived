@@ -51,6 +51,9 @@
 ---left available, speed/relock-gated ; see infectedRunner.lua's own RESET_MAX_SPEED doc comment).
 ---Purely an opt-in, harder mode for a host who wants resetting off the table entirely instead of
 ---just gated ; default false
+---@field allowStations boolean? when true, freeroam energy stations and garages (BJS-placed AND
+---the map's own gas stations) stay usable during a round. Default false : a round otherwise hides
+---their markers and refuses refuel/repair, so nobody can top off or un-damage mid-game
 ---@field config {model: string, config: string, label: string?, parts: table?}? optional forced
 ---vehicle, applied to every participant instead of letting them pick freely ; nil = free choice.
 ---Same {model, config, label, parts} shape services/vehiclePresets.lua's own preset entries already
@@ -135,6 +138,7 @@ local function sanitizeArena(arena)
     arena.defaults.hideInfectedNametags = arena.defaults.hideInfectedNametags == true
     arena.defaults.resetRelockSeconds = math.max(0, tonumber(arena.defaults.resetRelockSeconds) or 1)
     arena.defaults.disableResets = arena.defaults.disableResets == true
+    arena.defaults.allowStations = arena.defaults.allowStations == true
     if type(arena.defaults.survivorColor) ~= "table" then arena.defaults.survivorColor = nil end
     if type(arena.defaults.infectedColor) ~= "table" then arena.defaults.infectedColor = nil end
     if type(arena.defaults.config) ~= "table" or type(arena.defaults.config.model) ~= "string" or

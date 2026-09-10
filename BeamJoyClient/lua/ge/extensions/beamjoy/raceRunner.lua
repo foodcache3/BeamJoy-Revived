@@ -2435,6 +2435,23 @@ local function onBJRequestCurrentVehicleReset(req, resetType, mpVeh)
         vec3(0, 0, 1), { cling = false })
 end
 
+--- authorization gate for a freeroam energy-station / garage interaction (see beamjoy_stations).
+--- Fired before the refuel/repair process starts ; `req.state = false` denies. A mid-race refuel
+--- or repair is exactly the kind of "erase the run's consequences" the reset gate above already
+--- forbids, so Races blocks both kinds for the whole locked window. Kept a hook rather than
+--- beamjoy_stations reading a lock flag itself so a later per-mode rule needn't touch that file.
+---@param req RequestAuthorization
+---@param kind "refuel"|"repair"
+--- Also the gate beamjoy_stations uses for whether station/garage markers show at all during a
+--- race (called with kind == nil). Races have no opt-in : a mid-race refuel or repair is exactly
+--- the kind of "erase the run's consequences" the reset gate already forbids.
+local function onBJRequestStationInteraction(req, kind)
+    if isRaceLocked() then
+        req.state = false
+    end
+end
+M.onBJRequestStationInteraction = onBJRequestStationInteraction
+
 -- teleporting a vehicle (spawn.safeTeleport, inside setVehiclePositionRotation below) fires
 -- BeamNG's own native reset detection, which calls straight back into onVehicleResetted. Without
 -- an exemption, the teleport-to-last-checkpoint kept re-triggering itself off its own reset event,

@@ -789,5 +789,31 @@
     "beamjoy.window.config.tabs.races.share.importPlaceholder": "BJRACE1:...",
     "beamjoy.window.config.tabs.races.share.confirmOverwrite": "Esto reemplazará todo lo que hay actualmente en el editor con la carrera importada. ¿Continuar?",
     "beamjoy.window.config.tabs.races.share.invalidCode": "Eso no parece un código de carrera válido.",
-    "beamjoy.window.config.tabs.races.share.unsupported": "Los códigos de carrera no están disponibles en esta versión del juego."
+    "beamjoy.window.config.tabs.races.share.unsupported": "Los códigos de carrera no están disponibles en esta versión del juego.",
+
+
+    // NEW: freeroam stations & garages
+    "beamjoy.stations.markerStation": "Gasolinera",
+    "beamjoy.stations.markerGarage": "Taller",
+    "beamjoy.stations.bigmapGroupStations": "Gasolineras",
+    "beamjoy.stations.bigmapGroupGarages": "Talleres",
+    "beamjoy.stations.buttonRefuel": "Repostar",
+    "beamjoy.stations.buttonRepair": "Reparar",
+    "beamjoy.stations.promptRefuelling": "Repostando",
+    "beamjoy.stations.promptRepairing": "Reparando",
+    "beamjoy.stations.toastBlocked": "No disponible ahora mismo",
+    "beamjoy.stations.toastNothingToFill": "Depósitos ya llenos",
+    "beamjoy.stations.toastRefuelled": "Vehículo repostado",
+    "beamjoy.stations.toastRepaired": "Vehículo reparado",
+    "beamjoy.window.config.tabs.freeroam.title": "Mundo libre",
+    "beamjoy.window.config.tabs.freeroam.tab": "Mundo libre",
+    "beamjoy.window.config.tabs.freeroam.station": "Gasolinera",
+    "beamjoy.window.config.tabs.freeroam.garage": "Taller",
+    "beamjoy.window.config.tabs.freeroam.hint": "Conduce hasta donde quieras una gasolinera o taller y pulsa Añadir. Las gasolineras repostan todos los depósitos; los talleres reparan.",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "Tienes cambios sin guardar en las gasolineras y talleres. ¿Descartarlos?",
+    "beamjoy.window.config.tabs.infectedArena.allowStations": "Permitir gasolineras y talleres",
+    "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "Desactivado (predeterminado): las gasolineras y talleres se ocultan y no se pueden usar durante una partida. Activado: los jugadores pueden repostar y reparar durante el juego.",
+    "beamjoy.window.config.tabs.hunterArena.allowStations": "Permitir gasolineras y talleres",
+    "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "Desactivado (predeterminado): las gasolineras y talleres se ocultan y no se pueden usar durante una partida. Activado: los jugadores pueden repostar y reparar durante el juego.",
+    "beamjoy.window.config.editor.pointList.name.tooltip": "Nombre visible (opcional)"
 }

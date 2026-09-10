@@ -10,11 +10,11 @@
 // in this codebase uses as-is), no direct coupling between the two components at all.
 angular.module("beamjoy").component("bjPointListEditor", {
     bindings: {
-        // [{key, labelKey, min, hasRadius}]: color/hasDir/defaultRadius are Lua-only rendering
-        // concerns, not needed here
+        // [{key, labelKey, min, hasRadius, hasName}]: color/hasDir/defaultRadius are Lua-only
+        // rendering concerns, not needed here
         lists: "<",
         // {listsUpdate, activeUpdate, select, create, duplicate, delete, setToVehicle, setRadius?,
-        //  snapToGround, snapMethod, setSnapToGround, setSnapMethod}
+        //  setName?, snapToGround, snapMethod, setSnapToGround, setSnapMethod}
         events: "<",
     },
     templateUrl: "/ui/modModules/beamjoy/cmps/pointListEditor/app.html",
@@ -81,6 +81,10 @@ angular.module("beamjoy").component("bjPointListEditor", {
         this.setRadius = (list, index, radius) => {
             if (!this.events.setRadius) return;
             beamjoyStore.send(this.events.setRadius, [list, index + 1, Number(radius)]);
+        };
+        this.setName = (list, index, name) => {
+            if (!this.events.setName) return;
+            beamjoyStore.send(this.events.setName, [list, index + 1, name || ""]);
         };
 
         // Real bug: this component gets torn down and recreated every time its host switches away

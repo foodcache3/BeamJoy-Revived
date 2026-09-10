@@ -7,9 +7,9 @@
         "gridTimeout": 120,
         "hideInfectedNametags": true,
         "infectedColor": {
-            "b": 0,
-            "g": 1,
-            "r": 0.024
+            "b": 0.569,
+            "g": 0.149,
+            "r": 0.271
         },
         "infectedStartDelay": 10,
         "initialInfectedCount": 1,
@@ -18,7 +18,8 @@
             "b": 0.702,
             "g": 0.29,
             "r": 0.008
-        }
+        },
+        "survivorsStartDelay": 5
     },
     "enabled": true,
     "infectedSpawns": [

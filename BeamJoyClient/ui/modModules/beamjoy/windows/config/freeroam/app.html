@@ -1,0 +1,45 @@
+<style>
+    /* pins the header row + the point-list-editor's own translate/rotate/snap toolbar above a
+       separately-scrolling list, same split hunterArena / infectedArena already use */
+    bj-config-freeroam {
+        display: block;
+        height: 100%;
+        overflow: hidden;
+    }
+    bj-config-freeroam .editor-root {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    bj-config-freeroam .editor-pinned {
+        flex-shrink: 0;
+    }
+    bj-config-freeroam .section-panel {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+</style>
+
+<div class="editor-root">
+    <div class="editor-pinned">
+        <div class="d-flex gap-1 mb-2 align-center">
+            <span class="flex-grow-1 opacity-70 small">
+                {{'beamjoy.window.config.tabs.freeroam.hint' | translate}}
+            </span>
+            <button
+                class="btn success"
+                ng-click="$ctrl.save($event)"
+                ng-disabled="!$ctrl.dirty"
+                title="{{'beamjoy.common.save' | translate}}"
+            >
+                <icon name="save"></icon>
+            </button>
+        </div>
+        <bj-point-list-editor-toolbar events="$ctrl.pointListEvents"></bj-point-list-editor-toolbar>
+    </div>
+
+    <div class="section-panel">
+        <bj-point-list-editor lists="$ctrl.pointLists" events="$ctrl.pointListEvents"></bj-point-list-editor>
+    </div>
+</div>

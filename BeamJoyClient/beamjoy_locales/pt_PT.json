@@ -789,5 +789,31 @@
     "beamjoy.window.config.tabs.races.share.importPlaceholder": "BJRACE1:...",
     "beamjoy.window.config.tabs.races.share.confirmOverwrite": "Isto vai substituir tudo o que está atualmente no editor pela corrida importada. Continuar?",
     "beamjoy.window.config.tabs.races.share.invalidCode": "Isso não parece um código de partilha de corrida válido.",
-    "beamjoy.window.config.tabs.races.share.unsupported": "Códigos de partilha de corrida não são suportados por esta versão do jogo."
+    "beamjoy.window.config.tabs.races.share.unsupported": "Códigos de partilha de corrida não são suportados por esta versão do jogo.",
+
+
+    // NEW: freeroam stations & garages
+    "beamjoy.stations.markerStation": "Posto de combustível",
+    "beamjoy.stations.markerGarage": "Oficina",
+    "beamjoy.stations.bigmapGroupStations": "Postos de combustível",
+    "beamjoy.stations.bigmapGroupGarages": "Oficinas",
+    "beamjoy.stations.buttonRefuel": "Abastecer",
+    "beamjoy.stations.buttonRepair": "Reparar",
+    "beamjoy.stations.promptRefuelling": "A abastecer",
+    "beamjoy.stations.promptRepairing": "A reparar",
+    "beamjoy.stations.toastBlocked": "Indisponível de momento",
+    "beamjoy.stations.toastNothingToFill": "Depósitos já cheios",
+    "beamjoy.stations.toastRefuelled": "Veículo abastecido",
+    "beamjoy.stations.toastRepaired": "Veículo reparado",
+    "beamjoy.window.config.tabs.freeroam.title": "Livre",
+    "beamjoy.window.config.tabs.freeroam.tab": "Livre",
+    "beamjoy.window.config.tabs.freeroam.station": "Posto de combustível",
+    "beamjoy.window.config.tabs.freeroam.garage": "Oficina",
+    "beamjoy.window.config.tabs.freeroam.hint": "Conduza até onde quiser um posto ou oficina e clique em Adicionar. Os postos abastecem todos os depósitos; as oficinas reparam.",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "Tem alterações não guardadas nos postos e oficinas. Descartar?",
+    "beamjoy.window.config.tabs.infectedArena.allowStations": "Permitir postos e oficinas",
+    "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "Desligado (predefinição): postos e oficinas ficam ocultos e indisponíveis durante uma partida. Ligado: os jogadores podem abastecer e reparar durante o jogo.",
+    "beamjoy.window.config.tabs.hunterArena.allowStations": "Permitir postos e oficinas",
+    "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "Desligado (predefinição): postos e oficinas ficam ocultos e indisponíveis durante uma partida. Ligado: os jogadores podem abastecer e reparar durante o jogo.",
+    "beamjoy.window.config.editor.pointList.name.tooltip": "Nome a apresentar (opcional)"
 }

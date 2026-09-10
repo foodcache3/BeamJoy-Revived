@@ -789,5 +789,31 @@
     "beamjoy.window.config.tabs.races.share.importPlaceholder": "BJRACE1:...",
     "beamjoy.window.config.tabs.races.share.confirmOverwrite": "편집기의 현재 내용이 모두 가져온 레이스로 교체됩니다. 계속할까요?",
     "beamjoy.window.config.tabs.races.share.invalidCode": "유효한 레이스 공유 코드가 아닌 것 같습니다.",
-    "beamjoy.window.config.tabs.races.share.unsupported": "레이스 공유 코드는 이 게임 버전에서 지원되지 않습니다."
+    "beamjoy.window.config.tabs.races.share.unsupported": "레이스 공유 코드는 이 게임 버전에서 지원되지 않습니다.",
+
+
+    // NEW: freeroam stations & garages
+    "beamjoy.stations.markerStation": "주유소",
+    "beamjoy.stations.markerGarage": "정비소",
+    "beamjoy.stations.bigmapGroupStations": "주유소",
+    "beamjoy.stations.bigmapGroupGarages": "정비소",
+    "beamjoy.stations.buttonRefuel": "주유",
+    "beamjoy.stations.buttonRepair": "수리",
+    "beamjoy.stations.promptRefuelling": "주유 중",
+    "beamjoy.stations.promptRepairing": "수리 중",
+    "beamjoy.stations.toastBlocked": "지금은 사용할 수 없습니다",
+    "beamjoy.stations.toastNothingToFill": "연료 탱크가 이미 가득 찼습니다",
+    "beamjoy.stations.toastRefuelled": "차량 주유 완료",
+    "beamjoy.stations.toastRepaired": "차량 수리 완료",
+    "beamjoy.window.config.tabs.freeroam.title": "자유 주행",
+    "beamjoy.window.config.tabs.freeroam.tab": "자유 주행",
+    "beamjoy.window.config.tabs.freeroam.station": "주유소",
+    "beamjoy.window.config.tabs.freeroam.garage": "정비소",
+    "beamjoy.window.config.tabs.freeroam.hint": "주유소나 정비소를 놓을 위치로 운전한 뒤 추가를 누르세요. 주유소는 모든 탱크를 채우고 정비소는 수리합니다.",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "주유소와 정비소에 저장하지 않은 변경 사항이 있습니다. 취소할까요?",
+    "beamjoy.window.config.tabs.infectedArena.allowStations": "주유소 및 정비소 허용",
+    "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "꺼짐(기본값): 라운드 중 주유소와 정비소가 숨겨지고 사용할 수 없습니다. 켜짐: 플레이어가 게임 중에 주유하고 수리할 수 있습니다.",
+    "beamjoy.window.config.tabs.hunterArena.allowStations": "주유소 및 정비소 허용",
+    "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "꺼짐(기본값): 라운드 중 주유소와 정비소가 숨겨지고 사용할 수 없습니다. 켜짐: 플레이어가 게임 중에 주유하고 수리할 수 있습니다.",
+    "beamjoy.window.config.editor.pointList.name.tooltip": "표시 이름 (선택 사항)"
 }

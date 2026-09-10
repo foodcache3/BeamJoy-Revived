@@ -248,6 +248,7 @@
     "beamjoy.window.config.editor.pointList.addAtCurrentPosition": "Add at current position",
     "beamjoy.window.config.editor.pointList.empty": "None placed yet.",
     "beamjoy.window.config.editor.pointList.minimumOf": "minimum",
+    "beamjoy.window.config.editor.pointList.name.tooltip": "Display name (optional)",
     "beamjoy.window.config.editor.pointList.radius.tooltip": "Trigger radius, in meters.",
     "beamjoy.window.config.editor.pointList.teleportToHere": "Teleport my vehicle here",
     "beamjoy.window.config.tabs.general.title": "General",
@@ -395,6 +396,8 @@
     "beamjoy.window.config.tabs.hunterArena.huntedResetDistanceThreshold.tooltip": "The fugitive cannot reset/recover while any hunter is within this distance. 0 disables resetting entirely. Increments of 10m.",
     "beamjoy.window.config.tabs.hunterArena.velocityGatedResets": "Velocity-gated resets",
     "beamjoy.window.config.tabs.hunterArena.velocityGatedResets.tooltip": "Blocks all resets while moving too fast, for both roles, on top of the rules above.",
+    "beamjoy.window.config.tabs.hunterArena.allowStations": "Allow fuel stations & garages",
+    "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "Off (default): stations and garages are hidden and unusable during a hunt. On: players can refuel and repair mid-game.",
     "beamjoy.window.config.tabs.hunterArena.hunterNametagFadeDistance": "Hunter nametag fade distance",
     "beamjoy.window.config.tabs.hunterArena.hunterNametagFadeDistance.tooltip": "Hunter nametags fade out with distance up to this range. 0 (default) disables this, so hunters render like any other vehicle. Increments of 10m.",
     "beamjoy.window.config.tabs.hunterArena.huntedVehiclePool": "Fugitive vehicle pool",
@@ -477,6 +480,8 @@
     "beamjoy.window.config.tabs.infectedArena.resetRelockSeconds.tooltip": "Seconds resetting is blocked for right after a reset. 0 disables it.",
     "beamjoy.window.config.tabs.infectedArena.disableResets": "Disable resets",
     "beamjoy.window.config.tabs.infectedArena.disableResets.tooltip": "Blocks every reset/recover method outright while a round is active.",
+    "beamjoy.window.config.tabs.infectedArena.allowStations": "Allow fuel stations & garages",
+    "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "Off (default): stations and garages are hidden and unusable during a round. On: players can refuel and repair mid-game.",
     "beamjoy.window.config.tabs.infectedArena.enableColors": "Force role paint",
     "beamjoy.window.config.tabs.infectedArena.enableColors.tooltip": "Repaints every participant's vehicle to a flat role color and disables free paint choice while a round is active.",
     "beamjoy.window.config.tabs.infectedArena.survivorColor": "Survivor color",
@@ -491,6 +496,13 @@
     "beamjoy.window.config.tabs.infectedArena.countdown.tooltip": "Seconds between roles/spawns being assigned and the round actually starting.",
     "beamjoy.window.config.tabs.infectedArena.endTimeout": "Results screen duration",
     "beamjoy.window.config.tabs.infectedArena.endTimeout.tooltip": "Seconds the results screen stays up before the lobby tears down.",
+
+    "beamjoy.window.config.tabs.freeroam.title": "Freeroam",
+    "beamjoy.window.config.tabs.freeroam.tab": "Freeroam",
+    "beamjoy.window.config.tabs.freeroam.station": "Fuel Station",
+    "beamjoy.window.config.tabs.freeroam.garage": "Garage",
+    "beamjoy.window.config.tabs.freeroam.hint": "Drive to where you want a station or garage, then Add. Fuel stations refuel every tank; garages repair.",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "You have unsaved changes to the freeroam stations and garages. Discard them?",
 
     "beamjoy.window.infectedHud.title": "Infected",
     "beamjoy.window.infectedHud.role.survivor": "Survivor",
@@ -819,5 +831,19 @@
 
     // PURSUIT
     "beamjoy.pursuit.arrestIn": "Arrest in {time}",
-    "beamjoy.pursuit.fugitiveTag": "FUGITIVE"
+    "beamjoy.pursuit.fugitiveTag": "FUGITIVE",
+
+    // FREEROAM STATIONS & GARAGES
+    "beamjoy.stations.markerStation": "Fuel Station",
+    "beamjoy.stations.markerGarage": "Garage",
+    "beamjoy.stations.bigmapGroupStations": "Fuel Stations",
+    "beamjoy.stations.bigmapGroupGarages": "Garages",
+    "beamjoy.stations.buttonRefuel": "Refuel",
+    "beamjoy.stations.buttonRepair": "Repair",
+    "beamjoy.stations.promptRefuelling": "Refuelling",
+    "beamjoy.stations.promptRepairing": "Repairing",
+    "beamjoy.stations.toastRefuelled": "Vehicle refuelled",
+    "beamjoy.stations.toastRepaired": "Vehicle repaired",
+    "beamjoy.stations.toastNothingToFill": "Tanks already full",
+    "beamjoy.stations.toastBlocked": "Not available right now"
 }

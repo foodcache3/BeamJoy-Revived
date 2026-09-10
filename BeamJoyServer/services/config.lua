@@ -13,7 +13,7 @@
 ---@field DiscordChatHookLang string?
 ---@field Broadcasts {enabled: boolean, delay: integer, messages: table<string, string>[]}
 ---@field Whitelist table?
----@field Freeroam {TeleportDelay: integer, CollisionsMode: "forced"|"disabled"|"ghosts", RespawnGhostTimeoutEnabled: boolean, RespawnGhostTimeout: integer, RespawnGhostDistance: integer}
+---@field Freeroam {TeleportDelay: integer, CollisionsMode: "forced"|"disabled"|"ghosts", RespawnGhostTimeoutEnabled: boolean, RespawnGhostTimeout: integer, RespawnGhostDistance: integer, RefuelDuration: integer, RepairDuration: integer, PreserveEnergyOnRefuel: boolean}
 ---CollisionsMode : "forced" = collisions always on, ghosting never happens ; "disabled" = every
 ---player vehicle permanently ghosted (free-for-all, no vehicle-vehicle collision at all) ;
 ---"ghosts" (default) = respawn protection: a vehicle briefly ghosts on spawn/reset, only
@@ -101,6 +101,13 @@ local M = {
             RespawnGhostTimeoutEnabled = true,
             RespawnGhostTimeout = 10,
             RespawnGhostDistance = 0,
+            -- Energy-station / garage interaction (see services/freeroamData.lua). Seconds the
+            -- refuel/repair "process" holds the vehicle frozen before completing ; both clamped
+            -- [0, 60] client-side too. PreserveEnergyOnRefuel keeps the vehicle's fuel level
+            -- across the in-place reset a garage repair performs (a repair otherwise refills it).
+            RefuelDuration = 5,
+            RepairDuration = 5,
+            PreserveEnergyOnRefuel = true,
         },
         RaceAuthorshipRestriction = false,
         RaceEditorShowOnlyEditable = false,
@@ -323,6 +330,14 @@ local function sanitizeConfigValue(key, value)
         if type(value.TeleportDelay) == "string" then value.TeleportDelay = tonumber(value.TeleportDelay) end
         if type(value.RespawnGhostTimeout) == "string" then value.RespawnGhostTimeout = tonumber(value.RespawnGhostTimeout) end
         if type(value.RespawnGhostDistance) == "string" then value.RespawnGhostDistance = tonumber(value.RespawnGhostDistance) end
+        if type(value.RefuelDuration) == "string" then value.RefuelDuration = tonumber(value.RefuelDuration) end
+        if type(value.RepairDuration) == "string" then value.RepairDuration = tonumber(value.RepairDuration) end
+        -- backfill : a config saved before these keys existed omits them entirely, and this whole
+        -- table saves atomically, so a missing key would otherwise reject the unrelated fields
+        -- bundled with it (same reasoning as the string coercion above)
+        if value.RefuelDuration == nil then value.RefuelDuration = M.data.Freeroam.RefuelDuration end
+        if value.RepairDuration == nil then value.RepairDuration = M.data.Freeroam.RepairDuration end
+        if value.PreserveEnergyOnRefuel == nil then value.PreserveEnergyOnRefuel = M.data.Freeroam.PreserveEnergyOnRefuel end
         if type(value.TeleportDelay) ~= "number" then
             return nil, "TeleportDelay must be a number"
         elseif value.CollisionsMode ~= "forced" and value.CollisionsMode ~= "disabled" and
@@ -334,6 +349,12 @@ local function sanitizeConfigValue(key, value)
             return nil, "RespawnGhostTimeout must be a positive number"
         elseif type(value.RespawnGhostDistance) ~= "number" or value.RespawnGhostDistance < 0 then
             return nil, "RespawnGhostDistance must be a positive number"
+        elseif type(value.RefuelDuration) ~= "number" or value.RefuelDuration < 0 or value.RefuelDuration > 60 then
+            return nil, "RefuelDuration must be a number between 0 and 60"
+        elseif type(value.RepairDuration) ~= "number" or value.RepairDuration < 0 or value.RepairDuration > 60 then
+            return nil, "RepairDuration must be a number between 0 and 60"
+        elseif type(value.PreserveEnergyOnRefuel) ~= "boolean" then
+            return nil, "PreserveEnergyOnRefuel must be a boolean"
         end
     elseif key == "Voting" then
         if type(value) ~= "table" then

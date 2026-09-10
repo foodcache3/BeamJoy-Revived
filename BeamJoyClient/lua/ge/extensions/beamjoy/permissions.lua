@@ -6,6 +6,7 @@ BJ_PERMISSIONS = {
     SpawnProps = "SpawnProps",
     TeleportFrom = "TeleportFrom",
     EditRaces = "EditRaces",
+    EditFreeroamData = "EditFreeroamData",
     DeleteVehicle = "DeleteVehicle",
     Kick = "Kick",
     Mute = "Mute",
@@ -121,8 +122,8 @@ end
 ---@return boolean
 local function canOpenConfig()
     return isStaff() or hasAnyPermission(nil,
-        BJ_PERMISSIONS.EditRaces, BJ_PERMISSIONS.SetPermissions, BJ_PERMISSIONS.SetMaps,
-        BJ_PERMISSIONS.SetCore, BJ_PERMISSIONS.DatabasePlayers)
+        BJ_PERMISSIONS.EditRaces, BJ_PERMISSIONS.EditFreeroamData, BJ_PERMISSIONS.SetPermissions,
+        BJ_PERMISSIONS.SetMaps, BJ_PERMISSIONS.SetCore, BJ_PERMISSIONS.DatabasePlayers)
 end
 
 ---@param perms BJPermissions
