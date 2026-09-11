@@ -1,0 +1,52 @@
+<style>
+    bj-main-bus-lines .line-row {
+        transition: background-color 0.2s ease-in-out;
+    }
+    bj-main-bus-lines .line-row:hover {
+        background-color: rgba(0, 0, 0, 0.15);
+    }
+    bj-main-bus-lines .status-panel {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 0.4em;
+        padding: 0.6em;
+        margin-bottom: 0.6em;
+    }
+</style>
+
+<div class="status-panel d-flex align-center gap-1" ng-if="$ctrl.runActive">
+    <span class="flex-grow-1">
+        <span class="opacity-70">{{'beamjoy.buslines.main.currentlyRunning' | translate}}</span>
+        <b>{{$ctrl.runLineName}}</b>
+    </span>
+    <button class="btn danger" ng-click="$ctrl.stopRun($event)">
+        {{'beamjoy.window.busHud.stopRun' | translate}}
+    </button>
+</div>
+
+<div class="opacity-70 small mb-2" ng-if="$ctrl.lines.length === 0">
+    {{'beamjoy.buslines.edit.empty' | translate}}
+</div>
+
+<div
+    class="line-row d-flex p-1 px-2 gap-1 align-center"
+    ng-repeat="line in $ctrl.lines track by $index"
+>
+    <span class="flex-grow-1">
+        {{$ctrl.lineLabel(line, $index)}}
+        <span class="opacity-70 small">
+            ({{line.stops.length}} {{'beamjoy.buslines.edit.stops' | translate}})
+            <icon
+                ng-if="line.loopable"
+                name="reverse"
+                title="{{'beamjoy.buslines.edit.loopable' | translate}}"
+            ></icon>
+        </span>
+    </span>
+    <button
+        class="btn success"
+        ng-disabled="$ctrl.runActive || line.stops.length < 2"
+        ng-click="$ctrl.startLine($event, line)"
+    >
+        {{'beamjoy.buslines.play.start' | translate}}
+    </button>
+</div>

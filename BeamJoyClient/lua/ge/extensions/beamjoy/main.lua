@@ -36,7 +36,8 @@ local M = {
         "beamjoy_vehiclePresets", "beamjoy_races", "beamjoy_raceRunner", "beamjoy_raceMarkers",
         "beamjoy_hunter", "beamjoy_hunterRunner", "beamjoy_hunterMarkers",
         "beamjoy_infected", "beamjoy_infectedRunner",
-        "beamjoy_freeroamData", "beamjoy_stations" },
+        "beamjoy_freeroamData", "beamjoy_stations",
+        "beamjoy_busLines", "beamjoy_busRun" },
 
     world_ready = false,
     client_ready = false,

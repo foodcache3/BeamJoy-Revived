@@ -808,11 +808,49 @@
     "beamjoy.window.config.tabs.freeroam.tab": "Swobodna jazda",
     "beamjoy.window.config.tabs.freeroam.station": "Stacja paliw",
     "beamjoy.window.config.tabs.freeroam.garage": "Warsztat",
-    "beamjoy.window.config.tabs.freeroam.hint": "Podjedź w miejsce, gdzie chcesz stację lub warsztat, i kliknij Dodaj. Stacje tankują wszystkie zbiorniki; warsztaty naprawiają.",
-    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "Masz niezapisane zmiany stacji paliw i warsztatów. Odrzucić?",
+    "beamjoy.window.config.tabs.freeroam.hint": "Podjedź w miejsce, kliknij Dodaj, przeciągnij gizmem, nadaj nazwę i Zapisz.",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "Masz niezapisane zmiany swobodnej jazdy. Odrzucić?",
     "beamjoy.window.config.tabs.infectedArena.allowStations": "Zezwól na stacje paliw i warsztaty",
     "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "Wyłączone (domyślnie): stacje i warsztaty są ukryte i niedostępne podczas rundy. Włączone: gracze mogą tankować i naprawiać w trakcie gry.",
     "beamjoy.window.config.tabs.hunterArena.allowStations": "Zezwól na stacje paliw i warsztaty",
     "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "Wyłączone (domyślnie): stacje i warsztaty są ukryte i niedostępne podczas rundy. Włączone: gracze mogą tankować i naprawiać w trakcie gry.",
-    "beamjoy.window.config.editor.pointList.name.tooltip": "Wyświetlana nazwa (opcjonalnie)"
+    "beamjoy.window.config.editor.pointList.name.tooltip": "Wyświetlana nazwa (opcjonalnie)",
+
+
+    // NEW: bus lines editor
+    "beamjoy.window.config.tabs.freeroam.sections.stations": "Stacje i warsztaty",
+    "beamjoy.window.config.tabs.freeroam.sections.buslines": "Linie autobusowe",
+    "beamjoy.buslines.line": "Linia",
+    "beamjoy.buslines.stop": "Przystanek",
+    "beamjoy.buslines.edit.lines": "Linie autobusowe",
+    "beamjoy.buslines.edit.empty": "Brak linii autobusowych.",
+    "beamjoy.buslines.edit.addLine": "Dodaj linię autobusową w bieżącej pozycji",
+    "beamjoy.buslines.edit.addStop": "Dodaj przystanek w bieżącej pozycji",
+    "beamjoy.buslines.edit.stops": "Przystanki",
+    "beamjoy.buslines.edit.loopable": "Zapętl do pierwszego przystanku",
+    "beamjoy.buslines.edit.minStops": "wymaga 2+ przystanków",
+    "beamjoy.buslines.edit.moveUp": "W górę",
+    "beamjoy.buslines.edit.moveDown": "W dół",
+
+
+    // NEW: bus line gameplay
+    "beamjoy.buslines.markerLine": "Linia autobusowa",
+    "beamjoy.buslines.play.start": "Rozpocznij linię",
+    "beamjoy.buslines.play.started": "Linia autobusowa rozpoczęta",
+    "beamjoy.buslines.play.finished": "Linia ukończona",
+    "beamjoy.buslines.play.stopped": "Linia autobusowa zakończona",
+    "beamjoy.buslines.play.blocked": "Obecnie niedostępne",
+    "beamjoy.buslines.play.loop": "Powrót do pierwszego przystanku",
+    "beamjoy.buslines.play.pickBus": "Wybierz autobus do tej linii",
+    "beamjoy.window.busHud.title": "Linia autobusowa",
+    "beamjoy.window.busHud.stop": "Przystanek",
+    "beamjoy.window.busHud.approaching": "Przystanek blisko, zatrzymaj się",
+    "beamjoy.window.busHud.stopRun": "Zakończ przejazd",
+    "beamjoy.window.busHud.stopRun.tooltip": "Przestań jeździć tą linią",
+
+
+    // NEW: Activities tab split + bus lines browse list
+    "beamjoy.window.main.tabs.races.sections.races": "Wyścigi",
+    "beamjoy.window.main.tabs.races.sections.busLines": "Linie autobusowe",
+    "beamjoy.buslines.main.currentlyRunning": "Obecnie w trakcie:"
 }

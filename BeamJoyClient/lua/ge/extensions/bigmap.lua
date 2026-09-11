@@ -56,14 +56,20 @@ local function getRawPOIs(levelIdentifier)
     -- in one place, regardless of extension load order.
     local dropStations = beamjoy_context and beamjoy_context.stationsAllowed
         and not beamjoy_context.stationsAllowed()
+    -- bus lines are freeroam-only, no per-mode opt-in : drop their start POIs during ANY locked
+    -- round (beamjoy_busRun gates its own contributions too - this is the same second layer
+    -- dropStations is for the fuel stations)
+    local dropBus = beamjoy_context and beamjoy_context.isScenarioLocked
+        and beamjoy_context.isScenarioLocked()
 
     local out = {}
     for _, p in ipairs(pois or {}) do
         local t = p.data and p.data.type
         -- drop career missions / scenarios / challenges (a BJS sandbox doesn't run them), and
-        -- fuel/repair POIs mid-round per above
+        -- fuel/repair/bus POIs mid-round per above
         if t ~= "mission"
-            and not (dropStations and (t == "gasStation" or t == "bjEnergyStation" or t == "bjGarage")) then
+            and not (dropStations and (t == "gasStation" or t == "bjEnergyStation" or t == "bjGarage"))
+            and not (dropBus and t == "bjBusLineStart") then
             out[#out + 1] = p
         end
     end
@@ -84,8 +90,16 @@ local function getRawPOIs(levelIdentifier)
                 id = id,
                 -- must NOT be "mission" : that routes into freeroam_vueBigMap.processMissionPoi,
                 -- which assumes a real registered mission exists. A known facility type lands in
-                -- its own group ; anything else falls into "type_other".
-                data = { type = el.groupType or "other" },
+                -- its own group ; anything else falls into "type_other" - unavoidably, in ADDITION
+                -- to any customGroupTags below (vueBigMap's own processNonMissionPoi always tags
+                -- one native bucket first, elseif-chained on data.type, THEN separately unions in
+                -- customGroupTags ; there's no way to opt an element out of the native bucket).
+                -- customGroupTags is how a genuinely custom category (not one of vueBigMap's fixed
+                -- type_* names) gets an element into it anyway - pair with M.onBigmapBuildGroupData
+                -- (below) defining the group and M.onBigmapBuildCustomGroupStructures surfacing it
+                -- as a menu section, exactly the mechanism the old "BeamJoy > Garages" section used
+                -- for a NATIVE group vueBigMap otherwise hides outside career mode.
+                data = { type = el.groupType or "other", customGroupTags = el.customGroupTags },
                 markerInfo = {
                     bigmapMarker = {
                         cluster = el.cluster ~= false,
@@ -183,18 +197,28 @@ local function onExtensionUnloaded()
     RollBackNGFunctionsWrappers(M.baseFunctions)
 end
 
+--- adds a genuinely custom group (not one of vueBigMap's fixed type_* names) for bus lines : no
+--- native `data.type` fits them, so they'd otherwise only ever land in the "Other" catch-all (see
+--- getRawPOIs' own comment on customGroupTags above). Every entry in `groupData` gets `.elements`
+--- initialized right after this hook runs, same as every native entry, so this needs nothing more
+--- than a label + icon to become a real, poppable group.
+---@param groupData table<string, table>
+M.onBigmapBuildGroupData = function(groupData)
+    groupData.bjBusLines = { label = tr("beamjoy.buslines.edit.lines"), icon = "bus" }
+end
+
 --- vueBigMap's freeroam-mode side menu only lists `type_garage` when a career is active (see its
---- buildGroupStructure). Surface it here so BJS garages (groupType = "garage") show up in
---- freeroam too. vueBigMap always renders the section title AND the group's own label, so the
---- title has to differ from the group's "Garages" label or it reads "Garages > Garages".
---- Dropped automatically when the group has no elements.
+--- buildGroupStructure), and has no native bucket for bus lines at all. Surface both here under
+--- one "BeamJoy" section. vueBigMap always renders the section title AND each group's own label,
+--- so the title has to differ from "Garages" (or it'd read "Garages > Garages").
+--- Dropped automatically when a group has no elements.
 ---@param structures table[]
 M.onBigmapBuildCustomGroupStructures = function(structures)
     structures[#structures + 1] = {
         key = "beamjoy",
         icon = "star",
         title = "BeamJoy",
-        groupIds = { "type_garage" },
+        groupIds = { "type_garage", "bjBusLines" },
     }
 end
 
@@ -226,6 +250,16 @@ M.onBJRequestBigmapPOIs = function(POIS)
         pos = vec3(-397, -480, 38.5),         -- required (map marker + set-route target)
         groupType = "other",                  -- optional; a vueBigMap non-mission type
                                               -- (gasStation/garage/spawnPoint/...) or "other"
+        customGroupTags = { "myext_group" },  -- optional; extra group id(s) this POI ALSO joins,
+                                              -- on top of whatever groupType maps to (that mapping
+                                              -- always applies too - there's no opting out of it).
+                                              -- Use this for a genuinely custom category no native
+                                              -- groupType fits: define the group via
+                                              -- M.onBigmapBuildGroupData (add a groupData entry
+                                              -- keyed by the same id, {label, icon}) and surface it
+                                              -- with M.onBigmapBuildCustomGroupStructures (see
+                                              -- bigmap.lua's own "beamjoy"/bjBusLines for a worked
+                                              -- example).
         cluster = true,                       -- optional, default true (map-side clustering)
         preview = "/levels/east_coast_usa/east_coast_usa_preview1_v2.jpg", -- optional
         canQuickTravel = false,               -- optional

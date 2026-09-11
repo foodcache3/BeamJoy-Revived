@@ -6,6 +6,41 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.10.0] - 2026-09-11
+
+Client v1.10.0 (build 2398), server v1.10.0. Freeroam bus lines (server-defined stop-to-stop
+routes, driven with native GPS guidance), plus naming for stations and garages. Redeploy
+`BeamJoyServer/` to the live server, not just the client mod.
+
+### Added
+- **Freeroam bus lines.** Server-owner-authored, ordered routes of named stops per map
+  (`EditBusLines` permission, default rank mod), edited in-world alongside stations/garages in
+  the same Config > Freeroam tab (now split into Stations/Garages and Bus Lines sub-sections)
+  with drag-and-drop stop reordering (reusing the race editor's own gate-reorder component).
+  Three ways to start a line: a Big Map POI at the first stop (also gets its own "Bus Lines" Big
+  Map group, alongside the map's catch-all "Other"), a drive-up "Start line" prompt there, and a
+  browse list in the Main window's new Activities tab. Driving holds briefly inside each stop's
+  radius to advance, loops if the line is marked loopable, and shows a HUD (current stop, total
+  stops, hold progress). Any bus works - detected via the game's own "Body Style" field, matched
+  at both the model and per-config level so school/prison/derby buses (config-level only) and
+  citybus (model-level) all count. Client-only, no server round-trip, no rewards.
+- **Main window's Activities tab** is now split into per-gamemode sub-tabs (Races / Bus Lines)
+  instead of showing races directly.
+- **Garages and stations can be named**, shown on the world marker, drive-up prompt, and Big Map
+  card - extends the shared point-list editor's own drag/gizmo tooling.
+
+### Fixed
+- **A real BeamNG engine bug could strand the vehicle selector blank** on the very first click
+  into a vehicle's configs after any mod opens the freeroam vehicle-selector route directly
+  (`menu.vehiclesnew`) - that route has no child route for viewing configs, unlike the pause
+  menu's own selector, so the click re-navigates the same route and can lose a race against the
+  router's internal 1-second timeout, with no native fallback. Confirmed via a console-triggered,
+  fully unfiltered repro that this has nothing to do with BJS's own vehicle filtering. Every BJS
+  call site that opens the vehicle selector (bus lines, and vehicle-pool steering in
+  Race/Hunter/Infected) now opens the pause menu's selector instead, which has a real child route
+  and structurally avoids the bug; an event-driven recovery (listening to the router's own
+  cancellation hook) is also kept as a defensive safety net.
+
 ## [1.9.1] - 2026-09-10
 
 Client v1.9.1 (build 2378), server v1.9.1. The freeroam energy-station / garage feature (see

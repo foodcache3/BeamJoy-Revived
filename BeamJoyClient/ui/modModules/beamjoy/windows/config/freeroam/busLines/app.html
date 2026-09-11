@@ -1,0 +1,166 @@
+<style>
+    bj-config-bus-lines .line-row {
+        transition: background-color 0.2s ease-in-out;
+        border-radius: 0.3em;
+    }
+    bj-config-bus-lines .line-row:hover,
+    bj-config-bus-lines .line-row.active {
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-config-bus-lines .line-row.active .line-name {
+        color: #edff00;
+    }
+    bj-config-bus-lines .stop-row {
+        transition: background-color 0.15s ease-in-out;
+    }
+    bj-config-bus-lines .stop-row:hover,
+    bj-config-bus-lines .stop-row.active {
+        background-color: rgba(0, 0, 0, 0.25);
+    }
+    bj-config-bus-lines .name-input {
+        min-width: 0;
+    }
+    bj-config-bus-lines .radius-input {
+        width: 4em;
+    }
+    bj-config-bus-lines .stops-wrap {
+        border-left: 2px solid rgba(255, 255, 255, 0.15);
+        margin-left: 0.4em;
+        padding-left: 0.5em;
+    }
+</style>
+
+<div class="d-flex align-center gap-1 mb-1">
+    <h5 class="flex-grow-1">
+        {{'beamjoy.buslines.edit.lines' | translate}} ({{$ctrl.lines.length}})
+    </h5>
+    <button
+        class="btn success"
+        ng-click="$ctrl.addLine($event)"
+        title="{{'beamjoy.buslines.edit.addLine' | translate}}"
+    >
+        <icon name="add"></icon>
+    </button>
+</div>
+
+<div class="opacity-70 small mb-2" ng-if="$ctrl.lines.length === 0">
+    {{'beamjoy.buslines.edit.empty' | translate}}
+</div>
+
+<div
+    ng-repeat="line in $ctrl.lines track by $index"
+    ng-init="lineIdx = $index + 1"
+    class="mb-1"
+>
+    <div
+        class="line-row d-flex p-1 px-2 gap-1 cursor-pointer align-center"
+        ng-class="{active: $ctrl.activeLine === lineIdx}"
+        ng-click="$ctrl.selectLine($event, lineIdx)"
+    >
+        <input
+            type="text"
+            class="line-name name-input flex-grow-1"
+            maxlength="40"
+            ng-model="line.name"
+            ng-click="$event.stopPropagation()"
+            ng-change="$ctrl.setLineName(lineIdx, line.name)"
+            placeholder="{{'beamjoy.buslines.line' | translate}} {{lineIdx}}"
+        />
+        <button
+            class="btn"
+            ng-class="line.loopable ? 'success' : 'info'"
+            ng-click="$ctrl.toggleLoopable(lineIdx, !line.loopable); $event.stopPropagation()"
+            title="{{'beamjoy.buslines.edit.loopable' | translate}}"
+        >
+            <icon name="reverse"></icon>
+        </button>
+        <span class="opacity-70 small" ng-if="line.stops.length < 2">
+            {{'beamjoy.buslines.edit.minStops' | translate}}
+        </span>
+        <button
+            class="btn danger"
+            ng-click="$ctrl.deleteLine($event, lineIdx)"
+            title="{{'beamjoy.common.delete' | translate}}"
+        >
+            <icon name="delete"></icon>
+        </button>
+    </div>
+
+    <div class="stops-wrap mt-1 mb-2" ng-if="$ctrl.activeLine === lineIdx">
+        <div class="d-flex align-center gap-1 mb-1">
+            <span class="flex-grow-1 opacity-70 small">
+                {{'beamjoy.buslines.edit.stops' | translate}} ({{line.stops.length}})
+            </span>
+            <button
+                class="btn success"
+                ng-click="$ctrl.addStop($event, lineIdx)"
+                title="{{'beamjoy.buslines.edit.addStop' | translate}}"
+            >
+                <icon name="add"></icon>
+            </button>
+        </div>
+
+        <div ng-repeat="stop in line.stops track by $index" ng-init="stopIdx = $index + 1">
+            <bj-sort-separator
+                ng-hide="$index === 0"
+                group="bus-line-stops-order"
+                value="{{$index}}"
+            >
+                <hr class="w-100 my-1" />
+            </bj-sort-separator>
+            <div
+                id="bus-stop-row-{{lineIdx}}-{{stopIdx}}"
+                class="stop-row d-flex p-1 gap-1 cursor-pointer align-center"
+                ng-class="{active: $ctrl.activeLine === lineIdx && $ctrl.activeStop === stopIdx}"
+                ng-click="$ctrl.selectStop($event, lineIdx, stopIdx)"
+            >
+                <bj-sort-draggable
+                    group="bus-line-stops-order"
+                    ng-update="$ctrl.sortUpdate(lineIdx, $index, newValue)"
+                ></bj-sort-draggable>
+                <span class="opacity-70 small">{{stopIdx}}.</span>
+                <input
+                    type="text"
+                    class="name-input flex-grow-1"
+                    maxlength="40"
+                    ng-model="stop.name"
+                    ng-click="$event.stopPropagation()"
+                    ng-change="$ctrl.setStopName(lineIdx, stopIdx, stop.name)"
+                    placeholder="{{'beamjoy.buslines.stop' | translate}} {{stopIdx}}"
+                />
+                <input
+                    type="number"
+                    class="radius-input"
+                    min="1"
+                    max="10"
+                    step="0.5"
+                    ng-model="stop.radius"
+                    ng-click="$event.stopPropagation()"
+                    ng-change="$ctrl.setStopRadius(lineIdx, stopIdx, stop.radius)"
+                    title="{{'beamjoy.window.config.editor.pointList.radius.tooltip' | translate}}"
+                />
+                <button
+                    class="btn info"
+                    ng-click="$ctrl.setStopToVehicle($event, lineIdx, stopIdx)"
+                    title="{{'beamjoy.window.config.tabs.races.setToVehicle' | translate}}"
+                >
+                    <icon name="car"></icon>
+                </button>
+                <button
+                    class="btn info"
+                    ng-click="$ctrl.teleportToStop($event, lineIdx, stopIdx)"
+                    title="{{'beamjoy.window.config.editor.pointList.teleportToHere' | translate}}"
+                >
+                    <icon name="teleportTo"></icon>
+                </button>
+                <button
+                    class="btn danger"
+                    ng-click="$ctrl.deleteStop($event, lineIdx, stopIdx)"
+                    title="{{'beamjoy.common.delete' | translate}}"
+                >
+                    <icon name="delete"></icon>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

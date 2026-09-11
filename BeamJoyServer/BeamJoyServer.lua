@@ -45,6 +45,7 @@ local M = {
         "services_hunter", "services_hunterGrid",
         "services_infected", "services_infectedGrid",
         "services_freeroamData",
+        "services_busLines",
         "services_identity",
         "communications_rx", "communications_tx" },
 }

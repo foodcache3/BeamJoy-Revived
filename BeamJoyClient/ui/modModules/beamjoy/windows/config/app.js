@@ -120,7 +120,7 @@ angular.module("beamjoy").component("bjConfig", {
                 visible: false,
                 closable: false,
                 template: "<bj-config-freeroam></bj-config-freeroam>",
-                permissions: ["EditFreeroamData"],
+                permissions: ["EditFreeroamData", "EditBusLines"],
             },
             permissions: {
                 id: "permissions",

@@ -1,6 +1,6 @@
 <style>
-    /* pins the header row + the point-list-editor's own translate/rotate/snap toolbar above a
-       separately-scrolling list, same split hunterArena / infectedArena already use */
+    /* pins the header + the active section's translate/rotate/snap toolbar above a separately
+       scrolling panel, same split hunterArena / infectedArena already use */
     bj-config-freeroam {
         display: block;
         height: 100%;
@@ -19,6 +19,28 @@
         min-height: 0;
         overflow-y: auto;
     }
+    bj-config-freeroam .section-bar {
+        border-bottom: thin solid gray;
+    }
+    bj-config-freeroam .section-tab {
+        padding: 0.3em 0.6em;
+        border: thin solid gray;
+        border-radius: 0.3em;
+        border-bottom-left-radius: unset;
+        border-bottom-right-radius: unset;
+        background-color: rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease-in-out;
+    }
+    bj-config-freeroam .section-tab.active {
+        background-color: rgba(0, 140, 90, 0.4);
+    }
+    bj-config-freeroam .section-tab.disabled {
+        opacity: 0.4;
+        pointer-events: none;
+    }
+    bj-config-freeroam .section-tab:not(.disabled):hover {
+        color: rgb(241 255 164);
+    }
 </style>
 
 <div class="editor-root">
@@ -28,6 +50,14 @@
                 {{'beamjoy.window.config.tabs.freeroam.hint' | translate}}
             </span>
             <button
+                ng-if="$ctrl.dirty"
+                class="btn warning"
+                ng-click="$ctrl.discard($event)"
+                title="{{'beamjoy.common.cancel' | translate}}"
+            >
+                <icon name="reset"></icon>
+            </button>
+            <button
                 class="btn success"
                 ng-click="$ctrl.save($event)"
                 ng-disabled="!$ctrl.dirty"
@@ -36,10 +66,33 @@
                 <icon name="save"></icon>
             </button>
         </div>
-        <bj-point-list-editor-toolbar events="$ctrl.pointListEvents"></bj-point-list-editor-toolbar>
+
+        <div class="section-bar d-flex flex-wrap">
+            <div
+                class="section-tab cursor-pointer"
+                ng-repeat="section in $ctrl.SECTIONS"
+                ng-class="{active: $ctrl.activeSection === section, disabled: $ctrl.dirty && $ctrl.activeSection !== section}"
+                ng-click="$ctrl.changeSection($event, section)"
+            >
+                {{('beamjoy.window.config.tabs.freeroam.sections.' + section) | translate}}
+            </div>
+        </div>
+
+        <bj-point-list-editor-toolbar
+            ng-if="$ctrl.activeSection === 'stations'"
+            events="$ctrl.pointListEvents"
+        ></bj-point-list-editor-toolbar>
+        <bj-point-list-editor-toolbar
+            ng-if="$ctrl.activeSection === 'buslines'"
+            events="$ctrl.busSnapEvents"
+        ></bj-point-list-editor-toolbar>
     </div>
 
-    <div class="section-panel">
+    <div class="section-panel" ng-if="$ctrl.activeSection === 'stations'">
         <bj-point-list-editor lists="$ctrl.pointLists" events="$ctrl.pointListEvents"></bj-point-list-editor>
+    </div>
+
+    <div class="section-panel" ng-if="$ctrl.activeSection === 'buslines'">
+        <bj-config-bus-lines></bj-config-bus-lines>
     </div>
 </div>

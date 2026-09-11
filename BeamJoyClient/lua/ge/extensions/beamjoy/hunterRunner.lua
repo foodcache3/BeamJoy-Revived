@@ -759,7 +759,11 @@ local function onSessionUpdate(session)
                     if myVeh then beamjoy_vehicles.deleteCurrentOwnVehicle() end
                     toast.warn(label and string.format("This hunt restricts vehicles to: %s. Pick one", label) or
                         "This hunt restricts which vehicles can play. Pick one from the vehicle selector", nil, 6)
-                    extensions.ui_vehicleSelector_general.openVehicleSelectorForFreeroam()
+                    -- pause.vehicleSelector, not openVehicleSelectorForFreeroam's menu.vehiclesnew -
+                    -- see busRun.lua's top doc comment for the full writeup of a real, confirmed
+                    -- native engine bug the freeroam route is prone to (clicking into a vehicle's
+                    -- configs can strand the selector blank) that this route structurally avoids.
+                    extensions.ui_vehicleSelector_general.openFromPause("pause.vehicleSelector")
                 else
                     toast.warn("This hunt's allowed vehicles aren't installed on your game. You won't be able to play",
                         nil, 8)
@@ -833,7 +837,9 @@ local function onSessionUpdate(session)
                             label) or
                         "You need a vehicle for this hunt. Pick one now, the countdown won't start until everyone has",
                         nil, 8)
-                    extensions.ui_vehicleSelector_general.openVehicleSelectorForFreeroam()
+                    -- pause.vehicleSelector - see the LOBBY-join steering above / busRun.lua's own
+                    -- top doc comment for why.
+                    extensions.ui_vehicleSelector_general.openFromPause("pause.vehicleSelector")
                 else
                     toast.warn(
                         "Your role's allowed vehicles aren't installed on your game. You won't be able to play",

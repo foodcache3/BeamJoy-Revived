@@ -155,12 +155,73 @@ local function resetCache()
     M.caches = {}
 end
 
+--- FIRST theory here (now confirmed wrong, kept for the record): pre-warming
+--- `ui_vehicleSelector_general.getUiData()` on the assumption its own `initializeVehicleData()`
+--- was the expensive first-open build being raced. It genuinely is expensive-once, but it's BJS/
+--- native's own UI-side filter/grouping wrapper, layered ON TOP of a separate, lower-level cache -
+--- not what the route mount itself waits on. Kept below (harmless, still worth warming) but
+--- confirmed NOT the fix : the glitch reproduced again after this shipped.
+local function prewarmVehicleSelectorData()
+    if extensions.ui_vehicleSelector_general and extensions.ui_vehicleSelector_general.getUiData then
+        pcall(extensions.ui_vehicleSelector_general.getUiData)
+    end
+end
+
+--- Narrows one real (but, per a later stack-trace capture, not the only) window this glitch can
+--- exploit - found by reading the actual mount path (util/asyncBulkLoader.lua +
+--- ui/vehicleSelector/general.lua) after two live BeamNG.log repros kept showing the router
+--- mounting "menu.vehiclesnew" a SECOND time ~1.6-2.7s after the first mount had already
+--- completed cleanly (no error either time, in the second capture). The ACTUAL definitive root
+--- cause was found afterward by wrapping ui_router.navigate to log a stack trace on every call
+--- (now removed - see git history / TODO.md for the full writeup): that second navigate comes
+--- from BeamNG's own CEF/Vue vehicle-selector UI itself (an engineLua callback, no Lua-side
+--- caller at all - traceback shows only "main chunk of line"), fired by the PLAYER clicking into
+--- a grid item's own sub-path (a brand/model folder, or a bus's config list) - confirmed from the
+--- unminified Vue source (VehicleSelector.vue's onGridNavigateRequest). Since "menu.vehiclesnew"
+--- has no child route to drill into (unlike the pause selector), that click re-navigates the SAME
+--- root route with an updated path param instead, and it occasionally loses its own race against
+--- the router's 1-second "routerStart" phase timeout (`route_navigation_not_started`) - a native
+--- engine bug BJS has no lever to prevent.
+--- Kept below anyway since a warm catalog genuinely does remove ONE way this can be hit :
+---
+--- Every vehicle-selector root route mount (`M.onRootRouteMount`) calls
+--- `beginAsyncPauseRouteMount()`, which calls `util_asyncBulkLoader.loadVehicles()`. That returns
+--- `"alreadyLoaded"` (fast, synchronous, emits the grid snapshot next tick - no race) UNLESS
+--- `core_vehicles.isModelsDataLoaded()` is still false, which is true only for the session's very
+--- first open. In that cold case it instead kicks off an async `core_jobsystem` job and returns
+--- immediately with nothing mounted yet ; the job's own completion handler
+--- (`asyncVehicleLoadComplete` -> `emitPauseRouteSnapshot`) explicitly, silently DISCARDS the
+--- whole grid snapshot if the router's current route no longer matches the route that was pending
+--- when the job started (`isPendingPauseRouteStillCurrent`). A second mount of the same route
+--- landing inside that window - exactly what both logs show - is a real way to hit that mismatch:
+--- the completion callback fires, checks the (by-then-stale) pending entry against whatever the
+--- router considers current, and drops the payload with no error, leaving the grid permanently
+--- empty. A second attempt always takes the instant "alreadyLoaded" path since the catalog is
+--- warm by then, matching the user's own "second time works fine" report exactly.
+---
+--- Fix: force `loadVehicles()` this early - well before the player can possibly reach a bus stop
+--- - so `core_vehicles.isModelsDataLoaded()` is already true by the time ANY filtered-selector
+--- open happens, collapsing every open (first included) onto the same safe, synchronous path a
+--- working retry already takes. busRun.lua's own M.startLine has a defensive fallback in case this
+--- prewarm hasn't finished yet for some reason (fast reconnect, hot reload).
+local function prewarmVehicleModelList()
+    if extensions.util_asyncBulkLoader and extensions.util_asyncBulkLoader.loadVehicles then
+        pcall(extensions.util_asyncBulkLoader.loadVehicles)
+    end
+end
+
+local function prewarm()
+    prewarmVehicleSelectorData()
+    prewarmVehicleModelList()
+end
+
 local function onUnload()
     RollBackNGFunctionsWrappers(M.baseFunctions)
 end
 
 M.onInit = onInit
 M.onExtensionUnloaded = onUnload
+M.onBJClientReady = prewarm
 M.onBJVehiclesCacheUpdate = resetCache
 M.onBJPermissionsUpdate = resetCache
 M.onBJUpdateSelf = resetCache

@@ -1,0 +1,102 @@
+<style>
+    #beamjoy-bus-hud {
+        position: fixed;
+        top: 2vh;
+        right: 1vw;
+        z-index: 4;
+        width: 15em;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        color: white;
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 0.5em;
+        padding: 0.7em 0.9em;
+    }
+
+    #beamjoy-bus-hud .hud-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 0.35em;
+        font-weight: bold;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+    #beamjoy-bus-hud .hud-title {
+        color: #4fc3f7;
+    }
+    #beamjoy-bus-hud .hud-line {
+        font-size: 1.1em;
+        font-weight: bold;
+        margin-bottom: 0.3em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #beamjoy-bus-hud .hud-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.9em;
+        opacity: 0.85;
+        margin-bottom: 0.3em;
+        font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-bus-hud .hud-bar {
+        height: 0.5em;
+        border-radius: 0.25em;
+        background: rgba(255, 255, 255, 0.12);
+        overflow: hidden;
+        margin-bottom: 0.4em;
+    }
+    #beamjoy-bus-hud .hud-bar-fill {
+        height: 100%;
+        background: #4fc3f7;
+        transition: width 0.3s ease-in-out;
+    }
+    #beamjoy-bus-hud .hud-holding {
+        text-align: center;
+        font-weight: bold;
+        color: #81c784;
+        margin-bottom: 0.4em;
+    }
+    #beamjoy-bus-hud .hud-stop-btn {
+        display: block;
+        width: 100%;
+        padding: 0.35em 0.5em;
+        text-align: center;
+        font-size: 0.85em;
+        font-weight: bold;
+        color: white;
+        background: rgba(255, 82, 82, 0.18);
+        border: 1px solid rgba(255, 82, 82, 0.55);
+        border-radius: 0.3em;
+        cursor: pointer;
+        user-select: none;
+    }
+    #beamjoy-bus-hud .hud-stop-btn:hover {
+        background: rgba(255, 82, 82, 0.32);
+    }
+</style>
+
+<div id="beamjoy-bus-hud" ng-if="$ctrl.active">
+    <div class="hud-header">
+        <span class="hud-title">{{'beamjoy.window.busHud.title' | translate}}</span>
+        <span ng-if="$ctrl.loopable" title="{{'beamjoy.buslines.edit.loopable' | translate}}">&#8635;</span>
+    </div>
+    <div class="hud-line">{{$ctrl.lineName}}</div>
+    <div class="hud-row">
+        <span>{{'beamjoy.window.busHud.stop' | translate}}</span>
+        <span>{{$ctrl.stopIndex}} / {{$ctrl.totalStops}}</span>
+    </div>
+    <div class="hud-bar">
+        <div class="hud-bar-fill" style="width: {{$ctrl.progressPercent()}}%"></div>
+    </div>
+    <div class="hud-holding" ng-if="$ctrl.holding">
+        {{'beamjoy.window.busHud.approaching' | translate}}
+    </div>
+    <button
+        class="hud-stop-btn"
+        ng-click="$ctrl.stop()"
+        title="{{'beamjoy.window.busHud.stopRun.tooltip' | translate}}"
+    >
+        {{'beamjoy.window.busHud.stopRun' | translate}}
+    </button>
+</div>

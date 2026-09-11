@@ -1625,7 +1625,12 @@ local function onSessionUpdate(session)
                         -- this file's own hook above denies non-pool vehicles through, so simply
                         -- opening it here already shows just the pool, pre-filtered. No manual
                         -- search/filter state needs to be set.
-                        extensions.ui_vehicleSelector_general.openVehicleSelectorForFreeroam()
+                        -- pause.vehicleSelector, not openVehicleSelectorForFreeroam's
+                        -- menu.vehiclesnew - see busRun.lua's top doc comment for the full writeup
+                        -- of a real, confirmed native engine bug the freeroam route is prone to
+                        -- (clicking into a vehicle's configs can strand the selector blank) that
+                        -- this route structurally avoids.
+                        extensions.ui_vehicleSelector_general.openFromPause("pause.vehicleSelector")
                     else
                         toast.warn(
                             "This race's allowed vehicles aren't installed on your game. You won't be able to race",

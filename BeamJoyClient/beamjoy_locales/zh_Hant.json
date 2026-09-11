@@ -808,11 +808,49 @@
     "beamjoy.window.config.tabs.freeroam.tab": "自由駕駛",
     "beamjoy.window.config.tabs.freeroam.station": "加油站",
     "beamjoy.window.config.tabs.freeroam.garage": "維修廠",
-    "beamjoy.window.config.tabs.freeroam.hint": "開到你想放置加油站或維修廠的位置，然後點擊新增。加油站為所有油箱加油；維修廠進行維修。",
-    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "加油站和維修廠有未儲存的變更。要捨棄嗎？",
+    "beamjoy.window.config.tabs.freeroam.hint": "開到某處，點擊新增，用操控器拖曳，命名，然後儲存。",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "自由駕駛有未儲存的變更。要捨棄嗎？",
     "beamjoy.window.config.tabs.infectedArena.allowStations": "允許加油站和維修廠",
     "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "關閉（預設）：回合期間加油站和維修廠將隱藏且無法使用。開啟：玩家可在遊戲中加油和維修。",
     "beamjoy.window.config.tabs.hunterArena.allowStations": "允許加油站和維修廠",
     "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "關閉（預設）：回合期間加油站和維修廠將隱藏且無法使用。開啟：玩家可在遊戲中加油和維修。",
-    "beamjoy.window.config.editor.pointList.name.tooltip": "顯示名稱（可選）"
+    "beamjoy.window.config.editor.pointList.name.tooltip": "顯示名稱（可選）",
+
+
+    // NEW: bus lines editor
+    "beamjoy.window.config.tabs.freeroam.sections.stations": "加油站和維修廠",
+    "beamjoy.window.config.tabs.freeroam.sections.buslines": "公車路線",
+    "beamjoy.buslines.line": "路線",
+    "beamjoy.buslines.stop": "車站",
+    "beamjoy.buslines.edit.lines": "公車路線",
+    "beamjoy.buslines.edit.empty": "尚無公車路線。",
+    "beamjoy.buslines.edit.addLine": "在目前位置新增公車路線",
+    "beamjoy.buslines.edit.addStop": "在目前位置新增車站",
+    "beamjoy.buslines.edit.stops": "車站",
+    "beamjoy.buslines.edit.loopable": "循環回到首站",
+    "beamjoy.buslines.edit.minStops": "需要 2 個以上車站",
+    "beamjoy.buslines.edit.moveUp": "上移",
+    "beamjoy.buslines.edit.moveDown": "下移",
+
+
+    // NEW: bus line gameplay
+    "beamjoy.buslines.markerLine": "公車路線",
+    "beamjoy.buslines.play.start": "開始路線",
+    "beamjoy.buslines.play.started": "公車路線已開始",
+    "beamjoy.buslines.play.finished": "路線完成",
+    "beamjoy.buslines.play.stopped": "公車路線已結束",
+    "beamjoy.buslines.play.blocked": "目前無法使用",
+    "beamjoy.buslines.play.loop": "返回首站",
+    "beamjoy.buslines.play.pickBus": "選擇一輛公車來運行此路線",
+    "beamjoy.window.busHud.title": "公車路線",
+    "beamjoy.window.busHud.stop": "車站",
+    "beamjoy.window.busHud.approaching": "接近車站，在此停留",
+    "beamjoy.window.busHud.stopRun": "結束行程",
+    "beamjoy.window.busHud.stopRun.tooltip": "停止駕駛此路線",
+
+
+    // NEW: Activities tab split + bus lines browse list
+    "beamjoy.window.main.tabs.races.sections.races": "比賽",
+    "beamjoy.window.main.tabs.races.sections.busLines": "公車路線",
+    "beamjoy.buslines.main.currentlyRunning": "目前運行中："
 }

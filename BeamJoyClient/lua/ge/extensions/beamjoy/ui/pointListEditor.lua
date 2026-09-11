@@ -414,6 +414,16 @@ local function new(config)
         open = open,
         close = close,
         onBJClick = onBJClick,
+        -- re-draw the world shapes + re-show the gizmo + re-push state, without resetting
+        -- anything. For a host that hides/re-shows this editor behind its own section switch
+        -- (freeroamEditor's Stations <-> Bus Lines): open() would discard unsaved edits, and a
+        -- freshly re-mounted Angular side only gets a state re-push (requestState -> pushFullState,
+        -- no renderAll), so the 3D shapes would sit stale until the next mutation.
+        reassert = function()
+            renderAll()
+            updateGizmo(state.activeList, state.activeIndex)
+            pushFullState()
+        end,
         getLists = function() return state.lists end,
         isDirty = function() return state.dirty end,
         -- exposed so the host can flag dirty for its OWN non-list fields too (e.g. an `enabled`

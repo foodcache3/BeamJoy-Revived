@@ -796,7 +796,11 @@ local function onSessionUpdate(session)
             if myVeh then beamjoy_vehicles.deleteCurrentOwnVehicle() end
             toast.warn(string.format("This round requires vehicle: %s. Pick it from the vehicle selector",
                 forced.label or forced.model), nil, 6)
-            extensions.ui_vehicleSelector_general.openVehicleSelectorForFreeroam()
+            -- pause.vehicleSelector, not openVehicleSelectorForFreeroam's menu.vehiclesnew - see
+            -- busRun.lua's top doc comment for the full writeup of a real, confirmed native engine
+            -- bug the freeroam route is prone to (clicking into a vehicle's configs can strand the
+            -- selector blank) that this route structurally avoids.
+            extensions.ui_vehicleSelector_general.openFromPause("pause.vehicleSelector")
         end
     end
 

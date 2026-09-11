@@ -1,6 +1,7 @@
 await import(`/ui/modModules/beamjoy/windows/main/main/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/settings/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/races/app.js`);
+await import(`/ui/modModules/beamjoy/windows/main/activities/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/hunter/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/infected/app.js`);
 
@@ -51,7 +52,10 @@ angular.module("beamjoy").component("bjMain", {
                 title: "beamjoy.window.main.tabs.races.title",
                 visible: true,
                 closable: false,
-                template: "<bj-main-races></bj-main-races>",
+                // was <bj-main-races> directly ; now a section-switching wrapper hosting it
+                // alongside <bj-main-bus-lines> (see windows/main/activities/app.js) - the tab id/
+                // title ("Activities") are unchanged, only its content is split per gamemode now
+                template: "<bj-main-activities></bj-main-activities>",
             },
             hunter: {
                 id: "hunter",

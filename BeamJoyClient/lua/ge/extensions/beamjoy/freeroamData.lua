@@ -1,6 +1,6 @@
 --- Client-side mirror of the server's per-map freeroam POI data (energy stations + garages, see
 --- services/freeroamData.lua). Owns only the synced cache : the in-world editor
---- (ui/stationEditor.lua) and the refuel/repair gameplay + markers (beamjoy_stations) both read
+--- (ui/freeroamEditor.lua) and the refuel/repair gameplay + markers (beamjoy_stations) both read
 --- M.data straight off here, so it stays correct regardless of whether an editor is even open and
 --- refreshes for free on every cache push (join, save, map change).
 ---

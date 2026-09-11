@@ -27,7 +27,7 @@ local M = {
     ---@type { kind: "refuel"|"repair", vid: integer, endMs: integer, item: table }?
     process = nil,
 
-    --- true while ui/stationEditor.lua is open : it draws its own markers, so our POIs stand down
+    --- true while ui/freeroamEditor.lua is open : it draws its own markers, so our POIs stand down
     editorActive = false,
 
     ---@type table<string, table> our POI id -> station/garage, for onActivityAcceptGatherData

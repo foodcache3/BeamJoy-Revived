@@ -809,11 +809,49 @@
     "beamjoy.window.config.tabs.freeroam.tab": "フリーローム",
     "beamjoy.window.config.tabs.freeroam.station": "給油所",
     "beamjoy.window.config.tabs.freeroam.garage": "整備工場",
-    "beamjoy.window.config.tabs.freeroam.hint": "給油所または整備工場を設置したい場所まで運転し、「追加」を押します。給油所は全タンクを給油し、整備工場は修理します。",
-    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "給油所と整備工場に保存されていない変更があります。破棄しますか？",
+    "beamjoy.window.config.tabs.freeroam.hint": "任意の場所へ運転し、「追加」を押し、ギズモで動かし、名前を付けて「保存」します。",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "フリーロームに保存されていない変更があります。破棄しますか？",
     "beamjoy.window.config.tabs.infectedArena.allowStations": "給油所と整備工場を許可",
     "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "オフ（既定）: ラウンド中は給油所と整備工場が非表示になり使用できません。オン: プレイヤーはゲーム中に給油・修理できます。",
     "beamjoy.window.config.tabs.hunterArena.allowStations": "給油所と整備工場を許可",
     "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "オフ（既定）: ラウンド中は給油所と整備工場が非表示になり使用できません。オン: プレイヤーはゲーム中に給油・修理できます。",
-    "beamjoy.window.config.editor.pointList.name.tooltip": "表示名（任意）"
+    "beamjoy.window.config.editor.pointList.name.tooltip": "表示名（任意）",
+
+
+    // NEW: bus lines editor
+    "beamjoy.window.config.tabs.freeroam.sections.stations": "給油所と整備工場",
+    "beamjoy.window.config.tabs.freeroam.sections.buslines": "バス路線",
+    "beamjoy.buslines.line": "路線",
+    "beamjoy.buslines.stop": "停留所",
+    "beamjoy.buslines.edit.lines": "バス路線",
+    "beamjoy.buslines.edit.empty": "バス路線はまだありません。",
+    "beamjoy.buslines.edit.addLine": "現在位置にバス路線を追加",
+    "beamjoy.buslines.edit.addStop": "現在位置に停留所を追加",
+    "beamjoy.buslines.edit.stops": "停留所",
+    "beamjoy.buslines.edit.loopable": "最初の停留所へループ",
+    "beamjoy.buslines.edit.minStops": "停留所が2つ以上必要",
+    "beamjoy.buslines.edit.moveUp": "上へ",
+    "beamjoy.buslines.edit.moveDown": "下へ",
+
+
+    // NEW: bus line gameplay
+    "beamjoy.buslines.markerLine": "バス路線",
+    "beamjoy.buslines.play.start": "路線を開始",
+    "beamjoy.buslines.play.started": "バス路線を開始しました",
+    "beamjoy.buslines.play.finished": "路線完了",
+    "beamjoy.buslines.play.stopped": "バス路線を終了しました",
+    "beamjoy.buslines.play.blocked": "現在利用できません",
+    "beamjoy.buslines.play.loop": "最初の停留所へ戻ります",
+    "beamjoy.buslines.play.pickBus": "この路線を走るバスを選択してください",
+    "beamjoy.window.busHud.title": "バス路線",
+    "beamjoy.window.busHud.stop": "停留所",
+    "beamjoy.window.busHud.approaching": "停留所に接近、ここで停車",
+    "beamjoy.window.busHud.stopRun": "運行を終了",
+    "beamjoy.window.busHud.stopRun.tooltip": "この路線の運転をやめる",
+
+
+    // NEW: Activities tab split + bus lines browse list
+    "beamjoy.window.main.tabs.races.sections.races": "レース",
+    "beamjoy.window.main.tabs.races.sections.busLines": "バス路線",
+    "beamjoy.buslines.main.currentlyRunning": "現在運行中:"
 }

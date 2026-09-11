@@ -809,11 +809,49 @@
     "beamjoy.window.config.tabs.freeroam.tab": "자유 주행",
     "beamjoy.window.config.tabs.freeroam.station": "주유소",
     "beamjoy.window.config.tabs.freeroam.garage": "정비소",
-    "beamjoy.window.config.tabs.freeroam.hint": "주유소나 정비소를 놓을 위치로 운전한 뒤 추가를 누르세요. 주유소는 모든 탱크를 채우고 정비소는 수리합니다.",
-    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "주유소와 정비소에 저장하지 않은 변경 사항이 있습니다. 취소할까요?",
+    "beamjoy.window.config.tabs.freeroam.hint": "원하는 지점으로 운전한 뒤 추가를 누르고, 기즈모로 옮기고, 이름을 지은 다음 저장하세요.",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "자유 주행에 저장하지 않은 변경 사항이 있습니다. 취소할까요?",
     "beamjoy.window.config.tabs.infectedArena.allowStations": "주유소 및 정비소 허용",
     "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "꺼짐(기본값): 라운드 중 주유소와 정비소가 숨겨지고 사용할 수 없습니다. 켜짐: 플레이어가 게임 중에 주유하고 수리할 수 있습니다.",
     "beamjoy.window.config.tabs.hunterArena.allowStations": "주유소 및 정비소 허용",
     "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "꺼짐(기본값): 라운드 중 주유소와 정비소가 숨겨지고 사용할 수 없습니다. 켜짐: 플레이어가 게임 중에 주유하고 수리할 수 있습니다.",
-    "beamjoy.window.config.editor.pointList.name.tooltip": "표시 이름 (선택 사항)"
+    "beamjoy.window.config.editor.pointList.name.tooltip": "표시 이름 (선택 사항)",
+
+
+    // NEW: bus lines editor
+    "beamjoy.window.config.tabs.freeroam.sections.stations": "주유소 및 정비소",
+    "beamjoy.window.config.tabs.freeroam.sections.buslines": "버스 노선",
+    "beamjoy.buslines.line": "노선",
+    "beamjoy.buslines.stop": "정류장",
+    "beamjoy.buslines.edit.lines": "버스 노선",
+    "beamjoy.buslines.edit.empty": "아직 버스 노선이 없습니다.",
+    "beamjoy.buslines.edit.addLine": "현재 위치에 버스 노선 추가",
+    "beamjoy.buslines.edit.addStop": "현재 위치에 정류장 추가",
+    "beamjoy.buslines.edit.stops": "정류장",
+    "beamjoy.buslines.edit.loopable": "첫 정류장으로 반복",
+    "beamjoy.buslines.edit.minStops": "정류장 2개 이상 필요",
+    "beamjoy.buslines.edit.moveUp": "위로",
+    "beamjoy.buslines.edit.moveDown": "아래로",
+
+
+    // NEW: bus line gameplay
+    "beamjoy.buslines.markerLine": "버스 노선",
+    "beamjoy.buslines.play.start": "노선 시작",
+    "beamjoy.buslines.play.started": "버스 노선 시작됨",
+    "beamjoy.buslines.play.finished": "노선 완료",
+    "beamjoy.buslines.play.stopped": "버스 노선 종료됨",
+    "beamjoy.buslines.play.blocked": "지금은 사용할 수 없습니다",
+    "beamjoy.buslines.play.loop": "첫 정류장으로 돌아갑니다",
+    "beamjoy.buslines.play.pickBus": "이 노선을 운행할 버스를 선택하세요",
+    "beamjoy.window.busHud.title": "버스 노선",
+    "beamjoy.window.busHud.stop": "정류장",
+    "beamjoy.window.busHud.approaching": "정류장 접근 중, 여기서 정차",
+    "beamjoy.window.busHud.stopRun": "운행 종료",
+    "beamjoy.window.busHud.stopRun.tooltip": "이 노선 운전 중지",
+
+
+    // NEW: Activities tab split + bus lines browse list
+    "beamjoy.window.main.tabs.races.sections.races": "레이스",
+    "beamjoy.window.main.tabs.races.sections.busLines": "버스 노선",
+    "beamjoy.buslines.main.currentlyRunning": "현재 운행 중:"
 }

@@ -808,11 +808,49 @@
     "beamjoy.window.config.tabs.freeroam.tab": "Свободный режим",
     "beamjoy.window.config.tabs.freeroam.station": "Заправка",
     "beamjoy.window.config.tabs.freeroam.garage": "Гараж",
-    "beamjoy.window.config.tabs.freeroam.hint": "Подъедьте туда, где хотите разместить заправку или гараж, затем нажмите «Добавить». Заправки наполняют все баки; гаражи чинят.",
-    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "Есть несохранённые изменения заправок и гаражей. Отменить их?",
+    "beamjoy.window.config.tabs.freeroam.hint": "Подъедьте к месту, нажмите «Добавить», перетащите гизмо, дайте имя и сохраните.",
+    "beamjoy.window.config.tabs.freeroam.confirmDiscard": "Есть несохранённые изменения свободного режима. Отменить их?",
     "beamjoy.window.config.tabs.infectedArena.allowStations": "Разрешить заправки и гаражи",
     "beamjoy.window.config.tabs.infectedArena.allowStations.tooltip": "Выкл. (по умолчанию): заправки и гаражи скрыты и недоступны во время раунда. Вкл.: игроки могут заправляться и чиниться по ходу игры.",
     "beamjoy.window.config.tabs.hunterArena.allowStations": "Разрешить заправки и гаражи",
     "beamjoy.window.config.tabs.hunterArena.allowStations.tooltip": "Выкл. (по умолчанию): заправки и гаражи скрыты и недоступны во время раунда. Вкл.: игроки могут заправляться и чиниться по ходу игры.",
-    "beamjoy.window.config.editor.pointList.name.tooltip": "Отображаемое имя (необязательно)"
+    "beamjoy.window.config.editor.pointList.name.tooltip": "Отображаемое имя (необязательно)",
+
+
+    // NEW: bus lines editor
+    "beamjoy.window.config.tabs.freeroam.sections.stations": "Заправки и гаражи",
+    "beamjoy.window.config.tabs.freeroam.sections.buslines": "Автобусные маршруты",
+    "beamjoy.buslines.line": "Маршрут",
+    "beamjoy.buslines.stop": "Остановка",
+    "beamjoy.buslines.edit.lines": "Автобусные маршруты",
+    "beamjoy.buslines.edit.empty": "Автобусных маршрутов пока нет.",
+    "beamjoy.buslines.edit.addLine": "Добавить маршрут в текущей позиции",
+    "beamjoy.buslines.edit.addStop": "Добавить остановку в текущей позиции",
+    "beamjoy.buslines.edit.stops": "Остановки",
+    "beamjoy.buslines.edit.loopable": "Зациклить к первой остановке",
+    "beamjoy.buslines.edit.minStops": "нужно 2+ остановки",
+    "beamjoy.buslines.edit.moveUp": "Вверх",
+    "beamjoy.buslines.edit.moveDown": "Вниз",
+
+
+    // NEW: bus line gameplay
+    "beamjoy.buslines.markerLine": "Автобусный маршрут",
+    "beamjoy.buslines.play.start": "Начать маршрут",
+    "beamjoy.buslines.play.started": "Автобусный маршрут начат",
+    "beamjoy.buslines.play.finished": "Маршрут завершён",
+    "beamjoy.buslines.play.stopped": "Автобусный маршрут завершён",
+    "beamjoy.buslines.play.blocked": "Сейчас недоступно",
+    "beamjoy.buslines.play.loop": "Возврат к первой остановке",
+    "beamjoy.buslines.play.pickBus": "Выберите автобус для этого маршрута",
+    "beamjoy.window.busHud.title": "Автобусный маршрут",
+    "beamjoy.window.busHud.stop": "Остановка",
+    "beamjoy.window.busHud.approaching": "Остановка рядом, задержитесь здесь",
+    "beamjoy.window.busHud.stopRun": "Завершить поездку",
+    "beamjoy.window.busHud.stopRun.tooltip": "Перестать ехать по этому маршруту",
+
+
+    // NEW: Activities tab split + bus lines browse list
+    "beamjoy.window.main.tabs.races.sections.races": "Гонки",
+    "beamjoy.window.main.tabs.races.sections.busLines": "Автобусные маршруты",
+    "beamjoy.buslines.main.currentlyRunning": "Сейчас выполняется:"
 }

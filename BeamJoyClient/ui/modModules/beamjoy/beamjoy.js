@@ -53,6 +53,7 @@ await import(`/ui/modModules/beamjoy/windows/hunterCountdown/app.js`);
 await import(`/ui/modModules/beamjoy/windows/hunterHud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/infectedCountdown/app.js`);
 await import(`/ui/modModules/beamjoy/windows/infectedHud/app.js`);
+await import(`/ui/modModules/beamjoy/windows/busHud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/mapVote/app.js`);
 await import(`/ui/modModules/beamjoy/windows/kickVote/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceInfo/live/app.js`);
@@ -87,6 +88,7 @@ beamjoyModule.component("beamjoy", {
                         <bj-hunter-hud></bj-hunter-hud>
                         <bj-infected-countdown></bj-infected-countdown>
                         <bj-infected-hud></bj-infected-hud>
+                        <bj-bus-hud></bj-bus-hud>
                         <bj-map-vote></bj-map-vote>
                         <bj-kick-vote></bj-kick-vote>
                         <bj-confirm></bj-confirm>
