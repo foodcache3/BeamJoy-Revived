@@ -7,37 +7,44 @@ local M = {
     ---@type tablelib<integer, any[]> index 1-N, value printMessage args list
     queue = Table(),
 
+    -- Real, confirmed bug: every chat message on a BJS server - including the player's own, plain,
+    -- no-command messages - went through this module and a custom "BJChat" event, understood by
+    -- nothing native. A client-side override (ui/.../override/chat.js) had to bridge it into
+    -- whichever BeamMP chat UI app happened to be mounted, by calling that app's own global
+    -- `addMessage` function directly. BeamMP now ships TWO chat apps side by side (the classic one,
+    -- and a newer Vue-based "BeamMP Chat 2") and only the classic one exposes that global - Chat2 is
+    -- fully self-contained, so the bridge silently failed whenever Chat2 was the active app (or the
+    -- classic one wasn't mounted at all). Since services/chat.lua (server) intercepts ALL chat for
+    -- its own crash-workaround relay (see its own header comment) rather than letting BeamMP's own
+    -- native broadcast fire, EVERY message - not just BJS's own server messages/command feedback -
+    -- depended on this one fragile bridge, matching the reported "nothing appears at all, even my
+    -- own plain messages" exactly.
+    chatCounter = 0,
 }
-
----@param payload {sender: {text: string, color: number[], tag: string?, tagColor: number[]}?, message: {text: string, color: number[]}}
-local function addImguiMessage(payload)
-    -- multiplayer.ui.chat was removed in BeamNG 0.39 (chat moved to Vue).
-    -- Messages are now sent to the frontend via BJChat event in printMessage,
-    -- so this ImGui path is no longer needed.
-end
 
 ---@param senderName string?
 ---@param message string
----@param nameColor number[]? index 1-3, value 0-1
----@param textColor number[] index 1-3, value 0-1
+---@param nameColor number[]? index 1-3, value 0-1 (unused - see printMessage's own comment)
+---@param textColor number[] index 1-3, value 0-1 (unused - see printMessage's own comment)
 ---@param tag string?
 local function printMessage(senderName, message, nameColor, textColor, tag)
-    nameColor = nameColor or M.defaultColor
-    textColor = textColor or M.defaultColor
-    local payload = {
-        sender = senderName and {
-            text = senderName,
-            color = nameColor,
-            tag = tag,
-            tagColor = beamjoy_config.data.Chat.ServerNameColor,
-        } or nil,
-        message = {
-            text = message,
-            color = textColor,
-        }
-    }
-    beamjoy_communications_ui.send("BJChat", jsonEncode(payload))
-    addImguiMessage(payload)
+    -- `guihooks.trigger("onBeamMPChatMessage", {id, message})` is what BOTH chat apps actually
+    -- listen for directly (confirmed by reading BeamMP's own UI.lua - the exact call real native
+    -- chat messages trigger), so this reaches either one uniformly with no dependency on which is
+    -- currently mounted, replacing the old app-specific bridge entirely. Per-message RGB coloring
+    -- was already not reproduced through that old bridge either (its own comment said so), so
+    -- nothing is lost dropping it here - nameColor/textColor are kept as parameters since callers
+    -- (chatMessage/serverMessage/chatEvent/directChat) still compute and pass them, but no longer
+    -- used.
+    local text = ""
+    if senderName then
+        if tag then text = text .. "[" .. tag .. "] " end
+        text = text .. senderName .. ": "
+    end
+    text = text .. message
+
+    M.chatCounter = M.chatCounter + 1
+    guihooks.trigger("onBeamMPChatMessage", { id = M.chatCounter, message = text })
 end
 
 ---@param message string

@@ -1,9 +1,9 @@
 await import(`/ui/modModules/beamjoy/windows/main/main/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/settings/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/races/app.js`);
+// hunter/app.js and infected/app.js are imported by activities/app.js now - both gamemodes moved
+// under the Activities tab, no longer separate top-level tabs (see that file's own comment)
 await import(`/ui/modModules/beamjoy/windows/main/activities/app.js`);
-await import(`/ui/modModules/beamjoy/windows/main/hunter/app.js`);
-await import(`/ui/modModules/beamjoy/windows/main/infected/app.js`);
 
 angular.module("beamjoy").component("bjMain", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/app.html",
@@ -53,25 +53,11 @@ angular.module("beamjoy").component("bjMain", {
                 visible: true,
                 closable: false,
                 // was <bj-main-races> directly ; now a section-switching wrapper hosting it
-                // alongside <bj-main-bus-lines> (see windows/main/activities/app.js) - the tab id/
-                // title ("Activities") are unchanged, only its content is split per gamemode now
+                // alongside <bj-main-bus-lines>/<bj-main-hunter>/<bj-main-infected> (see
+                // windows/main/activities/app.js) - the tab id/title ("Activities") are
+                // unchanged, only its content is split per gamemode now. Hunter and Infected used
+                // to be their own top-level tabs here (order 3/4) - folded in as sections instead.
                 template: "<bj-main-activities></bj-main-activities>",
-            },
-            hunter: {
-                id: "hunter",
-                order: 3,
-                title: "beamjoy.window.main.tabs.hunter.title",
-                visible: true,
-                closable: false,
-                template: "<bj-main-hunter></bj-main-hunter>",
-            },
-            infected: {
-                id: "infected",
-                order: 4,
-                title: "beamjoy.window.main.tabs.infected.title",
-                visible: true,
-                closable: false,
-                template: "<bj-main-infected></bj-main-infected>",
             },
             settings: {
                 id: "settings",

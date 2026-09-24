@@ -18,6 +18,32 @@ local M = {
 local function onInit()
     beamjoy_communications.addHandler("sendCache", M.retrieveCache)
     beamjoy_communications_ui.addHandler("BJEditorBusLinesDataRequest", M.pushListToUI)
+    -- legacy BJI import bridge : thin passthrough, same shape as beamjoy_hunter's own /
+    -- beamjoy_freeroamData's own
+    beamjoy_communications_ui.addHandler("BJBusLinesLegacyImportPreviewRequest", M.requestLegacyImportPreview)
+    beamjoy_communications_ui.addHandler("BJBusLinesLegacyImportConfirm", M.confirmLegacyImport)
+    beamjoy_communications.addHandler("busLinesLegacyImportPreviewResult", M.onLegacyImportPreviewResult)
+    beamjoy_communications.addHandler("busLinesLegacyImportDone", M.onLegacyImportDone)
+end
+
+local function requestLegacyImportPreview()
+    beamjoy_communications.send("busLinesLegacyImportPreview")
+end
+
+---@param results table[]
+local function onLegacyImportPreviewResult(results)
+    beamjoy_communications_ui.send("BJBusLinesLegacyImportPreview", results or {})
+end
+
+local function confirmLegacyImport()
+    beamjoy_communications.send("busLinesLegacyImportConfirm")
+end
+
+---@param imported integer
+local function onLegacyImportDone(imported)
+    toast.info(string.format(
+        beamjoy_lang.translate("beamjoy.window.config.tabs.core.legacyImport.busLines.done"),
+        imported or 0), nil, 6)
 end
 
 --- lightweight snapshot for the config window's Bus Lines editor : it seeds its own line-list
@@ -47,5 +73,9 @@ M.onInit = onInit
 M.retrieveCache = retrieveCache
 M.pushListToUI = pushListToUI
 M.saveBusLines = saveBusLines
+M.requestLegacyImportPreview = requestLegacyImportPreview
+M.onLegacyImportPreviewResult = onLegacyImportPreviewResult
+M.confirmLegacyImport = confirmLegacyImport
+M.onLegacyImportDone = onLegacyImportDone
 
 return M

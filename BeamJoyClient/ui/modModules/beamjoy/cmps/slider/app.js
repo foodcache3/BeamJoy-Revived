@@ -26,6 +26,7 @@ angular.module("beamjoy").component("bjSlider", {
         this.mode = "slider";
         this.toggleMode = () => {
             if (this.disabled) return;
+            const leavingNumberMode = this.mode === "number";
             this.mode = this.mode === "slider" ? "number" : "slider";
             if (this.mode === "number") {
                 $timeout(() => {
@@ -35,6 +36,19 @@ angular.module("beamjoy").component("bjSlider", {
                         input.select();
                     }
                 });
+            } else if (leavingNumberMode) {
+                // Real, confirmed bug: rounding/clamping used to run on every keystroke (see the
+                // $watch below), not just once the user was actually done typing. Typing a
+                // multi-digit value like "1000" digit by digit got hijacked after the very first
+                // digit - e.g. typing "1" alone immediately rounded/clamped that partial value and
+                // wrote it back into the field mid-edit, so the next keystroke landed on top of an
+                // already-mutated number instead of extending what was actually being typed,
+                // compounding into a final value nothing like what was entered. Finalizing only
+                // here, the moment number mode is actually left (blur, Enter, or the mode-toggle
+                // button - all three already route through this same call), lets the field hold
+                // the raw typed text untouched the whole time it's being edited.
+                roundModel();
+                updatePercent();
             }
         };
 
@@ -80,6 +94,14 @@ angular.module("beamjoy").component("bjSlider", {
         $scope.$watch(
             () => this.ngModel,
             () => {
+                // Skip live rounding/clamping while actively typing in number mode - see
+                // toggleMode's own comment for the bug this caused. The slider mode's own range
+                // input + label are hidden while in number mode anyway, so there's nothing visible
+                // that needs the rounded value until the field is actually left.
+                if (this.mode === "number") {
+                    updatePercent();
+                    return;
+                }
                 roundModel();
                 updatePercent();
             }

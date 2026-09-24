@@ -6,6 +6,8 @@ local M = {
     menuHeight = 20,
     ---@type BJWindow?
     windowConfig = nil,
+
+    GITHUB_URL = "https://github.com/foodcache3/BeamJoy-Revived",
 }
 -- gc prevention
 local size, position
@@ -76,11 +78,27 @@ local function render(ctxt)
         M.toggle()
     end
 
+    -- Real, confirmed bug: the Settings tab's own "About" section (an actual `<a href>` link)
+    -- didn't open a browser, and its version display didn't work either - CEF's `local://` UI
+    -- scheme has nothing a plain anchor navigation can hand off to an external browser with. Moved
+    -- here instead, per direct request, as a "copy link" action in this same About menu - clipboard
+    -- access works fine from this ImGui overlay (`ui_imgui.SetClipboardText`, the same call the
+    -- installed game's own asset browser "Copy path" actions use), so the player can paste it
+    -- wherever they actually want it.
     RenderMenuDropdown(beamjoy_lang.translate("beamjoy.menu.about"), {
         { type = "item", label = string.var(beamjoy_lang.translate("beamjoy.menu.about.label"), { version = beamjoy_main.VERSION, buildversion = beamjoy_main.BUILD }) },
         { type = "item", label = beamjoy_lang.translate("beamjoy.menu.about.createdBy") },
         { type = "item", label = beamjoy_lang.translate("beamjoy.menu.about.continuedBy") },
         { type = "item", label = string.var(beamjoy_lang.translate("beamjoy.menu.about.computerTime"), { time = math.floor(ctxt.now / 1000) }) },
+        { type = "separator" },
+        {
+            type = "item",
+            label = beamjoy_lang.translate("beamjoy.menu.about.copyGithub"),
+            onClick = function()
+                ui_imgui.SetClipboardText(M.GITHUB_URL)
+                toast.info(beamjoy_lang.translate("beamjoy.menu.about.copyGithub.toast"), nil, 3)
+            end,
+        },
     })
 
     EndMenuBar()

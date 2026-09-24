@@ -75,17 +75,40 @@ set of racing- and gameplay-focused features.
     force-spawned for every participant, custom setups included) or a host-curated pool of
     allowed vehicles to pick from, either baked into the race itself or chosen fresh each time
     it's started
-- **Hunter**: asymmetric hide-and-seek chase mode — one random player becomes the hunted
+- **Hunter**: asymmetric hide-and-seek chase mode, one random player becomes the hunted
   fugitive, everyone else hunts. Stuck-timer elimination (no direct collision "tag"), a
   three-trigger reveal system (proximity, final-waypoint tension, post-crash), asymmetric grid
   release (fugitive gets a head start), native GPS routing plus an in-world beacon guiding the
   fugitive to their next waypoint, a hunter crash-reset penalty, and a staff force-fugitive
   reassignment tool. Includes its own in-world arena editor (hunter/prey spawns, waypoints)
+- **Infected**: one or more players start infected (count configurable), everyone else is a
+  survivor. Infection spreads by direct vehicle contact, not a "tag" button, so a stray bump can
+  turn the round. The original infected get a short freeze after the round starts (a head start
+  for survivors); a round timer means survivors can also win outright by outlasting the clock.
+  Role-based nametag colors (green survivor / red infected by default, both host-configurable),
+  with an option to hide infected nametags entirely so the color itself doesn't give them away.
+  Shares its in-world arena editor (spawns) with Hunter's own pattern
 - **Vehicle presets**: admin-curated, shareable vehicle lists (captured model/config/parts/tuning)
   usable to restrict a race or Hunter session to one exact vehicle or a host-picked pool, with
   matching that tolerates post-spawn paint and tuning changes
 - **Legacy import**: convert an old BeamJoy Free (BJI) server's Hunter arenas and races straight
-  into this fork's own format — see the section above for the full walkthrough
+  into this fork's own format, see the section above for the full walkthrough
+- **Freeroam energy stations and garages**: server-owner-placed refuel/repair points, synced per
+  map and registered as real BeamNG POIs, so the game's own marker system, drive-up prompt, and
+  Big Map both show them exactly like the map's own vanilla gas stations (which now behave the
+  same way, not just BJS-placed ones). Refuelling respects each vehicle's own tuned starting fuel
+  amount instead of always topping to max, and a station's fuel type is configurable (gasoline/
+  diesel/kerosine/n2o by default, electric opt-in); a vehicle with no compatible tank is rejected
+  immediately instead of running the hold for nothing. Both refuel and repair take a configurable
+  duration with the vehicle held on the external camera. Includes an in-world editor (place, name
+  and resize via gizmo), a low-fuel HUD warning with a "set GPS to nearest station" button, and a
+  free, cooldown-gated "emergency refuel" for when you're stranded. Disabled during Race/Hunter/
+  Infected rounds unless the arena opts in
+- **Bus lines**: drive a server-defined route stop-to-stop with native GPS guidance, holding
+  briefly inside each stop's radius to advance; loops automatically if the line is configured to.
+  Works with any vehicle the game itself classifies as a bus. Two ways in: a Big Map pin per line,
+  or a drive-up "Start line" prompt at the first stop. Includes an in-world line editor and an
+  optional strict-stops mode
 - **Map voting** (`/votemap`) and **vote-kick** (`/votekick`), both with configurable thresholds
   and timeouts and a live status panel
 - **Teleportation**: self-teleport to another player (rate-limited) and a moderator-relayed

@@ -4,8 +4,6 @@ angular.module("beamjoy").component("bjConfigGeneralEnvironment", {
     controller: function ($rootScope, beamjoyStore) {
         this.data = {
             timeSync: false,
-            dayLength: 30, // minutes
-            nightBrightnessMultiplier: 1,
             gravitySync: false,
         };
         this.default = {};
@@ -27,8 +25,6 @@ angular.module("beamjoy").component("bjConfigGeneralEnvironment", {
         $rootScope.$on("BJEnvironment", (_, payload) => {
             this.default = {
                 timeSync: payload.timeSync,
-                dayLength: Math.round(payload.dayLength / 60),
-                nightBrightnessMultiplier: payload.nightBrightnessMultiplier,
                 gravitySync: payload.gravitySync,
             };
             if (!this.dirty) {
@@ -40,15 +36,26 @@ angular.module("beamjoy").component("bjConfigGeneralEnvironment", {
         this.$onInit = () => beamjoyStore.send("BJRequestEnv");
 
         this.openSettings = () => {
-            $rootScope.$broadcast("ChangeState", { state: "menu.environment" });
+            // "menu.environment" was BeamNG's pre-0.39 environment settings route (legacy
+            // Angular state, ui/modules/environment/environment.html). 0.39 moved the real
+            // environment panel to its new ui-vue-based Pause menu, under "pause.environment"
+            // (see ui-vue/src/modules/pause/routes.js) - "menu.environment" is now dead in the
+            // new unified router, but the OLD Angular state definition for it is still
+            // registered too, so it fell back to rendering that vestigial old panel instead.
+            //
+            // Under "pause.environment", "pause.environment.simulation" (label
+            // ui.pause.environment.simulation) is the gravity/sim-speed/tire-marks tab, NOT
+            // this one - the actual Time Of Day + Weather tab is the sibling route
+            // "pause.environment.weather" (label ui.pause.environment.timeWeather).
+            $rootScope.$broadcast("ChangeState", {
+                state: "pause.environment.weather",
+            });
         };
 
         this.save = () => {
             beamjoyStore.send("BJSetEnvironment", [
                 {
                     timeSync: this.data.timeSync,
-                    dayLength: this.data.dayLength * 60,
-                    nightBrightnessMultiplier: this.data.nightBrightnessMultiplier,
                     gravitySync: this.data.gravitySync,
                 },
             ]);

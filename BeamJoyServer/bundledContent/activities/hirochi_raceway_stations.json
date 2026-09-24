@@ -1,0 +1,15 @@
+[
+    {
+        "id": 1,
+        "name": "Charg.IN",
+        "pos": {
+            "x": -416.477,
+            "y": 172.81,
+            "z": 29.313
+        },
+        "radius": 6.5,
+        "types": [
+            "electricEnergy"
+        ]
+    }
+]

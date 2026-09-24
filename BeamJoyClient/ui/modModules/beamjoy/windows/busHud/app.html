@@ -34,10 +34,22 @@
     #beamjoy-bus-hud .hud-row {
         display: flex;
         justify-content: space-between;
+        gap: 0.5em;
         font-size: 0.9em;
         opacity: 0.85;
         margin-bottom: 0.3em;
         font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-bus-hud .hud-row .hud-stop-name {
+        /* a stop's name can run up to 40 chars - don't let it push the "N / total" counter off
+           the edge of this (deliberately narrow) HUD */
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #beamjoy-bus-hud .hud-row .hud-stop-count {
+        flex-shrink: 0;
     }
     #beamjoy-bus-hud .hud-bar {
         height: 0.5em;
@@ -55,6 +67,12 @@
         text-align: center;
         font-weight: bold;
         color: #81c784;
+        margin-bottom: 0.4em;
+    }
+    #beamjoy-bus-hud .hud-pending {
+        text-align: center;
+        font-weight: bold;
+        color: #ffd54f;
         margin-bottom: 0.4em;
     }
     #beamjoy-bus-hud .hud-stop-btn {
@@ -83,14 +101,17 @@
     </div>
     <div class="hud-line">{{$ctrl.lineName}}</div>
     <div class="hud-row">
-        <span>{{'beamjoy.window.busHud.stop' | translate}}</span>
-        <span>{{$ctrl.stopIndex}} / {{$ctrl.totalStops}}</span>
+        <span class="hud-stop-name" title="{{$ctrl.stopName}}">{{$ctrl.stopName}}</span>
+        <span class="hud-stop-count">{{$ctrl.stopIndex}} / {{$ctrl.totalStops}}</span>
     </div>
     <div class="hud-bar">
         <div class="hud-bar-fill" style="width: {{$ctrl.progressPercent()}}%"></div>
     </div>
     <div class="hud-holding" ng-if="$ctrl.holding">
         {{'beamjoy.window.busHud.approaching' | translate}}
+    </div>
+    <div class="hud-pending" ng-if="$ctrl.pending">
+        {{('beamjoy.window.busHud.pending.' + $ctrl.pending) | translate}}
     </div>
     <button
         class="hud-stop-btn"

@@ -21,6 +21,51 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJModerationTempBan", M.onModerationTempBan)
 end
 
+--- Client-local only, unlike every other field on the player list: whether a player has a vehicle
+--- this client's own BeamMP layer remembers as deleted (MPVehicleGE.getVehicles()'s own isDeleted
+--- flag) is purely a fact about what THIS viewer's client has seen - BeamMP never syncs it through
+--- the server - so it can't ride along on the server-authored BJCPlayer payload every other
+--- player-list field comes from (see onPlayerAction's own "restore" case doc comment). Recomputed
+--- and pushed to the UI locally instead, only when the actual set of names changes. Drives the
+--- "Queue deleted vehicles" HUD button's visibility (see player-line/app.js): only shown for a
+--- player this client can actually do something useful for.
+local lastDeletedVehiclePlayers = {}
+---@param force boolean? bypass change-detection and resend regardless - used on UI (re)connect,
+---where a fresh UI needs the current state even if it hasn't changed since the last send (the
+---previous send went to a UI instance that may no longer exist)
+local function pushDeletedVehiclePlayers(force)
+    local current = {}
+    for _, v in pairs(MPVehicleGE.getVehicles()) do
+        if v.isDeleted and v.ownerName then
+            current[v.ownerName] = true
+        end
+    end
+    local changed = force == true
+    if not changed then
+        for name in pairs(current) do
+            if not lastDeletedVehiclePlayers[name] then
+                changed = true
+                break
+            end
+        end
+    end
+    if not changed then
+        for name in pairs(lastDeletedVehiclePlayers) do
+            if not current[name] then
+                changed = true
+                break
+            end
+        end
+    end
+    if not changed then return end
+    lastDeletedVehiclePlayers = current
+    beamjoy_communications_ui.send("BJPlayersWithDeletedVehicles", current)
+end
+
+local function onSlowUpdate()
+    pushDeletedVehiclePlayers()
+end
+
 local firstFocusMade = false
 local function onUIReady()
     core_jobsystem.create(function(job)
@@ -32,6 +77,7 @@ local function onUIReady()
         if self then
             beamjoy_communications_ui.send("BJUpdateSelf", self)
         end
+        pushDeletedVehiclePlayers(true)
 
         if not firstFocusMade then
             ---@type tablelib<integer, integer>
@@ -206,6 +252,14 @@ local function onPlayerAction(playerName, action)
         else
             beamjoy_communications.send("deletePlayerVehicles", playerName)
         end
+    elseif action == "restore" then
+        -- Purely local/client-side, no server round-trip needed: BeamMP's own
+        -- restorePlayerVehicle(playerName) just re-requests a spawn for whichever of that
+        -- player's vehicles THIS client's own BeamMP layer still remembers as deleted
+        -- (vehicle.isDeleted, keyed by that player's already-known server vehicle IDs) - the exact
+        -- native mechanism behind BeamMP's own "queue deleted vehicles" player-list action.
+        -- Harmless no-op if this client has nothing deleted to restore for them.
+        MPVehicleGE.restorePlayerVehicle(playerName)
     elseif action == "teleportTo" then
         M.tryTeleportToPlayer(playerName)
     elseif action == "teleportFrom" then
@@ -446,6 +500,7 @@ end
 
 M.onInit = onInit
 M.onUIReady = onUIReady
+M.onSlowUpdate = onSlowUpdate
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
 M.onPlayerAction = onPlayerAction
 M.tryTeleportToPlayer = tryTeleportToPlayer

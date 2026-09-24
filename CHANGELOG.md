@@ -6,6 +6,888 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.10.5] - 2026-09-24
+
+Client build 2487, server build 2349. A shared-component bug fix affecting every slider in the app,
+a bus-line destination-sign timing fix, cross-client bus displays, an optional strict-bus-stops
+mode, a "preserve fuel on reset" option, low-fuel HUD buttons, a double-welcome-screen fix, and a
+chat display fix.
+
+- **Real, confirmed bug (direct report, live-tested across many captures on two separate players):
+  synced time-of-day never actually stayed in sync while playing - the native clock could freeze
+  completely (confirmed frozen bit-for-bit for 35+ real seconds) while the server's own authoritative
+  ToD kept climbing correctly the whole time, and the visible sky just drifted further and further
+  out of sync with no recovery.** Two real, distinct bugs, found and fixed in sequence:
+  - First fix: a regression from the earlier "night sky stuttering" fix (which replaced an instant
+    per-tick ToD snap with a short native lerp via `onServerTick`). The installed game's own
+    `core/environment.lua` `setTimeOfDay` unconditionally cancels any in-progress lerp
+    (`if not updatingWholeState then stateLerp = nil end`) - `updateToD` was calling it
+    unconditionally on every single onUpdate tick (confirmed via a live capture to be far more often
+    than the ~100ms assumed - this client extension's onUpdate fires every render frame, not on the
+    server-side polling-timer cadence CLAUDE.md documents for `services/*`) while time-sync was on,
+    even when nothing had actually changed, killing `onServerTick`'s own once-a-second corrective
+    lerp before it ever had a chance to converge. Fixed by only re-calling `setTimeOfDay` from
+    `updateToD` while playing when `dayLength`/`dayScale`/`nightScale` genuinely changed since the
+    last time it ran.
+  - This fix alone turned out not to be enough - drift still climbed without bound and the native
+    clock could still freeze completely, confirmed via a deeper capture showing `updateToD` writing
+    the exact same value it had just been told to overwrite, over and over, for over half a minute,
+    even with the write attempt itself confirmed to be reaching the engine
+    (`core_environment.canChange()` true throughout). Root cause, confirmed by reading the installed
+    game's own source: `core_environment.getTimeOfDay()` does not return a fresh table - it returns
+    a reference to ONE shared, module-level singleton (`local timeOfDay = {}` in
+    `core/environment.lua`) that every caller in the engine reads AND writes. `updateToD` was
+    mutating that same shared table in place and passing it straight back into `setTimeOfDay` - but
+    `setTimeOfDay` fires the native `onEnvironmentChanged` hook *before* it actually writes to the
+    real TimeOfDay object, and anything anywhere in the engine reacting to that by calling
+    `getTimeOfDay()` again silently clobbers the pending value back to the stale one (same shared
+    table), so the write that follows just reapplies the stale value - a no-op disguised as a real
+    write. Fixed by never mutating or reusing that shared table: `updateToD` now only ever reads it
+    for a "is there a level loaded" existence check, and builds a fresh, BJS-owned table for every
+    outgoing `setTimeOfDay` call instead. `onServerTick` already built a fresh table for its own
+    `setState` calls (confirmed safe) and `interceptEnvState`'s own `state` parameter is confirmed
+    safe too (`getState()`, unlike `getTimeOfDay()`, already copies into a fresh table on every
+    call) - the shared-singleton bug was isolated to this one spot. *(client only)*
+  - A third, separate but real bug found by reading the code (not from a confirmed live symptom -
+    the "non-admins" report only confirmed drift was fixed, admin behavior was never actually
+    tested): the vanilla environment panel calls into `interceptEnvState` continuously while open
+    and playing, just to keep its own display current, not only on a genuine user edit.
+    `interceptEnvState` tried to tell those apart by checking whether the panel's own displayed
+    time differed from BJS's last-known synced time by more than about a minute of in-game time -
+    but BJS's own known time only refreshes once a second while the panel's own display advances
+    every frame, so ordinary playback drift alone crosses that threshold constantly (worse still at
+    short day lengths), and would get misread as "the player dragged the slider" - which then gets
+    pushed to the server as the new authoritative time, fighting the real sync. That push only ever
+    reaches the server for a player with `SetEnvironment` permission, so this would only ever have
+    affected admins. Fixed by only ever treating the panel's time value as a deliberate edit while
+    paused - a playing clock was never "at" one specific time for a user to have dragged to in the
+    first place, so the threshold-guessing this replaces was never sound to begin with.
+    *(client only)*
+  - A fourth bug, this one confirmed live (direct report: "not smooth, especially at night...
+    gets LESS smooth at higher framerate" - drift itself confirmed gone by this point). The
+    vanilla panel calls `setState` on every single render frame it stays open, for all sorts of
+    reasons unrelated to time (cloud cover, wind, ...). `interceptEnvState`'s own "rollback
+    server-driven settings" step ran unconditionally on every one of those calls, forcibly
+    re-pushing time/play/etc through a REAL native `setState` call regardless of whether anything
+    actually needed correcting - restarting/interfering with whatever lerp was already in flight
+    (onServerTick's own correction, or native's own natural interpolation), every single frame the
+    panel stayed open. More frames per second meant more restarts per second, giving any one of
+    them even less time to actually settle before being cut off again - exactly explaining "gets
+    worse at higher framerate". Fixed by only touching fields that are actually wrong (same 0.001
+    drift threshold onServerTick already uses for `time`; exact comparison for the discrete
+    host-configured fields) - nothing to correct now means `state`/`lerpSeconds` pass through
+    completely untouched. *(client only)*
+  - **Fifth: a full redesign, not another bug fix** (direct report after all four fixes above:
+    "not smooth, especially at night... some other solution might be required" - correctly
+    identifying that this needed more than another round of tuning). Root design flaw underneath
+    all four fixes above: the installed game's own native `play` auto-advance has NO concept of
+    `dayScale`/`nightScale` at all (confirmed: zero references to either in the installed game's
+    own `core/environment.lua`) - it can only free-run at ONE flat rate for the whole cycle.
+    Whenever `dayScale ~= nightScale` (the default: nights pass twice as fast), native's own flat
+    rate can never actually match the server's real, asymmetric one - not a correction-frequency
+    problem no amount of tuning could fix, a structural rate mismatch, worst at night. Cranking up
+    the old once-a-second server broadcast (the obvious next lever) was explicitly rejected per
+    direct request as "very performance intensive... some other solution might be required."
+    Redesigned around an EPOCH instead of a per-tick value, the same "push a duration, not a
+    timestamp" pattern this codebase already uses for race/hunt elapsed time: the server pushes
+    `{ToD, epochAgoMs}` (ToD at that duration ago, not a raw timestamp - server/client clocks
+    aren't comparable directly) only when something actually changes, plus an infrequent 60s
+    safety-net resync (down from once a second - a 60x reduction, strictly cheaper on the network
+    than before, direct answer to the performance concern) rather than continuously. Every client
+    derives its own exact current ToD locally and on demand from that one epoch, via a closed-form
+    (not a loop) piecewise day/night calculation - correct for any elapsed duration with zero
+    further network cost. While paused, this pins that exact value directly (unchanged - that half
+    was already working). While playing, native's own free-run still drives the always-smooth
+    per-frame motion (day, at the default `dayScale=1`, needs essentially no correction this way),
+    corrected toward the exact target far more often than before (every 200ms, purely local -
+    no added server/network cost at all), so even night's unavoidable rate mismatch becomes many
+    small nudges instead of few large ones. Also fixed a bug this redesign itself introduced
+    before ever shipping (caught in review): `sendEnv`'s default payload used to default to the
+    raw epoch-anchored `ToD` for any unrelated change (e.g. toggling `gravitySync` alone) while
+    playing, which would have told the server to roll the clock back to that stale epoch value -
+    fixed by using the same live local computation there too.
+    - **Follow-up, confirmed live (direct report: "much smoother, however at high framerates over
+      60 it still can seem jerky... jerking increases with framerate")**: the routine correction
+      above initially used a short lerp. The installed game's own `core/environment.lua` steps
+      every in-progress lerp with `stateLerp.elapsed = min(stateLerp.elapsed + max(dtReal, 1/60),
+      stateLerp.duration)` - it floors EVERY frame's own delta-time at 1/60s, even when far less
+      real time actually passed. Above 60fps that means each frame advances the lerp by MORE than
+      really elapsed, so it completes proportionally faster than requested the higher the
+      framerate climbs (2x fast at 120fps, 4x at 240fps, ...) - a native engine quirk, not
+      something fixable from here. These corrections are already meant to be tiny, frequent
+      nudges (not the old once-a-second jumps that genuinely needed easing), so they don't need a
+      lerp at all - switched to an instant `setTimeOfDay` snap, which sidesteps the native floor
+      bug entirely since there's no lerp left for it to distort, while staying visually
+      imperceptible as a "jump" given how small each one is. *(client only)*
+    - **Second follow-up**: a large jump "forwards then stops" was reported, initially seeming
+      noon-specific. Noon (`ToD=0`) genuinely is the point the raw ToD value wraps from
+      just-under-1 back to just-over-0 in this codebase's own convention, and every drift/rollback
+      comparison (this correction, and `interceptEnvState`'s own rollback check) compared native's
+      `.time` against a target with a plain subtraction, which isn't wrap-aware - a real bug in its
+      own right, fixed with a proper circular difference (`circularDiff`, shared by both
+      comparisons) instead of a raw subtraction. *(client only)* **However**, follow-up testing
+      (direct report: the jump got WORSE at higher framerate and disappeared at lower framerate,
+      achieved by adding enough traffic to tank the framerate) showed the wraparound fix alone
+      didn't explain what was actually being seen - a pure value-comparison bug can't depend on
+      framerate. The real cause: the once-a-minute safety-net broadcast
+      (`SAFETY_RESYNC_INTERVAL_SEC`) always carries a fresh `ToD`-at-a-new-epoch value, which reads
+      as numerically "changed" from whatever epoch the client already had (even though it's the
+      exact same continuously-advancing clock, just re-anchored) - triggering the big, *lerped*
+      `forceToD` full resync once a minute for no real reason, and that lerp is subject to the
+      exact same native high-framerate floor bug documented in `updateToD`'s own doc comment.
+      Fixed by comparing PREDICTED CURRENT VALUES before and after applying a new epoch (via
+      `circularDiff`, so the noon wrap isn't a problem here either), not the raw epoch-relative
+      number - a routine safety-net re-anchor now correctly predicts nearly the same value and
+      doesn't trigger the resync at all; a genuine change still does. *(client only)*
+    - **Third follow-up, diagnostic only (not yet a fix)**: a video capture after all of the above
+      (build 2470) was analyzed frame-by-frame (RMSE pixel diff between consecutive frames) and
+      objectively confirmed a real, sudden jump still occurs at high framerate, with the paired
+      low-framerate capture at the same moment showing no equivalent jump - so at least one more
+      cause remains beyond everything fixed so far. Correlating the video's timestamp against a
+      pair of captured BeamNG.logs from both players was attempted but proved unreliable (the
+      generic `sendCache` push event fires for ~23 unrelated subsystems, and wall-clock-to-log
+      correlation produced an unexplained, consistent offset) and was abandoned. Careful re-review
+      of `retrieveCache`/`updateToD` didn't turn up a further obvious logic bug, so shipped
+      temporary `[BJToDDebug3]` logging at all three places a correction can actually be issued
+      (the `forceToD` decision in `retrieveCache`, the lerped `forceToD` resync itself, and the
+      routine 200ms instant-correction branch, logging only when that last one's diff is
+      anomalously large) to get definitive evidence from a fresh capture instead of continuing to
+      guess. *(client only, temporary - remove once diagnosed, per this changelog's own
+      diagnostic-then-remove precedent)*
+    - Separately, an Agent-driven audit swept the rest of the codebase (client + server) for the
+      same four bug classes uncovered above (shared native-table mutation, the native lerp floor
+      bug, wraparound-unaware circular comparisons, and naive raw-value "did this change"
+      triggers): no other confirmed or plausible instance of any of them was found. One latent
+      (not currently triggered) fragility was noted for future reference: `vehicles.lua`'s
+      `getFullConfig()` returns `vars`/`paints` fields that are live references into the native
+      vehicle manager's own config rather than deep copies - harmless today since every current
+      caller only reads or clones them, but would silently corrupt real vehicle state if a future
+      caller ever mutated them in place.
+    - **Fourth follow-up: a real, previously-undiscovered clock bug, found by reading the code
+      after a fresh `[BJToDDebug3]` capture showed `forceToD` still firing every ~60s (the safety
+      broadcast cadence) with a small but not-explained-by-anything-above diff, sign flipping
+      between captures (+0.002050, then -0.001500) rather than growing one direction - not the
+      signature of a rate or wraparound bug, more like an intermittent, bounded misread of "what
+      time is it right now."** Root cause, in the client-only `GetCurrentTimeMillis()` utility
+      (`Client/BJ/lua/lua.lua`, used everywhere on the client for millisecond-precision timing -
+      12 files depend on it, including this ToD epoch anchor): it built its result from TWO
+      separate, independent clock reads a few Lua instructions apart - `GetCurrentTime()`'s own
+      whole-second reading, plus a *separate, later* `socket.gettime() % 1` call just for the
+      fractional part. Whenever a real second boundary happened to fall between those two reads
+      (rare per call, but this runs from every per-frame update path, so at high framerate it's
+      called often enough to hit that narrow window occasionally), the two reads disagreed about
+      which second it was, and the combined result came out wrong by up to roughly a second, in
+      either direction - explaining both the sign-flipping and, via `updateToD`'s per-frame
+      `currentToD()` call on the routine-correction path, why this got visibly worse at higher
+      framerate (more calls per second = more chances to land in that narrow race window) and why
+      it self-corrected a moment later (the very next frame reads the clock cleanly again). Fixed
+      by deriving both the whole and fractional second from one single `socket.gettime()` call
+      instead of two. *(client only)* **Not yet confirmed as the full explanation** - the
+      `[BJToDDebug3]` diagnostics are being kept in for one more retest rather than removed, to
+      confirm `forceToD` stops firing on these safety ticks (barring a genuine change) now that
+      this is fixed.
+    - **Fifth follow-up: the real, deterministic root cause, found after a direct follow-up report
+      ("it looks like the diff only happens every 60 seconds exactly") ruled the fourth follow-up's
+      client-side clock race out as the dominant explanation** - a rare per-call race wouldn't fire
+      on literally every single safety tick without fail, which is what was actually happening.
+      Root cause, server-side this time, in `collapseToD()`/`buildEnvPayload()`
+      (`services/environment.lua`): both measured elapsed real time as the difference between two
+      `GetCurrentTime()` readings, and that function only has WHOLE-SECOND resolution (`os.time()`).
+      Subtracting two whole-second readings always throws away up to just under a second of the
+      true elapsed time - not a rare race, a deterministic rounding loss on literally every single
+      call, with an essentially-random sign/magnitude each time depending on exactly where in the
+      current second each reading landed - exactly matching "every 60 seconds, without fail, flips
+      sign." Fixed by backing the ToD epoch with a genuine sub-second-precision monotonic clock
+      instead (`MP.CreateTimer()`, already wrapped by `utils/math.lua`'s own `math.timer()` but
+      previously unused anywhere) - `GetCurrentTime()` remains in use only for the safety broadcast's
+      own once-a-minute cadence check, which was never the problem (a 1-second-resolution "has ~60s
+      passed" gate doesn't need sub-second accuracy; the ToD *value* math reading it twice and
+      subtracting did). *(server only, needs deployment)* The fourth follow-up's client-side fix
+      (`GetCurrentTimeMillis()`'s two-clock race) remains in place regardless - a real bug in its
+      own right, independent of this one. `[BJToDDebug3]` diagnostics still in for one more retest.
+    - **Sixth follow-up, confirmed live (direct report after the server fix above: drift is now
+      negligible - "0.000003" on ticks that show anything at all - but "the shadows still jerk at
+      high fps").** With actual drift ruled out, this is the same architectural tension raised
+      earlier ("is that fixable without nuking the framerate") surfacing on its own now that
+      everything masking it is fixed. Root cause: the routine playing-time correction was throttled
+      to fire at most once every fixed 200ms, an explicit wall-clock wait rather than a drift-
+      threshold one - so whenever native's flat rate drifted from the real target faster than the
+      threshold needed 200ms to allow for, the correction still waited out the full window before
+      applying whatever had accumulated, in one instant snap, however large that turned out to be.
+      At high framerate many more frames render within that same fixed window, so the eye sees a
+      long smooth run then one comparatively large snap - more perceptible the higher the
+      framerate, exactly the report. Checking for drift is a cheap local computation (no native
+      write unless a correction is actually due), so there's no real need to gate the check itself
+      on a timer at all - removed the fixed 200ms throttle entirely; the check now runs every frame
+      and corrects the moment the existing 0.0001 threshold is crossed, bounding every individual
+      snap to close to that minimum instead of whatever a fixed window happened to accumulate. The
+      only remaining timing gate is a brief exclusion window right after a `forceToD` lerp starts,
+      so this doesn't fight that lerp mid-transition. *(client only)*
+    - **Seventh follow-up, and the end of this saga: confirmed NOT a BeamJoy bug at all.** Direct
+      report after the sixth follow-up: night sky confirmed smooth, but "shadows still jerk around
+      noontime" - then, after being asked to check, direct confirmation that the exact same jerk
+      reproduces in **vanilla BeamNG, with BeamJoy not involved at all**. A native engine rendering
+      quirk (most likely a shadow-map/sun-angle numerical sensitivity near a near-vertical sun,
+      structurally similar in spirit to the native lerp-floor quirk already documented above), out
+      of scope for this mod to fix. All `[BJToDDebug3]` diagnostic logging (`retrieveCache`, the
+      `forceToD` lerp branch, and the routine correction, including its near-noon logging added for
+      this specific follow-up) has been removed now that every BJS-side question it was added to
+      answer has a confirmed answer. *(client only)*
+    *(client + server, server needs deployment: `services/environment.lua`)*
+- **Real, confirmed bug, found immediately after the ToD saga above (direct report: "when skipping
+  from noon to night, sometimes it breaks the lighting for both clients and it won't fix until you
+  click sunrise or something and then go back to night" - confirmed via a solo-mode test to NOT
+  reproduce without BJS, unlike the noon-shadow issue above).** Root cause, in
+  `interceptEnvState`: the installed UI's own time-of-day quick-jump/preset buttons (confirmed by
+  reading `TodControl.vue`'s `applyTodTimeToEngine`) call `setState({time, play: !!next.play})` -
+  `play` stays whatever it already was, it never pauses first. `interceptEnvState` only ever
+  forwarded a picked time to the server while paused, on the theory that a deliberate pick only
+  makes sense then (see this session's earlier fix above) - so a preset click made WHILE PLAYING
+  was silently dropped (never sent to the server at all), and then the rollback logic further down
+  overwrote it back to the old synced time before it even reached native - explaining why the skip
+  needed an unrelated second change (e.g. jumping to sunrise, then back to night) to "unstick": that
+  second click is what finally got a value through. `play` was never actually the right signal for
+  "is this deliberate" - whether the picked time is meaningfully different from the live
+  `currentToD()` is, using the same ~0.0001 tolerance `updateToD`'s own routine correction already
+  relies on to keep native accurately pinned, regardless of play state. Also fixes a second bug this
+  one would otherwise have exposed: setting `M.data.ToD` here without also resetting
+  `M.data.ToDEpochAtMs` left the new value anchored to a stale epoch, so `currentToD()` would have
+  over-advanced it by however long that epoch had been sitting there the instant anything next read
+  it - harmless for the pre-existing paused case (pausing already forces `dayNightCycle=false`,
+  which makes `currentToD()` skip its epoch math entirely) but not for this newly-honored playing
+  case. Both are now set together. *(client only)*
+- **Real, confirmed bug (direct report: refuelling at one of the MAP'S OWN vanilla gas stations -
+  as opposed to a BJS-placed one - filled the tank instantly, to full, with no camera hold, despite
+  the refuel-amount/5s-hold/camera fixes earlier in this changelog).** Root cause: those fixes only
+  ever run through `startProcess`, only ever reached via `stations.lua`'s own
+  `onActivityAcceptGatherData` for BJS's own "bjEnergyStation" markers. A vanilla gas station is a
+  completely separate native POI type contributed by the installed game's own
+  `freeroam/gasStations.lua`, with its own independent `onActivityAcceptGatherData` calling its own
+  `refuelCar` directly - confirmed by reading that file: unconditionally
+  `setEnergyStorageEnergy(tank.name, tank.maxEnergy)`, synchronously, no hold/camera/tuning-awareness
+  at all. Real maps ship with plenty of these and players naturally use whichever pump is nearest, so
+  this was likely the MORE commonly hit path in practice, not an edge case. Fixed by overriding
+  `extensions.freeroam_gasStations.refuelCar` itself (same pattern already used for
+  `core_environment.setState`/`setTimeOfDay`) and routing it through the same `startProcess`/
+  `applyRefuel` flow as a BJS-placed station - same 5s hold, same external camera, same
+  `initialStoredEnergy`-aware fill amount, same toasts - preserving vanilla's own "any fuel type"
+  station semantics (including electric) rather than falling back to BJS's own stations-only default
+  fuel-type list. Falls back to vanilla's original instant behavior if BJS's station system is
+  disabled server-side or a hold is already in progress, so a refuel attempt is never just silently
+  dropped.
+  - **Follow-up, confirmed live (direct report: "nothing changed" after the above shipped).** Root
+    cause: `onInit` fires once at MOD load, before any level is loaded - `core_environment` (what
+    the hook approach was modeled on) is a core extension always present from the main menu, but
+    `freeroam_gasStations` is a FREEROAM GAMEPLAY extension that likely doesn't exist yet at that
+    point, so the hook attempt silently found nothing there to hook and gave up for good. This
+    file already has to handle exactly this for another native extension
+    (`gameplay_playmodeMarkers`, checked fresh every frame in `onUpdate` rather than assumed
+    present from `onInit`) - applied the same fix here: retries every frame from `onUpdate` (a
+    cheap no-op once actually hooked) instead of only ever trying once, too early.
+  - **Second follow-up, in progress (direct report: "same issue" persists even after the retry
+    fix, plus a captured log showing native's own `gameplay_achievement.unlockAchievement
+    ("VEHICLE_REFUELLED")` firing right after the refuel click - a call that only exists inside
+    vanilla's OWN unmodified `refuelCar`, proving that function is still what's actually running,
+    hook or no hook).** That log predates this round's diagnostics, so it can't yet show *why* the
+    install itself isn't taking. Added `[BJRefuelDebug]` logging at every relevant point: a
+    throttled line showing whether `freeroam_gasStations`/its `refuelCar` field ever actually
+    appears at all while unhooked, a one-shot line the instant the hook succeeds, an entry log in
+    `interceptRefuelCar` itself (proves the hook fired at all, and logs every individual fallback
+    condition), and an entry log in `applyRefuel`/`startProcess`. *(client only, temporary - remove
+    once diagnosed)*
+  - **Third follow-up: found the real root cause via that diagnostic build's own log, plus a
+    control test (direct report: adding a NEW BJS-placed station worked correctly - 5s hold,
+    camera, tuned amount - proving `startProcess`/`applyRefuel` themselves were never broken; the
+    same vanilla station retested right after still showed the original instant-fill behavior).
+    The captured log confirmed neither of `tryHookGasStations`' own diagnostic lines - not even the
+    throttled "not yet installed" one - had fired even once across an entire ~160s session, despite
+    the previous follow-up moving the retry into `onUpdate`, called every frame... except nothing
+    actually calls `onUpdate`. Confirmed by reading `main.lua` directly: it only ever dispatches
+    `onBJClientReady` and `onSlowUpdate` via `extensions.hook(...)`; `onUpdate` isn't one of the
+    installed game's own generically-auto-dispatched extension hook names either (confirmed by
+    reading its own `lua/common/extensions.lua`), and nothing else in the client calls it by name -
+    this whole file's own `onUpdate` (the pre-existing marker-radius touch-up included, not just
+    this new addition) has apparently never actually run. Moved the retry to `pollFuelStatus`
+    instead, which this file already relies on `onSlowUpdate` to actually dispatch (`M.onSlowUpdate
+    = pollFuelStatus`, confirmed real via `applyRefuel`'s own diagnostic firing correctly earlier in
+    this same investigation) - still cheap, and its ~250ms cadence is plenty fine-grained for this.
+    *(client only, temporary diagnostics still in - remove once confirmed fixed)*
+  - **Fourth follow-up, in progress**: direct pushback ("onupdate is dead code?" / "onUpdate isn't
+    ticking?") correctly caught that the previous follow-up's blanket claim didn't hold up -
+    `environment.lua`'s own `onUpdate` demonstrably DOES tick every frame (this whole session's ToD
+    work depended on it), which the "nothing dispatches onUpdate" framing directly contradicted.
+    That framing overreached: not finding an explicit Lua-level dispatch call doesn't prove one
+    doesn't exist (it's very likely a native, per-frame engine call into every loaded GE extension,
+    invisible to grepping Lua source) - it just meant this file's own onUpdate specifically wasn't
+    observed ticking, which is a narrower, still-unconfirmed claim. Added a direct, unconditional,
+    throttled diagnostic at the very top of `onUpdate` itself (not gated behind anything else) to
+    settle whether it ticks here at all, one way or the other, instead of continuing to reason about
+    it indirectly. Confirmed live: it ticks reliably, every ~2s as throttled, right through an
+    actual refuel attempt - the "dead code" claim was simply wrong.
+  - **Fifth follow-up, in progress**: that same capture, spanning an actual refuel click, showed
+    `onUpdate` ticking throughout but NEITHER `tryHookGasStations`' own diagnostic line (unconditional
+    at the top of `pollFuelStatus`) NOR anything from `interceptRefuelCar`/`startProcess`/
+    `applyRefuel` - despite the third follow-up's fix specifically moving the retry to
+    `pollFuelStatus`/`onSlowUpdate` on the (incorrect, in hindsight) assumption that `onSlowUpdate`
+    dispatch was already confirmed via `applyRefuel`'s own diagnostic. That assumption doesn't
+    actually hold up: `applyRefuel` runs off `startProcess`'s own `async.delayTask` timer, not
+    `onSlowUpdate` at all - so `onSlowUpdate` dispatch for this extension was never actually
+    verified, the same kind of gap the `onUpdate` claim just turned out to have. Added the identical
+    direct, unconditional, throttled diagnostic to `pollFuelStatus` itself instead of assuming
+    either way again. Confirmed live: `onSlowUpdate` genuinely dispatches here too, reliably,
+    including right through an actual refuel click - yet STILL neither of `tryHookGasStations`' own
+    lines showed up in that capture.
+  - **Sixth follow-up: the actual root cause.** With both dispatch mechanisms now directly confirmed
+    working, the only way for `tryHookGasStations` (provably called every ~250ms) to produce
+    NEITHER of its two possible log lines is if `baseRefuelCar` was already truthy - the one-shot
+    "already hooked, never check again" guard silently returning early every time - meaning a hook
+    attempt HAD succeeded at some earlier, unlogged point. Yet the vanilla achievement still fired
+    instantly on the actual click, with no `interceptRefuelCar` output anywhere near it. The only
+    way both facts hold together: the hook succeeded onto a `freeroam_gasStations` table that was
+    live AT THE TIME, but the installed game later replaced it with a fresh, unhooked one (a level
+    transition or reconnect reloading that extension) - and the one-shot guard had no way to notice
+    its hook was no longer the active one. Fixed by never treating a past success as permanent:
+    every ~250ms tick now checks whether the CURRENTLY installed `refuelCar` is still actually this
+    file's own interceptor, and (re)installs it if not - self-healing against any number of future
+    reloads. Also removed the (now redundant) `onUpdate`/`onSlowUpdate` tick diagnostics, since both
+    are conclusively confirmed dispatched.
+  - **Confirmed fixed, live.** All `[BJRefuelDebug]` diagnostic logging (`applyRefuel`,
+    `startProcess`, `interceptRefuelCar`, `tryHookGasStations`, and the `onUpdate`/`onSlowUpdate`
+    tick checks) has been removed now that every question it was added to answer has a confirmed
+    answer.
+  - **Seventh follow-up: NOT actually a bug, confirmed via the `[BJRefuelDebug2]` capture itself -
+    the fuel-type filtering was working correctly all along.** The capture: a gasoline vehicle at a
+    real electric-only vanilla charger, `allowed={electricEnergy}`, tank `energyType=gasoline`,
+    `allowedMatch=false` - exactly as it should behave, just a mismatched vehicle/station pair, the
+    same class of confusion as the original "gas vehicle refuelled at an electric charger" report
+    (which - now confirmed - was never real either). One genuine, unrelated bug caught while reading
+    that log though: `interceptRefuelCar` read `gasStation.name`, but `gasStation` there is the
+    installed game's own ACTIVITY-ITEM shape, whose name field actually lives one level down at
+    `gasStation.facility.name` - always nil as written. Fixed (harmless today, nothing currently
+    displays it mid-refuel, but wrong regardless). `[BJRefuelDebug2]` removed now that the filtering
+    itself is confirmed correct.
+  - **Eighth follow-up: a real UX bug the capture above surfaced, direct report** ("it says its
+    refuelling while changing the camera and then saying tank is already full while not filling the
+    tank at all - it should just reject all that and say wrong fuel type"). Confirmed: a vehicle
+    with NO compatible tank for a station's fuel type still got the full freeze/camera/"Refuelling…"
+    hold every time, only to be told "Tanks already full" at the very end - technically true
+    (nothing was filled) but a misleading reason for it, on top of a wasted multi-second hold for
+    something knowable upfront. Added `startRefuelProcess`: checks for at least one tank compatible
+    with the station's own types BEFORE starting the hold at all (one extra `core_vehicleBridge`
+    lookup, same primitive `applyRefuel` already uses) - rejects immediately with a new, accurate
+    "wrong fuel type" toast if there's no compatible tank, and only ever starts the real hold once
+    success is already confirmed. Wired into both the vanilla-station hook and this file's own
+    BJS-station activity prompt (repair is untouched - it has no fuel-type concept at all).
+  *(client only)*
+- **Bundled default freeroam content audit (direct request), following straight from the vanilla
+  gas station work above.** Went through every bundled `_stations.json`/`_garages.json` file
+  (`Server/BeamJoyServer/bundledContent/activities/`) and cross-referenced each entry's position
+  against the real vanilla facility positions extracted from each map's own level data, since a
+  BJS-placed station/garage sitting at the same physical spot as a real one is just a confusing
+  duplicate marker.
+  - Removed 34 conflicting bundled gas stations across `west_coast_usa` (all 20, file now empty -
+    17 from the initial position-matching pass, plus a final "Tyrannos" + two "KEVee" entries
+    confirmed - direct report - to actually be the real `apex_commercial`/`apex_commercial_KEVee`
+    pair, just mislabeled and positioned slightly off, which the automated pass alone hadn't
+    caught), `italy` (15), `hirochi_raceway` (1), `johnson_valley` (1, also now empty), `utah` (2),
+    and `automation_test_track` (1). Left alone every entry with no real vanilla equivalent at all
+    (e.g. Hirochi's "Charg.IN", Utah's "Airport", Automation Test Track's two Kurupae Aero Club
+    pumps) - those are genuine custom additions, not conflicts.
+  - Garages: initially removed West Coast USA's "Belasco City Garage" (6.2m from the real
+    `servicestationGarage`) on the same reasoning - then reverted, per direct correction: vanilla's
+    own `garage` facility opens BeamNG's Garage Mode, which isn't usable in BeamMP at all, so there
+    was never an actual conflict there to begin with. Restored with its exact original position/
+    radius. No other map's bundled garages needed any change - none of the other five even define a
+    vanilla `garages` facility type on their own map.
+  - **Important caveat, independent of any of the above:** `dao/bundled.lua`'s seeding is ledger-
+    gated per (map, type, name) and only ever adds, never removes or updates - a server that already
+    seeded a now-removed conflicting station still has it in its own live data, unaffected by this
+    change. This only stops it seeding on brand-new installs going forward; an existing server needs
+    that entry deleted by hand via the in-game station/garage editor.
+  - **One-time migration, added separately (direct request): corrects two "derby" races that were
+    fixed in the bundled content after some servers had already seeded the older version** -
+    `placementMode: "random"` added to all three bundled derby races' defaults, plus a gate-geometry
+    correction (distance 945->947, three gate positions/widths adjusted) to "The Big 8" specifically,
+    landed in a past release but never reached a server that seeded before that release, for the
+    exact same "seed once, never touch again" reason as the caveat above. Unlike the bundled-content
+    audit above, this one **actively patches existing live data** - but only when a race still
+    exactly matches the original, pre-fix values field-for-field; if an admin has since edited that
+    same race themselves, their edit is left completely untouched and the race is simply marked
+    handled rather than retried. One-time and self-tracking, the same ledger mechanism `dao_bundled`
+    already uses for seeding, so it can never re-apply. *(server only, needs deployment)*
+- **Real, confirmed bug (direct report): the Race/Hunter/Infected lobby's "Starting in Xs" countdown
+  showed a wildly inconsistent number instead of a real, always-the-same wait** - a live-tested
+  capture showed the ACTUAL wait before a round started was consistently correct (~10-11.5s across
+  four separate races), but the displayed countdown ranged from the full duration down to 0/instant
+  depending purely on how long players took to ready up. Root cause: `gridReadySecondsLeft` was a
+  floor measured from when the LOBBY was CREATED, not from when everyone actually finished readying
+  up - the client only shows "Starting in Xs" once everyone's ready, so what a player saw was
+  "however much of that floor happened to be left over" at that moment, not a fresh countdown.
+  Re-anchored to the moment every participant is actually ready (`session.allReadyAt`, cleared again
+  the instant that's no longer true - someone leaves unready, joins unready, un-readies via a
+  vehicle change) in `raceGrid.lua`/`hunterGrid.lua`/`infectedGrid.lua` alike, so it's now a real,
+  consistent `gridReadyTimeout`-second wait starting from ready-up every time, matching what
+  "Starting in Xs" actually implies. *(server only, needs deployment)*
+- **Real, confirmed bug (direct report): Hunter's round-start spawn queue still sometimes needed a
+  manual click of BeamMP's own "spawn queue" button.** Shipped with temporary `[BJQueueDebug]`
+  logging to catch a real repro (see this changelog's own diagnostic-then-remove precedent) - a
+  captured BeamNG.log confirmed the fix actually works as designed (a queued participant spawn gets
+  auto-applied ~1s after being queued, with no click needed); the diagnostic logging has been
+  removed now that it's confirmed. **Same gap found and fixed in Race and Infected**, which had
+  none of this spawn-queue handling at all (confirmed via a separate captured log: another
+  player's vehicle spawn sat in BeamMP's native queue mid-race with nothing to auto-apply it) -
+  ported the identical force-`enableSpawnQueue`-on / auto-flush-every-second / restore-on-teardown
+  flow from `hunterRunner.lua` to `raceRunner.lua` and `infectedRunner.lua`. *(client only)*
+- **Real, confirmed bug: no chat message ever appeared on a BJS server, including the player's own
+  plain messages with no command involved.** BJS's server-side chat handling intercepts every
+  message for its own crash-workaround relay (see `services/chat.lua`'s own header comment) instead
+  of letting BeamMP's native chat broadcast fire, so every message's display depended entirely on a
+  client-side bridge (`ui/.../override/chat.js`) that called a specific BeamMP chat UI app's own
+  global `addMessage` function directly. BeamMP now ships a second, newer Vue-based chat app
+  ("BeamMP Chat 2") alongside the classic one, and only the classic app exposes that global - Chat2
+  is fully self-contained, so the bridge silently failed whenever Chat2 was the active app, or the
+  classic one wasn't mounted at all. Replaced with `guihooks.trigger("onBeamMPChatMessage", {id,
+  message})` - the exact call BeamMP's own native chat messages trigger, confirmed by reading its
+  own `UI.lua` - which both chat apps listen for directly, with no dependency on which is currently
+  mounted; the old app-specific bridge (`override/chat.js`, and the now-unused `bjChat` Angular
+  service injection in `beamjoy.js`) was removed entirely. *(client only)*
+- **Real, confirmed bug: typing a multi-digit value into ANY `bj-slider`'s number-entry mode could
+  silently land on a completely different, unintended value** - reported for Hunter's reveal
+  distance (typing "1000" ended up as "50"), but the bug lived in the shared `cmps/slider`
+  component, so it affected every slider in the app that had one. Root cause: rounding/clamping to
+  the slider's configured `step`/`min`/`max` ran on every single keystroke, not just once typing
+  was actually finished - so typing "1" alone would immediately get rounded/clamped and written
+  back into the field mid-edit, meaning the next keystroke landed on top of an already-mutated
+  number instead of extending what was actually being typed. Depending on the exact digit
+  sequence and step size, this could compound into a final value nothing like what was entered.
+  Rounding/clamping in number mode is now deferred until the field is actually left (blur, Enter,
+  or toggling back to slider mode) instead of running on every keystroke; the field holds the raw
+  typed text untouched the whole time it's being edited.
+- **Real, confirmed bug: the bus destination sign didn't apply when starting a line required
+  picking a bus first** (only worked when already in one). The sign command was sent the instant
+  the freshly-picked vehicle was detected as a bus, which can be before that brand new vehicle's
+  own vlua VM (and its "bus" controller specifically) has actually finished initializing -
+  silently dropping the command. Now polls the vehicle's own native `isReady()` (the same signal
+  the engine's own vehicle-spawn helper waits on) before sending it, instead of assuming the
+  vehicle is ready the instant it's detected.
+- **Real, confirmed bug: the welcome screen sometimes showed twice on join.** `communications/
+  ui.lua`'s `onBJClientReady` calls the native `reloadUI()` global 1s after every connection - a
+  full CEF UI reload mid-connect (a player's own `BeamNG.log` shows this as "In-game reload
+  detected, holding UI boot until all preloading is done," plus a stray failed/retried "play" route
+  transition around the same moment). That tears down and re-executes the entire Angular app from
+  scratch, including `beamjoy-store.js`'s own one-time "BJReady" bootstrap - cache init, window
+  init, and the welcome-screen scheduling all ran a second time, with nothing on the GE-Lua side to
+  tell a replayed "BJReady" apart from the real first one. Whether this was visibly a *double*
+  welcome screen (vs. just a slower/janklier connect) depended on timing, matching the "sometimes."
+  - **First fix attempt removed the `reloadUI()` call outright, reasoning it was dead weight left
+    over from the unrelated stale-UI-cache investigation (1.8.22) that had already proven
+    `reloadUI()` doesn't bypass CEF's module cache.** That reasoning was wrong in a way live
+    testing caught immediately: **removing it broke the entire mod UI on connect** (config menu,
+    main HUD, login screen, and welcome screen all failed to show at all - only a manual UI reload
+    recovered it), confirming this call is genuinely load-bearing for the mod's own UI actually
+    mounting on a fresh connect (plausibly: BeamMP's own resource sync delivers this mod's
+    `ui/modModules/...` files into the CEF context after the page has already started loading, and
+    nothing runs them without a reload to pick them up) - whatever its original purpose, dropping
+    it wasn't safe. Reverted; `reloadUI()` is back, unconditionally.
+  - **Real fix**: a new `M.introPanelShown` flag, reset only on server leave. Since this GE-Lua
+    module keeps running continuously through the reload (only the JS/Angular side gets torn down
+    and rebuilt), a flag here correctly survives across a replayed "BJReady" and guards the welcome-
+    screen scheduling specifically to fire once per real server connection, not once per reload-
+    triggered re-bootstrap - without touching the reload itself, or anything else `proceedAfterLogin`
+    does that genuinely needs to re-run after one (window init, cache init).
+  *(client only, no server changes)*
+- **Real, confirmed bug: the Settings tab's "About" section neither showed a working version nor
+  opened a browser for its GitHub link.** Both were plain `<a href>`/Angular bindings, and CEF's
+  `local://` UI scheme has nothing for a plain anchor navigation to hand off to an external browser
+  with - the link never worked, full stop. Removed from Settings entirely, per direct request. The
+  version display and GitHub link both already existed correctly in the ImGui top menu bar's own
+  "About" dropdown (`imgui/menu.lua`) - added a "Copy GitHub link" action there instead of an
+  unusable open-in-browser one, via `ui_imgui.SetClipboardText` (the same call the installed game's
+  own asset browser "Copy path" actions use), with a confirmation toast. *(client only)*
+- **Real, confirmed bug: refuelling at an energy station always filled every tank to its raw
+  capacity, ignoring a smaller amount the vehicle's own BeamNG tuning menu configured it to start
+  with.** Some vehicles (citybus confirmed by reading its own jbeam) expose a "Fuel Volume"-style
+  tunable variable under the vehicle's own Config > Chassis tuning, distinct from the tank's raw
+  capacity (jbeam `startingFuelCapacity` vs. `fuelCapacity`) - a player who deliberately tuned a
+  partial load got it silently topped back up to full on every refuel. Fixed by refuelling back to
+  what the tank actually started with instead - captured once per vehicle instance, the moment
+  it's ready and before the player's ever touched it, so it needs no knowledge of the tuning
+  variable's own name (different per vehicle/mod, same reasoning as the strict-bus-stops door
+  detection elsewhere in this changelog). Falls back to the tank's own raw capacity only in the
+  narrow window before that one-time snapshot has resolved. *(client only)*
+  - **Real, confirmed follow-up bug: the refuelled amount still didn't match the tuning menu.** The
+    one-time snapshot above captured `currentEnergy` via an async engine round-trip whose actual
+    reply can land a noticeable delay after the vehicle spawns (the registration job that resolves
+    it polls in .01-.25s steps waiting for BeamMP/owner data) - if the engine was running and
+    burning fuel during that window, the snapshot ended up lower than the true tuned starting
+    amount, so refuelling filled back to less than what the tuning menu actually set. Fixed by
+    reading each tank's own `initialStoredEnergy` instead: a vehicle-side field written once at
+    tank init from the tuned starting-capacity variable and never touched by consumption afterward,
+    so it's correct no matter how late the callback lands. The engine's own vehicle-bridge lookup
+    doesn't expose that field, so this goes straight to vehicle-side Lua and reports back through
+    `obj:queueGameEngineLua`, the same callback primitive the engine's own vehicle-side modules use
+    for this exact purpose. *(client only)*
+
+### Added
+- **Bus displays now work for everyone, not just the driver, and the interior next-stop screen is
+  now driven too.** Previously the destination sign was set via a plain GE `queueLuaCommand` on the
+  driver's own local copy of their vehicle - invisible to anyone else, since BeamMP doesn't sync
+  arbitrary vehicle-controller state on its own (confirmed by reading `vehicles/citybus/lua/
+  controller/bus.lua` directly: the sign is an HTML-rendered texture, not part of the `electrics`
+  table BeamMP does sync). There IS an open, unmerged upstream BeamMP PR for this
+  (BeamMP/BeamMP#884, a generic "synced controller" mechanism) - not depended on, since it'd only
+  work for servers running that specific fork. Built as a BJS-side relay instead:
+  - New server module `services/busRuns.lua` (deliberately separate from `services/busLines.lua`,
+    which only ever owns the static line *definitions* - mirrors the hunter.lua/hunterGrid.lua
+    static-vs-live split) tracks which player is driving which line, and how far along, purely as a
+    relay - broadcasts on start/advance/stop, and hands a snapshot to anyone who (re)joins.
+  - The interior next-stop/route screen (a second, separate physical display, confirmed from the
+    same vehicle source) is now driven too, via the vehicle's own `bus_setLineInfo`/
+    `bus_onDepartedStop` events - both the destination sign AND this screen matter for a
+    **passenger**, not just a bystander (BeamMP does support riding along in someone else's
+    vehicle). Every other `bus_*` gameplay event this controller defines was checked against the
+    real source and confirmed to have no display/UI output at all - nothing else is relayed.
+  - Every receiving client mirrors the same two calls onto its own local copy of that player's
+    vehicle, whether that vehicle is already loaded or registers later (a join-time catch-up, or a
+    mid-run vehicle swap). *(client + server, server needs deployment: `services/busRuns.lua`,
+    `BeamJoyServer.lua`)*
+- **Real, confirmed bug (found from a bystander's own `BeamNG.log`, not the driver's): a bystander's
+  copy of a remote bus's interior next-stop screen re-flickered through the entire route history on
+  every single stop the driver passed**, instead of taking one clean step forward. The remote-mirror
+  path always did a full `bus_setLineInfo` reset + replayed every already-passed stop from scratch
+  on every relayed update, even a routine one-stop advance - each replayed step rendered its own
+  intermediate frame on the physical screen, visible as a flicker. Now tracks what's actually been
+  applied to each remote vehicle so a routine +1 advance sends a single incremental
+  `bus_onDepartedStop`, the same lightweight step the driver's own client already used; a full
+  reset+catch-up only happens for a genuinely new run, a different line, a different vehicle
+  instance, or a jump/rewind. *(client only)*
+- **Real, confirmed vanilla BeamNG bug (reproduced on a genuine native scripted bus route too, not
+  just a BJS one - confirmed unrelated to our own sync): the citybus interior next-stop screen's
+  "Next Stop" footer silently never appears once a real, multi-stop route is active**, even though
+  the underlying computed value is correct (confirmed via temporary instrumentation logging added to
+  a diagnostic copy of the file, since removed - the JS itself was never the problem). Root cause:
+  the stock `citybusStopDisplay.css` never sets an explicit height anywhere in the html/body/
+  controller-root chain, which made the footer's `position: absolute; bottom: 0px` behave
+  inconsistently depending on how much content was above it - it happened to work with an empty stop
+  list (the "off duty" reset state) and silently landed off-screen with a real one. Fixed with a
+  CSS-only BJS-side override of `citybusStopDisplay.css` (same relative path as the stock file, so
+  BeamNG's own mod loading takes ours instead) that flows the footer normally right after the stop
+  list instead of relying on that ambiguous positioning - not bottom-anchored, per direct request.
+  The new `busLine` overlay app (see Added, below) is an *additional*, opt-in HUD panel for the new
+  stop-request light, not a replacement for this screen - most players never enable it, so the
+  interior dashboard fix stays in place regardless. *(client only, overrides a stock BeamNG vehicle
+  file - worth re-checking after future BeamNG updates in case the base file changes)*
+- **Optional "strict bus stops" mode**: a new Freeroam config toggle (`StrictBusStops`, off by
+  default, in Config > General > Freeroam) makes a BJS bus-line stop also require the bus's own
+  doors to be open, and kneeling active on any bus that supports it, before it counts as arrived -
+  instead of proximity alone, closer to how a real, vanilla scripted bus stop behaves. GE-Lua has no
+  synchronous way to read a vehicle's own VE-side electrics, so this polls it explicitly each tick
+  while the toggle is on: a small VE-side snippet reads them fresh and calls back into GE, the same
+  "call back into GE" pattern `bus.lua`'s own `geCallback` already uses.
+  - **Real, confirmed bug (direct report, a stock md_series school bus): the door check never
+    passed even with the doors visibly open.** Originally checked one fixed field
+    (`electrics.values.dooropen`), which only citybus's own "bus" controller actually computes - the
+    school/prison/derby bus configs register their door controller under a different name
+    (`"doorsF"`) and never populate that field at all. First fix attempt generalized this to scan
+    every `electrics.values` key for a case-insensitive "door"+"open" match instead of one fixed
+    name - **this still didn't fix the school bus** (direct re-report after testing). Root cause,
+    found by reading the installed game's own `controller/pneumatics/actuators.lua`: the school
+    bus's door input (`"toggle_doors"`) flips that controller's *internal* `valveState` directly and
+    never writes to `electrics.values` at all - the electrics key it optionally reads
+    (`frontDoorOpenValve`) is only for an external override that ordinary keyboard play never uses,
+    so it sits unused/nil forever and no `electrics.values` scan, however generic, could ever have
+    found real data there. Fixed properly this time: when the `electrics.values` scan finds nothing
+    (citybus is unaffected and still takes that fast path), a fallback reads the controller's real
+    internal state directly - `debug.getupvalue` on one of its own public functions to reach its
+    private beam-group table (the same introspection technique the installed game's own
+    `powertrain.lua` uses on itself), for every `"pneumatics/actuators"` controller whose own
+    instance name mentions "door" - then checks each beam group whose name mentions "open" for
+    `valveState > 0`, the exact value that controller's own door-toggle function sets. No exact
+    controller or group name hardcoded either way, so this still isn't tied to citybus or this one
+    other stock platform specifically.
+  - **Real, confirmed follow-up bug (direct report): the above worked for the first stop, then
+    stopped requiring the doors at all for every stop after.** Checking the "open" group's
+    `valveState > 0` in isolation was the problem: `toggleBeamGroupValveState` only ever flips a
+    group between -1/1 with no auto-revert, and this school bus's own door uses two SEPARATELY
+    toggled groups (an "open" one and a "close" one, its own two-line pneumatic setup) - closing
+    the door again toggles the *close* group, not the open one back to some "closed" sign. So the
+    open group's own sign, once ever toggled, doesn't reliably mean anything on its own afterward.
+    Fixed by comparing the two paired groups directly instead of reading one in isolation -
+    whichever was toggled more recently/dominantly wins, which is correct regardless of which
+    absolute sign this particular valve pair happens to use for "open". A single-group door (no
+    distinct close group at all) has no pairing to compare against, so still falls back to that one
+    group's own sign, unchanged from before.
+  - **Direct re-report: the same symptom persisted even after that fix.** Two guesses in a row at
+    this exact mechanism (electrics.values contents, then valveState sign semantics) had both
+    turned out wrong once actually tested live, so build 2450 shipped a temporary diagnostic
+    instead of a third guess (same precedent as the 1.8.21 entry above): `onBJBusStopElectrics`
+    logging the RAW state to `BeamNG.log` under `[BJDoorDebug]` every poll.
+  - **Root cause confirmed from that capture, not guessed.** `electrics.doorsF_state` - a clean
+    0/1 flag, correlating perfectly with the real door state through the entire captured log - was
+    correct the *entire time*. The bug was the fuzzy "door"+"open" scan itself matching the WRONG
+    key: `doorsF_frontDoorsOpen_pressure_avg` also contains both substrings, and it's continuous
+    pressure telemetry, not a boolean flag - after the door is first opened, residual pressure in
+    that line lingers at tiny-but-nonzero values (0.39, 1.94, ...) for a very long time rather than
+    ever cleanly settling back to exactly 0, and the old `nv>0` check treated any of that residue
+    as "still open," permanently, from the first open onward - exactly matching "worked once, then
+    never required it again." Fixed by trying three tiers in order, each only attempted if the
+    previous one found nothing: (1) any key containing "door" and ending "_state" (a clean flag) ;
+    (2) the original fuzzy "door"+"open" scan, now excluding any key that also contains "pressure"
+    (continuous telemetry can't safely answer a boolean "is it open" question on any vehicle) ;
+    (3) the `debug.getupvalue`/`valveState` controller introspection from the previous build, kept
+    as a last resort. **Confirmed working live across multiple stops** (direct report); the
+    `[BJDoorDebug]` diagnostic logging from build 2450 has been removed now that it's done its job.
+  - **Bus HUD now tells you what strict mode is actually waiting on.** Previously the "Approaching
+    stop, hold here" message only ever appeared once kneeling AND the doors were both already
+    satisfied - a driver sitting in a stop's radius with the doors still shut got no indication
+    anything was expected of them at all. Now, while in range but not yet arrived, the HUD shows a
+    distinct amber hint for exactly what's still missing ("kneel the bus" / "open the doors" /
+    both), switching to the existing green "hold here" message once satisfied.
+  *(client + server, server needs deployment: `services/config.lua`)*
+- **"Preserve fuel on reset" (from old BeamJoy)**: a new Freeroam config toggle
+  (`PreserveFuelOnReset`, off by default, in Config > General > Freeroam). Native BeamNG vehicle
+  reset (Ctrl+R "Recover Vehicle") always refills every energy storage back to spawn state -
+  confirmed by reading the installed game's own `lua/vehicle/main.lua`: `onVehicleReset` (a genuine
+  engine-invoked callback, fired uniformly for every reset type) calls `energyStorage.reset()`
+  unconditionally, with no vanilla setting to stop it. Took three attempts to get right:
+  - **First version tried to work around this from the outside**: keep a rolling snapshot of the
+    vehicle's own energy storages (polled every slow-update tick) and reapply it via
+    `setEnergyStorageEnergy` the instant `onVehicleResetted` fired. **Two real, confirmed bugs from
+    direct reports**: (1) resetting fast enough could race past the restore and win, since there
+    was always a window between the native refill and the catch-up call ; (2) changing the
+    vehicle's fuel via BeamNG's own tuning/config menu, then resetting, silently reverted it back
+    to the stale cached snapshot.
+  - **Second version tried skipping `energyStorage.reset()` entirely** (stubbing it to a no-op
+    around the call to the real, original `onVehicleReset`) instead of fighting it after the fact.
+    **Two more real, confirmed bugs from direct reports**: (1) setting the vehicle on fire (to
+    deliberately burn fuel) kept draining fuel forever after a reset, even once the fire itself was
+    out - `energyStorage.reset()` also clears each tank's own "damaged/leaking" flag
+    (`damageTracker.setDamage("energyStorage", name, false)`, confirmed by reading the installed
+    game's own source) as a side effect, and skipping the whole function skipped that too. (2)
+    tuning a smaller starting fuel amount, then resetting, left the vehicle acting as if it had NO
+    fuel despite the tank showing some - the same function's second half re-registers every
+    powertrain device with its own energy storage after `powertrain.reset()` runs, and skipping it
+    silently severed that connection.
+  - **Fixed a third time, correctly**: let the real, unmodified `onVehicleReset` run in full (so
+    damage flags clear and powertrain devices re-register exactly like vanilla), and only overwrite
+    the resulting fuel amount afterward - synchronously, in the same Lua call, directly on each
+    storage's own `storedEnergy` field (the same one-line assignment `setEnergyStorageEnergy`'s own
+    action handler uses, just without that action's own round-trip). Snapshotting immediately
+    before the real reset and restoring immediately after, both within one synchronous call, closes
+    the race window entirely and never goes stale, since the snapshot is always taken fresh at the
+    moment of *that* reset. The (idempotent) install and the live flag value are still re-sent
+    together every slow-update tick, not just once at spawn, so a reset type that reconstructs the
+    vehicle's own VE environment from scratch (plausible for a full reload) self-heals instead of
+    silently losing the override.
+  - **A "preserve damage on reset" companion toggle was also attempted and has been removed**
+    (direct report: "doesn't even work"). This one turned out to be structural, not a bug to
+    iterate on: damage repair on reset happens at the native physics/engine level (actual node
+    position restoration), not through any Lua-side function this mod can intercept -
+    `damageTracker.reset()`/`beamstate.reset()` (the only Lua-side hooks available) are just
+    bookkeeping for the damage tracker's own UI/scoring records, not the repair mechanism itself.
+    Skipping them left the vehicle physically repaired anyway while the damage tracker's own
+    records went stale/wrong - worse than doing nothing. No further attempt planned.
+  *(client + server, server needs deployment: `services/config.lua`)*
+- **Low-fuel HUD button (from old BeamJoy)**: a single gas-pump button next to the Start Vote
+  button on the main BJS panel, shown once the current vehicle's own fuel/energy runs low (≤15%) -
+  `stations.lua` already polls the vehicle's own energy storages for the Refuel/Repair flow, this
+  reuses the same `core_vehicleBridge` calls on a slow-update timer instead of only on demand at a
+  station. Green while there's still some left - click sets a real, native GPS route
+  (`core_groundMarkers.setPath`, the exact call the big map's own "navigate here" uses) to the
+  nearest station carrying the vehicle's currently-low energy type. Considers BOTH BJS's own
+  custom-placed stations AND the map's own vanilla gas stations (`freeroam_facilities`/
+  `freeroam_gasStations`, the same native modules driving the map's own drive-up prompt), not just
+  one or the other. Turns red once actually empty (≤2%) - click instead does a free "emergency
+  refuel": a genuine emergency measure, not a substitute for driving to a station, so it only tops
+  the affected tank(s) up to 15% (enough to reach a station, not a free full fill), is cooldown-
+  gated per vehicle instance so it can't be spammed, and - per direct request - holds the vehicle
+  in place for 10 seconds through the same freeze-and-hold flow a real station refuel already
+  uses. Hidden whenever stations themselves are (an active Race/Hunter/Infected round without
+  `allowStations`), matching every other station-related feature. *(client only)*
+  - Originally shipped as two separate buttons on the minimal `windows/hud` overlay (one a
+    waypoint icon, one a labelled "Emergency Refuel" button) - moved and merged into the one
+    button described above per direct follow-up request, since that overlay isn't what "the
+    BeamJoy HUD panel" meant.
+  - **The cooldown is now host-configurable** (`EmergencyRefuelCooldown`, seconds, default 300 -
+    matching the original hardcoded 5 minutes - next to "Preserve fuel on reset" in Config >
+    General > Freeroam), per direct request, instead of a fixed constant. *(server needs
+    deployment: `services/config.lua`)* Its slider is now hidden until "Preserve fuel on reset"
+    itself is ticked, per direct request, matching the existing hide-until-relevant pattern
+    already used for the respawn-ghost-timeout slider elsewhere on the same tab. *(client only)*
+  - **The hold now switches to the external camera** while refuelling, per direct request - the
+    same one-time, not-locked "set camera, restore only if the player never manually switched
+    away themselves" pattern `raceRunner.lua`'s own countdown camera already uses, so a genuine
+    manual camera change during the hold isn't fought or overridden back.
+  - **Follow-up per direct request: a real station refuel/repair now gets the same external-camera
+    hold, not just the emergency one.** The freeze-and-hold flow both share was already ~5 seconds
+    by default (`RefuelDuration`/`RepairDuration`), so this only adds the camera switch - moved out
+    of the emergency-only code path and into `startProcess`/`endProcess` themselves so every kind
+    (refuel, repair, emergency) gets it uniformly. *(client only)*
+
+## [1.10.4] - 2026-09-15
+
+Client build 2429, server build 2339. Unicycle desync fix (+ upstream BeamMP PR) and several Hunter
+mode changes.
+
+### Fixed
+- **Real, confirmed bug: a remote player's unicycle (walking) position could desync for over a
+  minute after leaving a vehicle**, landing wildly off from where every other client actually sees
+  them. Root cause is in BeamMP itself: position packets are delivered through an engine mailbox
+  keyed by the vehicle's server-assigned id; when that id gets reused for a new vehicle (e.g.
+  spawning a fresh unicycle right after the old one is destroyed), the mailbox can still hold the
+  OLD vehicle's last packet, which the new vehicle's position code reads as valid on arrival -
+  teleporting to a stale location and adopting its old timestamp, which then makes every real
+  subsequent packet look "older" and get rejected until the new vehicle's own clock catches up.
+  `vehicles.lua`'s `onVehicleDestroyed` now overwrites a destroyed remote vehicle's mailbox with a
+  neutral marker so the next vehicle reusing that id starts clean. Confirmed fixed live. Also
+  reported and fixed upstream: [BeamMP/BeamMP#974](https://github.com/BeamMP/BeamMP/pull/974).
+  *(client only)*
+
+### Changed
+- **Hunter mode.** Round-start vehicle spawns are now forced through BeamMP's native spawn queue
+  AND auto-applied every ~1s while active, so simultaneous spawns at COUNTDOWN no longer require
+  manually clicking the native "spawn queue" button to see other players' vehicles. Default reveal
+  distance raised from 50m to 500m (all 5 bundled arenas, both config sliders' visible range). New
+  **"GPS to fugitive on reveal"** arena option (off by default): while enabled, every hunter's GPS
+  automatically points at the fugitive's live position for as long as they're revealed, clearing
+  the instant the reveal ends. New **"Queue deleted vehicles"** action on the main HUD's player
+  list (staff+, next to Remove): re-requests a spawn for any of that player's vehicles this client
+  still remembers as deleted. *(client + server, server needs deployment: `services/hunter.lua`,
+  `services/hunterGrid.lua`)*
+
+### Fixed (follow-up, builds 2426-2428)
+- The new "Queue deleted vehicles" button wasn't showing for any target player outranking the
+  viewer - it was gated on the same "must outrank the target" check as Freeze/Engine/Delete, which
+  doesn't apply here (it's a benign, local-only respawn request, not an action taken against the
+  target). Build 2426 relaxed this to "any staff member, any target rank"; per direct follow-up
+  request, build 2427 removed the permission gate entirely.
+- The button had no color (plain white/grey, unlike every sibling action button). Styled yellow
+  (`.btn.warning`), matching its own "recovery/utility action" tone.
+- **Build 2428: now only shown for a player that actually has a deleted vehicle to restore, and
+  never on yourself.** Whether a vehicle is "deleted" is tracked entirely client-locally by
+  BeamMP itself (`MPVehicleGE.getVehicles()`'s own `isDeleted` flag) and never synced through the
+  server, unlike every other field on the player list - so `players.lua` now polls it locally
+  (`onSlowUpdate`, plus once on UI ready/reconnect) and pushes the current set of playerNames with
+  a deleted vehicle to the UI as its own small, change-only broadcast (`BJPlayersWithDeletedVehicles`),
+  consumed by the player-list row the same way every other conditional action button already is.
+  *(client only)*
+- **Real, confirmed bug: reveal distance had no server-side upper clamp at all.** Typing a value
+  past the slider's own hard-max (a client-only widget limit) would be accepted and stored
+  unbounded - reported with a screenshot showing 1000 typed in visually settling back down near 50,
+  the pre-this-session default. Rescaled reveal distance across the board per direct request:
+  **steps of 50m** (was 10m), **cap raised to 2500m** (was 600), default unchanged at 500m. Both
+  `services/hunter.lua` and `services/hunterGrid.lua` now clamp `[10, 2500]` (previously no upper
+  bound existed server-side at all, only a floor), both reveal-distance sliders now use
+  `step="50"`/`max="2500"`/`hard-max="2500"`, and the "Increments of Nm" tooltip is corrected to
+  50m across all 13 client locales. *(client + server, server needs deployment:
+  `services/hunter.lua`, `services/hunterGrid.lua`)*
+
+## [1.10.3] - 2026-09-13
+
+Client builds 2412-2419, server builds 2335-2336. A cluster of environment/lighting fixes, mostly
+root-caused by reading BeamNG 0.39's own engine/UI source directly against assumptions this
+codebase had been carrying since an earlier game version.
+
+### Fixed
+- **Time-of-day changes snapped instantly instead of fading**, desyncing the engine's real-time
+  lighting/exposure adaptation until the next sunrise - looked like "lighting breaks until
+  sunrise," worse at night, sometimes map-dependent. `interceptEnvState` (BJS's wrap of
+  `core_environment.setState`) was dropping the native panel's own `lerpSeconds` argument; now
+  forwards it, restoring the intended smooth fade.
+- **Night sky visibly jerked forward** while day was smooth. The server's own periodic resync
+  (`onSlowUpdate`) was applying its per-second correction via an instant snap whenever
+  client/server drifted past a small threshold - which, at night's 2x time scale, tripped almost
+  every tick. Now goes through a short lerp instead, matching the fix above.
+- **A newly-joined (or resyncing) player alone could see badly broken lighting** (near-black scene)
+  even with everyone else fine. A second, separate instant-snap path (`forceToD`, used only for
+  that one player's resync) had the same issue as the two above; now also lerps.
+- **Day/night cycle duration ("day length") kept resetting / capped at 300 minutes**, and got
+  hard-reset to 30 minutes whenever BJS's own time sync was turned off. BJS was enforcing its own
+  separately-tracked day length instead of ever reading it back from the vanilla environment panel.
+  The BJS-side "day & night cycle duration" slider and its server console command are removed
+  entirely; day length now always follows whatever's picked in the vanilla panel, uncapped.
+- **"Open environment settings" opened the wrong, pre-0.39-vintage panel**, then a follow-up fix
+  landed on the wrong *tab* of the right panel. Now correctly opens `pause.environment.weather`
+  (Time & Weather).
+- **A play-only time-of-day patch (no `time` key) crashed with a Lua arithmetic error** on a `nil`
+  field, from a caller other than the standard panel path (e.g. a hotkey). Guarded.
+- Removed the night brightness multiplier setting entirely - no longer has any visible effect under
+  0.39's rendering pipeline (confirmed by direct testing), so it's dead weight rather than a real
+  control.
+- Big Map's "BeamJoy" custom sections (garages and bus lines) were rendering as two separate boxes
+  with the same title instead of one merged section. Now share a single section regardless of which
+  internal pipeline built it first.
+
+*(client + server, server needs deployment: `services/environment.lua`)*
+
+## [1.10.2] - 2026-09-12
+
+Client builds 2408-2411. Continued Freeroam/Bus lines fixes plus a time-of-day regression.
+
+### Added
+- **Individual pumps/chargers per energy station.** A station can now optionally hold several
+  sub-points (`pumps`), each with its own world position, radius, and fuel type(s) - not just one
+  shared type list for the whole station. Legacy/simple stations (the vast majority) are
+  unaffected. New dedicated station/garage editor UI (`stationsEditor.lua`) replaces the old shared
+  point-list editor for this section. *(client + server, server needs deployment:
+  `services/freeroamData.lua`)*
+
+### Fixed
+- A bus stop could land on top of the map's own parking-spot markers, letting BJS's parked-traffic
+  spawner block it with a parked car. Parked-vehicle placement now excludes any spot near a bus
+  stop, and any already-parked car occupying one gets relocated.
+- Real bug: fuel-type toggle chips on an imported station could silently mutate a *different*
+  station's fuel types (classic AngularJS nested `ng-repeat` `$index` shadowing - clicking a chip
+  sent the fuel type's own 0-4 position instead of the actual station's row index).
+- Bus lines still weren't showing in their own "Bus Lines" Big Map group after the previous round's
+  fix; a second, unrelated bug (`bigmap.lua` now builds that group directly instead of depending on
+  native's own custom-group pipeline, which turned out unreliable in practice).
+- Time-of-day Play button immediately paused itself again after pressing it. BJS's own 100ms poll
+  was overwriting the just-applied play state with stale local data before the server's echo came
+  back; now updates optimistically like the rest of the environment sync already does.
+
+*(client only)*
+
+## [1.10.1] - 2026-09-11
+
+Client builds 2399-2407. Feedback/bugfix round immediately following the 1.10.0 bus-lines release,
+plus the freeroam editor's fuel-type override.
+
+### Added
+- Per-station fuel-type override in the Freeroam editor (electric chargers etc.) - a toggle-chip
+  row per station; no type selected still means "any combustion fuel," matching the gameplay
+  side's existing default.
+- Legacy BJI ("BeamJoy Free") importer for energy stations, garages, and bus lines, in the same
+  Core config tab as the existing race/hunter/infected importers. *(client + server, server needs
+  deployment: `services/freeroamData.lua`, `services/busLines.lua`)*
+
+### Fixed
+- Big Map: bus lines were appearing under BOTH the generic "Other" category and their own "Bus
+  Lines" group; several rounds of root-causing landed on wrapping `getGroups()` directly (native's
+  own POI-type bucketing has no opt-out hook).
+- World-space bus stop icon went through three iterations (a parking icon, then a wrong "delivery"
+  icon, then the user picked a proper icon from a rendered gallery of every real candidate in the
+  game's icon atlas - `poi_dealer_1_round`) after confirming no dedicated bus icon exists at all.
+- Starting a bus line from the Main window's Activities list didn't teleport to the first stop;
+  later revised (per user correction) so only that entry point does, not the drive-up-at-stop-1
+  prompt.
+- Freeroam editor's Discard button now confirms before discarding, matching every other editor.
+- Loopable-line indicator's icon/color/visual-update bugs, across three separate rounds of user
+  feedback.
+- Bus destination sign (front/side/rear) now actually shows the line's terminus + route number
+  while driving, instead of sitting on its unset jbeam default the whole run.
+- GPS didn't route correctly when starting a line via teleport (the Activities-list entry) - fixed
+  with a delayed re-assert after the teleport settles.
+- Fixed a vehicle-selector native engine bug (confirmed BeamNG-side, not BJS) that could leave the
+  freeroam vehicle selector stuck/blank on its first use each session - every BJS call site that
+  opens it now goes through the pause menu's own selector route instead, which doesn't hit the bug.
+  Also backported to Race/Hunter/Infected's own vehicle-pool steering, which shared the same
+  vulnerable pattern.
+- Fixed a real bug where picking a bus from the filtered selector could delete/replace an unrelated
+  traffic vehicle or another player's vehicle.
+
+*(client only)*
+
 ## [1.10.0] - 2026-09-11
 
 Client v1.10.0 (build 2398), server v1.10.0. Freeroam bus lines (server-defined stop-to-stop

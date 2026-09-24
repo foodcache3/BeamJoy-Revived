@@ -16,8 +16,6 @@ const beamjoyModule = angular.module("beamjoy", [
     "ngSanitize",
 ]);
 
-await import(`/ui/modModules/beamjoy/override/chat.js`);
-
 await import(`/ui/modModules/beamjoy/directives/tooltip.js`);
 await import(`/ui/modModules/beamjoy/directives/ngHtml.js`);
 await import(`/ui/modModules/beamjoy/directives/textareaAutoheight.js`);
@@ -63,7 +61,7 @@ await import(`/ui/modModules/beamjoy/windows/infectedInfo/results/app.js`);
 
 beamjoyModule.component("beamjoy", {
     template: ``,
-    controller: function ($rootScope, $compile, beamjoyStore, bjChat) {
+    controller: function ($rootScope, $compile, beamjoyStore) {
         this.$onInit = () => {
             setTimeout(() => {
                 const wrapper = document.querySelector("beamjoy");

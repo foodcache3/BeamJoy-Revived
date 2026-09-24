@@ -1,6 +1,8 @@
 local M = {
     preloadedDependencies = { "gameplay_traffic", "gameplay_parking" },
-    dependencies = { "beamjoy_communications", "beamjoy_communications_ui" },
+    -- beamjoy_busLines : only for its own synced stop-position data, so parked traffic can avoid
+    -- spawning on top of a bus stop (see getFilteredParkingSpots below)
+    dependencies = { "beamjoy_communications", "beamjoy_communications_ui", "beamjoy_busLines" },
 
     data = {
         enabled = false,
@@ -559,6 +561,76 @@ local function spawnNewTrafficVehicles(amount)
     end)
 end
 
+-- Real, confirmed bug (live screenshot): a bus stop can land right on top of one of the map's own
+-- hand-authored parking-spot markers (gameplay_parking's own `sites`), which BJS's parked-traffic
+-- spawner has no awareness of at all - it just picks from every valid marker. The parked car then
+-- physically occupies the stop, leaving the bus unable to actually get within the stop's own
+-- trigger radius without ramming it. Two parts to the fix: never PICK an excluded spot in the
+-- first place (getFilteredParkingSpots, used by both updateParkedVehs' own full resize and the
+-- surgical top-up below), and actively clear out any car that's ALREADY sitting in one (a stop
+-- added/moved onto an existing parked car, or one left over from before this fix existed) -
+-- pruneAndTopUpParkedNearBusStops, run on every bus-lines cache change and on the same
+-- once-roughly-per-second cadence onRubberbandTick already uses for moving traffic.
+---@return {pos: vec3, radius: number}[] every bus line stop across every line, regardless of
+---running state - a parked car can conflict with ANY defined stop at any time, not just one
+---currently being driven
+local BUS_STOP_PARKING_BUFFER = 5 -- metres beyond a stop's own trigger radius a parked car must clear
+local function allBusStopZones()
+    local zones = {}
+    local lines = (beamjoy_busLines and beamjoy_busLines.data and beamjoy_busLines.data.lines) or {}
+    for _, line in ipairs(lines) do
+        for _, stop in ipairs(line.stops or {}) do
+            if stop.pos then
+                table.insert(zones, {
+                    pos = vec3(stop.pos.x, stop.pos.y, stop.pos.z),
+                    radius = (tonumber(stop.radius) or 3) + BUS_STOP_PARKING_BUFFER,
+                })
+            end
+        end
+    end
+    return zones
+end
+
+---@param pos vec3
+---@param zones {pos: vec3, radius: number}[]
+---@return boolean
+local function insideAnyBusStopZone(pos, zones)
+    for _, z in ipairs(zones) do
+        if pos:distance(z.pos) <= z.radius then return true end
+    end
+    return false
+end
+
+--- same shape/call `updateParkedVehs` already made directly ; factored out so the surgical top-up
+--- below can request just a few replacement spots without duplicating the over-fetch-then-filter
+--- logic. Over-fetches (4x) before filtering since native has no "exclude near this point" filter
+--- option of its own (only `banned`/`standardSize`/`checkVehicles`/`useProbability`) - filtering
+--- has to happen after the fact, on our own side, so asking for exactly `count` up front could
+--- come back short once bus-stop zones remove some of them.
+---@param count integer
+---@return table[] up to `count` parking-spot entries (native's own `{ps, squaredDistance}` shape),
+---none inside any bus stop's own zone
+local function getFilteredParkingSpots(count)
+    if count <= 0 then return {} end
+    -- getRandomParkingSpots itself bails out to an empty list (`if not sites then return {} end`)
+    -- rather than loading that data on demand; unlike setupVehicles, it never calls loadSites() on
+    -- its own. getParkingSpots() does, as a side effect of its own `if not sites then loadSites()
+    -- end` - calling it first (ignoring its own return value) guarantees sites are loaded before
+    -- the real request below, instead of every request silently seeing zero spots on a fresh connect.
+    extensions.gameplay_parking.getParkingSpots()
+    local raw = extensions.gameplay_parking.getRandomParkingSpots(nil, nil, nil, count * 4,
+        { checkVehicles = true, standardSize = true })
+    local zones = allBusStopZones()
+    if #zones == 0 then return raw end
+    local filtered = {}
+    for _, v in ipairs(raw) do
+        if not insideAnyBusStopZone(v.ps.pos, zones) then
+            table.insert(filtered, v)
+        end
+    end
+    return filtered
+end
+
 -- Parked vehicles are sourced exclusively from stock simple_traffic's own "_parked" configs
 -- (e.g. bastion_base_parked.pc), which beamjoy_vehicles' own scan deliberately excludes from the
 -- regular traffic config list, and are placed via native's gameplay_parking extension (real
@@ -619,17 +691,9 @@ local parkedSpawnDeadline = 0
 -- (there's nothing to spawn) - clear M.parkedVehs up front instead of waiting on that hook to do it.
 local function updateParkedVehs()
     local target = M.data.enabled and M.data.parkedAmount or 0
-    local psList
+    local psList = {}
     if target > 0 then
-        -- getRandomParkingSpots itself bails out to an empty list (`if not sites then return {}
-        -- end`) rather than loading that data on demand; unlike setupVehicles, it never calls
-        -- loadSites() on its own. getParkingSpots() does, as a side effect of its own
-        -- `if not sites then loadSites() end` - calling it first (ignoring its own return value)
-        -- guarantees sites are loaded before the real check below, instead of every request
-        -- silently seeing zero spots (and clamping to 0) on a fresh connect.
-        extensions.gameplay_parking.getParkingSpots()
-        psList = extensions.gameplay_parking.getRandomParkingSpots(nil, nil, nil, target,
-            { checkVehicles = true, standardSize = true })
+        psList = getFilteredParkingSpots(target)
         target = math.min(target, #psList)
     end
     if target == M.parkedVehs:length() then return end
@@ -668,6 +732,61 @@ local function updateParkedVehs()
         extensions.core_multiSpawn.spawnGroup(group, target,
             { name = "autoParking", mode = "roadBehind", gap = 50, customTransforms = transforms, randomPaints = true })
     end
+end
+
+--- spawns `count` MORE parked vehicles into fresh, bus-stop-clear spots, appending to
+--- M.parkedVehs rather than replacing it - unlike updateParkedVehs' own full resize, this never
+--- touches any already-fine parked vehicle. Reuses the same "autoParking" groupName
+--- M.onVehicleGroupSpawned already listens for (that's what claims the new vids into
+--- M.parkedVehs - it APPENDS, never clears, so this composes with it for free).
+---@param count integer
+local function spawnParkedTopUp(count)
+    if count <= 0 then return end
+    local psList = getFilteredParkingSpots(count)
+    count = math.min(count, #psList)
+    if count <= 0 then return end
+    local group = createParkedGroup(count)
+    if not group then return end
+    local transforms = {}
+    for i = 1, count do
+        table.insert(transforms, { pos = psList[i].ps.pos, rot = psList[i].ps.rot })
+    end
+    parkedSpawnDeadline = GetCurrentTimeMillis() + 15000
+    extensions.core_multiSpawn.spawnGroup(group, count,
+        { name = "autoParking", mode = "roadBehind", gap = 50, customTransforms = transforms, randomPaints = true })
+end
+
+--- deletes any ALREADY-SPAWNED parked vehicle now sitting inside a bus stop's own zone (a stop
+--- added/moved onto an existing parked car, or one left over from before this exclusion existed),
+--- then tops the count back up with fresh replacements from clear spots. Real reported bug (live
+--- screenshot) : a parked car sat right on top of a bus stop, physically blocking the bus from
+--- ever getting within the stop's own trigger radius.
+---@return integer removed
+local function prunedParkedVehiclesNearBusStops()
+    local zones = allBusStopZones()
+    if #zones == 0 or M.parkedVehs:length() == 0 then return 0 end
+    local removed = 0
+    for i = M.parkedVehs:length(), 1, -1 do
+        local vid = M.parkedVehs[i]
+        local veh = be:getObjectByID(vid)
+        if not veh then
+            M.parkedVehs:remove(i) -- stale entry, already gone some other way
+        elseif insideAnyBusStopZone(vec3(be:getObjectOOBBCenterXYZ(vid)), zones) then
+            M.parkedVehs:remove(i)
+            beamjoy_vehicles.delete(vid)
+            extensions.hook("onBJTrafficVehicleDeleted", vid)
+            removed = removed + 1
+        end
+    end
+    return removed
+end
+
+local function pruneAndTopUpParkedNearBusStops()
+    -- a parked batch (this feature's own top-up, or an unrelated resize) is already in flight ;
+    -- let it finish first rather than racing it - matches onRubberbandTick's own existing guard
+    if GetCurrentTimeMillis() < parkedSpawnDeadline then return end
+    local removed = prunedParkedVehiclesNearBusStops()
+    if removed > 0 then spawnParkedTopUp(removed) end
 end
 
 ---@param forceReset boolean? if traffic models have changed
@@ -945,6 +1064,9 @@ local function onRubberbandTick()
     -- M.parkedVehs out here directly rather than trusting M.vehs to already be clean, closes
     -- both the mid-batch window and the "already claimed but not yet reconciled" one.
     if GetCurrentTimeMillis() < parkedSpawnDeadline then return end
+    -- piggybacks on this same once-roughly-per-second cadence rather than a dedicated timer - see
+    -- pruneAndTopUpParkedNearBusStops' own comment
+    pruneAndTopUpParkedNearBusStops()
     core_jobsystem.create(function(job)
         local playerPositions = getPlayersPositions()
         if playerPositions:length() > 0 then
@@ -990,6 +1112,14 @@ local function markForRespawn(vid)
     end
 end
 
+--- an admin just added/moved/deleted a bus stop (or a fresh cache landed on join/map change) - a
+--- previously-fine parked vehicle can now conflict. Only the "now conflicts" direction is worth
+--- reacting to here; a spot that just became free again gets picked up naturally by the next
+--- resize/reconnect, no urgency.
+local function onBJBusLinesChanged()
+    pruneAndTopUpParkedNearBusStops()
+end
+
 M.onInit = onInit
 M.onExtensionUnloaded = onExtensionUnloaded
 M.onBJRequestRestrictions = onBJRequestRestrictions
@@ -997,6 +1127,7 @@ M.onBJVehicleInstantiated = onBJVehicleInstantiated
 M.onBJVehicleModChanged = onBJVehicleModChanged
 M.onVehicleGroupSpawned = onVehicleGroupSpawned
 M.onRubberbandTick = onRubberbandTick
+M.onBJBusLinesChanged = onBJBusLinesChanged
 
 M.getMinMaxDistFromPlayer = getMinMaxDistFromPlayer
 M.getPathRandomization = getPathRandomization

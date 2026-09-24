@@ -2,18 +2,38 @@
     bj-point-list-editor .point-row {
         transition: background-color 0.2s ease-in-out;
     }
-    bj-point-list-editor .point-row:hover,
-    bj-point-list-editor .point-row.active {
+    bj-point-list-editor .point-row:hover {
         background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-point-list-editor .point-row.active {
+        /* real, confirmed bug: 0.2 alpha barely darkens whatever's behind the config window (a
+           bright world scene in freecam) - the yellow highlight below read as near-invisible
+           against it. Active specifically (not hover) needs a properly opaque backing. A
+           darker-blue-background variant of this fix was tried and reverted per direct request
+           ("put it back to how it was") - back to this version. */
+        background-color: rgba(0, 0, 0, 0.65);
     }
     bj-point-list-editor .point-row.active .point-name {
         color: #edff00;
+        /* belt-and-suspenders on top of the darker background above : guarantees legibility
+           regardless of whatever's behind the panel */
+        text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 3px rgba(0, 0, 0, 0.9);
     }
     bj-point-list-editor .radius-input {
         width: 4em;
     }
     bj-point-list-editor .name-input {
+        /* NOT flex-grow-1 : a name input spanning the entire row left no empty space to click to
+           select the row without landing on the input itself (real, confirmed bug - same fix
+           applied to bj-config-bus-lines' own line/stop name inputs). Capped, not full-width, so
+           the row's own click-to-select area always has genuine empty space. */
+        flex: 1 1 auto;
+        max-width: 55%;
         min-width: 0;
+    }
+    bj-point-list-editor .type-chip {
+        padding: 0.1em 0.5em;
+        font-size: 0.85em;
     }
 </style>
 
@@ -33,60 +53,77 @@
     </div>
     <div
         id="point-list-row-{{list.key}}-{{$index}}"
-        class="point-row d-flex p-1 px-2 gap-1 cursor-pointer"
+        class="point-row p-1 px-2 cursor-pointer"
         ng-repeat="point in $ctrl.data[list.key] track by $index"
+        ng-init="pointIndex = $index"
         ng-class="{active: $ctrl.activeList === list.key && $index === $ctrl.activeIndex}"
         ng-click="$ctrl.select($event, list.key, $index)"
     >
-        <span
-            class="point-name flex-grow-1 d-flex align-center"
-            ng-if="!list.hasName"
+        <div class="d-flex gap-1">
+            <span
+                class="point-name flex-grow-1 d-flex align-center"
+                ng-if="!list.hasName"
+            >
+                {{list.labelKey | translate}} {{$index + 1}}
+            </span>
+            <input
+                ng-if="list.hasName"
+                type="text"
+                class="point-name name-input"
+                maxlength="40"
+                ng-model="point.name"
+                ng-click="$event.stopPropagation()"
+                ng-change="$ctrl.setName(list.key, $index, point.name)"
+                placeholder="{{(list.labelKey | translate) + ' ' + ($index + 1)}}"
+                title="{{'beamjoy.window.config.editor.pointList.name.tooltip' | translate}}"
+            />
+            <input
+                ng-if="list.hasRadius"
+                type="number"
+                class="radius-input"
+                min="0.5"
+                step="0.5"
+                ng-model="point.radius"
+                ng-click="$event.stopPropagation()"
+                ng-change="$ctrl.setRadius(list.key, $index, point.radius)"
+                title="{{'beamjoy.window.config.editor.pointList.radius.tooltip' | translate}}"
+            />
+            <button
+                class="btn info"
+                ng-click="$ctrl.setToVehicle($event, list.key, $index)"
+                title="{{'beamjoy.window.config.tabs.races.setToVehicle' | translate}}"
+            >
+                <icon name="car"></icon>
+            </button>
+            <button
+                class="btn info"
+                ng-click="$ctrl.teleportTo($event, list.key, $index)"
+                title="{{'beamjoy.window.config.editor.pointList.teleportToHere' | translate}}"
+            >
+                <icon name="eye"></icon>
+            </button>
+            <button
+                class="btn danger"
+                ng-click="$ctrl.remove($event, list.key, $index)"
+                title="{{'beamjoy.common.delete' | translate}}"
+            >
+                <icon name="delete"></icon>
+            </button>
+        </div>
+        <div
+            class="d-flex flex-wrap gap-1 mt-1"
+            ng-if="list.hasTypes"
+            title="{{'beamjoy.window.config.editor.pointList.types.tooltip' | translate}}"
         >
-            {{list.labelKey | translate}} {{$index + 1}}
-        </span>
-        <input
-            ng-if="list.hasName"
-            type="text"
-            class="point-name name-input flex-grow-1"
-            maxlength="40"
-            ng-model="point.name"
-            ng-click="$event.stopPropagation()"
-            ng-change="$ctrl.setName(list.key, $index, point.name)"
-            placeholder="{{(list.labelKey | translate) + ' ' + ($index + 1)}}"
-            title="{{'beamjoy.window.config.editor.pointList.name.tooltip' | translate}}"
-        />
-        <input
-            ng-if="list.hasRadius"
-            type="number"
-            class="radius-input"
-            min="0.5"
-            step="0.5"
-            ng-model="point.radius"
-            ng-click="$event.stopPropagation()"
-            ng-change="$ctrl.setRadius(list.key, $index, point.radius)"
-            title="{{'beamjoy.window.config.editor.pointList.radius.tooltip' | translate}}"
-        />
-        <button
-            class="btn info"
-            ng-click="$ctrl.setToVehicle($event, list.key, $index)"
-            title="{{'beamjoy.window.config.tabs.races.setToVehicle' | translate}}"
-        >
-            <icon name="car"></icon>
-        </button>
-        <button
-            class="btn info"
-            ng-click="$ctrl.teleportTo($event, list.key, $index)"
-            title="{{'beamjoy.window.config.editor.pointList.teleportToHere' | translate}}"
-        >
-            <icon name="eye"></icon>
-        </button>
-        <button
-            class="btn danger"
-            ng-click="$ctrl.remove($event, list.key, $index)"
-            title="{{'beamjoy.common.delete' | translate}}"
-        >
-            <icon name="delete"></icon>
-        </button>
+            <button
+                class="btn type-chip"
+                ng-repeat="opt in list.typeOptions track by opt.key"
+                ng-class="$ctrl.hasType(point, opt.key) ? 'success' : 'info'"
+                ng-click="$ctrl.toggleType($event, list.key, pointIndex, point, opt.key)"
+            >
+                {{opt.labelKey | translate}}
+            </button>
+        </div>
     </div>
     <div class="opacity-70 small" ng-if="($ctrl.data[list.key] || []).length === 0">
         {{'beamjoy.window.config.editor.pointList.empty' | translate}}

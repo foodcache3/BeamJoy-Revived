@@ -13,14 +13,31 @@
 ---@class BJEnergyStation
 ---@field id integer unique per map
 ---@field name string
----@field pos {x: number, y: number, z: number}
----@field radius number metres, the trigger sphere a vehicle must be inside to refuel
----@field types string[] subset of M.ENERGY_TYPES. **Empty = `M.DEFAULT_FUEL_TYPES`** (gasoline,
----diesel, kerosine, n2o - every combustion-side energy; electric is the one thing NOT included by
----default, so an EV at an unmarked pump gets no "recharge" prompt). A non-empty list is an
----explicit override : `{"electricEnergy"}` for an EV charger, `{"diesel"}` for a truck stop,
+---@field pos {x: number, y: number, z: number} the station's own reference position - the Big Map
+---pin always sits here, and (when `pumps` is empty) this is also the single refuel point, exactly
+---the pre-pumps behavior
+---@field radius number metres, the trigger sphere a vehicle must be inside to refuel - only
+---meaningful when `pumps` is empty (see above)
+---@field types string[] subset of M.ENERGY_TYPES, only meaningful when `pumps` is empty (see
+---above). **Empty = `M.DEFAULT_FUEL_TYPES`** (gasoline, diesel, kerosine, n2o - every
+---combustion-side energy; electric is the one thing NOT included by default, so an EV at an
+---unmarked pump gets no "recharge" prompt). A non-empty list is an explicit override :
+---`{"electricEnergy"}` for an EV charger, `{"diesel"}` for a truck stop,
 ---`{"gasoline","electricEnergy"}` for a mixed station, etc. The editor leaves this empty unless
 ---the host opens the advanced per-station override.
+---@field pumps BJEnergyPump[]? per direct request : individual pumps/chargers, each its own real
+---position a player can walk/drive up to independently, each with its own fuel type(s). Empty/nil
+---(the vast majority of stations, and every legacy-imported one - BJI has no equivalent concept)
+---keeps the station working exactly as a single point, using pos/radius/types above. Non-empty
+---means the station itself no longer contributes its OWN refuel point at all - every pump does
+---instead (see beamjoy/stations.lua) ; pos/radius/types on the station stay around purely as the
+---Big Map pin location.
+
+---@class BJEnergyPump
+---@field pos {x: number, y: number, z: number}
+---@field radius number metres, same semantics/bounds as BJEnergyStation.radius
+---@field types string[] same semantics as BJEnergyStation.types (empty = DEFAULT_FUEL_TYPES),
+---scoped to just this one pump
 
 ---@class BJGarage
 ---@field id integer unique per map
@@ -100,7 +117,46 @@ local function cleanRadius(radius)
     return math.max(M.MIN_RADIUS, math.min(M.MAX_RADIUS, radius))
 end
 
---- mutates `list` in place (id assignment, name/radius/type normalization) ; returns an error
+--- shared by a station's own `types` and each of its pumps' own `types` - same semantics : empty
+--- / absent stays empty (the client resolves that to DEFAULT_FUEL_TYPES), a non-empty list is
+--- filtered to known types + de-duped.
+---@param types any
+---@return string[]
+local function cleanTypes(types)
+    local clean, seen = {}, {}
+    if table.isArray(types) then
+        for _, t in ipairs(types) do
+            if table.includes(M.ENERGY_TYPES, t) and not seen[t] then
+                seen[t] = true
+                table.insert(clean, t)
+            end
+        end
+    end
+    return clean
+end
+
+--- mutates `pumps` in place (position/radius/type normalization), dropping any entry with an
+--- invalid position outright (unlike a station/garage itself, one bad pump shouldn't fail the
+--- whole station's save - it's a sub-item, not independently re-editable once lost)
+---@param pumps any
+---@return BJEnergyPump[]
+local function cleanPumps(pumps)
+    local clean = {}
+    if table.isArray(pumps) then
+        for _, p in ipairs(pumps) do
+            if type(p) == "table" and validPos(p.pos) then
+                table.insert(clean, {
+                    pos = { x = p.pos.x, y = p.pos.y, z = p.pos.z },
+                    radius = cleanRadius(p.radius),
+                    types = cleanTypes(p.types),
+                })
+            end
+        end
+    end
+    return clean
+end
+
+--- mutates `list` in place (id assignment, name/radius/type/pump normalization) ; returns an error
 --- string only for structurally unrecoverable data
 ---@param list any
 ---@return string? error
@@ -115,19 +171,9 @@ local function sanitizeStations(list)
         s.pos = { x = s.pos.x, y = s.pos.y, z = s.pos.z }
         s.name = cleanName(s.name, "Station " .. i)
         s.radius = cleanRadius(s.radius)
-        -- empty / absent stays empty : the client resolves that to DEFAULT_FUEL_TYPES (everything
-        -- but electric - see BJEnergyStation doc). Only a non-empty list overrides, and it's
-        -- filtered to known types + de-duped.
-        local types, seen = {}, {}
-        if table.isArray(s.types) then
-            for _, t in ipairs(s.types) do
-                if table.includes(M.ENERGY_TYPES, t) and not seen[t] then
-                    seen[t] = true
-                    table.insert(types, t)
-                end
-            end
-        end
-        s.types = types
+        s.types = cleanTypes(s.types)
+        local pumps = cleanPumps(s.pumps)
+        s.pumps = #pumps > 0 and pumps or nil
     end
     assignIds(list)
     return nil
@@ -291,9 +337,169 @@ local function garagesSave(ctxt, list)
     end, "garagesSaved")
 end
 
+--- Legacy BeamJoy Improved (BJI) stations/garages importer. Confirmed against BJI's own real
+--- source (`BeamJoyCore/dao/DaoFile/FileScenario.lua`, `my-name-is-samael/BeamJoy` on GitHub) -
+--- earlier revisions of this importer guessed at the file layout from client-only source and got
+--- it wrong (see below), which is why a real BJI install always reported "none found".
+---
+--- Real layout: BOTH energy stations AND garages live in the SAME file, `<mapName>_stations.json`
+--- under `<dbPath>/scenarii/` (`_TYPES.STATIONS = "_stations"`, concatenated directly onto the map
+--- name with no separator - the underscore is baked into the suffix). Its content is NOT a plain
+--- array like every other legacy scenario file: it's a single object `{EnergyStations: [...],
+--- Garages: [...]}` (`FileScenario.lua`'s `_loadMapStations`/`EnergyStations.save`/`Garages.save`
+--- all read-modify-write that same one file). There is no separate `_garages.json` at all - the
+--- earlier version of this importer invented that filename, and its `table.isArray(raw)` check on
+--- the combined object always failed (an object with string keys is not an array), so real BJI
+--- data silently matched nothing. NON-DESTRUCTIVE like every sibling importer: every convertible
+--- entry is ADDED, nothing already saved is ever touched or overwritten. Unlike races, there's no
+--- name-collision concept to check here at all - stations/garages were never unique-by-name to
+--- begin with, so every structurally valid entry just gets appended.
+local LEGACY_DIR = "scenarii"
+local LEGACY_STATIONS_SUFFIX = "_stations.json"
+
+---@param filename string
+---@param suffix string
+---@return string? mapName
+local function matchLegacyFilename(filename, suffix)
+    return filename:match("^(.+)" .. suffix:gsub("%.", "%%.") .. "$")
+end
+
+---@param old table raw BJI entry {name, pos, radius, types?}
+---@return table?
+local function convertLegacyStation(old)
+    if type(old) ~= "table" or not validPos(old.pos) then return nil end
+    return {
+        name = old.name,
+        pos = { x = old.pos.x, y = old.pos.y, z = old.pos.z },
+        radius = old.radius,
+        types = table.isArray(old.types) and old.types or nil,
+    }
+end
+
+---@param old table raw BJI entry {name, pos, radius}
+---@return table?
+local function convertLegacyGarage(old)
+    if type(old) ~= "table" or not validPos(old.pos) then return nil end
+    return {
+        name = old.name,
+        pos = { x = old.pos.x, y = old.pos.y, z = old.pos.z },
+        radius = old.radius,
+    }
+end
+
+---@return table<string, {stations: table[], garages: table[]}>
+local function scanLegacyFreeroamData()
+    local byMap = {}
+    local dir = dao_main.dbPath .. "/" .. LEGACY_DIR
+    if not FS.Exists(dir) then return byMap end
+    for _, filename in pairs(FS.ListFiles(dir)) do
+        local mapName = matchLegacyFilename(filename, LEGACY_STATIONS_SUFFIX)
+        if mapName then
+            local raw = dao_main.get(LEGACY_DIR .. "/" .. filename)
+            if type(raw) == "table" then
+                local entry = { stations = {}, garages = {} }
+                if table.isArray(raw.EnergyStations) then
+                    for _, s in ipairs(raw.EnergyStations) do
+                        local converted = convertLegacyStation(s)
+                        if converted then table.insert(entry.stations, converted) end
+                    end
+                end
+                if table.isArray(raw.Garages) then
+                    for _, g in ipairs(raw.Garages) do
+                        local converted = convertLegacyGarage(g)
+                        if converted then table.insert(entry.garages, converted) end
+                    end
+                end
+                if #entry.stations > 0 or #entry.garages > 0 then
+                    byMap[mapName] = entry
+                end
+            end
+        end
+    end
+    return byMap
+end
+
+---@return {map: string, stationCount: integer, garageCount: integer}[]
+local function previewLegacyFreeroamData()
+    local results = {}
+    for mapName, entries in pairs(scanLegacyFreeroamData()) do
+        if #entries.stations > 0 or #entries.garages > 0 then
+            table.insert(results, { map = mapName, stationCount = #entries.stations,
+                garageCount = #entries.garages })
+        end
+    end
+    return results
+end
+
+---@param ctxt BJSContext
+local function freeroamDataLegacyImportPreview(ctxt)
+    if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
+            BJ_PERMISSIONS.EditFreeroamData) then
+        return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
+            services_lang.get("error.insufficientPermissions", ctxt.sender.lang))
+    end
+    if ctxt.sender then
+        communications_tx.sendToPlayer(ctxt.senderID, "freeroamDataLegacyImportPreviewResult",
+            previewLegacyFreeroamData())
+    end
+end
+
+--- operates on every map found at once, not just the currently-loaded one, same as every sibling
+--- legacy importer - an admin migrating a whole server's worth of old data shouldn't have to
+--- switch maps repeatedly to import each one.
+---@param ctxt BJSContext
+local function freeroamDataLegacyImportConfirm(ctxt)
+    if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
+            BJ_PERMISSIONS.EditFreeroamData) then
+        local permErr = services_lang.get("error.insufficientPermissions", ctxt.sender.lang)
+        communications_tx.sendToPlayer(ctxt.senderID, "toast", "error", permErr)
+        return communications_tx.sendToPlayer(ctxt.senderID, "freeroamDataLegacyImportDone", 0, 0)
+    end
+
+    local importedStations, importedGarages = 0, 0
+    for mapName, entries in pairs(scanLegacyFreeroamData()) do
+        local isCurrentMap = mapName == services_core.getCurrentMap()
+        if #entries.stations > 0 then
+            local target = isCurrentMap and M.stations or (dao_activity.get(mapName, M.STATIONS_TYPE) or {})
+            for _, s in ipairs(entries.stations) do
+                table.insert(target, s)
+                importedStations = importedStations + 1
+            end
+            sanitizeStations(target)
+            if isCurrentMap then M.stations = target end
+            dao_activity.save(mapName, M.STATIONS_TYPE, #target > 0 and target or nil)
+        end
+        if #entries.garages > 0 then
+            local target = isCurrentMap and M.garages or (dao_activity.get(mapName, M.GARAGES_TYPE) or {})
+            for _, g in ipairs(entries.garages) do
+                table.insert(target, g)
+                importedGarages = importedGarages + 1
+            end
+            sanitizeGarages(target)
+            if isCurrentMap then M.garages = target end
+            dao_activity.save(mapName, M.GARAGES_TYPE, #target > 0 and target or nil)
+        end
+    end
+
+    if importedStations > 0 or importedGarages > 0 then
+        services_players.players:forEach(function(p)
+            local caches = {}
+            M.onBJRequestCache(caches)
+            communications_tx.sendToPlayer(p.playerID, "sendCache", caches)
+        end)
+    end
+
+    if ctxt.sender then
+        communications_tx.sendToPlayer(ctxt.senderID, "freeroamDataLegacyImportDone",
+            importedStations, importedGarages)
+    end
+end
+
 local function onInit()
     communications_rx.addHandler("energyStationsSave", M.energyStationsSave)
     communications_rx.addHandler("garagesSave", M.garagesSave)
+    communications_rx.addHandler("freeroamDataLegacyImportPreview", M.freeroamDataLegacyImportPreview)
+    communications_rx.addHandler("freeroamDataLegacyImportConfirm", M.freeroamDataLegacyImportConfirm)
     seedBundled(M.STATIONS_TYPE, sanitizeStations)
     seedBundled(M.GARAGES_TYPE, sanitizeGarages)
     loadData()
@@ -305,5 +511,7 @@ M.onMapChanged = loadData
 
 M.energyStationsSave = energyStationsSave
 M.garagesSave = garagesSave
+M.freeroamDataLegacyImportPreview = freeroamDataLegacyImportPreview
+M.freeroamDataLegacyImportConfirm = freeroamDataLegacyImportConfirm
 
 return M

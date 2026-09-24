@@ -50,4 +50,40 @@
             ></bj-slider>
         </td>
     </tr>
+    <tr>
+        <td class="text-right">
+            <span title="{{'beamjoy.window.config.tabs.general.freeroam.strictBusStops.tooltip'|translate}}">
+                {{"beamjoy.window.config.tabs.general.freeroam.strictBusStops"|translate}}
+            </span>
+        </td>
+        <td>
+            <bj-toggle ng-model="$ctrl.data.StrictBusStops"></bj-toggle>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right">
+            <span title="{{'beamjoy.window.config.tabs.general.freeroam.preserveFuelOnReset.tooltip'|translate}}">
+                {{"beamjoy.window.config.tabs.general.freeroam.preserveFuelOnReset"|translate}}
+            </span>
+        </td>
+        <td>
+            <bj-toggle ng-model="$ctrl.data.PreserveFuelOnReset"></bj-toggle>
+        </td>
+    </tr>
+    <tr ng-if="$ctrl.data.PreserveFuelOnReset">
+        <td class="text-right">
+            <span title="{{'beamjoy.window.config.tabs.general.freeroam.emergencyRefuelCooldown.tooltip'|translate}}">
+                {{"beamjoy.window.config.tabs.general.freeroam.emergencyRefuelCooldown"|translate}}
+            </span>
+        </td>
+        <td>
+            <bj-slider
+                ng-model="$ctrl.data.EmergencyRefuelCooldown"
+                min="0"
+                max="1800"
+                hard-max="3600"
+                step="30"
+            ></bj-slider>
+        </td>
+    </tr>
 </table>

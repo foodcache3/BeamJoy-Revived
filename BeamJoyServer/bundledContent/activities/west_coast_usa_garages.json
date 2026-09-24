@@ -1,0 +1,72 @@
+[
+    {
+        "id": 1,
+        "name": "Smash Auto Repairs",
+        "pos": {
+            "x": -612.234,
+            "y": 113.299,
+            "z": 101.982
+        },
+        "radius": 5
+    },
+    {
+        "id": 2,
+        "name": "Jerry Riggs",
+        "pos": {
+            "x": -79.625,
+            "y": -11.728,
+            "z": 119.83
+        },
+        "radius": 7
+    },
+    {
+        "id": 3,
+        "name": "Fast Automotive",
+        "pos": {
+            "x": 305.21,
+            "y": -137.093,
+            "z": 143.888
+        },
+        "radius": 5
+    },
+    {
+        "id": 4,
+        "name": "Easy Auto Repair",
+        "pos": {
+            "x": 155.404,
+            "y": 761.005,
+            "z": 102.053
+        },
+        "radius": 8
+    },
+    {
+        "id": 5,
+        "name": "Rich's Motors",
+        "pos": {
+            "x": -860.8,
+            "y": 903.255,
+            "z": 74.87
+        },
+        "radius": 5
+    },
+    {
+        "id": 6,
+        "name": "Jefferson Motors",
+        "pos": {
+            "x": -392.865,
+            "y": 179.585,
+            "z": 100.81
+        },
+        "radius": 5
+    },
+    {
+        "id": 7,
+        "name": "Belasco City Garage",
+        "pos": {
+            "x": 910.707,
+            "y": -545.771,
+            "z": 163.646
+        },
+        "radius": 7
+    }
+]

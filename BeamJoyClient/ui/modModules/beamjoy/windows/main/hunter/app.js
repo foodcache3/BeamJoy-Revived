@@ -115,7 +115,7 @@ angular.module("beamjoy").component("bjMainHunter", {
                 huntedStartDelay: d.huntedStartDelay ?? 0,
                 huntersStartDelay: d.huntersStartDelay ?? 5,
                 huntersRespawnDelay: d.huntersRespawnDelay ?? 10,
-                revealProximityDistance: d.revealProximityDistance || 50,
+                revealProximityDistance: d.revealProximityDistance || 500,
                 revealResetDuration: d.revealResetDuration ?? 5,
                 revealOnFinalWaypoint: d.revealOnFinalWaypoint !== false,
                 hunterNametagFadeDistance: d.hunterNametagFadeDistance ?? 0,

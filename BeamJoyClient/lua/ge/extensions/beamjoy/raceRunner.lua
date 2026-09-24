@@ -114,6 +114,15 @@ local M = {
     ---player's own vehicle, it only moves the camera away from it, so this is always still there to
     ---return to unless the vehicle itself was despawned/reset away in the meantime.
     preSpectateOwnVID = nil,
+
+    ---@type boolean whether THIS client has forced BeamMP's native spawn-queue setting on for the
+    ---current race (only ever done once per race, at the COUNTDOWN transition below) - same fix as
+    ---hunterRunner.lua's own identical one, ported here once confirmed working via a real captured
+    ---BeamNG.log (queued participant spawn applied ~1s after being queued, no manual click needed)
+    spawnQueueForced = false,
+    ---@type boolean? the native "enableSpawnQueue" value as it was right before this forced it on;
+    ---only meaningful while spawnQueueForced is true
+    previousSpawnQueueSetting = nil,
 }
 
 local function onInit()
@@ -156,6 +165,15 @@ local function onInit()
     -- coordinate with the session/server at all, just the local vehicle
     beamjoy_communications_ui.addHandler("BJRacePaintOptionsRequest", M.pushPaintOptions)
     beamjoy_communications_ui.addHandler("BJRaceSetPaint", M.setPaint)
+end
+
+--- Auto-applies BeamMP's own native spawn/edit queue (the same action the player would otherwise
+--- have to take themselves by clicking the "spawn queue" button at the top of the screen), so
+--- forcing enableSpawnQueue on for a race (see the COUNTDOWN transition below) never leaves anyone
+--- staring at an unspawned participant waiting on a manual click. Same fix as hunterRunner.lua's
+--- own identical one, ported here once confirmed working via a real captured BeamNG.log.
+local function flushSpawnQueue()
+    pcall(function() MPVehicleGE.applyQueuedEvents() end)
 end
 
 ---@return BJRaceParticipant?
@@ -1508,6 +1526,11 @@ local function onSessionUpdate(session)
         M.spectatingVID = nil
         M.spectatingPlayerName = nil
         M.myVehicleVid = nil
+        if M.spawnQueueForced then
+            M.spawnQueueForced = false
+            settings.setValue("enableSpawnQueue", M.previousSpawnQueueSetting)
+            M.previousSpawnQueueSetting = nil
+        end
         local myVeh = beamjoy_vehicles.getCurrentOwn()
         if myVeh then
             beamjoy_vehicles.setGhostReason(myVeh.vid, "race", false)
@@ -1657,6 +1680,23 @@ local function onSessionUpdate(session)
     end
 
     if session.state == "COUNTDOWN" and not wasCountdown then
+        -- Every participant's vehicle gets (re)positioned onto the grid within the same instant
+        -- this transition fires (see the teleport block below), and a mismatched/randomized pick
+        -- means a genuine new vehicle spawn too, for several players at once, all broadcast to
+        -- every other client together - exactly the kind of simultaneous-spawn burst BeamMP's own
+        -- native spawn queue (enableSpawnQueue) exists to smooth out. Forced on for the round,
+        -- restored to whatever it was once the race is genuinely over (both teardown paths below).
+        -- flushSpawnQueue (called every onSlowUpdate tick below for the rest of the race, plus
+        -- once immediately here) auto-applies the queue on the player's behalf, so no manual click
+        -- of the native "spawn queue" button is ever needed. Same fix as hunterRunner.lua's own
+        -- identical one, ported here once confirmed working via a real captured BeamNG.log.
+        if not M.spawnQueueForced then
+            M.spawnQueueForced = true
+            M.previousSpawnQueueSetting = settings.getValue("enableSpawnQueue") == true
+            settings.setValue("enableSpawnQueue", true)
+        end
+        flushSpawnQueue()
+
         -- the race editor being left open while a race is actually running is a real, confusing
         -- state (its own gate/start markers fight the live session's, and it doesn't know or care
         -- about race state at all). Force it closed the moment a race actually begins, same
@@ -1967,6 +2007,11 @@ local function onSessionRemoved(sessionId)
         M.spectatingVID = nil
         M.spectatingPlayerName = nil
         M.myVehicleVid = nil
+        if M.spawnQueueForced then
+            M.spawnQueueForced = false
+            settings.setValue("enableSpawnQueue", M.previousSpawnQueueSetting)
+            M.previousSpawnQueueSetting = nil
+        end
         local myVeh = beamjoy_vehicles.getCurrentOwn()
         if myVeh then
             beamjoy_vehicles.setGhostReason(myVeh.vid, "race", false)
@@ -2334,6 +2379,9 @@ end
 
 local function onSlowUpdate()
     checkDnfStall()
+    if M.spawnQueueForced then
+        flushSpawnQueue()
+    end
 end
 
 -- teleporting a vehicle (spawn.safeTeleport, inside setVehiclePositionRotation below) fires

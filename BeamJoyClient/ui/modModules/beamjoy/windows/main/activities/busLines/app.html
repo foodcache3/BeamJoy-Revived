@@ -11,6 +11,11 @@
         padding: 0.6em;
         margin-bottom: 0.6em;
     }
+    /* per direct request : the orange circular-arrow icon (before that, a plain white one) is
+       gone entirely now, plain parenthesized text instead - no icon/color styling needed */
+    bj-main-bus-lines .loopable-label {
+        opacity: 0.7;
+    }
 </style>
 
 <div class="status-panel d-flex align-center gap-1" ng-if="$ctrl.runActive">
@@ -35,11 +40,9 @@
         {{$ctrl.lineLabel(line, $index)}}
         <span class="opacity-70 small">
             ({{line.stops.length}} {{'beamjoy.buslines.edit.stops' | translate}})
-            <icon
-                ng-if="line.loopable"
-                name="reverse"
-                title="{{'beamjoy.buslines.edit.loopable' | translate}}"
-            ></icon>
+            <span class="loopable-label" ng-if="line.loopable">
+                ({{'beamjoy.buslines.edit.loopableLabel' | translate}})
+            </span>
         </span>
     </span>
     <button

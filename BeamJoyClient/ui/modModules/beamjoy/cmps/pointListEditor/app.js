@@ -10,11 +10,12 @@
 // in this codebase uses as-is), no direct coupling between the two components at all.
 angular.module("beamjoy").component("bjPointListEditor", {
     bindings: {
-        // [{key, labelKey, min, hasRadius, hasName}]: color/hasDir/defaultRadius are Lua-only
-        // rendering concerns, not needed here
+        // [{key, labelKey, min, hasRadius, hasName, hasTypes, typeOptions}]: color/hasDir/
+        // defaultRadius are Lua-only rendering concerns, not needed here. typeOptions is
+        // [{key, labelKey}], only meaningful when hasTypes.
         lists: "<",
         // {listsUpdate, activeUpdate, select, create, duplicate, delete, setToVehicle, setRadius?,
-        //  setName?, snapToGround, snapMethod, setSnapToGround, setSnapMethod}
+        //  setName?, setTypes?, snapToGround, snapMethod, setSnapToGround, setSnapMethod}
         events: "<",
     },
     templateUrl: "/ui/modModules/beamjoy/cmps/pointListEditor/app.html",
@@ -85,6 +86,25 @@ angular.module("beamjoy").component("bjPointListEditor", {
         this.setName = (list, index, name) => {
             if (!this.events.setName) return;
             beamjoyStore.send(this.events.setName, [list, index + 1, name || ""]);
+        };
+        this.hasType = (point, typeKey) => Array.isArray(point.types) && point.types.includes(typeKey);
+        // real, confirmed bug: only the first fuel type ever clicked stayed selected - every
+        // click read `point.types` fresh, but nothing ever mutated it locally, only the Lua
+        // round-trip echo did. If that echo hadn't landed yet by the next click (which it
+        // usually hadn't - same missing-optimistic-update issue as the loopable button), `current`
+        // was always stale/empty, so every click effectively computed "just this one type"
+        // instead of adding to what was already picked, overwriting the previous selection
+        // instead of extending it. Mutate `point.types` directly here too, same as every
+        // ng-model-bound field already does, instead of waiting on the round trip.
+        this.toggleType = (event, list, index, point, typeKey) => {
+            event.stopPropagation();
+            if (!this.events.setTypes) return;
+            const current = Array.isArray(point.types) ? point.types : [];
+            const types = current.includes(typeKey)
+                ? current.filter((t) => t !== typeKey)
+                : [...current, typeKey];
+            point.types = types;
+            beamjoyStore.send(this.events.setTypes, [list, index + 1, types]);
         };
 
         // Real bug: this component gets torn down and recreated every time its host switches away

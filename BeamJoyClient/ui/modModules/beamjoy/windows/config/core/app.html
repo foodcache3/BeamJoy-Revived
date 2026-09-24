@@ -315,7 +315,7 @@
     </tr>
 </table>
 
-<bj-accordion id="core-legacy-import" no-border-bottom="true" ng-if="$ctrl.canImportHunter || $ctrl.canImportInfected || $ctrl.canImportRaces">
+<bj-accordion id="core-legacy-import" no-border-bottom="true" ng-if="$ctrl.canImportHunter || $ctrl.canImportInfected || $ctrl.canImportRaces || $ctrl.canImportFreeroam || $ctrl.canImportBusLines">
     <accordion-title>
         <h5 style="font-size: 1.3em;">{{'beamjoy.window.config.tabs.core.legacyImport.title' | translate}}</h5>
         <button
@@ -351,7 +351,7 @@
                 {{$ctrl.infectedLegacyImportStatus | translate}}
             </span>
         </div>
-        <div class="d-flex align-center gap-1" ng-if="$ctrl.canImportRaces" style="font-size: 1.15em;">
+        <div class="d-flex align-center gap-1 mb-1" ng-if="$ctrl.canImportRaces" style="font-size: 1.15em;">
             <button
                 class="btn info w-fitcontent"
                 ng-click="$ctrl.requestRaceLegacyImport($event)"
@@ -361,6 +361,30 @@
             </button>
             <span class="opacity-70 small" ng-if="$ctrl.raceLegacyImportStatus">
                 {{$ctrl.raceLegacyImportStatus | translate}}
+            </span>
+        </div>
+        <div class="d-flex align-center gap-1 mb-1" ng-if="$ctrl.canImportFreeroam" style="font-size: 1.15em;">
+            <button
+                class="btn info w-fitcontent"
+                ng-click="$ctrl.requestFreeroamLegacyImport($event)"
+                title="{{'beamjoy.window.config.tabs.core.legacyImport.freeroam.tooltip' | translate}}"
+            >
+                {{'beamjoy.window.config.tabs.core.legacyImport.freeroam.button' | translate}}
+            </button>
+            <span class="opacity-70 small" ng-if="$ctrl.freeroamLegacyImportStatus">
+                {{$ctrl.freeroamLegacyImportStatus | translate}}
+            </span>
+        </div>
+        <div class="d-flex align-center gap-1" ng-if="$ctrl.canImportBusLines" style="font-size: 1.15em;">
+            <button
+                class="btn info w-fitcontent"
+                ng-click="$ctrl.requestBusLinesLegacyImport($event)"
+                title="{{'beamjoy.window.config.tabs.core.legacyImport.busLines.tooltip' | translate}}"
+            >
+                {{'beamjoy.window.config.tabs.core.legacyImport.busLines.button' | translate}}
+            </button>
+            <span class="opacity-70 small" ng-if="$ctrl.busLinesLegacyImportStatus">
+                {{$ctrl.busLinesLegacyImportStatus | translate}}
             </span>
         </div>
     </accordion-content>

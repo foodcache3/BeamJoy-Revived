@@ -14,7 +14,7 @@
         "randomizeVehiclePool": false,
         "respawnPenaltyIncrement": 0,
         "revealOnFinalWaypoint": true,
-        "revealProximityDistance": 50,
+        "revealProximityDistance": 500,
         "revealResetDuration": 5,
         "timedModeDuration": 10,
         "vehicleConfirmTimeout": 20,

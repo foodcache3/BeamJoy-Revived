@@ -1,0 +1,92 @@
+[
+    {
+        "id": 1,
+        "name": "Centro Cambio Olio",
+        "pos": {
+            "x": 1441.018,
+            "y": 1357.728,
+            "z": 147.38
+        },
+        "radius": 4
+    },
+    {
+        "id": 2,
+        "name": "Carlino Garage",
+        "pos": {
+            "x": 749.775,
+            "y": 411.143,
+            "z": 178.065
+        },
+        "radius": 7
+    },
+    {
+        "id": 3,
+        "name": "Garage Usato Garantito",
+        "pos": {
+            "x": 217.123,
+            "y": -314.101,
+            "z": 192.026
+        },
+        "radius": 5
+    },
+    {
+        "id": 4,
+        "name": "FBX Car Service",
+        "pos": {
+            "x": 1198.671,
+            "y": -830.284,
+            "z": 145.855
+        },
+        "radius": 7
+    },
+    {
+        "id": 5,
+        "name": "Portino Auto Service",
+        "pos": {
+            "x": -711.807,
+            "y": -1316.77,
+            "z": 143.251
+        },
+        "radius": 3.8
+    },
+    {
+        "id": 6,
+        "name": "Claudio Motors",
+        "pos": {
+            "x": -1126.55,
+            "y": 912.394,
+            "z": 383.76
+        },
+        "radius": 8
+    },
+    {
+        "id": 7,
+        "name": "Bianco Auto",
+        "pos": {
+            "x": -1805.02,
+            "y": 1517.458,
+            "z": 143.026
+        },
+        "radius": 8
+    },
+    {
+        "id": 8,
+        "name": "Centro Cambio Olio",
+        "pos": {
+            "x": 663.898,
+            "y": 578.46,
+            "z": 174.103
+        },
+        "radius": 3
+    },
+    {
+        "id": 9,
+        "name": "Centro Cambio Olio",
+        "pos": {
+            "x": -554.393,
+            "y": -205.878,
+            "z": 231.31
+        },
+        "radius": 3
+    }
+]

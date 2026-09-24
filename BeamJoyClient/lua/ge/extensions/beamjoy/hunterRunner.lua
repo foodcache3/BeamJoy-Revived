@@ -73,6 +73,20 @@ local M = {
     ---re-issues setPath when the actual target changes, not every slow tick
     lastGpsWaypointIndex = nil,
 
+    -- hunter-only, local reveal-driven GPS-to-fugitive (see updateHunterGpsGuidance). Unlike
+    -- lastGpsWaypointIndex above, there's no fixed waypoint index to key off (the target is the
+    -- fugitive's own live, moving position), so this just tracks whether the path is currently
+    -- pointed at them at all, to know when to clear it.
+    hunterGpsActive = false,
+
+    ---@type boolean whether THIS client has forced BeamMP's native spawn-queue setting on for the
+    ---current hunt (only ever done once per hunt, at the COUNTDOWN transition below), so
+    ---clearHuntState knows whether previousSpawnQueueSetting below is meaningful to restore
+    spawnQueueForced = false,
+    ---@type boolean? the native "enableSpawnQueue" value as it was right before this forced it on;
+    ---only meaningful while spawnQueueForced is true
+    previousSpawnQueueSetting = nil,
+
     -- hunter-only, local crash-reset penalty (freeze + camera lock for huntersRespawnDelay)
     hunterResetLockedUntilMs = nil,
     ---@type integer hunter-only : how many times THIS hunter has reset/crashed this hunt, shown on
@@ -127,6 +141,16 @@ end
 ---@return boolean
 local function isHuntLocked()
     return M.session ~= nil and (M.session.state == "COUNTDOWN" or M.session.state == "HUNT")
+end
+
+--- Auto-applies BeamMP's own native spawn/edit queue (the same action the player would otherwise
+--- have to take themselves by clicking the "spawn queue" button at the top of the screen), so
+--- forcing enableSpawnQueue on for a hunt (see the COUNTDOWN transition below) never leaves anyone
+--- staring at an unspawned participant waiting on a manual click. Confirmed working via a real
+--- captured BeamNG.log (queued spawn applied ~1s after being queued, no manual click needed) -
+--- see raceRunner.lua/infectedRunner.lua for the same flow, ported once this was confirmed here.
+local function flushSpawnQueue()
+    pcall(function() MPVehicleGE.applyQueuedEvents() end)
 end
 
 --- shared by every "my vehicle is confirmed" call site (matches/randomize/onBJVehicleInstantiated)
@@ -510,6 +534,15 @@ local function clearHuntState()
         M.lastGpsWaypointIndex = nil
         extensions.core_groundMarkers.setPath(nil)
     end
+    if M.hunterGpsActive then
+        M.hunterGpsActive = false
+        extensions.core_groundMarkers.setPath(nil)
+    end
+    if M.spawnQueueForced then
+        M.spawnQueueForced = false
+        settings.setValue("enableSpawnQueue", M.previousSpawnQueueSetting)
+        M.previousSpawnQueueSetting = nil
+    end
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if myVeh then
         beamjoy_vehicles.setGhostReason(myVeh.vid, "hunter", false)
@@ -773,6 +806,25 @@ local function onSessionUpdate(session)
     end
 
     if session.state == "COUNTDOWN" and not wasCountdown then
+        -- Every participant's vehicle gets (re)positioned onto the grid within the same instant
+        -- this transition fires (see the teleport block below), and a mismatched/randomized pick
+        -- (randomizeVehiclePool, or steering someone into the role's required vehicle) means a
+        -- genuine new vehicle spawn too, for several players at once, all broadcast to every other
+        -- client together - exactly the kind of simultaneous-spawn burst BeamMP's own native spawn
+        -- queue (enableSpawnQueue) exists to smooth out. Forced on for the round, restored to
+        -- whatever it was in clearHuntState once the hunt is over, not left permanently changed.
+        -- Forcing the setting on isn't enough by itself though: with it on, BeamMP queues those
+        -- spawns instead of applying them, and normally waits for the player to notice and click
+        -- the native "spawn queue" button themselves. flushSpawnQueue (called every onSlowUpdate
+        -- tick below for the rest of the hunt, plus once immediately here) auto-applies the queue
+        -- on their behalf instead, so no manual click is ever needed.
+        if not M.spawnQueueForced then
+            M.spawnQueueForced = true
+            M.previousSpawnQueueSetting = settings.getValue("enableSpawnQueue") == true
+            settings.setValue("enableSpawnQueue", true)
+        end
+        flushSpawnQueue()
+
         beamjoy_communications_ui.closeWindow("config")
         if beamjoy_ui_activityEditor then
             beamjoy_ui_activityEditor.onClose()
@@ -1132,6 +1184,34 @@ local function updateGpsGuidance()
         end
     elseif M.lastGpsWaypointIndex ~= nil then
         M.lastGpsWaypointIndex = nil
+        extensions.core_groundMarkers.setPath(nil)
+    end
+end
+
+--- Hunter-only: routes native GPS (core_groundMarkers) straight to the fugitive's own live
+--- position for as long as they're revealed, when the arena's gpsOnReveal setting is on (off by
+--- default: see services/hunter.lua's own doc comment). Never runs for the fugitive's own client
+--- (they get updateGpsGuidance's own next-checkpoint routing instead) or for spectators. Re-issued
+--- every slow tick while active, unlike updateGpsGuidance's change-only re-issue: the target here
+--- is the fugitive's own live, continuously-moving position, not a fixed waypoint.
+local function updateHunterGpsGuidance()
+    local session = M.session
+    local participant = session and getSelfParticipant() or nil
+    local active = session and session.state == "HUNT" and session.settings.gpsOnReveal and
+        participant and participant.role == "hunter" and not participant.eliminated
+    local hunted = active and getHunted(session) or nil
+    active = active and hunted and hunted.revealed
+    if active then
+        local mpVeh = beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == hunted.playerName end)
+        local pos = mpVeh and mpVeh.veh and beamjoy_vehicles.getVehiclePositionRotation(mpVeh.veh)
+        if pos then
+            M.hunterGpsActive = true
+            extensions.core_groundMarkers.setPath(pos)
+            return
+        end
+    end
+    if M.hunterGpsActive then
+        M.hunterGpsActive = false
         extensions.core_groundMarkers.setPath(nil)
     end
 end
@@ -1615,6 +1695,10 @@ local function onSlowUpdate()
     updateFugitiveState()
     updateRevealVisuals()
     updateGpsGuidance()
+    updateHunterGpsGuidance()
+    if M.spawnQueueForced then
+        flushSpawnQueue()
+    end
 end
 
 ---@param opts table?

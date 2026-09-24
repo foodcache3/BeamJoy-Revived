@@ -49,6 +49,8 @@ angular.module("beamjoy").component("bjPlayerLine", {
             }
             this.actions.focus = canFocus;
 
+            const isSelf = self.playerName === this.player.playerName;
+
             const selfGroupIndex = beamjoyStore.groups.getGroupIndex(
                 self.group
             );
@@ -69,8 +71,18 @@ angular.module("beamjoy").component("bjPlayerLine", {
                 this.actions.engine = true;
                 if (this.player.vehicles.length > 0) this.actions.delete = true;
             }
+            // Unlike freeze/engine/delete, not permission-gated at all: restoring a player's own
+            // deleted vehicle isn't a punitive/administrative action against them, just a local,
+            // harmless request-respawn (restorePlayerVehicle is a no-op if there's nothing deleted
+            // to bring back), so every player can use it on anyone, staff or not. Only shown for a
+            // player that actually has something to restore (players.deletedVehiclePlayers, pushed
+            // client-locally by players.lua - see its own doc comment for why this can't come from
+            // the server like every other player-list field) - and never on yourself, since a
+            // player already has their own native UI/keybind for their own vehicles.
+            if (!isSelf && beamjoyStore.players.deletedVehiclePlayers[this.player.playerName]) {
+                this.actions.restore = true;
+            }
 
-            const isSelf = self.playerName === this.player.playerName;
             if (
                 !isSelf &&
                 this.player.currentVehicle &&
@@ -101,6 +113,7 @@ angular.module("beamjoy").component("bjPlayerLine", {
         updatePlayer();
         $scope.$watch(() => this.player, updatePlayer, true);
         $scope.$watch(() => beamjoyStore.players.self, updatePlayer, true);
+        $scope.$watch(() => beamjoyStore.players.deletedVehiclePlayers, updatePlayer, true);
 
         this.action = (evt, action) => {
             evt.stopPropagation();

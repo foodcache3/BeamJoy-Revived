@@ -31,7 +31,8 @@
 ---@field revealed boolean fugitive-only : current hide/reveal state. Self-computed and reported by
 ---the fugitive's own client from all three BJI-ported triggers at once (proximity / near-final-
 ---waypoint / post-reset; see hunterRevealUpdate) ; every other participant/spectator just reads
----this to decide nametag/minimap rendering for that one vehicle
+---this to decide nametag/minimap rendering for that one vehicle, and (when gpsOnReveal is on) to
+---drive hunterRunner.lua's updateHunterGpsGuidance
 ---@field vehicleConfirmed boolean self-reported once this participant's own client has confirmed
 ---their current vehicle matches their freshly-assigned role's pool (or there's no pool to match at
 ---all). Reset false by beginCountdown every round, see hunterVehicleConfirmed/startCountdownTimer.
@@ -49,6 +50,9 @@
 ---@field revealProximityDistance number
 ---@field revealResetDuration integer
 ---@field revealOnFinalWaypoint boolean
+---@field gpsOnReveal boolean when true, every hunter's own native GPS is routed straight to the
+---fugitive's live position for as long as they're revealed (see hunterRunner.lua's
+---updateHunterGpsGuidance) ; off by default, see services/hunter.lua's own doc comment
 ---@field huntedResetDistanceThreshold number
 ---@field velocityGatedResets boolean applies Infected's own always-on speed gate to every reset
 ---type, for both roles; see services/hunter.lua's own field doc
@@ -79,6 +83,9 @@
 ---@field settings BJHunterSessionSettings
 ---@field state BJHunterSessionState
 ---@field createdAt integer
+---@field allReadyAt integer? GetCurrentTime() of the moment every current participant most recently
+---became ready together, cleared again the instant that's no longer true - see
+---updateAllReadyState's own doc comment
 ---@field startedAt integer?
 ---@field winner ("hunted"|"hunters")? set once state reaches FINISHED via a real win (not a cancel,
 ---which tears the session down immediately with no FINISHED/results step at all, matching races'
@@ -300,10 +307,16 @@ local function buildBasePayload(session)
         -- survival countdown (see onTimedModeExpired)
         payload.huntTimedSecondsLeft = math.max(0, math.ceil(session.huntDeadlineAt - GetCurrentTime()))
     end
+    -- gridReadySecondsLeft is a full, consistent gridReadyTimeout-second countdown anchored to
+    -- session.allReadyAt, not session.createdAt - see raceGrid.lua's updateAllReadyState (the
+    -- same fix, ported here) for the real, confirmed bug this replaces. gridTimeoutSecondsLeft is
+    -- unrelated and unchanged: the hard deadline, still anchored to session.createdAt.
     if session.state == "LOBBY" and session.joinable then
-        local elapsedSec = GetCurrentTime() - session.createdAt
-        payload.gridReadySecondsLeft = math.max(0, math.ceil(session.settings.gridReadyTimeout - elapsedSec))
-        payload.gridTimeoutSecondsLeft = math.max(0, math.ceil(session.settings.gridTimeout - elapsedSec))
+        payload.gridReadySecondsLeft = session.allReadyAt and
+            math.max(0, math.ceil(session.settings.gridReadyTimeout - (GetCurrentTime() - session.allReadyAt)))
+            or nil
+        payload.gridTimeoutSecondsLeft = math.max(0,
+            math.ceil(session.settings.gridTimeout - (GetCurrentTime() - session.createdAt)))
     end
     return payload
 end
@@ -462,14 +475,16 @@ local function buildSettings(arena, overrides)
         respawnPenaltyIncrement = math.max(0, tonumber(overrides.respawnPenaltyIncrement) or
             defaults.respawnPenaltyIncrement or 0),
         hunterRespawnStrategy = hunterRespawnStrategy,
-        -- see services/hunter.lua's own resolve step for why this rounds to the nearest 10
-        -- instead of just flooring at 1: nothing else in this chain enforces the "increments of
-        -- 10m" the Config UI's slider only ever promises cosmetically, client-side
-        revealProximityDistance = math.max(10, math.round((tonumber(overrides.revealProximityDistance) or
-            defaults.revealProximityDistance or 50) / 10) * 10),
+        -- see services/hunter.lua's own resolve step for why this rounds to the nearest 50 and
+        -- clamps to 2500 instead of just flooring at 1 with no ceiling: nothing else in this chain
+        -- enforces the "increments of 50m" the Config UI's slider only ever promises cosmetically,
+        -- client-side, and a raw request could otherwise send an arbitrarily large value
+        revealProximityDistance = math.clamp(math.round((tonumber(overrides.revealProximityDistance) or
+            defaults.revealProximityDistance or 500) / 50) * 50, 10, 2500),
         revealResetDuration = math.max(0, tonumber(overrides.revealResetDuration) or
             defaults.revealResetDuration or 5),
         revealOnFinalWaypoint = revealOnFinalWaypoint,
+        gpsOnReveal = (overrides.gpsOnReveal ~= nil and overrides.gpsOnReveal or defaults.gpsOnReveal) == true,
         -- same "Increments of 10m" tooltip promise as revealProximityDistance above, same gap
         huntedResetDistanceThreshold = math.max(0, math.round((tonumber(overrides.huntedResetDistanceThreshold) or
             defaults.huntedResetDistanceThreshold or 150) / 10) * 10),
@@ -598,13 +613,41 @@ local function onTimedModeExpired(sessionId)
     endHunt(session, "hunted")
 end
 
+-- forward-declared: updateAllReadyState's own rescheduled delayTask (below) needs to call this
+-- from a closure defined lexically before tryStartFromLobby's own definition
+local tryStartFromLobby
+
+--- Tracks the moment (server GetCurrentTime() domain) this session's participants most recently
+--- became ALL ready, clearing it again the instant that's no longer true - exact-mirror
+--- implementation as raceGrid.lua's own updateAllReadyState (the same real, confirmed bug this
+--- fixes: the floor used to be measured from when the LOBBY was created, not from when everyone
+--- actually finished readying up). gridReadySecondsLeft (buildBasePayload) and the actual
+--- start-floor check (tryStartFromLobby, below) are both anchored to this now, not
+--- session.createdAt.
+---@param session BJHunterSession
+local function updateAllReadyState(session)
+    local allReady = session.participants:length() > 0 and
+        session.participants:every(function(p) return p.ready end)
+    local key = "BJHunterGrid-" .. session.id .. "-readyTimeout"
+    if allReady and not session.allReadyAt then
+        session.allReadyAt = GetCurrentTime()
+        utils_async.delayTask(function() tryStartFromLobby(session) end,
+            session.settings.gridReadyTimeout, key)
+    elseif not allReady and session.allReadyAt then
+        session.allReadyAt = nil
+        utils_async.removeTask(key)
+    end
+end
+
 ---@param session BJHunterSession whose LOBBY phase just ended (start-now, or force-cut via timers)
-local function tryStartFromLobby(session)
+tryStartFromLobby = function(session)
     if session.state ~= "LOBBY" then return end
     if session.participants:length() < MINIMUM_PARTICIPANTS and not session.debugSolo then return end
     if not session.participants:every(function(p) return p.ready end) then return end
+    updateAllReadyState(session)
     -- debugSolo also skips the lobby-floor wait entirely, for fast iteration; see hunterDebugStart
-    if not session.debugSolo and GetCurrentTime() - session.createdAt < session.settings.gridReadyTimeout then
+    if not session.debugSolo and
+        not (session.allReadyAt and GetCurrentTime() - session.allReadyAt >= session.settings.gridReadyTimeout) then
         return
     end
     beginCountdown(session)
@@ -668,8 +711,9 @@ local function hunterStart(ctxt, opts)
     table.insert(session.joinOrder, ctxt.senderID)
     M.sessions[session.id] = session
 
-    utils_async.delayTask(function() tryStartFromLobby(session) end,
-        session.settings.gridReadyTimeout, "BJHunterGrid-" .. session.id .. "-readyTimeout")
+    -- no readyTimeout task scheduled here anymore: updateAllReadyState (tryStartFromLobby's own
+    -- helper) now schedules it dynamically the moment everyone's actually ready, since the floor
+    -- is anchored to that moment, not session creation - see its own doc comment
     utils_async.delayTask(function() onGridTimeout(session.id) end,
         session.settings.gridTimeout, "BJHunterGrid-" .. session.id .. "-gridTimeout")
 
@@ -716,6 +760,9 @@ local function hunterJoin(ctxt, sessionId)
     addParticipant(session, ctxt.senderID, ctxt.sender.playerName)
     table.insert(session.joinOrder, ctxt.senderID)
     pruneJoinOrder(session)
+    -- a fresh joiner always starts unready (addParticipant), so this only ever clears an
+    -- already-set session.allReadyAt (and its scheduled start) - see its own doc comment
+    updateAllReadyState(session)
     pushSessionUpdate(session)
     pushOpenSessionsList()
 end
@@ -816,6 +863,10 @@ local function hunterReady(ctxt, sessionId, ready, model)
     end
     if participant.ready then
         tryStartFromLobby(session)
+    else
+        -- manually un-readying doesn't call tryStartFromLobby (nothing to start), but still needs
+        -- to clear session.allReadyAt/its scheduled start - see updateAllReadyState's own doc
+        updateAllReadyState(session)
     end
     if M.sessions[sessionId] then -- session may have just been consumed by tryStartFromLobby
         pushSessionUpdate(session)
@@ -832,6 +883,9 @@ local function unreadyOnVehicleChange(playerID)
     local participant = session.participants[playerID]
     if not participant or not participant.ready then return end
     participant.ready = false
+    -- clears session.allReadyAt (and the scheduled start it was driving) the instant this breaks
+    -- the ready-floor - see updateAllReadyState's own doc comment
+    updateAllReadyState(session)
     pushSessionUpdate(session)
 end
 
@@ -883,8 +937,9 @@ local function hunterRevealUpdate(ctxt, sessionId, revealed)
     if ctxt.senderID ~= huntedID then return end
 
     revealed = revealed == true
-    if session.participants[huntedID].revealed == revealed then return end
-    session.participants[huntedID].revealed = revealed
+    local participant = session.participants[huntedID]
+    if participant.revealed == revealed then return end
+    participant.revealed = revealed
     pushSessionUpdate(session)
 end
 

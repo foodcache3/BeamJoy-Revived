@@ -155,6 +155,7 @@ local function registerVehicle(vid, callback)
         M.vehicles[vid] = {
             vid = vid,
             serverVID = mpVeh.serverVehicleID,
+            serverVehicleString = mpVeh.serverVehicleString, -- "ownerID-slot", see onVehicleDestroyed
             remoteVID = mpVeh.remoteVehID ~= -1 and mpVeh.remoteVehID or vid,
             ownerID = owner.playerID,
             ownerName = owner.playerName,
@@ -299,7 +300,117 @@ local function onVehicleSwitched(previousVID, newVID)
     end
 end
 
+-- Neutral position packet: tim = -1 makes BeamMP's positionVE treat it as "no data yet" (its
+-- updateGFX bails while remoteData.timer < 0), while still being newer than nothing, so the very
+-- next real packet (tim >= 0) is accepted normally.
+local NEUTRAL_POS_PACKET = '{"tim":-1,"ping":0,"pos":[0,0,0],"rot":[0,0,0,1],"vel":[0,0,0],"rvel":[0,0,0]}'
+
+-- PreserveFuelOnReset (Freeroam) support ------------------------------------------------------
+-- From old BeamJoy. Native vehicle reset (Ctrl+R) always refills every energy storage back to
+-- spawn state - confirmed by reading the installed game's own `lua/vehicle/main.lua`:
+-- `onVehicleReset(retainDebug)` ("called when the user pressed I") is a genuine engine-invoked
+-- callback fired uniformly for every reset type, and it calls `energyStorage.reset()` (among many
+-- others) unconditionally, with no vanilla way to opt it out.
+--
+-- Earlier version tried to work around that from the outside: keep a rolling snapshot (polled
+-- every onSlowUpdate) and reapply it via `setEnergyStorageEnergy` the moment `onVehicleResetted`
+-- fired. Real, confirmed bugs with that approach (direct reports): (1) resetting fast enough could
+-- race past the restore and win, since there was always a window between the native refill and the
+-- catch-up call ; (2) changing the vehicle's fuel via BeamNG's own tuning/config menu, then
+-- resetting, silently reverted it back to the stale cached snapshot.
+--
+-- SECOND attempt tried skipping `energyStorage.reset()` entirely (stubbing it to `nop` around the
+-- real reset call) instead of fighting it after the fact. **Two more real, confirmed bugs from
+-- direct reports**: (1) setting the vehicle on fire (to deliberately burn fuel) kept draining fuel
+-- forever after a reset, even once the fire itself was out - because `energyStorage.reset()`
+-- ALSO does `damageTracker.setDamage("energyStorage", name, false)` per tank (confirmed by reading
+-- the installed game's own source), clearing the "this tank is damaged/leaking" flag ; skipping
+-- the whole function skipped that too, so the tank stayed marked as damaged/leaking indefinitely.
+-- (2) tuning a smaller starting fuel amount, then resetting, left the vehicle acting as if it had
+-- NO fuel despite the tank showing some - `energyStorage.reset()`'s second half re-registers every
+-- powertrain device with its own energy storage (`device:registerStorage(storage.name)`), which
+-- runs AFTER `powertrain.reset()` (unskipped, so it still ran and presumably cleared that
+-- registration) in the real function's own order ; skipping `energyStorage.reset()` meant that
+-- re-registration step never happened, silently severing the engine's own connection to its tank.
+--
+-- Fixed a third time, correctly this time: let the REAL, unmodified reset run in full (so damage
+-- flags clear and powertrain devices re-register exactly like vanilla), and only overwrite the
+-- resulting fuel AMOUNT afterward - synchronously, in the same Lua call, directly on each
+-- storage's own `storedEnergy` field (the exact one-line assignment `setEnergyStorageEnergy`'s own
+-- action handler uses, confirmed by reading `interactEnergyStorage.lua`, just done directly here
+-- instead of through that action's own round-trip). Snapshotting immediately before calling the
+-- real reset and restoring immediately after, both within the same synchronous call, leaves no
+-- window for a second reset to race into and nothing ever goes stale, since the snapshot is always
+-- taken fresh at the moment of THIS reset, not on a polling cadence.
+--
+-- The flag driving this is sent fresh every onSlowUpdate tick (cheap - one boolean, no vehicle
+-- round-trip needed), along with the (idempotent) install itself - not just once at spawn. A reset
+-- type that reconstructs the vehicle's own VE Lua environment from scratch (plausible for
+-- `RELOAD`/`RELOAD_ALL` specifically) would silently wipe a one-time install with no way for this
+-- GE side to know it needs re-sending ; re-sending it every tick self-heals from that instead.
+local function pushResetPreserveFlags(v)
+    local fr = beamjoy_config.data.Freeroam or {}
+    v.veh:queueLuaCommand(string.var([[
+if not _bjResetPreserveInstalled then
+    _bjResetPreserveInstalled = true
+    _bjPreserveFuelOnReset = false
+    local _bjOrigOnVehicleReset = onVehicleReset
+    onVehicleReset = function(retainDebug)
+        local fuelSnap
+        if _bjPreserveFuelOnReset then
+            fuelSnap = {}
+            for name, storage in pairs(energyStorage.getStorages()) do
+                fuelSnap[name] = storage.storedEnergy
+            end
+        end
+        _bjOrigOnVehicleReset(retainDebug)
+        if fuelSnap then
+            for name, energy in pairs(fuelSnap) do
+                local storage = energyStorage.getStorage(name)
+                if storage then storage.storedEnergy = energy end
+            end
+        end
+    end
+end
+_bjPreserveFuelOnReset={1}
+]], { tostring(fr.PreserveFuelOnReset == true) }))
+end
+
 local function onVehicleDestroyed(vid)
+    -- Real, log-confirmed fix for "another player's beamling is desynced for a long time" (also
+    -- applies to any remote vehicle, the unicycle just triggers it constantly). BeamMP delivers a
+    -- remote vehicle's position packets through an engine mailbox named after its server vehicle
+    -- ID ("vehPosPckt<ownerID>-<slot>"), and the server hands the freed slot straight to that
+    -- player's next vehicle - every get-out-and-walk reuses the same ID as the previous unicycle.
+    -- The mailbox keeps the OLD vehicle's last packet. The new copy's positionVE reads it as
+    -- unread data on its first frame, teleports to where the old copy last was, and records that
+    -- packet's timestamp. Timestamps are the SENDER's per-vehicle clock, which restarts at 0 for
+    -- the new vehicle, so every real packet is then rejected as "older" (`remoteData.timer > tim`)
+    -- until the new vehicle has existed as long as the old one did. Captured with temporary
+    -- position logging: a new copy sat exactly on the previous unicycle's last spot, 5-7m from
+    -- the packets, for ~3s after a ~4s-old unicycle. It's a race (a fresh packet normally
+    -- overwrites the stale one before the new copy reads it), which is why pure vanilla rarely
+    -- shows it while a BJS server hit it constantly. Overwriting the mailbox with a neutral packet
+    -- the moment the old copy is gone removes the race entirely. Confirmed fixed live (build 2421).
+    local serverVehicleString
+    local mpVeh = M.vehicles[vid]
+    if mpVeh then
+        if not mpVeh.isLocal then serverVehicleString = mpVeh.serverVehicleString end
+    else
+        -- a copy destroyed before registerVehicle's async job finished (get in/out within a
+        -- fraction of a second) never made it into M.vehicles ; ask BeamMP directly instead
+        for sid, v in pairs(MPVehicleGE.getVehicles()) do
+            if v.gameVehicleID == vid and not v.isLocal then
+                serverVehicleString = sid
+                break
+            end
+        end
+    end
+    if type(serverVehicleString) == "string" then
+        pcall(function()
+            be:sendToMailbox("vehPosPckt" .. serverVehicleString, NEUTRAL_POS_PACKET)
+        end)
+    end
     M.vehicles[vid] = nil
     M.ghostReasons[vid] = nil
 end
@@ -317,6 +428,13 @@ local function onSlowUpdate()
                 obj:queueGameEngineLua("beamjoy_vehicles.updateVehAttribute('damages', {1}, "..dmg..")");
             ]], { v.vid }))
         end)
+
+    -- keep each local, non-AI vehicle's own VE-side reset-preserve flags fresh (see
+    -- INSTALL_RESET_PRESERVE_CMD's own doc comment above) - only the local player's own vehicles
+    -- can ever be reset by this client, so only those need it
+    M.vehicles:filter(function(v)
+        return v.isLocal and not v.isAi and v.isVehicle
+    end):forEach(pushResetPreserveFlags)
 
     -- shut vehicles engine process
     M.vehicles:filter(function(v)

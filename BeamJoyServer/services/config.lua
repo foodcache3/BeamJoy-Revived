@@ -13,7 +13,7 @@
 ---@field DiscordChatHookLang string?
 ---@field Broadcasts {enabled: boolean, delay: integer, messages: table<string, string>[]}
 ---@field Whitelist table?
----@field Freeroam {TeleportDelay: integer, CollisionsMode: "forced"|"disabled"|"ghosts", RespawnGhostTimeoutEnabled: boolean, RespawnGhostTimeout: integer, RespawnGhostDistance: integer, RefuelDuration: integer, RepairDuration: integer, PreserveEnergyOnRefuel: boolean}
+---@field Freeroam {TeleportDelay: integer, CollisionsMode: "forced"|"disabled"|"ghosts", RespawnGhostTimeoutEnabled: boolean, RespawnGhostTimeout: integer, RespawnGhostDistance: integer, RefuelDuration: integer, RepairDuration: integer, PreserveEnergyOnRefuel: boolean, StrictBusStops: boolean, PreserveFuelOnReset: boolean, EmergencyRefuelCooldown: integer}
 ---CollisionsMode : "forced" = collisions always on, ghosting never happens ; "disabled" = every
 ---player vehicle permanently ghosted (free-for-all, no vehicle-vehicle collision at all) ;
 ---"ghosts" (default) = respawn protection: a vehicle briefly ghosts on spawn/reset, only
@@ -33,6 +33,10 @@
 ---RespawnGhostDistance : extra buffer distance (meters), on top of the two vehicles' own bounding
 ---radii, a spawn/reset-protected vehicle must clear of every other vehicle before un-ghosting.
 ---0 (default) matches the original behavior (only literal contact blocks it).
+---StrictBusStops : when on, a BJS bus-line stop also requires the bus's own doors to be open, and
+---kneeling active on any bus that actually supports it, before it counts as "arrived" (matching how
+---a real, vanilla scripted bus stop behaves) - off (default), proximity alone is enough, same as
+---before this setting existed.
 ---@field RaceAuthorshipRestriction boolean when on, non-staff race editors may only save/delete
 ---races they authored themselves (services/races.lua's raceSave/raceDelete) ; when off (default),
 ---anyone with EditRaces can manage any race, same as before this restriction ever existed
@@ -108,6 +112,27 @@ local M = {
             RefuelDuration = 5,
             RepairDuration = 5,
             PreserveEnergyOnRefuel = true,
+            StrictBusStops = false,
+            -- From old BeamJoy. Native BeamNG vehicle reset (Ctrl+R "Recover Vehicle") always
+            -- refills every energy storage back to spawn state (see the installed game's own
+            -- lua/vehicle/main.lua onVehicleReset, which calls energyStorage.reset()
+            -- unconditionally) - there is no vanilla setting to stop it. When on, BJS snapshots
+            -- the local player's own vehicle's fuel immediately before a reset and restores it
+            -- immediately after, synchronously, so resetting a stuck/flipped vehicle doesn't also
+            -- give it free fuel.
+            --
+            -- A "PreserveDamageOnReset" companion was attempted and removed (direct report:
+            -- "doesn't even work"). Structural, not a bug to fix: damage repair on reset happens at
+            -- the native physics/engine level (actual node position restoration), not through any
+            -- Lua-side function this mod can intercept - `damageTracker.reset()`/`beamstate.reset()`
+            -- (the only Lua-side hooks available) are just bookkeeping for the damage tracker's own
+            -- UI/scoring records, not the repair mechanism itself. Skipping them left the vehicle
+            -- physically repaired anyway while the damage tracker's own records went stale/wrong -
+            -- worse than doing nothing.
+            PreserveFuelOnReset = false,
+            -- Free "emergency refuel" HUD button, only while actually empty : cooldown before it
+            -- can be used again on the same vehicle instance. Seconds, clamped [0, 3600] client-side.
+            EmergencyRefuelCooldown = 300,
         },
         RaceAuthorshipRestriction = false,
         RaceEditorShowOnlyEditable = false,
@@ -332,12 +357,16 @@ local function sanitizeConfigValue(key, value)
         if type(value.RespawnGhostDistance) == "string" then value.RespawnGhostDistance = tonumber(value.RespawnGhostDistance) end
         if type(value.RefuelDuration) == "string" then value.RefuelDuration = tonumber(value.RefuelDuration) end
         if type(value.RepairDuration) == "string" then value.RepairDuration = tonumber(value.RepairDuration) end
+        if type(value.EmergencyRefuelCooldown) == "string" then value.EmergencyRefuelCooldown = tonumber(value.EmergencyRefuelCooldown) end
         -- backfill : a config saved before these keys existed omits them entirely, and this whole
         -- table saves atomically, so a missing key would otherwise reject the unrelated fields
         -- bundled with it (same reasoning as the string coercion above)
         if value.RefuelDuration == nil then value.RefuelDuration = M.data.Freeroam.RefuelDuration end
         if value.RepairDuration == nil then value.RepairDuration = M.data.Freeroam.RepairDuration end
         if value.PreserveEnergyOnRefuel == nil then value.PreserveEnergyOnRefuel = M.data.Freeroam.PreserveEnergyOnRefuel end
+        if value.StrictBusStops == nil then value.StrictBusStops = M.data.Freeroam.StrictBusStops end
+        if value.PreserveFuelOnReset == nil then value.PreserveFuelOnReset = M.data.Freeroam.PreserveFuelOnReset end
+        if value.EmergencyRefuelCooldown == nil then value.EmergencyRefuelCooldown = M.data.Freeroam.EmergencyRefuelCooldown end
         if type(value.TeleportDelay) ~= "number" then
             return nil, "TeleportDelay must be a number"
         elseif value.CollisionsMode ~= "forced" and value.CollisionsMode ~= "disabled" and
@@ -355,6 +384,13 @@ local function sanitizeConfigValue(key, value)
             return nil, "RepairDuration must be a number between 0 and 60"
         elseif type(value.PreserveEnergyOnRefuel) ~= "boolean" then
             return nil, "PreserveEnergyOnRefuel must be a boolean"
+        elseif type(value.StrictBusStops) ~= "boolean" then
+            return nil, "StrictBusStops must be a boolean"
+        elseif type(value.PreserveFuelOnReset) ~= "boolean" then
+            return nil, "PreserveFuelOnReset must be a boolean"
+        elseif type(value.EmergencyRefuelCooldown) ~= "number" or value.EmergencyRefuelCooldown < 0
+            or value.EmergencyRefuelCooldown > 3600 then
+            return nil, "EmergencyRefuelCooldown must be a number between 0 and 3600"
         end
     elseif key == "Voting" then
         if type(value) ~= "table" then

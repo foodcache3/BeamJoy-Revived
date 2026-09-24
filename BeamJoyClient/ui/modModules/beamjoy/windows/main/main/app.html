@@ -47,6 +47,15 @@
     >
         <icon name="check"></icon>
     </button>
+    <button
+        class="btn"
+        ng-if="$ctrl.fuelLow"
+        ng-class="{'success': !$ctrl.fuelEmpty, 'danger': $ctrl.fuelEmpty}"
+        ng-click="$ctrl.fuelAction()"
+        title="{{ (($ctrl.fuelEmpty ? 'beamjoy.window.main.tabs.main.fuelEmergencyRefuel' : 'beamjoy.window.main.tabs.main.fuelSetWaypoint')) | translate}}"
+    >
+        <icon name="gas_station"></icon>
+    </button>
 </div>
 
 <div class="vote-panel" ng-if="$ctrl.voteMenu === 'choice'">

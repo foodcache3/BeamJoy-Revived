@@ -80,7 +80,7 @@
 
         <bj-point-list-editor-toolbar
             ng-if="$ctrl.activeSection === 'stations'"
-            events="$ctrl.pointListEvents"
+            events="$ctrl.stationsSnapEvents"
         ></bj-point-list-editor-toolbar>
         <bj-point-list-editor-toolbar
             ng-if="$ctrl.activeSection === 'buslines'"
@@ -89,7 +89,7 @@
     </div>
 
     <div class="section-panel" ng-if="$ctrl.activeSection === 'stations'">
-        <bj-point-list-editor lists="$ctrl.pointLists" events="$ctrl.pointListEvents"></bj-point-list-editor>
+        <bj-config-stations></bj-config-stations>
     </div>
 
     <div class="section-panel" ng-if="$ctrl.activeSection === 'buslines'">

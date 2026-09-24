@@ -39,6 +39,16 @@ local M = {
     -- or explicitly skipped ; see onUIReady/proceedAfterLogin/onLoginRequestState below
     loginPending = false,
 
+    -- Real, confirmed bug: onBJClientReady's own `reloadUI()` (1s after every connect - see its own
+    -- doc comment for why it has to stay) does a full CEF UI reload, which re-executes beamjoy-
+    -- store.js's one-time "BJReady" bootstrap from scratch, re-running proceedAfterLogin below a
+    -- second time - including its "BJJoinIntroPanel" welcome-screen scheduling. Unlike the JS side
+    -- (torn down and rebuilt by the reload), this GE-Lua module keeps running the whole time, so a
+    -- flag here survives across it : guards the welcome screen specifically to actually fire once
+    -- per real server connection, not once per "BJReady" call. Reset on server leave so the NEXT
+    -- real connection still gets its own welcome screen.
+    introPanelShown = false,
+
     EVENT = "BJEvent",
     handlers = Table(),
 }
@@ -70,7 +80,8 @@ local function proceedAfterLogin()
         extensions.core_gamestate.requestExitLoadingScreen("serverConnection")
         uiHelpers.hideGameMenu()
 
-        if beamjoy_config.data.IntroPanel.enabled then
+        if beamjoy_config.data.IntroPanel.enabled and not M.introPanelShown then
+            M.introPanelShown = true
             async.delayTask(function()
                 local self
                 while not self do
@@ -168,6 +179,20 @@ local function onInit()
     beamjoy_communications.addHandler("uiBroadcast", M.uiBroadcast)
 end
 
+-- REVERTED (direct report: "broke the whole beamjoy ui and now the overlay doesn't show at all -
+-- config menu, main hud, login screen, and welcome screen don't show" ; confirmed only a manual UI
+-- reload recovered it). A previous change removed the `reloadUI()` call below on the theory that it
+-- was dead weight left over from the unrelated stale-UI-cache investigation (CHANGELOG 1.8.22) -
+-- that reasoning was wrong. Whatever the original reason this was added, it is evidently load-
+-- bearing for the mod's OWN UI actually mounting at all on a fresh connect (plausibly: BeamMP's own
+-- resource sync delivering this mod's `ui/modModules/...` files into the CEF context AFTER the page
+-- already started loading, so nothing here ever executes without a reload to pick them up) - proven
+-- by live testing, not merely theorized this time. Restored unconditionally.
+--
+-- The real "welcome screen shows twice" bug is still real (this reload doing a full Angular
+-- re-bootstrap, replaying beamjoy-store.js's one-time "BJReady" sequence, is still the mechanism -
+-- see the log evidence in CHANGELOG's own entry for this), but the fix has to be "make the one-time
+-- effects actually one-time," not "remove the reload" - see M.introPanelShown below.
 local function onBJClientReady()
     core_jobsystem.create(function(job)
         extensions.core_gamestate.requestExitLoadingScreen("serverConnection")
@@ -179,6 +204,7 @@ end
 
 local function onServerLeave()
     M.send("BJUnload")
+    M.introPanelShown = false
 end
 
 ---@param key string

@@ -1,0 +1,52 @@
+[
+    {
+        "id": 1,
+        "name": "Smiths Auto Services",
+        "pos": {
+            "x": -793.962,
+            "y": 489.535,
+            "z": 23.461
+        },
+        "radius": 8
+    },
+    {
+        "id": 2,
+        "name": "Henderson's Garage",
+        "pos": {
+            "x": -79.562,
+            "y": -790.344,
+            "z": 16.362
+        },
+        "radius": 5
+    },
+    {
+        "id": 3,
+        "name": "GEM Cassics",
+        "pos": {
+            "x": 562.179,
+            "y": -761.074,
+            "z": 60.5
+        },
+        "radius": 6
+    },
+    {
+        "id": 4,
+        "name": "Firwood Garage",
+        "pos": {
+            "x": 583.988,
+            "y": -147.116,
+            "z": 53.489
+        },
+        "radius": 6
+    },
+    {
+        "id": 5,
+        "name": "Firwood Motor Company",
+        "pos": {
+            "x": 703.791,
+            "y": -346.76,
+            "z": 56.596
+        },
+        "radius": 9
+    }
+]

@@ -74,6 +74,9 @@
 ---@field settings BJInfectedSessionSettings
 ---@field state BJInfectedSessionState
 ---@field createdAt integer
+---@field allReadyAt integer? GetCurrentTime() of the moment every current participant most recently
+---became ready together, cleared again the instant that's no longer true - see
+---updateAllReadyState's own doc comment
 ---@field startedAt integer?
 ---@field winner ("survivors"|"infected")? set once state reaches FINISHED via a real win (not a
 ---cancel, which tears the session down immediately with no FINISHED/results step at all, matching
@@ -228,15 +231,22 @@ local function buildBasePayload(session)
     if session.state == "GAME" and session.roundDeadlineAt then
         payload.roundSecondsLeft = math.max(0, math.ceil(session.roundDeadlineAt - GetCurrentTime()))
     end
+    -- gridReadySecondsLeft is a full, consistent gridReadyTimeout-second countdown anchored to
+    -- session.allReadyAt, not session.createdAt - see raceGrid.lua's updateAllReadyState (the
+    -- same fix, ported here) for the real, confirmed bug this replaces. gridTimeoutSecondsLeft is
+    -- unrelated and unchanged: the hard deadline, still anchored to session.createdAt.
     if session.state == "LOBBY" and session.joinable then
-        local elapsedSec = GetCurrentTime() - session.createdAt
-        payload.gridReadySecondsLeft = math.max(0, math.ceil(session.settings.gridReadyTimeout - elapsedSec))
-        payload.gridTimeoutSecondsLeft = math.max(0, math.ceil(session.settings.gridTimeout - elapsedSec))
-        -- Real bug: tryStartFromLobby silently refuses to leave LOBBY below this floor (session
-        -- never starts, not even once gridReadyTimeout elapses), but the UI's own "Starting in Xs"
-        -- countdown had nothing telling it that floor exists, so it happily ticked down to 0 and
-        -- sat there forever whenever exactly 2 people readied up (Infected needs 3, unlike Hunter's
-        -- 2). Exposed here so the client can gate that countdown on actually having enough people.
+        payload.gridReadySecondsLeft = session.allReadyAt and
+            math.max(0, math.ceil(session.settings.gridReadyTimeout - (GetCurrentTime() - session.allReadyAt)))
+            or nil
+        payload.gridTimeoutSecondsLeft = math.max(0,
+            math.ceil(session.settings.gridTimeout - (GetCurrentTime() - session.createdAt)))
+        -- Real bug: tryStartFromLobby silently refuses to leave LOBBY below the MINIMUM_PARTICIPANTS
+        -- floor (session never starts, not even once gridReadyTimeout elapses), but the UI's own
+        -- "Starting in Xs" countdown had nothing telling it that floor exists, so it happily ticked
+        -- down to 0 and sat there forever whenever exactly 2 people readied up (Infected needs 3,
+        -- unlike Hunter's 2). Exposed here so the client can gate that countdown on actually having
+        -- enough people.
         payload.minParticipants = services_infected.MINIMUM_PARTICIPANTS
     end
     return payload
@@ -400,14 +410,42 @@ local function onRoundTimeout(sessionId)
     endGame(session, "survivors")
 end
 
+-- forward-declared: updateAllReadyState's own rescheduled delayTask (below) needs to call this
+-- from a closure defined lexically before tryStartFromLobby's own definition
+local tryStartFromLobby
+
+--- Tracks the moment (server GetCurrentTime() domain) this session's participants most recently
+--- became ALL ready, clearing it again the instant that's no longer true - exact-mirror
+--- implementation as raceGrid.lua's own updateAllReadyState (the same real, confirmed bug this
+--- fixes: the floor used to be measured from when the LOBBY was created, not from when everyone
+--- actually finished readying up). gridReadySecondsLeft (buildBasePayload) and the actual
+--- start-floor check (tryStartFromLobby, below) are both anchored to this now, not
+--- session.createdAt.
+---@param session BJInfectedSession
+local function updateAllReadyState(session)
+    local allReady = session.participants:length() > 0 and
+        session.participants:every(function(p) return p.ready end)
+    local key = "BJInfectedGrid-" .. session.id .. "-readyTimeout"
+    if allReady and not session.allReadyAt then
+        session.allReadyAt = GetCurrentTime()
+        utils_async.delayTask(function() tryStartFromLobby(session) end,
+            session.settings.gridReadyTimeout, key)
+    elseif not allReady and session.allReadyAt then
+        session.allReadyAt = nil
+        utils_async.removeTask(key)
+    end
+end
+
 ---@param session BJInfectedSession whose LOBBY phase just ended (start-now, or force-cut via timers)
-local function tryStartFromLobby(session)
+tryStartFromLobby = function(session)
     if session.state ~= "LOBBY" then return end
     if session.participants:length() < services_infected.MINIMUM_PARTICIPANTS and not session.debugSolo then
         return
     end
     if not session.participants:every(function(p) return p.ready end) then return end
-    if not session.debugSolo and GetCurrentTime() - session.createdAt < session.settings.gridReadyTimeout then
+    updateAllReadyState(session)
+    if not session.debugSolo and
+        not (session.allReadyAt and GetCurrentTime() - session.allReadyAt >= session.settings.gridReadyTimeout) then
         return
     end
     beginCountdown(session)
@@ -464,8 +502,9 @@ local function infectedStart(ctxt, opts)
     addParticipant(session, ctxt.senderID, ctxt.sender.playerName)
     M.sessions[session.id] = session
 
-    utils_async.delayTask(function() tryStartFromLobby(session) end,
-        session.settings.gridReadyTimeout, "BJInfectedGrid-" .. session.id .. "-readyTimeout")
+    -- no readyTimeout task scheduled here anymore: updateAllReadyState (tryStartFromLobby's own
+    -- helper) now schedules it dynamically the moment everyone's actually ready, since the floor
+    -- is anchored to that moment, not session creation - see its own doc comment
     utils_async.delayTask(function() onGridTimeout(session.id) end,
         session.settings.gridTimeout, "BJInfectedGrid-" .. session.id .. "-gridTimeout")
 
@@ -509,6 +548,9 @@ local function infectedJoin(ctxt, sessionId)
     end
 
     addParticipant(session, ctxt.senderID, ctxt.sender.playerName)
+    -- a fresh joiner always starts unready (addParticipant), so this only ever clears an
+    -- already-set session.allReadyAt (and its scheduled start) - see its own doc comment
+    updateAllReadyState(session)
     pushSessionUpdate(session)
     pushOpenSessionsList()
 end
@@ -626,6 +668,10 @@ local function infectedReady(ctxt, sessionId, ready, model)
     end
     if participant.ready then
         tryStartFromLobby(session)
+    else
+        -- manually un-readying doesn't call tryStartFromLobby (nothing to start), but still needs
+        -- to clear session.allReadyAt/its scheduled start - see updateAllReadyState's own doc
+        updateAllReadyState(session)
     end
     if M.sessions[sessionId] then -- session may have just been consumed by tryStartFromLobby
         pushSessionUpdate(session)
@@ -641,6 +687,9 @@ local function unreadyOnVehicleChange(playerID)
     local participant = session.participants[playerID]
     if not participant or not participant.ready then return end
     participant.ready = false
+    -- clears session.allReadyAt (and the scheduled start it was driving) the instant this breaks
+    -- the ready-floor - see updateAllReadyState's own doc comment
+    updateAllReadyState(session)
     pushSessionUpdate(session)
 end
 

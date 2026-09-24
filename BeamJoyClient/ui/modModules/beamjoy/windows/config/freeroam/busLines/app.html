@@ -3,21 +3,41 @@
         transition: background-color 0.2s ease-in-out;
         border-radius: 0.3em;
     }
-    bj-config-bus-lines .line-row:hover,
-    bj-config-bus-lines .line-row.active {
+    bj-config-bus-lines .line-row:hover {
         background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-config-bus-lines .line-row.active {
+        /* real, confirmed bug: 0.2 alpha barely darkens whatever's behind the config window (a
+           bright world scene in freecam) - the yellow highlight below read as near-invisible
+           against it. Active specifically (not hover) needs a properly opaque backing. A
+           darker-blue-background variant of this fix was tried and reverted per direct request
+           ("put it back to how it was") - back to this version. Same treatment on .stop-row.active
+           below, for consistency. */
+        background-color: rgba(0, 0, 0, 0.65);
     }
     bj-config-bus-lines .line-row.active .line-name {
         color: #edff00;
+        /* belt-and-suspenders on top of the darker background above : guarantees legibility
+           regardless of whatever's behind the panel */
+        text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 3px rgba(0, 0, 0, 0.9);
     }
     bj-config-bus-lines .stop-row {
         transition: background-color 0.15s ease-in-out;
     }
-    bj-config-bus-lines .stop-row:hover,
-    bj-config-bus-lines .stop-row.active {
+    bj-config-bus-lines .stop-row:hover {
         background-color: rgba(0, 0, 0, 0.25);
     }
+    bj-config-bus-lines .stop-row.active {
+        background-color: rgba(0, 0, 0, 0.65);
+    }
     bj-config-bus-lines .name-input {
+        /* NOT flex-grow-1 : a name input spanning the entire row left no empty space left to
+           click to select the row without landing on the input itself (real, confirmed bug -
+           per direct request, same fix applied to bj-point-list-editor's own name input for
+           stations/garages). Capped, not full-width, so the row's own click-to-select area
+           always has genuine empty space. */
+        flex: 1 1 auto;
+        max-width: 55%;
         min-width: 0;
     }
     bj-config-bus-lines .radius-input {
@@ -59,7 +79,7 @@
     >
         <input
             type="text"
-            class="line-name name-input flex-grow-1"
+            class="line-name name-input"
             maxlength="40"
             ng-model="line.name"
             ng-click="$event.stopPropagation()"
@@ -68,11 +88,11 @@
         />
         <button
             class="btn"
-            ng-class="line.loopable ? 'success' : 'info'"
-            ng-click="$ctrl.toggleLoopable(lineIdx, !line.loopable); $event.stopPropagation()"
+            ng-class="line.loopable ? 'success' : 'neutral'"
+            ng-click="$ctrl.toggleLoopable(line, lineIdx, !line.loopable); $event.stopPropagation()"
             title="{{'beamjoy.buslines.edit.loopable' | translate}}"
         >
-            <icon name="reverse"></icon>
+            <icon name="reset"></icon>
         </button>
         <span class="opacity-70 small" ng-if="line.stops.length < 2">
             {{'beamjoy.buslines.edit.minStops' | translate}}
@@ -121,7 +141,7 @@
                 <span class="opacity-70 small">{{stopIdx}}.</span>
                 <input
                     type="text"
-                    class="name-input flex-grow-1"
+                    class="name-input"
                     maxlength="40"
                     ng-model="stop.name"
                     ng-click="$event.stopPropagation()"

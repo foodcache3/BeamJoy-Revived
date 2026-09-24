@@ -15,9 +15,20 @@ end
 
 ---@return integer
 function GetCurrentTimeMillis()
-    local ms = require "socket".gettime() % 1
-    local time = GetCurrentTime() + ms
-    return math.round(time * 1000)
+    -- Used to combine GetCurrentTime()'s whole-second reading with a SEPARATE, later
+    -- socket.gettime() call for the fractional part - two independent clock reads a few Lua
+    -- instructions apart. Whenever a real second boundary fell between those two reads, the
+    -- result was off by up to a full second (either direction, depending on which side of the
+    -- boundary each read landed on): e.g. GetCurrentTime() reads just before the rollover (T) but
+    -- the later socket.gettime() has already rolled over (fractional part near 0), producing
+    -- T+~0 instead of the correct T+1+~0 - a ~1s-early result; or the reverse, a ~1s-late one.
+    -- Rare per call, but this is called from every per-frame update path (ToD correction,
+    -- countdowns, throttles, ...), so at high framerate it was hit often enough to produce
+    -- occasional real, visible time-of-day jerks (confirmed via [BJToDDebug3] capture - one-frame
+    -- glitches in `currentToD()`'s elapsed-time math that snapped visibly, then self-corrected the
+    -- very next frame). Fixed by taking both the whole and fractional second from the SAME single
+    -- clock read, so there's no longer a second call that can straddle a boundary.
+    return math.round(require("socket").gettime() * 1000)
 end
 
 ---@param str string

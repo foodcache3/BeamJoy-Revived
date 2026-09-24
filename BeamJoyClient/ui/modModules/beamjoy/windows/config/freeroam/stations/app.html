@@ -1,0 +1,203 @@
+<style>
+    bj-config-stations .item-row {
+        transition: background-color 0.2s ease-in-out;
+        border-radius: 0.3em;
+    }
+    bj-config-stations .item-row:hover {
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-config-stations .item-row.active {
+        /* same dark-overlay + yellow-text treatment established (and reverted back to, after a
+           darker-blue variant was tried and undone) for busLines/pointListEditor's own active rows */
+        background-color: rgba(0, 0, 0, 0.65);
+    }
+    bj-config-stations .item-row.active .item-name {
+        color: #edff00;
+        text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 3px rgba(0, 0, 0, 0.9);
+    }
+    bj-config-stations .pump-row {
+        transition: background-color 0.15s ease-in-out;
+    }
+    bj-config-stations .pump-row:hover {
+        background-color: rgba(0, 0, 0, 0.25);
+    }
+    bj-config-stations .pump-row.active {
+        background-color: rgba(0, 0, 0, 0.65);
+    }
+    bj-config-stations .name-input {
+        /* NOT flex-grow-1 : same real, confirmed bug fixed the same way for every other list's own
+           name input in this codebase - a name spanning the whole row leaves no empty space to
+           click to select the row without landing on the input itself */
+        flex: 1 1 auto;
+        max-width: 55%;
+        min-width: 0;
+    }
+    bj-config-stations .radius-input {
+        width: 4em;
+    }
+    bj-config-stations .type-chip {
+        padding: 0.1em 0.5em;
+        font-size: 0.85em;
+    }
+    bj-config-stations .pumps-wrap {
+        border-left: 2px solid rgba(255, 255, 255, 0.15);
+        margin-left: 0.4em;
+        padding-left: 0.5em;
+    }
+</style>
+
+<div class="mb-3">
+    <div class="d-flex align-center gap-1 mb-1">
+        <h5 class="flex-grow-1">
+            {{'beamjoy.window.config.tabs.freeroam.station' | translate}}
+            {{$ctrl.countLabel('stations')}}
+        </h5>
+        <button class="btn success" ng-click="$ctrl.addItem($event, 'stations')"
+            title="{{'beamjoy.window.config.editor.pointList.addAtCurrentPosition' | translate}}">
+            <icon name="add"></icon>
+        </button>
+    </div>
+    <div class="opacity-70 small mb-2" ng-if="$ctrl.stations.length === 0">
+        {{'beamjoy.window.config.editor.pointList.empty' | translate}}
+    </div>
+
+    <div ng-repeat="station in $ctrl.stations track by $index" ng-init="stationIdx = $index + 1" class="mb-1">
+        <div
+            id="station-row-stations-{{stationIdx}}"
+            class="item-row d-flex p-1 px-2 gap-1 cursor-pointer align-center"
+            ng-class="{active: $ctrl.activeList === 'stations' && $ctrl.activeIndex === stationIdx}"
+            ng-click="$ctrl.selectItem($event, 'stations', stationIdx)"
+        >
+            <input type="text" class="item-name name-input" maxlength="40" ng-model="station.name"
+                ng-click="$event.stopPropagation()"
+                ng-change="$ctrl.setItemName('stations', stationIdx, station.name)"
+                placeholder="{{'beamjoy.window.config.tabs.freeroam.station' | translate}} {{stationIdx}}" />
+            <input type="number" class="radius-input" min="1" max="50" step="0.5" ng-model="station.radius"
+                ng-click="$event.stopPropagation()"
+                ng-change="$ctrl.setItemRadius('stations', stationIdx, station.radius)"
+                title="{{'beamjoy.window.config.editor.pointList.radius.tooltip' | translate}}" />
+            <button class="btn info" ng-click="$ctrl.setItemToVehicle($event, 'stations', stationIdx)"
+                title="{{'beamjoy.window.config.tabs.races.setToVehicle' | translate}}">
+                <icon name="car"></icon>
+            </button>
+            <button class="btn info" ng-click="$ctrl.teleportToItem($event, 'stations', stationIdx)"
+                title="{{'beamjoy.window.config.editor.pointList.teleportToHere' | translate}}">
+                <icon name="eye"></icon>
+            </button>
+            <button class="btn danger" ng-click="$ctrl.deleteItem($event, 'stations', stationIdx)"
+                title="{{'beamjoy.common.delete' | translate}}">
+                <icon name="delete"></icon>
+            </button>
+        </div>
+
+        <div class="d-flex flex-wrap gap-1 mt-1 ml-1"
+            title="{{'beamjoy.window.config.editor.pointList.types.tooltip' | translate}}">
+            <button class="btn type-chip" ng-repeat="opt in $ctrl.typeOptions track by opt.key"
+                ng-class="$ctrl.hasType(station, opt.key) ? 'success' : 'info'"
+                ng-click="$ctrl.toggleStationType($event, station, stationIdx, opt.key)">
+                {{opt.labelKey | translate}}
+            </button>
+        </div>
+        <div class="opacity-70 small ml-1" ng-if="station.pumps.length > 0">
+            {{'beamjoy.window.config.tabs.freeroam.pumps.stationTypesHint' | translate}}
+        </div>
+
+        <div class="pumps-wrap mt-1" ng-if="$ctrl.activeList === 'stations' && $ctrl.activeIndex === stationIdx">
+            <div class="d-flex align-center gap-1 mb-1">
+                <span class="flex-grow-1 opacity-70 small">
+                    {{'beamjoy.window.config.tabs.freeroam.pumps.title' | translate}} ({{station.pumps.length}})
+                </span>
+                <button class="btn success" ng-click="$ctrl.addPump($event, stationIdx)"
+                    title="{{'beamjoy.window.config.tabs.freeroam.pumps.add' | translate}}">
+                    <icon name="add"></icon>
+                </button>
+            </div>
+
+            <div ng-repeat="pump in station.pumps track by $index" ng-init="pumpIdx = $index + 1" class="mb-1">
+                <div
+                    id="station-row-pump-{{stationIdx}}-{{pumpIdx}}"
+                    class="pump-row d-flex p-1 gap-1 cursor-pointer align-center"
+                    ng-class="{active: $ctrl.activePump === pumpIdx}"
+                    ng-click="$ctrl.selectPump($event, stationIdx, pumpIdx)"
+                >
+                    <span class="opacity-70 small flex-grow-1">
+                        {{'beamjoy.stations.pump' | translate}} {{pumpIdx}}
+                    </span>
+                    <input type="number" class="radius-input" min="1" max="50" step="0.5" ng-model="pump.radius"
+                        ng-click="$event.stopPropagation()"
+                        ng-change="$ctrl.setPumpRadius(stationIdx, pumpIdx, pump.radius)"
+                        title="{{'beamjoy.window.config.editor.pointList.radius.tooltip' | translate}}" />
+                    <button class="btn info" ng-click="$ctrl.setPumpToVehicle($event, stationIdx, pumpIdx)"
+                        title="{{'beamjoy.window.config.tabs.races.setToVehicle' | translate}}">
+                        <icon name="car"></icon>
+                    </button>
+                    <button class="btn info" ng-click="$ctrl.teleportToPump($event, stationIdx, pumpIdx)"
+                        title="{{'beamjoy.window.config.editor.pointList.teleportToHere' | translate}}">
+                        <icon name="eye"></icon>
+                    </button>
+                    <button class="btn danger" ng-click="$ctrl.deletePump($event, stationIdx, pumpIdx)"
+                        title="{{'beamjoy.common.delete' | translate}}">
+                        <icon name="delete"></icon>
+                    </button>
+                </div>
+                <div class="d-flex flex-wrap gap-1 mt-1 ml-1"
+                    title="{{'beamjoy.window.config.editor.pointList.types.tooltip' | translate}}">
+                    <button class="btn type-chip" ng-repeat="opt in $ctrl.typeOptions track by opt.key"
+                        ng-class="$ctrl.hasType(pump, opt.key) ? 'success' : 'info'"
+                        ng-click="$ctrl.togglePumpType($event, pump, stationIdx, pumpIdx, opt.key)">
+                        {{opt.labelKey | translate}}
+                    </button>
+                </div>
+            </div>
+            <div class="opacity-70 small" ng-if="station.pumps.length === 0">
+                {{'beamjoy.window.config.tabs.freeroam.pumps.empty' | translate}}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div>
+    <div class="d-flex align-center gap-1 mb-1">
+        <h5 class="flex-grow-1">
+            {{'beamjoy.window.config.tabs.freeroam.garage' | translate}}
+            {{$ctrl.countLabel('garages')}}
+        </h5>
+        <button class="btn success" ng-click="$ctrl.addItem($event, 'garages')"
+            title="{{'beamjoy.window.config.editor.pointList.addAtCurrentPosition' | translate}}">
+            <icon name="add"></icon>
+        </button>
+    </div>
+    <div class="opacity-70 small mb-2" ng-if="$ctrl.garages.length === 0">
+        {{'beamjoy.window.config.editor.pointList.empty' | translate}}
+    </div>
+
+    <div
+        id="station-row-garages-{{$index + 1}}"
+        class="item-row d-flex p-1 px-2 gap-1 cursor-pointer align-center mb-1"
+        ng-repeat="garage in $ctrl.garages track by $index"
+        ng-init="garageIdx = $index + 1"
+        ng-class="{active: $ctrl.activeList === 'garages' && $ctrl.activeIndex === garageIdx}"
+        ng-click="$ctrl.selectItem($event, 'garages', garageIdx)"
+    >
+        <input type="text" class="item-name name-input" maxlength="40" ng-model="garage.name"
+            ng-click="$event.stopPropagation()"
+            ng-change="$ctrl.setItemName('garages', garageIdx, garage.name)"
+            placeholder="{{'beamjoy.window.config.tabs.freeroam.garage' | translate}} {{garageIdx}}" />
+        <input type="number" class="radius-input" min="1" max="50" step="0.5" ng-model="garage.radius"
+            ng-click="$event.stopPropagation()"
+            ng-change="$ctrl.setItemRadius('garages', garageIdx, garage.radius)"
+            title="{{'beamjoy.window.config.editor.pointList.radius.tooltip' | translate}}" />
+        <button class="btn info" ng-click="$ctrl.setItemToVehicle($event, 'garages', garageIdx)"
+            title="{{'beamjoy.window.config.tabs.races.setToVehicle' | translate}}">
+            <icon name="car"></icon>
+        </button>
+        <button class="btn info" ng-click="$ctrl.teleportToItem($event, 'garages', garageIdx)"
+            title="{{'beamjoy.window.config.editor.pointList.teleportToHere' | translate}}">
+            <icon name="eye"></icon>
+        </button>
+        <button class="btn danger" ng-click="$ctrl.deleteItem($event, 'garages', garageIdx)"
+            title="{{'beamjoy.common.delete' | translate}}">
+            <icon name="delete"></icon>
+        </button>
+    </div>
+</div>

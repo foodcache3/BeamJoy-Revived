@@ -76,3 +76,15 @@
         title="{{'beamjoy.window.main.playerlist.actions.deleteAll'|translate}}"
     ></icon>
 </div>
+<div
+    ng-hide="$ctrl.actions.restore === undefined"
+    class="btn warning"
+    ng-class="{disabled: !$ctrl.actions.restore}"
+    ng-click="$ctrl.action($event,'restore')"
+>
+    <icon
+        name="reset"
+        class="small"
+        title="{{'beamjoy.window.main.playerlist.actions.restoreAll'|translate}}"
+    ></icon>
+</div>

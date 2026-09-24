@@ -67,6 +67,9 @@ angular
             this.BJUpdateSelf = (payload) => {
                 this.players.self = payload;
             };
+            this.BJPlayersWithDeletedVehicles = (payload) => {
+                this.players.deletedVehiclePlayers = payload || {};
+            };
             this.BJRaceSettings = (payload) => {
                 this.raceSettings = payload;
             };

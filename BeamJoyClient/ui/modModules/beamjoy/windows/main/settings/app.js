@@ -7,13 +7,12 @@ angular.module("beamjoy").component("bjMainSettings", {
            this.settings = angular.copy(beamjoyStore.settings.data)
         });
 
-        this.githubUrl = "https://github.com/foodcache3/BeamJoy-Revived";
-        this.version = null;
-        this.build = null;
-        $rootScope.$on("BJVersion", (_, data) => {
-            this.version = data.version;
-            this.build = data.build;
-        });
+        // Real, confirmed bug: this "About" section's version display never worked and its
+        // GitHub link (a plain `<a href>`) never opened a browser - CEF's `local://` UI scheme has
+        // nothing for a plain anchor navigation to hand off to an external browser with. Removed
+        // per direct request ; both moved to the ImGui top menu bar's own "About" dropdown instead
+        // (imgui/menu.lua), where a "copy link" action via `ui_imgui.SetClipboardText` actually
+        // works, and the version is already correctly shown there too.
 
         $scope.$watch(
             () => this.settings,

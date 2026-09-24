@@ -20,6 +20,34 @@ local M = {
 local function onInit()
     beamjoy_communications.addHandler("sendCache", M.retrieveCache)
     beamjoy_communications_ui.addHandler("BJEditorFreeroamDataRequest", M.pushListToUI)
+    -- legacy BJI import bridge : thin passthrough, same shape as beamjoy_hunter's own
+    -- (preview round-trips through Angular so the Core config tab can show a per-map breakdown ;
+    -- "done" is just toasted directly here, no need to round-trip for a one-shot result summary)
+    beamjoy_communications_ui.addHandler("BJFreeroamDataLegacyImportPreviewRequest", M.requestLegacyImportPreview)
+    beamjoy_communications_ui.addHandler("BJFreeroamDataLegacyImportConfirm", M.confirmLegacyImport)
+    beamjoy_communications.addHandler("freeroamDataLegacyImportPreviewResult", M.onLegacyImportPreviewResult)
+    beamjoy_communications.addHandler("freeroamDataLegacyImportDone", M.onLegacyImportDone)
+end
+
+local function requestLegacyImportPreview()
+    beamjoy_communications.send("freeroamDataLegacyImportPreview")
+end
+
+---@param results table[]
+local function onLegacyImportPreviewResult(results)
+    beamjoy_communications_ui.send("BJFreeroamDataLegacyImportPreview", results or {})
+end
+
+local function confirmLegacyImport()
+    beamjoy_communications.send("freeroamDataLegacyImportConfirm")
+end
+
+---@param stationCount integer
+---@param garageCount integer
+local function onLegacyImportDone(stationCount, garageCount)
+    toast.info(string.format(
+        beamjoy_lang.translate("beamjoy.window.config.tabs.core.legacyImport.freeroam.done"),
+        stationCount or 0, garageCount or 0), nil, 6)
 end
 
 --- lightweight snapshot for the config window's Freeroam tab sidebar : the editor seeds its own
@@ -64,5 +92,9 @@ M.retrieveCache = retrieveCache
 M.pushListToUI = pushListToUI
 M.saveStations = saveStations
 M.saveGarages = saveGarages
+M.requestLegacyImportPreview = requestLegacyImportPreview
+M.onLegacyImportPreviewResult = onLegacyImportPreviewResult
+M.confirmLegacyImport = confirmLegacyImport
+M.onLegacyImportDone = onLegacyImportDone
 
 return M

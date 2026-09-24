@@ -18,6 +18,8 @@ angular.module("beamjoy").component("bjConfigCore", {
         this.canImportHunter = false;
         this.canImportInfected = false;
         this.canImportRaces = false;
+        this.canImportFreeroam = false;
+        this.canImportBusLines = false;
         // the identity-fields form below (server name/description/max players/private/debug/
         // informationPacket) is real admin-only data - the server already withholds it entirely
         // from anyone without SetCore (see services/core.lua's own onBJRequestCache), but this
@@ -41,6 +43,14 @@ angular.module("beamjoy").component("bjConfigCore", {
             this.canImportRaces = beamjoyStore.permissions.hasAllPermissions(
                 undefined,
                 "EditRaces"
+            );
+            this.canImportFreeroam = beamjoyStore.permissions.hasAllPermissions(
+                undefined,
+                "EditFreeroamData"
+            );
+            this.canImportBusLines = beamjoyStore.permissions.hasAllPermissions(
+                undefined,
+                "EditBusLines"
             );
             this.canSetCore = beamjoyStore.permissions.hasAllPermissions(
                 undefined,
@@ -172,6 +182,55 @@ angular.module("beamjoy").component("bjConfigCore", {
                 .replace("{invalid}", invalidCount);
             beamjoyConfirm.ask(`${header}\n\n${lines}`, () => {
                 beamjoyStore.send("BJRaceLegacyImportConfirm");
+            });
+        });
+
+        // Freeroam stations/garages, and Bus Lines: same non-destructive "always ADD, never
+        // overwrite" design as races' own importer above, and no per-entry conflict concept at
+        // all (unlike races' own name collisions) - stations/garages/bus lines were never
+        // unique-by-name to begin with, so every structurally valid entry just gets imported.
+        this.freeroamLegacyImportStatus = null;
+        this.requestFreeroamLegacyImport = (event) => {
+            event.stopPropagation();
+            this.freeroamLegacyImportStatus = null;
+            beamjoyStore.send("BJFreeroamDataLegacyImportPreviewRequest");
+        };
+        $rootScope.$on("BJFreeroamDataLegacyImportPreview", (_, results) => {
+            // see BJHunterLegacyImportPreview's own comment above: same guihooks round-trip gap
+            if (!Array.isArray(results) || results.length === 0) {
+                this.freeroamLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.freeroam.none";
+                return;
+            }
+            const totalStations = results.reduce((sum, r) => sum + r.stationCount, 0);
+            const totalGarages = results.reduce((sum, r) => sum + r.garageCount, 0);
+            const lines = results
+                .map((r) => `${r.map} · ${r.stationCount} stations / ${r.garageCount} garages`)
+                .join("\n");
+            const header = translate("beamjoy.window.config.tabs.core.legacyImport.freeroam.confirm")
+                .replace("{stations}", totalStations)
+                .replace("{garages}", totalGarages);
+            beamjoyConfirm.ask(`${header}\n\n${lines}`, () => {
+                beamjoyStore.send("BJFreeroamDataLegacyImportConfirm");
+            });
+        });
+
+        this.busLinesLegacyImportStatus = null;
+        this.requestBusLinesLegacyImport = (event) => {
+            event.stopPropagation();
+            this.busLinesLegacyImportStatus = null;
+            beamjoyStore.send("BJBusLinesLegacyImportPreviewRequest");
+        };
+        $rootScope.$on("BJBusLinesLegacyImportPreview", (_, results) => {
+            if (!Array.isArray(results) || results.length === 0) {
+                this.busLinesLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.busLines.none";
+                return;
+            }
+            const total = results.reduce((sum, r) => sum + r.lineCount, 0);
+            const lines = results.map((r) => `${r.map} · ${r.lineCount} lines`).join("\n");
+            const header = translate("beamjoy.window.config.tabs.core.legacyImport.busLines.confirm")
+                .replace("{count}", total);
+            beamjoyConfirm.ask(`${header}\n\n${lines}`, () => {
+                beamjoyStore.send("BJBusLinesLegacyImportConfirm");
             });
         });
 

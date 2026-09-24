@@ -6,6 +6,11 @@ const M = {
         currentVehicle: null,
     },
     players: [],
+    // Client-local only (see players.lua's own pushDeletedVehiclePlayers doc comment): playerName
+    // -> true for every player this client's own BeamMP layer currently remembers as having a
+    // deleted vehicle. Never server-synced, unlike everything else on `players` - drives the
+    // "Queue deleted vehicles" button's visibility (see player-line/app.js).
+    deletedVehiclePlayers: {},
 };
 let parent;
 M.init = function (beamjoyStore) {

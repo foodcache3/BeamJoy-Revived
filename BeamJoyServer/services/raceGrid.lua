@@ -163,6 +163,11 @@
 ---@field joinCounter integer? monotonic source of BJRaceParticipant.joinIndex (see
 ---addParticipant); never decremented on leave
 ---@field participants tablelib<integer, BJRaceParticipant> index playerID
+---@field allReadyAt integer? GetCurrentTime() of the moment every current participant most
+---recently became ready together, cleared again the instant that's no longer true (someone leaves
+---unready, joins unready, un-readies via vehicle-change). gridReadySecondsLeft and the actual
+---start-floor check (tryStartFromGrid) are both anchored to this, not createdAt - see
+---updateAllReadyState's own doc comment for why
 
 local M = {
     dependencies = { "services_races", "services_vehiclePresets", "utils_async", "services_identity" },
@@ -418,20 +423,24 @@ local function buildSessionPayload(session)
         payload.raceElapsedMs = math.floor((GetCurrentTime() - session.startedAt) * 1000)
     end
     -- lobby-phase countdown feedback, same "push a duration, not a timestamp" reasoning as
-    -- raceElapsedMs above (session.createdAt is in the server's own GetCurrentTime() clock domain,
-    -- meaningless compared directly against a client's GetCurrentTimeMillis()). Only meaningful
-    -- for a real joinable multiplayer lobby. A non-joinable (solo/private) session never schedules
-    -- either of these timers server-side (raceStart only does so when session.joinable), so
-    -- there's nothing to report for one. gridReadySecondsLeft counts down to the earliest moment
-    -- an already-fully-ready lobby is allowed to actually start (see tryStartFromGrid's own
-    -- gridReadyTimeout check: it's a floor on lobby duration, not a "start regardless of who's
-    -- ready" trigger, so the client decides for itself whether it's actually relevant to show,
-    -- based on whether everyone's ready yet). gridTimeoutSecondsLeft counts down to the hard
-    -- deadline where anyone still unready gets kicked and the lobby starts (or closes) regardless.
+    -- raceElapsedMs above (session.createdAt/allReadyAt are in the server's own GetCurrentTime()
+    -- clock domain, meaningless compared directly against a client's GetCurrentTimeMillis()). Only
+    -- meaningful for a real joinable multiplayer lobby. A non-joinable (solo/private) session never
+    -- schedules either of these timers server-side, so there's nothing to report for one.
+    --
+    -- gridReadySecondsLeft is a full, consistent gridReadyTimeout-second countdown anchored to
+    -- session.allReadyAt (see updateAllReadyState's own doc comment for why, and the real,
+    -- confirmed bug this replaces) - nil whenever not everyone's ready yet, so the client already
+    -- naturally has nothing to show (previously sent a number even before anyone was ready, relying
+    -- entirely on the client's own separate allReady gate to hide it). gridTimeoutSecondsLeft is
+    -- unrelated and unchanged: the hard deadline where anyone still unready gets kicked and the
+    -- lobby starts (or closes) regardless, still anchored to session.createdAt.
     if session.state == "GRID" and session.joinable then
-        local gridElapsedSec = GetCurrentTime() - session.createdAt
-        payload.gridReadySecondsLeft = math.max(0, math.ceil(session.settings.gridReadyTimeout - gridElapsedSec))
-        payload.gridTimeoutSecondsLeft = math.max(0, math.ceil(session.settings.gridTimeout - gridElapsedSec))
+        payload.gridReadySecondsLeft = session.allReadyAt and
+            math.max(0, math.ceil(session.settings.gridReadyTimeout - (GetCurrentTime() - session.allReadyAt)))
+            or nil
+        payload.gridTimeoutSecondsLeft = math.max(0,
+            math.ceil(session.settings.gridTimeout - (GetCurrentTime() - session.createdAt)))
     end
     -- backmarker flag for the optional "ghost backmarkers" setting (client decides whether to
     -- actually act on it, see raceRunner.lua). Deliberately not a raw currentLap comparison.
@@ -933,16 +942,47 @@ local function finishParticipant(session, participant)
     checkSessionComplete(session)
 end
 
+-- forward-declared: updateAllReadyState's own rescheduled delayTask (below) needs to call this
+-- from a closure defined lexically before tryStartFromGrid's own definition
+local tryStartFromGrid
+
+--- Tracks the moment (server GetCurrentTime() domain) this session's participants most recently
+--- became ALL ready, clearing it again the instant that's no longer true (someone leaves unready,
+--- joins unready, un-readies via a vehicle change). gridReadySecondsLeft (buildSessionPayload) and
+--- the actual start-floor check (tryStartFromGrid, below) are both anchored to this now, not
+--- session.createdAt.
+---
+--- Real, confirmed bug (direct report) this replaces: the floor used to be measured from when the
+--- LOBBY was created, not from when everyone actually finished readying up. The displayed
+--- "Starting in Xs" only appears once everyone's ready (client-side gate), so what a player saw was
+--- "however much of the floor happened to be left over" at that moment - anywhere from the full
+--- gridReadyTimeout down to 0/instant-start, depending purely on how long people took to ready up,
+--- not a consistent countdown. Re-anchoring to the moment everyone's actually ready makes it a real,
+--- consistent gridReadyTimeout-second wait every time, matching what "Starting in Xs" implies.
+--- Schedules (or reschedules, on a later re-ready) the same fallback delayTask raceStart used to
+--- schedule once at session creation, so a lobby where everyone was ready from the very start still
+--- reliably auto-starts even with no further reactive trigger (leave/ready-toggle) to catch it.
+---@param session BJRaceSession
+local function updateAllReadyState(session)
+    local allReady = session.participants:length() > 0 and
+        session.participants:every(function(p) return p.ready end)
+    local key = "BJRaceGrid-" .. session.id .. "-readyTimeout"
+    if allReady and not session.allReadyAt then
+        session.allReadyAt = GetCurrentTime()
+        if session.joinable then
+            utils_async.delayTask(function() tryStartFromGrid(session) end,
+                session.settings.gridReadyTimeout, key)
+        end
+    elseif not allReady and session.allReadyAt then
+        session.allReadyAt = nil
+        utils_async.removeTask(key)
+    end
+end
+
 ---@param session BJRaceSession whose GRID phase just ended (start-now, or force-cut via timers)
-local function tryStartFromGrid(session)
-    -- diagnostics: "grid timer settings don't seem to do anything" reported after a real 2-player
-    -- test, and static tracing didn't turn up an obvious bug. Logging every actual decision point
-    print(string.format(
-        "[BJ raceGrid] tryStartFromGrid session=%s state=%s joinable=%s participants=%d allReady=%s elapsed=%d gridReadyTimeout=%s",
-        session.id, session.state, tostring(session.joinable), session.participants:length(),
-        tostring(session.participants:every(function(p) return p.ready end)),
-        GetCurrentTime() - session.createdAt, tostring(session.settings.gridReadyTimeout)))
+tryStartFromGrid = function(session)
     if session.state ~= "GRID" then return end
+    updateAllReadyState(session)
     if not session.joinable then
         -- solo path: starts the instant its lone participant is ready, no grace period
         if session.participants:every(function(p) return p.ready end) then
@@ -950,10 +990,8 @@ local function tryStartFromGrid(session)
         end
         return
     end
-    if session.participants:length() > 0 and
-        session.participants:every(function(p) return p.ready end) and
-        GetCurrentTime() - session.createdAt >= session.settings.gridReadyTimeout then
-        print("[BJ raceGrid] tryStartFromGrid: starting countdown now")
+    if session.allReadyAt and
+        GetCurrentTime() - session.allReadyAt >= session.settings.gridReadyTimeout then
         beginCountdown(session)
     end
 end
@@ -1012,8 +1050,9 @@ local function raceStart(ctxt, raceId, opts)
         tostring(session.settings.gridTimeout), tostring(opts.gridReadyTimeout), tostring(opts.gridTimeout)))
 
     if session.joinable then
-        utils_async.delayTask(function() tryStartFromGrid(session) end,
-            session.settings.gridReadyTimeout, "BJRaceGrid-" .. session.id .. "-readyTimeout")
+        -- no readyTimeout task scheduled here anymore: updateAllReadyState (tryStartFromGrid's own
+        -- helper) now schedules it dynamically the moment everyone's actually ready, since the
+        -- floor is anchored to that moment, not session creation - see its own doc comment
         utils_async.delayTask(function()
             print(string.format("[BJ raceGrid] gridTimeout fired for session=%s", session.id))
             local s = M.sessions[session.id]
@@ -1060,6 +1099,9 @@ local function raceJoin(ctxt, sessionId)
     if not race or session.participants:length() >= #race.startPositions then return end
 
     addParticipant(session, ctxt.senderID, ctxt.sender.playerName)
+    -- a fresh joiner always starts unready (addParticipant), so this only ever clears an
+    -- already-set session.allReadyAt (and its scheduled start) - see its own doc comment
+    updateAllReadyState(session)
     pushSessionUpdate(session)
     pushOpenSessionsList()
 end
@@ -1163,6 +1205,11 @@ local function raceReady(ctxt, sessionId, ready, model)
     end
     if participant.ready then
         tryStartFromGrid(session)
+    else
+        -- manually un-readying doesn't call tryStartFromGrid (nothing to start), but still needs
+        -- to clear session.allReadyAt/its scheduled start the same way un-readying via a vehicle
+        -- change already does (unreadyOnVehicleChange) - see updateAllReadyState's own doc comment
+        updateAllReadyState(session)
     end
     if M.sessions[sessionId] then -- session may have just been consumed by tryStartFromGrid
         pushSessionUpdate(session)
@@ -1215,6 +1262,9 @@ local function unreadyOnVehicleChange(playerID)
     local participant = session.participants[playerID]
     if not participant or not participant.ready then return end
     participant.ready = false
+    -- clears session.allReadyAt (and the scheduled start it was driving) the instant this breaks
+    -- the ready-floor - see updateAllReadyState's own doc comment
+    updateAllReadyState(session)
     pushSessionUpdate(session)
 end
 

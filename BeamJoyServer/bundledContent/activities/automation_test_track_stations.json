@@ -1,0 +1,28 @@
+[
+    {
+        "id": 1,
+        "name": "Kurupae Aero Club 1",
+        "pos": {
+            "x": 94.151,
+            "y": -350.055,
+            "z": 123.095
+        },
+        "radius": 20,
+        "types": [
+            "kerosine"
+        ]
+    },
+    {
+        "id": 2,
+        "name": "Kurupae Aero Club 2",
+        "pos": {
+            "x": 53.251,
+            "y": -350.139,
+            "z": 123.095
+        },
+        "radius": 20,
+        "types": [
+            "kerosine"
+        ]
+    }
+]

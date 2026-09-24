@@ -8,8 +8,13 @@ angular.module("beamjoy").component("bjBusHud", {
         this.lineName = "";
         this.stopIndex = 0;
         this.totalStops = 0;
+        this.stopName = "";
         this.loopable = false;
         this.holding = false;
+        // strict-stops only : "kneel"|"doors"|"kneelAndDoors" while in a stop's radius but not yet
+        // satisfying strict mode - null once satisfied (holding takes over), non-strict, or out of
+        // radius. Mutually exclusive with holding (busRun.lua only ever sets one at a time).
+        this.pending = null;
 
         $rootScope.$on("BJBusHud", (_, data) => {
             data = data || {};
@@ -18,8 +23,10 @@ angular.module("beamjoy").component("bjBusHud", {
             this.lineName = data.lineName || "";
             this.stopIndex = data.stopIndex || 0;
             this.totalStops = data.totalStops || 0;
+            this.stopName = data.stopName || "";
             this.loopable = !!data.loopable;
             this.holding = !!data.holding;
+            this.pending = data.pending || null;
         });
 
         this.$onInit = () => {

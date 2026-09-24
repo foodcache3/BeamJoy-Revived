@@ -1077,6 +1077,104 @@ local function seedBundledRaces()
     end
 end
 
+-- ONE-TIME MIGRATION (direct request): the bundled "derby" races were re-tuned in a later release
+-- (placementMode added to all three; "The Big 8" also got a gate-geometry correction) after some
+-- servers had already seeded the OLDER, unfixed version via seedBundledRaces above - which never
+-- revisits an already-seeded name, so those servers were stuck with the original values forever.
+-- Patches an existing server's own live copy of each affected race, but ONLY when it still exactly
+-- (within float rounding) matches the OLD, as-originally-seeded values - if an admin has since
+-- edited that same race themselves, their edit is left completely alone and this is treated as
+-- handled, not retried. Reuses dao_bundled's own seeded-ledger mechanism (see its own doc comment)
+-- under a synthetic activity type, keyed per race name, so each one is only ever considered once.
+local DERBY_FIX_LEDGER_TYPE = "derbyRaceFix_1_9_1"
+
+---@param a any
+---@param b number
+---@return boolean
+local function closeEnough(a, b)
+    return math.abs((tonumber(a) or 0) - b) < 0.0001
+end
+
+---@param name string
+---@param targetList table[]
+---@param checkFn fun(race: table): boolean matches the exact OLD (pre-fix) values?
+---@param applyFn fun(race: table) mutates race in place to the corrected values
+---@return boolean changed
+local function migrateDerbyRace(name, targetList, checkFn, applyFn)
+    if dao_bundled.isSeeded("derby", DERBY_FIX_LEDGER_TYPE, name) then return false end
+    local race = table.find(targetList, function(r) return r.name == name end)
+    local changed = false
+    if race and checkFn(race) then
+        applyFn(race)
+        changed = true
+        LogInfo(string.format("migrateDerbyRaces: corrected derby / %s", name))
+    else
+        LogInfo(string.format(
+            "migrateDerbyRaces: skipped derby / %s (not found, or already edited since seeding)", name))
+    end
+    dao_bundled.markSeeded("derby", DERBY_FIX_LEDGER_TYPE, name)
+    return changed
+end
+
+local function hasNoPlacementMode(r)
+    return type(r.defaults) == "table" and r.defaults.placementMode == nil
+end
+
+local function migrateDerbyRaces()
+    local targetList = dao_activity.get("derby", M.ACTIVITY_TYPE)
+    if not table.isArray(targetList) then return end
+    local changed = false
+
+    changed = migrateDerbyRace("Dirt Oval", targetList, hasNoPlacementMode, function(r)
+        r.defaults.placementMode = "random"
+    end) or changed
+
+    changed = migrateDerbyRace("Dirt Oval Reverse", targetList, hasNoPlacementMode, function(r)
+        r.defaults.placementMode = "random"
+    end) or changed
+
+    changed = migrateDerbyRace("The Big 8", targetList, function(r)
+        if not hasNoPlacementMode(r) then return false end
+        if not closeEnough(r.distance, 945) then return false end
+        if not table.isArray(r.gates) then return false end
+        local g3 = table.find(r.gates, function(g) return g.step == 3 end)
+        local g4 = table.find(r.gates, function(g) return g.step == 4 end)
+        local g6 = table.find(r.gates, function(g) return g.step == 6 end)
+        if not (g3 and g4 and g6 and g3.pos and g4.pos and g6.pos) then return false end
+        return closeEnough(g3.pos.x, -195.6) and closeEnough(g3.pos.y, -104.388) and closeEnough(g3.width, 12)
+            and closeEnough(g4.pos.x, -171.58) and closeEnough(g4.pos.y, -250.24)
+            and closeEnough(g4.pos.z, 81.717) and closeEnough(g4.width, 19)
+            and closeEnough(g6.pos.x, -262.00380805886) and closeEnough(g6.pos.y, -8.5198426857799)
+            and closeEnough(g6.pos.z, 80.918357849121) and closeEnough(g6.width, 17.788674960184)
+    end, function(r)
+        r.defaults.placementMode = "random"
+        r.distance = 947
+        local g3 = table.find(r.gates, function(g) return g.step == 3 end)
+        local g4 = table.find(r.gates, function(g) return g.step == 4 end)
+        local g6 = table.find(r.gates, function(g) return g.step == 6 end)
+        g3.dir.x, g3.dir.y = -0.36143201326044, -0.93239846620986
+        g3.pos.x, g3.pos.y = -194.99122659783, -104.5316363176
+        g3.width = 14.5
+        g4.dir.x, g4.dir.y = 0.99253723212019, 0.12194196511128
+        g4.pos.x, g4.pos.y, g4.pos.z = -171.49566935698, -250.92640277306, 80.46875
+        g4.width = 19.571918418761
+        g6.pos.x, g6.pos.y, g6.pos.z = -262.482979891, -8.5048752382411, 80.90625
+        g6.width = 19
+    end) or changed
+
+    if changed then
+        dao_activity.save("derby", M.ACTIVITY_TYPE, targetList)
+        if services_core.getCurrentMap() == "derby" then
+            M.data = targetList
+            services_players.players:forEach(function(p)
+                local caches = {}
+                M.onBJRequestCache(caches, p.playerID)
+                communications_tx.sendToPlayer(p.playerID, "sendCache", caches)
+            end)
+        end
+    end
+end
+
 ---@param caches table
 local function onBJRequestCache(caches)
     -- Visible to every player, not staff-gated: races are meant to be played, not just administered.
@@ -1350,6 +1448,7 @@ local function onInit()
         consoleDebugLeaderboard)
 
     seedBundledRaces()
+    migrateDerbyRaces()
     loadData()
 end
 

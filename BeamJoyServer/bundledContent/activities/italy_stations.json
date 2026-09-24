@@ -1,0 +1,96 @@
+[
+    {
+        "id": 1,
+        "name": "2Sparks Fastello",
+        "pos": {
+            "x": 1201.075,
+            "y": -796.286,
+            "z": 145.808
+        },
+        "radius": 6,
+        "types": [
+            "electricEnergy"
+        ]
+    },
+    {
+        "id": 2,
+        "name": "Aeroporto",
+        "pos": {
+            "x": -793.234,
+            "y": 1715.933,
+            "z": 152.422
+        },
+        "radius": 20,
+        "types": [
+            "kerosine"
+        ]
+    },
+    {
+        "id": 3,
+        "name": "Apex Conca Azzura",
+        "pos": {
+            "x": -1757.731,
+            "y": 1327.303,
+            "z": 138.996
+        },
+        "radius": 3,
+        "types": [
+            "gasoline",
+            "diesel"
+        ]
+    },
+    {
+        "id": 4,
+        "name": "2Sparks Casteletto",
+        "pos": {
+            "x": -969.91,
+            "y": 950.718,
+            "z": 392.545
+        },
+        "radius": 5,
+        "types": [
+            "electricEnergy"
+        ]
+    },
+    {
+        "id": 5,
+        "name": "2Sparks Centro Fastello",
+        "pos": {
+            "x": 1113.992,
+            "y": -685.391,
+            "z": 146.021
+        },
+        "radius": 3,
+        "types": [
+            "electricEnergy"
+        ]
+    },
+    {
+        "id": 6,
+        "name": "Apex Portino",
+        "pos": {
+            "x": -728.027,
+            "y": -1326.264,
+            "z": 143.251
+        },
+        "radius": 5,
+        "types": [
+            "diesel",
+            "gasoline"
+        ]
+    },
+    {
+        "id": 7,
+        "name": "Norte Docks",
+        "pos": {
+            "x": 631.769,
+            "y": 1484.332,
+            "z": 139.299
+        },
+        "radius": 4.5,
+        "types": [
+            "gasoline",
+            "diesel"
+        ]
+    }
+]

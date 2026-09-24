@@ -24,7 +24,9 @@
 ---@field stops BJBusStop[] ordered, always >= 2 (a shorter line is dropped at sanitize time)
 
 local M = {
-    dependencies = { "dao_activity", "dao_bundled", "services_core" },
+    -- services_hunter is only needed for its quatToFlatDir helper (the legacy BJI importer below,
+    -- converting a stop's quaternion rotation to BJS's own flat forward-vector convention)
+    dependencies = { "dao_activity", "dao_bundled", "services_core", "services_hunter" },
 
     BUSLINES_TYPE = "buslines",
 
@@ -234,8 +236,135 @@ local function busLinesSave(ctxt, list)
     end)
 end
 
+--- Legacy BeamJoy Improved (BJI) bus-lines importer. Confirmed against BJI's own real source
+--- (`BeamJoyCore/dao/DaoFile/FileScenario.lua`, `my-name-is-samael/BeamJoy` on GitHub):
+--- `<dbPath>/scenarii/<mapName>_buslines.json` (`_TYPES.BUS_LINES = "_buslines"`, concatenated
+--- directly onto the map name with no separator - the underscore is baked into the suffix), a
+--- plain JSON array of line objects, one file per map. NON-DESTRUCTIVE like every sibling
+--- importer - every convertible line is ADDED as a new line, nothing already saved is touched.
+--- No separate preview step, same reasoning as freeroamData.lua's own importer (nothing
+--- meaningful to preview beyond the same counts the "done" toast reports - bus lines have no
+--- name-collision concept either).
+---
+--- One real conversion needed: BJI stores each stop's facing as a quaternion (`rot`), not BJS's
+--- own flat forward-vector `dir`. `services_hunter.quatToFlatDir` already does exactly this
+--- conversion (the same helper races'/hunter's own legacy importers trust for the identical
+--- purpose), reused here rather than re-deriving the same math a third time.
+local LEGACY_DIR = "scenarii"
+local LEGACY_BUSLINE_SUFFIX = "_buslines.json"
+
+---@param filename string
+---@param suffix string
+---@return string? mapName
+local function matchLegacyFilename(filename, suffix)
+    return filename:match("^(.+)" .. suffix:gsub("%.", "%%.") .. "$")
+end
+
+---@param old table raw BJI line {name, loopable, stops: {name,pos,rot,radius}[]}
+---@return table?
+local function convertLegacyBusLine(old)
+    if type(old) ~= "table" or not table.isArray(old.stops) then return nil end
+    local stops = {}
+    for _, s in ipairs(old.stops) do
+        if type(s) == "table" and validVec3(s.pos) then
+            stops[#stops + 1] = {
+                name = s.name,
+                pos = { x = s.pos.x, y = s.pos.y, z = s.pos.z },
+                dir = type(s.rot) == "table" and services_hunter.quatToFlatDir(s.rot) or { x = 1, y = 0, z = 0 },
+                radius = s.radius,
+            }
+        end
+    end
+    if #stops < M.MIN_STOPS then return nil end
+    return { name = old.name, loopable = old.loopable == true, stops = stops }
+end
+
+---@return table<string, table[]> map name -> converted lines
+local function scanLegacyBusLines()
+    local byMap = {}
+    local dir = dao_main.dbPath .. "/" .. LEGACY_DIR
+    if not FS.Exists(dir) then return byMap end
+    for _, filename in pairs(FS.ListFiles(dir)) do
+        local mapName = matchLegacyFilename(filename, LEGACY_BUSLINE_SUFFIX)
+        if mapName then
+            local raw = dao_main.get(LEGACY_DIR .. "/" .. filename)
+            if table.isArray(raw) then
+                byMap[mapName] = byMap[mapName] or {}
+                for _, oldLine in ipairs(raw) do
+                    local converted = convertLegacyBusLine(oldLine)
+                    if converted then table.insert(byMap[mapName], converted) end
+                end
+            end
+        end
+    end
+    return byMap
+end
+
+---@return {map: string, lineCount: integer}[]
+local function previewLegacyBusLines()
+    local results = {}
+    for mapName, lines in pairs(scanLegacyBusLines()) do
+        if #lines > 0 then
+            table.insert(results, { map = mapName, lineCount = #lines })
+        end
+    end
+    return results
+end
+
+---@param ctxt BJSContext
+local function busLinesLegacyImportPreview(ctxt)
+    if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
+            BJ_PERMISSIONS.EditBusLines) then
+        return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
+            services_lang.get("error.insufficientPermissions", ctxt.sender.lang))
+    end
+    if ctxt.sender then
+        communications_tx.sendToPlayer(ctxt.senderID, "busLinesLegacyImportPreviewResult",
+            previewLegacyBusLines())
+    end
+end
+
+---@param ctxt BJSContext
+local function busLinesLegacyImportConfirm(ctxt)
+    if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
+            BJ_PERMISSIONS.EditBusLines) then
+        local permErr = services_lang.get("error.insufficientPermissions", ctxt.sender.lang)
+        communications_tx.sendToPlayer(ctxt.senderID, "toast", "error", permErr)
+        return communications_tx.sendToPlayer(ctxt.senderID, "busLinesLegacyImportDone", 0)
+    end
+
+    local imported = 0
+    for mapName, lines in pairs(scanLegacyBusLines()) do
+        if #lines > 0 then
+            local isCurrentMap = mapName == services_core.getCurrentMap()
+            local target = isCurrentMap and M.lines or (dao_activity.get(mapName, M.BUSLINES_TYPE) or {})
+            for _, line in ipairs(lines) do
+                table.insert(target, line)
+                imported = imported + 1
+            end
+            sanitizeBusLines(target)
+            if isCurrentMap then M.lines = target end
+            dao_activity.save(mapName, M.BUSLINES_TYPE, #target > 0 and target or nil)
+        end
+    end
+
+    if imported > 0 then
+        services_players.players:forEach(function(p)
+            local caches = {}
+            M.onBJRequestCache(caches)
+            communications_tx.sendToPlayer(p.playerID, "sendCache", caches)
+        end)
+    end
+
+    if ctxt.sender then
+        communications_tx.sendToPlayer(ctxt.senderID, "busLinesLegacyImportDone", imported)
+    end
+end
+
 local function onInit()
     communications_rx.addHandler("busLinesSave", M.busLinesSave)
+    communications_rx.addHandler("busLinesLegacyImportPreview", M.busLinesLegacyImportPreview)
+    communications_rx.addHandler("busLinesLegacyImportConfirm", M.busLinesLegacyImportConfirm)
     seedBundled()
     loadData()
 end
@@ -245,5 +374,7 @@ M.onBJRequestCache = onBJRequestCache
 M.onMapChanged = loadData
 
 M.busLinesSave = busLinesSave
+M.busLinesLegacyImportPreview = busLinesLegacyImportPreview
+M.busLinesLegacyImportConfirm = busLinesLegacyImportConfirm
 
 return M

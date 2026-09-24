@@ -8,6 +8,9 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
             RespawnGhostTimeoutEnabled: true,
             RespawnGhostTimeout: 10,
             RespawnGhostDistance: 0,
+            StrictBusStops: false,
+            PreserveFuelOnReset: false,
+            EmergencyRefuelCooldown: 300,
         };
         // preserved verbatim on save : not editable from this accordion, but setConfig replaces
         // the whole Freeroam table at once, so it has to be sent back along with everything else
@@ -27,6 +30,9 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
                 RespawnGhostTimeoutEnabled: this.data.RespawnGhostTimeoutEnabled,
                 RespawnGhostTimeout: this.data.RespawnGhostTimeout,
                 RespawnGhostDistance: this.data.RespawnGhostDistance,
+                StrictBusStops: this.data.StrictBusStops,
+                PreserveFuelOnReset: this.data.PreserveFuelOnReset,
+                EmergencyRefuelCooldown: this.data.EmergencyRefuelCooldown,
             }),
             (current) => {
                 if (!this.init) return;
@@ -34,7 +40,10 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
                     current.CollisionsMode === this.default.CollisionsMode &&
                     current.RespawnGhostTimeoutEnabled === this.default.RespawnGhostTimeoutEnabled &&
                     current.RespawnGhostTimeout === this.default.RespawnGhostTimeout &&
-                    current.RespawnGhostDistance === this.default.RespawnGhostDistance
+                    current.RespawnGhostDistance === this.default.RespawnGhostDistance &&
+                    current.StrictBusStops === this.default.StrictBusStops &&
+                    current.PreserveFuelOnReset === this.default.PreserveFuelOnReset &&
+                    current.EmergencyRefuelCooldown === this.default.EmergencyRefuelCooldown
                 )
                     return;
                 beamjoyStore.send("BJDirectSend", [
@@ -53,6 +62,10 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
                         // those doesn't stick."
                         RespawnGhostTimeout: Number(current.RespawnGhostTimeout),
                         RespawnGhostDistance: Number(current.RespawnGhostDistance),
+                        StrictBusStops: current.StrictBusStops,
+                        PreserveFuelOnReset: current.PreserveFuelOnReset,
+                        // same string-vs-number coercion note as RespawnGhostTimeout/Distance above
+                        EmergencyRefuelCooldown: Number(current.EmergencyRefuelCooldown),
                     },
                 ]);
             },
@@ -69,6 +82,9 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
                 RespawnGhostTimeoutEnabled: freeroam.RespawnGhostTimeoutEnabled !== false,
                 RespawnGhostTimeout: freeroam.RespawnGhostTimeout ?? 10,
                 RespawnGhostDistance: freeroam.RespawnGhostDistance ?? 0,
+                StrictBusStops: freeroam.StrictBusStops === true,
+                PreserveFuelOnReset: freeroam.PreserveFuelOnReset === true,
+                EmergencyRefuelCooldown: freeroam.EmergencyRefuelCooldown ?? 300,
             };
             this.default = angular.copy(this.data);
             this.init = true;

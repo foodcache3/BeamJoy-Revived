@@ -31,6 +31,12 @@
 ---@field hasName boolean? each item carries an optional free-text `name`, edited via an Angular
 ---text input. Shown in place of "<label> <n>" on the world-space text label when set. The host is
 ---still responsible for persisting/sanitizing it (this module just clamps to 40 chars).
+---@field hasTypes boolean? each item carries an optional `types` string array (subset of
+---`typeOptions`), edited via an Angular toggle-chip row. Empty/nil is a valid, meaningful value
+---(the host decides what it defaults to - e.g. freeroamData's energy stations treat it as "any
+---combustion fuel"), so this module never invents a default list on create.
+---@field typeOptions { key: string, labelKey: string }[]? only used when hasTypes ; the fixed set
+---of togglable type keys and their locale keys, in display order
 ---@field defaultRadius number? only used when hasRadius ; default 5
 ---@field min integer? default 0, purely informational (the host's own save-time validation is
 ---still authoritative: this module never blocks a mutation over it)
@@ -51,6 +57,8 @@
 ---list has hasRadius
 ---@field setName string? Angular -> Lua : (listKey, 1-based index, name), only needed if any list
 ---has hasName
+---@field setTypes string? Angular -> Lua : (listKey, 1-based index, types[]), only needed if any
+---list has hasTypes
 ---@field snapToGround string Lua -> Angular : (boolean)
 ---@field snapMethod string Lua -> Angular : ("terrain"|"raycast")
 ---@field setSnapToGround string Angular -> Lua : (boolean)
@@ -321,6 +329,30 @@ local function new(config)
         markDirty()
     end
 
+    ---@param listKey string
+    ---@param index integer
+    ---@param types string[]
+    local function onSetTypes(listKey, index, types)
+        if not config.isActive() then return end
+        local spec = specByKey[listKey]
+        local item = spec and spec.hasTypes and state.lists[listKey][index]
+        if not item then return end
+        local validKeys = {}
+        for _, opt in ipairs(spec.typeOptions or {}) do validKeys[opt.key] = true end
+        local clean, seen = {}, {}
+        if table.isArray(types) then
+            for _, t in ipairs(types) do
+                if validKeys[t] and not seen[t] then
+                    seen[t] = true
+                    table.insert(clean, t)
+                end
+            end
+        end
+        item.types = #clean > 0 and clean or nil
+        pushListsUpdate()
+        markDirty()
+    end
+
     ---@param stateValue boolean
     local function onSetSnapToGround(stateValue)
         state.snapToGroundEnabled = stateValue == true
@@ -401,6 +433,9 @@ local function new(config)
         end
         if config.events.setName then
             beamjoy_communications_ui.addHandler(config.events.setName, onSetName)
+        end
+        if config.events.setTypes then
+            beamjoy_communications_ui.addHandler(config.events.setTypes, onSetTypes)
         end
         beamjoy_communications_ui.addHandler(config.events.setSnapToGround, onSetSnapToGround)
         beamjoy_communications_ui.addHandler(config.events.setSnapMethod, onSetSnapMethod)
