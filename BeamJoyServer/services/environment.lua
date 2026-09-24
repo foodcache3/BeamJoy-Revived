@@ -1,4 +1,6 @@
 local DEFAULT_GRAVITY = -9.81
+-- shared VERBATIM with the client (Client/BJ/lua/envClock.lua) - see its own header
+local envClock = require("utils/envClock")
 local M = {
     ---@class BJEnvironment
     data = {
@@ -8,9 +10,19 @@ local M = {
         ToD = 0, -- noon ; the ToD value AT ToDEpochAt (see below), not necessarily the current one
         dayNightCycle = false,
         ---@type integer
-        dayLength = 1800, -- seconds
+        dayLength = 1800, -- seconds, the full cycle at 1x day AND night speed (vanilla panel's meaning)
         dayScale = 1,
         nightScale = 2,
+        ---@type integer? synced calendar date AT ToDEpochAt ; nil until a client first reports its
+        ---level's own date (see reportObserver) or an admin sets one
+        year = nil,
+        ---@type integer?
+        month = nil,
+        ---@type integer?
+        day = nil,
+        ---@type table<string, table> per-map solar data (latitude/longitude/utcOffset/dstRule),
+        ---keyed by services_core.getCurrentMap() ; the first client on a map reports it
+        observers = {},
         gravitySync = false,
         gravity = DEFAULT_GRAVITY,
         ---@type number milliseconds on this session's own monotonic realtimeClock (see onInit)
@@ -20,31 +32,14 @@ local M = {
     },
     default = {},
 
-    -- Real, confirmed design flaw (direct report: night-time playback was structurally jerky, and
-    -- got WORSE the more often corrections were pushed - "cranking up the update speed isn't a
-    -- good solution, it could be very performance intensive"): this used to broadcast a plain ToD
-    -- VALUE once a second (onBJRequestServerTickPayload) and rely on every client periodically
-    -- correcting its own native clock toward it. The installed game's own native `play` auto-advance
-    -- has no concept of dayScale/nightScale at all (confirmed: zero references to either in the
-    -- installed game's own core/environment.lua) - it can only free-run at ONE flat rate for the
-    -- whole cycle. Whenever dayScale ~= nightScale (the default: nightScale=2, nights pass twice as
-    -- fast as days), native's own flat rate can NEVER actually match the server's real, asymmetric
-    -- one - it's not a timing/frequency problem correction pushes can fix, it's a structural rate
-    -- mismatch that needed constant, ever-growing correction specifically at night, which is
-    -- unavoidably visible no matter how often it's pushed.
-    --
-    -- Redesigned around an EPOCH instead of a per-tick value, the same "push a duration, not a
+    -- Designed around an EPOCH instead of a per-tick value, the same "push a duration, not a
     -- timestamp" pattern this codebase already uses for race/hunt elapsed time: `ToD` is the value
-    -- AT `ToDEpochAt` (this session's own monotonic clock domain), pushed to clients as a plain duration
-    -- (`epochAgoMs`, computed fresh at send time) only when something actually changes - not every
-    -- tick. Every client (see computeCurrentToD's own client-side twin) derives its own exact
-    -- current ToD locally, on demand, from that one epoch using the real day/night piecewise rate -
-    -- a closed-form calculation, not a loop, so it's correct and free-running for any elapsed
-    -- duration without needing further server pushes at all. This is strictly CHEAPER on the network
-    -- than the old once-a-second broadcast (an occasional push instead of a constant one), and lets
-    -- each client correct as often as it wants against the mathematically exact target, entirely
-    -- locally, with zero added server load - directly answering "some other solution might be
-    -- required" instead of just tuning the old push frequency up or down.
+    -- AT `ToDEpochAt` (this session's own monotonic clock domain), pushed to clients as a plain
+    -- duration (`epochAgoMs`, computed fresh at send time) only when something actually changes -
+    -- not every tick. The server and every client derive the exact current ToD locally, on demand,
+    -- from that one epoch with the same shared math (utils/envClock.lua: real sunset/sunrise split,
+    -- separate day/night speeds), so nothing needs pushing while it free-runs. Clients hand the
+    -- engine a per-phase dayLength so its own advance matches too (see the client's syncNative).
 }
 
 ---@return boolean whether ToD is actually advancing right now
@@ -56,77 +51,49 @@ end
 -- (still used for lastSafetyResyncAt's own once-a-minute cadence check further below, which is
 -- fine at 1-second resolution) is NOT precise enough for this: os.time() is whole-seconds-only, so
 -- subtracting two readings of it always throws away up to just under a second of the true elapsed
--- real time - deterministically, on literally every single call, not a rare edge case. Confirmed
--- live: a direct report (with `[BJToDDebug3]` diagnostic logging) of `forceToD` re-triggering on
--- EVERY single 60-second safety broadcast without fail, with the sign of the resulting diff
--- flipping between captures - exactly what discarding an essentially-random sub-second remainder
--- every time would produce, not a rate or wraparound bug (both already ruled out/fixed earlier).
+-- real time - confirmed live as `forceToD` re-triggering on every 60-second safety broadcast.
 -- MP.CreateTimer() (wrapped by the existing utils/math.lua's own math.timer()) is a genuine
 -- sub-second-precision monotonic stopwatch, with none of that quantization loss.
 local realtimeClock
 
----@param t0 number ToD at the start of the elapsed window, 0-1
----@param dtSec number real seconds elapsed since t0 (may be very large - e.g. a long-idle server -
----or negative, treated as 0)
----@param dayLength integer
----@param dayScale number
----@param nightScale number
----@param simSpeed number
----@return number ToD, 0-1
----@nodiscard
---- Closed-form (not a loop) day/night-aware ToD advance, matching onSlowUpdate's own historical
---- per-tick step exactly (same day=[0,.25)u[.75,1), night=[.25,.75) split, same `scale/dayLength`
---- rate) but computed directly for any elapsed duration. Re-expressed in a "shifted" coordinate
---- (`shifted = (ToD - .75) % 1`) where day is the single contiguous span [0,.5) and night is
---- [.5,1), since that's what makes a closed-form piecewise formula tractable - day/night's own
---- span in real ToD-space is two disjoint pieces, awkward to reason about directly. Has an exact
---- client-side twin (environment.lua's own computeCurrentToD) - keep both in sync if this changes.
-local function computeCurrentToD(t0, dtSec, dayLength, dayScale, nightScale, simSpeed)
-    dayLength = tonumber(dayLength) or 1800
-    dayScale = tonumber(dayScale) or 1
-    nightScale = tonumber(nightScale) or 1
-    simSpeed = tonumber(simSpeed) or 1
-    dtSec = math.max(0, tonumber(dtSec) or 0)
-    t0 = (tonumber(t0) or 0) % 1
-    if dayLength <= 0 or simSpeed <= 0 or dtSec <= 0 then return t0 end
+---@param mapName string?
+---@return table|false that map's solar data, false if no client has reported it yet (envClock then
+---falls back to a fixed 06:00-18:00 day, on every client alike - it's synced, see buildEnvPayload)
+local function observerFor(mapName)
+    return mapName and M.data.observers and M.data.observers[mapName] or false
+end
 
-    local dayRate = math.max(dayScale, 0) * simSpeed / dayLength
-    local nightRate = math.max(nightScale, 0) * simSpeed / dayLength
-    if dayRate <= 0 and nightRate <= 0 then return t0 end -- both segments frozen ; nothing to do
+local function currentObserver()
+    return observerFor(services_core.getCurrentMap())
+end
 
-    local dayDurationSec = dayRate > 0 and (0.5 / dayRate) or math.huge
-    local nightDurationSec = nightRate > 0 and (0.5 / nightRate) or math.huge
-    local cycleDurationSec = dayDurationSec + nightDurationSec
-    if cycleDurationSec == math.huge then
-        -- exactly one of the two segments never advances ; can't wrap a cycle, just walk directly
-        -- within whichever segment t0 starts in (the other segment is a wall this can't cross)
-        local shifted0 = (t0 - 0.75) % 1
-        if shifted0 < 0.5 and dayRate > 0 then
-            return (math.min(0.5, shifted0 + dayRate * dtSec) + 0.75) % 1
-        elseif shifted0 >= 0.5 and nightRate > 0 then
-            return (math.min(1, shifted0 + nightRate * dtSec) + 0.75) % 1
-        end
-        return t0
-    end
-
-    local shifted0 = (t0 - 0.75) % 1
-    local s0 = shifted0 < 0.5 and (shifted0 / dayRate) or (dayDurationSec + (shifted0 - 0.5) / nightRate)
-    local s1 = (s0 + dtSec) % cycleDurationSec
-    local shifted1 = s1 < dayDurationSec and (s1 * dayRate) or (0.5 + (s1 - dayDurationSec) * nightRate)
-    return (shifted1 + 0.75) % 1
+---@param observer table|false
+local function clockParams(observer)
+    return {
+        dayLength = M.data.dayLength,
+        dayScale = M.data.dayScale,
+        nightScale = M.data.nightScale,
+        simSpeed = M.data.simSpeed,
+        observer = observer,
+        year = M.data.year,
+        month = M.data.month,
+        day = M.data.day,
+    }
 end
 
 --- Collapses M.data.ToD/ToDEpochAt to the true current value (if it's actually been advancing since
 --- the last collapse) and re-anchors the epoch to right now. Call this BEFORE changing anything that
 --- affects the rate or play state (dayLength/dayScale/nightScale/dayNightCycle/simSpeed/simPause/
---- timeSync/an explicit ToD set) - so the window that just elapsed is correctly accounted for under
---- the OLD settings before the new ones take over, and any client that was already playing keeps
---- exact continuity across the change instead of jumping.
-local function collapseToD()
+--- timeSync/date/solar data/an explicit ToD set) - so the window that just elapsed is correctly
+--- accounted for under the OLD settings before the new ones take over, and any client that was
+--- already playing keeps exact continuity across the change instead of jumping.
+---@param observer table|false|nil override the solar data the elapsed window ran under (onMapChanged:
+---the OLD map's) ; nil = the current map's
+local function collapseToD(observer)
+    if observer == nil then observer = currentObserver() end
     local nowMs = realtimeClock:get()
     if isToDPlaying() then
-        M.data.ToD = computeCurrentToD(M.data.ToD, (nowMs - M.data.ToDEpochAt) / 1000,
-            M.data.dayLength, M.data.dayScale, M.data.nightScale, M.data.simSpeed)
+        M.data.ToD = envClock.advance(M.data.ToD, (nowMs - M.data.ToDEpochAt) / 1000, clockParams(observer))
     end
     M.data.ToDEpochAt = nowMs
 end
@@ -134,36 +101,111 @@ end
 ---@return number ToD, 0-1, right now
 local function currentToD()
     if not isToDPlaying() then return M.data.ToD end
-    return computeCurrentToD(M.data.ToD, (realtimeClock:get() - M.data.ToDEpochAt) / 1000,
-        M.data.dayLength, M.data.dayScale, M.data.nightScale, M.data.simSpeed)
+    return envClock.advance(M.data.ToD, (realtimeClock:get() - M.data.ToDEpochAt) / 1000,
+        clockParams(currentObserver()))
 end
 
 ---@return table a plain clone of M.data, with ToDEpochAt replaced by a fresh epochAgoMs DURATION
----(this session's own monotonic clock reading is meaningless to a client directly - see
----collapseToD's own doc comment for why this whole feature is built around durations, not
----timestamps)
+---(this session's own monotonic clock reading is meaningless to a client directly), and the
+---per-map solar data table replaced by just the current map's entry (explicit false when unknown,
+---so a client can't keep a previous map's entry around)
 local function buildEnvPayload()
     local payload = table.clone(M.data)
     payload.ToDEpochAt = nil
+    payload.observers = nil
+    payload.observer = currentObserver()
     payload.epochAgoMs = math.floor(realtimeClock:get() - M.data.ToDEpochAt)
     return payload
+end
+
+local function broadcastEnv()
+    communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "sendCache",
+        { environment = buildEnvPayload() })
+end
+
+local function isLeapYear(y)
+    return (y % 4 == 0 and y % 100 ~= 0) or y % 400 == 0
+end
+
+---@return integer?, integer?, integer? the date if it's a real calendar date, else nil
+local function validDate(year, month, day)
+    year, month, day = tonumber(year), tonumber(month), tonumber(day)
+    if not year or not month or not day then return nil end
+    year, month, day = math.floor(year), math.floor(month), math.floor(day)
+    if year < 1 or year > 9999 or month < 1 or month > 12 or day < 1 then return nil end
+    local monthDays = { 31, isLeapYear(year) and 29 or 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 }
+    if day > monthDays[month] then return nil end
+    return year, month, day
+end
+
+---@param ctxt BJSContext
+---@param report {map: string, latitude: number?, longitude: number?, utcOffset: number?, dstRule: string?, year: integer?, month: integer?, day: integer?}
+--- The server has no engine to read a level's solar data from, but needs it to split day from night
+--- exactly like every client (collapseToD). Every client reports it once its world is ready
+--- (client environment.lua's reportObserver); the first report for the current map is kept and
+--- persisted - it's level data, so every honest client sends the same values. Also seeds the synced
+--- date from the level's own if the server has never had one.
+local function reportObserver(ctxt, report)
+    if type(report) ~= "table" then return end
+    local map = services_core.getCurrentMap()
+    if tostring(report.map or ""):lower() ~= tostring(map):lower() then return end -- stale, map switched
+
+    local changed = false
+    M.data.observers = M.data.observers or {}
+    if M.data.observers[map] == nil then
+        collapseToD() -- the elapsed window ran under the fallback split
+        M.data.observers[map] = {
+            latitude = tonumber(report.latitude),
+            longitude = tonumber(report.longitude),
+            utcOffset = tonumber(report.utcOffset),
+            dstRule = type(report.dstRule) == "string" and report.dstRule or nil,
+        }
+        changed = true
+    end
+    if M.data.year == nil then
+        local y, mo, d = validDate(report.year, report.month, report.day)
+        if y then
+            collapseToD()
+            M.data.year, M.data.month, M.data.day = y, mo, d
+            changed = true
+        end
+    end
+    if changed then
+        dao_environment.save(M.data)
+        broadcastEnv()
+    end
 end
 
 local function onInit()
     realtimeClock = math.timer()
     M.default = table.clone(M.data)
     table.assign(M.data, dao_environment.get() or {})
+    -- removed setting (CHANGELOG 1.10.3) an older save may still carry ; dropped so it isn't
+    -- re-saved or broadcast forever
+    M.data.nightBrightnessMultiplier = nil
+    M.data.observers = M.data.observers or {}
     M.data.ToDEpochAt = realtimeClock:get() -- never meaningful across a restart ; re-anchor fresh
 
     communications_rx.addHandler("simSpeed", M.changeSimSpeed)
     communications_rx.addHandler("simPause", M.changeSimPause)
     communications_rx.addHandler("setEnv", M.changeEnv)
+    communications_rx.addHandler("envObserver", M.reportObserver)
 
     services_consoleCommands.register("env", "commands.bjenv.args", "commands.bjenv.desc", M.consoleEnv)
 end
 
 local function onBJRequestCache(caches, targetID)
     caches.environment = buildEnvPayload()
+end
+
+---@param oldMapName string
+---@param newMapName string
+local function onMapChanged(oldMapName, newMapName)
+    -- the elapsed window ran under the OLD map's solar data ; from here on the new map's applies
+    -- (or the fallback split, until its first client reports it)
+    collapseToD(observerFor(oldMapName))
+    dao_environment.save(M.data)
+    broadcastEnv()
 end
 
 ---@param playerID integer
@@ -184,9 +226,9 @@ local function onPlayerDisconnect(playerID)
 end
 
 -- how often the safety-net resync (persistence + a fresh epoch broadcast, in case of long-run
--- server/client real-time clock drift unrelated to the day/night rate mismatch fixed above) fires
--- while actively playing - replaces the old once-a-second broadcast; 60s is far more than enough
--- to bound plain clock drift to something negligible, at a fraction of the old network cost
+-- server/client real-time clock drift) fires while actively playing; 60s is far more than enough
+-- to bound plain clock drift to something negligible, at a fraction of the network cost of a
+-- constant broadcast
 local SAFETY_RESYNC_INTERVAL_SEC = 60
 local lastSafetyResyncAt = 0
 
@@ -195,8 +237,7 @@ local function onSlowUpdate()
         lastSafetyResyncAt = GetCurrentTime()
         collapseToD()
         dao_environment.save(M.data)
-        communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "sendCache",
-            { environment = buildEnvPayload() })
+        broadcastEnv()
     end
 end
 
@@ -213,8 +254,7 @@ local function changeSimSpeed(ctxt, newSpeed)
         collapseToD() -- simSpeed affects the ToD rate too ; account for the elapsed window first
         M.data.simSpeed = newSpeed
         dao_environment.save(M.data)
-        communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "sendCache",
-            { environment = buildEnvPayload() })
+        broadcastEnv()
     end
 end
 
@@ -230,21 +270,54 @@ local function changeSimPause(ctxt, pauseState)
         collapseToD() -- pausing/unpausing changes whether ToD is advancing at all
         M.data.simPause = pauseState
         dao_environment.save(M.data)
-        communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "sendCache",
-            { environment = buildEnvPayload() })
+        broadcastEnv()
     end
 end
 
+-- the only fields a setEnv payload may touch ; everything else in M.data (the per-map solar data,
+-- the epoch) is server-owned
+local SETTABLE_FIELDS = {
+    timeSync = true, ToD = true, dayNightCycle = true, dayLength = true, dayScale = true,
+    nightScale = true, year = true, month = true, day = true, gravitySync = true, gravity = true,
+}
+
 ---@param ctxt BJSContext
----@param payload {timeSync: boolean, ToD: number, dayNightCycle: boolean, dayLength: integer, dayScale: number, nightScale: number, gravitySync: boolean, gravity: number}
+---@param payload {timeSync: boolean, ToD: number, dayNightCycle: boolean, dayLength: integer, dayScale: number, nightScale: number, year: integer?, month: integer?, day: integer?, gravitySync: boolean, gravity: number}
 local function changeEnv(ctxt, payload)
     if ctxt.sender and not services_permissions.hasAnyPermission(ctxt.senderID,
             BJ_PERMISSIONS.SetEnvironment) then
         return
     end
+    if type(payload) ~= "table" then return end
+
+    local clean = {}
+    for key, value in pairs(payload) do
+        if SETTABLE_FIELDS[key] then clean[key] = value end
+    end
+    if clean.ToD ~= nil then
+        clean.ToD = tonumber(clean.ToD) and tonumber(clean.ToD) % 1 or nil
+    end
+    -- the game's own day length bounds (envClock.MIN/MAX_DAY_LENGTH)
+    if clean.dayLength ~= nil then
+        clean.dayLength = tonumber(clean.dayLength) and envClock.clampDayLength(clean.dayLength) or nil
+    end
+    -- day/night speed multipliers: nightScale is set from the config panel's own slider (0.1x-10x),
+    -- dayScale has no UI but gets the same bounds (envClock.effectiveScale further limits both at
+    -- use, so the engine's per-phase dayLength stays within the game's own bounds). Anything
+    -- non-numeric is dropped rather than stored.
+    for _, key in ipairs({ "dayScale", "nightScale" }) do
+        if clean[key] ~= nil then
+            local value = tonumber(clean[key])
+            clean[key] = value and math.clamp(value, envClock.MIN_SCALE, envClock.MAX_SCALE) or nil
+        end
+    end
+    -- the date only ever changes as a whole, and only to a real one
+    if clean.year ~= nil or clean.month ~= nil or clean.day ~= nil then
+        clean.year, clean.month, clean.day = validDate(clean.year, clean.month, clean.day)
+    end
 
     collapseToD() -- account for the elapsed window under the OLD settings before anything changes
-    local newData = table.assign(table.clone(M.data), payload)
+    local newData = table.assign(table.clone(M.data), clean)
     if not table.compare(M.data, newData) then
         table.assign(M.data, newData)
         if not M.data.gravitySync and M.data.gravity ~= DEFAULT_GRAVITY then
@@ -252,8 +325,7 @@ local function changeEnv(ctxt, payload)
         end
         M.data.ToDEpochAt = realtimeClock:get() -- fresh epoch under the NEW settings (or explicit ToD)
         dao_environment.save(M.data)
-        communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "sendCache",
-            { environment = buildEnvPayload() })
+        broadcastEnv()
     end
 end
 
@@ -418,10 +490,12 @@ M.onInit = onInit
 M.onBJRequestCache = onBJRequestCache
 M.onPlayerDisconnect = onPlayerDisconnect
 M.onSlowUpdate = onSlowUpdate
+M.onMapChanged = onMapChanged
 
 M.changeSimSpeed = changeSimSpeed
 M.changeSimPause = changeSimPause
 M.changeEnv = changeEnv
+M.reportObserver = reportObserver
 M.consoleEnv = consoleEnv
 
 return M

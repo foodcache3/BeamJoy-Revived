@@ -6,6 +6,117 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.10.6] - 2026-09-24
+
+Client build 2494, server build 2354.
+
+- Night speed slider's "limited by the day length" note (and the cycle readout) now wrap instead of
+  stretching the config window's column, and the slider with it, off the edge of the interface:
+  every table cell inherits `white-space: nowrap` from the shared stylesheet. *(client only)*
+- **Fixed a big hitch when opening the config window (and on race/hunter starts, paint and
+  config-label lookups, traffic spawns).** Found with BJSpikeProfiler's per-job timing:
+  `config.lua`'s `sendModelBlacklistToUI` job took 26 ms and allocated **37 MB** in one frame each
+  time the window opened, followed by GC pauses of up to 112 ms. Root cause:
+  `beamjoy_vehicles.getAllVehicleConfigs`'s cached path deep-cloned the entire vehicle database
+  (`table.clone` is a full `deepcopy`) on every call, twice for cars + trucks, cloning everything
+  before filtering. That included callers that only look up a single model (`getConfigLabel`,
+  `getAllPaints`) or just check whether a model exists (race/hunter `modelAvailableLocally`). The
+  cached path now returns a new top-level map pointing at the shared cached model tables (all
+  callers are read-only). It's written directly rather than through `table.assign`, which is itself
+  a recursive deep merge. `sendModelBlacklistToUI` also now uses the existing lightweight
+  `getAllVehicleLabels`, since it only needs key/label pairs. *(client only)*
+- **New standalone debugging tool: `Tools/BJSpikeProfiler.zip`** (separate mod, not part of
+  `BJ.zip`, costs nothing unless loaded from the console with
+  `extensions.load("bjSpikeProfiler")`). It keeps the game's own per-hook Lua profiler armed every
+  frame and logs only frames over a threshold, plus a summary of which hooks show up in spikes.
+  First findings: the sunrise/sunset hitch is the game's own night-light sweep (about 5,500
+  lights/emissives on West Coast, ~20 ms and ~1-1.4 MB garbage in one frame, once per
+  transition). The game's `setTimeOfDay` applies night lights immediately whenever a time is
+  written, so it's attributed to whichever of BJS or `core_environment` crosses the boundary
+  first. It's never run twice, and it costs the same as in vanilla.
+- **Day/night clock redesign: real sunrise/sunset, no per-frame corrections, synced date.**
+  - **Night is now real sunset to sunrise.** The day/night split used to be a fixed 18:00-06:00.
+    It now uses the same astronomy the game itself uses (a line-for-line port of
+    `core_solarTimeOfDay.getSolarNightWindow`: the map's latitude/longitude/time zone/DST rule
+    and the date, rounded to whole minutes), so night speed kicks in at the actual sunset,
+    matching the vanilla environment panel's own day/night bar. Maps without solar data fall
+    back to the old fixed split.
+  - **New shared module `envClock`** (`Client/BJ/lua/envClock.lua` and
+    `Server/BeamJoyServer/utils/envClock.lua`, byte-identical copies): the whole clock's math, so
+    the server and every client compute exactly the same thing. Whole cycles are skipped with a
+    modulo and segment layouts are cached, so the per-frame call allocates nothing.
+  - **No more per-frame correction.** The engine can only free-run at one speed, so BJS used to
+    correct it toward the synced clock every frame at night. The engine is now handed a
+    different `dayLength` per phase (`dayLength / that phase's speed`), switched at sunset and
+    sunrise, so its own advance already matches the synced rate. Per frame BJS only recomputes
+    the synced state (pure math, no engine reads) and writes only on a transition (day/night,
+    play/pause, a new date or setting). A 250ms `onSlowUpdate` drift check is the safety net.
+  - **Always within the game's own bounds.** The engine's per-phase `dayLength` never leaves
+    the vanilla panel's 5 min to 24 h range: the effective day/night speed is limited so that
+    `dayLength / speed` stays inside it (`envClock.effectiveScale`). At a 5-minute day length,
+    night can't go above 1x. The config slider's range follows the current day length and says
+    when it's limited.
+  - **Synced date.** A date picked in the vanilla panel by someone with SetEnvironment now
+    applies to everyone (sunrise, sunset and the moon all depend on it). It's written to the
+    engine only when the synced date changes, never re-pinned continuously, so BJS can't fight
+    anything the engine does with its own date. The server seeds it from the first client's
+    level date. No midnight rollover yet: still investigating the moon jump (see TODO).
+  - **Per-map solar data.** The first client on a map reports that map's
+    latitude/longitude/time zone (`envObserver`). The server keeps it per map (persisted) and
+    syncs it, and collapses the clock on a map change under the old map's data.
+  - **Config readout fixed.** The full-cycle readout now uses the real day/night split for the
+    synced date instead of assuming 50/50.
+  - `setEnv` now only accepts the fields it's meant to change (the server previously copied any
+    key a client sent into its own state), validates the date, and clamps the day length to the
+    game's bounds.
+  - Level loads reset what BJS thinks it last wrote, so a fresh level's `TimeOfDay` gets
+    everything rewritten (date included).
+  *(client + server, server needs deployment)*
+- **Fixed pausing/unpausing time or changing day length teleporting the clock** (sometimes a whole
+  cycle in under a second). The vanilla panel's play button and day-length picker call `setState`
+  with a bare partial (`{play = ...}` / `{dayLength = ...}`, no time), and `interceptEnvState` only
+  re-anchored the synced clock's epoch when an explicit time came in. Unpausing therefore advanced
+  the clock by the entire time spent paused in one step, pausing froze on the last epoch's value
+  instead of the current position, and a day-length change applied the new rate to the whole window
+  since the old epoch; whichever wrong value resulted was also sent to the server as
+  authoritative. Any play-state or rate change (play, dayLength, dayScale, nightScale) now
+  collapses first, starting the new epoch from where the clock actually was under the old
+  settings, matching the server's own `collapseToD`. *(client only)*
+- **Fixed the clock running on through a game pause (J) and snapping back afterwards.** The
+  client's `currentToD` didn't check `simPause`, unlike the server's `isToDPlaying`, so clients
+  kept advancing while the server's clock was stopped, then got re-anchored back by the whole
+  pause's worth of time on unpause. *(client only)*
+- **Night speed slider** in Config → Time & Environment (shown while time sync is on), 0.1x to
+  10x, backed by the existing `nightScale` sync field (default stays 2x). Underneath it, a live
+  **full day/night cycle** readout (total, plus day and night halves) recalculates as the slider
+  moves and whenever the vanilla panel's day length changes, since the vanilla panel's own "day
+  length" assumes night runs at 1x and stops matching the real cycle once night speed changes.
+  Server `changeEnv` clamps `dayScale`/`nightScale` to 0.1-10 and drops non-numeric values.
+  *(client + server, server needs deployment)*
+- **Gravity sync no longer writes every frame.** `updateGravity` used to call native `setGravity`
+  unconditionally on every frame while gravity sync was on. Native's `setGravity` fires the
+  `onEnvironmentChanged` hook and queues an `obj:setGravity(...)` Lua chunk into every vehicle's
+  own VM (traffic included), so this was compiling and running one chunk per vehicle per frame for
+  nothing. Now only writes when the level's actual gravity differs from the synced value (with a
+  float32 tolerance, since native never reads back bit-identical). *(client only)*
+- **Paused time-of-day no longer writes every frame.** Same pattern: with time sync on and the
+  cycle paused, `updateToD` re-pinned the time through native `setTimeOfDay` every frame, firing
+  `onEnvironmentChanged` across every extension each time. Now only writes when native is actually
+  playing or holding a different time. The playing path already worked this way. *(client only)*
+- A stale `nightBrightnessMultiplier` field (setting removed in 1.10.3) in an existing
+  `environment.json` is now dropped on server boot instead of being re-saved/broadcast forever.
+  *(server only, needs deployment)*
+- Resolved the "dayScale/nightScale may be dead code under 0.39" TODO: they are NOT dead. Native
+  0.39 no longer reads either field, but BJS's own synced clock (`computeCurrentToD`, both twins)
+  does, and enforces it through the per-frame correction in `updateToD` - nights really do run 2x
+  faster by default (confirmed live). Kept as-is. (Client build 2488 / server 2351 briefly removed
+  them on the wrong premise; reverted in full here.)
+- Removed the one-time derby race migration (`migrateDerbyRaces` and its helpers in
+  `services/races.lua`) added for the 1.10.5 release. It already shipped and did its job there
+  (self-tracking via `dao_bundled`'s own ledger, so any server on 1.10.5 or later either already
+  ran it or will on next boot) - no reason to keep carrying that one-shot code forward into ongoing
+  development. *(server only, needs deployment)*
+
 ## [1.10.5] - 2026-09-24
 
 Client build 2487, server build 2349. A shared-component bug fix affecting every slider in the app,

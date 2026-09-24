@@ -705,25 +705,26 @@ local function getAllVehicleConfigs(job, data)
     data.trucks = data.trucks ~= false
 
     if not data.forced and M.allVehicleConfigs then
-        -- cached data
-        local configs = {}
-        if data.cars then
-            table.assign(configs, Table(M.allVehicleConfigs):clone()
-                :filter(function(v) return v.Type == M.TYPES.CAR end))
+        -- cached data. Real, confirmed hitch (BJSpikeProfiler: 26 ms / 37 MB allocated in one frame
+        -- opening the config window, then GC pauses up to 112 ms): this used to DEEP-clone the whole
+        -- cached database (table.clone is a full deepcopy: every model with every config) on every
+        -- call - twice for cars + trucks, cloning everything before filtering - even for callers that
+        -- only look up one model (getConfigLabel, getAllPaints) or check `configs[model] ~= nil`.
+        -- Now a new top-level map pointing at the SHARED cached model tables: callers must treat the
+        -- model entries as read-only (every current caller does - lookups, or map/filter into new
+        -- tables of their own). Written directly, not through table.assign, which is itself a
+        -- recursive deep merge and would copy everything all over again.
+        local configs = Table()
+        local function addOfType(src, wantedType)
+            for key, model in pairs(src or {}) do
+                if wantedType == nil or model.Type == wantedType then configs[key] = model end
+            end
         end
-        if data.trucks then
-            table.assign(configs, Table(M.allVehicleConfigs):clone()
-                :filter(function(v) return v.Type == M.TYPES.TRUCK end))
-        end
-        if data.trailers then
-            table.assign(configs, Table(M.allTrailerConfigs):clone())
-        end
-        if data.props then
-            table.assign(configs, Table(M.allPropConfigs):clone())
-        end
-        if data.traffic then
-            table.assign(configs, Table(M.allTrafficConfigs):clone())
-        end
+        if data.cars then addOfType(M.allVehicleConfigs, M.TYPES.CAR) end
+        if data.trucks then addOfType(M.allVehicleConfigs, M.TYPES.TRUCK) end
+        if data.trailers then addOfType(M.allTrailerConfigs) end
+        if data.props then addOfType(M.allPropConfigs) end
+        if data.traffic then addOfType(M.allTrafficConfigs) end
         return configs
     end
 

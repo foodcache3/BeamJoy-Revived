@@ -160,7 +160,8 @@ set of racing- and gameplay-focused features.
   - Can be edited via UI, menus and radial menu
   - Gravity will resets to default (Earth) if all staff members leave
   - Customizable day/night cycle duration
-  - Optional night brightness multiplier
+  - Configurable night speed (0.1x to 10x), with a live readout of the resulting full cycle length
+  - Night follows each map's real sunset and sunrise, and the calendar date is synced too
 - Trailers and Props spawning permissions
 - Vehicle models blacklist
 - Toggle allowing players mods:

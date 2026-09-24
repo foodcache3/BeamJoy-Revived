@@ -47,17 +47,47 @@ hooked into the existing `interceptEnvState` wrap (which already receives the fu
 (cloud cover / fog / precipitation probably yes; things like cloud wind direction or altitude
 probably not worth the bandwidth) before touching code.
 
-## Environment: dayScale/nightScale may be dead code under 0.39
+## Moon jump / date rollover at midnight
 
-Found while fixing the day/night lerp bugs (CHANGELOG 1.10.3). BeamNG 0.39's own
-`core_environment`'s `timeOfDayStateFields` (the authoritative list of fields `setState`/
-`getState`/etc. actually read or write) no longer includes `dayScale` or `nightScale` at all —
-same "silently ignored by the engine" pattern `nightBrightnessMultiplier` turned out to be (already
-removed, same CHANGELOG entry). BJS's own `dayScale`/`nightScale` sync fields (`M.data.dayScale`/
-`nightScale`, `updateToD`, `interceptEnvState`, `sendEnv`, the config UI sliders) may be entirely
-vestigial now. Not confirmed live, and not removed yet — a separate cleanup from the lerp fix that
-prompted this note. Worth a live test (does changing either slider actually do anything under 0.39?)
-before removing them the same way.
+**Status:** investigating, blocked on an engine test.
+
+The sky (`core/celestial.lua`) is stateless: every frame it positions the sun, moon and stars from
+the engine's current `time` + date (`whenToJD`). Nothing in the game's Lua ever advances the date
+when the clock passes midnight, so crossing midnight on a fixed date steps the sky's instant back
+a day, and the moon (moves ~12-13 degrees/day) visibly jumps. But the user found the jump only
+happens after a full played-through cycle, NOT when crossing midnight via the panel's preset
+times, which the stateless-Lua explanation alone can't produce. So the engine's C++ TimeOfDay
+likely does something with the date (or time) during free-running playback that isn't visible in
+Lua or the panel.
+
+Next step: in vanilla single-player, `core_environment.setTimeOfDay({dayLength = 300, play =
+true})`, then `dump(core_environment.getTimeOfDay())` just before midnight, just after, and after
+a full cycle, and compare `year/month/day/time`. Then: if the engine advances the date itself,
+BJS's synced date should follow it (currently written only on change, so it doesn't fight it);
+if not, implement rollover in `envClock.advance` (count midnights crossed since the epoch,
+advance the synced date; the per-date segment cache already supports a date that moves).
+
+## Sim pause: replace the deliberate-error block with a function wrap
+
+**Status:** planned, not started. User asked to add this to the plan rather than build it now.
+
+Pressing J logs a `*** FATAL LUA ERROR ... BeamJoy needs to prevent game from toggling pause (this
+error is not a real one)` with a full stack trace every time. It's intentional and harmless (inherited
+from the original mod): native `simTimeAuthority.togglePause` (`lua/ge/simTimeAuthority.lua:229`)
+runs the `onTogglePause` hook and then pauses locally, with no supported veto (hook return values
+are ignored), so client `environment.lua`'s `onTogglePause` sends `simPause` to the server and then
+throws to abort the local pause. The server's `sendCache` reply then applies the pause for everyone.
+Works, but the log noise looks like a real crash to anyone reading a BeamNG.log.
+
+Cleaner: wrap `simTimeAuthority.togglePause` itself in `onInit` (store the original in
+`M.baseFunctions` so `RollBackNGFunctionsWrappers` restores it on unload, same as the
+`core_environment` wraps). The wrapper calls the original during replay playback (local pause stays
+local there, matching the current `core_replay.state.state ~= "playback"` check) and otherwise just
+sends `simPause`, no error. The J binding executes `simTimeAuthority.togglePause(true)` as a string
+at press time (visible in the traceback), so a replaced function is picked up. Then remove the
+throwing `onTogglePause`. Worth checking whether anything else (radial menu, UI pause button) calls
+`simTimeAuthority.pause` directly instead of `togglePause`. `updateSimSpeed`'s per-frame re-sync
+already reverts those, but they'd bypass the server request.
 
 ## Freeroam / Bus lines — later phases
 

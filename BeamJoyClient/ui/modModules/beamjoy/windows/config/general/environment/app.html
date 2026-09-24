@@ -20,6 +20,49 @@
             <bj-toggle ng-model="$ctrl.data.timeSync"></bj-toggle>
         </td>
     </tr>
+    <tr ng-if="$ctrl.data.timeSync">
+        <td
+            class="text-right"
+            title="{{'beamjoy.window.config.tabs.general.environment.nightSpeed.tooltip'|translate}}"
+        >
+            {{"beamjoy.window.config.tabs.general.environment.nightSpeed"|translate}}
+        </td>
+        <td>
+            <bj-slider
+                ng-model="$ctrl.data.nightScale"
+                min="$ctrl.nightScaleMin"
+                max="$ctrl.nightScaleMax"
+                step="0.1"
+            ></bj-slider>
+            <!-- white-space: normal - every table cell is nowrap by default (beamjoy-style's
+                 global `beamjoy table td` rule), which let this note stretch the column (and the
+                 slider with it) past the window's edge instead of wrapping -->
+            <div
+                ng-if="$ctrl.nightScaleMax < 10 || $ctrl.nightScaleMin > 0.1"
+                style="opacity: 0.75; font-size: 0.85em; white-space: normal"
+            >
+                {{"beamjoy.window.config.tabs.general.environment.nightSpeed.limited"|translate}}
+                {{$ctrl.nightScaleMin}}x - {{$ctrl.nightScaleMax}}x
+            </div>
+        </td>
+    </tr>
+    <tr ng-if="$ctrl.data.timeSync && $ctrl.cycle">
+        <td
+            class="text-right"
+            title="{{'beamjoy.window.config.tabs.general.environment.cycleLength.tooltip'|translate}}"
+        >
+            {{"beamjoy.window.config.tabs.general.environment.cycleLength"|translate}}
+        </td>
+        <td style="white-space: normal">
+            <strong>{{$ctrl.cycle.total}}</strong>
+            <span style="opacity: 0.75">
+                ({{"beamjoy.window.config.tabs.general.environment.cycleLength.day"|translate}}
+                {{$ctrl.cycle.day}},
+                {{"beamjoy.window.config.tabs.general.environment.cycleLength.night"|translate}}
+                {{$ctrl.cycle.night}})
+            </span>
+        </td>
+    </tr>
     <tr>
         <td class="text-right">
             {{"beamjoy.window.config.tabs.general.environment.gravitySync"|translate}}

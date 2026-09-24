@@ -1,0 +1,184 @@
+@font-face {
+  font-family: Roboto;
+  src: url(/ui/common/Roboto-Regular.ttf),url(/ui/common/Roboto-Regular.ttf);
+}
+
+body {
+  font-family: Roboto;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  background-color: white
+}
+
+.displayHeader {
+  margin-top: 0;
+  width: 100%;
+  height: 50px;
+  background-color: #393939;
+  display: inline-block
+}
+
+.displayHeader .time {
+  float: left;
+  margin-left: 5%;
+  color: #D8D8D8;
+  font-weight: bold;
+  font-size: 35px;
+}
+
+.displayHeader .logo {
+  margin: 1%;
+  margin-right: 5%;
+  width: 40px;
+  float: right;
+}
+
+.displayRoute {
+  z-index: -2;
+  width: 100%;
+  height: 60px;
+  margin: 10px;
+  margin-top: 1%;
+  margin-bottom: 0px;
+  display: inline-block;
+  position: relative;
+  color: white;
+
+}
+
+.displayRoute .route {
+  float: left;
+  font-weight: bold;
+  font-size: 35px;
+  text-align: center;
+  width: 15%;
+  height: 100%;
+  background-color: #393939;
+}
+
+.displayRoute .route .chevron {
+  position: absolute;
+  bottom:0;
+  width: 0;
+  height: 0;
+  border-left: 39px solid transparent;
+  border-right: 39px solid transparent;
+  border-bottom: 15px solid white;
+}
+
+.displayRoute .destination {
+  margin-left: 18%;
+  width: 78%;
+  height: 100%;
+  background-color: #393939;
+}
+
+.displayRoute .destination .title {
+  font-weight: bold;
+  font-size: 35px;
+  line-height: 50px;
+  margin-left: 2%;
+}
+
+.displayStops {
+  display: inline-block;
+  width: 100%;
+  height: 100%;
+}
+
+.displayStops .bullet {
+  float: left;
+  overflow: visible;
+  margin-top: 1%;
+  margin-left: 2%;
+  width: 15%;
+  position: relative;
+}
+
+.displayStops .bullet .body {
+  width: 100%;
+  height: 35px;
+  background-color: #FFA200
+}
+
+.displayStops .bullet .chevron {
+  width:0;
+  height:0;
+  border-left: 39px solid transparent;
+  border-right: 39px solid transparent;
+  border-bottom:15px solid #FFA200;
+  position: absolute;
+  top: inherit;
+  bottom:inherit;
+}
+
+.displayStops .stopContainer {
+  width: 78%;
+  height: 40px;
+  background-color: #DFDFDF;
+  margin-left: 20%;
+  margin-top: 1.5%;
+  top: inherit;
+  bottom:inherit;
+}
+
+.displayStops .stopContainer .title {
+  font-size: 20px;
+  padding: 1.5%;
+}
+
+/* [BJDisplayDebug] changed from `position: absolute; bottom: 0px;` (pinned to the bottom of the
+   FULL rendered webview canvas) to a normal in-flow element. Root cause (confirmed via temporary
+   instrumented logging in a diagnostic copy of citybusStopDisplay.js - the JS itself was never the
+   problem, its computed next-stop value was always correct, it just never appeared on screen): the
+   stock file never sets an explicit height anywhere in the html/body/controller-root chain, which
+   makes an absolutely positioned "bottom: 0" element behave inconsistently depending on how much
+   content is above it - it worked with an empty stop list (the "off duty" reset state) and silently
+   landed off-screen with a real one. Flowing it normally right after the stop list sidesteps that
+   ambiguity entirely (not bottom-anchored per direct request - it just renders wherever the list
+   actually ends). CSS-only fix: citybusStopDisplay.js itself is untouched stock, no override needed
+   for it. */
+.displayFooter {
+  color: black;
+  width: 100%;
+  height: 50px;
+  margin: 10px;
+  display: inline-block;
+  position: relative;
+}
+
+.displayFooter .nextStop {
+  float: left;
+  font-weight: bold;
+  font-size: 18px;
+  text-align: center;
+  width: 15%;
+  height: 100%;
+  background-color: #FFA200;
+}
+
+.displayFooter .chevron {
+  position: absolute;
+  top: -15px;
+  margin: 0 auto;
+  width:0;
+  height:0;
+  border-left: 39px solid transparent;
+  border-right: 39px solid transparent;
+  border-bottom:15px solid #FFA200;
+}
+
+.displayFooter .nextStopTitle {
+  font-weight:
+  bold; font-size: 40px;
+  text-align: justify;
+  margin-left: 18%;
+  width: 78%;
+  height: 100%;
+  background-color: #FFA200;
+}
+
+.displayFooter .nextStopTitle .title {
+  margin-left: 2%;
+}

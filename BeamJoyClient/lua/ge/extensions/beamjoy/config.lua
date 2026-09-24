@@ -74,17 +74,20 @@ end
 
 local function sendModelBlacklistToUI()
     extensions.core_jobsystem.create(function(job)
+        -- Real, confirmed hitch (BJSpikeProfiler: this job at 26 ms / 37 MB allocated in one frame,
+        -- every time the config window opened, followed by a GC pause of up to 112 ms): this used
+        -- getAllVehicleConfigs, whose cached path deep-clones the WHOLE config table (every model
+        -- with every config) - twice, once per car/truck filter - just to read each model's label.
+        -- getAllVehicleLabels returns the same key -> label pairs from small prebuilt maps.
+        local labels = beamjoy_vehicles.getAllVehicleLabels(job, { trailers = true, props = true })
+        local models = {}
+        for key, label in pairs(labels) do
+            models[#models + 1] = { key = key, label = label }
+        end
+        table.sort(models, function(a, b) return a.label < b.label end)
         beamjoy_communications_ui.send("BJModelsBlacklist", {
             list = M.data.ModelBlacklist,
-            models = table.map(beamjoy_vehicles.getAllVehicleConfigs(job,
-                        { cars = true, trucks = true, trailers = true, props = true }),
-                    function(model, modelKey)
-                        return {
-                            key = modelKey,
-                            label = model.label,
-                        }
-                    end):values()
-                :sort(function(a, b) return a.label < b.label end),
+            models = models,
         })
     end)
 end
