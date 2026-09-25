@@ -69,6 +69,7 @@ local function sendConfigToUI()
         -- them from this exact broadcast.
         Freeroam = M.data.Freeroam,
         Voting = M.data.Voting,
+        Deliveries = M.data.Deliveries,
     })
 end
 

@@ -8,18 +8,11 @@
     }
     bj-config-bus-lines .line-row.active {
         /* real, confirmed bug: 0.2 alpha barely darkens whatever's behind the config window (a
-           bright world scene in freecam) - the yellow highlight below read as near-invisible
-           against it. Active specifically (not hover) needs a properly opaque backing. A
+           bright world scene in freecam) - the active row read as near-invisible against it. Active specifically (not hover) needs a properly opaque backing. A
            darker-blue-background variant of this fix was tried and reverted per direct request
            ("put it back to how it was") - back to this version. Same treatment on .stop-row.active
            below, for consistency. */
         background-color: rgba(0, 0, 0, 0.65);
-    }
-    bj-config-bus-lines .line-row.active .line-name {
-        color: #edff00;
-        /* belt-and-suspenders on top of the darker background above : guarantees legibility
-           regardless of whatever's behind the panel */
-        text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 3px rgba(0, 0, 0, 0.9);
     }
     bj-config-bus-lines .stop-row {
         transition: background-color 0.15s ease-in-out;

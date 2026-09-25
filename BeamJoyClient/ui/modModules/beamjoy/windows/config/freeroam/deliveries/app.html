@@ -1,0 +1,178 @@
+<style>
+    bj-config-deliveries .item-row {
+        transition: background-color 0.2s ease-in-out;
+        border-radius: 0.3em;
+    }
+    bj-config-deliveries .item-row:hover {
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-config-deliveries .item-row.active {
+        background-color: rgba(0, 0, 0, 0.65);
+    }
+    bj-config-deliveries .slot-row {
+        transition: background-color 0.15s ease-in-out;
+    }
+    bj-config-deliveries .slot-row:hover {
+        background-color: rgba(0, 0, 0, 0.25);
+    }
+    bj-config-deliveries .slot-row.active {
+        background-color: rgba(0, 0, 0, 0.65);
+    }
+    bj-config-deliveries .name-input {
+        /* not flex-grow-1 : leaves empty row space to click-select, same as the stations list */
+        flex: 1 1 auto;
+        max-width: 50%;
+        min-width: 0;
+    }
+    bj-config-deliveries .radius-input {
+        width: 4em;
+    }
+    bj-config-deliveries .kind-dot {
+        width: 0.6em;
+        height: 0.6em;
+        border-radius: 50%;
+        flex-shrink: 0;
+        background-color: #4db3ff;
+    }
+    bj-config-deliveries .kind-dot.depot {
+        background-color: #ff7300;
+    }
+    bj-config-deliveries .tag-chip {
+        padding: 0.1em 0.5em;
+        font-size: 0.85em;
+    }
+    bj-config-deliveries .tag-label {
+        min-width: 4.5em;
+    }
+    bj-config-deliveries .details-wrap {
+        border-left: 2px solid rgba(255, 255, 255, 0.15);
+        margin-left: 0.4em;
+        padding-left: 0.5em;
+    }
+    bj-config-deliveries .warn-text {
+        color: #ffb74d;
+        white-space: normal;
+    }
+</style>
+
+<div class="d-flex align-center gap-1 mb-1">
+    <h5 class="flex-grow-1">
+        {{'beamjoy.window.config.tabs.freeroam.deliveries.points' | translate}}
+        ({{$ctrl.points.length}}, {{'beamjoy.window.config.tabs.freeroam.deliveries.depots' | translate}}: {{$ctrl.depotCount()}})
+    </h5>
+    <button class="btn info" ng-click="$ctrl.importFromMap($event)" ng-disabled="$ctrl.measuring"
+        title="{{'beamjoy.window.config.tabs.freeroam.deliveries.import.tooltip' | translate}}">
+        {{'beamjoy.window.config.tabs.freeroam.deliveries.import' | translate}}
+    </button>
+    <button class="btn success" ng-click="$ctrl.addPoint($event)"
+        title="{{'beamjoy.window.config.editor.pointList.addAtCurrentPosition' | translate}}">
+        <icon name="add"></icon>
+    </button>
+</div>
+
+<div class="small mb-2" ng-if="$ctrl.measuring">
+    {{'beamjoy.window.config.tabs.freeroam.deliveries.measuring' | translate}}
+    {{$ctrl.measuring.done}} / {{$ctrl.measuring.total}}
+</div>
+<div class="opacity-70 small mb-2" style="white-space: normal">
+    {{'beamjoy.window.config.tabs.freeroam.deliveries.hint' | translate}}
+</div>
+<div class="opacity-70 small mb-2" ng-if="$ctrl.points.length === 0">
+    {{'beamjoy.window.config.editor.pointList.empty' | translate}}
+</div>
+
+<div ng-repeat="point in $ctrl.points track by $index" ng-init="pointIdx = $index + 1" class="mb-1">
+    <div
+        id="delivery-row-{{pointIdx}}"
+        class="item-row d-flex p-1 px-2 gap-1 cursor-pointer align-center"
+        ng-class="{active: $ctrl.activeIndex === pointIdx}"
+        ng-click="$ctrl.selectPoint($event, pointIdx)"
+    >
+        <span class="kind-dot" ng-class="{depot: $ctrl.isDepot(point)}"
+            title="{{($ctrl.isDepot(point) ? 'beamjoy.window.config.tabs.freeroam.deliveries.kind.depot' : 'beamjoy.window.config.tabs.freeroam.deliveries.kind.dropOff') | translate}}"></span>
+        <input type="text" class="item-name name-input" maxlength="40" ng-model="point.name"
+            ng-click="$event.stopPropagation()"
+            ng-change="$ctrl.setName(pointIdx, point.name)"
+            placeholder="{{'beamjoy.window.config.tabs.freeroam.deliveries.point' | translate}} {{pointIdx}}" />
+        <input type="number" class="radius-input" min="3" max="30" step="0.5" ng-model="point.radius"
+            ng-click="$event.stopPropagation()"
+            ng-change="$ctrl.setRadius(pointIdx, point.radius)"
+            title="{{'beamjoy.window.config.tabs.freeroam.deliveries.radius.tooltip' | translate}}" />
+        <button class="btn info" ng-click="$ctrl.setToVehicle($event, pointIdx)"
+            title="{{'beamjoy.window.config.tabs.races.setToVehicle' | translate}}">
+            <icon name="car"></icon>
+        </button>
+        <button class="btn info" ng-click="$ctrl.teleportTo($event, pointIdx)"
+            title="{{'beamjoy.window.config.editor.pointList.teleportToHere' | translate}}">
+            <icon name="eye"></icon>
+        </button>
+        <button class="btn danger" ng-click="$ctrl.deletePoint($event, pointIdx)"
+            title="{{'beamjoy.common.delete' | translate}}">
+            <icon name="delete"></icon>
+        </button>
+    </div>
+    <div class="warn-text small ml-1" ng-if="$ctrl.missingSlots(point)">
+        {{'beamjoy.window.config.tabs.freeroam.deliveries.slots.missing' | translate}}
+    </div>
+
+    <div class="details-wrap mt-1" ng-if="$ctrl.activeIndex === pointIdx">
+        <div class="d-flex flex-wrap align-center gap-1 mb-1"
+            title="{{'beamjoy.window.config.tabs.freeroam.deliveries.provides.tooltip' | translate}}">
+            <span class="tag-label opacity-70 small">{{'beamjoy.window.config.tabs.freeroam.deliveries.provides' | translate}}</span>
+            <button class="btn tag-chip" ng-repeat="tag in $ctrl.provideOptions track by tag"
+                ng-class="$ctrl.hasTag(point, 'provides', tag) ? 'success' : 'info'"
+                ng-click="$ctrl.toggleTag($event, point, pointIdx, 'provides', tag)">
+                {{('beamjoy.window.config.tabs.freeroam.deliveries.tag.' + tag) | translate}}
+            </button>
+        </div>
+        <div class="d-flex flex-wrap align-center gap-1 mb-1"
+            title="{{'beamjoy.window.config.tabs.freeroam.deliveries.receives.tooltip' | translate}}">
+            <span class="tag-label opacity-70 small">{{'beamjoy.window.config.tabs.freeroam.deliveries.receives' | translate}}</span>
+            <button class="btn tag-chip" ng-repeat="tag in $ctrl.receiveOptions track by tag"
+                ng-class="$ctrl.hasTag(point, 'receives', tag) ? 'success' : 'info'"
+                ng-click="$ctrl.toggleTag($event, point, pointIdx, 'receives', tag)">
+                {{('beamjoy.window.config.tabs.freeroam.deliveries.tag.' + tag) | translate}}
+            </button>
+        </div>
+
+        <div ng-if="$ctrl.sendsVehicles(point)">
+            <div class="d-flex align-center gap-1 mb-1">
+                <span class="flex-grow-1 opacity-70 small">
+                    {{'beamjoy.window.config.tabs.freeroam.deliveries.slots.title' | translate}}
+                    ({{point.slots.length}} / {{$ctrl.MAX_SLOTS}})
+                </span>
+                <button class="btn success" ng-click="$ctrl.addSlot($event, pointIdx)"
+                    ng-disabled="point.slots.length >= $ctrl.MAX_SLOTS"
+                    title="{{'beamjoy.window.config.tabs.freeroam.deliveries.slots.add' | translate}}">
+                    <icon name="add"></icon>
+                </button>
+            </div>
+            <div
+                ng-repeat="slot in point.slots track by $index"
+                ng-init="slotIdx = $index + 1"
+                class="slot-row d-flex p-1 gap-1 cursor-pointer align-center mb-1"
+                ng-class="{active: $ctrl.activeSlot === slotIdx}"
+                ng-click="$ctrl.selectSlot($event, pointIdx, slotIdx)"
+            >
+                <span class="opacity-70 small flex-grow-1">
+                    {{'beamjoy.window.config.tabs.freeroam.deliveries.slot' | translate}} {{slotIdx}}
+                </span>
+                <button class="btn info" ng-click="$ctrl.setSlotToVehicle($event, pointIdx, slotIdx)"
+                    title="{{'beamjoy.window.config.tabs.races.setToVehicle' | translate}}">
+                    <icon name="car"></icon>
+                </button>
+                <button class="btn info" ng-click="$ctrl.teleportToSlot($event, pointIdx, slotIdx)"
+                    title="{{'beamjoy.window.config.editor.pointList.teleportToHere' | translate}}">
+                    <icon name="eye"></icon>
+                </button>
+                <button class="btn danger" ng-click="$ctrl.deleteSlot($event, pointIdx, slotIdx)"
+                    title="{{'beamjoy.common.delete' | translate}}">
+                    <icon name="delete"></icon>
+                </button>
+            </div>
+            <div class="opacity-70 small" style="white-space: normal">
+                {{'beamjoy.window.config.tabs.freeroam.deliveries.slots.hint' | translate}}
+            </div>
+        </div>
+    </div>
+</div>

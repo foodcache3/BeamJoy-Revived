@@ -81,6 +81,14 @@ local function onBJBusLinesChanged()
     end
 end
 
+--- same forwarding pattern, for deliveryPoints.lua's own extensions.hook("onBJDeliveryPointsChanged")
+--- (only freeroamEditor.lua defines this)
+local function onBJDeliveryPointsChanged()
+    if M.activeEditor and M.activeEditor.onBJDeliveryPointsChanged then
+        M.activeEditor.onBJDeliveryPointsChanged()
+    end
+end
+
 M.onInit = onInit
 M.onUpdate = onUpdate
 M.onBJClick = onBJClick
@@ -89,5 +97,6 @@ M.onBJHunterArenaChanged = onBJHunterArenaChanged
 M.onBJInfectedArenaChanged = onBJInfectedArenaChanged
 M.onBJFreeroamDataChanged = onBJFreeroamDataChanged
 M.onBJBusLinesChanged = onBJBusLinesChanged
+M.onBJDeliveryPointsChanged = onBJDeliveryPointsChanged
 
 return M

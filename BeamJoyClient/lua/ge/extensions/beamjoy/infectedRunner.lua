@@ -20,23 +20,18 @@ local TAG_CANDIDATE_RADIUS = 50 -- slow-tick coarse cull distance, matching BJI'
 local RESET_MAX_SPEED = 2
 -- Per direct request: reset_physics/reset_all_physics (whatever key triggers them, "R" by
 -- default) get redirected to actually perform the same in-place recovery recover_vehicle itself
--- does, rather than just being blocked outright. Achieved by overriding the GLOBAL `resetGameplay`
--- function (lua/ge/main.lua's own definition, confirmed by reading the installed game's source:
--- `function resetGameplay(playerID) extensions.hook('onResetGameplay', playerID) end` - a plain,
--- reassignable global, one line, no other side effect to replicate), NOT by watching input at all
--- - both reset_physics and reset_all_physics execute this exact function directly as their
--- native "onDown" Lua (see core/input/actions/gameplay.json), so overriding it here intercepts
--- every caller uniformly regardless of what triggered it. See redirectedResetGameplay/
--- installResetGameplayRedirect/uninstallResetGameplayRedirect further down this file (after
--- myCurrentVehicle/getSelfParticipant, which the redirect itself needs to already be in scope)
--- for the actual mechanism.
+-- does, rather than just being blocked outright. Both already funnel through beamjoy_inputs'
+-- onBJRequestCurrentVehicleReset hook (inputs.lua overrides the global resetGameplay), where the
+-- shared beamjoy/recoveryPolicy.lua (also used by deliveries) does the redirect while this mode
+-- holds its claim - see installResetGameplayRedirect/uninstallResetGameplayRedirect further down.
 -- reload_vehicle deliberately NOT covered by this : it's a different, heavier native operation
 -- (core_vehicle_manager.reloadVehicle -> a genuine vehicle respawn, not just a physics reset) on
 -- a debug-category action unlikely to have a real default keybind, so it stays simply blocked
 -- (see onBJRequestRestrictions) rather than redirected too.
 
 local M = {
-    dependencies = { "beamjoy_infected", "beamjoy_vehicles", "beamjoy_players", "camera" },
+    dependencies = { "beamjoy_infected", "beamjoy_vehicles", "beamjoy_players", "camera",
+        "beamjoy_recoveryPolicy" },
 
     ---@type BJInfectedSession?
     session = nil,
@@ -1122,49 +1117,28 @@ local function onBJRequestStationInteraction(req, kind)
 end
 M.onBJRequestStationInteraction = onBJRequestStationInteraction
 
--- See RESET_MAX_SPEED's own doc comment near the top of this file for the full "why" and "how".
----@type function? the real, native resetGameplay, saved while overridden ; nil whenever not
----installed, which doubles as this mechanism's own "is it currently installed" flag
-local originalResetGameplay = nil
-
----@param playerID integer|string 0 for "my own vehicle" (reset_physics), -1 for "every vehicle"
----(reset_all_physics) - both treated identically here, matching how the restriction system
----already treated them identically before this redirect existed (always blocked together).
----Self-gating: checks whether it's actually relevant on EVERY call, so even if
----uninstallResetGameplayRedirect() is somehow never reached on a particular round's end (a missed
----teardown path), the worst case is a harmless permanent pass-through wrapper, not resets staying
----redirected outside Infected.
-local function redirectedResetGameplay(playerID)
-    local id = tonumber(playerID)
-    if M.session and M.session.state == "GAME" and (id == 0 or id == -1) then
-        local participant = getSelfParticipant()
-        if participant then
-            local myVeh = myCurrentVehicle()
-            -- same speed/relock gate recover_vehicle's own actionFilter entry is held to (see
-            -- onBJRequestRestrictions) - this is reached via reset_physics's OWN key/menu, still
-            -- performing recover_vehicle's exact behavior, so it must respect the exact same gate
-            -- rather than becoming a way around it. Silently does nothing when gated, matching
-            -- how a genuinely blocked action would feel (key press, nothing happens).
-            if myVeh and not (M.movingTooFastToReset or
-                    (M.resetRelockUntilMs and GetCurrentTimeMillis() < M.resetRelockUntilMs)) then
-                myVeh.veh:queueLuaCommand("recovery.recoverInPlace()")
-            end
-            return
-        end
-    end
-    originalResetGameplay(playerID)
-end
-
+-- See RESET_MAX_SPEED's own doc comment near the top of this file for the "why". The mechanism now
+-- lives in beamjoy/recoveryPolicy.lua, shared with deliveries : while this claim is active (GAME,
+-- and actually a participant), reset_physics/reset_all_physics perform recover_vehicle's in-place
+-- recovery instead, under the same speed/relock gate recover_vehicle's own actionFilter entry is
+-- held to (see onBJRequestRestrictions) ; silently nothing when gated, matching how a genuinely
+-- blocked action feels. Kept under the old install/uninstall names so the GAME-transition block and
+-- clearGameState above don't change.
 local function installResetGameplayRedirect()
-    if originalResetGameplay then return end -- already installed
-    originalResetGameplay = resetGameplay
-    resetGameplay = redirectedResetGameplay
+    beamjoy_recoveryPolicy.claim("infected", {
+        active = function()
+            return M.session ~= nil and M.session.state == "GAME" and getSelfParticipant() ~= nil
+        end,
+        allowRecovery = function()
+            return not (M.movingTooFastToReset or
+                (M.resetRelockUntilMs and GetCurrentTimeMillis() < M.resetRelockUntilMs))
+        end,
+        vehicle = myCurrentVehicle,
+    })
 end
 
 local function uninstallResetGameplayRedirect()
-    if not originalResetGameplay then return end
-    resetGameplay = originalResetGameplay
-    originalResetGameplay = nil
+    beamjoy_recoveryPolicy.release("infected")
 end
 -- exported on M (not just left as plain locals) specifically so clearGameState/the GAME-transition
 -- block above - both defined earlier in this file, textually before these two - can reach them: a

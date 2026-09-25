@@ -6,6 +6,237 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [Unreleased] - Phase 3 deliveries, slices 1-4: delivery points, package and vehicle delivery, convoys
+
+Client build 2508, server build 2360.
+
+### POI sort error (client 2508)
+
+- **"Error while sorting table ... missionMarker ... attempt to compare two nil values"** in the
+  log whenever the map's markers refreshed. The game sorts overlapping mission-style markers by
+  `data.date`, and BJS's own markers (depots, energy stations and garages, bus line starts) had
+  none, so two of them close together crashed the sort. They now carry `date = 0`. Existed since
+  Phase 1's station markers, not new with deliveries. *(client only)*
+
+### Job board route fix (client 2507)
+
+- **The route's dots and line didn't line up with the stops** on multi-stop jobs. They were
+  drawn in a separate column with fixed spacing; each stop now draws its own dot and the line
+  down to the next one, so they stay aligned with any number of stops. *(client only)*
+
+### Job board fix (client 2506)
+
+- **The board's details panel stopped following the selection** (the highlight moved, the
+  details kept showing an earlier job). The new route list was rebuilt as a fresh array on every
+  UI refresh, which AngularJS never settles on, so it gave up refreshing the panel. The list is
+  now built once when the board data arrives; the convoy lobby's slot list had the same pattern
+  and got the same fix. *(client only)*
+
+### Slice 4 follow-ups (client 2504, server 2360)
+
+- **Multi-stop package jobs.** Some package offers (about a third, when the map allows) now have
+  2 or 3 drop-offs in a row: depot, then stop 1, stop 2 and maybe stop 3, holding at each. Every
+  leg stays within the server's route distances, the target time covers all legs plus the holds,
+  and the score gets x1.15 for 2 stops or x1.3 for 3 on top of the longer route. The board shows
+  "3 stops" and the whole route with each leg's length, the HUD shows "Stop 2 / 3", and the server
+  checks each stop's position like the final one. Vehicle jobs stay single-stop. **Needs one save
+  in the Freeroam editor's Deliveries section** so the stop-to-stop legs get measured. Every pair
+  of package drop-offs is measured, whatever the route distance settings, so changing Shortest or
+  Longest route later never needs another save. That first save takes longer than usual; later
+  saves reuse the measurements. *(client + server)*
+- **Un-readying puts the lobby countdown back.** When everyone is ready the countdown drops to
+  5 seconds; if someone then un-readies (or an unready player joins), it goes back to what was
+  left when the last player readied. The leader's Start now still sticks. *(server)*
+- **Vehicle sync delay.** Vehicle jobs (solo and convoy) now start their clock 8 seconds after
+  the vehicles spawn, so every player's new vehicle has synced before anyone drives. The vehicle
+  stays frozen and the HUD counts down, then "Go!". *(client + server)*
+- **Convoy lobby now waits 180 seconds by default** (slider up to 300). A server that already
+  saved its Deliveries settings keeps its saved value. *(client + server)*
+- **Vehicle blacklist by configuration.** Config > General > Deliveries lists each model with an
+  arrow that opens its configurations, each with its own tick box. Unticking the model still
+  blocks all of it, including configurations a later refresh adds; a partly blocked model shows
+  "3 / 5". Searching also matches configuration names. Existing model blocks carry over; press
+  Refresh from my game once so configuration names show cleanly. *(client + server)*
+
+### Slice 4: convoys and Unstuck
+
+- **Convoys.** Up to 4 players take one job together, one package or one vehicle each (a vehicle
+  convoy is capped at the depot's start slot count, and member 1 takes slot 1, member 2 slot 2,
+  and so on). On the job board, A starts a convoy on the selected job and X still starts solo.
+  *(client + server)*
+- **Convoy lobby.** A HUD panel with the job, a countdown and every member: A ready / not ready,
+  Y start now (leader only), X invite a player, B leave. The convoy leaves when the countdown
+  runs out (Config > General > Deliveries > **Convoy lobby**, 60 s by default), or 5 seconds after
+  everyone is ready or the leader presses Start now. Members don't have to wait at the depot:
+  when it leaves, everyone is brought there (vehicle convoys: your delivery vehicle spawns on your
+  start slot; package convoys: your own car is moved to your start slot, or next to the depot if it
+  has none). If the leader leaves, the next member leads; an empty lobby breaks up and its job
+  goes back into rotation. *(client + server)*
+- **Joining.** Other players join from the depot's drive-up prompt (one "Join <leader>'s convoy"
+  entry per lobby forming there), from the board's new **Convoys forming here** list, or from an
+  invite. An invite shows top right with a bar counting down 20 seconds and can be accepted from
+  anywhere. *(client + server)*
+- **Pad buttons never interfere with driving.** An invite takes no pad buttons until you press
+  the game's own "interact" chord (RB + Y on a pad, Shift + E on a keyboard, or whatever you
+  rebound Interact to), which focuses it: then A joins and B declines. The lobby panel takes the
+  pad's buttons while you're at the depot; away from it, the same chord focuses it. Mouse and
+  keyboard always work. *(client only)*
+- **Grace period and bonuses.** The first delivery starts a grace period (20% of the target
+  time, 45 s to 3 min). Delivering inside it earns the convoy bonus (+10% per extra member) and
+  the "driving together" bonus: the server checks every member's position once a second (from
+  20 s after the start until the first delivery), and the share of checks where you were within
+  200 m of another member gives up to +20%. Delivering after the grace period scores without
+  either; the 2x target deadline still fails anyone left. Nobody waits for anyone. *(server)*
+- **Convoy results.** The results panel adds the convoy and driving-together lines and a table
+  of every member (time, condition, driving together, score, or "Still driving" / "Out of time" /
+  "Left"), which fills in as the others finish. The HUD shows the convoy size and, once someone
+  has delivered, the time left for the bonus. *(client + server)*
+- **Unstuck** (vehicle jobs). A HUD button next to Abandon that puts the vehicle back on the
+  nearest road it recently drove on, keeping its damage (the pause menu's own "recover to road"
+  call with repair off). Only when nearly stopped, then a 30 second cooldown; the button says
+  "Stop first" or "Unstuck in 12 s" when it can't be used. *(client only)*
+- The job board's details now list the drop-off type and how many players a job takes, and the
+  scoring text mentions the convoy bonuses. *(client + server)*
+
+### Slice 3 fixes (client 2501)
+
+- **Delivery vehicle faced backwards at the start slot.** The game's spawner already turns the
+  rotation 180 degrees, so the slot direction is now passed as is. *(client only)*
+- **Resets repaired the delivery vehicle.** The vehicle's own `recovery.recoverInPlace()` calls
+  `spawn.safeTeleport` without a repair flag, and that flag defaults to repairing. During a
+  vehicle job, R now uses a keep-damage flip in place (the same call career uses), and
+  hold-to-rewind (which repairs when released) does the same flip instead. The pause menu's
+  Repair stays blocked. Infected and package jobs keep the repairing in-place recovery, as
+  before. *(client only)*
+
+### Slice 3: vehicle delivery
+
+- **Vehicle jobs.** A depot that sends vehicles and has at least one start slot now offers
+  vehicle jobs next to its package jobs. Each goes to a point accepting cars or trucks, and the
+  vehicle is picked to match (a truck only goes where trucks are accepted). Starting one replaces
+  your car with the delivery vehicle at the depot's first free start slot, facing the slot's
+  arrow, and you keep the vehicle afterwards. *(client + server)*
+- **Vehicle pool.** The server has no vehicle list, so an admin's client builds one from its own
+  installed vehicles (BJS clients only ever run stock vehicles plus server mods, so it matches
+  every player) and uploads it. This happens automatically the first time an admin joins a
+  server with no pool, and again from Config > General > Deliveries > **Refresh from my game**
+  after adding mods. Eligible: Car and Truck models; Factory, Service and untagged configs (a mod
+  model with only Custom configs keeps those); no police, race, rally or drift builds. The same
+  panel lists every model with a tick box: unticking one keeps it out of vehicle deliveries (a
+  delivery-only blacklist, separate from the spawn blacklist, which also applies). Stored in
+  `BeamJoyData/db/deliveryPool.json`. *(client + server)*
+- **Condition score.** The delivery vehicle's part conditions are set up fresh when it spawns
+  (`partCondition.initConditions`, the same call the game's own freeroam delivery uses; freeroam
+  vehicles otherwise have none). At the drop-off the client counts parts at integrity 0 out of
+  all parts, the same count career's vehicle delivery uses. The server bands the share: Pristine
+  1.0, Minor up to 5% 0.85, Moderate up to 15% 0.6, Heavy 0.3. It shows in the results as
+  "Condition, Minor damage (2 of 58 parts broken)". If the game can't read the parts within
+  3 seconds, the job still delivers and the condition counts as undamaged. *(client + server)*
+- **No repairs during a vehicle job.** The shared recovery claim now blocks the pause-menu repair
+  for vehicle jobs, and garages refuse service until you deliver (a new
+  `onBJRequestStationInteraction` handler). Refuelling stays allowed, and resets still only
+  recover the vehicle where it stands. Package jobs are unchanged. *(client only)*
+- Board, HUD and results show the vehicle's own name as the cargo, with vehicle-specific scoring
+  text. *(client only)*
+
+### Slice 2: solo package delivery
+
+- **Depots in the world.** Every point that sends packages gets a floating delivery marker
+  (the game's own `poi_delivery_round`) with a drive-up prompt, **View jobs**, sized to the
+  depot's zone, plus a Big Map pin under a new **Delivery depots** group in the BeamJoy section.
+  Hidden during a Race / Hunter / Infected round, during your own job, and while the Freeroam
+  editor is open. *(client only)*
+- **Job board**, the first controller-driven BJS window. Lists the depot's jobs (cargo, drop-off,
+  route distance, target time). D-pad browses, **X** starts solo, **B** closes, and mouse and
+  keyboard work too. It closes itself if you drive away. Jobs come from the server: each depot's
+  board is shared by everyone, generated when someone first looks, topped up the moment a job is
+  taken, and rotated after a few minutes untaken. Destinations stay within the configured route
+  distances. *(client + server: new `services/deliveries.lua`)*
+- **Controller navigation** (`beamjoy/uiNav.lua`). While a delivery window is open, BJS turns on
+  the game's own per-button menu action maps (`MenuIndependent_menu_item_*`, `cui_action_2`,
+  `cui_context`, the same ones the Vue menus use), so the pad drives the window instead of the car.
+  The window listens for the game's `UINavigation` event. It re-asserts them every 300 ms because
+  the Vue menu tracker switches untracked maps off when it resyncs, and on close it turns off only
+  the maps it turned on. The existing BJS windows are unchanged. *(client only)*
+- **The run.** GPS to the drop-off, an orange disc on its zone, and a HUD (cargo, destination,
+  distance, time against the target, Abandon). Hold inside the zone for the configured seconds
+  (default 3). The server then checks your vehicle's position (`MP.GetPositionRaw`, skipped if
+  BeamMP can't say) and scores it. The server owns the clock: the job fails at twice the target
+  time. The job is tied to the vehicle it started in, so switching vehicles, deleting it or
+  teleporting (more than 150 m between two ticks) ends it. Teleport-to-player, walking mode,
+  reload, go-home, recover-to-road and drop-at-camera are blocked. A delivery and a bus run can't
+  run at the same time. *(client + server)*
+- **Ghosting at delivery zones.** Any of your own vehicles inside any delivery point's zone is
+  ghosted (new `delivery` reason), whatever the collisions mode, so nobody can block a depot or
+  a drop-off. *(client only)*
+- **Scoring and results.** Base 100 per route km (min 50) times a time factor (target / actual,
+  clamped 0.5 to 1.25). Condition, convoy and cohesion factors join in later slices. A results
+  panel (controller-driven: **A** opens the destination's own board when it's a depot too, **B**
+  closes) shows the breakdown and your running total for that cargo type with your rank. Totals are
+  per player per type, all maps combined, in `BeamJoyData/db/deliveryScores.json` (guests aren't
+  ranked). *(client + server)*
+- **Shared in-place recovery** (`beamjoy/recoveryPolicy.lua`). Infected's "a reset becomes an
+  in-place recovery that never repairs" redirect moved into one module that Infected and
+  deliveries both claim, at `beamjoy_inputs`' `onBJRequestCurrentVehicleReset` hook instead of by
+  swapping the global `resetGameplay`. Infected's behaviour (speed / relock gate, GAME only) is
+  unchanged. A package job allows repairs, since damage doesn't count for packages. *(client only)*
+- **Delivery settings** (Config > General > Deliveries): shortest and longest route, target speed
+  (default 40 km/h), jobs per depot, job rotation minutes, drop-off hold seconds. *(client + server)*
+- Fixed (build 2498, from the first test) job board and results buttons needing two presses.
+  The press tracker only saw events while its window was open, so the release of the press that
+  closed a window (X starting a job, A on the results) was missed. That button then looked "still
+  held" and the next first press was dropped. *(client only)*
+- Fixed (build 2498) the pad buttons a delivery window uses also triggering the game's own global
+  UI-nav defaults: B toggled the pause menu, Y (driving view) the Big Map, and the d-pad / A moved
+  and clicked Crossfire focus. A window-level capture listener on the game's `ui_nav` DOM event
+  stops those while a delivery window is open. Start still opens the pause menu. *(client only)*
+- Fixed (build 2498) world labels from the Freeroam editor (depots, stations, bus stops) staying
+  on screen after switching to another config tab. Only switching sections inside the Freeroam
+  tab cleared them. A running bus line or delivery redraws its target disc afterwards.
+  *(client only)*
+- Fixed (build 2499) BJS Big Map POIs never showing as their own pin on the map, only in the
+  sidebar list or inside a numbered cluster of 2+. The pin is drawn from the marker icon atlas
+  (`core/art/gui/images/iconAtlas.json`, names like `poi_fuel_round`), a different set from the
+  sidebar card's UI icon font that BJS was passing it (`fuelPump`, `garage01`, `bus`,
+  `deliveryTruck`). An unknown atlas name draws nothing. POIs now carry a separate `mapIcon` for
+  the pin: depots `poi_delivery_round`, stations `poi_fuel_round`, garages `poi_garage_2_round`,
+  bus lines `poi_dealer_1_round` (the same icon as their world marker). This affected stations,
+  garages and bus lines too, not just depots. *(client only)*
+- Fixed the Voting settings panel always showing its defaults instead of the saved values: the
+  server never included `Voting` in the config it sends to admins. *(server only)*
+
+### Slice 1: delivery points
+
+- **Delivery points editor** (Config > Freeroam > Deliveries). Each point has a zone (center +
+  radius), what it **sends** (packages, vehicles) and what it **accepts** (packages, cars, trucks).
+  A point that sends anything is a depot and will offer jobs. Points that send vehicles also get up
+  to 4 **vehicle start slots** (position + facing, one per convoy member), with a warning when a
+  vehicle depot has none. Same gizmo, world-click, set-to-vehicle and teleport tools as stations.
+  *(client + server)*
+- **Import from map** adds the current level's own delivery facilities (West Coast USA ships about
+  65): real parking-spot positions, tags from the game's logistic types (parcels, food, parts and
+  so on become packages; private/repair vehicles become cars; large trucks become trucks).
+  Additive; names already in the list are skipped. Vehicle depots get up to 4 start slots: the
+  game lists only one vehicle spot per facility (career spawns one vehicle at a time), so after
+  that spot and the facility's other spots, the rest are filled from the level's nearest parking
+  spots from every sites file (street parking included), within 60 m, car-sized (7.5 m+ for
+  truck-only depots) and at least 4 m apart. Facilities that list no vehicle spot at all are
+  filled around the depot itself (build 2495 left those with none, and every other one with 1).
+  Residential neighbourhoods are skipped because they're whole zones with no single drop-off spot.
+  *(client only)*
+- **Route lengths measured on save.** The saving admin's client walks the map's road graph
+  (`map.getPointToPointPath`) for every depot-to-destination pair a job could use, in a background
+  job with a progress counter, then sends the lengths with the points. Lengths already measured
+  between the same two positions are reused (seeded from the server's stored routes when the editor
+  opens), so only new or moved points cost anything. Stored server-side in
+  `<map>_deliveryroutes.json` next to `<map>_deliverypoints.json`; clients only receive the points.
+  Gated by the existing Edit Freeroam Data permission. *(server: new `services/deliveryPoints.lua`)*
+- Removed the yellow text and dark outline from the selected row's name box in the Stations &
+  Garages, Bus Lines, Deliveries and Hunter/Infected spawn lists: the name stays plain black text
+  on the highlighted row. *(client only)*
+- Fixed the Freeroam editor's Lua side keeping its last section after the tab closed while the tab
+  itself always reopens on Stations & Garages. *(client only)*
+
 ## [1.10.6] - 2026-09-24
 
 Client build 2494, server build 2354.

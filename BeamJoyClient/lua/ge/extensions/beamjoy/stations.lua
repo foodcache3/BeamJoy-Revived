@@ -139,7 +139,9 @@ local function onGetRawPoiListForLevel(levelIdentifier, elements)
                 M.itemById[id] = p
                 elements[#elements + 1] = {
                     id = id,
-                    data = { type = kind, id = id },
+                    -- date : the game sorts overlapping mission markers by data.date
+                    -- (missionMarker.lua dateSort) and errors on a nil one
+                    data = { type = kind, id = id, date = 0 },
                     markerInfo = {
                         missionMarker = { pos = vec3(p.pos.x, p.pos.y, p.pos.z), rot = rot, icon = icon },
                     },
@@ -629,7 +631,8 @@ local function onBJRequestBigmapPOIs(POIS)
         if s.id then
             POIS["bjStation_" .. tostring(s.id)] = {
                 name = (s.name and #s.name > 0) and s.name or "beamjoy.stations.markerStation",
-                icon = "fuelPump", groupType = "gasStation", pos = vec3(s.pos.x, s.pos.y, s.pos.z),
+                icon = "fuelPump", mapIcon = "poi_fuel_round", groupType = "gasStation",
+                pos = vec3(s.pos.x, s.pos.y, s.pos.z),
             }
         end
     end
@@ -637,7 +640,8 @@ local function onBJRequestBigmapPOIs(POIS)
         if g.id then
             POIS["bjGarage_" .. tostring(g.id)] = {
                 name = (g.name and #g.name > 0) and g.name or "beamjoy.stations.markerGarage",
-                icon = "garage01", groupType = "garage", pos = vec3(g.pos.x, g.pos.y, g.pos.z),
+                icon = "garage01", mapIcon = "poi_garage_2_round", groupType = "garage",
+                pos = vec3(g.pos.x, g.pos.y, g.pos.z),
             }
         end
     end

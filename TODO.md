@@ -93,8 +93,203 @@ already reverts those, but they'd bypass the server request.
 
 Phase 0-2 (energy stations, garages, bus lines) are shipped — see CHANGELOG. Scope for what's next:
 
-- **Phase 3 — deliveries.** Package + vehicle delivery modes, two-point-list editor, minimal
-  leaderboard.
+- **Phase 3 — deliveries.** Package + vehicle delivery, improving on BJI's
+  `ScenarioDelivery{Package,Vehicle,Multi}`. Design agreed 2026-09-24. Phase 3 mockup (Jobs tab,
+  depot prompt and convoy invite, job board, convoy lobby and results as HUD panels):
+  https://claude.ai/artifact/THviDWY8eYTf4KDnVzQ1p1
+  - **Build order** (each slice testable in-game before the next builds on it). Written so the
+    work can be picked up cold after a context reset: file names, wire events and what's left.
+    1. **Delivery points** - DONE, tested in-game (import + first save ~10 s).
+       - Server `services/deliveryPoints.lua` (`<map>_deliverypoints.json` + `<map>_deliveryroutes.json`,
+         routes flat `[fromId, toId, metres]`, `deliveryPointsSave` / `deliveryRoutesRequest`).
+       - Client cache `beamjoy/deliveryPoints.lua` ; editor `ui/deliveryEditor.lua` as the
+         "deliveries" section of `ui/freeroamEditor.lua` ; sidebar
+         `windows/config/freeroam/deliveries/app.html` (component `bjConfigDeliveries` in
+         `windows/config/freeroam/app.js`).
+       - Point = `{id, name, pos, radius, provides[packages|vehicles], receives[packages|cars|trucks],
+         slots[{pos,dir}] (max 4, only when provides vehicles)}`.
+       - Import: the level's facilities + every `*.sites.json` parking spot ; slots 2-4 filled
+         from nearby level parking spots (60 m, car/truck sized, 4 m apart).
+    2. **Solo package delivery** - BUILT (client 2497+, server 2356), in testing.
+       - Server `services/deliveries.lua`: boards per depot (lazy, `OffersPerDepot`, rotation,
+         min/max route), jobs per playerID (server clock, fail at 2x target), position checks via
+         `MP.GetPositionRaw` (skipped when unavailable), scoring, totals in
+         `BeamJoyData/db/deliveryScores.json`. Wire: `deliveryBoardOpen/Close`, `deliveryStart`,
+         `deliveryArrive`, `deliveryAbandon`, `deliveryStateRequest` -> `deliveryBoard`,
+         `deliveryJob`, `deliveryStartRefused`, `deliveryArriveRefused`, `deliveryEnded`,
+         `deliveryResult`. Config key `Deliveries` (services/config.lua + Config > General >
+         Deliveries panel).
+       - Client `beamjoy/delivery.lua` (POIs, prompt, board/HUD/results state, run tick, zone
+         ghosting reason "delivery"), `beamjoy/uiNav.lua` (MenuIndependent action maps while a
+         window is open), `beamjoy/recoveryPolicy.lua` (shared with Infected: resets -> in-place
+         recovery ; `claim(name, {active, allowRecovery, vehicle, blockRepair})`).
+       - UI `windows/deliveryBoard` (also defines the `beamjoyDelivery` service + the shared
+         `.bj-dlv` styles), `windows/deliveryHud`, `windows/deliveryResults`.
+       - Fixed after first test (client 2498): buttons needing two presses (press tracker missed
+         the release that closed a window) ; B/Y/A also firing the game's own global UI-nav
+         defaults (pause menu, Big Map, Crossfire) - blocked with a `ui_nav` capture listener ;
+         editor labels staying in the world after leaving the Freeroam tab.
+       - Still to verify live: full run end to end, gamepad not also driving the car while a
+         window is open, the server position check, Infected resets unchanged.
+    3. **Vehicle delivery** - BUILT (client 2500, server 2357), untested in-game. Pool:
+       `beamjoy/deliveryPool.lua` + server `deliveryPool.json` (`deliveryPoolSave`,
+       `deliveryPoolBlacklist`, admin-only `caches.deliveryPool`), panel in Config > General >
+       Deliveries. Spawn at a free slot in `delivery.lua` spawnDeliveryVehicle (waits up to 20 s for
+       the vehicle to register), conditions via `partCondition.initConditions` + 'getPartConditions'
+       at arrival (3 s timeout). Still to verify live: the spawn facing, part conditions actually
+       readable in MP freeroam, garages refusing during the job. The design notes below are what
+       was built:
+       - Server: offers of kind "vehicles" from depots that provide vehicles and have >= 1 slot, to
+         points receiving cars/trucks ; the offer carries the model/config picked server-side from
+         the pool, matched to the destination (cars vs trucks by Body Style / Type).
+       - Pool = stock vehicles + server-distributed mods minus a new vehicle-delivery blacklist
+         (separate from `ModelBlacklist`). The server has no vehicle list, so an admin's client
+         uploads the eligible pool (model, config, label, type/body style) - same idea as the
+         route measuring. Admin UI for the blacklist (reuse the model-blacklist picker).
+       - Start: replace the player's car with the delivery vehicle at a depot start slot
+         (`beamjoy_vehicles` spawn/replace like raceRunner/hunterRunner do) ; the job ties to the
+         new vid ; you keep the vehicle afterwards.
+       - Damage: broken parts from `getPartConditions` (integrity 0) counted from the job's start,
+         bands Pristine / Minor (<=5%) / Moderate (<=15%) / Heavy -> factor 1.0 / 0.85 / 0.6 / 0.3.
+         Verify part conditions work in freeroam MP ; fallback `beamstate.damage`. Client reports
+         the counts at arrival ; server applies the factor and shows it in the results breakdown.
+       - Recovery claim with `blockRepair = true` ; garages blocked for the job
+         (`onBJRequestStationInteraction` kind "repair"), refuelling allowed.
+       - Board/results already take `kind` ; add the vehicle row ("Vehicle, one per player") and
+         the condition line.
+    4. **Convoys** (co-op, up to 4 ; one piece of cargo each) - BUILT (client 2502, server 2358),
+       untested in-game. Server `services/deliveries.lua` CONVOY LOBBY / CONVOY RUN sections
+       (`M.convoys`, `M.memberOf`), wire `deliveryConvoyCreate/Join/Ready/StartNow/Leave/
+       InviteList/Invite/InviteReply`, `deliveryVehicleReady` -> `deliveryLobby`,
+       `deliveryLobbyClosed`, `deliveryConvoys` (broadcast of forming lobbies), `deliveryInvite`,
+       `deliveryInviteClosed`, `deliveryInviteList`, `deliveryConvoyGrace`, `deliveryConvoyResults`.
+       Config `Deliveries.LobbyDuration`. Client `delivery.lua` CONVOY LOBBY / CONVOY INVITE
+       sections ; UI `windows/deliveryLobby`, `windows/deliveryInvite`. Unstuck = `onUnstuck` in
+       delivery.lua. Changed after review (client 2503, server 2359): invites and the away-from-
+       depot lobby take the pad only after the game's `gameplay_interact` chord (RB + Y, Shift + E ;
+       GE hook `onGameplayInteract`) focuses them, and members no longer have to be at the depot
+       when the convoy leaves (`bringToDepot` moves a package member's car to slot i or next to
+       the depot ; vehicle members spawn on slot i as before). Still to verify live: two clients
+       end to end, cohesion samples actually getting positions (`MP.GetPositionRaw` with the
+       reported vids), the interact chord reaching `onGameplayInteract` while driving in MP,
+       Unstuck's landing spot.
+       Follow-ups (client 2504, server 2360): multi-stop package offers (`offer.stops` /
+       `legMeters`, `extendStops`, `deliveryLegArrive` -> `deliveryLeg`, STOP_BONUS 1 / 1.15 /
+       1.3 ; stop-to-stop routes kept by deliveryPoints `isRoutePair`, measured by the editor's
+       `isStopPair`), ready-countdown restore (`updateReadyCountdown`, `readyHold`,
+       `leaderStarted`), VEHICLE_SYNC_SEC = 8 (vehicle frozen until the clock starts),
+       LobbyDuration default 180, per-config delivery blacklist (`pool.configBlacklist`). The design notes below are what was built:
+       - Server: a convoy = a job with a leader + members, formed at a depot ; lobby state
+         pushed to members ; ready-up countdown (reuse the race grid's countdown pattern) ; "Start
+         now" (Y) for the leader.
+       - Join paths: depot drive-up prompt (X: Join <leader>'s convoy), the board's "Convoys
+         forming here", later the Jobs section. Convoy invite from the lobby (X opens a player
+         picker ; invitee gets an A/B toast that expires).
+       - Vehicle convoys: one start slot per member (max players = slot count).
+       - Grace period after the first delivery: 20% of the target, 45-180 s. On-time members get
+         the convoy bonus (+10% per extra player), late ones base score only ; hard deadline 2x
+         target fails the rest ; nobody waits on one player.
+       - Cohesion: server samples `MP.GetPositionRaw` once a second ; share of samples within
+         200 m of another member (first 20 s and anything after the first arrival excluded) ;
+         bonus = share x 20%.
+       - UI: lobby and results as HUD panels per the mockup (A Ready, Y Start now, X Invite,
+         B Leave) ; results table with every member.
+       - **Unstuck button** (user request), vehicle deliveries (solo and convoy): an "Unstuck"
+         button on the delivery HUD, next to Abandon, that moves the vehicle to the nearest road,
+         keeping its damage. Use the unwrapped `spawn.teleportToLastRoad(veh, {resetVehicle =
+         false})` via `beamjoy_inputs.baseFunctions` (what the pause menu's own "recover to
+         road" button calls ; the recovery claim denies RECOVER_LAST_ROAD for every other path).
+         Only when nearly stopped (under ~2 m/s), with a cooldown (~30 s) so it can't be used
+         to skip ahead ; the job's 150 m teleport check must allow the jump (grace the next
+         position check, as spawn grace does). Say so on the button when it's unavailable
+         ("Stop first", "Ready in 12 s"). Asked for vehicle jobs ; offering it on package jobs
+         too is a one-line change if wanted. Locale keys under `beamjoy.delivery.hud.unstuck*`.
+    5. **Jobs section + leaderboards.**
+       - Main window > Activities > Jobs: every depot (filter Packages / Vehicles), distance, open
+         job count, convoys forming, Set GPS, Join convoy. Controller-driven (d-pad, A Set GPS,
+         X Join convoy, Y filter, B close) ; a controller reaches it ONLY from the depot prompt's
+         Y (All depots). The existing main window stays mouse-driven.
+       - Leaderboard view per type (packages / vehicles) from `deliveryScores.json`, own rank
+         pinned.
+  - **Depots and points.** Admin-placed delivery points tagged with what they send/receive; a
+    depot is a point that offers jobs. Two-leg jobs: the depot is the pickup, then the drop-off.
+    Drop-offs use a zone with a 3-second hold (the hold already forces a stop; no separate
+    stationary check).
+  - **West Coast USA import** of the game's own ~65 delivery facilities
+    (`levels/west_coast_usa/facilities/delivery/*.facilities.json`, `logisticTypesProvided/Received`).
+  - **Route lengths** between all point pairs computed once by the admin's client when points are
+    saved, stored with the points; no GPS route calls at runtime.
+  - **Jobs tab** (Activities): every depot, filterable by Packages / Vehicles, with distance, open
+    job count, any convoy forming, Set GPS and Join convoy. Replaces "GPS to nearest depot".
+  - **Job board** at each depot (drive-up prompt "View jobs"): 3-5 server-generated offers, shared
+    by everyone, replaced as soon as one is taken and rotated every few minutes. Destinations
+    limited to the server's min/max route distance. Target time = route length / reference speed.
+    Styled after vanilla windows (tokens pulled from `ui/ui-vue/dist/base.css`: translucent
+    `#0009` surfaces, cool-grey scale, `#f60` for lines and selection, `#c24b00` primary buttons,
+    Overpass titles with bold-italic big buttons, Noto Sans body).
+  - **Vehicle choice**: pool = stock vehicles plus server-distributed mods, minus a dedicated
+    vehicle-delivery blacklist (separate from the global spawn `ModelBlacklist`), uploaded by the
+    admin's client since the server has no vehicle list. Drop-offs tagged cars / trucks / any to
+    match vehicles to destinations by model type and Body Style. No "not installed" state: every
+    player always has every pool vehicle.
+  - **Convoys** (co-op, up to 4): one piece of cargo per player (vehicle delivery = one vehicle
+    each, package = one package each in their own car). Formed at a depot with a lobby (ready-up
+    countdown reused from races); others join through the depot's drive-up prompt, the board's
+    "Convoys forming here", the Jobs tab's Join convoy, or a **convoy invite** from the lobby
+    (X in the lobby panel opens a player picker; the invitee gets an A/B toast that expires). Vehicle delivery replaces your car at a
+    depot start slot when the job starts; you keep the delivered vehicle afterwards.
+  - **Grace period**: the first delivery starts it (default 20% of the target time, 45-180 s).
+    On-time players get the full score plus the convoy-size bonus; late players only their base
+    score; a hard deadline (2x target) fails anyone left. The group is never blocked on one player.
+  - **Resets** (vehicle delivery; package delivery too, to stop reset-teleport exploits): like
+    Infected, every reset becomes an in-place recovery that never repairs; reload and repair
+    blocked; garages blocked during vehicle delivery, refuelling allowed. Share the code with
+    Infected in one module instead of copying it.
+  - **Ghosting**: any vehicle inside a pickup or drop-off zone is ghosted (new `delivery` ghost
+    reason), still applied under the "forced collisions" admin setting, like races.
+  - **Damage** (vehicle delivery): broken parts via the game's part conditions (`getPartConditions`,
+    integrity 0), measured from the job's start, banded Pristine / Minor (≤5%) / Moderate (≤15%) /
+    Heavy. Verify in-game that part conditions work in freeroam MP; fallback `beamstate.damage`.
+  - **Scoring**: base (100 per route km, min 50) x time (target/actual, 0.5-1.25) x condition
+    (1.0 / 0.85 / 0.6 / 0.3) x convoy size (+10% per extra player, on-time only) x cohesion (up to
+    +20%). Recoveries shown, not penalized.
+  - **Cohesion bonus**: per player, sampled once a second by the server (`MP.GetPositionRaw`):
+    the share of samples where you were within 200 m of at least one other convoy member. First
+    20 s and anything after the first arrival excluded. Bonus = share x 20%, so drifting away for
+    a while only reduces it proportionally.
+  - **Leaderboards**: each player's total score across every delivery of a type (one board for
+    packages, one for vehicles), all maps combined, own rank pinned.
+  - **Controller support for everything new in Phase 3.** Menus that already exist in the current
+    build stay exactly as they are, mouse-driven (the user will redesign them later): the main
+    window's Main/Settings tabs and the existing Races, Bus lines, Hunter and Infected sections.
+    Controller-driven:
+    - the new **Jobs section** in the main window's Activities tab (d-pad between depots, A: Set
+      GPS, X: Join convoy, Y: cycle the filter, B: close). A controller reaches it ONLY through a
+      depot's drive-up prompt (Y: All depots), which opens the main window straight on the Jobs
+      section. No LB/RB section switching: that would mean making the existing main window's tabs
+      controller-driven, which waits for the user's main HUD redesign;
+    - the new **job board** window (d-pad browse, A: Start convoy, X: Start solo, B: close);
+    - the **convoy lobby and results** as HUD panels with bound actions (A: Ready / next job, Y:
+      Start now, X: Invite player, B: Leave / close);
+    - the depot's native drive-up prompt (already controller-friendly).
+    Use the game's own menu actions (`menu_item_*`, `menu_tab_left/right`, back) without the
+    gamepad also driving the car. First try opting into vanilla's own spatial navigation
+    (`bng-nav-item` / `menu-navigation`); fall back to a BJS action map pushed only while a BJS
+    window has focus.
+- **Phase 3 follow-ups, after everything else in Phase 3:**
+  - **Parking spots as a drop-off option**: per point, a zone or 1-4 parking spots, using the
+    game's `gameplay/sites/parkingSpot.lua` `checkParking` (all four corners inside, aligned
+    within 45°, nearly stopped) and `precisionParking.lua` grades for a parking factor
+    (perfect 1.15 / good 1.10 / ok 1.05 / bad 1.0). A job's max players = its drop-off's spot
+    count. West Coast USA facilities reference real parking spots in `*.sites.json`.
+  - **Crews**: a persistent party (max 4 to start) with its own Crew tab next to Activities on the
+    main HUD. Join once and you're pulled into the leader's lobbies (deliveries, races, hunts,
+    infected) automatically when free; busy members skip that one. Not in a crew: the tab lists
+    every crew to ask to join or join. A job smaller than the crew can't be started with the crew.
+    In Hunter/Infected, roles stay random across everyone, and crew markers must be hidden during
+    rounds so crewmates can't track a fugitive or spot an infected crewmate.
+  - **Crew invites**: extend Phase 3's convoy invites to crews (player context menu, Crew tab
+    search), with its own frontend design pass.
 - **Phase 4 — derby.** A full 4th competitive gamemode (`services/derby.lua` +
   `services/derbyGrid.lua` + `derbyRunner.lua` + HUD/countdown/results, arena browse-list editor).
   Bigger than phases 1-3 combined.
@@ -111,6 +306,26 @@ Reference source for native API research, if picking any of these up:
   predates a native marker-system rewrite and isn't portable 1:1, see CHANGELOG 1.10.0):
   `X:\beam\essentials\beamjoy-2.0.8` -> `Client/BJI.zip` -> `StationsManager.lua`,
   `ui/windows/ScenarioEditor/{Stations,Garages,BusLines}.lua`.
+
+## Hauling: trailer delivery and tow trucks (future version, not Phase 3)
+
+**Status:** planned for a later version. User asked to add this to the plan, not this version.
+
+- **Trailer delivery.** Hitch a spawned trailer at a pickup and arrive with it still coupled. West
+  Coast USA's own delivery facility data already has `trailerSpotNames` for hitch points.
+- **Tow truck mode** (the user's idea): a "hauling" gamemode where a tow truck recovers a broken-down
+  or abandoned vehicle and brings it to a garage or yard. Likely shares trailer delivery's
+  "coupled cargo" checks.
+
+## Rideshare / taxi, and fragile cargo (future version)
+
+**Status:** planned for a later version (already on the README's planned-features list).
+
+- **Rideshare / taxi.** Pick up and drop off passengers.
+- **Fragile cargo** (goes with rideshare): score how carefully cargo or passengers are carried,
+  from damage gained during the job plus sudden g-force spikes, instead of BJI's pass/fail
+  "pristine at the end" check. The same comfort score would work for passengers. Not yet confirmed
+  how easily vehicle g-force data can be read from the game side.
 
 ## Bus lines — open follow-ups (not yet built)
 

@@ -84,6 +84,15 @@ local function getRawPOIs(levelIdentifier)
         if el.pos then
             local pos = vec3(el.pos.x, el.pos.y, el.pos.z)
             local icon = el.icon or "info"
+            -- real, confirmed bug (a depot showed in the sidebar list but never as its own pin on
+            -- the map, only inside a numbered cluster) : the pin is drawn from the marker ICON
+            -- ATLAS (bigmapMarker.lua -> iconRendererObj:addIcon(cluster.icon), names like
+            -- "poi_fuel_round", core/art/gui/images/iconAtlas.json), a different set from the
+            -- sidebar card's UI icon font ("fuelPump", "bus", "deliveryTruck"). An unknown atlas
+            -- name draws nothing ; a cluster draws its own generic numbered pin, which is why
+            -- only stacked POIs ever showed. `mapIcon` is the atlas name for the pin, `icon`
+            -- stays the card's.
+            local mapIcon = el.mapIcon or icon
             local qtFn
             if el.canQuickTravel and el.quickTravelPos then
                 local qtPos = vec3(el.quickTravelPos.x, el.quickTravelPos.y, el.quickTravelPos.z)
@@ -112,7 +121,7 @@ local function getRawPOIs(levelIdentifier)
                         name = tr(el.name) or id,
                         description = tr(el.description),
                         cardIcon = icon,
-                        icon = icon,
+                        icon = mapIcon,
                         pos = pos,
                         thumbnail = el.preview,
                         previews = el.preview and { el.preview } or nil,
@@ -230,6 +239,7 @@ end
 ---@type table<string, {label: string, icon: string}>
 local CUSTOM_GROUPS = {
     bjBusLines = { label = "beamjoy.buslines.edit.lines", icon = "bus" },
+    bjDeliveryDepots = { label = "beamjoy.delivery.depots", icon = "deliveryTruck" },
 }
 
 ---@return table[]?
@@ -350,6 +360,7 @@ end
 ---@param groupData table<string, table>
 M.onBigmapBuildGroupData = function(groupData)
     groupData.bjBusLines = { label = tr("beamjoy.buslines.edit.lines"), icon = "bus" }
+    groupData.bjDeliveryDepots = { label = tr("beamjoy.delivery.depots"), icon = "deliveryTruck" }
 end
 
 --- vueBigMap's freeroam-mode side menu only lists `type_garage` when a career is active (see its

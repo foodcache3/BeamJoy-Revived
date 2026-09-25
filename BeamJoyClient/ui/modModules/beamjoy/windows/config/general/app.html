@@ -36,6 +36,14 @@
         <bj-config-general-freeroam></bj-config-general-freeroam>
     </accordion-content>
 </bj-accordion>
+<bj-accordion id="config-deliveries" ng-hide="!$ctrl.display.deliveries">
+    <accordion-title>
+        {{"beamjoy.window.config.tabs.general.deliveries.title"|translate}}
+    </accordion-title>
+    <accordion-content>
+        <bj-config-general-deliveries></bj-config-general-deliveries>
+    </accordion-content>
+</bj-accordion>
 <bj-accordion id="config-voting" ng-hide="!$ctrl.display.voting">
     <accordion-title>
         {{"beamjoy.window.config.tabs.general.voting.title"|translate}}

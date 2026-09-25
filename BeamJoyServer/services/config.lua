@@ -48,6 +48,12 @@
 ---@field ShowHudAtStart boolean opens the main BeamJoy window automatically on connect (still
 ---player-closable afterward, unlike ForceHud) ; moot while ForceHud is on, matters when it's off ;
 ---default on
+---@field Deliveries {MinRouteDistance: integer, MaxRouteDistance: integer, ReferenceSpeed: integer, OffersPerDepot: integer, OfferRotation: integer, HoldDuration: integer, LobbyDuration: integer}
+---Phase 3 deliveries (services/deliveries.lua). MinRouteDistance/MaxRouteDistance : metres of road
+---a job's route may span. ReferenceSpeed : km/h the target time assumes (route length / speed).
+---OffersPerDepot : jobs each depot's board shows at once. OfferRotation : minutes an untaken offer
+---stays up before it's replaced. HoldDuration : seconds a vehicle must hold inside a drop-off zone.
+---LobbyDuration : seconds a convoy lobby waits for players before it leaves.
 ---@field Voting {MapVoteThresholdPercent: number, MapVoteTimeout: integer, KickVoteThresholdPercent: number, KickVoteTimeout: integer}
 ---ThresholdPercent : percentage (1-100) of eligible voters needed to pass ; Timeout : seconds a
 ---vote stays open before it's automatically considered failed. Defaults (51%, 30s) match what
@@ -133,6 +139,15 @@ local M = {
             -- Free "emergency refuel" HUD button, only while actually empty : cooldown before it
             -- can be used again on the same vehicle instance. Seconds, clamped [0, 3600] client-side.
             EmergencyRefuelCooldown = 300,
+        },
+        Deliveries = {
+            MinRouteDistance = 500,
+            MaxRouteDistance = 8000,
+            ReferenceSpeed = 40,
+            OffersPerDepot = 4,
+            OfferRotation = 5,
+            HoldDuration = 3,
+            LobbyDuration = 180,
         },
         RaceAuthorshipRestriction = false,
         RaceEditorShowOnlyEditable = false,
@@ -247,6 +262,8 @@ local function onBJRequestCache(caches, targetID, forced)
         AllowWalking = M.data.AllowWalking,
         Chat = M.data.Chat,
         Freeroam = M.data.Freeroam,
+        -- every client shows target times / runs its own drop-off hold
+        Deliveries = M.data.Deliveries,
         -- Visible to every player, not SetConfig-gated: each one needs to be readable client-side
         -- to gate ordinary UI (race edit/delete buttons, the race browse list filter, whether the
         -- main window opens forced/at-start), not just editable by an admin.
@@ -260,7 +277,10 @@ local function onBJRequestCache(caches, targetID, forced)
         table.assign(caches.config, {
             DefaultGroup = M.data.DefaultGroup,
             DiscordChatHookLang = M.data.DiscordChatHookLang,
-            Broadcasts = M.data.Broadcasts
+            Broadcasts = M.data.Broadcasts,
+            -- was never sent at all, so the Voting settings panel always showed its hardcoded
+            -- defaults instead of the saved values
+            Voting = M.data.Voting,
         })
     end
     if forced or (targetID and services_permissions.hasAllPermissions(targetID,
@@ -391,6 +411,29 @@ local function sanitizeConfigValue(key, value)
         elseif type(value.EmergencyRefuelCooldown) ~= "number" or value.EmergencyRefuelCooldown < 0
             or value.EmergencyRefuelCooldown > 3600 then
             return nil, "EmergencyRefuelCooldown must be a number between 0 and 3600"
+        end
+    elseif key == "Deliveries" then
+        if type(value) ~= "table" then return nil, "Value must be a table" end
+        -- same string coercion + backfill as Freeroam above (bj-slider can hand back strings, and
+        -- the whole table saves atomically)
+        local bounds = {
+            MinRouteDistance = { 100, 50000 }, MaxRouteDistance = { 100, 100000 },
+            ReferenceSpeed = { 10, 200 }, OffersPerDepot = { 1, 8 },
+            OfferRotation = { 1, 60 }, HoldDuration = { 0, 15 }, LobbyDuration = { 15, 300 },
+        }
+        for k, b in pairs(bounds) do
+            local v = tonumber(value[k])
+            if v == nil then v = M.data.Deliveries[k] end
+            if v < b[1] or v > b[2] then
+                return nil, string.format("%s must be a number between %d and %d", k, b[1], b[2])
+            end
+            value[k] = math.round(v)
+        end
+        if value.MaxRouteDistance < value.MinRouteDistance then
+            return nil, "MaxRouteDistance must be at least MinRouteDistance"
+        end
+        for k in pairs(value) do
+            if not bounds[k] then value[k] = nil end
         end
     elseif key == "Voting" then
         if type(value) ~= "table" then

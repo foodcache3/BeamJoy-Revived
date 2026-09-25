@@ -4,6 +4,8 @@
 ---                   `stationsEditor.lua` sub-module. Saves to `energyStationsSave` / `garagesSave`.
 ---   - "buslines"  : ordered line -> ordered stop editing, via `busLineEditor.lua` (a sub-module,
 ---                   NOT its own activityEditor slot). Saves to `busLinesSave`.
+---   - "deliveries": delivery points + their vehicle start slots, via `deliveryEditor.lua`.
+---                   Saves to `deliveryPointsSave` (after measuring route lengths).
 ---
 --- Energy stations + garages moved OUT of the shared, flat `pointListEditor.lua` instance and into
 --- their own dedicated `stationsEditor.lua` sub-module (mirroring busLineEditor.lua's own split)
@@ -23,26 +25,31 @@
 
 local stationsEditor = require("ge/extensions/beamjoy/ui/stationsEditor")
 local busLineEditor = require("ge/extensions/beamjoy/ui/busLineEditor")
+local deliveryEditor = require("ge/extensions/beamjoy/ui/deliveryEditor")
 
 ---@class BJActivityEditorFreeroam: BJActivityEditor
 local M = {}
 ---@type BJActivityEditorCommon?
 local parent
----@type "stations"|"buslines"
+---@type "stations"|"buslines"|"deliveries"
 local section = "stations"
+
+--- section name -> its sub-editor (the Angular side owns the display order)
+local SECTIONS = {
+    stations = stationsEditor,
+    buslines = busLineEditor,
+    deliveries = deliveryEditor,
+}
 
 -- SECTION PLUMBING -----------------------------------------------------------------------
 
 --- render whichever section is live ; the other one drops its gizmo and its world shapes get
 --- cleared by the live section's own renderAll -> shape.reset
 local function applySection()
-    if section == "buslines" then
-        stationsEditor.standDown()
-        busLineEditor.standUp()
-    else
-        busLineEditor.standDown()
-        stationsEditor.standUp()
+    for name, editor in pairs(SECTIONS) do
+        if name ~= section then editor.standDown() end
     end
+    SECTIONS[section].standUp()
 end
 
 local function onOpen()
@@ -57,13 +64,14 @@ local function onOpen()
     extensions.hook("onBJStationEditorState", true)
     stationsEditor.refresh()
     busLineEditor.refresh()
+    deliveryEditor.refresh()
     applySection()
 end
 
 ---@param s string
 local function onSetSection(s)
     if not parent or parent.activeEditor ~= M then return end
-    section = (s == "buslines") and "buslines" or "stations"
+    section = SECTIONS[s] and s or "stations"
     applySection()
 end
 
@@ -81,13 +89,16 @@ local function onBusLinesChanged()
     if section == "buslines" then busLineEditor.standUp() end
 end
 
+--- fired via onBJDeliveryPointsChanged (delivery points cache landed)
+local function onDeliveryPointsChanged()
+    if not parent or parent.activeEditor ~= M then return end
+    deliveryEditor.refresh()
+    if section == "deliveries" then deliveryEditor.standUp() end
+end
+
 local function onSave()
     if not parent then return end
-    if section == "buslines" then
-        busLineEditor.save()
-    else
-        stationsEditor.save()
-    end
+    SECTIONS[section].save()
 end
 
 ---@param activityEditor BJActivityEditorCommon
@@ -101,6 +112,10 @@ local function onInit(activityEditor)
         return parent ~= nil and parent.activeEditor == M and section == "buslines"
     end)
     busLineEditor.onInit()
+    deliveryEditor.setActivePredicate(function()
+        return parent ~= nil and parent.activeEditor == M and section == "deliveries"
+    end)
+    deliveryEditor.onInit()
 
     beamjoy_communications_ui.addHandler("BJEditorFreeroamOpen", onOpen)
     beamjoy_communications_ui.addHandler("BJEditorFreeroamClose", M.onClose)
@@ -113,17 +128,21 @@ local function onClose()
     if parent.activeEditor == M then parent.activeEditor = nil end
     stationsEditor.close()
     busLineEditor.close()
+    deliveryEditor.close()
+    -- real, confirmed bug : none of the sub-editors clear the world labels/markers on close
+    -- (switching SECTIONS did, via the next section's own renderAll), so leaving the Freeroam tab
+    -- for another config tab left every point's name floating in the world. The running bus line /
+    -- delivery (which share this shape buffer) redraw their own target on the hook below.
+    shape.reset()
+    -- the Angular tab always reopens on its first section ; match it
+    section = "stations"
     extensions.hook("onBJStationEditorState", false)
 end
 
 ---@param clickType string
 ---@param data table
 local function onBJClick(clickType, data)
-    if section == "buslines" then
-        busLineEditor.onBJClick(clickType, data)
-    else
-        stationsEditor.onBJClick(clickType, data)
-    end
+    SECTIONS[section].onBJClick(clickType, data)
 end
 
 M.onInit = onInit
@@ -131,5 +150,6 @@ M.onClose = onClose
 M.onBJClick = onBJClick
 M.onBJFreeroamDataChanged = onDataChanged
 M.onBJBusLinesChanged = onBusLinesChanged
+M.onBJDeliveryPointsChanged = onDeliveryPointsChanged
 
 return M

@@ -1,0 +1,156 @@
+<table ng-if="$ctrl.init">
+    <tr>
+        <td class="text-right" title="{{'beamjoy.window.config.tabs.general.deliveries.minRoute.tooltip'|translate}}">
+            {{"beamjoy.window.config.tabs.general.deliveries.minRoute"|translate}}
+        </td>
+        <td>
+            <bj-slider ng-model="$ctrl.data.MinRouteDistance" min="100" max="10000" hard-max="50000" step="100"></bj-slider>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right" title="{{'beamjoy.window.config.tabs.general.deliveries.maxRoute.tooltip'|translate}}">
+            {{"beamjoy.window.config.tabs.general.deliveries.maxRoute"|translate}}
+        </td>
+        <td>
+            <bj-slider ng-model="$ctrl.data.MaxRouteDistance" min="500" max="20000" hard-max="100000" step="100"></bj-slider>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right" title="{{'beamjoy.window.config.tabs.general.deliveries.referenceSpeed.tooltip'|translate}}">
+            {{"beamjoy.window.config.tabs.general.deliveries.referenceSpeed"|translate}}
+        </td>
+        <td>
+            <bj-slider ng-model="$ctrl.data.ReferenceSpeed" min="10" max="120" hard-max="200" step="5"></bj-slider>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right" title="{{'beamjoy.window.config.tabs.general.deliveries.offersPerDepot.tooltip'|translate}}">
+            {{"beamjoy.window.config.tabs.general.deliveries.offersPerDepot"|translate}}
+        </td>
+        <td>
+            <bj-slider ng-model="$ctrl.data.OffersPerDepot" min="1" max="8" step="1"></bj-slider>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right" title="{{'beamjoy.window.config.tabs.general.deliveries.offerRotation.tooltip'|translate}}">
+            {{"beamjoy.window.config.tabs.general.deliveries.offerRotation"|translate}}
+        </td>
+        <td>
+            <bj-slider ng-model="$ctrl.data.OfferRotation" min="1" max="30" hard-max="60" step="1"></bj-slider>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right" title="{{'beamjoy.window.config.tabs.general.deliveries.holdDuration.tooltip'|translate}}">
+            {{"beamjoy.window.config.tabs.general.deliveries.holdDuration"|translate}}
+        </td>
+        <td>
+            <bj-slider ng-model="$ctrl.data.HoldDuration" min="0" max="10" hard-max="15" step="1"></bj-slider>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right" title="{{'beamjoy.window.config.tabs.general.deliveries.lobbyDuration.tooltip'|translate}}">
+            {{"beamjoy.window.config.tabs.general.deliveries.lobbyDuration"|translate}}
+        </td>
+        <td>
+            <bj-slider ng-model="$ctrl.data.LobbyDuration" min="15" max="300" hard-max="300" step="5"></bj-slider>
+        </td>
+    </tr>
+</table>
+
+<style>
+    bj-config-general-deliveries .pool {
+        margin-top: 0.8em;
+        padding-top: 0.6em;
+        border-top: thin solid rgba(255, 255, 255, 0.15);
+    }
+    bj-config-general-deliveries .pool-summary {
+        white-space: normal;
+    }
+    bj-config-general-deliveries .pool-list {
+        max-height: 18em;
+        overflow-y: auto;
+        margin-top: 0.4em;
+    }
+    bj-config-general-deliveries .pool-row {
+        padding: 0.15em 0.4em;
+        border-radius: 0.25em;
+        cursor: pointer;
+    }
+    bj-config-general-deliveries .pool-row:hover {
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-config-general-deliveries .pool-row.off {
+        opacity: 0.5;
+        text-decoration: line-through;
+    }
+    bj-config-general-deliveries .pool-row.config {
+        padding-left: 2.2em;
+    }
+    bj-config-general-deliveries .pool-row.config.locked {
+        cursor: default;
+    }
+    bj-config-general-deliveries .pool-expand {
+        width: 1.6em;
+        height: 1.6em;
+        padding: 0;
+        flex-shrink: 0;
+        background: transparent;
+        border: 0;
+        color: inherit;
+        cursor: pointer;
+    }
+    bj-config-general-deliveries .pool-expand svg {
+        transition: transform 0.15s;
+    }
+    bj-config-general-deliveries .pool-expand.open svg {
+        transform: rotate(90deg);
+    }
+</style>
+
+<div class="pool">
+    <div class="d-flex align-center gap-1">
+        <h5 class="flex-grow-1">{{"beamjoy.window.config.tabs.general.deliveries.pool.title"|translate}}</h5>
+        <button class="btn info" ng-click="$ctrl.refreshPool()" ng-disabled="$ctrl.poolBuilding"
+            title="{{'beamjoy.window.config.tabs.general.deliveries.pool.refresh.tooltip'|translate}}">
+            {{($ctrl.poolBuilding ? "beamjoy.window.config.tabs.general.deliveries.pool.building"
+                : "beamjoy.window.config.tabs.general.deliveries.pool.refresh")|translate}}
+        </button>
+    </div>
+    <div class="pool-summary small opacity-70">
+        {{"beamjoy.window.config.tabs.general.deliveries.pool.summary"|translate}}
+        {{$ctrl.pool.count}} ({{$ctrl.pool.cars}} / {{$ctrl.pool.trucks}})
+    </div>
+    <div class="small opacity-70" style="white-space: normal">
+        {{"beamjoy.window.config.tabs.general.deliveries.pool.hint"|translate}}
+    </div>
+    <input type="text" class="mt-1" ng-model="$ctrl.poolFilter"
+        placeholder="{{'beamjoy.window.config.tabs.general.deliveries.pool.search'|translate}}" />
+    <div class="pool-list">
+        <div ng-repeat="row in $ctrl.filteredModels() track by row.model">
+            <div class="pool-row d-flex gap-1 align-center"
+                ng-class="{off: row.blacklisted}" ng-click="$ctrl.toggleModel(row)"
+                title="{{'beamjoy.window.config.tabs.general.deliveries.pool.toggle.tooltip'|translate}}">
+                <button type="button" class="pool-expand" ng-class="{open: $ctrl.isExpanded(row)}"
+                    ng-click="$ctrl.toggleExpanded(row, $event)"
+                    aria-label="{{'beamjoy.window.config.tabs.general.deliveries.pool.expand'|translate}}"
+                    title="{{'beamjoy.window.config.tabs.general.deliveries.pool.expand'|translate}}">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor"
+                        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 1.5L6.5 5 3 8.5"></path></svg>
+                </button>
+                <input type="checkbox" ng-checked="!row.blacklisted" style="pointer-events: none" />
+                <span class="flex-grow-1">{{row.label}}</span>
+                <span class="small opacity-70">{{('beamjoy.window.config.tabs.freeroam.deliveries.tag.' + row.kind)|translate}}, {{$ctrl.configsLine(row)}}</span>
+            </div>
+            <div class="pool-row config d-flex gap-1 align-center" ng-if="$ctrl.isExpanded(row)"
+                ng-repeat="cfg in $ctrl.visibleConfigs(row) track by cfg.config"
+                ng-class="{off: row.blacklisted || cfg.blacklisted, locked: row.blacklisted}"
+                ng-click="$ctrl.toggleConfig(row, cfg)"
+                title="{{(row.blacklisted ? 'beamjoy.window.config.tabs.general.deliveries.pool.configLocked'
+                    : 'beamjoy.window.config.tabs.general.deliveries.pool.configToggle')|translate}}">
+                <input type="checkbox" ng-checked="!row.blacklisted && !cfg.blacklisted"
+                    ng-disabled="row.blacklisted" style="pointer-events: none" />
+                <span class="flex-grow-1">{{cfg.label}}</span>
+            </div>
+        </div>
+    </div>
+</div>

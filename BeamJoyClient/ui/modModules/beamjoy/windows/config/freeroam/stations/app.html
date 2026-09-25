@@ -7,13 +7,9 @@
         background-color: rgba(0, 0, 0, 0.2);
     }
     bj-config-stations .item-row.active {
-        /* same dark-overlay + yellow-text treatment established (and reverted back to, after a
-           darker-blue variant was tried and undone) for busLines/pointListEditor's own active rows */
+        /* same dark overlay as busLines/pointListEditor's own active rows ; the name box itself
+           keeps its normal black text (the old yellow text + outline was removed per request) */
         background-color: rgba(0, 0, 0, 0.65);
-    }
-    bj-config-stations .item-row.active .item-name {
-        color: #edff00;
-        text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 0 3px rgba(0, 0, 0, 0.9);
     }
     bj-config-stations .pump-row {
         transition: background-color 0.15s ease-in-out;

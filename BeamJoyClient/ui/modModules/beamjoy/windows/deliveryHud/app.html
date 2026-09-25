@@ -1,0 +1,156 @@
+<style>
+    #beamjoy-delivery-hud {
+        position: fixed;
+        top: 2vh;
+        right: 1vw;
+        z-index: 4;
+        width: 16em;
+        box-sizing: border-box;
+        padding: 0.8em 0.95em 0.85em;
+        background: var(--dlv-surface);
+        border: 1px solid var(--dlv-line);
+        border-radius: 0 0.5em 0.5em 0;
+        box-shadow: inset 3px 0 0 var(--dlv-orange);
+    }
+    #beamjoy-delivery-hud .hud-kind {
+        font-size: 0.8em;
+        color: var(--dlv-orange-soft);
+    }
+    #beamjoy-delivery-hud .hud-cargo {
+        font-family: "Overpass", sans-serif;
+        font-size: 1.1em;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #beamjoy-delivery-hud .hud-dest {
+        font-size: 0.88em;
+        color: var(--dlv-soft);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 0.55em;
+    }
+    #beamjoy-delivery-hud .hud-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-size: 0.9em;
+        font-variant-numeric: tabular-nums;
+        margin-bottom: 0.25em;
+    }
+    #beamjoy-delivery-hud .hud-row .muted {
+        color: var(--dlv-muted);
+    }
+    #beamjoy-delivery-hud .hud-time {
+        font-weight: 700;
+    }
+    #beamjoy-delivery-hud .hud-time.late {
+        color: #ff8955;
+    }
+    #beamjoy-delivery-hud .hud-state {
+        margin: 0.45em 0 0.2em;
+        font-weight: 700;
+        text-align: center;
+        color: #73eb9d;
+    }
+    #beamjoy-delivery-hud .hud-convoy {
+        margin-top: 0.35em;
+        font-size: 0.85em;
+        color: var(--dlv-soft);
+        white-space: normal;
+    }
+    #beamjoy-delivery-hud .hud-grace {
+        font-weight: 600;
+        color: var(--dlv-orange-soft);
+    }
+    #beamjoy-delivery-hud .hud-buttons {
+        display: flex;
+        gap: 0.4em;
+        margin-top: 0.55em;
+    }
+    #beamjoy-delivery-hud .hud-buttons .hud-abandon {
+        margin-top: 0;
+    }
+    #beamjoy-delivery-hud .hud-unstuck {
+        flex: 1 1 0;
+        padding: 0.35em 0.5em;
+        font-size: 0.85em;
+        font-weight: 600;
+        color: var(--dlv-text);
+        background: var(--dlv-button);
+        border: 0;
+        border-radius: 0.25em;
+        cursor: pointer;
+    }
+    #beamjoy-delivery-hud .hud-unstuck:hover:not(:disabled) {
+        filter: brightness(1.15);
+    }
+    #beamjoy-delivery-hud .hud-unstuck:disabled {
+        color: var(--dlv-muted);
+        cursor: default;
+    }
+    #beamjoy-delivery-hud .hud-abandon {
+        display: block;
+        flex: 1 1 0;
+        width: 100%;
+        margin-top: 0.55em;
+        padding: 0.35em 0.5em;
+        font-size: 0.85em;
+        font-weight: 600;
+        color: var(--dlv-soft);
+        background: rgba(255, 255, 255, 0.06);
+        border: 0;
+        border-radius: 0.25em;
+        cursor: pointer;
+    }
+    #beamjoy-delivery-hud .hud-abandon:hover {
+        background: rgba(255, 82, 82, 0.25);
+        color: #fff;
+    }
+</style>
+
+<div id="beamjoy-delivery-hud" class="bj-dlv" ng-if="$ctrl.active">
+    <div class="hud-kind">{{('beamjoy.delivery.kindLong.' + $ctrl.data.kind) | translate}}</div>
+    <div class="hud-cargo">{{$ctrl.cargoLabel()}}</div>
+    <div class="hud-dest" title="{{$ctrl.data.toName}}">
+        <span ng-if="$ctrl.data.stopCount">{{'beamjoy.delivery.stopN' | translate}} {{$ctrl.data.stop}} / {{$ctrl.data.stopCount}}:</span>
+        <span ng-if="!$ctrl.data.stopCount">{{'beamjoy.delivery.to' | translate}}</span>
+        {{$ctrl.data.toName}}
+    </div>
+    <div class="hud-row" ng-if="$ctrl.data.distance != null">
+        <span class="muted">{{'beamjoy.delivery.hud.distance' | translate}}</span>
+        <span>{{$ctrl.fmt.formatDistance($ctrl.data.distance)}}</span>
+    </div>
+    <div class="hud-state" ng-if="$ctrl.data.startsIn">
+        {{'beamjoy.delivery.hud.syncing' | translate}} {{$ctrl.data.startsIn}}
+    </div>
+    <div class="hud-row" ng-if="!$ctrl.data.startsIn">
+        <span class="muted">{{'beamjoy.delivery.hud.time' | translate}}</span>
+        <span>
+            <span class="hud-time" ng-class="{late: $ctrl.overTarget()}">{{$ctrl.fmt.formatTime($ctrl.data.elapsedSec)}}</span>
+            / {{$ctrl.fmt.formatTime($ctrl.data.targetSec)}}
+        </span>
+    </div>
+    <div class="hud-convoy" ng-if="$ctrl.data.convoy">
+        <div>{{$ctrl.convoyLine()}}</div>
+        <div class="hud-grace" ng-if="$ctrl.graceLine()">{{$ctrl.graceLine()}}</div>
+    </div>
+    <div class="hud-state" ng-if="$ctrl.data.holding && !$ctrl.data.confirming">
+        {{'beamjoy.delivery.hud.holding' | translate}}
+    </div>
+    <div class="hud-state" ng-if="$ctrl.data.confirming">
+        {{'beamjoy.delivery.hud.confirming' | translate}}
+    </div>
+    <div class="hud-buttons">
+        <button type="button" class="hud-unstuck" ng-if="$ctrl.data.unstuck"
+            ng-disabled="$ctrl.data.unstuck.state !== 'ready'" ng-click="$ctrl.unstuck()"
+            title="{{'beamjoy.delivery.hud.unstuck.tooltip' | translate}}">
+            {{$ctrl.unstuckLabel()}}
+        </button>
+        <button type="button" class="hud-abandon" ng-click="$ctrl.abandon()">
+            {{'beamjoy.delivery.hud.abandon' | translate}}
+        </button>
+    </div>
+</div>

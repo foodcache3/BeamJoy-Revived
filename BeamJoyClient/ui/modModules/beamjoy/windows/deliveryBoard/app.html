@@ -1,0 +1,446 @@
+<style>
+    /* shared by the delivery board / HUD / results : vanilla window tokens */
+    .bj-dlv {
+        --dlv-surface: rgba(10, 11, 14, 0.82);
+        --dlv-line: rgba(255, 255, 255, 0.08);
+        --dlv-text: #ebebeb;
+        --dlv-muted: #979dad;
+        --dlv-soft: #c8cedc;
+        --dlv-orange: #ff6600;
+        --dlv-orange-soft: #ffbca0;
+        --dlv-primary: #c24b00;
+        --dlv-button: #363a45;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        color: var(--dlv-text);
+    }
+    .bj-dlv .dlv-title {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-style: italic;
+        line-height: 1.2;
+        margin: 0;
+    }
+    .bj-dlv .dlv-glyph {
+        width: 1.6em;
+        height: 1.6em;
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: var(--dlv-text);
+        color: #151820;
+        font-family: "Overpass", sans-serif;
+        font-style: normal;
+        font-size: 0.85em;
+        font-weight: 800;
+    }
+    .bj-dlv .dlv-glyph.wide {
+        width: auto;
+        padding: 0 0.45em;
+        border-radius: 0.25em;
+        background: transparent;
+        border: 1px solid var(--dlv-muted);
+        color: var(--dlv-soft);
+    }
+    .bj-dlv .dlv-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6em;
+        min-height: 2.8em;
+        padding: 0 1.2em 0 0.7em;
+        border: 0;
+        border-radius: 0.25em;
+        background: var(--dlv-button);
+        color: var(--dlv-text);
+        font-family: "Overpass", sans-serif;
+        font-size: 1.15em;
+        font-style: italic;
+        font-weight: 700;
+        cursor: pointer;
+    }
+    .bj-dlv .dlv-btn.primary {
+        background: var(--dlv-primary);
+        color: #fff;
+    }
+    .bj-dlv .dlv-btn.primary .dlv-glyph {
+        background: #fff;
+        color: #a54106;
+    }
+    .bj-dlv .dlv-btn:hover {
+        filter: brightness(1.12);
+    }
+    .bj-dlv .dlv-btn:disabled {
+        opacity: 0.45;
+        cursor: default;
+        filter: none;
+    }
+
+    #beamjoy-delivery-board {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 6;
+        width: min(72em, 92vw);
+        max-height: 86vh;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        background: var(--dlv-surface);
+        border: 1px solid var(--dlv-line);
+        border-radius: 0.5em;
+    }
+    #beamjoy-delivery-board .board-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: 1.1em 1em 1em 1.5em;
+        border-bottom: 1px solid var(--dlv-line);
+    }
+    #beamjoy-delivery-board .board-header .dlv-title {
+        font-size: 1.75em;
+    }
+    #beamjoy-delivery-board .board-sub {
+        margin: 0.15em 0 0;
+        font-size: 0.9em;
+        color: var(--dlv-muted);
+    }
+    #beamjoy-delivery-board .board-close {
+        width: 2.5em;
+        height: 2.5em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: 0;
+        border-radius: 0.25em;
+        color: #a7aebf;
+        cursor: pointer;
+    }
+    #beamjoy-delivery-board .board-close:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+    #beamjoy-delivery-board .board-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(16em, 26em) minmax(0, 1fr);
+        gap: 1.5em;
+        padding: 1.25em 1.5em;
+    }
+    #beamjoy-delivery-board .board-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4em;
+        min-height: 0;
+        overflow-y: auto;
+    }
+    #beamjoy-delivery-board .section-label {
+        margin: 0 0 0.3em;
+        font-size: 0.95em;
+        font-weight: 600;
+        color: var(--dlv-soft);
+    }
+    #beamjoy-delivery-board .offer {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25em;
+        width: 100%;
+        text-align: left;
+        padding: 0.75em 1em;
+        border: 0;
+        border-radius: 0 0.4em 0.4em 0;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--dlv-text);
+        cursor: pointer;
+    }
+    #beamjoy-delivery-board .offer:hover {
+        background: rgba(255, 255, 255, 0.07);
+    }
+    #beamjoy-delivery-board .offer.selected {
+        background: rgba(255, 102, 0, 0.12);
+        box-shadow: inset 3px 0 0 var(--dlv-orange), 0 0 0 2px rgba(255, 102, 0, 0.55);
+    }
+    #beamjoy-delivery-board .offer-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.82em;
+        color: var(--dlv-muted);
+        font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-delivery-board .offer.selected .offer-meta {
+        color: var(--dlv-orange-soft);
+    }
+    #beamjoy-delivery-board .offer-title {
+        font-family: "Overpass", sans-serif;
+        font-size: 1.05em;
+        font-weight: 600;
+    }
+    #beamjoy-delivery-board .offer-dest {
+        font-size: 0.9em;
+        color: var(--dlv-soft);
+    }
+    #beamjoy-delivery-board .empty {
+        font-size: 0.95em;
+        color: var(--dlv-muted);
+        white-space: normal;
+        line-height: 1.5;
+    }
+    #beamjoy-delivery-board .details {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25em;
+        padding: 1.5em 1.75em;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 0.5em;
+        min-height: 0;
+    }
+    #beamjoy-delivery-board .details-kind {
+        font-size: 0.9em;
+        color: var(--dlv-orange-soft);
+    }
+    #beamjoy-delivery-board .details .dlv-title {
+        font-size: 1.9em;
+        font-style: normal;
+    }
+    /* each stop draws its own dot, and the line down to the next stop, so they line up with
+       the text whatever its height or the number of stops */
+    #beamjoy-delivery-board .route {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    #beamjoy-delivery-board .route-stop {
+        position: relative;
+        padding: 0 0 1.1em 1.55em;
+    }
+    #beamjoy-delivery-board .route-stop:last-child {
+        padding-bottom: 0;
+    }
+    #beamjoy-delivery-board .route-stop::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        /* centred on the small label line above the name */
+        top: 0.24em;
+        width: 0.65em;
+        height: 0.65em;
+        border-radius: 50%;
+        box-sizing: border-box;
+        border: 2px solid var(--dlv-text);
+    }
+    #beamjoy-delivery-board .route-stop.end::before {
+        border: 0;
+        background: var(--dlv-orange);
+    }
+    #beamjoy-delivery-board .route-stop::after {
+        content: "";
+        position: absolute;
+        left: calc(0.325em - 1px);
+        top: 1.09em;
+        /* down to just above the next stop's dot */
+        bottom: -0.04em;
+        width: 2px;
+        background: #606570;
+    }
+    #beamjoy-delivery-board .route-stop:last-child::after {
+        display: none;
+    }
+    #beamjoy-delivery-board .label {
+        display: block;
+        font-size: 0.82em;
+        color: var(--dlv-muted);
+    }
+    #beamjoy-delivery-board .facts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1em 1.5em;
+        margin: 0;
+    }
+    #beamjoy-delivery-board .fact-value {
+        margin: 0;
+        font-size: 1.15em;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-delivery-board .scoring {
+        margin: 0;
+        font-size: 0.9em;
+        line-height: 1.55;
+        color: #a7aebf;
+        white-space: normal;
+        max-width: 38em;
+    }
+    #beamjoy-delivery-board .actions {
+        margin-top: auto;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.75em;
+    }
+    #beamjoy-delivery-board .board-footer {
+        display: flex;
+        align-items: center;
+        gap: 1.5em;
+        padding: 0.75em 1.5em;
+        border-top: 1px solid var(--dlv-line);
+        font-size: 0.9em;
+        color: var(--dlv-soft);
+    }
+    #beamjoy-delivery-board .hint {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5em;
+    }
+    #beamjoy-delivery-board .convoy {
+        border: 1px solid rgba(255, 102, 0, 0.45);
+        border-radius: 0.4em;
+    }
+    #beamjoy-delivery-board .convoy.selected {
+        border-color: transparent;
+    }
+    #beamjoy-delivery-board .convoy-note {
+        margin: 0;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6em;
+        font-size: 0.9em;
+        line-height: 1.5;
+        white-space: normal;
+        max-width: 38em;
+    }
+    #beamjoy-delivery-board .hint-note {
+        margin-left: auto;
+        color: var(--dlv-muted);
+    }
+</style>
+
+<section id="beamjoy-delivery-board" class="bj-dlv" ng-if="$ctrl.open"
+    aria-label="{{'beamjoy.delivery.board.title' | translate}}">
+    <header class="board-header">
+        <div>
+            <h1 class="dlv-title">{{$ctrl.depotName}}</h1>
+            <p class="board-sub">{{'beamjoy.delivery.board.subtitle' | translate}}</p>
+        </div>
+        <button type="button" class="board-close" ng-click="$ctrl.close()"
+            aria-label="{{'beamjoy.delivery.close' | translate}}">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round"><path d="M4 4l10 10M14 4L4 14"></path></svg>
+        </button>
+    </header>
+
+    <div class="board-body">
+        <div class="board-list">
+            <h2 class="section-label">{{'beamjoy.delivery.board.jobs' | translate}}</h2>
+            <div class="empty" ng-if="$ctrl.loading">{{'beamjoy.delivery.board.loading' | translate}}</div>
+            <div class="empty" ng-if="!$ctrl.loading && $ctrl.offers.length === 0">
+                {{'beamjoy.delivery.board.empty' | translate}}
+            </div>
+            <button type="button" class="offer" ng-repeat="offer in $ctrl.offers track by offer.id"
+                ng-class="{selected: $index === $ctrl.selected}"
+                aria-pressed="{{$index === $ctrl.selected}}"
+                ng-click="$ctrl.select($index)">
+                <span class="offer-meta">
+                    <span>{{$ctrl.kindLabel(offer)}}<span ng-if="$ctrl.isMulti(offer)">, {{$ctrl.stopsLabel(offer)}}</span></span>
+                    <span>{{$ctrl.fmt.formatDistance(offer.meters)}}</span>
+                </span>
+                <span class="offer-title">{{$ctrl.cargoLabel(offer)}}</span>
+                <span class="offer-dest" ng-if="!$ctrl.isMulti(offer)">{{'beamjoy.delivery.to' | translate}} {{offer.destName}}</span>
+                <span class="offer-dest" ng-if="$ctrl.isMulti(offer)">{{'beamjoy.delivery.toLast' | translate}} {{offer.destName}}</span>
+            </button>
+
+            <h2 class="section-label" ng-if="$ctrl.convoys.length > 0" style="margin-top: 0.8em">
+                {{'beamjoy.delivery.board.convoysHere' | translate}}
+            </h2>
+            <button type="button" class="offer convoy" ng-repeat="c in $ctrl.convoys track by c.id"
+                ng-class="{selected: $ctrl.convoyIndex($index) === $ctrl.selected}"
+                aria-pressed="{{$ctrl.convoyIndex($index) === $ctrl.selected}}"
+                ng-click="$ctrl.select($ctrl.convoyIndex($index))">
+                <span class="offer-meta">
+                    <span>{{'beamjoy.delivery.convoy.label' | translate}}, {{c.count}} / {{c.max}}</span>
+                    <span>{{$ctrl.fmt.formatDistance(c.meters)}}</span>
+                </span>
+                <span class="offer-title">{{$ctrl.convoyTitle(c)}}</span>
+                <span class="offer-dest">{{$ctrl.cargoLabel(c)}} {{'beamjoy.delivery.toLower' | translate}} {{c.destName}}</span>
+            </button>
+        </div>
+
+        <article class="details" ng-if="$ctrl.current()">
+            <div>
+                <span class="details-kind">{{('beamjoy.delivery.kindLong.' + $ctrl.current().kind) | translate}}</span>
+                <h2 class="dlv-title">{{$ctrl.cargoLabel($ctrl.current())}}</h2>
+            </div>
+
+            <ol class="route">
+                <li class="route-stop">
+                    <span class="label">{{'beamjoy.delivery.pickUp' | translate}}</span>
+                    <span>{{$ctrl.depotName}}</span>
+                </li>
+                <li class="route-stop" ng-repeat="s in $ctrl.current().dropStops" ng-class="{end: $last}">
+                    <span class="label" ng-if="$ctrl.current().dropStops.length === 1">{{'beamjoy.delivery.dropOff' | translate}}</span>
+                    <span class="label" ng-if="$ctrl.current().dropStops.length > 1">
+                        {{'beamjoy.delivery.stopN' | translate}} {{$index + 1}}<span ng-if="s.meters">, {{$ctrl.fmt.formatDistance(s.meters)}}</span>
+                    </span>
+                    <span>{{s.name}}</span>
+                </li>
+            </ol>
+            <p class="scoring" ng-if="$ctrl.isMulti($ctrl.current())" style="color: var(--dlv-orange-soft)">
+                {{('beamjoy.delivery.board.multiNote' + $ctrl.current().stops.length) | translate}}
+            </p>
+
+            <dl class="facts">
+                <div>
+                    <dt class="label">{{'beamjoy.delivery.routeDistance' | translate}}</dt>
+                    <dd class="fact-value">{{$ctrl.fmt.formatDistance($ctrl.current().meters)}}</dd>
+                </div>
+                <div>
+                    <dt class="label">{{'beamjoy.delivery.targetTime' | translate}}</dt>
+                    <dd class="fact-value">{{$ctrl.fmt.formatTime($ctrl.current().targetSec)}}</dd>
+                </div>
+                <div>
+                    <dt class="label">{{'beamjoy.delivery.dropOff' | translate}}</dt>
+                    <dd class="fact-value">{{'beamjoy.delivery.board.zoneHold' | translate}}</dd>
+                </div>
+                <div>
+                    <dt class="label">{{'beamjoy.delivery.board.players' | translate}}</dt>
+                    <dd class="fact-value" ng-if="!$ctrl.current().isConvoy">{{$ctrl.playersLine($ctrl.current())}}</dd>
+                    <dd class="fact-value" ng-if="$ctrl.current().isConvoy">{{$ctrl.current().count}} / {{$ctrl.current().max}}</dd>
+                </div>
+            </dl>
+
+            <p class="scoring">{{('beamjoy.delivery.scoring.' + $ctrl.current().kind) | translate}}</p>
+
+            <p class="convoy-note" ng-if="!$ctrl.current().isConvoy">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#ff8955" stroke-width="1.7"
+                    stroke-linecap="round" style="flex-shrink: 0; margin-top: 2px" aria-hidden="true">
+                    <circle cx="6.5" cy="6" r="2.5"></circle><circle cx="12.5" cy="7" r="2"></circle>
+                    <path d="M2 15c.6-2.6 2.4-4 4.5-4s3.9 1.4 4.5 4M11 11.3c.5-.2 1-.3 1.5-.3 1.8 0 3 1.2 3.5 3.5"></path>
+                </svg>
+                <span>{{'beamjoy.delivery.board.convoyNote' | translate}}</span>
+            </p>
+
+            <div class="actions" ng-if="!$ctrl.current().isConvoy">
+                <button type="button" class="dlv-btn" ng-click="$ctrl.startSolo()">
+                    <span class="dlv-glyph" aria-hidden="true">X</span>{{'beamjoy.delivery.startSolo' | translate}}
+                </button>
+                <button type="button" class="dlv-btn primary" ng-click="$ctrl.primary()">
+                    <span class="dlv-glyph" aria-hidden="true">A</span>{{'beamjoy.delivery.startConvoy' | translate}}
+                </button>
+            </div>
+            <div class="actions" ng-if="$ctrl.current().isConvoy">
+                <button type="button" class="dlv-btn primary" ng-click="$ctrl.primary()"
+                    ng-disabled="$ctrl.convoyFull($ctrl.current())">
+                    <span class="dlv-glyph" aria-hidden="true">A</span>{{($ctrl.convoyFull($ctrl.current()) ? 'beamjoy.delivery.convoy.full' : 'beamjoy.delivery.convoy.join') | translate}}
+                </button>
+            </div>
+        </article>
+    </div>
+
+    <footer class="board-footer" aria-label="{{'beamjoy.delivery.controls' | translate}}">
+        <span class="hint"><span class="dlv-glyph wide" aria-hidden="true">D-pad</span>{{'beamjoy.delivery.board.browse' | translate}}</span>
+        <span class="hint"><span class="dlv-glyph" aria-hidden="true">A</span>{{'beamjoy.delivery.board.aHint' | translate}}</span>
+        <span class="hint"><span class="dlv-glyph" aria-hidden="true">X</span>{{'beamjoy.delivery.startSolo' | translate}}</span>
+        <span class="hint"><span class="dlv-glyph" aria-hidden="true">B</span>{{'beamjoy.delivery.close' | translate}}</span>
+        <span class="hint-note">{{'beamjoy.delivery.mouseToo' | translate}}</span>
+    </footer>
+</section>

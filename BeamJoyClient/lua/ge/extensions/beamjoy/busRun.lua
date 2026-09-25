@@ -454,7 +454,8 @@ local function onGetRawPoiListForLevel(level, elements)
             M.lineById[id] = line
             elements[#elements + 1] = {
                 id = id,
-                data = { type = "bjBusLineStart", id = id },
+                -- date : the game sorts overlapping mission markers by data.date (see stations.lua)
+                data = { type = "bjBusLineStart", id = id, date = 0 },
                 markerInfo = {
                     missionMarker = { pos = vec3(s1.pos.x, s1.pos.y, s1.pos.z), rot = rot,
                         icon = "poi_dealer_1_round" },
@@ -503,6 +504,8 @@ local function onBJRequestBigmapPOIs(POIS)
                 description = string.format("%d %s", #line.stops,
                     beamjoy_lang.translate("beamjoy.buslines.edit.stops")),
                 icon = "bus",
+                -- same atlas icon as the line's world marker (see onGetRawPoiListForLevel)
+                mapIcon = "poi_dealer_1_round",
                 groupType = "other",
                 -- no native vueBigMap type fits "bus line", so it always also lands in the "Other"
                 -- catch-all (see bigmap.lua's own getRawPOIs comment) - but this additionally
@@ -955,7 +958,8 @@ function M.startLine(line, fromActivity)
         M.needBus, M.pendingLine, M.pendingFromActivity = false, nil, false
     end
 
-    if locked() then
+    -- a delivery owns the GPS and the target disc too ; one activity at a time
+    if locked() or (beamjoy_delivery and beamjoy_delivery.job) then
         toast.warn(beamjoy_lang.translate("beamjoy.buslines.play.blocked"), nil, 4)
         return
     end
@@ -1190,6 +1194,11 @@ end
 local function onBJStationEditorState(active)
     M.editorOpen = active == true
     refreshPOIs()
+    -- the editor clears the shared shape buffer when it closes ; put the stop disc back
+    if not M.editorOpen and M.run then
+        M.lastTargetKey = nil
+        setTarget()
+    end
 end
 
 M.onInit = onInit

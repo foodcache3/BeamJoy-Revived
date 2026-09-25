@@ -165,6 +165,11 @@ local function tryTeleportToPlayer(targetPlayerName, forced)
         -- self-teleporting during an active hunt would trivially skip the chase entirely (or let
         -- the fugitive escape any close call). Scoped to COUNTDOWN/HUNT, not LOBBY, matching races'
         -- own RACE/COUNTDOWN-only scope.
+        -- a delivery is tied to the vehicle's own drive from the depot : teleporting would skip it
+        if beamjoy_delivery and beamjoy_delivery.job then
+            return toast.warn(beamjoy_lang.translate("beamjoy.teleport.duringDelivery"))
+        end
+
         local hunterSession = beamjoy_hunterRunner and beamjoy_hunterRunner.session
         if hunterSession and (hunterSession.state == "COUNTDOWN" or hunterSession.state == "HUNT") then
             local selfName = MPConfig.getNickname()

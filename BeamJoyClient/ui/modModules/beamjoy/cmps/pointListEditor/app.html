@@ -13,7 +13,8 @@
            ("put it back to how it was") - back to this version. */
         background-color: rgba(0, 0, 0, 0.65);
     }
-    bj-point-list-editor .point-row.active .point-name {
+    /* the read-only label only ; the editable name box keeps its normal black text (per request) */
+    bj-point-list-editor .point-row.active span.point-name {
         color: #edff00;
         /* belt-and-suspenders on top of the darker background above : guarantees legibility
            regardless of whatever's behind the panel */

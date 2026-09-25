@@ -14,7 +14,7 @@ angular.module("beamjoy").component("bjConfigFreeroam", {
     controller: function ($rootScope, $scope, $filter, beamjoyStore, beamjoyNavGuard, beamjoyConfirm) {
         const translate = $filter("translate");
 
-        this.SECTIONS = ["stations", "buslines"];
+        this.SECTIONS = ["stations", "buslines", "deliveries"];
         this.activeSection = "stations";
         // switching sections while one is dirty would strand the unsaved edits (each section is a
         // separate Lua editor). The inactive tab is disabled until you Save or Discard.
@@ -41,6 +41,14 @@ angular.module("beamjoy").component("bjConfigFreeroam", {
             snapMethod: "BJEditorBusLinesSnapMethod",
             setSnapToGround: "BJEditorBusLinesSetSnapToGround",
             setSnapMethod: "BJEditorBusLinesSetSnapMethod",
+        };
+
+        // "Deliveries" section: same, for <bj-config-deliveries>
+        this.deliverySnapEvents = {
+            snapToGround: "BJEditorDeliveriesSnapToGround",
+            snapMethod: "BJEditorDeliveriesSnapMethod",
+            setSnapToGround: "BJEditorDeliveriesSetSnapToGround",
+            setSnapMethod: "BJEditorDeliveriesSetSnapMethod",
         };
 
         this.$onInit = () => {
@@ -290,5 +298,113 @@ angular.module("beamjoy").component("bjConfigStations", {
         };
 
         this.countLabel = (list) => `(${(list === "stations" ? this.stations : this.garages).length})`;
+    },
+});
+
+// Nested: the Deliveries editor sidebar. A flat point list ; the active point expands to its tags
+// (what it sends / receives) and, when it sends vehicles, its ordered vehicle start slots. All
+// state is pushed from ui/deliveryEditor.lua ; every row action is a BJEditorDeliveries* send with
+// 1-based indices.
+angular.module("beamjoy").component("bjConfigDeliveries", {
+    templateUrl: "/ui/modModules/beamjoy/windows/config/freeroam/deliveries/app.html",
+    controller: function ($rootScope, $timeout, beamjoyStore) {
+        // kept in sync with services/deliveryPoints.lua
+        this.provideOptions = ["packages", "vehicles"];
+        this.receiveOptions = ["packages", "cars", "trucks"];
+        this.MAX_SLOTS = 4;
+
+        this.points = [];
+        this.activeIndex = null; // 1-based, or null
+        this.activeSlot = null; // 1-based, or null
+        this.measuring = null; // {done, total} while Save measures routes
+
+        $rootScope.$on("BJEditorDeliveriesListUpdate", (_, data) => {
+            this.points = Array.isArray(data && data.points) ? data.points : [];
+        });
+        $rootScope.$on("BJEditorDeliveriesActiveUpdate", (_, active) => {
+            active = active || {};
+            this.activeIndex = active.index || null;
+            this.activeSlot = active.slot || null;
+            if (this.activeIndex) {
+                $timeout(() => {
+                    const el = document.getElementById(`delivery-row-${this.activeIndex}`);
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                });
+            }
+        });
+        $rootScope.$on("BJEditorDeliveriesMeasuring", (_, m) => {
+            this.measuring = m && m.total ? m : null;
+        });
+
+        this.$onInit = () => {
+            beamjoyStore.send("BJEditorDeliveriesRequestState");
+        };
+
+        const send = (event, args) => beamjoyStore.send(event, args);
+
+        this.isDepot = (point) => Array.isArray(point.provides) && point.provides.length > 0;
+        this.sendsVehicles = (point) => Array.isArray(point.provides) && point.provides.includes("vehicles");
+        this.hasTag = (point, field, tag) => Array.isArray(point[field]) && point[field].includes(tag);
+        // optimistic local update, same as the stations editor's type chips, so rapid clicks never
+        // read a stale list while the Lua echo is in flight
+        this.toggleTag = (event, point, index, field, tag) => {
+            event.stopPropagation();
+            const current = Array.isArray(point[field]) ? point[field] : [];
+            const tags = current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag];
+            point[field] = tags;
+            send("BJEditorDeliveriesSetTags", [index, field, tags]);
+        };
+        this.missingSlots = (point) =>
+            this.sendsVehicles(point) && (!Array.isArray(point.slots) || point.slots.length === 0);
+
+        this.selectPoint = (event, index) => {
+            event.stopPropagation();
+            send("BJEditorDeliveriesSelectPoint", [index]);
+        };
+        this.addPoint = (event) => {
+            event.stopPropagation();
+            send("BJEditorDeliveriesAddPoint", []);
+        };
+        this.deletePoint = (event, index) => {
+            event.stopPropagation();
+            send("BJEditorDeliveriesDeletePoint", [index]);
+        };
+        this.importFromMap = (event) => {
+            event.stopPropagation();
+            send("BJEditorDeliveriesImport", []);
+        };
+        this.setName = (index, name) => send("BJEditorDeliveriesSetName", [index, name || ""]);
+        this.setRadius = (index, radius) => send("BJEditorDeliveriesSetRadius", [index, Number(radius)]);
+        this.setToVehicle = (event, index) => {
+            event.stopPropagation();
+            send("BJEditorDeliveriesSetToVehicle", [index]);
+        };
+        this.teleportTo = (event, index) => {
+            event.stopPropagation();
+            send("BJEditorDeliveriesTeleportTo", [index]);
+        };
+
+        this.selectSlot = (event, pi, si) => {
+            event.stopPropagation();
+            send("BJEditorDeliveriesSelectSlot", [pi, si]);
+        };
+        this.addSlot = (event, pi) => {
+            event.stopPropagation();
+            send("BJEditorDeliveriesAddSlot", [pi]);
+        };
+        this.deleteSlot = (event, pi, si) => {
+            event.stopPropagation();
+            send("BJEditorDeliveriesDeleteSlot", [pi, si]);
+        };
+        this.setSlotToVehicle = (event, pi, si) => {
+            event.stopPropagation();
+            send("BJEditorDeliveriesSetSlotToVehicle", [pi, si]);
+        };
+        this.teleportToSlot = (event, pi, si) => {
+            event.stopPropagation();
+            send("BJEditorDeliveriesTeleportToSlot", [pi, si]);
+        };
+
+        this.depotCount = () => this.points.filter((p) => this.isDepot(p)).length;
     },
 });

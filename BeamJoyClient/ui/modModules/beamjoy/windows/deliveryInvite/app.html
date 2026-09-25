@@ -1,0 +1,84 @@
+<style>
+    #beamjoy-delivery-invite {
+        position: fixed;
+        right: 1vw;
+        top: 2vh;
+        z-index: 7;
+        width: min(25em, 92vw);
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6em;
+        padding: 1em 1.1em 0.9em;
+        background: var(--dlv-surface);
+        border: 1px solid var(--dlv-line);
+        border-radius: 0 0.5em 0.5em 0;
+        box-shadow: inset 3px 0 0 var(--dlv-orange);
+    }
+    #beamjoy-delivery-invite h2 {
+        margin: 0;
+        font-family: "Overpass", sans-serif;
+        font-size: 1.2em;
+        font-weight: 700;
+        white-space: normal;
+    }
+    #beamjoy-delivery-invite p {
+        margin: 0;
+        font-size: 0.88em;
+        line-height: 1.5;
+        color: var(--dlv-soft);
+        white-space: normal;
+    }
+    #beamjoy-delivery-invite .bar {
+        height: 4px;
+        border-radius: 2px;
+        background: var(--dlv-button);
+        overflow: hidden;
+    }
+    #beamjoy-delivery-invite .bar div {
+        height: 4px;
+        background: var(--dlv-orange);
+        transition: width 0.25s linear;
+    }
+    #beamjoy-delivery-invite.focused {
+        border-color: rgba(255, 102, 0, 0.6);
+    }
+    #beamjoy-delivery-invite .focus-hint {
+        display: flex;
+        align-items: center;
+        gap: 0.45em;
+        font-size: 0.82em;
+        color: var(--dlv-muted);
+    }
+    #beamjoy-delivery-invite .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5em;
+    }
+    #beamjoy-delivery-invite .dlv-btn {
+        font-size: 0.9em;
+        font-style: normal;
+        font-family: "Noto Sans", sans-serif;
+        font-weight: 600;
+        min-height: 2.5em;
+        padding: 0 0.9em 0 0.5em;
+    }
+</style>
+
+<section id="beamjoy-delivery-invite" class="bj-dlv" ng-if="$ctrl.open" ng-class="{focused: $ctrl.i.padActive}"
+    aria-label="{{'beamjoy.delivery.invite.label' | translate}}">
+    <h2>{{$ctrl.heading()}}</h2>
+    <p>{{$ctrl.body()}}</p>
+    <div class="bar" role="timer"><div ng-style="{width: $ctrl.progress()}"></div></div>
+    <div class="focus-hint" ng-if="!$ctrl.i.padActive">
+        <span class="dlv-glyph wide" aria-hidden="true">RB + Y</span>{{'beamjoy.delivery.invite.focusHint' | translate}}
+    </div>
+    <div class="actions">
+        <button type="button" class="dlv-btn" ng-click="$ctrl.decline()">
+            <span class="dlv-glyph" aria-hidden="true">B</span>{{'beamjoy.delivery.invite.decline' | translate}}
+        </button>
+        <button type="button" class="dlv-btn primary" ng-click="$ctrl.accept()">
+            <span class="dlv-glyph" aria-hidden="true">A</span>{{'beamjoy.delivery.convoy.join' | translate}}
+        </button>
+    </div>
+</section>

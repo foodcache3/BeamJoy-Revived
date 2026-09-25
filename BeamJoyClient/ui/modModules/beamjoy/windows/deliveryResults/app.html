@@ -1,0 +1,182 @@
+<style>
+    #beamjoy-delivery-results {
+        position: fixed;
+        left: 50%;
+        top: 8vh;
+        transform: translateX(-50%);
+        z-index: 6;
+        width: min(40em, 92vw);
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        background: var(--dlv-surface);
+        border: 1px solid var(--dlv-line);
+        border-radius: 0.5em;
+    }
+    #beamjoy-delivery-results .res-header {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25em;
+        padding: 1.25em 1.5em 1em;
+        border-bottom: 1px solid var(--dlv-line);
+    }
+    #beamjoy-delivery-results .res-status {
+        font-size: 0.9em;
+        color: #73eb9d;
+    }
+    #beamjoy-delivery-results .res-header .dlv-title {
+        font-size: 1.75em;
+        white-space: normal;
+    }
+    #beamjoy-delivery-results .res-from {
+        margin: 0;
+        font-size: 0.9em;
+        color: #a7aebf;
+    }
+    #beamjoy-delivery-results .breakdown {
+        margin: 1em 1.5em 0;
+        padding: 0.9em 1em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0.4em;
+    }
+    #beamjoy-delivery-results .breakdown h2 {
+        margin: 0 0 0.5em;
+        font-size: 0.9em;
+        font-weight: 600;
+        color: var(--dlv-soft);
+    }
+    #beamjoy-delivery-results .breakdown dl {
+        margin: 0;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.4em 1.5em;
+        font-size: 0.9em;
+        font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-delivery-results .breakdown dt {
+        color: var(--dlv-soft);
+    }
+    #beamjoy-delivery-results .breakdown dd {
+        margin: 0;
+        text-align: right;
+    }
+    #beamjoy-delivery-results .breakdown .sum {
+        padding-top: 0.4em;
+        border-top: 1px solid var(--dlv-line);
+        font-weight: 700;
+        color: var(--dlv-text);
+    }
+    #beamjoy-delivery-results .res-note {
+        margin: 0.2em 0 0;
+        font-size: 0.9em;
+        color: #a7aebf;
+        white-space: normal;
+    }
+    #beamjoy-delivery-results .members {
+        width: calc(100% - 3em);
+        margin: 1em 1.5em 0;
+        border-collapse: collapse;
+        font-size: 0.9em;
+        font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-delivery-results .members th {
+        padding: 0 0 0.4em;
+        font-size: 0.85em;
+        font-weight: 500;
+        color: var(--dlv-muted);
+        text-align: left;
+    }
+    #beamjoy-delivery-results .members td {
+        padding: 0.55em 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    #beamjoy-delivery-results .members .num {
+        text-align: right;
+        font-weight: 700;
+    }
+    #beamjoy-delivery-results .members .who {
+        font-weight: 600;
+    }
+    #beamjoy-delivery-results .members .muted {
+        color: var(--dlv-muted);
+    }
+    #beamjoy-delivery-results .res-total {
+        margin: 0;
+        padding: 0.9em 1.5em 0;
+        font-size: 0.9em;
+        white-space: normal;
+    }
+    #beamjoy-delivery-results .res-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5em;
+        padding: 1em 1.5em 1.1em;
+    }
+    #beamjoy-delivery-results .res-actions .dlv-btn {
+        font-size: 1em;
+    }
+</style>
+
+<section id="beamjoy-delivery-results" class="bj-dlv" ng-if="$ctrl.open"
+    aria-label="{{'beamjoy.delivery.results.title' | translate}}">
+    <header class="res-header">
+        <span class="res-status">{{'beamjoy.delivery.results.delivered' | translate}}</span>
+        <h1 class="dlv-title">{{$ctrl.cargoLabel()}} {{'beamjoy.delivery.toLower' | translate}} {{$ctrl.r.toName}}</h1>
+        <p class="res-from">{{'beamjoy.delivery.from' | translate}} {{$ctrl.r.fromName}}</p>
+        <p class="res-note" ng-if="$ctrl.statusLine()">{{$ctrl.statusLine()}}</p>
+    </header>
+
+    <table class="members" ng-if="$ctrl.convoy() && $ctrl.convoy().size > 1 && $ctrl.table().length > 0">
+        <thead>
+            <tr>
+                <th scope="col">{{'beamjoy.delivery.results.player' | translate}}</th>
+                <th scope="col">{{'beamjoy.delivery.hud.time' | translate}} ({{$ctrl.fmt.formatTime($ctrl.r.targetSec)}})</th>
+                <th scope="col" ng-if="$ctrl.r.kind === 'vehicles'">{{'beamjoy.delivery.results.conditionCol' | translate}}</th>
+                <th scope="col">{{'beamjoy.delivery.results.togetherCol' | translate}}</th>
+                <th scope="col" style="text-align: right">{{'beamjoy.delivery.results.score' | translate}}</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr ng-repeat="row in $ctrl.table()">
+                <td class="who">{{row.name}}<span ng-if="row.you"> ({{'beamjoy.delivery.lobby.you' | translate}})</span></td>
+                <td ng-if="row.status === 'delivered' || row.status === 'late'">
+                    {{$ctrl.rowTime(row)}}<span class="muted" ng-if="row.status === 'late'"> {{$ctrl.rowStatus(row)}}</span>
+                </td>
+                <td class="muted" ng-if="row.status !== 'delivered' && row.status !== 'late'">{{$ctrl.rowStatus(row)}}</td>
+                <td ng-if="$ctrl.r.kind === 'vehicles'">{{$ctrl.rowCondition(row)}}</td>
+                <td>{{$ctrl.rowCohesion(row)}}</td>
+                <td class="num">{{row.score != null ? row.score : ''}}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="breakdown">
+        <h2>{{'beamjoy.delivery.results.howItAddsUp' | translate}}</h2>
+        <dl>
+            <dt>{{$ctrl.baseLine()}}</dt><dd>{{$ctrl.r.base}}</dd>
+            <dt>{{$ctrl.timeLine()}}</dt><dd>&times; {{$ctrl.r.timeFactor | number:2}}</dd>
+            <dt ng-if="$ctrl.r.condition">{{$ctrl.conditionLine()}}</dt>
+            <dd ng-if="$ctrl.r.condition">&times; {{$ctrl.r.condition.factor | number:2}}</dd>
+            <dt ng-if="$ctrl.r.stops">{{$ctrl.stopsLine()}}</dt>
+            <dd ng-if="$ctrl.r.stops">&times; {{$ctrl.r.stopFactor | number:2}}</dd>
+            <dt ng-if="$ctrl.r.conditionUnknown">{{'beamjoy.delivery.results.conditionUnknown' | translate}}</dt>
+            <dd ng-if="$ctrl.r.conditionUnknown">&times; 1.00</dd>
+            <dt ng-if="$ctrl.convoy() && $ctrl.convoy().size > 1">{{$ctrl.sizeLine()}}</dt>
+            <dd ng-if="$ctrl.convoy() && $ctrl.convoy().size > 1">&times; {{$ctrl.convoy().sizeFactor | number:2}}</dd>
+            <dt ng-if="$ctrl.convoy() && $ctrl.convoy().cohesionShare != null">{{$ctrl.cohesionLine()}}</dt>
+            <dd ng-if="$ctrl.convoy() && $ctrl.convoy().cohesionShare != null">&times; {{$ctrl.convoy().cohesionFactor | number:2}}</dd>
+            <dt class="sum">{{'beamjoy.delivery.results.score' | translate}}</dt><dd class="sum">{{$ctrl.r.score}}</dd>
+        </dl>
+    </div>
+
+    <p class="res-total" ng-if="$ctrl.hasTotal()">{{$ctrl.totalLine()}}</p>
+
+    <div class="res-actions">
+        <button type="button" class="dlv-btn" ng-click="$ctrl.close()">
+            <span class="dlv-glyph" aria-hidden="true">B</span>{{'beamjoy.delivery.close' | translate}}
+        </button>
+        <button type="button" class="dlv-btn primary" ng-if="$ctrl.r.toIsDepot" ng-click="$ctrl.next()">
+            <span class="dlv-glyph" aria-hidden="true">A</span>{{'beamjoy.delivery.results.nextJob' | translate}}
+        </button>
+    </div>
+</section>
