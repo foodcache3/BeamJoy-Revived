@@ -1,6 +1,8 @@
 angular.module("beamjoy").component("bjPlayerLine", {
     bindings: {
         player: "<",
+        // full window : also shows the staff buttons acting on all of the player's vehicles
+        full: "<",
     },
     templateUrl:
         "/ui/modModules/beamjoy/windows/main/main/player-line/app.html",

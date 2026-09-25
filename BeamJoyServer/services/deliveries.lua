@@ -18,7 +18,8 @@
 ---     delivery opens a grace period ; members delivering inside it get the convoy bonus and their
 ---     cohesion bonus (share of 1 s samples within 200 m of another member), later ones don't.
 ---   - **scoring** and **per-type score totals** (one total per player per cargo kind, all maps
----     combined), persisted in `deliveryScores.json`.
+---     combined), persisted in `deliveryScores.json` ; the Jobs section reads them as leaderboards
+---     (`deliveryLeaderboardRequest`) and lists every depot's open jobs (`deliveryDepotsRequest`).
 ---
 --- **Multi-stop** package jobs : 2 or 3 drop-offs in a row (depot -> stop -> stop), each leg within
 --- the route distances ; the offer's destId is the last stop, `stops` lists them all in order.
@@ -106,6 +107,7 @@ local M = {
     -- vehicle has synced to the other players before anyone can drive (frozen until then)
     VEHICLE_SYNC_SEC = 8,
     MAX_CONVOY = 4,
+    LEADERBOARD_SIZE = 50,
     -- multi-stop : chance a package offer tries to be one, and the score factor per stop count
     MULTI_STOP_CHANCE = 0.35,
     STOP_BONUS = { 1, 1.15, 1.3 },
@@ -1162,14 +1164,8 @@ local function deliveryConvoyJoin(ctxt, convoyId, serverVid, viaInvite)
     if M.memberOf[ctxt.senderID] == c.id then return end
     if isBusy(ctxt.senderID) then return refuseStart(ctxt, "alreadyInJob") end
     if #c.order >= maxPlayers(c.offer) then return refuseStart(ctxt, "convoyFull") end
-    -- joining at the depot needs you there ; an invite can be accepted from anywhere (you're
-    -- brought to the depot when the convoy leaves)
-    if not viaInvite then
-        local depot = services_deliveryPoints.getPoint(c.offer.depotId)
-        if depot and not near(vehiclePosition(ctxt.senderID, serverVid), depot, M.START_SLACK) then
-            return refuseStart(ctxt, "notAtDepot")
-        end
-    end
+    -- joinable from anywhere (depot prompt, board, Jobs section, invite) : every member is
+    -- brought to the depot when the convoy leaves
     addToLobby(c, ctxt.senderID, serverVid)
 end
 
@@ -1311,6 +1307,61 @@ local function tickConvoys(now)
     end
 end
 
+-- JOBS SECTION ----------------------------------------------------------------------------------
+
+--- every depot with its open jobs by kind (boards are filled on the way, as if someone looked)
+---@param ctxt BJSContext
+local function deliveryDepotsRequest(ctxt)
+    if not ctxt.sender then return end
+    local list = {}
+    for _, p in ipairs(services_deliveryPoints.points) do
+        if hasJobs(p) then
+            fillBoard(p)
+            local packages, vehicles = 0, 0
+            for _, o in ipairs(M.boards[p.id] or {}) do
+                if o.kind == "vehicles" then vehicles = vehicles + 1 else packages = packages + 1 end
+            end
+            list[#list + 1] = {
+                id = p.id,
+                sendsPackages = offersPackages(p),
+                sendsVehicles = offersVehicles(p),
+                packages = packages,
+                vehicles = vehicles,
+            }
+        end
+    end
+    communications_tx.sendToPlayer(ctxt.senderID, "deliveryDepots", list)
+end
+
+--- both leaderboards : the top LEADERBOARD_SIZE by total, plus the sender's own place
+---@param ctxt BJSContext
+local function deliveryLeaderboardRequest(ctxt)
+    if not ctxt.sender then return end
+    local me = ctxt.sender.playerName
+    local payload = {}
+    for _, kind in ipairs({ "packages", "vehicles" }) do
+        local rows = {}
+        for name, entry in pairs(M.scores[kind] or {}) do
+            rows[#rows + 1] = { name = name, total = entry.total or 0, count = entry.count or 0 }
+        end
+        table.sort(rows, function(a, b)
+            if a.total ~= b.total then return a.total > b.total end
+            return a.name:lower() < b.name:lower()
+        end)
+        local top, mine = {}, nil
+        for i, row in ipairs(rows) do
+            row.rank = i
+            if row.name == me then
+                row.you = true
+                mine = row
+            end
+            if i <= M.LEADERBOARD_SIZE then top[#top + 1] = row end
+        end
+        payload[kind] = { rows = top, players = #rows, mine = mine }
+    end
+    communications_tx.sendToPlayer(ctxt.senderID, "deliveryLeaderboard", payload)
+end
+
 ---@param ctxt BJSContext
 ---@param reason string? client-side reason, logged only
 local function deliveryAbandon(ctxt, reason)
@@ -1439,6 +1490,8 @@ local function onInit()
     communications_rx.addHandler("deliveryPoolBlacklist", M.deliveryPoolBlacklist)
     communications_rx.addHandler("deliveryVehicleReady", M.deliveryVehicleReady)
     communications_rx.addHandler("deliveryLegArrive", M.deliveryLegArrive)
+    communications_rx.addHandler("deliveryDepotsRequest", M.deliveryDepotsRequest)
+    communications_rx.addHandler("deliveryLeaderboardRequest", M.deliveryLeaderboardRequest)
     communications_rx.addHandler("deliveryConvoyCreate", M.deliveryConvoyCreate)
     communications_rx.addHandler("deliveryConvoyJoin", M.deliveryConvoyJoin)
     communications_rx.addHandler("deliveryConvoyReady", M.deliveryConvoyReady)
@@ -1466,6 +1519,8 @@ M.deliveryPoolSave = deliveryPoolSave
 M.deliveryPoolBlacklist = deliveryPoolBlacklist
 M.deliveryVehicleReady = deliveryVehicleReady
 M.deliveryLegArrive = deliveryLegArrive
+M.deliveryDepotsRequest = deliveryDepotsRequest
+M.deliveryLeaderboardRequest = deliveryLeaderboardRequest
 M.deliveryConvoyCreate = deliveryConvoyCreate
 M.deliveryConvoyJoin = function(ctxt, convoyId, serverVid) deliveryConvoyJoin(ctxt, convoyId, serverVid) end
 M.deliveryConvoyReady = deliveryConvoyReady

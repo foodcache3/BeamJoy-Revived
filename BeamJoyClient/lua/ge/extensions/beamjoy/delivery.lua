@@ -19,13 +19,18 @@
 ---     the leader, X invite, B leave) ; others join from the depot prompt, the board's "Convoys
 ---     forming here" or an invite (a panel that expires). Pad buttons : the lobby panel takes them
 ---     while you're parked at the depot ; an invite, or the lobby while you're away from the depot,
----     only after the game's own "interact" chord (gameplay_interact : RB + Y on a pad, Shift + E
----     on a keyboard) focuses it, so they never steal shifting (A/X) or anything else mid-drive.
+---     only after BJS's own "Focus notification" control focuses it (Controls > BeamJoy ; RB + X
+---     on a pad, Shift + J on a keyboard by default), so they never steal shifting (A/X) or
+---     anything else mid-drive.
 ---     When it leaves, every member is brought to the depot (vehicle convoys : their delivery
 ---     vehicle spawns on their start slot ; package convoys : their own car is moved there) and
 ---     runs their own job ; the results table fills in as the others deliver.
 ---   - **Multi-stop** package jobs : 2-3 drop-offs in a row ; each held stop is checked by the
 ---     server (`deliveryLegArrive`), which answers with the next one (`deliveryLeg`).
+---   - **Jobs window** : every depot with distance, open jobs and convoys forming (A GPS, X join,
+---     Y filter, B close), plus the two leaderboards. Opened from a depot prompt's "All depots"
+---     (pad-driven) or the main window's Activities > Jobs section (a summary + "Open jobs",
+---     mouse-driven ; the main window itself stays mouse-driven until its redesign).
 ---   - **Unstuck** (vehicle jobs) : HUD button that puts the vehicle back on the nearest road,
 ---     keeping its damage ; only when nearly stopped, with a cooldown.
 ---   - **Vehicle jobs** : the delivered vehicle replaces your own car at the first free start slot
@@ -75,6 +80,9 @@ local M = {
     invite = nil,
     ---@type table<integer, table> convoyId -> latest results table from the server
     convoyResults = {},
+    --- Jobs section state : open (mounted), pad (driven by the pad), counts (server, by depot id)
+    jobsUi = { open = false, pad = false, counts = nil, lastPush = 0, lastRequest = 0 },
+    JOBS_REFRESH_MS = 15000,
 
     --- true while the Freeroam editor is open (reuses the stations editor's hook)
     editorOpen = false,
@@ -219,6 +227,15 @@ local function onActivityAcceptGatherData(elemData, activityData)
                     buttonSoundClass = "bng_hover_generic",
                     sorting = { type = elem.type, id = elem.id },
                     buttonFun = function() M.openBoard(depot.id) end,
+                }
+                activityData[#activityData + 1] = {
+                    icon = M.MARKER_ICON,
+                    heading = depot.name,
+                    preheadings = { t("beamjoy.delivery.jobs.promptSub") },
+                    buttonLabel = t("beamjoy.delivery.jobs.allDepots"),
+                    buttonSoundClass = "bng_hover_generic",
+                    sorting = { type = elem.type, id = elem.id .. "_zall" },
+                    buttonFun = function() M.openJobs() end,
                 }
                 for _, c in ipairs(M.convoys) do
                     if c.depotId == depot.id and c.count < c.max and not M.lobby then
@@ -709,20 +726,21 @@ local function pushLobby()
     payload.startsIn = math.max(0, math.ceil((l.startsAtMs - GetCurrentTimeMillis()) / 1000))
     payload.atDepot = l.atDepot == true
     payload.padActive = l.padActive == true
-    payload.focusable = not payload.padActive and M.result == nil
+    payload.focusable = false
     payload.inviting = l.inviting == true
     payload.invitees = l.invitees or {}
     payload.startsAtMs = nil
     beamjoy_communications_ui.send("BJDeliveryLobby", payload)
 end
 
---- the lobby window takes the pad while you're at the depot, or away from it once focused with
---- the interact chord (see onGameplayInteract)
+--- the convoy lobby lives in the main window (Activities > Jobs). Arriving at the depot brings the
+--- main window up there with the pad (beamjoy/mainNav.lua autoFocus) ; away from it, the Focus
+--- notification control opens the same place.
 local function updateLobbyPad()
     local l = M.lobby
-    local want = l ~= nil and (l.atDepot == true or l.focused == true) and M.result == nil
-    if l then l.padActive = want end
-    if want then beamjoy_uiNav.acquire("deliveryLobby") else beamjoy_uiNav.release("deliveryLobby") end
+    local want = l ~= nil and l.atDepot == true and M.result == nil
+    if l then l.padActive = false end
+    if beamjoy_mainNav then beamjoy_mainNav.autoFocus("lobby", want, "play", "jobs") end
 end
 
 ---@param at boolean
@@ -738,7 +756,7 @@ end
 function M.closeLobby()
     if not M.lobby then return end
     M.lobby = nil
-    beamjoy_uiNav.release("deliveryLobby")
+    if beamjoy_mainNav then beamjoy_mainNav.autoFocus("lobby", false) end
     refreshPOIs()
     pushLobby()
 end
@@ -757,7 +775,7 @@ local function onServerLobby(data)
     if M.lobby.atDepot == nil then setLobbyAtDepot(atLobbyDepot()) end
     if not wasOpen then
         closeBoard()
-        -- the lobby panel replaces an open results panel
+        -- the lobby replaces an open results panel
         if M.result then
             M.result = nil
             beamjoy_uiNav.release("deliveryResults")
@@ -781,6 +799,7 @@ end
 ---@param list table[]
 local function onServerConvoys(list)
     M.convoys = table.isArray(list) and list or {}
+    if M.jobsUi.open then M.pushJobs() end
 end
 
 ---@param list table[] {playerID, name, busy, invited}
@@ -875,8 +894,8 @@ local function onInviteReply(accept)
         own and own.serverVID or nil)
 end
 
---- the invite takes the pad's A/B only once focused with the interact chord (see
---- onGameplayInteract) and while no other delivery window has the pad
+--- the invite takes the pad's A/B only once focused with the Focus notification control (see
+--- beamjoy/mainNav.lua) and while no other delivery window has the pad
 local function tickInvite()
     local i = M.invite
     if not i then return end
@@ -891,17 +910,179 @@ local function tickInvite()
     pushInvite()
 end
 
---- the game's own "interact" chord (gameplay_interact : RB + Y on a pad, Shift + E on a
---- keyboard, whatever the player rebound it to) toggles focus on an invite, or on the lobby
---- panel while you're away from the depot ; only a focused panel takes the pad's buttons
-local function onGameplayInteract()
-    if M.invite and not M.board and not M.result then
-        M.invite.focused = not M.invite.focused
+-- JOBS SECTION ----------------------------------------------------------------------------------
+
+local function pushJobs()
+    local ui = M.jobsUi
+    if not ui.open then return end
+    ui.lastPush = GetCurrentTimeMillis()
+    local own = beamjoy_vehicles.getCurrentOwn()
+    local from = own and own.veh:getPosition() or (core_camera and core_camera.getPosition())
+    local rows = {}
+    for _, depot in ipairs(depots()) do
+        local counts = ui.counts and ui.counts[depot.id]
+        local convoys = {}
+        for _, c in ipairs(M.convoys) do
+            if c.depotId == depot.id then
+                convoys[#convoys + 1] = {
+                    id = c.id,
+                    leaderName = c.leaderName,
+                    count = c.count,
+                    max = c.max,
+                    kind = c.kind,
+                    title = cargoTitle(c.kind, c.cargo, c.vehicle),
+                    destName = c.destName,
+                }
+            end
+        end
+        rows[#rows + 1] = {
+            id = depot.id,
+            name = depot.name,
+            sendsPackages = sendsPackages(depot),
+            sendsVehicles = sendsVehicles(depot),
+            distance = from and math.round(distTo(from, depot)) or nil,
+            packages = counts and counts.packages or nil,
+            vehicles = counts and counts.vehicles or nil,
+            convoys = convoys,
+        }
+    end
+    table.sort(rows, function(a, b) return (a.distance or 0) < (b.distance or 0) end)
+    beamjoy_communications_ui.send("BJDeliveryJobs", {
+        open = true,
+        depots = rows,
+        pad = ui.pad,
+        loading = ui.counts == nil,
+        busy = M.job ~= nil or M.lobby ~= nil,
+    })
+end
+
+local function requestJobsData()
+    M.jobsUi.lastRequest = GetCurrentTimeMillis()
+    beamjoy_communications.send("deliveryDepotsRequest")
+end
+
+--- the main window's Activities > Jobs section (windows/main/jobs) : open while it's shown, for the
+--- live distances and job counts. The pad there is the main window's own (beamjoy/mainNav.lua).
+function M.openJobsWindow()
+    local ui = M.jobsUi
+    local wasOpen = ui.open
+    ui.open = true
+    ui.pad = false
+    if not wasOpen then
+        requestJobsData()
+        beamjoy_communications.send("deliveryLeaderboardRequest")
+    end
+    pushJobs()
+end
+
+function M.closeJobsWindow()
+    local ui = M.jobsUi
+    if not ui.open then return end
+    ui.open = false
+    beamjoy_communications_ui.send("BJDeliveryJobs", { open = false })
+end
+
+--- a depot prompt's "All depots" : the main window's Jobs section, driven by the pad
+function M.openJobs()
+    closeBoard()
+    if M.result then M.closeResults() end
+    if beamjoy_mainNav then beamjoy_mainNav.focusOn("play", "jobs") end
+end
+
+local function onJobsRequest()
+    if M.jobsUi.open then
+        pushJobs()
+    else
+        beamjoy_communications_ui.send("BJDeliveryJobs", { open = false })
+    end
+end
+
+---@param depotId integer
+local function onJobsGps(depotId)
+    local depot = beamjoy_deliveryPoints.getPoint(tonumber(depotId))
+    if not depot then return end
+    if M.job then
+        toast.warn(t("beamjoy.delivery.jobs.gpsDuringJob"), nil, 4)
+        return
+    end
+    if extensions.core_groundMarkers then extensions.core_groundMarkers.setPath(v3(depot.pos)) end
+    toast.info(string.var(t("beamjoy.delivery.jobs.gpsSet"), { depot.name }), nil, 4)
+end
+
+---@param list table[] {id, sendsPackages, sendsVehicles, packages, vehicles}
+local function onServerDepots(list)
+    local counts = {}
+    for _, d in ipairs(table.isArray(list) and list or {}) do counts[d.id] = d end
+    M.jobsUi.counts = counts
+    pushJobs()
+end
+
+---@param payload table {packages = {rows, players, mine}, vehicles = ...}
+local function onServerLeaderboard(payload)
+    if type(payload) == "table" then beamjoy_communications_ui.send("BJDeliveryLeaderboard", payload) end
+end
+
+--- the main window's Activities > Jobs section : a short summary and an "Open jobs" button
+local function pushJobsSummary()
+    local ui = M.jobsUi
+    if not ui.summaryOpen then return end
+    ui.lastSummary = GetCurrentTimeMillis()
+    local own = beamjoy_vehicles.getCurrentOwn()
+    local from = own and own.veh:getPosition() or (core_camera and core_camera.getPosition())
+    local list = depots()
+    local nearest, best
+    for _, depot in ipairs(list) do
+        local d = from and distTo(from, depot)
+        if d and (not best or d < best) then nearest, best = depot, d end
+    end
+    beamjoy_communications_ui.send("BJDeliveryJobsSummary", {
+        depots = #list,
+        convoys = #M.convoys,
+        nearestName = nearest and nearest.name or nil,
+        nearestDistance = best and math.round(best) or nil,
+    })
+end
+
+M.pushJobs = pushJobs
+
+local function tickJobs()
+    local ui = M.jobsUi
+    local now = GetCurrentTimeMillis()
+    if ui.summaryOpen and now - (ui.lastSummary or 0) >= 1000 then pushJobsSummary() end
+    if not ui.open then return end
+    if now - ui.lastRequest >= M.JOBS_REFRESH_MS then requestJobsData() end
+    if now - ui.lastPush >= 1000 then pushJobs() end
+end
+
+--- BJS's "Focus notification" control (core/input/actions/beamjoy.json bjFocusNotification,
+--- listed under BeamJoy in the game's Controls menu ; RB + X / Shift + J by default) is handled by
+--- beamjoy/mainNav.lua, which puts notifications first and the main window after them. These
+--- three are its view of delivery's one notification, a convoy invite ; only a focused one takes
+--- the pad's buttons (the convoy lobby is part of the main window now).
+---@return "invite"|nil
+local function focusTarget()
+    if M.invite and not M.board and not M.result then return "invite" end
+    return nil
+end
+
+---@return boolean
+local function notificationFocusable()
+    return focusTarget() ~= nil
+end
+
+---@return boolean
+local function notificationFocused()
+    local target = focusTarget()
+    if target == "invite" then return M.invite.focused == true end
+    return false
+end
+
+---@param focused boolean
+local function setNotificationFocus(focused)
+    local target = focusTarget()
+    if target == "invite" then
+        M.invite.focused = focused
         tickInvite()
-    elseif M.lobby and not M.lobby.atDepot and not M.result then
-        M.lobby.focused = not M.lobby.focused
-        updateLobbyPad()
-        pushLobby()
     end
 end
 
@@ -1051,6 +1232,7 @@ local function onSlowUpdate()
     tickJob()
     tickLobby()
     tickInvite()
+    tickJobs()
 end
 
 -- HOOKS -----------------------------------------------------------------------------------------
@@ -1112,6 +1294,8 @@ local function onInit()
     beamjoy_communications.addHandler("deliveryResult", onServerResult)
     beamjoy_communications.addHandler("deliveryConvoyResults", onConvoyResults)
     beamjoy_communications.addHandler("deliveryLeg", onServerLeg)
+    beamjoy_communications.addHandler("deliveryDepots", onServerDepots)
+    beamjoy_communications.addHandler("deliveryLeaderboard", onServerLeaderboard)
     beamjoy_communications.addHandler("deliveryConvoyGrace", onConvoyGrace)
     beamjoy_communications.addHandler("deliveryConvoys", onServerConvoys)
     beamjoy_communications.addHandler("deliveryLobby", onServerLobby)
@@ -1139,6 +1323,21 @@ local function onInit()
         beamjoy_communications.send("deliveryConvoyInvite", tonumber(playerID))
     end)
     beamjoy_communications_ui.addHandler("BJDeliveryInviteRequest", pushInvite)
+    beamjoy_communications_ui.addHandler("BJDeliveryJobsRequest", onJobsRequest)
+    beamjoy_communications_ui.addHandler("BJDeliveryJobsOpenWindow", function() M.openJobsWindow() end)
+    beamjoy_communications_ui.addHandler("BJDeliveryJobsClose", function() M.closeJobsWindow() end)
+    beamjoy_communications_ui.addHandler("BJDeliveryJobsSummaryRequest", function()
+        M.jobsUi.summaryOpen = true
+        pushJobsSummary()
+    end)
+    beamjoy_communications_ui.addHandler("BJDeliveryJobsSummaryClosed", function()
+        M.jobsUi.summaryOpen = false
+    end)
+    beamjoy_communications_ui.addHandler("BJDeliveryJobsGps", onJobsGps)
+    beamjoy_communications_ui.addHandler("BJDeliveryJobsJoin", function(convoyId) M.joinConvoy(convoyId) end)
+    beamjoy_communications_ui.addHandler("BJDeliveryLeaderboardRequest", function()
+        beamjoy_communications.send("deliveryLeaderboardRequest")
+    end)
     beamjoy_communications_ui.addHandler("BJDeliveryInviteReply", onInviteReply)
     beamjoy_communications_ui.addHandler("BJDeliveryHudRequest", pushHud)
     beamjoy_communications_ui.addHandler("BJDeliveryAbandon", function() abandonJob("abandoned") end)
@@ -1152,6 +1351,7 @@ local function onExtensionUnloaded()
     beamjoy_uiNav.release("deliveryResults")
     beamjoy_uiNav.release("deliveryLobby")
     beamjoy_uiNav.release("deliveryInvite")
+    beamjoy_uiNav.release("deliveryJobs")
     beamjoy_recoveryPolicy.release("delivery")
 end
 
@@ -1161,7 +1361,9 @@ M.onBJClientReady = onBJClientReady
 M.onUpdate = onUpdate
 M.onSlowUpdate = onSlowUpdate
 
-M.onGameplayInteract = onGameplayInteract
+M.notificationFocusable = notificationFocusable
+M.notificationFocused = notificationFocused
+M.setNotificationFocus = setNotificationFocus
 
 M.onGetRawPoiListForLevel = onGetRawPoiListForLevel
 M.onActivityAcceptGatherData = onActivityAcceptGatherData

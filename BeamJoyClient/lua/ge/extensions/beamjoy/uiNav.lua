@@ -1,5 +1,5 @@
---- Controller navigation for BJS's own controller-driven windows (Phase 3's job board and delivery
---- results ; the older BJS windows stay mouse-driven until their redesign).
+--- Controller navigation for BJS's own controller-driven windows (Phase 3's delivery windows and
+--- the redesigned main window, see beamjoy/mainNav.lua).
 ---
 --- The game's menu inputs (d-pad, A, B, X, Y on a pad) are "MenuIndependent" actions : each has its
 --- own action map (`MenuIndependent_<action>ActionMap`) that, while enabled, takes that button away
@@ -19,9 +19,13 @@ local M = {
         "menu_item_up", "menu_item_down", "menu_item_left", "menu_item_right",
         "menu_item_select", "menu_item_back", "cui_action_2", "cui_context",
     },
+    -- LB / RB, only for owners that ask for them (the main window's full view switches tabs) :
+    -- LB is also the clutch, so it isn't taken by default
+    TAB_ACTIONS = { "menu_tab_left", "menu_tab_right" },
     REASSERT_MS = 300,
 
-    ---@type table<string, true>
+    --- owner -> the actions it needs
+    ---@type table<string, string[]>
     owners = {},
     --- actions this module enabled (and so may disable again on release)
     ---@type table<string, true>
@@ -45,8 +49,18 @@ local function setAction(action, enabled)
     pcall(bindings.setMenuActionEnabled, enabled, action)
 end
 
+--- every action some current owner needs
+---@return table<string, true>
+local function wanted()
+    local res = {}
+    for _, actions in pairs(M.owners) do
+        for _, action in ipairs(actions) do res[action] = true end
+    end
+    return res
+end
+
 local function assertAll()
-    for _, action in ipairs(M.ACTIONS) do
+    for action in pairs(wanted()) do
         local am = actionMap(action)
         if am and not am.enabled then
             setAction(action, true)
@@ -56,8 +70,12 @@ local function assertAll()
 end
 
 ---@param owner string
-local function acquire(owner)
-    M.owners[owner] = true
+---@param extraActions string[]? on top of M.ACTIONS (e.g. M.TAB_ACTIONS)
+local function acquire(owner, extraActions)
+    local actions = {}
+    for _, a in ipairs(M.ACTIONS) do table.insert(actions, a) end
+    for _, a in ipairs(extraActions or {}) do table.insert(actions, a) end
+    M.owners[owner] = actions
     assertAll()
 end
 
@@ -65,9 +83,20 @@ end
 local function release(owner)
     if not M.owners[owner] then return end
     M.owners[owner] = nil
-    if next(M.owners) then return end
-    for action in pairs(M.enabledByUs) do setAction(action, false) end
-    M.enabledByUs = {}
+    -- give back what we turned on and nobody needs anymore
+    local still = wanted()
+    for action in pairs(M.enabledByUs) do
+        if not still[action] then
+            setAction(action, false)
+            M.enabledByUs[action] = nil
+        end
+    end
+end
+
+---@param owner string
+---@return boolean
+local function isAcquired(owner)
+    return M.owners[owner] ~= nil
 end
 
 local function onUpdate()
@@ -84,6 +113,7 @@ end
 
 M.acquire = acquire
 M.release = release
+M.isAcquired = isAcquired
 M.onUpdate = onUpdate
 M.onServerLeave = onServerLeave
 M.onExtensionUnloaded = onServerLeave

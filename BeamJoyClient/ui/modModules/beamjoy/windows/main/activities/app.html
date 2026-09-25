@@ -1,36 +1,46 @@
 <style>
     bj-main-activities .section-bar {
-        border-bottom: thin solid gray;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25em;
+        margin-bottom: 0.75em;
     }
     bj-main-activities .section-tab {
-        padding: 0.3em 0.6em;
-        border: thin solid gray;
-        border-radius: 0.3em;
-        border-bottom-left-radius: unset;
-        border-bottom-right-radius: unset;
-        background-color: rgba(0, 0, 0, 0.1);
-        transition: all 0.2s ease-in-out;
-    }
-    bj-main-activities .section-tab.active {
-        background-color: rgba(230, 92, 0, 0.44);
+        min-height: 2em;
+        padding: 0 0.75em;
+        background: #282b33;
+        border: 0;
+        border-radius: 1em;
+        color: #c8cedc;
+        font-size: 0.85em;
+        font-weight: 600;
+        cursor: pointer;
     }
     bj-main-activities .section-tab:hover {
-        color: rgb(241 255 164);
+        color: #ebebeb;
+    }
+    bj-main-activities .section-tab.active {
+        background: rgba(255, 102, 0, 0.16);
+        box-shadow: inset 0 0 0 1px rgba(255, 102, 0, 0.6);
+        color: #ebebeb;
     }
 </style>
 
-<div class="section-bar d-flex flex-wrap mb-2">
-    <div
-        class="section-tab cursor-pointer"
-        ng-repeat="section in $ctrl.SECTIONS"
+<nav class="section-bar" ng-if="$ctrl.sections().length > 1" aria-label="{{'beamjoy.window.main.tabs.races.title' | translate}}">
+    <button
+        type="button"
+        class="section-tab"
+        ng-repeat="section in $ctrl.sections()"
         ng-class="{active: $ctrl.activeSection === section}"
+        aria-current="{{$ctrl.activeSection === section ? 'page' : 'false'}}"
         ng-click="$ctrl.changeSection($event, section)"
     >
         {{('beamjoy.window.main.tabs.races.sections.' + section) | translate}}
-    </div>
-</div>
+    </button>
+</nav>
 
 <bj-main-races ng-if="$ctrl.activeSection === 'races'"></bj-main-races>
 <bj-main-bus-lines ng-if="$ctrl.activeSection === 'busLines'"></bj-main-bus-lines>
 <bj-main-hunter ng-if="$ctrl.activeSection === 'hunter'"></bj-main-hunter>
 <bj-main-infected ng-if="$ctrl.activeSection === 'infected'"></bj-main-infected>
+<bj-main-jobs ng-if="$ctrl.activeSection === 'jobs'"></bj-main-jobs>

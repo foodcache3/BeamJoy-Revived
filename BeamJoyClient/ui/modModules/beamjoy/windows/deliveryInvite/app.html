@@ -40,6 +40,12 @@
         background: var(--dlv-orange);
         transition: width 0.25s linear;
     }
+    #beamjoy-delivery-invite {
+        transition: opacity 0.2s ease-in-out;
+    }
+    #beamjoy-delivery-invite.dimmed {
+        opacity: 0.5;
+    }
     #beamjoy-delivery-invite.focused {
         border-color: rgba(255, 102, 0, 0.6);
     }
@@ -65,13 +71,13 @@
     }
 </style>
 
-<section id="beamjoy-delivery-invite" class="bj-dlv" ng-if="$ctrl.open" ng-class="{focused: $ctrl.i.padActive}"
+<section id="beamjoy-delivery-invite" class="bj-dlv" ng-if="$ctrl.open" ng-class="{focused: $ctrl.i.padActive, dimmed: $ctrl.dimmed()}" ng-style="$ctrl.position()"
     aria-label="{{'beamjoy.delivery.invite.label' | translate}}">
     <h2>{{$ctrl.heading()}}</h2>
     <p>{{$ctrl.body()}}</p>
     <div class="bar" role="timer"><div ng-style="{width: $ctrl.progress()}"></div></div>
     <div class="focus-hint" ng-if="!$ctrl.i.padActive">
-        <span class="dlv-glyph wide" aria-hidden="true">RB + Y</span>{{'beamjoy.delivery.invite.focusHint' | translate}}
+        <span class="dlv-glyph wide" aria-hidden="true">RB + X</span>{{'beamjoy.delivery.invite.focusHint' | translate}}
     </div>
     <div class="actions">
         <button type="button" class="dlv-btn" ng-click="$ctrl.decline()">

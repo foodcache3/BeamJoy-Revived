@@ -1,0 +1,3 @@
+{
+  "bindings": [{ "control": "modifier1 btn_x", "action": "bjFocusNotification" }]
+}

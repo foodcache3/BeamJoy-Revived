@@ -8,7 +8,9 @@ angular.module("beamjoy").component("bjMainRaces", {
         $timeout,
         beamjoyStore,
         beamjoyInfoPanel,
-        beamjoyConfirm
+        beamjoyConfirm,
+        $scope,
+        beamjoyNow
     ) {
         const translate = $filter("translate");
         this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint"];
@@ -250,12 +252,24 @@ angular.module("beamjoy").component("bjMainRaces", {
             beamjoyStore.send("BJRaceCountdownRequest");
         };
 
-        // the start-options panel, open for at most one race at a time
-        this.startingId = null;
-        this.startOptions = null;
+        // the start-options panel, open for at most one race at a time. Kept in beamjoyNow while
+        // it's open, so switching between the side panel and the full window (each mounts its
+        // own copy of this component) doesn't lose what you were setting up
+        const draft = beamjoyNow.raceDraft;
+        this.startingId = draft ? draft.startingId : null;
+        this.startOptions = draft ? draft.startOptions : null;
+        $scope.$watch(
+            () => this.startingId,
+            () => {
+                beamjoyNow.raceDraft = this.startingId
+                    ? { startingId: this.startingId, startOptions: this.startOptions, showAdvanced: this.showAdvanced }
+                    : null;
+            }
+        );
         this.openStart = (event, race) => {
             event.stopPropagation();
             this.startingId = race.id;
+            this.showAdvanced = false;
             // seed from the race's own saved defaults (host-configurable per the plan; these
             // are just the starting point, not fixed), not generic hardcoded values
             const d = race.defaults || {};
@@ -327,6 +341,91 @@ angular.module("beamjoy").component("bjMainRaces", {
             event.stopPropagation();
             this.startingId = null;
             this.startOptions = null;
+        };
+
+        // redesigned start : laps / vehicles / respawns up front, everything else folded under
+        // Advanced settings ; two ways to go instead of a "joinable" toggle, X starts alone and A
+        // opens a lobby others can join (a one-slot race only has the solo start)
+        this.showAdvanced = draft ? draft.showAdvanced : false;
+        this.toggleAdvanced = () => {
+            this.showAdvanced = !this.showAdvanced;
+            if (beamjoyNow.raceDraft) beamjoyNow.raceDraft.showAdvanced = this.showAdvanced;
+        };
+        this.startSolo = (event, race) => {
+            this.startOptions.joinable = false;
+            this.confirmStart(event, race);
+        };
+        this.startLobby = (event, race) => {
+            if (race.startPositions <= 1) return this.startSolo(event, race);
+            this.startOptions.joinable = true;
+            this.confirmStart(event, race);
+        };
+        this.startBlocked = () =>
+            !!this.startOptions &&
+            this.startOptions.vehicleRestrictionMode === "pool" &&
+            !this.startOptions.vehicleRestrictionPoolPresetId;
+        this.raceMeta = (race) =>
+            [
+                `${race.startPositions} ${translate("beamjoy.window.main.tabs.races.slots")}`,
+                this.formatDistance(race.distance),
+                `${translate("beamjoy.window.config.tabs.races.author")} ${race.author || translate("beamjoy.window.config.tabs.races.unknownAuthor")}`,
+            ].join(", ");
+
+        // lobby panel helpers
+        this.formatSeconds = (sec) => {
+            sec = Math.max(0, Math.round(Number(sec) || 0));
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            return `${m}:${s < 10 ? "0" : ""}${s}`;
+        };
+        // the one timer that matters right now : the start countdown, the all-ready countdown, or
+        // how long the lobby stays open
+        this.lobbyTimer = () => {
+            const s = this.status;
+            if (!s) return null;
+            if (s.state === "COUNTDOWN" && this.countdownSeconds !== null) {
+                return { label: "beamjoy.window.main.tabs.races.startingIn", value: `${this.countdownSeconds}` };
+            }
+            if (s.state === "GRID" && this.allReady && s.gridReadySecondsLeft != null) {
+                return { label: "beamjoy.window.main.tabs.races.startingIn", value: this.formatSeconds(s.gridReadySecondsLeft) };
+            }
+            if (s.state === "GRID" && s.gridTimeoutSecondsLeft != null) {
+                return { label: "beamjoy.window.main.tabs.races.lobbyClosesIn", value: this.formatSeconds(s.gridTimeoutSecondsLeft) };
+            }
+            return null;
+        };
+        this.vehicleChip = () => {
+            const s = this.status;
+            if (!s) return "";
+            if (s.vehicleRestrictionMode === "single") return s.vehicleRestrictionLabel || "";
+            if (s.vehicleRestrictionMode === "pool") return `${s.vehicleRestrictionPoolLabel} (${s.vehicleRestrictionPoolCount})`;
+            return translate("beamjoy.window.main.tabs.races.noVehicleRestrictions");
+        };
+        this.isLeader = (player) => !!this.status && player.playerID === this.status.starterID;
+        // the grid as the lobby shows it : players by slot, then the free slots. Built once per
+        // status push (a fresh array per digest never settles)
+        this.slots = [];
+        const buildSlots = () => {
+            const s = this.status;
+            if (!s) return (this.slots = []);
+            const rows = (s.participants || []).map((p, i) => ({ key: `p${p.playerID}`, num: p.gridSlot || i + 1, player: p }));
+            for (let i = rows.length; i < (s.maxParticipants || 0); i++) rows.push({ key: `o${i}`, num: i + 1, open: true });
+            this.slots = rows;
+        };
+        $scope.$watch(() => this.status, buildSlots);
+        this.lobbyLine = () => {
+            const s = this.status;
+            if (!s) return "";
+            if (!s.joinable) return translate("beamjoy.window.main.tabs.races.soloLine");
+            const leader = (s.participants || []).find((p) => p.playerID === s.starterID);
+            return translate(s.isStarter ? "beamjoy.window.main.tabs.races.yourLobby" : "beamjoy.window.main.tabs.races.theirLobby")
+                .replace("{name}", leader ? leader.displayName || leader.playerName : "?")
+                .replace("{count}", s.participantCount || 0)
+                .replace("{max}", s.maxParticipants || 0);
+        };
+        this.openStatusLeaderboard = (event) => {
+            const race = this.races.find((r) => this.status && r.name === this.status.raceName);
+            if (race) this.openLeaderboard(event, race);
         };
         this.confirmStart = (event, race) => {
             event.stopPropagation();

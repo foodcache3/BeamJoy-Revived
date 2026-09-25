@@ -1,90 +1,31 @@
-<span>{{$ctrl.player.displayName || $ctrl.player.playerName}} ({{$ctrl.groupLabel}})</span>
-
-<div
-    ng-hide="$ctrl.actions.focus === undefined"
-    class="btn primary"
-    ng-class="{disabled: !$ctrl.actions.focus}"
-    ng-click="$ctrl.action($event,'focus')"
->
-    <icon
-        name="focus"
-        class="small"
-        title="{{'beamjoy.window.main.playerlist.actions.focus'|translate}}"
-    ></icon>
-</div>
-<div
-    ng-hide="$ctrl.actions.teleportTo === undefined"
-    class="btn primary"
-    ng-class="{disabled: !$ctrl.actions.teleportTo}"
-    ng-click="$ctrl.action($event,'teleportTo')"
->
-    <icon
-        name="teleportTo"
-        class="small"
-        title="{{'beamjoy.window.main.playerlist.actions.teleportTo'|translate}}"
-    ></icon>
-</div>
-<div
-    ng-hide="$ctrl.actions.teleportFrom === undefined"
-    class="btn primary"
-    ng-class="{disabled: !$ctrl.actions.teleportFrom}"
-    ng-click="$ctrl.action($event,'teleportFrom')"
->
-    <icon
-        name="teleportFrom"
-        class="small"
-        title="{{'beamjoy.window.main.playerlist.actions.teleportFrom'|translate}}"
-    ></icon>
-</div>
-<div
-    ng-hide="$ctrl.actions.freeze === undefined"
-    class="btn"
-    ng-class="{danger: !$ctrl.player.froze, success: $ctrl.player.froze, disabled: !$ctrl.actions.freeze}"
-    ng-click="$ctrl.action($event,'freeze')"
->
-    <icon
-        name="{{$ctrl.player.froze ? 'unfreeze' : 'freeze'}}"
-        class="small"
-        title="{{($ctrl.player.froze ?
-            'beamjoy.window.main.playerlist.actions.unfreezeAll' :
-            'beamjoy.window.main.playerlist.actions.freezeAll')|translate}}"
-    ></icon>
-</div>
-<div
-    ng-hide="$ctrl.actions.engine === undefined"
-    class="btn"
-    ng-class="{danger: !$ctrl.player.shut, success: $ctrl.player.shut, disabled: !$ctrl.actions.engine}"
-    ng-click="$ctrl.action($event,'engine')"
->
-    <icon
-        name="{{$ctrl.player.shut ? 'play' : 'pause'}}"
-        class="small"
-        title="{{($ctrl.player.shut ?
-            'beamjoy.window.main.playerlist.actions.startAll' :
-            'beamjoy.window.main.playerlist.actions.stopAll')|translate}}"
-    ></icon>
-</div>
-<div
-    ng-hide="$ctrl.actions.delete === undefined"
-    class="btn danger"
-    ng-class="{disabled: !$ctrl.actions.delete}"
-    ng-click="$ctrl.action($event,'delete')"
->
-    <icon
-        name="delete"
-        class="small"
-        title="{{'beamjoy.window.main.playerlist.actions.deleteAll'|translate}}"
-    ></icon>
-</div>
-<div
-    ng-hide="$ctrl.actions.restore === undefined"
-    class="btn warning"
-    ng-class="{disabled: !$ctrl.actions.restore}"
-    ng-click="$ctrl.action($event,'restore')"
->
-    <icon
-        name="reset"
-        class="small"
-        title="{{'beamjoy.window.main.playerlist.actions.restoreAll'|translate}}"
-    ></icon>
-</div>
+<!-- a player's actions, shown when their row in the player list is expanded. The staff buttons that
+     act on ALL of the player's vehicles at once only show in the full window ($ctrl.full) ; the
+     side panel keeps the per-vehicle buttons below -->
+<button type="button" class="bjr-btn small" ng-if="$ctrl.actions.focus !== undefined"
+    ng-disabled="!$ctrl.actions.focus" ng-click="$ctrl.action($event,'focus')">
+    {{'beamjoy.window.main.playerlist.actions.focus' | translate}}
+</button>
+<button type="button" class="bjr-btn small" ng-if="$ctrl.actions.teleportTo !== undefined"
+    ng-disabled="!$ctrl.actions.teleportTo" ng-click="$ctrl.action($event,'teleportTo')">
+    {{'beamjoy.window.main.playerlist.actions.teleportTo' | translate}}
+</button>
+<button type="button" class="bjr-btn small" ng-if="$ctrl.actions.teleportFrom !== undefined"
+    ng-disabled="!$ctrl.actions.teleportFrom" ng-click="$ctrl.action($event,'teleportFrom')">
+    {{'beamjoy.window.main.playerlist.actions.teleportFrom' | translate}}
+</button>
+<button type="button" class="bjr-btn small ghost" ng-if="$ctrl.actions.restore !== undefined"
+    ng-disabled="!$ctrl.actions.restore" ng-click="$ctrl.action($event,'restore')">
+    {{'beamjoy.window.main.playerlist.actions.restoreAll' | translate}}
+</button>
+<button type="button" class="bjr-btn small" ng-if="$ctrl.full && $ctrl.actions.freeze !== undefined"
+    ng-click="$ctrl.action($event,'freeze')">
+    {{($ctrl.player.froze ? 'beamjoy.window.main.playerlist.actions.unfreezeAll' : 'beamjoy.window.main.playerlist.actions.freezeAll') | translate}}
+</button>
+<button type="button" class="bjr-btn small" ng-if="$ctrl.full && $ctrl.actions.engine !== undefined"
+    ng-click="$ctrl.action($event,'engine')">
+    {{($ctrl.player.shut ? 'beamjoy.window.main.playerlist.actions.startAll' : 'beamjoy.window.main.playerlist.actions.stopAll') | translate}}
+</button>
+<button type="button" class="bjr-btn small danger" ng-if="$ctrl.full && $ctrl.actions.delete !== undefined"
+    ng-click="$ctrl.action($event,'delete')">
+    {{'beamjoy.window.main.playerlist.actions.deleteAll' | translate}}
+</button>

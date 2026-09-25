@@ -1,62 +1,26 @@
 <style>
-    bj-main-main .vote-panel {
+    bj-main-vote .vote-panel {
         background: rgba(0, 0, 0, 0.2);
         border-radius: 0.4em;
         padding: 0.6em;
         margin-top: 0.5em;
     }
-    bj-main-main .vote-list {
+    bj-main-vote .vote-list {
         max-height: 14em;
         overflow-y: auto;
         margin-top: 0.4em;
     }
-    bj-main-main .vote-row {
+    bj-main-vote .vote-row {
         transition: background-color 0.2s ease-in-out;
         border-radius: 0.3em;
     }
-    bj-main-main .vote-row:hover {
+    bj-main-vote .vote-row:hover {
         background-color: rgba(0, 0, 0, 0.15);
     }
-    bj-main-main .opacity-70 {
+    bj-main-vote .opacity-70 {
         opacity: 0.7;
     }
 </style>
-
-<div class="d-flex gap-1">
-    <button
-        class="btn primary"
-        ng-click="$ctrl.openSettings()"
-        title="{{ 'beamjoy.window.main.tabs.settings.title' | translate}}"
-    >
-        <icon name="settings"></icon>
-    </button>
-    <button
-        class="btn"
-        ng-class="{'success': $ctrl.stateNametags, 'danger': !$ctrl.stateNametags}"
-        ng-click="$ctrl.toggleNametags()"
-        title="{{ 'beamjoy.window.main.tabs.main.toggleNametags' | translate}}"
-    >
-        <icon name="nametag"></icon>
-    </button>
-    <button
-        class="btn info"
-        ng-if="$ctrl.canStartVote()"
-        ng-class="{'success': $ctrl.voteMenu}"
-        ng-click="$ctrl.toggleVoteMenu()"
-        title="{{ 'beamjoy.window.main.tabs.main.startVote' | translate}}"
-    >
-        <icon name="check"></icon>
-    </button>
-    <button
-        class="btn"
-        ng-if="$ctrl.fuelLow"
-        ng-class="{'success': !$ctrl.fuelEmpty, 'danger': $ctrl.fuelEmpty}"
-        ng-click="$ctrl.fuelAction()"
-        title="{{ (($ctrl.fuelEmpty ? 'beamjoy.window.main.tabs.main.fuelEmergencyRefuel' : 'beamjoy.window.main.tabs.main.fuelSetWaypoint')) | translate}}"
-    >
-        <icon name="gas_station"></icon>
-    </button>
-</div>
 
 <div class="vote-panel" ng-if="$ctrl.voteMenu === 'choice'">
     <div class="d-flex gap-1">
@@ -132,6 +96,3 @@
         </div>
     </div>
 </div>
-
-<hr />
-<bj-players-list></bj-players-list>

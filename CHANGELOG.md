@@ -6,9 +6,133 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
-## [Unreleased] - Phase 3 deliveries, slices 1-4: delivery points, package and vehicle delivery, convoys
+## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Client build 2508, server build 2360.
+Client build 2516, server build 2361.
+
+### Main window redesign: controller and layout fixes
+
+- **The d-pad follows direction.** Up/down/left/right now go to the nearest button in that
+  direction instead of stepping through a list, so down from a race's Start goes to the next
+  race's Start (not its leaderboard button), and right on a filter goes to the filter beside it.
+  Right only leaves a side panel for the rail when there's nothing further right; the full window
+  never hands the cursor to the rail (B takes you back to the side panel). *(client only)*
+- **Nothing skipped.** Settings toggles, number fields and the nametag colours can all be reached;
+  a toggle only counts as disabled when it really is. Number fields take left/right like sliders.
+  *(client only)*
+- **Player rows.** One row opens at a time, and the pad's outline sits inside the row instead of
+  spilling over its buttons. *(client only)*
+- **Starting a race survives switching size.** The race and settings you're picking stay put when
+  you swap between the side panel and the full window. *(client only)*
+- **Only your activity while you're in one.** In a race lobby, a hunt, an infected game, a
+  convoy, a delivery or a bus run, Activities shows just that section (side panel and full
+  window). Happening now shows your convoy, delivery or bus run too. *(client only)*
+- **Race lobby matches the convoy lobby.** Title and lobby line, the timer, chips, numbered grid
+  with the leader's crown, ready tags and the free slots, a note on how the start works, then
+  I'm ready (A, where the pad lands), Race info (X), Cancel race / Leave, and Paint / Race
+  leaderboard. *(client only)*
+- **Jobs and convoys are back in the main window.** Activities > Jobs holds your convoy's lobby
+  while you're in one (A ready, Y start now for the leader, X invite a player, Leave) and every
+  depot otherwise (filter, set GPS, join a convoy). The standalone Jobs and convoy lobby windows
+  are gone; the leaderboards live in the full window's Leaderboards tab. A depot prompt's All
+  depots opens this section with the pad, and arriving at your convoy's depot brings it up with the
+  pad (letting go keeps it down until you've left and come back). *(client only)*
+- **Dimming is back.** While a convoy invite or a delivery window has the pad, the rail and its
+  panel dim; while the main window has the pad, the invite dims. *(client only)*
+
+### Main window redesign, part 4: controller support
+
+- **Focus the main window from the pad.** The Focus notification control (RB + X / Shift + J,
+  Controls > BeamJoy) now covers the main window too, notifications first: with an invite or a
+  convoy lobby waiting, the first press focuses it and the next moves on to the main window;
+  otherwise it goes straight to the main window, which opens on Happening now. Pressing it on the
+  main window lets go (or jumps to a notification that turned up meanwhile). Letting go, or
+  backing out with B until you leave the rail, closes the panel or full window; if the rail was
+  hidden before, it hides again. *(client only)*
+- **Rail.** D-pad up/down picks a button (orange outline), A opens it, left goes into the open
+  panel, Y opens or closes the full window, B lets go of the pad. *(client only)*
+- **Panels and full window.** D-pad up/down moves through buttons and fields, A presses,
+  left/right nudges sliders, right or B goes back to the rail, Y switches to the full window. In
+  the full window LB / RB switch tabs and B goes back to the side panel. Starting a race, X starts
+  solo. Button hints show at the bottom while the pad is in use. A delivery window that has the
+  pad (job board, results, a focused invite) takes priority. *(client only)*
+- The controller's menu buttons (and LB / RB for the full window) only leave driving while the
+  window is focused; LB is still the clutch otherwise. *(client only)*
+
+### Main window redesign, parts 2 and 3: panels and full window content
+
+- **Starting a race.** Pick a race, then set laps, vehicles and respawns right there; everything
+  else (grid placement, pool and tuning options, auto-spectate, DNF and reset penalty, ghosting,
+  anti-cheat, gate display and timers) is under **Advanced settings**. Instead of a "joinable"
+  switch there are two buttons: **Start solo** (X) and **Open lobby** (A). One-slot races only
+  have Start solo. *(client only)*
+- **Race lobby.** Your lobby is one card: the race, how long until it closes or starts, chips for
+  laps / vehicles / respawns, and the grid with a crown on the leader and a ready tag per player.
+  I'm ready / I'm not ready, Race info, Leave and Cancel race (leader) sit underneath. Manual grid
+  placement and the paint picker work as before. Joining someone else's race now happens from
+  Happening now. *(client only)*
+- **Activities.** The section switcher is a row of pills, and Hunter, Infected, Bus lines and
+  Settings pick up the new buttons and cards. *(client only)*
+- **Players.** Each player is a row with their rank and the car they're in; click it to expand
+  their actions (Spectate, Teleport to, Bring here, respawn deleted vehicles), their vehicles for
+  staff (Spectate, Freeze, Stop engine, Launch, Explode, Remove) and moderation. In the full
+  window, staff also get Freeze all / Stop all engines / Remove all for that player. *(client
+  only)*
+- **Full window Home.** Three columns: Happening now, Players, and **You** (the car you're in,
+  the low fuel button, your delivery standings, and Nametags on/off, Start a vote, Change
+  nickname and Welcome screen). *(client only)*
+- **Leaderboards tab.** Delivery totals (packages or vehicles, your place pinned) beside race
+  best times for any race you pick. *(client only)*
+- **Change nickname.** Opens the nickname prompt mid-session (Cancel just closes it). Renaming no
+  longer re-runs the connection setup. *(client only)*
+
+### Main window redesign, part 1: edge rail and BJR branding
+
+- **New look, new name on screen.** The main window is now a slim rail on the right edge of the
+  screen, branded BJR (BeamJoy Revived) with the new signal-tile logo. Its buttons open small
+  panels beside it: **Now** (happening now), **Play** (Activities), **Players** (the count shows
+  on the button), **Vote** (if you can start one) and **Setup** (Settings). Press a button again
+  to close its panel. The rail stays put and panels open in the same spot every time.
+  *(client only)*
+- **Happening now.** One list of everything you could jump into: races, hunts and infected games
+  forming (Join) or running (Spectate, races only), the activity you're already in (Open takes
+  you to its Activities section), and delivery convoys forming (Open jobs). While the panel is
+  closed, the Now button shows how many lobbies you could join. *(client only)*
+- **Full window.** The rail's **Full** button (or the expand button on any panel) opens a big
+  window with tabs: Home (happening now and the player list side by side), Activities, Players
+  and Settings. Staff get a Server config button. **Small** takes you back to the matching
+  panel. *(client only)*
+- **Fuel and hiding.** The low fuel / emergency refuel button moved to the rail. When the host
+  lets players close BeamJoy, the rail has a Hide button (the F4 menu brings it back).
+  *(client only)*
+- **Invites don't cover the panel.** A convoy invite now appears beside the rail, or to the left
+  of an open panel, so the panel you're using is never covered. *(client only)*
+- **Moved.** The nametags toggle is in Setup > Nametags (it was a duplicate), and the vote
+  picker is its own panel. The old main tab is gone. *(client only)*
+
+### Slice 5: Jobs section and leaderboards
+
+- **Jobs window.** Its own centred window, like the job board (the first build put it inside the
+  main window, which is too narrow for it). Every depot on the map, nearest first, with its
+  distance, open jobs, what it sends and any convoy forming there. Filter by All / Packages / Vehicles, set
+  your GPS to a depot, or join a convoy from anywhere (you're brought to the depot when it
+  leaves). Job counts refresh every 15 seconds, distances every second. *(client + server)*
+- **Leaderboards.** The same section's second view: each player's total for package deliveries
+  and for vehicle deliveries, all maps combined, top 50 with your own place pinned below if you're
+  further down. *(client + server)*
+- **Opening it.** Main window > Activities > **Jobs** shows the nearest depot and how many
+  convoys are forming, with an **Open jobs** button (mouse). On a controller, a depot's drive-up
+  prompt has a new **All depots** entry that opens the Jobs window driven by the pad: d-pad up/down picks a depot, left/right switches
+  between Depots and Leaderboard, A sets GPS, X joins a convoy, Y changes the filter (or the
+  leaderboard's type), B closes. Opened with the mouse, it stays mouse-driven. Joining a lobby,
+  starting a job or opening a job board closes it. *(client only)*
+- **Focus notification control.** Focusing an invite (or the lobby panel away from the depot) is
+  now BJS's own control, listed under BeamJoy in the game's Controls menu, instead of borrowing
+  the game's Interact. Defaults: RB + X on a pad, Shift + J on a keyboard; rebind it there.
+  RB + X is free in every stock input map (RB + Y is the game's Interact, and binding it there too
+  stopped RB + Y opening depot prompts). *(client only)*
+- Joining a convoy no longer requires being at its depot from any entry point, since everyone is
+  brought there when it leaves. *(server)*
 
 ### POI sort error (client 2508)
 

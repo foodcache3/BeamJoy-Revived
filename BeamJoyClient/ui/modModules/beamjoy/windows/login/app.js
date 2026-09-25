@@ -21,7 +21,17 @@ angular.module("beamjoy").component("bjLogin", {
             // input is a fine fallback, this is only ever a convenience prefill
         }
 
-        $rootScope.$on("BJLoginShow", () => {
+        // also reopened mid-session from the full window's "Change nickname" ({change: true}) :
+        // same prompt, but Cancel just closes it instead of continuing as a guest
+        this.changing = false;
+        $rootScope.$on("BJLoginShow", (_, data) => {
+            this.changing = !!(data && data.change);
+            this.error = null;
+            this.submitting = false;
+            if (this.changing) {
+                const self = beamjoyStore.players.self;
+                this.nickname = (self && (self.displayName || self.playerName)) || this.nickname;
+            }
             this.visible = true;
         });
 
@@ -52,6 +62,10 @@ angular.module("beamjoy").component("bjLogin", {
         this.skip = (event) => {
             event.stopPropagation();
             this.visible = false;
+            if (this.changing) {
+                this.changing = false;
+                return;
+            }
             beamjoyStore.send("BJLoginSkip");
         };
 

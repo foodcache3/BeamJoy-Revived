@@ -1,18 +1,861 @@
-<div id="beamjoy-main" class="position-absolute pointer-events-none">
-    <bj-window
-        window-id="main"
-        label="beamjoy.window.main.title"
-        visible="$ctrl.visible"
-        minimizable="true"
-        closable="$ctrl.closable"
-        on-close="$ctrl.onClose()"
-        background="true"
-    >
-        <bj-tabs
-            tabs="$ctrl.tabs"
-            active-tab-index="$ctrl.activeTabIndex"
-            on-tab-change="$ctrl.onTabChange(tabId)"
-            on-tab-close="$ctrl.onTabClose(tabId)"
-        />
-    </bj-window>
+<style>
+    /* BJR main window : edge rail, side panels and the full window. Vanilla window tokens (same as
+       the delivery windows), branding from the A1 "signal tile" */
+    .bjr {
+        --bjr-surface: rgba(10, 11, 14, 0.84);
+        --bjr-rail: rgba(10, 11, 14, 0.72);
+        --bjr-line: rgba(255, 255, 255, 0.08);
+        --bjr-text: #ebebeb;
+        --bjr-muted: #a7aebf;
+        --bjr-soft: #c8cedc;
+        --bjr-orange: #ff6600;
+        --bjr-orange-text: #ff8955;
+        --bjr-orange-soft: #ffbca0;
+        --bjr-primary: #c24b00;
+        --bjr-button: #363a45;
+        --bjr-rail-w: 4em;
+        --bjr-right: 1vw;
+        --bjr-top: 15vh;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        color: var(--bjr-text);
+    }
+    .bjr button {
+        font-family: inherit;
+    }
+    .bjr button:focus-visible {
+        outline: 2px solid var(--bjr-orange);
+        outline-offset: 2px;
+    }
+    .bjr .bjr-title {
+        margin: 0;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-style: italic;
+        line-height: 1.2;
+    }
+    .bjr .bjr-word {
+        font-family: "Overpass", sans-serif;
+        font-weight: 900;
+        font-style: italic;
+        line-height: 1;
+    }
+    .bjr .bjr-icon-btn {
+        width: 2.3em;
+        height: 2.3em;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        background: transparent;
+        border: 0;
+        border-radius: 0.25em;
+        color: var(--bjr-soft);
+        cursor: pointer;
+    }
+    .bjr .bjr-icon-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--bjr-text);
+    }
+
+    /* RAIL */
+    .bjr-rail {
+        position: fixed;
+        right: var(--bjr-right);
+        top: var(--bjr-top);
+        z-index: 3;
+        width: var(--bjr-rail-w);
+        box-sizing: border-box;
+        padding: 0.375em;
+        display: flex;
+        flex-direction: column;
+        gap: 0.2em;
+        background: var(--bjr-rail);
+        border: 1px solid var(--bjr-line);
+        border-radius: 0.5em;
+        pointer-events: auto;
+    }
+    .bjr-rail .rail-logo {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.3em;
+        padding: 0.45em 0 0.3em;
+    }
+    .bjr-rail .rail-logo .bjr-word {
+        font-size: 0.7em;
+        color: var(--bjr-orange-text);
+    }
+    .bjr-rail .rail-staff {
+        padding: 0 0.3em;
+        border: 1px solid rgba(255, 102, 0, 0.6);
+        border-radius: 0.2em;
+        color: var(--bjr-orange-soft);
+        font-size: 0.56em;
+        font-weight: 600;
+        line-height: 1.6;
+    }
+    .bjr-rail .rail-sep {
+        height: 1px;
+        margin: 0.15em 0.375em;
+        background: rgba(255, 255, 255, 0.1);
+    }
+    .bjr-rail .rail-item {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.2em;
+        width: 100%;
+        padding: 0.45em 0 0.3em;
+        background: transparent;
+        border: 0;
+        border-radius: 0.375em;
+        color: var(--bjr-muted);
+        cursor: pointer;
+    }
+    .bjr-rail .rail-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--bjr-text);
+    }
+    .bjr-rail .rail-item.active {
+        background: rgba(255, 102, 0, 0.14);
+        box-shadow: inset -3px 0 0 var(--bjr-orange);
+        color: var(--bjr-text);
+    }
+    .bjr-rail .rail-item span.label {
+        font-size: 0.62em;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+    .bjr-rail .rail-badge {
+        position: absolute;
+        top: 0.2em;
+        right: 0.3em;
+        min-width: 1em;
+        height: 1em;
+        padding: 0 0.25em;
+        box-sizing: border-box;
+        border-radius: 0.5em;
+        background: var(--bjr-orange);
+        color: #151820;
+        font-size: 0.62em;
+        font-weight: 800;
+        line-height: 1em;
+        text-align: center;
+    }
+    .bjr-rail .rail-item.fuel-low {
+        background: rgba(255, 176, 32, 0.14);
+        color: #ffc768;
+    }
+    .bjr-rail .rail-item.fuel-empty {
+        background: #b3261e;
+        color: #fff;
+    }
+
+    /* SIDE PANEL : opens beside the rail, never moves while open */
+    .bjr-panel {
+        position: fixed;
+        right: calc(var(--bjr-right) + var(--bjr-rail-w) + 0.75em);
+        top: var(--bjr-top);
+        z-index: 3;
+        width: 22em;
+        max-height: 75vh;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        background: var(--bjr-surface);
+        border: 1px solid var(--bjr-line);
+        border-radius: 0.5em;
+        pointer-events: auto;
+    }
+    .bjr-panel.wide {
+        width: 28em;
+    }
+    .bjr-panel > header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5em;
+        padding: 0.75em 0.6em 0.6em 1em;
+    }
+    .bjr-panel > header .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4em;
+    }
+    .bjr-panel > header .eyebrow .bjr-word {
+        font-size: 0.75em;
+        color: var(--bjr-orange-text);
+    }
+    .bjr-panel > header .bjr-title {
+        font-size: 1.25em;
+    }
+    .bjr-panel .panel-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 0 0.75em 0.9em;
+    }
+
+    /* FULL WINDOW */
+    .bjr-full {
+        position: fixed;
+        left: 6vw;
+        right: calc(var(--bjr-right) + var(--bjr-rail-w) + 1.25em);
+        top: 6vh;
+        bottom: 6vh;
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        background: var(--bjr-surface);
+        border: 1px solid var(--bjr-line);
+        border-radius: 0.5em;
+        pointer-events: auto;
+    }
+    .bjr-full > header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1em;
+        padding: 0.75em 0.75em 0 1.25em;
+        border-bottom: 1px solid var(--bjr-line);
+    }
+    .bjr-full > header .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.6em;
+        padding-bottom: 0.3em;
+    }
+    .bjr-full > header .brand .bjr-word {
+        font-size: 1.5em;
+    }
+    .bjr-full > header .sep {
+        width: 1px;
+        height: 1.6em;
+        margin-bottom: 0.3em;
+        background: rgba(255, 255, 255, 0.14);
+    }
+    .bjr-full .full-tabs {
+        display: flex;
+        gap: 0.25em;
+    }
+    .bjr-full .full-tab {
+        padding: 0.5em 0.75em 0.6em;
+        background: transparent;
+        border: 0;
+        border-bottom: 3px solid transparent;
+        color: var(--bjr-muted);
+        font-family: "Overpass", sans-serif;
+        font-weight: 700;
+        font-style: italic;
+        font-size: 1.3em;
+        line-height: 1.2;
+        cursor: pointer;
+    }
+    .bjr-full .full-tab:hover {
+        color: var(--bjr-text);
+    }
+    .bjr-full .full-tab.active {
+        border-bottom-color: var(--bjr-orange);
+        color: var(--bjr-text);
+    }
+    .bjr-full .full-tab .count {
+        margin-left: 0.4em;
+        padding: 0.05em 0.45em;
+        border-radius: 0.25em;
+        background: var(--bjr-button);
+        color: var(--bjr-text);
+        font-family: "Noto Sans", sans-serif;
+        font-style: normal;
+        font-size: 0.6em;
+        font-weight: 600;
+        vertical-align: middle;
+    }
+    .bjr-full .full-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.75em;
+        padding-bottom: 0.3em;
+        font-size: 0.9em;
+        color: var(--bjr-muted);
+    }
+    .bjr-full .staff-btn {
+        min-height: 2.1em;
+        padding: 0 0.75em;
+        background: var(--bjr-button);
+        border: 1px solid rgba(255, 102, 0, 0.45);
+        border-radius: 0.25em;
+        color: var(--bjr-orange-soft);
+        font-size: 0.9em;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .bjr-full .full-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 1.4em 1.5em;
+    }
+    .bjr-full .full-home {
+        display: grid;
+        grid-template-columns: minmax(16em, 22em) minmax(0, 1fr) minmax(13em, 17em);
+        gap: 1.5em;
+        align-items: start;
+    }
+    .bjr .bjr-h2 {
+        margin: 0 0 0.6em;
+        font-size: 1em;
+        font-weight: 600;
+        color: var(--bjr-soft);
+    }
+
+    /* SKIN : the older components hosted in panels (hunter, infected, bus lines, settings, player
+       moderation) keep their markup ; these rules give their shared classes the new look. Scoped to
+       .bjr so the Config window and the HUD are untouched */
+    .bjr .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4em;
+        min-height: 2.1em;
+        padding: 0 0.75em;
+        border-radius: 0.25em;
+        background: var(--bjr-button);
+        color: var(--bjr-text);
+        fill: var(--bjr-text);
+        font-size: 0.88em;
+        font-weight: 600;
+        transition: filter 0.15s ease-in-out;
+    }
+    .bjr .btn:hover {
+        background: var(--bjr-button);
+        filter: brightness(1.15);
+    }
+    .bjr .btn.primary,
+    .bjr .btn.success {
+        background: var(--bjr-primary);
+        color: #fff;
+        fill: #fff;
+    }
+    .bjr .btn.info,
+    .bjr .btn.neutral {
+        background: var(--bjr-button);
+    }
+    .bjr .btn.warning {
+        background: rgba(255, 176, 32, 0.14);
+        color: #ffc768;
+        fill: #ffc768;
+    }
+    .bjr .btn.danger {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px rgba(255, 110, 100, 0.5);
+        color: #ff9a8f;
+        fill: #ff9a8f;
+    }
+    .bjr .btn.disabled,
+    .bjr .btn:disabled {
+        background: rgba(255, 255, 255, 0.04);
+        box-shadow: none;
+        color: #6f7582;
+        fill: #6f7582;
+        filter: none;
+        cursor: default;
+    }
+    .bjr .btn icon.small {
+        width: 1em;
+        height: 1em;
+    }
+    .bjr h3,
+    .bjr h4 {
+        margin: 0.2em 0 0.4em;
+        border: 0;
+        font-size: 0.92em;
+        font-weight: 600;
+        color: var(--bjr-soft);
+    }
+    .bjr hr {
+        margin: 0.6em 0;
+        border: 0;
+        border-top: 1px solid var(--bjr-line);
+    }
+    .bjr input:not([type="range"]):not([type="checkbox"]) {
+        min-height: 2em;
+        padding: 0 0.5em;
+        background: #1c1f26;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 0.25em;
+        color: var(--bjr-text);
+    }
+    .bjr .status-panel {
+        margin-bottom: 0.6em;
+        padding: 0.75em;
+        background: rgba(255, 102, 0, 0.1);
+        border-radius: 0 0.375em 0.375em 0;
+        box-shadow: inset 3px 0 0 var(--bjr-orange);
+    }
+    .bjr .session-row,
+    .bjr .race-row {
+        border-radius: 0 0.375em 0.375em 0;
+    }
+    .bjr .session-row:hover,
+    .bjr .race-row:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    .bjr .opacity-70 {
+        opacity: 1;
+        color: var(--bjr-muted);
+    }
+
+    /* shared pieces for the restyled components */
+    .bjr .bjr-card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4em;
+        padding: 0.7em 0.8em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0 0.375em 0.375em 0;
+    }
+    .bjr .bjr-card.hot {
+        background: rgba(255, 102, 0, 0.1);
+        box-shadow: inset 3px 0 0 var(--bjr-orange);
+    }
+    .bjr .bjr-muted {
+        font-size: 0.82em;
+        color: var(--bjr-muted);
+        white-space: normal;
+    }
+    .bjr .bjr-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.15em 0.55em;
+        border-radius: 0.25em;
+        background: #282b33;
+        color: var(--bjr-soft);
+        font-size: 0.78em;
+        white-space: nowrap;
+    }
+    .bjr .bjr-chip.ready {
+        background: rgba(73, 182, 114, 0.16);
+        color: #73eb9d;
+    }
+    .bjr .bjr-chip.rank {
+        padding: 0 0.35em;
+        background: var(--bjr-button);
+        font-size: 0.65em;
+        font-weight: 600;
+    }
+    .bjr .bjr-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45em;
+        min-height: 2.3em;
+        padding: 0 0.8em;
+        background: var(--bjr-button);
+        border: 0;
+        border-radius: 0.25em;
+        color: var(--bjr-text);
+        font-size: 0.88em;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .bjr .bjr-btn:hover {
+        filter: brightness(1.15);
+    }
+    .bjr .bjr-btn.primary {
+        background: var(--bjr-primary);
+        color: #fff;
+    }
+    .bjr .bjr-btn.ghost {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+        color: var(--bjr-soft);
+    }
+    .bjr .bjr-btn.danger {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px rgba(255, 110, 100, 0.5);
+        color: #ff9a8f;
+    }
+    .bjr .bjr-btn.small {
+        min-height: 1.9em;
+        padding: 0 0.6em;
+        font-size: 0.78em;
+    }
+    .bjr .bjr-btn:disabled {
+        opacity: 0.45;
+        filter: none;
+        cursor: default;
+    }
+    .bjr .bjr-glyph {
+        width: 1.55em;
+        height: 1.55em;
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: var(--bjr-text);
+        color: #151820;
+        font-family: "Overpass", sans-serif;
+        font-size: 0.85em;
+        font-weight: 800;
+    }
+    .bjr .bjr-btn.primary .bjr-glyph {
+        background: #fff;
+        color: #a54106;
+    }
+    .bjr .bjr-seg {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25em;
+    }
+    .bjr .bjr-seg button {
+        min-height: 2em;
+        padding: 0 0.7em;
+        background: #282b33;
+        border: 0;
+        border-radius: 0.25em;
+        color: var(--bjr-soft);
+        font-size: 0.82em;
+        cursor: pointer;
+    }
+    .bjr .bjr-seg button.on {
+        background: rgba(255, 102, 0, 0.16);
+        box-shadow: inset 0 0 0 1px rgba(255, 102, 0, 0.6);
+        color: var(--bjr-text);
+    }
+    .bjr .bjr-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3em;
+    }
+    .bjr .bjr-field > .name {
+        font-size: 0.8em;
+        color: var(--bjr-muted);
+    }
+    .bjr .bjr-toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75em;
+        font-size: 0.85em;
+    }
+    /* CONTROLLER : the rail button under the pad's cursor, and the focused element in a panel */
+    .bjr-rail .rail-item[bjr-pad-cursor="true"] {
+        box-shadow: inset 0 0 0 2px var(--bjr-orange);
+        color: var(--bjr-text);
+    }
+    /* inset, so it never spills over the buttons below a player row */
+    .bjr .bjr-pad-focus {
+        outline: 2px solid var(--bjr-orange) !important;
+        outline-offset: -2px;
+    }
+    /* another window has the pad (a focused invite, the job board) : this one steps back */
+    .bjr-rail,
+    .bjr-panel,
+    .bjr-full {
+        transition: opacity 0.2s ease-in-out;
+    }
+    .bjr .dimmed {
+        opacity: 0.5;
+    }
+
+    /* LOBBY : shared by the race lobby and the convoy lobby (Activities) */
+    .bjr .bjr-lobby {
+        display: flex;
+        flex-direction: column;
+        gap: 0.7em;
+    }
+    .bjr .bjr-lobby .lobby-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 0.75em;
+    }
+    .bjr .bjr-lobby .lobby-head .bjr-title {
+        font-size: 1.25em;
+    }
+    .bjr .bjr-lobby .lobby-timer {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        flex-shrink: 0;
+    }
+    .bjr .bjr-lobby .lobby-timer .value {
+        font-family: "Overpass", sans-serif;
+        font-size: 1.65em;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        line-height: 1.1;
+    }
+    .bjr .bjr-lobby .chips {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35em;
+    }
+    .bjr .bjr-lobby .slots {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25em;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    .bjr .bjr-lobby .slots li {
+        display: grid;
+        grid-template-columns: 1.4em minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.45em 0.5em 0.45em 0.65em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0 0.375em 0.375em 0;
+    }
+    .bjr .bjr-lobby .slots .num {
+        font-family: "Overpass", sans-serif;
+        font-style: italic;
+        font-weight: 700;
+        color: #979dad;
+    }
+    .bjr .bjr-lobby .slots .who {
+        display: flex;
+        flex-direction: column;
+        gap: 0.05em;
+        min-width: 0;
+    }
+    .bjr .bjr-lobby .slots .who .n {
+        display: flex;
+        align-items: center;
+        gap: 0.3em;
+        font-size: 0.9em;
+        font-weight: 600;
+    }
+    .bjr .bjr-lobby .slots li.open .who .n {
+        color: #979dad;
+        font-weight: 400;
+    }
+    .bjr .bjr-lobby .note {
+        margin: 0;
+        font-size: 0.8em;
+        line-height: 1.5;
+        color: var(--bjr-muted);
+        white-space: normal;
+    }
+    .bjr .bjr-lobby .controls {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.35em;
+    }
+    .bjr .bjr-lobby .controls .bjr-btn {
+        justify-content: flex-start;
+        min-height: 2.6em;
+        text-align: left;
+    }
+    .bjr .bjr-lobby .extras {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35em;
+    }
+    .bjr .bjr-lobby .extras .bjr-btn {
+        flex: 1 1 auto;
+    }
+    .bjr-rail.pad {
+        border-color: rgba(255, 102, 0, 0.6);
+    }
+    .bjr .pad-hints {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4em 1em;
+        padding: 0.6em 1em 0.7em;
+        border-top: 1px solid var(--bjr-line);
+        font-size: 0.78em;
+        color: var(--bjr-soft);
+    }
+    .bjr .pad-hints span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4em;
+    }
+    .bjr .pad-hints .key {
+        min-width: 1.5em;
+        height: 1.5em;
+        padding: 0 0.35em;
+        box-sizing: border-box;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #979dad;
+        border-radius: 0.25em;
+        font-family: "Overpass", sans-serif;
+        font-weight: 700;
+    }
+</style>
+
+<div id="beamjoy-main" class="bjr" ng-if="$ctrl.visible">
+    <nav class="bjr-rail" ng-class="{pad: $ctrl.pad, dimmed: $ctrl.dimmed()}" aria-label="{{'beamjoy.window.main.rail.label' | translate}}">
+        <div class="rail-logo" title="BeamJoy Revived">
+            <svg width="30" height="30" viewBox="0 0 100 100" aria-hidden="true">
+                <rect width="100" height="100" rx="24" fill="#ff6600"></rect>
+                <polygon points="18,80 33,80 38.5,54 23.5,54" fill="#1c1f26"></polygon>
+                <polygon points="41,80 56,80 64.8,38 49.8,38" fill="#1c1f26"></polygon>
+                <polygon points="64,80 79,80 91.6,20 76.6,20" fill="#1c1f26"></polygon>
+            </svg>
+            <span class="bjr-word">BJR</span>
+            <span class="rail-staff" ng-if="$ctrl.isStaff()">{{'beamjoy.window.main.rail.staff' | translate}}</span>
+        </div>
+        <div class="rail-sep"></div>
+
+        <button type="button" class="rail-item" ng-class="{active: $ctrl.panel === 'now' || ($ctrl.full && $ctrl.fullTab === 'home')}"
+            ng-click="$ctrl.full ? $ctrl.setFullTab('home') : $ctrl.togglePanel('now')" data-rail="now" bjr-pad-cursor="{{$ctrl.railPad('now')}}"
+            aria-label="{{'beamjoy.window.main.now.title' | translate}}">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="3"></circle><path d="M5.3 5.3a8 8 0 000 11.4M16.7 5.3a8 8 0 010 11.4"></path></svg>
+            <span class="label">{{'beamjoy.window.main.rail.now' | translate}}</span>
+            <span class="rail-badge" ng-if="$ctrl.nowCount() > 0 && $ctrl.panel !== 'now'">{{$ctrl.nowCount()}}</span>
+        </button>
+        <button type="button" class="rail-item" ng-class="{active: $ctrl.panel === 'play' || ($ctrl.full && $ctrl.fullTab === 'activities')}"
+            ng-click="$ctrl.full ? $ctrl.setFullTab('activities') : $ctrl.togglePanel('play')" data-rail="play" bjr-pad-cursor="{{$ctrl.railPad('play')}}"
+            aria-label="{{'beamjoy.window.main.tabs.races.title' | translate}}">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V3M5 4h11l-2.5 4L16 12H5"></path></svg>
+            <span class="label">{{'beamjoy.window.main.rail.play' | translate}}</span>
+        </button>
+        <button type="button" class="rail-item" ng-class="{active: $ctrl.panel === 'players' || ($ctrl.full && $ctrl.fullTab === 'players')}"
+            ng-click="$ctrl.full ? $ctrl.setFullTab('players') : $ctrl.togglePanel('players')" data-rail="players" bjr-pad-cursor="{{$ctrl.railPad('players')}}"
+            aria-label="{{'beamjoy.window.main.playerlist.title' | translate}}">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="7.5" r="3"></circle><circle cx="15.5" cy="8.5" r="2.4"></circle><path d="M2.5 18c.7-3 2.8-4.6 5.5-4.6s4.8 1.6 5.5 4.6M14 13.6c.5-.2 1-.2 1.5-.2 2.2 0 3.6 1.4 4.2 4.1"></path></svg>
+            <span class="label">{{$ctrl.playerCount()}}</span>
+        </button>
+        <button type="button" class="rail-item" ng-if="$ctrl.canVote()" ng-class="{active: $ctrl.panel === 'vote'}"
+            ng-click="$ctrl.togglePanel('vote')" data-rail="vote" bjr-pad-cursor="{{$ctrl.railPad('vote')}}"
+            aria-label="{{'beamjoy.window.main.tabs.main.startVote' | translate}}">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="15" height="15" rx="2"></rect><path d="M7.5 11.5l2.5 2.5 4.5-5"></path></svg>
+            <span class="label">{{'beamjoy.window.main.rail.vote' | translate}}</span>
+        </button>
+        <button type="button" class="rail-item" ng-class="{active: $ctrl.panel === 'settings' || ($ctrl.full && $ctrl.fullTab === 'settings')}"
+            ng-click="$ctrl.full ? $ctrl.setFullTab('settings') : $ctrl.togglePanel('settings')" data-rail="settings" bjr-pad-cursor="{{$ctrl.railPad('settings')}}"
+            aria-label="{{'beamjoy.window.main.tabs.settings.title' | translate}}">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"></path></svg>
+            <span class="label">{{'beamjoy.window.main.rail.setup' | translate}}</span>
+        </button>
+
+        <div class="rail-sep"></div>
+        <button type="button" class="rail-item" ng-class="{active: $ctrl.full}"
+            ng-click="$ctrl.full ? $ctrl.shrink() : $ctrl.openFull()" data-rail="full" bjr-pad-cursor="{{$ctrl.railPad('full')}}"
+            aria-label="{{($ctrl.full ? 'beamjoy.window.main.rail.shrinkLong' : 'beamjoy.window.main.rail.fullLong') | translate}}"
+            title="{{($ctrl.full ? 'beamjoy.window.main.rail.shrinkLong' : 'beamjoy.window.main.rail.fullLong') | translate}}">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="16" height="14" rx="2"></rect><path d="M12.5 7.5h3v3M15.5 7.5l-4 4"></path></svg>
+            <span class="label">{{($ctrl.full ? 'beamjoy.window.main.rail.shrink' : 'beamjoy.window.main.rail.full') | translate}}</span>
+        </button>
+        <button type="button" class="rail-item" ng-if="$ctrl.fuelLow" ng-class="{'fuel-low': !$ctrl.fuelEmpty, 'fuel-empty': $ctrl.fuelEmpty}"
+            ng-click="$ctrl.fuelAction()" data-rail="fuel" bjr-pad-cursor="{{$ctrl.railPad('fuel')}}"
+            aria-label="{{($ctrl.fuelEmpty ? 'beamjoy.window.main.tabs.main.fuelEmergencyRefuel' : 'beamjoy.window.main.tabs.main.fuelSetWaypoint') | translate}}"
+            title="{{($ctrl.fuelEmpty ? 'beamjoy.window.main.tabs.main.fuelEmergencyRefuel' : 'beamjoy.window.main.tabs.main.fuelSetWaypoint') | translate}}">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5a2 2 0 012-2h6a2 2 0 012 2v14M3 19h12M14 9h2a2 2 0 012 2v4a1.5 1.5 0 003 0V8l-3-3"></path><path d="M6.5 7h5"></path></svg>
+            <span class="label">{{($ctrl.fuelEmpty ? 'beamjoy.window.main.rail.refuel' : 'beamjoy.window.main.rail.station') | translate}}</span>
+        </button>
+        <button type="button" class="rail-item" ng-if="$ctrl.closable" ng-click="$ctrl.hide()" data-rail="hide" bjr-pad-cursor="{{$ctrl.railPad('hide')}}"
+            aria-label="{{'beamjoy.window.main.rail.hideLong' | translate}}" title="{{'beamjoy.window.main.rail.hideLong' | translate}}">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l10 10M16 6L6 16"></path></svg>
+            <span class="label">{{'beamjoy.window.main.rail.hide' | translate}}</span>
+        </button>
+    </nav>
+
+    <section class="bjr-panel" ng-if="$ctrl.panel && !$ctrl.full" ng-class="{wide: $ctrl.panel === 'play' || $ctrl.panel === 'settings', dimmed: $ctrl.dimmed()}"
+        aria-label="{{('beamjoy.window.main.panels.' + $ctrl.panel) | translate}}">
+        <header>
+            <div>
+                <span class="eyebrow">
+                    <svg width="14" height="14" viewBox="0 0 100 100" aria-hidden="true">
+                        <rect width="100" height="100" rx="24" fill="#ff6600"></rect>
+                        <polygon points="18,80 33,80 38.5,54 23.5,54" fill="#1c1f26"></polygon>
+                        <polygon points="41,80 56,80 64.8,38 49.8,38" fill="#1c1f26"></polygon>
+                        <polygon points="64,80 79,80 91.6,20 76.6,20" fill="#1c1f26"></polygon>
+                    </svg>
+                    <span class="bjr-word">BJR</span>
+                </span>
+                <h2 class="bjr-title">{{('beamjoy.window.main.panels.' + $ctrl.panel) | translate}}</h2>
+            </div>
+            <span style="display: flex; gap: 0.2em">
+                <button type="button" class="bjr-icon-btn" ng-if="$ctrl.panel !== 'vote'" ng-click="$ctrl.openFull()"
+                    aria-label="{{'beamjoy.window.main.rail.fullLong' | translate}}" title="{{'beamjoy.window.main.rail.fullLong' | translate}}">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9"></path></svg>
+                </button>
+                <button type="button" class="bjr-icon-btn" ng-click="$ctrl.togglePanel($ctrl.panel)"
+                    aria-label="{{'beamjoy.common.close' | translate}}" title="{{'beamjoy.common.close' | translate}}">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 3l8 8M11 3l-8 8"></path></svg>
+                </button>
+            </span>
+        </header>
+        <div class="panel-body">
+            <bj-main-now ng-if="$ctrl.panel === 'now'"></bj-main-now>
+            <bj-main-activities ng-if="$ctrl.panel === 'play'"></bj-main-activities>
+            <bj-players-list ng-if="$ctrl.panel === 'players'"></bj-players-list>
+            <bj-main-vote ng-if="$ctrl.panel === 'vote'"></bj-main-vote>
+            <bj-main-settings ng-if="$ctrl.panel === 'settings'"></bj-main-settings>
+        </div>
+        <footer class="pad-hints" ng-if="$ctrl.pad" aria-label="{{'beamjoy.window.main.pad.label' | translate}}">
+            <span><span class="key">D-pad</span>{{'beamjoy.window.main.pad.move' | translate}}</span>
+            <span><span class="key">A</span>{{'beamjoy.window.main.pad.select' | translate}}</span>
+            <span><span class="key">B</span>{{'beamjoy.window.main.pad.back' | translate}}</span>
+            <span><span class="key">Y</span>{{'beamjoy.window.main.pad.full' | translate}}</span>
+        </footer>
+    </section>
+
+    <section class="bjr-full" ng-if="$ctrl.full" ng-class="{dimmed: $ctrl.dimmed()}" aria-label="BeamJoy Revived">
+        <header>
+            <div style="display: flex; align-items: center; gap: 1.1em">
+                <span class="brand">
+                    <svg width="30" height="30" viewBox="0 0 100 100" aria-hidden="true">
+                        <rect width="100" height="100" rx="24" fill="#ff6600"></rect>
+                        <polygon points="18,80 33,80 38.5,54 23.5,54" fill="#1c1f26"></polygon>
+                        <polygon points="41,80 56,80 64.8,38 49.8,38" fill="#1c1f26"></polygon>
+                        <polygon points="64,80 79,80 91.6,20 76.6,20" fill="#1c1f26"></polygon>
+                    </svg>
+                    <span class="bjr-word">BJR</span>
+                </span>
+                <span class="sep" aria-hidden="true"></span>
+                <nav class="full-tabs" aria-label="{{'beamjoy.window.main.rail.sections' | translate}}">
+                    <button type="button" class="full-tab" ng-repeat="tab in $ctrl.FULL_TABS" ng-class="{active: $ctrl.fullTab === tab}"
+                        ng-click="$ctrl.setFullTab(tab)" aria-current="{{$ctrl.fullTab === tab ? 'page' : 'false'}}">
+                        {{('beamjoy.window.main.full.tabs.' + tab) | translate}}<span class="count" ng-if="tab === 'players'">{{$ctrl.playerCount()}}</span>
+                    </button>
+                </nav>
+            </div>
+            <div class="full-meta">
+                <button type="button" class="staff-btn" ng-if="$ctrl.isStaff()" ng-click="$ctrl.openConfig()">
+                    {{'beamjoy.window.main.full.serverConfig' | translate}}
+                </button>
+                <button type="button" class="bjr-icon-btn" ng-click="$ctrl.shrink()"
+                    aria-label="{{'beamjoy.window.main.rail.shrinkLong' | translate}}" title="{{'beamjoy.window.main.rail.shrinkLong' | translate}}">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5h4.5V15M7.5 10.5L2.5 15.5M15 7.5h-4.5V3M10.5 7.5l5-5"></path></svg>
+                </button>
+            </div>
+        </header>
+        <div class="full-body">
+            <div class="full-home" ng-if="$ctrl.fullTab === 'home'">
+                <section aria-labelledby="bjr-home-now">
+                    <h2 class="bjr-h2" id="bjr-home-now">{{'beamjoy.window.main.now.title' | translate}}</h2>
+                    <bj-main-now></bj-main-now>
+                </section>
+                <section aria-labelledby="bjr-home-players">
+                    <h2 class="bjr-h2" id="bjr-home-players">{{'beamjoy.window.main.playerlist.title' | translate}}</h2>
+                    <bj-players-list full="true"></bj-players-list>
+                </section>
+                <section aria-labelledby="bjr-home-you">
+                    <h2 class="bjr-h2" id="bjr-home-you">{{'beamjoy.window.main.you.title' | translate}}</h2>
+                    <bj-main-you></bj-main-you>
+                </section>
+            </div>
+            <bj-main-activities ng-if="$ctrl.fullTab === 'activities'"></bj-main-activities>
+            <bj-players-list ng-if="$ctrl.fullTab === 'players'" full="true"></bj-players-list>
+            <bj-main-leaderboards ng-if="$ctrl.fullTab === 'leaderboards'"></bj-main-leaderboards>
+            <bj-main-settings ng-if="$ctrl.fullTab === 'settings'"></bj-main-settings>
+        </div>
+        <footer class="pad-hints" ng-if="$ctrl.pad" aria-label="{{'beamjoy.window.main.pad.label' | translate}}">
+            <span><span class="key">LB RB</span>{{'beamjoy.window.main.pad.tabs' | translate}}</span>
+            <span><span class="key">D-pad</span>{{'beamjoy.window.main.pad.move' | translate}}</span>
+            <span><span class="key">A</span>{{'beamjoy.window.main.pad.select' | translate}}</span>
+            <span><span class="key">B</span>{{'beamjoy.window.main.pad.toSide' | translate}}</span>
+        </footer>
+    </section>
 </div>

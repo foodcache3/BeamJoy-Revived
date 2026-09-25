@@ -1,0 +1,92 @@
+<style>
+    bj-main-leaderboards {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+        gap: 1.5em;
+        align-items: start;
+    }
+    bj-main-leaderboards .col {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6em;
+        min-width: 0;
+    }
+    bj-main-leaderboards table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.88em;
+        font-variant-numeric: tabular-nums;
+    }
+    bj-main-leaderboards th {
+        padding: 0.3em 0.5em;
+        font-weight: 600;
+        color: #979dad;
+        text-align: left;
+    }
+    bj-main-leaderboards td {
+        padding: 0.4em 0.5em;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    bj-main-leaderboards .num {
+        text-align: right;
+    }
+    bj-main-leaderboards tr.you td {
+        background: rgba(255, 102, 0, 0.1);
+    }
+    bj-main-leaderboards .race-picks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25em;
+    }
+</style>
+
+<section class="col" aria-labelledby="bjr-lb-deliveries">
+    <h2 class="bjr-h2" id="bjr-lb-deliveries">{{'beamjoy.window.main.leaderboards.deliveries' | translate}}</h2>
+    <div class="bjr-seg">
+        <button type="button" ng-repeat="k in $ctrl.KINDS" ng-class="{on: $ctrl.kind === k}" ng-click="$ctrl.kind = k">
+            {{('beamjoy.delivery.kindLong.' + k) | translate}}
+        </button>
+    </div>
+    <span class="bjr-muted">{{$ctrl.mineLine()}}</span>
+    <p class="bjr-muted" ng-if="$ctrl.board && $ctrl.lb().rows.length === 0">
+        {{('beamjoy.delivery.jobs.lbEmpty.' + $ctrl.kind) | translate}}
+    </p>
+    <table ng-if="$ctrl.lb().rows.length > 0">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>{{'beamjoy.window.main.leaderboards.player' | translate}}</th>
+                <th class="num">{{'beamjoy.window.main.leaderboards.jobs' | translate}}</th>
+                <th class="num">{{'beamjoy.window.main.leaderboards.points' | translate}}</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr ng-repeat="r in $ctrl.lb().rows track by r.rank" ng-class="{you: r.you}">
+                <td>{{r.rank}}</td>
+                <td>{{r.name}}</td>
+                <td class="num">{{r.count}}</td>
+                <td class="num">{{r.total | number}}</td>
+            </tr>
+            <tr class="you" ng-if="$ctrl.mineOutside()">
+                <td>{{$ctrl.mineOutside().rank}}</td>
+                <td>{{'beamjoy.window.main.playerlist.you' | translate}}</td>
+                <td class="num">{{$ctrl.mineOutside().count}}</td>
+                <td class="num">{{$ctrl.mineOutside().total | number}}</td>
+            </tr>
+        </tbody>
+    </table>
+</section>
+
+<section class="col" aria-labelledby="bjr-lb-races">
+    <h2 class="bjr-h2" id="bjr-lb-races">{{'beamjoy.window.main.leaderboards.races' | translate}}</h2>
+    <p class="bjr-muted" ng-if="$ctrl.races.length === 0">{{'beamjoy.window.main.tabs.races.empty' | translate}}</p>
+    <div class="race-picks bjr-seg" ng-if="$ctrl.races.length > 0">
+        <button type="button" ng-repeat="race in $ctrl.races track by race.id" ng-class="{on: $ctrl.raceId === race.id}" ng-click="$ctrl.pickRace(race)">
+            {{race.name}}
+        </button>
+    </div>
+    <!-- remounted per race : bj-race-leaderboard reads its race id once, on init -->
+    <div ng-repeat="id in [$ctrl.raceId] track by id" ng-if="$ctrl.raceId !== null">
+        <bj-race-leaderboard race-id="{{id}}"></bj-race-leaderboard>
+    </div>
+</section>

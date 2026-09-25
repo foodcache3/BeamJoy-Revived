@@ -204,7 +204,16 @@ Phase 0-2 (energy stations, garages, bus lines) are shipped — see CHANGELOG. S
          position check, as spawn grace does). Say so on the button when it's unavailable
          ("Stop first", "Ready in 12 s"). Asked for vehicle jobs ; offering it on package jobs
          too is a one-line change if wanted. Locale keys under `beamjoy.delivery.hud.unstuck*`.
-    5. **Jobs section + leaderboards.**
+    5. **Jobs section + leaderboards** - BUILT (client 2509, server 2361), untested in-game.
+       UI `windows/deliveryJobs` (`bjDeliveryJobs`, its own window) plus a summary + "Open jobs"
+       section in the main window (`windows/main/activities/jobs`, `bjMainJobs`) ; delivery.lua
+       JOBS SECTION (`openJobsWindow(pad)` / `closeJobsWindow`, pad only from the prompt's "All
+       depots" entry, `uiNav` owner "deliveryJobs") ; server `deliveryDepotsRequest` -> `deliveryDepots`,
+       `deliveryLeaderboardRequest` -> `deliveryLeaderboard`. Focus control: `bjFocusNotification`
+       in core/input/actions/beamjoy.json, defaults in settings/inputmaps/xidevice_beamjoy.json
+       (RB + X) and keyboard_beamjoy.json (Shift + J), handled by delivery.lua
+       `onBJFocusNotification`. **When the main window goes controller-driven, it joins that same
+       control, AFTER notifications (invite, lobby) in the focus order.**
        - Main window > Activities > Jobs: every depot (filter Packages / Vehicles), distance, open
          job count, convoys forming, Set GPS, Join convoy. Controller-driven (d-pad, A Set GPS,
          X Join convoy, Y filter, B close) ; a controller reaches it ONLY from the depot prompt's
@@ -276,6 +285,61 @@ Phase 0-2 (energy stations, garages, bus lines) are shipped — see CHANGELOG. S
     gamepad also driving the car. First try opting into vanilla's own spatial navigation
     (`bng-nav-item` / `menu-navigation`); fall back to a BJS action map pushed only while a BJS
     window has focus.
+- **Main window redesign** (started 2026-09-25): replaces the old tabbed main window with something
+  streamlined, unobtrusive and vanilla-looking, controller-driven through the Focus notification
+  control (after notifications in the focus order). Mockups:
+  https://claude.ai/artifact/CGvMdFLWjZdj1J2nTNe18C. The user picked the **edge rail** (revision 3
+  page: player and staff versions of Home, Start a race, Race lobby, Leaderboards, Players and the
+  full window; race start = laps / vehicles / respawns up front, the rest under Advanced settings,
+  X start solo, A open lobby). The staff Config window is out of scope here (its own session).
+  Branding: **A1 "signal tile"** (orange rounded tile, three rising bars knocked out, Overpass
+  Italic 900 "BJR"), picked on the canvas's Branding page.
+  - **Part 1 - DONE (client 2512), untested in-game:** rail (`windows/main/app.html`), side
+    panels, full window shell, Happening now (`windows/main/now`, service `beamjoyNow`), Vote
+    panel (`windows/main/vote`), invite placed beside the rail/panel (`$rootScope.bjMainLayout`).
+    Panels still host the OLD Activities / Players / Settings components unchanged.
+  - **Parts 2 and 3 - DONE (client 2513), untested in-game:** races restyled (start form with
+    Advanced settings, X solo / A lobby, lobby card with crown + ready tags ; `starterID` added to
+    BJRaceSessionStatus), a `.bjr` skin in `windows/main/app.html` restyling the older hosted
+    components (hunter, infected, bus lines, settings, moderation), expandable player rows
+    (`main/players-list`, `player-line` takes `full`), full window Home = Now / Players / You
+    (`windows/main/you`), Leaderboards tab (`windows/main/leaderboards`), Change nickname
+    (login prompt `{change: true}` ; `communications/ui.lua` only runs proceedAfterLogin once).
+  - **Still open from parts 2/3:** a Crew tab needs the Crews feature itself (see Phase 3
+    follow-ups), not just UI. Staff "Cancel race" on someone else's lobby needs a server action.
+    Race "Start now" and "Invite player" from the lobby mockup don't exist server-side. A staff
+    "everyone's vehicles" block (freeze/remove for all players at once) has no server action
+    either ; per-player all-vehicle buttons are in the full window. Hunter / infected / bus
+    sections only got the skin, not a restructure like races.
+  - **Part 4 - DONE (client 2514), untested in-game:** `beamjoy/mainNav.lua` owns the Focus
+    notification control (order: delivery notification, then main window ; delivery exposes
+    notificationFocusable / notificationFocused / setNotificationFocus), `uiNav.acquire(owner,
+    extraActions)` (LB/RB = `uiNav.TAB_ACTIONS` for the full window), Angular pad levels rail /
+    panel / full in `windows/main/app.js` (generic focusables walk, `data-pad-x` for a panel's X
+    action). Not done: A directly opening a lobby from the start form (A presses the focused
+    element instead), text inputs need a keyboard, bj-select dropdowns aren't pad-driven.
+  - **Fix round (client 2516), untested:** spatial pad nav (`findDir` in windows/main/app.js),
+    Jobs + convoy lobby folded into Activities > Jobs (`windows/main/activities/jobs` ;
+    standalone windows/deliveryJobs and windows/deliveryLobby deleted ; the convoy lobby at the
+    depot takes the pad through `mainNav.autoFocus("lobby", ...)`, "All depots" through
+    `mainNav.focusOn("play", "jobs")`), race lobby rebuilt on the shared `.bjr-lobby` layout,
+    `beamjoyNow.activeSection()` filters Activities, `beamjoyNow.raceDraft` keeps a start form.
+  - Known debt: the hosted old components register `$rootScope.$on` listeners without cleanup,
+    and panels now mount/unmount them often ; fix as each is restyled.
+  - **Change race settings from inside the lobby** (feature idea from the mockup's "Change" link):
+    BJS fixes a race's settings when the lobby opens. Letting the leader change laps / vehicles /
+    respawns / advanced options while the lobby is still forming would mean the server accepting a
+    settings update for an open GRID session, re-broadcasting it to members (their lobby tags
+    update), and resetting everyone's ready state when something changes. Check raceRunner /
+    services races session code for how much of the start payload is re-validated; only worth it
+    if it isn't a big change.
+  - **Staff player panel in the full window keeps the player-wide buttons.** Revision 3's full
+    window now uses the small menu's expandable player rows (actions, vehicles with per-vehicle
+    buttons, moderation box). When building it, the full window's staff version must ALSO keep the
+    player-level buttons the small menu leaves out, i.e. the ones acting on all of that player's
+    vehicles at once, matching today's player-line actions: Freeze all / Unfreeze all, Stop all
+    engines / Start all engines, Remove all, Queue deleted vehicles to respawn (plus Bring here /
+    Teleport to / Spectate). The small side menu doesn't need them. The Jobs window (`windows/deliveryJobs`) folds into it later.
 - **Phase 3 follow-ups, after everything else in Phase 3:**
   - **Parking spots as a drop-off option**: per point, a zone or 1-4 parking spots, using the
     game's `gameplay/sites/parkingSpot.lua` `checkParking` (all four corners inside, aligned

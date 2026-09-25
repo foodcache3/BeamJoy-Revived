@@ -1,0 +1,76 @@
+<style>
+    bj-main-you {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6em;
+    }
+    bj-main-you .car {
+        font-size: 1em;
+        font-weight: 600;
+    }
+    bj-main-you .fuel {
+        align-self: flex-start;
+        background: rgba(255, 176, 32, 0.14);
+        color: #ffc768;
+    }
+    bj-main-you .fuel.empty {
+        background: #b3261e;
+        color: #fff;
+    }
+    bj-main-you dl {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.5em 0.75em;
+        margin: 0;
+        padding: 0.7em 0.8em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0 0.375em 0.375em 0;
+        font-size: 0.85em;
+        font-variant-numeric: tabular-nums;
+    }
+    bj-main-you dt {
+        color: #c8cedc;
+    }
+    bj-main-you dd {
+        margin: 0;
+        text-align: right;
+    }
+    bj-main-you .shortcuts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.35em;
+    }
+    bj-main-you .shortcuts .on {
+        background: rgba(73, 182, 114, 0.16);
+        color: #73eb9d;
+    }
+</style>
+
+<div class="bjr-card">
+    <span class="car">{{$ctrl.carLabel()}}</span>
+    <button type="button" class="bjr-btn small fuel" ng-if="$ctrl.fuelLow" ng-class="{empty: $ctrl.fuelEmpty}" ng-click="$ctrl.fuelAction()">
+        {{($ctrl.fuelEmpty ? 'beamjoy.window.main.tabs.main.fuelEmergencyRefuel' : 'beamjoy.window.main.tabs.main.fuelSetWaypoint') | translate}}
+    </button>
+</div>
+
+<dl>
+    <dt>{{'beamjoy.delivery.kindLong.packages' | translate}}</dt>
+    <dd>{{$ctrl.standing('packages')}}</dd>
+    <dt>{{'beamjoy.delivery.kindLong.vehicles' | translate}}</dt>
+    <dd>{{$ctrl.standing('vehicles')}}</dd>
+</dl>
+
+<div class="shortcuts">
+    <button type="button" class="bjr-btn" ng-class="{on: $ctrl.nametags}" ng-click="$ctrl.toggleNametags()" aria-pressed="{{$ctrl.nametags}}">
+        {{($ctrl.nametags ? 'beamjoy.window.main.you.nametagsOn' : 'beamjoy.window.main.you.nametagsOff') | translate}}
+    </button>
+    <button type="button" class="bjr-btn" ng-if="$ctrl.canVote()" ng-click="$ctrl.startVote()">
+        {{'beamjoy.window.main.panels.vote' | translate}}
+    </button>
+    <button type="button" class="bjr-btn" ng-click="$ctrl.changeNickname()">
+        {{'beamjoy.window.main.you.changeNickname' | translate}}
+    </button>
+    <button type="button" class="bjr-btn" ng-click="$ctrl.welcome()">
+        {{'beamjoy.window.main.you.welcome' | translate}}
+    </button>
+</div>

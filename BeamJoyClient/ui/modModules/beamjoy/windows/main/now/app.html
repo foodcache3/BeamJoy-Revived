@@ -1,0 +1,129 @@
+<style>
+    bj-main-now {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4em;
+    }
+    bj-main-now .now-card {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.15em 0.75em;
+        padding: 0.65em 0.75em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0 0.375em 0.375em 0;
+    }
+    bj-main-now .now-card.mine,
+    bj-main-now .now-card.forming {
+        background: rgba(255, 102, 0, 0.1);
+        box-shadow: inset 3px 0 0 #ff6600;
+    }
+    bj-main-now .now-card .title {
+        font-size: 0.95em;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    bj-main-now .now-card .line {
+        grid-column: 1;
+        font-size: 0.8em;
+        color: #a7aebf;
+        white-space: normal;
+    }
+    bj-main-now .now-card.mine .line,
+    bj-main-now .now-card.forming .line {
+        color: #ffbca0;
+    }
+    bj-main-now .now-card .actions {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        display: flex;
+        gap: 0.35em;
+    }
+    bj-main-now .now-btn {
+        min-height: 2.1em;
+        padding: 0 0.75em;
+        background: #363a45;
+        border: 0;
+        border-radius: 0.25em;
+        color: #ebebeb;
+        font-size: 0.85em;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    bj-main-now .now-btn.primary {
+        background: #c24b00;
+        color: #fff;
+    }
+    bj-main-now .now-btn:hover {
+        filter: brightness(1.12);
+    }
+    bj-main-now .now-empty {
+        margin: 0.2em 0 0.3em;
+        font-size: 0.88em;
+        line-height: 1.5;
+        color: #a7aebf;
+        white-space: normal;
+    }
+    bj-main-now .now-start {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5em;
+        min-height: 2.5em;
+        margin-top: 0.15em;
+        background: transparent;
+        border: 1px dashed #606570;
+        border-radius: 0.375em;
+        color: #ebebeb;
+        font-size: 0.9em;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    bj-main-now .now-start:hover {
+        border-color: #ff8955;
+    }
+</style>
+
+<div class="now-card mine" ng-if="$ctrl.mine()">
+    <span class="title">{{$ctrl.mine().title}}</span>
+    <span class="line">{{$ctrl.mine().line}}</span>
+    <span class="actions">
+        <button type="button" class="now-btn primary" ng-click="$ctrl.open($ctrl.mine().section)">
+            {{'beamjoy.window.main.now.openMine' | translate}}
+        </button>
+    </span>
+</div>
+
+<div class="now-card" ng-repeat="row in $ctrl.rows() track by row.id" ng-class="{forming: row.forming && !$ctrl.now.busy()}">
+    <span class="title">{{row.title}}</span>
+    <span class="line">{{row.line}}</span>
+    <span class="actions">
+        <button type="button" class="now-btn primary" ng-if="$ctrl.canJoin(row)" ng-click="$ctrl.join(row)">
+            {{'beamjoy.window.main.now.join' | translate}}
+        </button>
+        <button type="button" class="now-btn" ng-if="$ctrl.canSpectate(row)" ng-click="$ctrl.spectate(row)">
+            {{'beamjoy.window.main.now.spectate' | translate}}
+        </button>
+    </span>
+</div>
+
+<div class="now-card" ng-if="$ctrl.jobs && $ctrl.jobs.depots > 0">
+    <span class="title">{{'beamjoy.window.main.now.jobs.title' | translate}}</span>
+    <span class="line">{{$ctrl.jobsLine()}}</span>
+    <span class="actions">
+        <button type="button" class="now-btn" ng-click="$ctrl.openJobs()">
+            {{'beamjoy.window.main.now.jobs.open' | translate}}
+        </button>
+    </span>
+</div>
+
+<p class="now-empty" ng-if="!$ctrl.mine() && $ctrl.rows().length === 0">
+    {{'beamjoy.window.main.now.empty' | translate}}
+</p>
+
+<button type="button" class="now-start" ng-if="!$ctrl.now.busy()" ng-click="$ctrl.startActivity()">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 2.5v9M2.5 7h9"></path></svg>
+    {{'beamjoy.window.main.now.start' | translate}}
+</button>

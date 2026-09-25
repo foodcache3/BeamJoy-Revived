@@ -1,78 +1,22 @@
-<span title="{{$ctrl.vehicle.jbeam}}">{{$ctrl.vehicle.label}}</span>
-
-<div
-    ng-hide="$ctrl.actions.focus === undefined"
-    class="btn primary"
-    ng-class="{disabled: !$ctrl.actions.focus}"
-    ng-click="$ctrl.action($event,'focus')"
->
-    <icon
-        name="focus"
-        class="small"
-        title="{{'beamjoy.window.main.playerlist.actions.focus' | translate}}"
-    ></icon>
-</div>
-<div
-    ng-hide="$ctrl.actions.freeze === undefined"
-    class="btn"
-    ng-class="{danger: !$ctrl.vehicle.froze, success: $ctrl.vehicle.froze, disabled: !$ctrl.actions.freeze}"
-    ng-click="$ctrl.action($event,'freeze')"
->
-    <icon
-        name="{{$ctrl.vehicle.froze ? 'unfreeze' : 'freeze'}}"
-        class="small"
-        title="{{($ctrl.vehicle.froze ?
-            'beamjoy.window.main.playerlist.actions.unfreeze' :
-            'beamjoy.window.main.playerlist.actions.freeze') | translate}}"
-    ></icon>
-</div>
-<div
-    ng-hide="$ctrl.actions.engine === undefined"
-    class="btn"
-    ng-class="{danger: !$ctrl.vehicle.shut, success: $ctrl.vehicle.shut, disabled: !$ctrl.actions.engine}"
-    ng-click="$ctrl.action($event,'engine')"
->
-    <icon
-        name="{{$ctrl.vehicle.shut ? 'play' : 'pause'}}"
-        class="small"
-        title="{{($ctrl.vehicle.shut ?
-            'beamjoy.window.main.playerlist.actions.start' :
-            'beamjoy.window.main.playerlist.actions.stop') | translate}}"
-    ></icon>
-</div>
-<div
-    ng-hide="$ctrl.actions.delete === undefined"
-    class="btn danger"
-    ng-class="{disabled: !$ctrl.actions.delete}"
-    ng-click="$ctrl.action($event,'delete')"
->
-    <icon
-        name="delete"
-        class="small"
-        title="{{'beamjoy.window.main.playerlist.actions.delete' | translate}}"
-    ></icon>
-</div>
-<div
-    ng-hide="$ctrl.actions.explode === undefined"
-    class="btn danger"
-    ng-class="{disabled: !$ctrl.actions.explode}"
-    ng-click="$ctrl.action($event,'explode')"
->
-    <icon
-        name="explode"
-        class="small"
-        title="{{'beamjoy.window.main.playerlist.actions.explode' | translate}}"
-    ></icon>
-</div>
-<div
-    ng-hide="$ctrl.actions.launch === undefined"
-    class="btn danger"
-    ng-class="{disabled: !$ctrl.actions.launch}"
-    ng-click="$ctrl.action($event,'launch')"
->
-    <icon
-        name="launch"
-        class="small"
-        title="{{'beamjoy.window.main.playerlist.actions.launch' | translate}}"
-    ></icon>
-</div>
+<span class="v-name" title="{{$ctrl.vehicle.jbeam}}">{{$ctrl.vehicle.label}}</span>
+<span class="v-actions">
+    <button type="button" class="bjr-btn small" ng-if="$ctrl.actions.focus !== undefined"
+        ng-disabled="!$ctrl.actions.focus" ng-click="$ctrl.action($event,'focus')">
+        {{'beamjoy.window.main.playerlist.actions.focus' | translate}}
+    </button>
+    <button type="button" class="bjr-btn small" ng-if="$ctrl.actions.freeze !== undefined" ng-click="$ctrl.action($event,'freeze')">
+        {{($ctrl.vehicle.froze ? 'beamjoy.window.main.playerlist.actions.unfreeze' : 'beamjoy.window.main.playerlist.actions.freeze') | translate}}
+    </button>
+    <button type="button" class="bjr-btn small" ng-if="$ctrl.actions.engine !== undefined" ng-click="$ctrl.action($event,'engine')">
+        {{($ctrl.vehicle.shut ? 'beamjoy.window.main.playerlist.actions.start' : 'beamjoy.window.main.playerlist.actions.stop') | translate}}
+    </button>
+    <button type="button" class="bjr-btn small" ng-if="$ctrl.actions.launch !== undefined" ng-click="$ctrl.action($event,'launch')">
+        {{'beamjoy.window.main.playerlist.actions.launch' | translate}}
+    </button>
+    <button type="button" class="bjr-btn small" ng-if="$ctrl.actions.explode !== undefined" ng-click="$ctrl.action($event,'explode')">
+        {{'beamjoy.window.main.playerlist.actions.explode' | translate}}
+    </button>
+    <button type="button" class="bjr-btn small danger" ng-if="$ctrl.actions.delete !== undefined" ng-click="$ctrl.action($event,'delete')">
+        {{'beamjoy.window.main.playerlist.actions.delete' | translate}}
+    </button>
+</span>

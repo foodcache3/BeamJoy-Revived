@@ -1,722 +1,411 @@
 <style>
-    bj-main-races .race-row,
-    bj-main-races .session-row {
-        transition: background-color 0.2s ease-in-out;
+    bj-main-races {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5em;
     }
-    bj-main-races .race-row:hover,
-    bj-main-races .session-row:hover {
-        background-color: rgba(0, 0, 0, 0.15);
+    bj-main-races .races-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5em;
     }
-    bj-main-races .status-panel {
-        background: rgba(0, 0, 0, 0.2);
-        border-radius: 0.4em;
-        padding: 0.6em;
-        margin-bottom: 0.6em;
+    bj-main-races .race-card .top {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5em;
     }
-    bj-main-races .opacity-70 {
-        opacity: 0.7;
-    }
-    /* real, confirmed bug ("vehicle restriction info width issue still persists": the earlier
-       beamjoy-tooltip position:fixed fix was a real, separate bug, but not this one). A plain
-       flex-grow-1 item's min-width defaults to `auto`, meaning it refuses to shrink below the
-       width its content would need laid out on ONE line. A long "Required vehicle:"/"Allowed
-       vehicles:" note (or just a long race name) was pushing this span, and therefore the whole
-       race row and its ancestors, wider than the window instead of wrapping. min-width: 0 lets it
-       actually shrink to the row's available width; overflow-wrap covers the edge case of a
-       single unbroken long word (e.g. a custom vehicle label with no spaces) that would otherwise
-       still overflow even once wrapping is allowed. Scoped to this specific span (not .flex-grow-1
-       globally, and not even every .flex-grow-1 in this file: line ~474's bj-slider also uses it
-       and needs its own natural minimum width preserved).
-    */
-    bj-main-races .race-row-info {
+    /* a flex child's min-width defaults to auto : without this a long race name or vehicle note
+       pushed the whole row wider than the panel instead of wrapping */
+    bj-main-races .race-card .info {
+        flex: 1 1 auto;
         min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15em;
         overflow-wrap: break-word;
     }
-    bj-main-races .start-options table td {
-        padding: 0.2em 0.4em;
+    bj-main-races .race-card .name {
+        font-size: 0.95em;
+        font-weight: 600;
     }
-    /* this panel is a narrow sidebar (unlike the much wider Config window bj-slider is more
-       commonly used in), so the component's own default 0.5em gap between the range input, its
-       value label, and the mode-toggle button reads as noticeably too spaced out here, scoped
-       down rather than changed globally, since it looks fine at the Config window's own width */
-    bj-main-races .start-options bj-slider .slider-row {
+    bj-main-races .icon-btn {
+        width: 2.1em;
+        height: 2.1em;
+        padding: 0;
+    }
+    bj-main-races .icon-btn icon {
+        width: 1.1em;
+        height: 1.1em;
+    }
+    bj-main-races .start-form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8em;
+        margin-top: 0.4em;
+    }
+    bj-main-races .start-form bj-slider .slider-row {
         gap: 0.25em;
     }
-    bj-main-races .player-list {
-        margin-top: 0.4em;
-        padding-top: 0.4em;
-        border-top: thin solid rgba(255, 255, 255, 0.2);
+    bj-main-races .advanced-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.4em;
+        padding: 0.3em 0;
+        background: transparent;
+        border: 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        color: #ff8955;
+        font-size: 0.85em;
+        font-weight: 600;
+        text-align: left;
+        cursor: pointer;
     }
-    /* inline edit-preset shortcut sits inside an "opacity-70 small" text span, not a normal button
-       row: sized down and vertically nudged so it reads as part of that line instead of a full-size
-       button breaking the text flow */
-    bj-main-races .edit-preset-btn {
-        padding: 0.05em 0.3em;
-        vertical-align: middle;
-        margin-left: 0.2em;
+    bj-main-races .advanced {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6em;
     }
-    bj-main-races .edit-preset-btn icon {
-        width: 0.9em;
-        height: 0.9em;
+    bj-main-races .advanced h4 {
+        margin: 0.4em 0 0;
+        font-size: 0.8em;
+        color: #979dad;
     }
-    bj-main-races .player-list .ready {
-        color: #8bc34a;
+    bj-main-races .start-actions {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+        gap: 0.35em;
     }
-    bj-main-races .countdown-badge {
-        font-weight: bold;
-        color: #ffca28;
+    bj-main-races .start-actions.solo-only {
+        grid-template-columns: auto minmax(0, 1fr);
     }
 </style>
 
-<div class="status-panel" ng-if="$ctrl.status">
-    <div class="d-flex align-center gap-1 mb-1">
-        <b class="flex-grow-1">{{$ctrl.status.raceName}}</b>
-        <span
-            class="opacity-70"
-            ng-if="!($ctrl.status.state === 'COUNTDOWN' && $ctrl.countdownSeconds !== null) &&
-                   !($ctrl.status.state === 'GRID' && $ctrl.allReady && $ctrl.status.gridReadySecondsLeft != null) &&
-                   !($ctrl.status.state === 'GRID' && !$ctrl.status.joinable)"
-        >
-            {{('beamjoy.window.main.tabs.races.states.' + $ctrl.status.state) | translate}}
-        </span>
-        <span
-            class="countdown-badge"
-            ng-if="$ctrl.status.state === 'COUNTDOWN' && $ctrl.countdownSeconds !== null"
-        >
-            {{'beamjoy.window.main.tabs.races.startingIn' | translate}} {{$ctrl.countdownSeconds}}s
-        </span>
-        <span
-            class="countdown-badge"
-            ng-if="$ctrl.status.state === 'GRID' && $ctrl.allReady && $ctrl.status.gridReadySecondsLeft != null"
-        >
-            {{'beamjoy.window.main.tabs.races.startingIn' | translate}} {{$ctrl.status.gridReadySecondsLeft}}s
-        </span>
+<!-- IN A RACE : the lobby, the countdown or the race itself (same layout as the convoy lobby) -->
+<section class="bjr-lobby" ng-if="$ctrl.status" aria-label="{{$ctrl.status.raceName}}">
+    <header class="lobby-head">
+        <div>
+            <h3 class="bjr-title">{{$ctrl.status.raceName}}</h3>
+            <span class="bjr-muted">{{$ctrl.lobbyLine()}}</span>
+        </div>
+        <div class="lobby-timer" role="timer" ng-if="$ctrl.lobbyTimer()">
+            <span class="bjr-muted">{{$ctrl.lobbyTimer().label | translate}}</span>
+            <span class="value">{{$ctrl.lobbyTimer().value}}</span>
+        </div>
+        <div class="lobby-timer" ng-if="!$ctrl.lobbyTimer() && $ctrl.status.state !== 'GRID'">
+            <span class="bjr-muted">{{('beamjoy.window.main.tabs.races.states.' + $ctrl.status.state) | translate}}</span>
+        </div>
+    </header>
+
+    <div class="chips">
+        <span class="bjr-chip">{{'beamjoy.window.config.tabs.races.laps' | translate}}: {{$ctrl.status.laps || 1}}</span>
+        <span class="bjr-chip">{{$ctrl.vehicleChip()}}</span>
+        <span class="bjr-chip">{{('beamjoy.window.config.tabs.races.respawnStrategies.' + $ctrl.status.respawnStrategy) | translate}}</span>
     </div>
-    <div
-        class="opacity-70 small mb-1"
-        ng-if="$ctrl.status.state === 'GRID' && !$ctrl.allReady && $ctrl.status.gridTimeoutSecondsLeft != null"
-    >
-        {{'beamjoy.window.main.tabs.races.lobbyClosesIn' | translate}} {{$ctrl.status.gridTimeoutSecondsLeft}}s
-    </div>
-    <div class="d-flex align-center gap-1">
-        <!-- solo (non-joinable) attempts have nobody else who could ever join, so a "1/1 joined"
-             count (and the player-list dropdown it opens) is meaningless clutter there -->
-        <span
-            ng-if="$ctrl.status.joinable"
-            class="flex-grow-1 opacity-70 cursor-pointer"
-            ng-click="$ctrl.togglePlayers($event)"
-        >
-            {{$ctrl.status.participantCount}}/{{$ctrl.status.maxParticipants}}
-            {{'beamjoy.window.main.tabs.races.joined' | translate}}
-            {{$ctrl.showPlayers ? '▲' : '▼'}}
-        </span>
-        <span ng-if="!$ctrl.status.joinable" class="flex-grow-1"></span>
-        <button
-            class="btn info"
-            title="{{$ctrl.statusInfoText()}}"
-            ng-click="$ctrl.openRaceInfo($event)"
-        >
-            {{'beamjoy.window.main.tabs.races.raceInfo.info' | translate}}
+
+    <!-- the grid, by slot, then the free slots. "manual" placement lets the leader move players
+         while the lobby is open (picking a taken slot swaps the two) ; `value` is bj-select's
+         freshly picked slot, player.gridSlot is still the old one at ng-change time -->
+    <ol class="slots" ng-if="$ctrl.status.joinable">
+        <li ng-repeat="slot in $ctrl.slots track by slot.key" ng-class="{open: slot.open}">
+            <span class="num">{{slot.num}}</span>
+            <span class="who" ng-if="!slot.open">
+                <span class="n">
+                    <svg ng-if="$ctrl.isLeader(slot.player)" role="img" aria-label="{{'beamjoy.window.main.tabs.races.leader' | translate}}"
+                        width="14" height="14" viewBox="0 0 16 16" fill="#ffc768" style="flex-shrink: 0">
+                        <title>{{'beamjoy.window.main.tabs.races.leader' | translate}}</title>
+                        <path d="M2 5.5l3.2 2.6L8 3l2.8 5.1L14 5.5l-1.3 7H3.3L2 5.5z"></path>
+                    </svg>
+                    {{slot.player.displayName || slot.player.playerName}}
+                </span>
+                <span class="bjr-muted" ng-if="slot.player.vehicleModel">{{slot.player.vehicleModel}}</span>
+            </span>
+            <span class="who" ng-if="slot.open">
+                <span class="n">{{'beamjoy.window.main.tabs.races.openSlot' | translate}}</span>
+                <span class="bjr-muted">{{'beamjoy.window.main.tabs.races.openSlotDetail' | translate}}</span>
+            </span>
+            <span style="display: flex; align-items: center; gap: 0.3em" ng-if="!slot.open">
+                <bj-select
+                    ng-if="$ctrl.status.placementMode === 'manual' && $ctrl.status.isStarter && $ctrl.status.state === 'GRID'"
+                    ng-model="slot.player.gridSlot"
+                    options="$ctrl.gridSlotOptions"
+                    ng-change="$ctrl.setGridSlot(slot.player, value)"
+                    title="{{'beamjoy.window.main.tabs.races.gridSlot.tooltip' | translate}}"
+                ></bj-select>
+                <span class="bjr-chip" ng-class="{ready: slot.player.ready}" ng-if="$ctrl.status.state === 'GRID'">
+                    {{(slot.player.ready ? 'beamjoy.window.main.tabs.races.ready' : 'beamjoy.window.main.tabs.races.unready') | translate}}
+                </span>
+            </span>
+            <span class="bjr-chip" ng-if="slot.open" style="background: transparent">{{'beamjoy.window.main.tabs.races.open' | translate}}</span>
+        </li>
+    </ol>
+
+    <p class="note" ng-if="$ctrl.status.state === 'GRID' && $ctrl.status.joinable">{{'beamjoy.window.main.tabs.races.lobbyNote' | translate}}</p>
+
+    <div class="controls" aria-label="{{'beamjoy.delivery.controls' | translate}}">
+        <button type="button" class="bjr-btn primary" data-pad-a ng-if="$ctrl.status.state === 'GRID'"
+            ng-click="$ctrl.setReady($event, !$ctrl.status.ready)">
+            <span class="bjr-glyph" aria-hidden="true">A</span>{{($ctrl.status.ready ? 'beamjoy.window.main.tabs.races.imNotReady' : 'beamjoy.window.main.tabs.races.imReady') | translate}}
         </button>
-        <button
-            class="btn success"
-            ng-if="$ctrl.status.state === 'GRID' && !$ctrl.status.ready"
-            ng-click="$ctrl.setReady($event, true)"
-        >
-            {{'beamjoy.window.main.tabs.races.ready' | translate}}
-        </button>
-        <button
-            class="btn warning"
-            ng-if="$ctrl.status.state === 'GRID' && $ctrl.status.ready"
-            ng-click="$ctrl.setReady($event, false)"
-        >
-            {{'beamjoy.window.main.tabs.races.unready' | translate}}
-        </button>
-        <button
-            class="btn warning"
-            ng-if="$ctrl.status.state === 'RACE' && !$ctrl.status.finished && !$ctrl.status.dnf"
-            ng-click="$ctrl.retire($event)"
-            title="{{'beamjoy.window.main.tabs.races.retire.tooltip' | translate}}"
-        >
+        <button type="button" class="bjr-btn" data-pad-a ng-if="$ctrl.status.state === 'RACE' && !$ctrl.status.finished && !$ctrl.status.dnf"
+            ng-click="$ctrl.retire($event)" title="{{'beamjoy.window.main.tabs.races.retire.tooltip' | translate}}">
             {{'beamjoy.window.main.tabs.races.retire' | translate}}
         </button>
-        <button
-            class="btn danger"
+        <button type="button" class="bjr-btn" data-pad-x ng-click="$ctrl.openRaceInfo($event)" title="{{$ctrl.statusInfoText()}}">
+            <span class="bjr-glyph" aria-hidden="true">X</span>{{'beamjoy.window.main.tabs.races.raceInfo.info' | translate}}
+        </button>
+        <button type="button" class="bjr-btn danger"
             ng-if="$ctrl.status.isStarter && ($ctrl.status.state === 'GRID' || $ctrl.status.participantCount <= 1)"
-            ng-click="$ctrl.cancelSession($event)"
-        >
+            ng-click="$ctrl.cancelSession($event)">
             {{'beamjoy.window.main.tabs.races.cancelSession' | translate}}
         </button>
-        <button
-            class="btn info"
-            ng-click="$ctrl.leaveSession($event)"
-        >
+        <button type="button" class="bjr-btn ghost" ng-click="$ctrl.leaveSession($event)">
             {{'beamjoy.window.main.tabs.races.leaveSession' | translate}}
         </button>
     </div>
-    <div class="player-list" ng-if="$ctrl.showPlayers">
-        <div
-            class="d-flex align-center gap-1"
-            ng-repeat="player in $ctrl.status.participants track by player.playerID"
-        >
-            <!-- "manual" placement: the host rearranges slots right here while the lobby is
-                 still open (picking a taken slot swaps the two players server-side); everyone
-                 else just sees each player's assigned slot number. `value` is the freshly picked
-                 slot, exposed by bj-select's own ng-change locals: player.gridSlot itself is
-                 still the OLD value at this instant (the two-way binding write-back runs later
-                 in the digest), which is exactly the stale-send bug this replaced. track by
-                 playerID keeps these rows (and an open dropdown) alive across the once-a-second
-                 lobby-countdown status pushes instead of rebuilding the whole list each tick -->
-            <bj-select
-                ng-if="$ctrl.status.placementMode === 'manual' && $ctrl.status.isStarter && $ctrl.status.state === 'GRID'"
-                ng-model="player.gridSlot"
-                options="$ctrl.gridSlotOptions"
-                ng-change="$ctrl.setGridSlot(player, value)"
-                title="{{'beamjoy.window.main.tabs.races.gridSlot.tooltip' | translate}}"
-            ></bj-select>
-            <span
-                ng-if="$ctrl.status.placementMode === 'manual' && !($ctrl.status.isStarter && $ctrl.status.state === 'GRID') && player.gridSlot"
-                class="opacity-70 small"
-                title="{{'beamjoy.window.main.tabs.races.gridSlot.tooltip' | translate}}"
-            >
-                #{{player.gridSlot}}
-            </span>
-            <span class="flex-grow-1">
-                {{player.displayName || player.playerName}}
-                <span ng-if="player.vehicleModel" class="small opacity-70">({{player.vehicleModel}})</span>
-            </span>
-            <span ng-if="player.ready" class="ready small">
-                {{'beamjoy.window.main.tabs.races.ready' | translate}}
-            </span>
-            <span ng-if="!player.ready" class="opacity-70 small">
-                {{'beamjoy.window.main.tabs.races.unready' | translate}}
-            </span>
-        </div>
-    </div>
-    <!-- "pool" re-enabled: the paint picker's own swatch list now re-requests itself whenever the
-    player's local vehicle actually changes (see raceRunner.lua's onBJVehicleInstantiated), which
-    covers a pool racer switching between pool entries via the native selector before readying up.
-    Was briefly restricted to "single" only, over a stale-swatch-list concern now fixed instead. -->
-    <div
-        class="player-list"
-        ng-if="$ctrl.status.vehicleRestrictionMode !== 'free' && $ctrl.status.state === 'GRID'"
-    >
-        <div class="d-flex align-center gap-1 cursor-pointer" ng-click="$ctrl.togglePaint($event)">
-            <span class="flex-grow-1 opacity-70">
-                {{'beamjoy.window.main.tabs.races.paint.title' | translate}}
-                {{$ctrl.showPaint ? '▲' : '▼'}}
-            </span>
-        </div>
-        <bj-race-paint-picker ng-if="$ctrl.showPaint"></bj-race-paint-picker>
-    </div>
-</div>
 
-<div class="status-panel" ng-if="$ctrl.spectateStatus && !$ctrl.status">
-    <div class="d-flex align-center gap-1">
-        <span class="opacity-70">{{'beamjoy.window.main.tabs.races.spectating' | translate}}</span>
-        <b class="flex-grow-1">{{$ctrl.spectateStatus.raceName}}</b>
-        <button
-            class="btn info"
-            ng-click="$ctrl.openRaceInfo($event)"
-        >
+    <div class="extras">
+        <button type="button" class="bjr-btn small ghost" ng-if="$ctrl.status.vehicleRestrictionMode !== 'free' && $ctrl.status.state === 'GRID'"
+            ng-click="$ctrl.togglePaint($event)" aria-expanded="{{$ctrl.showPaint}}">
+            {{'beamjoy.window.main.tabs.races.paint.title' | translate}} {{$ctrl.showPaint ? '▲' : '▼'}}
+        </button>
+        <button type="button" class="bjr-btn small ghost" ng-click="$ctrl.openStatusLeaderboard($event)">
+            {{'beamjoy.window.main.tabs.races.leaderboard.title' | translate}}
+        </button>
+    </div>
+    <bj-race-paint-picker ng-if="$ctrl.showPaint && $ctrl.status.vehicleRestrictionMode !== 'free' && $ctrl.status.state === 'GRID'"></bj-race-paint-picker>
+</section>
+
+<!-- WATCHING someone else's race -->
+<section class="bjr-card hot" ng-if="$ctrl.spectateStatus && !$ctrl.status">
+    <span class="bjr-muted">{{'beamjoy.window.main.tabs.races.spectating' | translate}}</span>
+    <h3 class="bjr-title" style="font-size: 1.1em">{{$ctrl.spectateStatus.raceName}}</h3>
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.35em">
+        <button type="button" class="bjr-btn" ng-click="$ctrl.openRaceInfo($event)">
             {{'beamjoy.window.main.tabs.races.raceInfo.info' | translate}}
         </button>
-        <button class="btn danger" ng-click="$ctrl.stopSpectating($event)">
+        <button type="button" class="bjr-btn danger" ng-click="$ctrl.stopSpectating($event)">
             {{'beamjoy.window.main.tabs.races.stopSpectating' | translate}}
         </button>
     </div>
-</div>
+</section>
 
-<div ng-if="!$ctrl.status && !$ctrl.spectateStatus">
-    <!-- only one category exists today ; structured as one so more activity types (deliveries,
-         traffic jobs, etc.) can slot in alongside racing later without a redesign -->
-    <div class="d-flex align-center gap-1 mb-1">
-        <h4 class="flex-grow-1">{{'beamjoy.window.main.tabs.races.category.racing' | translate}}</h4>
-        <button
-            class="btn info"
-            ng-if="$ctrl.canEditRaces()"
-            ng-click="$ctrl.openRaceEditor($event)"
-            title="{{'beamjoy.window.main.tabs.races.editRaces.tooltip' | translate}}"
-        >
+<!-- FREE : pick a race -->
+<div ng-if="!$ctrl.status && !$ctrl.spectateStatus" style="display: flex; flex-direction: column; gap: 0.4em">
+    <div class="races-head" ng-if="!$ctrl.startingId">
+        <span class="bjr-muted">{{'beamjoy.window.main.tabs.races.pickRace' | translate}}</span>
+        <button type="button" class="bjr-btn small ghost" ng-if="$ctrl.canEditRaces()" ng-click="$ctrl.openRaceEditor($event)"
+            title="{{'beamjoy.window.main.tabs.races.editRaces.tooltip' | translate}}">
             {{'beamjoy.window.main.tabs.races.editRaces' | translate}}
         </button>
     </div>
-    <div ng-if="$ctrl.sessions.length > 0 && !$ctrl.startingId" class="mb-2">
-        <div class="opacity-70 mb-1">{{'beamjoy.window.main.tabs.races.openSessions' | translate}}</div>
-        <div
-            class="session-row d-flex p-1 px-2 gap-1 align-center"
-            ng-repeat="session in $ctrl.sessions track by session.id"
-        >
-            <span class="flex-grow-1">
-                {{session.raceName}}
-                <span class="opacity-70 small">
-                    ({{session.starterName}}, {{session.participantCount}}/{{session.maxParticipants}})
-                    <span ng-if="session.state !== 'GRID'">
-                        · {{('beamjoy.window.main.tabs.races.states.' + session.state) | translate}}
-                    </span>
-                </span>
-            </span>
-            <button
-                class="btn success"
-                ng-if="session.state === 'GRID'"
-                ng-click="$ctrl.joinSession($event, session)"
-            >
-                {{'beamjoy.window.main.tabs.races.join' | translate}}
-            </button>
-            <button
-                class="btn info"
-                ng-if="session.state !== 'GRID'"
-                ng-click="$ctrl.spectateSession($event, session)"
-            >
-                {{'beamjoy.window.main.tabs.races.spectate' | translate}}
-            </button>
-        </div>
-    </div>
 
-    <div
-        class="race-row d-flex flex-column p-1 px-2 gap-1"
-        ng-repeat="race in $ctrl.races track by race.id"
-        ng-if="!$ctrl.startingId || $ctrl.startingId === race.id"
-    >
-        <div class="d-flex align-center gap-1">
-            <span class="flex-grow-1 race-row-info">
-                {{race.name}}
-                <span class="opacity-70 small">
-                    · {{race.startPositions}} {{'beamjoy.window.main.tabs.races.slots' | translate}}
-                    · {{$ctrl.formatDistance(race.distance)}}
-                    · {{'beamjoy.window.config.tabs.races.author' | translate}}
-                    {{race.author || ('beamjoy.window.config.tabs.races.unknownAuthor' | translate)}}
+    <div class="bjr-card race-card" ng-repeat="race in $ctrl.races track by race.id"
+        ng-if="!$ctrl.startingId || $ctrl.startingId === race.id" ng-class="{hot: $ctrl.startingId === race.id}">
+        <div class="top">
+            <span class="info">
+                <span class="name">{{race.name}}</span>
+                <span class="bjr-muted">{{$ctrl.raceMeta(race)}}</span>
+                <span class="bjr-muted" ng-if="race.vehicleRestrictionMode === 'single'">
+                    {{'beamjoy.window.main.tabs.races.vehicleRestriction.required' | translate}} {{race.vehicleRestrictionLabel}}
                 </span>
-                <br ng-if="race.vehicleRestrictionMode !== 'free'" />
-                <span class="opacity-70 small" ng-if="race.vehicleRestrictionMode === 'single'">
-                    {{'beamjoy.window.main.tabs.races.vehicleRestriction.required' | translate}}
-                    {{race.vehicleRestrictionLabel}}
-                </span>
-                <span class="opacity-70 small" ng-if="race.vehicleRestrictionMode === 'pool'">
+                <span class="bjr-muted" ng-if="race.vehicleRestrictionMode === 'pool'">
                     {{'beamjoy.window.main.tabs.races.vehicleRestriction.pool' | translate}}
                     {{$ctrl.poolLabel(race.vehicleRestrictionPoolPresetId)}}
                     (<span title="{{$ctrl.poolTooltip(race.vehicleRestrictionPoolPresetId)}}">{{$ctrl.poolCount(race.vehicleRestrictionPoolPresetId)}}</span>)
-                    <button
-                        class="btn info edit-preset-btn"
-                        ng-if="$ctrl.canEditVehiclePresets()"
-                        ng-click="$ctrl.openVehiclePresets($event)"
-                        title="{{'beamjoy.window.main.tabs.races.vehicleRestriction.editPreset.tooltip' | translate}}"
-                    >
-                        <icon name="settings"></icon>
-                    </button>
                 </span>
             </span>
-            <button
-                class="btn info"
-                title="{{'beamjoy.window.main.tabs.races.leaderboard.title' | translate}}"
-                ng-click="$ctrl.openLeaderboard($event, race)"
-            >
+            <button type="button" class="btn icon-btn" ng-click="$ctrl.openLeaderboard($event, race)"
+                aria-label="{{'beamjoy.window.main.tabs.races.leaderboard.title' | translate}}"
+                title="{{'beamjoy.window.main.tabs.races.leaderboard.title' | translate}}">
                 <icon name="leaderboard"></icon>
             </button>
-            <button
-                class="btn success"
-                ng-if="$ctrl.startingId !== race.id"
-                title="{{'beamjoy.window.main.tabs.races.start' | translate}}"
-                ng-click="$ctrl.openStart($event, race)"
-            >
-                <icon name="play"></icon>
+            <button type="button" class="bjr-btn primary" ng-if="$ctrl.startingId !== race.id" ng-click="$ctrl.openStart($event, race)">
+                {{'beamjoy.window.main.tabs.races.start' | translate}}
             </button>
         </div>
-        <div class="start-options" ng-if="$ctrl.startingId === race.id">
-            <table class="w-100">
-                <!-- topmost, per direct request : the single most consequential option in this
-                     whole panel (solo/private vs a real multiplayer lobby others can join), so it
-                     should be the first thing seen, not buried after every restriction option -->
-                <tr ng-if="race.startPositions > 1">
-                    <td
-                        class="text-right"
-                        title="{{'beamjoy.window.config.tabs.races.joinable.tooltip' | translate}}"
-                    >
-                        {{'beamjoy.window.config.tabs.races.joinable' | translate}}
-                    </td>
-                    <td><bj-toggle ng-model="$ctrl.startOptions.joinable"></bj-toggle></td>
-                </tr>
-                <!-- grid placement only ever matters with more than one participant, i.e. a real
-                     multiplayer lobby, so it's hidden (not just ignored) for a solo start -->
-                <tr ng-if="race.startPositions > 1 && $ctrl.startOptions.joinable">
-                    <td
-                        class="text-right"
-                        title="{{'beamjoy.window.config.tabs.races.placementMode.tooltip' | translate}}"
-                    >
+
+        <div class="start-form" ng-if="$ctrl.startingId === race.id">
+            <div class="bjr-field" ng-if="race.loopable">
+                <span class="name">{{'beamjoy.window.config.tabs.races.laps' | translate}}</span>
+                <bj-slider ng-model="$ctrl.startOptions.laps" min="1" max="20" hard-max="500" step="1"></bj-slider>
+            </div>
+
+            <div class="bjr-field">
+                <span class="name" title="{{'beamjoy.window.main.tabs.races.vehicleRestriction.startMode.tooltip' | translate}}">
+                    {{'beamjoy.window.main.tabs.races.vehicleRestriction.startMode' | translate}}
+                </span>
+                <div class="bjr-seg">
+                    <button type="button" ng-if="race.vehicleRestrictionMode !== 'free'"
+                        ng-class="{on: $ctrl.startOptions.vehicleRestrictionMode === 'raceDefined'}"
+                        ng-click="$ctrl.startOptions.vehicleRestrictionMode = 'raceDefined'">
+                        {{'beamjoy.window.main.tabs.races.vehicleRestriction.raceDefined' | translate}}
+                    </button>
+                    <button type="button" ng-class="{on: $ctrl.startOptions.vehicleRestrictionMode === 'free'}"
+                        ng-click="$ctrl.startOptions.vehicleRestrictionMode = 'free'">
+                        {{'beamjoy.window.config.tabs.races.vehicleRestriction.modes.free' | translate}}
+                    </button>
+                    <button type="button" ng-class="{on: $ctrl.startOptions.vehicleRestrictionMode === 'single'}"
+                        ng-click="$ctrl.startOptions.vehicleRestrictionMode = 'single'"
+                        title="{{'beamjoy.window.main.tabs.races.vehicleRestriction.singleNote' | translate}}">
+                        {{'beamjoy.window.config.tabs.races.vehicleRestriction.modes.single' | translate}}
+                    </button>
+                    <button type="button" ng-class="{on: $ctrl.startOptions.vehicleRestrictionMode === 'pool'}"
+                        ng-click="$ctrl.startOptions.vehicleRestrictionMode = 'pool'">
+                        {{'beamjoy.window.config.tabs.races.vehicleRestriction.modes.pool' | translate}}
+                    </button>
+                </div>
+                <span class="bjr-muted" ng-if="$ctrl.startOptions.vehicleRestrictionMode === 'raceDefined' && race.vehicleRestrictionMode === 'single'">
+                    {{'beamjoy.window.main.tabs.races.vehicleRestriction.required' | translate}} {{race.vehicleRestrictionLabel}}
+                </span>
+                <span class="bjr-muted" ng-if="$ctrl.startOptions.vehicleRestrictionMode === 'raceDefined' && race.vehicleRestrictionMode === 'pool'">
+                    {{'beamjoy.window.main.tabs.races.vehicleRestriction.pool' | translate}}
+                    {{$ctrl.poolLabel(race.vehicleRestrictionPoolPresetId)}}
+                    (<span title="{{$ctrl.poolTooltip(race.vehicleRestrictionPoolPresetId)}}">{{$ctrl.poolCount(race.vehicleRestrictionPoolPresetId)}}</span>)
+                </span>
+                <div ng-if="$ctrl.startOptions.vehicleRestrictionMode === 'pool'" style="display: flex; align-items: center; gap: 0.4em">
+                    <bj-select ng-model="$ctrl.startOptions.vehicleRestrictionPoolPresetId" options="$ctrl.vehiclePresetOptions"></bj-select>
+                    <span class="bjr-muted" ng-if="$ctrl.startOptions.vehicleRestrictionPoolPresetId"
+                        title="{{$ctrl.poolTooltip($ctrl.startOptions.vehicleRestrictionPoolPresetId)}}">
+                        ({{$ctrl.poolCount($ctrl.startOptions.vehicleRestrictionPoolPresetId)}})
+                    </span>
+                    <button type="button" class="bjr-btn small ghost" ng-if="$ctrl.canEditVehiclePresets()" ng-click="$ctrl.openVehiclePresets($event)"
+                        title="{{'beamjoy.window.main.tabs.races.vehicleRestriction.editPreset.tooltip' | translate}}">
+                        {{'beamjoy.window.main.tabs.races.vehicleRestriction.editPreset' | translate}}
+                    </button>
+                </div>
+            </div>
+
+            <div class="bjr-field">
+                <span class="name">{{'beamjoy.window.config.tabs.races.respawnStrategy' | translate}}</span>
+                <div class="bjr-seg">
+                    <button type="button" ng-repeat="strategy in $ctrl.RESPAWN_STRATEGIES"
+                        ng-class="{on: $ctrl.startOptions.respawnStrategy === strategy}"
+                        ng-click="$ctrl.startOptions.respawnStrategy = strategy">
+                        {{('beamjoy.window.config.tabs.races.respawnStrategies.' + strategy) | translate}}
+                    </button>
+                </div>
+            </div>
+
+            <button type="button" class="advanced-toggle" ng-click="$ctrl.toggleAdvanced()" aria-expanded="{{$ctrl.showAdvanced}}">
+                {{'beamjoy.window.main.tabs.races.advanced' | translate}} {{$ctrl.showAdvanced ? '▲' : '▼'}}
+            </button>
+            <div class="advanced" ng-if="$ctrl.showAdvanced">
+                <h4>{{'beamjoy.window.main.tabs.races.sections.lobby' | translate}}</h4>
+                <div class="bjr-field" ng-if="race.startPositions > 1">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.placementMode.tooltip' | translate}}">
                         {{'beamjoy.window.config.tabs.races.placementMode' | translate}}
-                    </td>
-                    <td>
-                        <div class="d-flex gap-1 flex-wrap">
-                            <button
-                                ng-repeat="mode in $ctrl.PLACEMENT_MODES"
-                                class="btn info"
-                                ng-class="{success: $ctrl.startOptions.placementMode === mode}"
-                                ng-click="$ctrl.startOptions.placementMode = mode"
-                            >
-                                {{('beamjoy.window.config.tabs.races.placementModes.' + mode) | translate}}
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-                <tr>
-                    <td
-                        class="text-right"
-                        title="{{'beamjoy.window.main.tabs.races.vehicleRestriction.startMode.tooltip' | translate}}"
-                    >
-                        {{'beamjoy.window.main.tabs.races.vehicleRestriction.startMode' | translate}}
-                    </td>
-                    <td>
-                        <div class="d-flex gap-1 flex-wrap">
-                            <button
-                                class="btn info"
-                                ng-class="{success: $ctrl.startOptions.vehicleRestrictionMode === 'free'}"
-                                ng-click="$ctrl.startOptions.vehicleRestrictionMode = 'free'"
-                            >
-                                {{'beamjoy.window.config.tabs.races.vehicleRestriction.modes.free' | translate}}
-                            </button>
-                            <button
-                                class="btn info"
-                                ng-class="{success: $ctrl.startOptions.vehicleRestrictionMode === 'single'}"
-                                ng-click="$ctrl.startOptions.vehicleRestrictionMode = 'single'"
-                                title="{{'beamjoy.window.main.tabs.races.vehicleRestriction.singleNote' | translate}}"
-                            >
-                                {{'beamjoy.window.config.tabs.races.vehicleRestriction.modes.single' | translate}}
-                            </button>
-                            <button
-                                class="btn info"
-                                ng-class="{success: $ctrl.startOptions.vehicleRestrictionMode === 'pool'}"
-                                ng-click="$ctrl.startOptions.vehicleRestrictionMode = 'pool'"
-                            >
-                                {{'beamjoy.window.config.tabs.races.vehicleRestriction.modes.pool' | translate}}
-                            </button>
-                            <button
-                                class="btn info"
-                                ng-if="race.vehicleRestrictionMode !== 'free'"
-                                ng-class="{success: $ctrl.startOptions.vehicleRestrictionMode === 'raceDefined'}"
-                                ng-click="$ctrl.startOptions.vehicleRestrictionMode = 'raceDefined'"
-                            >
-                                {{'beamjoy.window.main.tabs.races.vehicleRestriction.raceDefined' | translate}}
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-                <tr ng-if="$ctrl.startOptions.vehicleRestrictionMode === 'raceDefined' && race.vehicleRestrictionMode === 'single'">
-                    <td class="text-right">
-                        {{'beamjoy.window.main.tabs.races.vehicleRestriction.required' | translate}}
-                    </td>
-                    <td>{{race.vehicleRestrictionLabel}}</td>
-                </tr>
-                <tr ng-if="$ctrl.startOptions.vehicleRestrictionMode === 'raceDefined' && race.vehicleRestrictionMode === 'pool'">
-                    <td class="text-right">
-                        {{'beamjoy.window.main.tabs.races.vehicleRestriction.pool' | translate}}
-                    </td>
-                    <td>
-                        {{$ctrl.poolLabel(race.vehicleRestrictionPoolPresetId)}}
-                        (<span title="{{$ctrl.poolTooltip(race.vehicleRestrictionPoolPresetId)}}">{{$ctrl.poolCount(race.vehicleRestrictionPoolPresetId)}}</span>)
-                        <button
-                            class="btn info edit-preset-btn"
-                            ng-if="$ctrl.canEditVehiclePresets()"
-                            ng-click="$ctrl.openVehiclePresets($event)"
-                            title="{{'beamjoy.window.main.tabs.races.vehicleRestriction.editPreset.tooltip' | translate}}"
-                        >
-                            <icon name="settings"></icon>
+                    </span>
+                    <div class="bjr-seg">
+                        <button type="button" ng-repeat="mode in $ctrl.PLACEMENT_MODES"
+                            ng-class="{on: $ctrl.startOptions.placementMode === mode}"
+                            ng-click="$ctrl.startOptions.placementMode = mode">
+                            {{('beamjoy.window.config.tabs.races.placementModes.' + mode) | translate}}
                         </button>
-                    </td>
-                </tr>
-                <tr ng-if="$ctrl.startOptions.vehicleRestrictionMode === 'pool'">
-                    <td
-                        class="text-right"
-                        title="{{'beamjoy.window.main.tabs.races.vehicleRestriction.pool.tooltip' | translate}}"
-                    >
-                        {{'beamjoy.window.main.tabs.races.vehicleRestriction.pool' | translate}}
-                    </td>
-                    <td>
-                        <bj-select
-                            ng-model="$ctrl.startOptions.vehicleRestrictionPoolPresetId"
-                            options="$ctrl.vehiclePresetOptions"
-                        ></bj-select>
-                        <span
-                            ng-if="$ctrl.startOptions.vehicleRestrictionPoolPresetId"
-                            class="opacity-70 small"
-                            title="{{$ctrl.poolTooltip($ctrl.startOptions.vehicleRestrictionPoolPresetId)}}"
-                        >
-                            ({{$ctrl.poolCount($ctrl.startOptions.vehicleRestrictionPoolPresetId)}})
-                        </span>
-                        <button
-                            class="btn info edit-preset-btn"
-                            ng-if="$ctrl.canEditVehiclePresets()"
-                            ng-click="$ctrl.openVehiclePresets($event)"
-                            title="{{'beamjoy.window.main.tabs.races.vehicleRestriction.editPreset.tooltip' | translate}}"
-                        >
-                            <icon name="settings"></icon>
-                        </button>
-                    </td>
-                </tr>
-                <tr ng-if="$ctrl.startOptions.vehicleRestrictionMode === 'pool' || ($ctrl.startOptions.vehicleRestrictionMode === 'raceDefined' && race.vehicleRestrictionMode === 'pool')">
-                    <td
-                        class="text-right"
-                        title="{{'beamjoy.window.config.tabs.races.vehicleRestriction.randomizeVehiclePool.tooltip' | translate}}"
-                    >
-                        {{'beamjoy.window.config.tabs.races.vehicleRestriction.randomizeVehiclePool' | translate}}
-                    </td>
-                    <td><bj-toggle ng-model="$ctrl.startOptions.randomizeVehiclePool"></bj-toggle></td>
-                </tr>
-                <tr ng-if="$ctrl.startOptions.vehicleRestrictionMode !== 'free'">
-                    <td
-                        class="text-right"
-                        title="{{'beamjoy.window.config.tabs.races.vehicleRestriction.allowTuning.tooltip' | translate}}"
-                    >
-                        {{'beamjoy.window.config.tabs.races.vehicleRestriction.allowTuning' | translate}}
-                    </td>
-                    <td><bj-toggle ng-model="$ctrl.startOptions.allowTuning"></bj-toggle></td>
-                </tr>
-                <tr>
-                    <td class="text-right">
-                        {{'beamjoy.window.config.tabs.races.respawnStrategy' | translate}}
-                    </td>
-                    <td>
-                        <div class="d-flex gap-1 flex-wrap">
-                            <button
-                                ng-repeat="strategy in $ctrl.RESPAWN_STRATEGIES"
-                                class="btn info"
-                                ng-class="{success: $ctrl.startOptions.respawnStrategy === strategy}"
-                                ng-click="$ctrl.startOptions.respawnStrategy = strategy"
-                            >
-                                {{('beamjoy.window.config.tabs.races.respawnStrategies.' + strategy) | translate}}
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-                <tr ng-if="race.startPositions > 1">
-                    <td
-                        class="text-right"
-                        title="{{'beamjoy.window.config.tabs.races.autoSpectateOnFinish.tooltip' | translate}}"
-                    >
-                        {{'beamjoy.window.config.tabs.races.autoSpectateOnFinish' | translate}}
-                    </td>
-                    <td><bj-toggle ng-model="$ctrl.startOptions.autoSpectateOnFinish"></bj-toggle></td>
-                </tr>
-                <tr ng-if="race.loopable">
-                    <td class="text-right">{{'beamjoy.window.config.tabs.races.laps' | translate}}</td>
-                    <td>
-                        <bj-slider ng-model="$ctrl.startOptions.laps" min="1" max="20" hard-max="500" step="1"></bj-slider>
-                    </td>
-                </tr>
-                <tr>
-                    <td
-                        class="text-right"
-                        title="{{'beamjoy.window.config.tabs.races.dnfEnabled.tooltip' | translate}}"
-                    >
-                        {{'beamjoy.window.config.tabs.races.dnfEnabled' | translate}}
-                    </td>
-                    <td><bj-toggle ng-model="$ctrl.startOptions.dnfEnabled"></bj-toggle></td>
-                </tr>
-                <tr ng-if="$ctrl.startOptions.dnfEnabled">
-                    <td
-                        class="text-right"
-                        title="{{'beamjoy.window.config.tabs.races.dnfTimeout.tooltip' | translate}}"
-                    >
-                        {{'beamjoy.window.config.tabs.races.dnfTimeout' | translate}}
-                    </td>
-                    <td>
-                        <bj-slider ng-model="$ctrl.startOptions.dnfTimeout" min="3" max="60" hard-max="600" step="1"></bj-slider>
-                    </td>
-                </tr>
-                <tr ng-if="$ctrl.startOptions.respawnStrategy !== 'norespawn'">
-                    <td
-                        class="text-right"
-                        title="{{'beamjoy.window.config.tabs.races.resetPenaltyEnabled.tooltip' | translate}}"
-                    >
-                        {{'beamjoy.window.config.tabs.races.resetPenaltyEnabled' | translate}}
-                    </td>
-                    <td><bj-toggle ng-model="$ctrl.startOptions.resetPenaltyEnabled"></bj-toggle></td>
-                </tr>
-                <tr ng-if="$ctrl.startOptions.respawnStrategy !== 'norespawn' && $ctrl.startOptions.resetPenaltyEnabled">
-                    <td
-                        class="text-right"
-                        title="{{'beamjoy.window.config.tabs.races.resetPenaltySeconds.tooltip' | translate}}"
-                    >
-                        {{'beamjoy.window.config.tabs.races.resetPenaltySeconds' | translate}}
-                    </td>
-                    <td>
-                        <bj-slider ng-model="$ctrl.startOptions.resetPenaltySeconds" min="1" max="30" hard-max="600" step="1"></bj-slider>
-                    </td>
-                </tr>
-            </table>
+                    </div>
+                </div>
+                <div class="bjr-toggle-row" ng-if="race.startPositions > 1">
+                    <span title="{{'beamjoy.window.config.tabs.races.autoSpectateOnFinish.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.autoSpectateOnFinish' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.autoSpectateOnFinish"></bj-toggle>
+                </div>
+                <div class="bjr-toggle-row" ng-if="$ctrl.startOptions.vehicleRestrictionMode === 'pool' || ($ctrl.startOptions.vehicleRestrictionMode === 'raceDefined' && race.vehicleRestrictionMode === 'pool')">
+                    <span title="{{'beamjoy.window.config.tabs.races.vehicleRestriction.randomizeVehiclePool.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.vehicleRestriction.randomizeVehiclePool' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.randomizeVehiclePool"></bj-toggle>
+                </div>
+                <div class="bjr-toggle-row" ng-if="$ctrl.startOptions.vehicleRestrictionMode !== 'free'">
+                    <span title="{{'beamjoy.window.config.tabs.races.vehicleRestriction.allowTuning.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.vehicleRestriction.allowTuning' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.allowTuning"></bj-toggle>
+                </div>
 
-            <bj-accordion id="start-options-ghosting" no-border-bottom="true">
-                <accordion-title>
-                    <span>{{'beamjoy.window.main.tabs.races.sections.ghosting' | translate}}</span>
-                </accordion-title>
-                <accordion-content>
-                    <table class="w-100">
-                        <tr>
-                            <td
-                                class="text-right"
-                                title="{{'beamjoy.window.config.tabs.races.ghostOnCountdown.tooltip' | translate}}"
-                            >
-                                {{'beamjoy.window.config.tabs.races.ghostOnCountdown' | translate}}
-                            </td>
-                            <td><bj-toggle ng-model="$ctrl.startOptions.ghostOnCountdown"></bj-toggle></td>
-                        </tr>
-                        <tr>
-                            <td
-                                class="text-right"
-                                title="{{'beamjoy.window.config.tabs.races.disableCollisions.tooltip' | translate}}"
-                            >
-                                {{'beamjoy.window.config.tabs.races.disableCollisions' | translate}}
-                            </td>
-                            <td><bj-toggle ng-model="$ctrl.startOptions.disableCollisions"></bj-toggle></td>
-                        </tr>
-                        <tr ng-if="race.loopable">
-                            <td
-                                class="text-right"
-                                title="{{'beamjoy.window.config.tabs.races.ghostBackmarkers.tooltip' | translate}}"
-                            >
-                                {{'beamjoy.window.config.tabs.races.ghostBackmarkers' | translate}}
-                            </td>
-                            <td><bj-toggle ng-model="$ctrl.startOptions.ghostBackmarkers"></bj-toggle></td>
-                        </tr>
-                    </table>
-                </accordion-content>
-            </bj-accordion>
+                <h4>{{'beamjoy.window.main.tabs.races.sections.rules' | translate}}</h4>
+                <div class="bjr-toggle-row">
+                    <span title="{{'beamjoy.window.config.tabs.races.dnfEnabled.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.dnfEnabled' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.dnfEnabled"></bj-toggle>
+                </div>
+                <div class="bjr-field" ng-if="$ctrl.startOptions.dnfEnabled">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.dnfTimeout.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.dnfTimeout' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.dnfTimeout" min="3" max="60" hard-max="600" step="1"></bj-slider>
+                </div>
+                <div class="bjr-toggle-row" ng-if="$ctrl.startOptions.respawnStrategy !== 'norespawn'">
+                    <span title="{{'beamjoy.window.config.tabs.races.resetPenaltyEnabled.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.resetPenaltyEnabled' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.resetPenaltyEnabled"></bj-toggle>
+                </div>
+                <div class="bjr-field" ng-if="$ctrl.startOptions.respawnStrategy !== 'norespawn' && $ctrl.startOptions.resetPenaltyEnabled">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.resetPenaltySeconds.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.resetPenaltySeconds' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.resetPenaltySeconds" min="1" max="30" hard-max="600" step="1"></bj-slider>
+                </div>
 
-            <bj-accordion id="start-options-anticheat" no-border-bottom="true">
-                <accordion-title>
-                    <span>{{'beamjoy.window.main.tabs.races.sections.anticheat' | translate}}</span>
-                </accordion-title>
-                <accordion-content>
-                    <table class="w-100">
-                        <tr>
-                            <td
-                                class="text-right"
-                                title="{{'beamjoy.window.config.tabs.races.disableNodegrabber.tooltip' | translate}}"
-                            >
-                                {{'beamjoy.window.config.tabs.races.disableNodegrabber' | translate}}
-                            </td>
-                            <td><bj-toggle ng-model="$ctrl.startOptions.disableNodegrabber"></bj-toggle></td>
-                        </tr>
-                        <tr>
-                            <td
-                                class="text-right"
-                                title="{{'beamjoy.window.config.tabs.races.disableCameras.tooltip' | translate}}"
-                            >
-                                {{'beamjoy.window.config.tabs.races.disableCameras' | translate}}
-                            </td>
-                            <td><bj-toggle ng-model="$ctrl.startOptions.disableCameras"></bj-toggle></td>
-                        </tr>
-                        <tr>
-                            <td
-                                class="text-right"
-                                title="{{'beamjoy.window.config.tabs.races.disableGravityChange.tooltip' | translate}}"
-                            >
-                                {{'beamjoy.window.config.tabs.races.disableGravityChange' | translate}}
-                            </td>
-                            <td><bj-toggle ng-model="$ctrl.startOptions.disableGravityChange"></bj-toggle></td>
-                        </tr>
-                    </table>
-                </accordion-content>
-            </bj-accordion>
+                <h4>{{'beamjoy.window.main.tabs.races.sections.ghosting' | translate}}</h4>
+                <div class="bjr-toggle-row">
+                    <span title="{{'beamjoy.window.config.tabs.races.ghostOnCountdown.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.ghostOnCountdown' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.ghostOnCountdown"></bj-toggle>
+                </div>
+                <div class="bjr-toggle-row">
+                    <span title="{{'beamjoy.window.config.tabs.races.disableCollisions.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.disableCollisions' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.disableCollisions"></bj-toggle>
+                </div>
+                <div class="bjr-toggle-row" ng-if="race.loopable">
+                    <span title="{{'beamjoy.window.config.tabs.races.ghostBackmarkers.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.ghostBackmarkers' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.ghostBackmarkers"></bj-toggle>
+                </div>
 
-            <bj-accordion id="start-options-display" no-border-bottom="true">
-                <accordion-title>
-                    <span>{{'beamjoy.window.main.tabs.races.sections.display' | translate}}</span>
-                </accordion-title>
-                <accordion-content>
-                    <table class="w-100">
-                        <tr>
-                            <td
-                                class="text-right"
-                                title="{{'beamjoy.window.config.tabs.races.showGateNametags.tooltip' | translate}}"
-                            >
-                                {{'beamjoy.window.config.tabs.races.showGateNametags' | translate}}
-                            </td>
-                            <td><bj-toggle ng-model="$ctrl.startOptions.showGateNametags"></bj-toggle></td>
-                        </tr>
-                        <tr>
-                            <td
-                                class="text-right"
-                                title="{{'beamjoy.window.config.tabs.races.limitVisibleGates.tooltip' | translate}}"
-                            >
-                                {{'beamjoy.window.config.tabs.races.limitVisibleGates' | translate}}
-                            </td>
-                            <td>
-                                <div class="d-flex align-center gap-1">
-                                    <bj-toggle ng-model="$ctrl.startOptions.limitVisibleGates"></bj-toggle>
-                                    <bj-slider
-                                        ng-if="$ctrl.startOptions.limitVisibleGates"
-                                        class="flex-grow-1"
-                                        ng-model="$ctrl.startOptions.visibleGateCount"
-                                        min="1"
-                                        max="5"
-                                        hard-max="5"
-                                        step="1"
-                                    ></bj-slider>
-                                </div>
-                            </td>
-                        </tr>
-                    </table>
-                </accordion-content>
-            </bj-accordion>
+                <h4>{{'beamjoy.window.main.tabs.races.sections.anticheat' | translate}}</h4>
+                <div class="bjr-toggle-row">
+                    <span title="{{'beamjoy.window.config.tabs.races.disableNodegrabber.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.disableNodegrabber' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.disableNodegrabber"></bj-toggle>
+                </div>
+                <div class="bjr-toggle-row">
+                    <span title="{{'beamjoy.window.config.tabs.races.disableCameras.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.disableCameras' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.disableCameras"></bj-toggle>
+                </div>
+                <div class="bjr-toggle-row">
+                    <span title="{{'beamjoy.window.config.tabs.races.disableGravityChange.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.disableGravityChange' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.disableGravityChange"></bj-toggle>
+                </div>
 
-            <bj-accordion id="start-options-timers" no-border-bottom="true">
-                <accordion-title>
-                    <span>{{'beamjoy.window.main.tabs.races.sections.timers' | translate}}</span>
-                </accordion-title>
-                <accordion-content>
-                    <table class="w-100">
-                        <tr>
-                            <td
-                                class="text-right"
-                                title="{{'beamjoy.window.config.tabs.races.countdown.tooltip' | translate}}"
-                            >
-                                {{'beamjoy.window.config.tabs.races.countdown' | translate}}
-                            </td>
-                            <td>
-                                <bj-slider ng-model="$ctrl.startOptions.countdown" min="0" max="30" hard-max="600" step="1"></bj-slider>
-                            </td>
-                        </tr>
-                        <tr ng-if="$ctrl.startOptions.joinable">
-                            <td
-                                class="text-right"
-                                title="{{'beamjoy.window.config.tabs.races.gridReadyTimeout.tooltip' | translate}}"
-                            >
-                                {{'beamjoy.window.config.tabs.races.gridReadyTimeout' | translate}}
-                            </td>
-                            <td>
-                                <bj-slider ng-model="$ctrl.startOptions.gridReadyTimeout" min="0" max="60" hard-max="600" step="1"></bj-slider>
-                            </td>
-                        </tr>
-                        <tr ng-if="$ctrl.startOptions.joinable">
-                            <td
-                                class="text-right"
-                                title="{{'beamjoy.window.config.tabs.races.gridTimeout.tooltip' | translate}}"
-                            >
-                                {{'beamjoy.window.config.tabs.races.gridTimeout' | translate}}
-                            </td>
-                            <td>
-                                <bj-slider ng-model="$ctrl.startOptions.gridTimeout" min="10" max="300" hard-max="600" step="5"></bj-slider>
-                            </td>
-                        </tr>
-                    </table>
-                </accordion-content>
-            </bj-accordion>
-            <div class="d-flex gap-1 justify-end mt-1">
-                <button class="btn info" ng-click="$ctrl.cancelStart($event)">
-                    {{'beamjoy.common.cancel' | translate}}
+                <h4>{{'beamjoy.window.main.tabs.races.sections.display' | translate}}</h4>
+                <div class="bjr-toggle-row">
+                    <span title="{{'beamjoy.window.config.tabs.races.showGateNametags.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.showGateNametags' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.showGateNametags"></bj-toggle>
+                </div>
+                <div class="bjr-toggle-row">
+                    <span title="{{'beamjoy.window.config.tabs.races.limitVisibleGates.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.limitVisibleGates' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.limitVisibleGates"></bj-toggle>
+                </div>
+                <div class="bjr-field" ng-if="$ctrl.startOptions.limitVisibleGates">
+                    <bj-slider ng-model="$ctrl.startOptions.visibleGateCount" min="1" max="5" hard-max="5" step="1"></bj-slider>
+                </div>
+
+                <h4>{{'beamjoy.window.main.tabs.races.sections.timers' | translate}}</h4>
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.countdown.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.countdown' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.countdown" min="0" max="30" hard-max="600" step="1"></bj-slider>
+                </div>
+                <div class="bjr-field" ng-if="race.startPositions > 1">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.gridReadyTimeout.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.gridReadyTimeout' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.gridReadyTimeout" min="0" max="60" hard-max="600" step="1"></bj-slider>
+                </div>
+                <div class="bjr-field" ng-if="race.startPositions > 1">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.gridTimeout.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.gridTimeout' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.gridTimeout" min="10" max="300" hard-max="600" step="5"></bj-slider>
+                </div>
+            </div>
+
+            <div class="start-actions" ng-class="{'solo-only': race.startPositions <= 1}">
+                <button type="button" class="bjr-btn ghost" ng-click="$ctrl.cancelStart($event)">
+                    <span class="bjr-glyph" aria-hidden="true">B</span>{{'beamjoy.common.cancel' | translate}}
                 </button>
-                <button
-                    class="btn success"
-                    ng-class="{disabled: $ctrl.startOptions.vehicleRestrictionMode === 'pool' && !$ctrl.startOptions.vehicleRestrictionPoolPresetId}"
-                    ng-disabled="$ctrl.startOptions.vehicleRestrictionMode === 'pool' && !$ctrl.startOptions.vehicleRestrictionPoolPresetId"
-                    ng-click="$ctrl.confirmStart($event, race)"
-                >
-                    {{'beamjoy.window.main.tabs.races.go' | translate}}
+                <button type="button" data-pad-x class="bjr-btn" ng-class="{primary: race.startPositions <= 1}" ng-disabled="$ctrl.startBlocked()" ng-click="$ctrl.startSolo($event, race)">
+                    <span class="bjr-glyph" aria-hidden="true">X</span>{{'beamjoy.window.main.tabs.races.startSolo' | translate}}
+                </button>
+                <button type="button" class="bjr-btn primary" ng-if="race.startPositions > 1" ng-disabled="$ctrl.startBlocked()" ng-click="$ctrl.startLobby($event, race)">
+                    <span class="bjr-glyph" aria-hidden="true">A</span>{{'beamjoy.window.main.tabs.races.openLobby' | translate}}
                 </button>
             </div>
         </div>
     </div>
-    <div ng-if="$ctrl.races.length === 0" class="p-2 opacity-70">
+
+    <p class="bjr-muted" ng-if="$ctrl.races.length === 0" style="margin: 0.3em 0">
         {{'beamjoy.window.main.tabs.races.empty' | translate}}
-    </div>
+    </p>
 </div>

@@ -1,36 +1,8 @@
-await import(`/ui/modModules/beamjoy/windows/main/main/players-list/app.js`);
-
-angular.module("beamjoy").component("bjMainMain", {
-    templateUrl: "/ui/modModules/beamjoy/windows/main/main/app.html",
-    controller: function ($rootScope, beamjoyStore) {
-        this.openSettings = () => {
-            $rootScope.$broadcast("BJOpenTab", "settings");
-        };
-
-        this.stateNametags = !beamjoyStore.settings.data.nametags.hideNameTags;
-        this.toggleNametags = () => {
-            this.stateNametags = !this.stateNametags;
-            beamjoyStore.send("BJToggleNametagsHideState");
-        };
-        $rootScope.$on("BJNametagsState", (_, data) => {
-            this.stateNametags = !data.hideNameTags;
-        });
-
-        // Low fuel / emergency refuel button (see stations.lua's own "LOW FUEL / EMERGENCY
-        // REFUEL HUD" section for the full story) : one button, shown once the current vehicle's
-        // fuel/energy runs low - green (sets a GPS route to the nearest station) while there's
-        // still some left, red (does a free, held "emergency refuel" instead) once actually empty.
-        this.fuelLow = false;
-        this.fuelEmpty = false;
-        $rootScope.$on("BJFuelStatus", (_, data) => {
-            data = data || {};
-            this.fuelLow = data.low === true;
-            this.fuelEmpty = data.empty === true;
-        });
-        this.fuelAction = () => {
-            beamjoyStore.send(this.fuelEmpty ? "BJFuelEmergencyRefuel" : "BJFuelSetWaypoint");
-        };
-
+// Main window > Vote panel : start a map vote or a kick vote (moved out of the old main tab's
+// inline picker). The only UI front door for either vote ; both also have chat commands.
+angular.module("beamjoy").component("bjMainVote", {
+    templateUrl: "/ui/modModules/beamjoy/windows/main/vote/app.html",
+    controller: function ($rootScope, $scope, beamjoyStore) {
         // "Start Vote": a small in-place picker (choice -> map/player list), not a new modal
         // framework. This is the only place either vote type is startable from the UI (both
         // votes previously only had a chat-command front door, "/votemap <name>"/"/votekick
@@ -39,18 +11,15 @@ angular.module("beamjoy").component("bjMainMain", {
         this.canVoteKick = () => beamjoyStore.permissions.hasAllPermissions(undefined, "VoteKick");
         this.canStartVote = () => this.canVoteMap() || this.canVoteKick();
 
-        // null | "choice" | "map" | "kick"
-        this.voteMenu = null;
+        // "choice" | "map" | "kick"
+        this.voteMenu = "choice";
         this.voteSearch = "";
         this.maps = [];
 
-        this.toggleVoteMenu = () => {
-            this.voteMenu = this.voteMenu ? null : "choice";
-            this.voteSearch = "";
-        };
         this.closeVoteMenu = () => {
-            this.voteMenu = null;
+            this.voteMenu = "choice";
             this.voteSearch = "";
+            $rootScope.$broadcast("BJMainOpenPanel", null);
         };
         this.chooseMapVote = () => {
             this.voteMenu = "map";
@@ -66,7 +35,7 @@ angular.module("beamjoy").component("bjMainMain", {
             this.voteSearch = "";
         };
 
-        $rootScope.$on("BJSendMapsData", (_, data) => {
+        const offMaps = $rootScope.$on("BJSendMapsData", (_, data) => {
             this.maps = Object.entries(data || {})
                 .map(([name, map]) => ({ name, label: map.label }))
                 .sort((a, b) => a.label.localeCompare(b.label));
@@ -85,5 +54,6 @@ angular.module("beamjoy").component("bjMainMain", {
             beamjoyStore.send("BJKickVoteStart", [player.playerID]);
             this.closeVoteMenu();
         };
+        $scope.$on("$destroy", offMaps);
     },
 });

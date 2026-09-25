@@ -49,8 +49,8 @@
 
 <div id="beamjoy-login" class="d-flex align-center justify-center" ng-if="$ctrl.visible">
     <div class="login-box">
-        <div class="login-title">{{'beamjoy.window.login.title' | translate}}</div>
-        <div class="login-message">{{'beamjoy.window.login.message' | translate}}</div>
+        <div class="login-title">{{($ctrl.changing ? 'beamjoy.window.login.changeTitle' : 'beamjoy.window.login.title') | translate}}</div>
+        <div class="login-message">{{($ctrl.changing ? 'beamjoy.window.login.changeMessage' : 'beamjoy.window.login.message') | translate}}</div>
         <input
             type="text"
             class="login-input"
@@ -63,14 +63,14 @@
         <div class="login-error" ng-if="$ctrl.error">{{$ctrl.error | translate}}</div>
         <div class="d-flex gap-1 justify-end">
             <button class="btn info" ng-click="$ctrl.skip($event)">
-                {{'beamjoy.window.login.skip' | translate}}
+                {{($ctrl.changing ? 'beamjoy.common.cancel' : 'beamjoy.window.login.skip') | translate}}
             </button>
             <button
                 class="btn success"
                 ng-disabled="!$ctrl.nickname.trim() || $ctrl.submitting"
                 ng-click="$ctrl.submit($event)"
             >
-                {{'beamjoy.window.login.continue' | translate}}
+                {{($ctrl.changing ? 'beamjoy.common.save' : 'beamjoy.window.login.continue') | translate}}
             </button>
         </div>
     </div>

@@ -1,0 +1,146 @@
+<style>
+    bj-main-jobs {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6em;
+    }
+    bj-main-jobs .depot {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.2em 0.6em;
+    }
+    bj-main-jobs .depot .name {
+        font-size: 0.95em;
+        font-weight: 600;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    bj-main-jobs .depot .dist {
+        font-size: 0.85em;
+        font-variant-numeric: tabular-nums;
+        color: #c8cedc;
+    }
+    bj-main-jobs .depot .line {
+        grid-column: 1 / -1;
+    }
+    bj-main-jobs .depot .actions {
+        grid-column: 1 / -1;
+        display: flex;
+        gap: 0.3em;
+    }
+    bj-main-jobs .convoy-line {
+        color: #ffbca0;
+    }
+    bj-main-jobs .picker-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.45em 0.5em 0.45em 0.65em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0 0.375em 0.375em 0;
+    }
+</style>
+
+<!-- YOUR CONVOY -->
+<section class="bjr-lobby" ng-if="$ctrl.l" aria-label="{{'beamjoy.delivery.lobby.title' | translate}}">
+    <header class="lobby-head">
+        <div>
+            <span class="bjr-muted">{{$ctrl.headerLine()}}</span>
+            <h3 class="bjr-title">{{$ctrl.l.title}} {{'beamjoy.delivery.toLower' | translate}} {{$ctrl.l.destName}}</h3>
+            <span class="bjr-muted">{{$ctrl.subLine()}}</span>
+        </div>
+        <div class="lobby-timer" role="timer">
+            <span class="bjr-muted">{{'beamjoy.delivery.lobby.startsIn' | translate}}</span>
+            <span class="value">{{$ctrl.fmt.formatTime($ctrl.l.startsIn)}}</span>
+        </div>
+    </header>
+
+    <ol class="slots" ng-if="!$ctrl.l.inviting">
+        <li ng-repeat="slot in $ctrl.slots track by slot.key" ng-class="{open: slot.open}">
+            <span class="num">{{slot.num}}</span>
+            <span class="who" ng-if="!slot.open">
+                <span class="n">
+                    <svg ng-if="slot.member.leader" role="img" aria-label="{{'beamjoy.delivery.lobby.leader' | translate}}"
+                        width="14" height="14" viewBox="0 0 16 16" fill="#ffc768" style="flex-shrink: 0">
+                        <title>{{'beamjoy.delivery.lobby.leader' | translate}}</title>
+                        <path d="M2 5.5l3.2 2.6L8 3l2.8 5.1L14 5.5l-1.3 7H3.3L2 5.5z"></path>
+                    </svg>
+                    {{slot.member.name}}<span class="bjr-muted" ng-if="slot.member.you">&nbsp;({{'beamjoy.delivery.lobby.you' | translate}})</span>
+                </span>
+                <span class="bjr-muted" ng-if="$ctrl.memberDetail(slot.member)">{{$ctrl.memberDetail(slot.member)}}</span>
+            </span>
+            <span class="who" ng-if="slot.open">
+                <span class="n">{{'beamjoy.delivery.lobby.openSlot' | translate}}</span>
+                <span class="bjr-muted">{{'beamjoy.delivery.lobby.openSlotDetail' | translate}}</span>
+            </span>
+            <span class="bjr-chip" ng-if="!slot.open" ng-class="{ready: slot.member.ready}">
+                {{(slot.member.ready ? 'beamjoy.delivery.lobby.ready' : 'beamjoy.delivery.lobby.notReady') | translate}}
+            </span>
+            <span class="bjr-chip" ng-if="slot.open" style="background: transparent">{{'beamjoy.delivery.lobby.open' | translate}}</span>
+        </li>
+    </ol>
+
+    <div ng-if="$ctrl.l.inviting" style="display: flex; flex-direction: column; gap: 0.3em">
+        <h4>{{'beamjoy.delivery.lobby.inviteTitle' | translate}}</h4>
+        <p class="note" ng-if="!$ctrl.l.invitees">{{'beamjoy.delivery.board.loading' | translate}}</p>
+        <p class="note" ng-if="$ctrl.l.invitees && $ctrl.l.invitees.length === 0">{{'beamjoy.delivery.lobby.nobody' | translate}}</p>
+        <div class="picker-row" ng-repeat="p in $ctrl.l.invitees track by p.playerID">
+            <span class="who">
+                <span style="font-size: 0.9em; font-weight: 600">{{p.name}}</span>
+                <span class="bjr-muted">{{$ctrl.inviteeStatus(p)}}</span>
+            </span>
+            <button type="button" class="bjr-btn small primary" ng-if="$ctrl.canInvite(p)" ng-click="$ctrl.invite(p)">
+                {{'beamjoy.delivery.lobby.invite' | translate}}
+            </button>
+        </div>
+        <button type="button" class="bjr-btn ghost" data-pad-a ng-click="$ctrl.setInviting(false)">
+            {{'beamjoy.delivery.lobby.back' | translate}}
+        </button>
+    </div>
+
+    <p class="note" ng-if="!$ctrl.l.inviting">{{$ctrl.hint()}}</p>
+
+    <div class="controls" ng-if="!$ctrl.l.inviting" aria-label="{{'beamjoy.delivery.controls' | translate}}">
+        <button type="button" class="bjr-btn primary" data-pad-a ng-click="$ctrl.toggleReady()">
+            <span class="bjr-glyph" aria-hidden="true">A</span>{{($ctrl.me().ready ? 'beamjoy.delivery.lobby.unready' : 'beamjoy.delivery.lobby.readyUp') | translate}}
+        </button>
+        <button type="button" class="bjr-btn" data-pad-y ng-click="$ctrl.startNow()" ng-disabled="!$ctrl.l.isLeader">
+            <span class="bjr-glyph" aria-hidden="true">Y</span>{{'beamjoy.delivery.lobby.startNow' | translate}}
+        </button>
+        <button type="button" class="bjr-btn" data-pad-x ng-click="$ctrl.setInviting(true)">
+            <span class="bjr-glyph" aria-hidden="true">X</span>{{'beamjoy.delivery.lobby.invitePlayer' | translate}}
+        </button>
+        <button type="button" class="bjr-btn danger" ng-click="$ctrl.leave()">
+            {{'beamjoy.delivery.lobby.leave' | translate}}
+        </button>
+    </div>
+</section>
+
+<!-- EVERY DEPOT -->
+<section ng-if="!$ctrl.l" style="display: flex; flex-direction: column; gap: 0.4em" aria-label="{{'beamjoy.delivery.jobs.title' | translate}}">
+    <div class="bjr-seg" role="group" aria-label="{{'beamjoy.delivery.jobs.filterLabel' | translate}}">
+        <button type="button" ng-repeat="f in $ctrl.FILTERS" aria-pressed="{{$ctrl.filter === f}}"
+            ng-class="{on: $ctrl.filter === f}" ng-click="$ctrl.setFilter(f)">
+            {{('beamjoy.delivery.jobs.filter.' + f) | translate}}
+        </button>
+    </div>
+    <p class="bjr-muted" ng-if="$ctrl.data.loading">{{'beamjoy.delivery.board.loading' | translate}}</p>
+    <p class="bjr-muted" ng-if="!$ctrl.data.loading && $ctrl.rows.length === 0">{{'beamjoy.delivery.jobs.empty' | translate}}</p>
+    <div class="bjr-card depot" ng-repeat="d in $ctrl.rows track by d.id" ng-class="{hot: $ctrl.openConvoy(d)}">
+        <span class="name">{{d.name}}</span>
+        <span class="dist">{{$ctrl.fmt.formatDistance(d.distance)}}</span>
+        <span class="bjr-muted line">
+            {{$ctrl.modes(d)}}<span ng-if="$ctrl.jobCount(d) !== ''">, {{$ctrl.jobCount(d)}} {{'beamjoy.window.main.now.jobs.openJobs' | translate}}</span>
+        </span>
+        <span class="bjr-muted line convoy-line" ng-if="$ctrl.convoyLabel(d)">{{$ctrl.convoyLabel(d)}}</span>
+        <span class="actions">
+            <button type="button" class="bjr-btn small" ng-click="$ctrl.gps(d)">{{'beamjoy.delivery.jobs.gps' | translate}}</button>
+            <button type="button" class="bjr-btn small primary" ng-if="$ctrl.openConvoy(d) && !$ctrl.data.busy" ng-click="$ctrl.join(d)">
+                {{$ctrl.joinLabel(d)}}
+            </button>
+        </span>
+    </div>
+</section>

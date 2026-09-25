@@ -134,6 +134,9 @@ local function onLoginSubmit(nickname)
 end
 
 local function onLoginSkip()
+    -- only the first prompt gates the rest of the UI ; the full window's "Change nickname" reuses
+    -- the same prompt mid-session, and must not run the connection setup a second time
+    if not M.loginPending then return end
     M.loginPending = false
     async.removeTask("BJLoginTimeout")
     proceedAfterLogin()
@@ -143,7 +146,7 @@ end
 ---@param reason string nickname on success, an error key on failure
 local function onLoginResult(success, reason)
     M.send("BJLoginResult", { success = success, reason = not success and reason or nil })
-    if success then
+    if success and M.loginPending then
         M.loginPending = false
         async.removeTask("BJLoginTimeout")
         proceedAfterLogin()

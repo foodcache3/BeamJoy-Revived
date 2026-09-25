@@ -13,12 +13,15 @@ angular.module("beamjoy").service("beamjoyDelivery", function () {
     // handleGlobalUINavEvent). A window-level capture listener stops those events before they get
     // there ; the Angular-side UINavigation broadcast our windows listen to is separate and still
     // arrives. Start ("menu") is left alone so the pause menu still opens.
-    const CONSUMED = ["ok", "back", "focus_u", "focus_d", "focus_l", "focus_r", "action_2", "context"];
+    const CONSUMED = ["ok", "back", "focus_u", "focus_d", "focus_l", "focus_r", "action_2", "context", "tab_l", "tab_r"];
     const navOwners = new Set();
     this.setNavOwner = (owner, active) => {
         if (active) navOwners.add(owner);
         else navOwners.delete(owner);
     };
+    // whether a window other than `owner` has the pad right now (the main window steps aside for
+    // an open delivery window)
+    this.otherNavOwner = (owner) => [...navOwners].some((o) => o !== owner);
     window.addEventListener(
         "ui_nav",
         (e) => {

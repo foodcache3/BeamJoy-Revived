@@ -1,6 +1,6 @@
 // Convoy invite (Phase 3). Shown when another player invites you into their convoy lobby ; state
 // from beamjoy/delivery.lua (BJDeliveryInvite, pushed on its slow tick for the expiry bar). It
-// takes no pad buttons until the game's "interact" chord (RB + Y, Shift + E) focuses it, so
+// takes no pad buttons until BJS's "Focus notification" control (Controls > BeamJoy ; RB + X, Shift + J) focuses it, so
 // driving past with an invite up changes nothing ; focused, A joins and B declines. Mouse and
 // keyboard always work.
 angular.module("beamjoy").component("bjDeliveryInvite", {
@@ -32,6 +32,16 @@ angular.module("beamjoy").component("bjDeliveryInvite", {
                 .replace("{4}", this.i.depotName || "")
                 .replace("{5}", this.i.slotsLeft || 0);
         this.progress = () => `${Math.max(0, Math.min(100, ((this.i.expiresIn || 0) / this.total) * 100))}%`;
+        // beside the main window's rail, left of its open panel (never on top of it, so the panel
+        // you're clicking in doesn't get covered) ; top right of the screen when the rail is hidden
+        this.position = () => {
+            const l = $rootScope.bjMainLayout;
+            if (!l || !l.rail) return null;
+            const beside = "calc(1vw + 4.75em" + (l.panelEm ? ` + ${l.panelEm + 0.75}em` : "") + ")";
+            return { right: beside, top: l.full ? "8vh" : "15vh" };
+        };
+        // the main window has the pad : this steps back until it's focused again
+        this.dimmed = () => !this.i.padActive && $rootScope.bjMainPadActive === true;
         this.accept = () => beamjoyStore.send("BJDeliveryInviteReply", [true]);
         this.decline = () => beamjoyStore.send("BJDeliveryInviteReply", [false]);
 

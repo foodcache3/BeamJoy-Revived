@@ -1,41 +1,137 @@
-<div class="players-list" ng-hide="$ctrl.players.length === 0">
-    <h3>{{ "beamjoy.window.main.playerlist.title" | translate}}</h3>
-    <div ng-repeat="player in $ctrl.players">
-        <bj-player-line
-            class="d-flex align-center flex-wrap gap-1 py-1"
-            ng-if="!player.showModeration && !player.showVehicles"
-            player="player"
-        ></bj-player-line>
-        <bj-accordion
-            id="{{player.playerName}}"
-            ng-if="player.showModeration || player.showVehicles"
-        >
-            <accordion-title>
-                <bj-player-line
-                    class="d-flex align-center flex-wrap gap-1 py-1"
-                    player="player"
-                ></bj-player-line>
-            </accordion-title>
-            <accordion-content>
-                <bj-player-moderation
-                    ng-if="player.showModeration"
-                    player="player"
-                ></bj-player-moderation>
-                <div ng-if="player.showVehicles">
-                    <h4>
-                        {{"beamjoy.window.main.playerlist.vehicles.title"|translate}}
-                        <span ng-hide="!player.vehicleInfo"
-                            >{{player.vehicleInfo}}</span
-                        >
-                    </h4>
-                    <bj-vehicle-line
-                        class="d-flex align-center flex-wrap gap-1"
-                        ng-repeat="vehicle in player.vehicles"
-                        vehicle="vehicle"
-                        owner="player"
-                    ></bj-vehicle-line>
-                </div>
-            </accordion-content>
-        </bj-accordion>
+<style>
+    bj-players-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2em;
+    }
+    bj-players-list .p-row {
+        display: flex;
+        flex-direction: column;
+        border-radius: 0 0.375em 0.375em 0;
+        background: rgba(255, 255, 255, 0.03);
+    }
+    bj-players-list .p-row.open {
+        background: rgba(255, 102, 0, 0.08);
+        box-shadow: inset 3px 0 0 #ff6600;
+    }
+    bj-players-list .p-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+        align-items: center;
+        gap: 0.75em;
+        width: 100%;
+        padding: 0.55em 0.8em;
+        background: transparent;
+        border: 0;
+        color: #ebebeb;
+        text-align: left;
+        cursor: pointer;
+    }
+    bj-players-list .p-head:hover {
+        background: rgba(255, 255, 255, 0.04);
+    }
+    bj-players-list .p-name {
+        display: flex;
+        align-items: center;
+        gap: 0.4em;
+        min-width: 0;
+        font-size: 0.9em;
+        font-weight: 600;
+    }
+    bj-players-list .p-name .txt {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    bj-players-list .p-car {
+        font-size: 0.82em;
+        color: #c8cedc;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    bj-players-list .p-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0.7em;
+        padding: 0 0.8em 0.8em;
+    }
+    bj-players-list bj-player-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3em;
+    }
+    bj-players-list .p-body.split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+    bj-players-list .p-body.split > bj-player-line {
+        grid-column: 1 / -1;
+    }
+    bj-players-list .p-vehicles h4,
+    bj-players-list .p-mod h4 {
+        margin: 0 0 0.3em;
+        font-size: 0.78em;
+        color: #979dad;
+    }
+    bj-players-list bj-vehicle-line {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3em;
+        padding: 0.4em 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    bj-players-list bj-vehicle-line .v-name {
+        font-size: 0.8em;
+        font-weight: 600;
+    }
+    bj-players-list bj-vehicle-line .v-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.2em;
+    }
+    bj-players-list .p-mod {
+        padding: 0.6em;
+        border: 1px solid rgba(255, 102, 0, 0.35);
+        border-radius: 0.375em;
+    }
+    bj-players-list .p-mod h4 {
+        color: #ffbca0;
+    }
+    bj-players-list bj-player-moderation input[type="text"] {
+        width: 100%;
+    }
+    bj-players-list bj-player-moderation table td {
+        padding: 0.15em 0.2em;
+        font-size: 0.85em;
+    }
+</style>
+
+<div class="p-row" ng-repeat="player in $ctrl.players track by player.playerName" ng-class="{open: $ctrl.expanded[player.playerName]}">
+    <button type="button" class="p-head" ng-click="$ctrl.toggle(player)" aria-expanded="{{!!$ctrl.expanded[player.playerName]}}">
+        <span class="p-name">
+            <span class="txt">{{player.displayName || player.playerName}}</span>
+            <span class="bjr-chip rank">{{player.rankLabel}}</span>
+            <span class="bjr-muted" ng-if="player.isSelf">{{'beamjoy.window.main.playerlist.you' | translate}}</span>
+        </span>
+        <span class="p-car">
+            {{player.currentLabel || ('beamjoy.window.main.playerlist.onFoot' | translate)}}
+            <span class="bjr-muted" ng-if="player.vehicleInfo">{{player.vehicleInfo}}</span>
+        </span>
+    </button>
+    <div class="p-body" ng-if="$ctrl.expanded[player.playerName]"
+        ng-class="{split: $ctrl.full && player.showVehicles && player.showModeration}">
+        <bj-player-line player="player" full="$ctrl.full"></bj-player-line>
+        <div class="p-vehicles" ng-if="player.showVehicles">
+            <h4>{{'beamjoy.window.main.playerlist.vehicles.title' | translate}}</h4>
+            <bj-vehicle-line ng-repeat="vehicle in player.vehicles track by vehicle.vid" vehicle="vehicle" owner="player"></bj-vehicle-line>
+        </div>
+        <div class="p-mod" ng-if="player.showModeration">
+            <h4>{{'beamjoy.window.main.playerlist.moderation.title' | translate}}</h4>
+            <bj-player-moderation player="player"></bj-player-moderation>
+        </div>
     </div>
 </div>
+<p class="bjr-muted" ng-if="$ctrl.players.length === 0" style="margin: 0.3em 0">
+    {{'beamjoy.window.main.playerlist.empty' | translate}}
+</p>

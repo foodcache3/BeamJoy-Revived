@@ -1459,6 +1459,8 @@ local function pushSessionStatus()
         vehicleRestrictionPoolLabel = restriction and restriction.mode == "pool" and restriction.label or nil,
         ready = participant.ready,
         isStarter = starter and starter.playerName == participant.playerName,
+        -- the lobby panel marks the leader with a crown
+        starterID = M.session.starterID,
         -- lets the status panel hide "Retire" once already retired/finished, instead of letting
         -- the player click a no-op button (raceDNF already silently guards against it server-side,
         -- this is purely so the UI doesn't look actionable when it isn't anymore)

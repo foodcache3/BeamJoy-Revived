@@ -39,7 +39,8 @@ local M = {
         "beamjoy_infected", "beamjoy_infectedRunner",
         "beamjoy_freeroamData", "beamjoy_stations",
         "beamjoy_busLines", "beamjoy_busRun",
-        "beamjoy_deliveryPoints", "beamjoy_delivery", "beamjoy_deliveryPool" },
+        "beamjoy_deliveryPoints", "beamjoy_delivery", "beamjoy_deliveryPool",
+        "beamjoy_mainNav" },
 
     world_ready = false,
     client_ready = false,

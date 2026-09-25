@@ -55,7 +55,6 @@ await import(`/ui/modModules/beamjoy/windows/busHud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/deliveryBoard/app.js`);
 await import(`/ui/modModules/beamjoy/windows/deliveryHud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/deliveryResults/app.js`);
-await import(`/ui/modModules/beamjoy/windows/deliveryLobby/app.js`);
 await import(`/ui/modModules/beamjoy/windows/deliveryInvite/app.js`);
 await import(`/ui/modModules/beamjoy/windows/mapVote/app.js`);
 await import(`/ui/modModules/beamjoy/windows/kickVote/app.js`);
@@ -95,7 +94,6 @@ beamjoyModule.component("beamjoy", {
                         <bj-delivery-board></bj-delivery-board>
                         <bj-delivery-hud></bj-delivery-hud>
                         <bj-delivery-results></bj-delivery-results>
-                        <bj-delivery-lobby></bj-delivery-lobby>
                         <bj-delivery-invite></bj-delivery-invite>
                         <bj-map-vote></bj-map-vote>
                         <bj-kick-vote></bj-kick-vote>
