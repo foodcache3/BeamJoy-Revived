@@ -12,52 +12,131 @@
         background: rgba(0, 0, 0, 0.55);
     }
 
+    /* the main window's look (windows/main/app.html's .bjr tokens) */
     #beamjoy-info-panel .info-panel-box {
-        /* was 44em/90vw: too narrow to fit the race-info Live/Results tables' full column set
-           (#, Player, Lap, Best, Last, Gap, Leader, each with generous 1.25em cell padding)
-           without horizontal scrolling. A thin, easy-to-miss scrollbar at the bottom of an
-           already-compact panel made that read as "the last column is cut off / shifted off-screen"
-           rather than "scroll right to see it", so it's widened to fit content without scrolling
-           in the common case */
+        /* wide enough for the race Live table's columns without scrolling sideways, tall enough
+           for a full 12-car grid */
         width: 60em;
         max-width: 92vw;
-        height: 32em;
-        max-height: 85vh;
-        /* slightly transparent per direct request (was a fully opaque #1c1c1c); same RGB, alpha
-           reduced just enough to let the dimmed backdrop (and the race scene behind it) show
-           through faintly without hurting the table text's own readability */
-        background: rgba(28, 28, 28, 0.9);
-        border: thin solid gray;
-        border-radius: 0.4em;
-        box-shadow: 0 0.3em 1em rgba(0, 0, 0, 0.6);
+        height: 40em;
+        max-height: 88vh;
+        box-sizing: border-box;
+        background: rgba(10, 11, 14, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 0.5em;
         display: flex;
         flex-direction: column;
         overflow: hidden;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        color: #ebebeb;
     }
 
     #beamjoy-info-panel .info-panel-header {
-        padding: 0.6em 0.8em;
-        border-bottom: thin solid gray;
-        color: white;
-        font-size: 1.1em;
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.8em 0.75em 0.5em 1.1em;
     }
-
-    #beamjoy-info-panel .info-panel-header .close {
-        font-size: 1.4em;
-        line-height: 1em;
-        cursor: pointer;
-        transition: color 0.2s ease-in-out;
-    }
-
-    #beamjoy-info-panel .info-panel-header .close:hover {
-        color: red;
-    }
-
-    #beamjoy-info-panel .info-panel-tabs {
-        flex-grow: 1;
+    #beamjoy-info-panel .info-panel-header .title {
+        flex: 1;
+        min-width: 0;
+        margin: 0;
         overflow: hidden;
-        padding: 0 0.8em 0.6em;
-        color: white;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-style: italic;
+        font-size: 1.4em;
+        line-height: 1.2;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #beamjoy-info-panel .info-panel-header .close {
+        width: 2.3em;
+        height: 2.3em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        background: transparent;
+        border: 0;
+        border-radius: 0.25em;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+        color: #c8cedc;
+        cursor: pointer;
+    }
+    #beamjoy-info-panel .info-panel-header .close:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+    }
+
+    /* the pad's cursor */
+    #beamjoy-info-panel .ip-pad-focus {
+        outline: 2px solid #ff6600 !important;
+        outline-offset: -2px;
+    }
+    #beamjoy-info-panel .pad-hints {
+        display: flex;
+        align-items: center;
+        gap: 0.9em;
+        margin-right: 0.4em;
+        font-size: 0.75em;
+        color: #a7aebf;
+        white-space: nowrap;
+    }
+    #beamjoy-info-panel .pad-hints span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35em;
+    }
+    #beamjoy-info-panel .pad-hints b {
+        min-width: 1.6em;
+        height: 1.6em;
+        padding: 0 0.35em;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        border-radius: 0.8em;
+        background: #ebebeb;
+        color: #0a0b0e;
+        font-weight: 700;
+        font-size: 0.9em;
+    }
+    #beamjoy-info-panel .info-panel-tabs {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 0 1.1em 0.9em;
+    }
+    /* bj-tabs, restyled as the main window's segmented tabs */
+    #beamjoy-info-panel bj-tabs .tab-bar {
+        gap: 0.25em;
+        padding-bottom: 0.6em;
+        border-bottom: 0;
+    }
+    #beamjoy-info-panel bj-tabs .tab {
+        margin: 0;
+        padding: 0.35em 0.9em;
+        border: 0;
+        border-radius: 0.25em;
+        background: transparent;
+        color: #a7aebf;
+    }
+    #beamjoy-info-panel bj-tabs .tab.active {
+        margin: 0;
+        padding: 0.35em 0.9em;
+        background: #363a45;
+        color: #fff;
+    }
+    #beamjoy-info-panel bj-tabs .tab:hover {
+        color: #fff;
+    }
+    #beamjoy-info-panel bj-tabs .tab-content {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding-top: 0;
     }
 </style>
 
@@ -65,12 +144,19 @@
     id="beamjoy-info-panel"
     class="d-flex align-center justify-center cursor-pointer"
     ng-if="$ctrl.state.visible"
-    ng-click="$ctrl.close()"
+    ng-click="$ctrl.closeAll()"
 >
     <div class="info-panel-box cursor-default" ng-click="$event.stopPropagation()">
-        <div class="info-panel-header d-flex align-center gap-1">
-            <b class="flex-grow-1">{{$ctrl.state.title}}</b>
-            <span class="close" ng-click="$ctrl.close()">×</span>
+        <div class="info-panel-header">
+            <h2 class="title">{{$ctrl.state.title}}</h2>
+            <div class="pad-hints" ng-if="$ctrl.padUsed" aria-hidden="true">
+                <span ng-if="$ctrl.state.tabs.length > 1"><b>LB</b><b>RB</b>{{'beamjoy.infoPanel.pad.tabs' | translate}}</span>
+                <span><b>A</b>{{'beamjoy.infoPanel.pad.select' | translate}}</span>
+                <span><b>B</b>{{'beamjoy.raceInfo.close' | translate}}</span>
+            </div>
+            <button type="button" class="close" ng-click="$ctrl.close()" aria-label="{{'beamjoy.raceInfo.close' | translate}}">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"></path></svg>
+            </button>
         </div>
         <div class="info-panel-tabs">
             <bj-tabs

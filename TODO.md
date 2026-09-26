@@ -306,11 +306,9 @@ Phase 0-2 (energy stations, garages, bus lines) are shipped — see CHANGELOG. S
     (`windows/main/you`), Leaderboards tab (`windows/main/leaderboards`), Change nickname
     (login prompt `{change: true}` ; `communications/ui.lua` only runs proceedAfterLogin once).
   - **Still open from parts 2/3:** a Crew tab needs the Crews feature itself (see Phase 3
-    follow-ups), not just UI. Staff "Cancel race" on someone else's lobby needs a server action.
-    Race "Start now" and "Invite player" from the lobby mockup don't exist server-side. A staff
-    "everyone's vehicles" block (freeze/remove for all players at once) has no server action
-    either ; per-player all-vehicle buttons are in the full window. Hunter / infected / bus
-    sections only got the skin, not a restructure like races.
+    follow-ups), not just UI. Staff Cancel on any lobby, the staff Everyone's vehicles block,
+    Change settings in the race lobby and the Bus lines restyle are DONE (client 2522 / server
+    2365), untested in-game.
   - **Part 4 - DONE (client 2514), untested in-game:** `beamjoy/mainNav.lua` owns the Focus
     notification control (order: delivery notification, then main window ; delivery exposes
     notificationFocusable / notificationFocused / setNotificationFocus), `uiNav.acquire(owner,
@@ -334,13 +332,6 @@ Phase 0-2 (energy stations, garages, bus lines) are shipped — see CHANGELOG. S
     (`mainNav` pushBinding -> `$rootScope.bjFocusLabel`).
   - Known debt: the hosted old components register `$rootScope.$on` listeners without cleanup,
     and panels now mount/unmount them often ; fix as each is restyled.
-  - **Change race settings from inside the lobby** (feature idea from the mockup's "Change" link):
-    BJS fixes a race's settings when the lobby opens. Letting the leader change laps / vehicles /
-    respawns / advanced options while the lobby is still forming would mean the server accepting a
-    settings update for an open GRID session, re-broadcasting it to members (their lobby tags
-    update), and resetting everyone's ready state when something changes. Check raceRunner /
-    services races session code for how much of the start payload is re-validated; only worth it
-    if it isn't a big change.
   - **Staff player panel in the full window keeps the player-wide buttons.** Revision 3's full
     window now uses the small menu's expandable player rows (actions, vehicles with per-vehicle
     buttons, moderation box). When building it, the full window's staff version must ALSO keep the
@@ -354,7 +345,12 @@ Phase 0-2 (energy stations, garages, bus lines) are shipped — see CHANGELOG. S
     within 45°, nearly stopped) and `precisionParking.lua` grades for a parking factor
     (perfect 1.15 / good 1.10 / ok 1.05 / bad 1.0). A job's max players = its drop-off's spot
     count. West Coast USA facilities reference real parking spots in `*.sites.json`.
-  - **Crews**: a persistent party (max 4 to start) with its own Crew tab next to Activities on the
+  - **Crews - BUILT (client 2522 / server 2365), untested in-game:** `services/crews.lua`
+    (in memory, by player name, pullIn / pullSize / sameCrew called by the grids and
+    deliveries), `beamjoy/crews.lua`, `windows/main/crew` (service `beamjoyCrew`), crew invites
+    in `beamjoy/notices.lua`. Not done: crew markers (none exist yet, so nothing to hide during
+    hunts / infected rounds). Original spec below.
+    Spec: a persistent party (max 4 to start) with its own Crew tab next to Activities on the
     main HUD. Join once and you're pulled into the leader's lobbies (deliveries, races, hunts,
     infected) automatically when free; busy members skip that one. Not in a crew: the tab lists
     every crew to ask to join or join. A job smaller than the crew can't be started with the crew.

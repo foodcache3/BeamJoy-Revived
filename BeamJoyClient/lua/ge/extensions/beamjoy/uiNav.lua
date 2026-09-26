@@ -11,6 +11,11 @@
 --- The Vue tracker turns off action maps it isn't tracking whenever its own menu state resyncs
 --- (e.g. opening and closing the pause menu), so while anything is acquired this re-asserts the
 --- maps on a short timer. Release only turns off the maps this module itself turned on.
+---
+--- While the game's own menu is up (the pause menu : ui/menuManager.lua's onMenuToggled) those
+--- maps are the menu's : nothing is re-asserted, and
+--- letting go never turns off a map the menu is using (that left the pause menu without its d-pad
+--- and face buttons).
 
 local M = {
     -- pad : up/down/left/right = d-pad (and left stick), select = A, back = B, cui_action_2 = X,
@@ -31,7 +36,14 @@ local M = {
     ---@type table<string, true>
     enabledByUs = {},
     lastReassert = 0,
+    -- the game's own menu is open
+    gameMenu = false,
 }
+
+---@return boolean the game's own menu has the menu inputs
+local function gameMenuActive()
+    return M.gameMenu
+end
 
 ---@param action string
 ---@return table? action map
@@ -60,6 +72,7 @@ local function wanted()
 end
 
 local function assertAll()
+    if gameMenuActive() then return end
     for action in pairs(wanted()) do
         local am = actionMap(action)
         if am and not am.enabled then
@@ -76,6 +89,8 @@ local function acquire(owner, extraActions)
     for _, a in ipairs(M.ACTIONS) do table.insert(actions, a) end
     for _, a in ipairs(extraActions or {}) do table.insert(actions, a) end
     M.owners[owner] = actions
+    -- taking the pad happens while driving : the menu is closed, even if its close went unheard
+    M.gameMenu = false
     assertAll()
 end
 
@@ -85,9 +100,11 @@ local function release(owner)
     M.owners[owner] = nil
     -- give back what we turned on and nobody needs anymore
     local still = wanted()
+    local menu = gameMenuActive()
     for action in pairs(M.enabledByUs) do
         if not still[action] then
-            setAction(action, false)
+            -- the game's menu is using it now : leave it on, it's the menu's to turn off
+            if not menu then setAction(action, false) end
             M.enabledByUs[action] = nil
         end
     end
@@ -111,10 +128,18 @@ local function onServerLeave()
     for owner in pairs(M.owners) do release(owner) end
 end
 
+--- the game's pause menu opened or closed (ui/menuManager.lua)
+---@param show boolean
+local function onMenuToggled(show)
+    M.gameMenu = show == true
+end
+
 M.acquire = acquire
 M.release = release
 M.isAcquired = isAcquired
 M.onUpdate = onUpdate
+M.onMenuToggled = onMenuToggled
+M.gameMenuActive = gameMenuActive
 M.onServerLeave = onServerLeave
 M.onExtensionUnloaded = onServerLeave
 

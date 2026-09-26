@@ -1,162 +1,209 @@
+// Race info > Results : the top three, the classification, and one driver's laps (you by
+// default). Each lap is a row with a strip of its sectors, coloured against that driver's own best
+// sector (green), the race's fastest (purple), a small loss (light grey) or a big one (amber). A lap
+// opens to show its sector times. Any number of laps is just a longer list. Built once per push /
+// selection (never in template getters : fresh arrays per digest break ng-repeat).
 angular.module("beamjoy").component("bjRaceInfoResults", {
     templateUrl: "/ui/modModules/beamjoy/windows/raceInfo/results/app.html",
-    controller: function ($rootScope, beamjoyStore) {
+    controller: function ($rootScope, $scope, $filter, beamjoyStore, beamjoyInfoPanel) {
+        const translate = (key) => $filter("translate")(key);
+        const fill = (key, values) =>
+            Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, v), translate(key));
+
         this.active = false;
-        this.finished = false;
-        this.raceName = null;
-        this.sectorCount = 1;
-        this.sectors = [];
-        this.classification = [];
+        this.v = null;
         this.selectedPlayerName = null;
-        this.selectedLaps = [];
-        this.fastestSectorMs = {};
-        // race-wide fastest lap for the classification table's own "Best" column purple highlight.
-        // The Live tab already had this (isFastestLap there), Results never did at all
-        this.fastestLapMs = null;
+        this.openLap = null; // null : the selected driver's best lap ; -1 : none open
+        let data = null;
 
-        const buildClassification = (participants) => {
-            // finished (by total time) first, then still-racing/dnf keep the server's own
-            // leaderboard order (already sorted "most progress first"); matches how a results
-            // screen reads even before every last straggler has actually finished or dnf'd
-            const withTotals = participants.map((p) => {
-                let totalMs = null;
-                if (p.finished && Array.isArray(p.lapTimes)) {
-                    totalMs = p.lapTimes.reduce((a, b) => a + b, 0);
-                }
-                return { ...p, totalMs };
-            });
-            const finishedSorted = withTotals
-                .filter((p) => p.totalMs !== null)
-                .sort((a, b) => a.totalMs - b.totalMs);
-            const rest = withTotals.filter((p) => p.totalMs === null);
-            const ordered = finishedSorted.concat(rest);
-            const winnerMs = finishedSorted.length > 0 ? finishedSorted[0].totalMs : null;
-            return ordered.map((p) => ({
-                ...p,
-                gapMs: p.totalMs !== null && winnerMs !== null ? p.totalMs - winnerMs : null,
-            }));
-        };
-
-        const rebuild = (data) => {
-            this.active = !!data.active;
-            if (!this.active) return;
-            this.raceName = data.raceName;
-            this.finished = data.state === "FINISHED";
-            this.sectorCount = data.sectorCount;
-            this.sectors = Array.from({ length: this.sectorCount }, (_, i) => i + 1);
-            this.classification = buildClassification(data.participants || []);
-
-            this.fastestLapMs = null;
-            (data.participants || []).forEach((p) => {
-                if (typeof p.bestLapMs === "number") {
-                    if (this.fastestLapMs === null || p.bestLapMs < this.fastestLapMs) {
-                        this.fastestLapMs = p.bestLapMs;
-                    }
-                }
-            });
-
-            // race-wide fastest sector, for highlighting a selected player's own splits against
-            // the best anyone actually posted that sector; same "purple" convention as the live
-            // tab
-            this.fastestSectorMs = {};
-            (data.participants || []).forEach((p) => {
-                this.sectors.forEach((s) => {
-                    // bestSectorMs is keyed "s1"/"s2"/... , not plain numbers: see keyify() in
-                    // raceRunner.lua. A table keyed by small positive integers is indistinguishable
-                    // from an array to both this codebase's JSON encoder and the engine's Lua->UI
-                    // bridge, so it would otherwise arrive here as a 0-indexed JS array instead of
-                    // an object keyed by sector number
-                    const v = p.bestSectorMs && p.bestSectorMs["s" + s];
-                    if (typeof v === "number") {
-                        if (
-                            this.fastestSectorMs[s] === undefined ||
-                            v < this.fastestSectorMs[s]
-                        ) {
-                            this.fastestSectorMs[s] = v;
-                        }
-                    }
-                });
-            });
-
-            if (
-                !this.selectedPlayerName ||
-                !this.classification.some((p) => p.playerName === this.selectedPlayerName)
-            ) {
-                this.selectedPlayerName =
-                    this.classification.length > 0 ? this.classification[0].playerName : null;
-            }
-            this.rebuildSelectedLaps();
-        };
-
-        $rootScope.$on("BJRaceInfo", (_, data) => rebuild(data));
-
-        this.$onInit = () => {
-            beamjoyStore.send("BJRaceInfoRequest");
-        };
-
-        this.selectPlayer = (playerName) => {
-            this.selectedPlayerName = playerName;
-            this.rebuildSelectedLaps();
-        };
-
-        this.rebuildSelectedLaps = () => {
-            const p = this.classification.find(
-                (row) => row.playerName === this.selectedPlayerName
-            );
-            if (!p || !Array.isArray(p.lapTimes)) {
-                this.selectedLaps = [];
-                return;
-            }
-            // lapSectorHistory is keyed "lap1"/"lap2"/... (each value itself keyed "s1"/"s2"/...)
-            // rather than plain numbers; see keyifyLapSectorHistory() in raceRunner.lua, same
-            // array-vs-object ambiguity keyify() works around
-            this.selectedLaps = p.lapTimes.map((lapMs, i) => {
-                const raw = (p.lapSectorHistory && p.lapSectorHistory["lap" + (i + 1)]) || {};
-                const sectors = {};
-                this.sectors.forEach((s) => {
-                    if (raw["s" + s] !== undefined) sectors[s] = raw["s" + s];
-                });
-                return { lap: i + 1, lapMs, sectors };
-            });
-        };
-
-        this.formatTime = (ms) => {
+        const clock = (ms) => {
             if (typeof ms !== "number" || ms < 0) return "-";
             const totalSec = ms / 1000;
-            const min = Math.floor(totalSec / 60);
-            const sec = (totalSec % 60).toFixed(2);
-            return `${min}:${sec.padStart(5, "0")}`;
+            return `${Math.floor(totalSec / 60)}:${(totalSec % 60).toFixed(2).padStart(5, "0")}`;
+        };
+        const secs = (ms) => (typeof ms === "number" ? (ms / 1000).toFixed(2) : "-");
+        const plus = (ms) => `+${(Math.abs(ms) / 1000).toFixed(2)}`;
+        const nameOf = (p) => p.displayName || p.playerName;
+
+        // finished (by total time) first, then still racing in race order, then retired
+        const classify = (participants) => {
+            const withTotals = participants.map((p) => ({
+                ...p,
+                totalMs: p.finished && Array.isArray(p.lapTimes) ? p.lapTimes.reduce((a, b) => a + b, 0) : null,
+            }));
+            const done = withTotals.filter((p) => p.totalMs !== null).sort((a, b) => a.totalMs - b.totalMs);
+            const racing = withTotals.filter((p) => p.totalMs === null && !p.dnf);
+            const out = withTotals.filter((p) => p.totalMs === null && p.dnf);
+            return done.concat(racing, out);
         };
 
-        this.formatGap = (ms) => {
-            if (typeof ms !== "number") return "-";
-            if (ms === 0) return "-";
-            return `+${(ms / 1000).toFixed(2)}s`;
-        };
-
-        this.isFastestSector = (sector, ms) =>
-            typeof ms === "number" && this.fastestSectorMs[sector] === ms;
-
-        this.isFastestLap = (p) =>
-            this.fastestLapMs !== null && p.bestLapMs === this.fastestLapMs;
-
-        // sum of a player's own best sector times; see the Live tab's identical helper for why
-        // this is undefined (shown as "-") rather than a partial sum until every sector has a
-        // best time recorded at least once. Real, confirmed bug fixed here: with zero sectors
-        // (a branching race, see computeSectorCount's own comment), the loop below never ran at
-        // all, so `sum` stayed at its initial 0 and got returned as a real value instead of
-        // undefined, showing a bogus "0:00.00" Theoretical time for every participant rather than
-        // "-". Explicit empty-sectors guard now returns undefined the same as any other
-        // no-real-data case.
-        this.theoreticalBest = (p) => {
-            if (!p.bestSectorMs || this.sectors.length === 0) return undefined;
-            let sum = 0;
-            for (const s of this.sectors) {
-                const v = p.bestSectorMs["s" + s];
-                if (typeof v !== "number") return undefined;
-                sum += v;
+        const render = () => {
+            if (!data || !data.active) {
+                this.v = null;
+                return;
             }
-            return sum;
+            const sectors = data.sectorCount || 0;
+            const sectorList = Array.from({ length: sectors }, (_, i) => i + 1);
+            const order = classify(data.participants || []);
+            const winner = order.find((p) => p.totalMs !== null);
+            const multi = order.length > 1;
+
+            // race-wide bests (purple)
+            let fastestLap = null;
+            const fastestSector = {};
+            order.forEach((p) => {
+                if (typeof p.bestLapMs === "number" && (fastestLap === null || p.bestLapMs < fastestLap)) fastestLap = p.bestLapMs;
+                sectorList.forEach((s) => {
+                    const ms = p.bestSectorMs && p.bestSectorMs["s" + s];
+                    if (typeof ms === "number" && (fastestSector[s] === undefined || ms < fastestSector[s])) fastestSector[s] = ms;
+                });
+            });
+
+            if (!this.selectedPlayerName || !order.some((p) => p.playerName === this.selectedPlayerName)) {
+                const self = order.find((p) => p.playerName === data.selfPlayerName);
+                this.selectedPlayerName = (self || order[0] || {}).playerName || null;
+                this.openLap = null;
+            }
+
+            const rows = order.map((p, i) => ({
+                playerName: p.playerName,
+                pos: p.totalMs !== null ? String(i + 1) : p.dnf ? "DNF" : String(i + 1),
+                plateCls: p.dnf ? "out" : i === 0 && p.totalMs !== null ? "p1" : "",
+                rowCls: (p.playerName === this.selectedPlayerName ? "sel" : "") + (p.dnf ? " out" : ""),
+                selected: p.playerName === this.selectedPlayerName,
+                name: nameOf(p),
+                car: p.vehicleModel || "",
+                total: p.totalMs !== null ? clock(p.totalMs) : translate(p.dnf ? "beamjoy.raceInfo.retired" : "beamjoy.raceInfo.racing"),
+                gap: p.totalMs !== null && winner && p !== winner ? `${plus(p.totalMs - winner.totalMs)}s` : "",
+                best: clock(p.bestLapMs),
+                bestCls: typeof p.bestLapMs === "number" && p.bestLapMs === fastestLap ? "fast" : "",
+            }));
+            const podium = multi
+                ? order.filter((p) => p.totalMs !== null).slice(0, 3).map((p, i) => ({
+                    pos: String(i + 1),
+                    name: nameOf(p),
+                    line: i === 0 ? clock(p.totalMs) : `${plus(p.totalMs - winner.totalMs)}s`,
+                    cls: i === 0 ? "first" : "",
+                    plateCls: i === 0 ? "p1" : "",
+                }))
+                : [];
+
+            // the selected driver's laps
+            const sel = order.find((p) => p.playerName === this.selectedPlayerName);
+            let laps = [];
+            let ideal = null;
+            let summary = "";
+            if (sel) {
+                const lapTimes = Array.isArray(sel.lapTimes) ? sel.lapTimes : [];
+                const pb = {};
+                sectorList.forEach((s) => {
+                    const ms = sel.bestSectorMs && sel.bestSectorMs["s" + s];
+                    if (typeof ms === "number") pb[s] = ms;
+                });
+                const heat = (ms, s) => {
+                    if (typeof ms !== "number") return "";
+                    if (ms === fastestSector[s]) return "fast";
+                    if (ms === pb[s]) return "pb";
+                    const loss = ms - pb[s];
+                    return loss >= 500 ? "slow" : loss <= 200 ? "near" : "ok";
+                };
+                const bestIdx = typeof sel.bestLapMs === "number" ? lapTimes.indexOf(sel.bestLapMs) : -1;
+                const openIdx = this.openLap === null ? bestIdx : this.openLap;
+                laps = lapTimes.map((t, l) => {
+                    const own = (sel.lapSectorHistory && sel.lapSectorHistory["lap" + (l + 1)]) || {};
+                    const d = bestIdx > -1 ? t - lapTimes[bestIdx] : 0;
+                    return {
+                        idx: l,
+                        n: l + 1,
+                        time: clock(t),
+                        tCls: t === fastestLap ? "fast" : l === bestIdx ? "pbt" : d >= 1000 ? "slowt" : "",
+                        delta: l === bestIdx ? translate("beamjoy.raceInfo.best") : plus(d),
+                        cells: sectorList.map((s) => heat(own["s" + s], s)),
+                        open: sectors > 1 && l === openIdx,
+                        detail: sectorList.map((s) => {
+                            const ms = own["s" + s];
+                            const h = heat(ms, s);
+                            const lost = typeof ms === "number" && fastestSector[s] !== undefined ? ms - fastestSector[s] : null;
+                            return {
+                                n: s,
+                                time: secs(ms),
+                                delta: lost === null ? "" : lost === 0 ? translate("beamjoy.raceInfo.fastest") : plus(lost),
+                                cls: h === "fast" ? "fast" : h === "pb" ? "pbt" : h === "slow" ? "slowt" : "",
+                            };
+                        }),
+                    };
+                });
+                // best possible lap : your best in every sector, once each has one
+                if (sectors > 1 && sectorList.every((s) => pb[s] !== undefined) && lapTimes.length > 0) {
+                    const sum = sectorList.reduce((a, s) => a + pb[s], 0);
+                    ideal = {
+                        time: clock(sum),
+                        delta: typeof sel.bestLapMs === "number" ? `-${(Math.max(0, sel.bestLapMs - sum) / 1000).toFixed(2)}` : "",
+                        cells: sectorList.map((s) => (pb[s] === fastestSector[s] ? "fast" : "pb")),
+                    };
+                }
+                const place = order.indexOf(sel) + 1;
+                if (sel.totalMs !== null && bestIdx > -1) {
+                    summary = fill(multi ? "beamjoy.raceInfo.summary" : "beamjoy.raceInfo.summarySolo", {
+                        pos: place,
+                        time: clock(sel.bestLapMs),
+                        lap: bestIdx + 1,
+                    });
+                } else if (sel.totalMs !== null) summary = clock(sel.totalMs);
+                else summary = translate(sel.dnf ? "beamjoy.raceInfo.retired" : "beamjoy.raceInfo.racing");
+            }
+
+            const chips = [];
+            chips.push(data.state === "FINISHED"
+                ? { text: translate("beamjoy.raceInfo.finished"), cls: "ok" }
+                : { text: translate("beamjoy.raceInfo.stillRacing") });
+            const lapsTotal = data.totalLaps || 1;
+            chips.push({ text: lapsTotal > 1 ? fill("beamjoy.raceInfo.lapCount", { n: lapsTotal }) : translate("beamjoy.raceInfo.pointToPoint") });
+            if (sectors > 1) chips.push({ text: fill("beamjoy.raceInfo.sectorCount", { n: sectors }) });
+            chips.push({ text: fill(order.length === 1 ? "beamjoy.raceInfo.racerCountOne" : "beamjoy.raceInfo.racerCount", { n: order.length }) });
+
+            this.v = {
+                chips,
+                podium,
+                rows,
+                sel: sel ? { name: nameOf(sel), summary } : null,
+                laps,
+                ideal,
+                sectors,
+                raceId: data.raceId,
+            };
+        };
+
+        const off = $rootScope.$on("BJRaceInfo", (_, d) => {
+            this.active = !!d.active;
+            data = d;
+            render();
+        });
+        $scope.$on("$destroy", off);
+        this.$onInit = () => beamjoyStore.send("BJRaceInfoRequest");
+
+        this.selectPlayer = (playerName) => {
+            if (playerName === this.selectedPlayerName) return;
+            this.selectedPlayerName = playerName;
+            this.openLap = null;
+            render();
+        };
+        this.toggleLap = (lap) => {
+            this.openLap = lap.open ? -1 : lap.idx;
+            render();
+        };
+        this.close = () => beamjoyInfoPanel.close();
+        // the race's all-time leaderboard, in the same window
+        this.openLeaderboard = () => {
+            const raceId = this.v ? Number(this.v.raceId) : NaN;
+            if (!Number.isFinite(raceId)) return;
+            beamjoyInfoPanel.push(data.raceName || "", [
+                {
+                    id: "leaderboard",
+                    title: "beamjoy.window.main.tabs.races.leaderboard.title",
+                    template: `<bj-race-leaderboard race-id="${raceId}"></bj-race-leaderboard>`,
+                },
+            ], "leaderboard");
         };
     },
 });

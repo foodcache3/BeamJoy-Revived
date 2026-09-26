@@ -56,6 +56,13 @@
         background: #c24b00;
         color: #fff;
     }
+    bj-main-now .now-btn.danger {
+        color: #ff8f80;
+    }
+    bj-main-now .now-btn.danger.armed {
+        background: #b3261e;
+        color: #fff;
+    }
     bj-main-now .now-btn:hover {
         filter: brightness(1.12);
     }
@@ -81,6 +88,10 @@
         font-weight: 600;
         cursor: pointer;
     }
+    bj-main-now .now-card .mine-timer {
+        font-variant-numeric: tabular-nums;
+        color: #ffbca0;
+    }
     bj-main-now .now-start:hover {
         border-color: #ff8955;
     }
@@ -89,6 +100,7 @@
 <div class="now-card mine" ng-if="$ctrl.mine()">
     <span class="title">{{$ctrl.mine().title}}</span>
     <span class="line">{{$ctrl.mine().line}}</span>
+    <span class="line mine-timer" role="timer" ng-if="$ctrl.mine().timer">{{$ctrl.mine().timer}}</span>
     <span class="actions">
         <button type="button" class="now-btn primary" ng-click="$ctrl.open($ctrl.mine().section)">
             {{'beamjoy.window.main.now.openMine' | translate}}
@@ -105,6 +117,11 @@
         </button>
         <button type="button" class="now-btn" ng-if="$ctrl.canSpectate(row)" ng-click="$ctrl.spectate(row)">
             {{'beamjoy.window.main.now.spectate' | translate}}
+        </button>
+        <!-- staff : a first press arms it, a second within 4 s cancels -->
+        <button type="button" class="now-btn danger" ng-class="{armed: $ctrl.cancelArmed === row.id}" ng-if="$ctrl.canCancel(row)"
+            ng-click="$ctrl.cancel(row)" title="{{'beamjoy.window.main.now.staffCancel.tooltip' | translate}}">
+            {{($ctrl.cancelArmed === row.id ? 'beamjoy.window.main.now.staffCancel.confirm' : 'beamjoy.window.main.now.staffCancel') | translate}}
         </button>
     </span>
 </div>

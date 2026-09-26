@@ -8,8 +8,122 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Client build 2521, server build 2364.
+Client build 2523, server build 2366.
 
+- **Race HUD takes the Focus control.** During a race the Focus control now focuses the race HUD
+  instead of the main window, and shows its Race info and Retire buttons (hidden otherwise). The
+  d-pad picks, A presses, B or the control again lets go. Retire is a 5 second hold (A or the
+  mouse) that fills the button, letting go early cancels. It also lets go when the race ends or
+  the pause menu opens. *(client only)*
+- **Infected vehicle presets.** The infected start form has a vehicle preset for each side
+  (survivors, first infected) and Randomize, like the hunt. At the countdown a player not in one
+  of their side's vehicles (or everyone, with Randomize) is given one ; players infected mid-round
+  keep theirs. An arena that forces one vehicle on everyone still wins. The start form is now
+  stacked like the hunt's, so it fits the side panel. *(server and client)*
+- **Vehicle pool choices are greyed out when the server has no vehicle presets**, with a tooltip
+  saying so: the Pool vehicle mode in the race start form and the race editor, and the vehicle
+  preset dropdowns in the hunter and infected start forms and the hunter arena editor. The
+  controller's cursor skips them too. *(client only)*
+- **Race lobby:** the free slots are one row ("5 open slots") instead of a row each.
+- **Race results > Leaderboard:** B (or Close) goes back to the results instead of closing.
+- **Crews:** "Busy, skips this one" is now just "Busy", and "Free, joins your activities" only
+  shows to the crew leader (everyone else sees "Free").
+- **Controller:** up / down goes to the nearest row first, then the closest control in it, so a
+  toggle at the end of its row (Reveal on final stretch) is no longer skipped. After Start opens
+  an activity's options, the cursor lands on the first new option, not the race's Leaderboard
+  button. *(client only)*
+- **Race info (and the leaderboard / infected results overlay) works with a controller.** While
+  it's open it has the pad and the main window steps aside: the d-pad moves between its buttons
+  (drivers, laps, Leaderboard, Close) and scrolls a list when there's nothing further that way,
+  A selects, LB / RB switch tabs, B closes. Button hints show in its header once the pad is used.
+  *(client only)*
+- **Fixed: the pause menu losing the d-pad and face buttons.** Opening the game's pause menu now
+  lets go of the controller in the BeamJoy menu and any focused notification. While the pause
+  menu is up BJS no longer re-grabs the menu inputs, and letting go never switches off an input
+  the pause menu is using. *(client only)*
+- **Fixed: no "Lobby closes in" timer in race, hunt and infected lobbies** until everyone had
+  readied: the client only picked up the lobby's closing time together with the all-ready start
+  timer. The Now page's card for your own lobby now shows the timer too. *(client only)*
+- **Bus lines list redesigned** like the Jobs depot list: a table with each line's name (loop or
+  one way), stop count and route. The controller's cursor selects a row, A (or a second click)
+  starts it. *(client only)*
+- **Crews:** your own seat no longer shows a status, and a crewmate in the same lobby, race,
+  hunt, infected game or convoy as you shows "With you" instead of "Busy, skips this one". The
+  leader now gets a hint to select a crewmate to make them crew leader or remove them, and the
+  button reads "Make {name} crew leader". *(server and client)*
+- **Hunter start options** are stacked (label above the control), like the race start form, so
+  they fit the side panel. The win condition and respawn choices use the orange segmented
+  buttons, so the selected one stands out. *(client only)*
+- **Controller:** when the button under the cursor disappears (Start opening an activity's
+  options, a list turning into a lobby), the cursor lands on the lobby's main action if there is
+  one, otherwise on the nearest control where the button was, not back on the activity tabs.
+  *(client only)*
+- **Fixed: the race reset penalty during a hold-to-rewind recover.** With free respawn, the
+  penalty now starts when you let go of recover. It used to start when you pressed it, so the
+  freeze fought the rewind and the countdown ran down while you were still rewinding. Checkpoint
+  respawns and hard resets still apply it straight away. *(client only)*
+- **Race HUD and race info redesign.** Both now match the main window's look and are built to
+  handle full grids, long races and up to 12 sectors. *(client only)*
+  - **Three race HUD layouts**, picked in Settings > Menu > Race HUD layout and saved per player:
+    - *Standard:* your position, big gap numbers to the cars ahead and behind, your lap with the
+      running lap timer and live delta, this lap's sector strip, last and best lap, and a short
+      standings list (the leader, then the cars around you, with the rest folded).
+    - *Compact:* the essentials only: position, lap, timer and delta, sector strip, both gaps,
+      last and best lap.
+    - *Full standings:* every racer with their gap to the leader, the race's progress and the
+      fastest lap, for broadcasting or spectating.
+  - A chequered flag marks racers who have finished, everywhere they're listed. Folded standings
+    say how many in them have finished.
+  - **Race info > Live:** one compact row per racer, with this lap's sector strip (purple: the
+    fastest anyone has set, orange: the sector they're in), last lap, gaps to the car ahead and
+    the leader, and best lap. Finished racers show their time. On a point-to-point stage the lap
+    columns count sectors instead. Your row is highlighted.
+  - **Race info > Results:** the top three, the classification, and one driver's laps (you by
+    default, pick anyone). Every lap is a row with a strip of its sectors coloured by time lost
+    (purple fastest in the race, green personal best, amber 0.5s or more lost), so any number of
+    laps fits. Selecting a lap shows its sector times. A best-possible-lap row sums the driver's
+    best sectors. A Leaderboard button opens the race's all-time times.
+  - The info window's frame (also used by the race leaderboard and infected results) has the
+    main window's look too.
+- **Fixed: the UI flooding errors during lobby countdowns.** The race, hunt and infected lobby
+  timers and the Now panel's "your activity" card rebuilt their data on every UI refresh, which
+  Angular treats as a value that never settles. Every frame with a timer on screen logged an
+  infinite-digest error (over 10,000 in one countdown) and stalled the UI. They now reuse the same
+  data until it actually changes. *(client only)*
+- **Hide the sidebar when not in use.** New Settings > Menu option. While no panel is open and
+  the pad isn't on the menu, the rail shrinks to a small orange handle at its edge (brighter when
+  lobbies or crew requests are waiting). Hovering it, the Focus binding or opening a panel brings
+  it back. Saved per player, like the rail's position. *(client only)*
+- **Crews.** A new Crew tab on the rail and in the full window. A crew is up to 8 players:
+  when its leader opens a race, hunt or infected lobby or a convoy, every crewmate who's online
+  and free joins it automatically (busy ones skip it and get told why). Crewmates can join the
+  leader's private race lobbies. A convoy job with fewer seats than the crew can't be started
+  with it. Crews last until the server restarts: disconnecting keeps your seat, and a leader who
+  goes offline hands the crew to an online member.
+  - Not in a crew: create one (the name is optional), or join from the crew list. Open crews take
+    anyone; the others ask their leader first.
+  - In a crew: the crew is drawn as eight slanted seats whose signal bars show who's free, busy or
+    offline. The leader can invite players (X, or Invite to crew on a player's row in Players),
+    accept or decline requests, make someone else leader, remove members and open the crew to
+    anyone. The rail's Crew button shows pending requests.
+  - Crew invites arrive in the notification stack, last 30 s, and stay while you're busy.
+  - Being brought into your leader's lobby or convoy shows a notice in the stack ("Your crew
+    joined X's race") with Open lobby (A), which opens the main window on that lobby.
+  *(client + server)*
+- **Change race settings in the lobby.** The leader has a Change settings button while the
+  lobby is open. It reopens the start form with the current settings (the lobby's own timers
+  stay fixed). Saving checks them like a start, sets everyone back to not ready, tells the others,
+  and steers their vehicle again if the restriction changed. A single-config restriction keeps
+  its original capture. *(client + server)*
+- **Staff: everyone's vehicles.** The full window's Players tab has an Everyone's vehicles block
+  for staff: Freeze all, Unfreeze all, Stop all engines, Start all engines and Remove all
+  (Remove asks for a second press). It acts on every player ranked below you. *(client + server)*
+- **Staff: cancel any session.** Happening now shows staff a Cancel button on other players'
+  races, hunts and infected games (press twice). The players in it get a toast saying staff
+  closed it. *(client + server)*
+- **Bus lines restyled.** The Bus lines section uses the new card layout: stop count, first and
+  last stop, a Loopable tag, and Start straight away (no lobby, bus lines are solo). *(client
+  only)*
 - **Hunts need vehicle presets.** A hunt can't start without a vehicle preset for the fugitive
   and one for the hunters (players who weren't in a car when it started got an empty vehicle
   picker). The start form says what's missing and keeps Start disabled; the server refuses too.

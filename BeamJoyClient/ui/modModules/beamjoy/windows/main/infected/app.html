@@ -37,6 +37,12 @@
     bj-main-infected .force-role-btn {
         padding: 0.05em 0.3em;
     }
+    bj-main-infected .infected-form {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8em;
+        margin-top: 0.4em;
+    }
 </style>
 
 <!-- IN A GAME : the lobby, the countdown or the game itself (same layout as the race and convoy
@@ -159,38 +165,42 @@
     </button>
 
     <div class="start-options" ng-if="$ctrl.starting">
-        <table class="w-100">
-            <tr>
-                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.initialInfectedCount.tooltip' | translate}}">
-                    {{'beamjoy.window.config.tabs.infectedArena.initialInfectedCount' | translate}}
-                </td>
-                <td><bj-slider ng-model="$ctrl.startOptions.initialInfectedCount" min="1" max="5" hard-max="20" step="1"></bj-slider></td>
-            </tr>
-            <tr>
-                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.roundDuration.tooltip' | translate}}">
-                    {{'beamjoy.window.config.tabs.infectedArena.roundDuration' | translate}}
-                </td>
-                <td><bj-slider ng-model="$ctrl.startOptions.roundDuration" min="1" max="30" hard-max="120" step="1"></bj-slider></td>
-            </tr>
-            <tr>
-                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.infectedStartDelay.tooltip' | translate}}">
-                    {{'beamjoy.window.config.tabs.infectedArena.infectedStartDelay' | translate}}
-                </td>
-                <td><bj-slider ng-model="$ctrl.startOptions.infectedStartDelay" min="0" max="30" hard-max="60" step="1"></bj-slider></td>
-            </tr>
-            <tr>
-                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.enableColors.tooltip' | translate}}">
-                    {{'beamjoy.window.config.tabs.infectedArena.enableColors' | translate}}
-                </td>
-                <td><bj-toggle ng-model="$ctrl.startOptions.enableColors"></bj-toggle></td>
-            </tr>
-            <tr>
-                <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.disableResets.tooltip' | translate}}">
-                    {{'beamjoy.window.config.tabs.infectedArena.disableResets' | translate}}
-                </td>
-                <td><bj-toggle ng-model="$ctrl.startOptions.disableResets"></bj-toggle></td>
-            </tr>
-        </table>
+        <!-- stacked like the Races and Hunter start forms : label above control, fits the side panel -->
+        <div class="infected-form">
+            <div class="bjr-field">
+                <span class="name" title="{{'beamjoy.window.config.tabs.infectedArena.initialInfectedCount.tooltip' | translate}}">{{'beamjoy.window.config.tabs.infectedArena.initialInfectedCount' | translate}}</span>
+                <bj-slider ng-model="$ctrl.startOptions.initialInfectedCount" min="1" max="5" hard-max="20" step="1"></bj-slider>
+            </div>
+            <div class="bjr-field">
+                <span class="name" title="{{'beamjoy.window.config.tabs.infectedArena.roundDuration.tooltip' | translate}}">{{'beamjoy.window.config.tabs.infectedArena.roundDuration' | translate}}</span>
+                <bj-slider ng-model="$ctrl.startOptions.roundDuration" min="1" max="30" hard-max="120" step="1"></bj-slider>
+            </div>
+            <div class="bjr-field">
+                <span class="name" title="{{'beamjoy.window.config.tabs.infectedArena.infectedStartDelay.tooltip' | translate}}">{{'beamjoy.window.config.tabs.infectedArena.infectedStartDelay' | translate}}</span>
+                <bj-slider ng-model="$ctrl.startOptions.infectedStartDelay" min="0" max="30" hard-max="60" step="1"></bj-slider>
+            </div>
+            <div class="bjr-toggle-row">
+                <span title="{{'beamjoy.window.config.tabs.infectedArena.enableColors.tooltip' | translate}}">{{'beamjoy.window.config.tabs.infectedArena.enableColors' | translate}}</span>
+                <bj-toggle ng-model="$ctrl.startOptions.enableColors"></bj-toggle>
+            </div>
+            <div class="bjr-toggle-row">
+                <span title="{{'beamjoy.window.config.tabs.infectedArena.disableResets.tooltip' | translate}}">{{'beamjoy.window.config.tabs.infectedArena.disableResets' | translate}}</span>
+                <bj-toggle ng-model="$ctrl.startOptions.disableResets"></bj-toggle>
+            </div>
+            <div class="bjr-field" ng-if="!$ctrl.arenaForcesVehicle()">
+                <span class="name" title="{{'beamjoy.window.main.tabs.infected.survivorsVehicles.tooltip' | translate}}">{{'beamjoy.window.main.tabs.infected.survivorsVehicles' | translate}}</span>
+                <bj-select ng-model="$ctrl.startOptions.survivorsVehiclePresetId" options="$ctrl.vehiclePresetOptions" ng-class="{disabled: $ctrl.vehiclePresetOptions.length <= 1}" ng-attr-title="{{$ctrl.vehiclePresetOptions.length <= 1 ? ('beamjoy.vehiclePresets.noneYet' | translate) : undefined}}"></bj-select>
+            </div>
+            <div class="bjr-field" ng-if="!$ctrl.arenaForcesVehicle()">
+                <span class="name" title="{{'beamjoy.window.main.tabs.infected.infectedVehicles.tooltip' | translate}}">{{'beamjoy.window.main.tabs.infected.infectedVehicles' | translate}}</span>
+                <bj-select ng-model="$ctrl.startOptions.infectedVehiclePresetId" options="$ctrl.vehiclePresetOptions" ng-class="{disabled: $ctrl.vehiclePresetOptions.length <= 1}" ng-attr-title="{{$ctrl.vehiclePresetOptions.length <= 1 ? ('beamjoy.vehiclePresets.noneYet' | translate) : undefined}}"></bj-select>
+            </div>
+            <div class="bjr-toggle-row" ng-if="!$ctrl.arenaForcesVehicle() && ($ctrl.startOptions.survivorsVehiclePresetId || $ctrl.startOptions.infectedVehiclePresetId)">
+                <span title="{{'beamjoy.window.config.tabs.hunterArena.randomizeVehiclePool.tooltip' | translate}}">{{'beamjoy.window.config.tabs.hunterArena.randomizeVehiclePool' | translate}}</span>
+                <bj-toggle ng-model="$ctrl.startOptions.randomizeVehiclePool"></bj-toggle>
+            </div>
+            <p class="bjr-muted" ng-if="$ctrl.arenaForcesVehicle()">{{'beamjoy.window.main.tabs.infected.arenaVehicle' | translate}}</p>
+        </div>
         <div class="d-flex gap-1 mt-1">
             <button class="btn success" ng-click="$ctrl.confirmStart($event)">
                 {{'beamjoy.window.main.tabs.infected.start' | translate}}

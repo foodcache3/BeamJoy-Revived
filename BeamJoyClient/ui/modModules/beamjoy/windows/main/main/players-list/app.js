@@ -17,7 +17,7 @@ angular.module("beamjoy").component("bjPlayersList", {
     },
     templateUrl:
         "/ui/modModules/beamjoy/windows/main/main/players-list/app.html",
-    controller: function ($rootScope, $scope, beamjoyStore, $filter) {
+    controller: function ($rootScope, $scope, $timeout, beamjoyStore, $filter) {
         const translate = $filter("translate");
         this.players = [];
         // the one expanded row, by playerName (kept across list refreshes) : opening another
@@ -37,6 +37,24 @@ angular.module("beamjoy").component("bjPlayersList", {
             }
         };
         this.moderate = (player) => $rootScope.$broadcast("BJMainModerate", player.playerName);
+
+        // staff : everyone's vehicles at once (services/players.lua staffAllVehicles). Remove
+        // asks twice : a first press arms it for 4 s
+        this.isStaff = () => beamjoyStore.permissions.isStaff();
+        this.ALL_ACTIONS = ["freeze", "unfreeze", "stopEngines", "startEngines", "remove"];
+        this.allArmed = null;
+        let disarm = null;
+        this.allVehicles = (action) => {
+            $timeout.cancel(disarm);
+            if (action === "remove" && this.allArmed !== action) {
+                this.allArmed = action;
+                disarm = $timeout(() => (this.allArmed = null), 4000);
+                return;
+            }
+            this.allArmed = null;
+            beamjoyStore.send("BJStaffAllVehicles", [action]);
+        };
+        $scope.$on("$destroy", () => $timeout.cancel(disarm));
         this.moderationInputs = {};
 
         this.updateList = () => {

@@ -64,12 +64,17 @@
         display: inline-flex;
         align-items: center;
         gap: 0.45em;
+        min-width: 0;
+        line-height: 1.25;
         font-size: 0.8em;
         color: #979dad;
     }
+    /* the binding's name stays on one line : a wrapped "RB + X" squashed into the box */
     #beamjoy-notices .key {
+        flex-shrink: 0;
         height: 1.6em;
         padding: 0 0.45em;
+        white-space: nowrap;
         display: inline-flex;
         align-items: center;
         border: 1px solid #979dad;
@@ -139,7 +144,7 @@
                     <span class="glyph" aria-hidden="true" ng-if="$ctrl.padActive && $first">B</span>{{'beamjoy.notices.dismiss' | translate}}
                 </button>
                 <button type="button" class="primary" ng-click="$ctrl.reply(n, true)">
-                    <span class="glyph" aria-hidden="true" ng-if="$ctrl.padActive && $first">A</span>{{'beamjoy.notices.join' | translate}}
+                    <span class="glyph" aria-hidden="true" ng-if="$ctrl.padActive && $first">A</span>{{$ctrl.acceptLabel(n) | translate}}
                 </button>
             </span>
         </div>

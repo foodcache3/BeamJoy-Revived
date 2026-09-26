@@ -73,6 +73,49 @@
         border-radius: 0.5em;
         pointer-events: auto;
     }
+    /* hidden while idle (Settings > Menu) : only a small handle stays, on the screen-edge side.
+       The rail keeps its box, so hovering where it sits brings it back */
+    .bjr-rail.tucked {
+        background: transparent;
+        border-color: transparent;
+    }
+    .bjr-rail.tucked > * {
+        opacity: 0;
+        pointer-events: none;
+    }
+    .bjr-rail::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: 2px;
+        width: 4px;
+        height: 2.8em;
+        margin-top: -1.4em;
+        border-radius: 2px;
+        background: #ff6600;
+        opacity: 0;
+        pointer-events: none;
+    }
+    .bjr-rail.on-left::after {
+        right: auto;
+        left: 2px;
+    }
+    .bjr-rail.tucked::after {
+        opacity: 0.55;
+    }
+    /* something is waiting (joinable lobbies, crew requests) : the badges are hidden, the handle
+       says so instead */
+    .bjr-rail.tucked.alert::after {
+        opacity: 1;
+        box-shadow: 0 0 6px rgba(255, 102, 0, 0.8);
+    }
+    @media (prefers-reduced-motion: no-preference) {
+        .bjr-rail,
+        .bjr-rail > *,
+        .bjr-rail::after {
+            transition: opacity 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+        }
+    }
     /* the logo is the rail's drag handle (double-click puts it back) */
     .bjr-rail .rail-logo {
         cursor: grab;
@@ -530,6 +573,10 @@
         font-size: 0.82em;
         cursor: pointer;
     }
+    .bjr .bjr-seg button:disabled {
+        opacity: 0.45;
+        cursor: default;
+    }
     .bjr .bjr-seg button.on {
         background: rgba(255, 102, 0, 0.16);
         box-shadow: inset 0 0 0 1px rgba(255, 102, 0, 0.6);
@@ -731,7 +778,8 @@
 </style>
 
 <div id="beamjoy-main" class="bjr" ng-if="$ctrl.visible" ng-class="{'side-left': $ctrl.side() === 'left'}">
-    <nav class="bjr-rail" ng-class="{pad: $ctrl.pad, dimmed: $ctrl.dimmed()}" ng-style="$ctrl.railStyle()" aria-label="{{'beamjoy.window.main.rail.label' | translate}}">
+    <nav class="bjr-rail" ng-class="{pad: $ctrl.pad, dimmed: $ctrl.dimmed(), tucked: $ctrl.railTucked(), alert: $ctrl.nowCount() > 0 || $ctrl.crewCount() > 0, 'on-left': $ctrl.side() === 'left'}" ng-style="$ctrl.railStyle()"
+        ng-mouseenter="$ctrl.hoverRail(true)" ng-mouseleave="$ctrl.hoverRail(false)" aria-label="{{'beamjoy.window.main.rail.label' | translate}}">
         <div class="rail-logo" title="{{'beamjoy.window.main.rail.drag' | translate}}"
             ng-mousedown="$ctrl.startDrag($event)">
             <svg width="30" height="30" viewBox="0 0 100 100" aria-hidden="true">
@@ -757,6 +805,14 @@
             aria-label="{{'beamjoy.window.main.tabs.races.title' | translate}}">
             <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 20V3M5 4h11l-2.5 4L16 12H5"></path></svg>
             <span class="label">{{'beamjoy.window.main.rail.play' | translate}}</span>
+        </button>
+        <button type="button" class="rail-item" ng-class="{active: $ctrl.panel === 'crew' || ($ctrl.full && $ctrl.fullTab === 'crew')}"
+            ng-click="$ctrl.full ? $ctrl.setFullTab('crew') : $ctrl.togglePanel('crew')" data-rail="crew" bjr-pad-cursor="{{$ctrl.railPad('crew')}}"
+            aria-label="{{'beamjoy.window.main.panels.crew' | translate}}">
+            <!-- four slanted seats, the Crew tab's formation -->
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4.6 4h5.2l-1.1 5.6H3.5zM13 4h5.2l-1.1 5.6h-5.2zM3.3 12.4h5.2l-1.1 5.6H2.2zM11.7 12.4h5.2l-1.1 5.6h-5.2z"></path></svg>
+            <span class="label">{{'beamjoy.window.main.rail.crew' | translate}}</span>
+            <span class="rail-badge" ng-if="$ctrl.crewCount() > 0 && $ctrl.panel !== 'crew'">{{$ctrl.crewCount()}}</span>
         </button>
         <button type="button" class="rail-item" ng-class="{active: $ctrl.panel === 'players' || ($ctrl.full && $ctrl.fullTab === 'players')}"
             ng-click="$ctrl.full ? $ctrl.setFullTab('players') : $ctrl.togglePanel('players')" data-rail="players" bjr-pad-cursor="{{$ctrl.railPad('players')}}"
@@ -828,6 +884,7 @@
         <div class="panel-body">
             <bj-main-now ng-if="$ctrl.panel === 'now'"></bj-main-now>
             <bj-main-activities ng-if="$ctrl.panel === 'play'"></bj-main-activities>
+            <bj-main-crew ng-if="$ctrl.panel === 'crew'"></bj-main-crew>
             <bj-players-list ng-if="$ctrl.panel === 'players'"></bj-players-list>
             <bj-main-vote ng-if="$ctrl.panel === 'vote'"></bj-main-vote>
             <bj-main-settings ng-if="$ctrl.panel === 'settings'"></bj-main-settings>
@@ -894,6 +951,7 @@
                 </section>
             </div>
             <bj-main-activities ng-if="$ctrl.fullTab === 'activities'"></bj-main-activities>
+            <bj-main-crew ng-if="$ctrl.fullTab === 'crew'" full="true"></bj-main-crew>
             <bj-players-list ng-if="$ctrl.fullTab === 'players'" full="true" moderation="true"></bj-players-list>
             <bj-main-leaderboards ng-if="$ctrl.fullTab === 'leaderboards'"></bj-main-leaderboards>
             <bj-main-settings ng-if="$ctrl.fullTab === 'settings'"></bj-main-settings>

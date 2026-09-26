@@ -141,6 +141,7 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJRaceSetGridSlot", M.setGridSlot)
     beamjoy_communications_ui.addHandler("BJRaceLeave", M.leave)
     beamjoy_communications_ui.addHandler("BJRaceCancel", M.cancel)
+    beamjoy_communications_ui.addHandler("BJRaceUpdateSettings", M.updateSettings)
     -- the leader starts now with whoever is ready (services/raceGrid.lua)
     beamjoy_communications_ui.addHandler("BJRaceStartNow", function()
         if M.session then beamjoy_communications.send("raceStartNow", M.session.id) end
@@ -1074,6 +1075,29 @@ local function describeOpponent(self, other, totalGates)
     return desc
 end
 
+--- sector/lap indices here are plain small positive integers (1, 2, 3...). A table keyed that way
+--- (e.g. {[1]=1234, [2]=5678}) is indistinguishable from a real array to both this codebase's own
+--- JSON encoder (services/utils/jsonOld.lua's isJsonArray) and the engine's own Lua->UI bridge
+--- (guihooks.trigger, used by communications/ui.lua's send()), so it serializes as a 0-indexed JS
+--- array instead of an object. Angular then reads it with a 1-based sector/lap number and gets
+--- either the WRONG neighboring entry (index N really holds sector/lap N+1's value) or nothing at
+--- all for the last one (index == length is out of bounds). This is what was actually behind both
+--- "sector 3 is misaligned" and "the last lap's sectors aren't counted". Prefixing the key with a
+--- non-numeric character defeats the array heuristic on both ends, forcing a real object ; JS
+--- indexing a plain object with a numeric key (p.bestSectorMs[3]) auto-coerces to the same string
+--- key anyway, so this only needs a matching read-side convention, not a behavior change.
+---@param t table<integer, any>?
+---@param prefix string
+---@return table<string, any>?
+local function keyify(t, prefix)
+    if not t then return t end
+    local out = {}
+    for k, v in pairs(t) do
+        out[prefix .. tostring(k)] = v
+    end
+    return out
+end
+
 --- pushes (or hides) the race HUD: own progress always included ; position/ahead/behind/full
 --- standings only once there's more than one participant (a solo attempt has nothing to compare
 --- against, but still gets the live best-lap delta once it has a lap to compare to). Also serves
@@ -1137,9 +1161,39 @@ local function pushHud()
                 break
             end
         end
+        -- every row also carries its gap to the leader (the full standings layout) and, once
+        -- finished, its total time
+        local leader = leaderboard[1]
+        -- describeOpponent gives no gap between a finished and a still-racing car ; against the
+        -- leader, a still-racing row is measured as if the leader were still racing too
+        local racingLeader = setmetatable({ finished = false }, { __index = leader })
         standings = table.map(leaderboard, function(row)
-            return describeOpponent(participant, row, totalSteps(race))
+            local desc = describeOpponent(participant, row, totalSteps(race))
+            local toLeader = row ~= leader
+                and describeOpponent(row.finished and leader or racingLeader, row, totalSteps(race)) or nil
+            desc.currentLap = row.currentLap
+            desc.currentGate = row.currentGate
+            desc.leaderGapMs = toLeader and toLeader.gapMs or nil
+            desc.leaderLapsDiff = toLeader and toLeader.lapsDiff or nil
+            if row.finished then
+                local total = 0
+                table.forEach(row.lapTimes or {}, function(t) total = total + t end)
+                desc.totalMs = total
+            end
+            return desc
         end)
+    end
+
+    -- race-wide bests (purple) : the fastest time anyone has set in each sector, and the fastest lap
+    local fastestSectorMs, fastestLap, finishedCount = {}, nil, 0
+    for _, p in pairs(session.participants) do
+        for sector, ms in pairs(p.bestSectorMs or {}) do
+            if not fastestSectorMs[sector] or ms < fastestSectorMs[sector] then fastestSectorMs[sector] = ms end
+        end
+        if p.bestLapMs and (not fastestLap or p.bestLapMs < fastestLap.ms) then
+            fastestLap = { ms = p.bestLapMs, playerName = p.playerName, displayName = p.displayName }
+        end
+        if p.finished then finishedCount = finishedCount + 1 end
     end
 
     beamjoy_communications_ui.send("BJRaceHud", {
@@ -1161,7 +1215,12 @@ local function pushHud()
             lastLapMs = participant.lapTimes and participant.lapTimes[#participant.lapTimes] or nil,
             bestLapMs = participant.bestLapMs,
             liveDeltaMs = participant.liveDeltaMs,
+            -- this lap's finished sectors (keyed "s1", "s2"... see keyify)
+            lapSectors = keyify(participant.lapSectors, "s"),
         },
+        fastestSectorMs = keyify(fastestSectorMs, "s"),
+        fastestLap = fastestLap,
+        finishedCount = finishedCount,
         position = position,
         totalRacers = totalRacers,
         ahead = ahead,
@@ -1172,29 +1231,6 @@ local function pushHud()
         -- some other locally-known "self" value
         spectatingPlayerName = M.spectatingPlayerName,
     })
-end
-
---- sector/lap indices here are plain small positive integers (1, 2, 3...). A table keyed that way
---- (e.g. {[1]=1234, [2]=5678}) is indistinguishable from a real array to both this codebase's own
---- JSON encoder (services/utils/jsonOld.lua's isJsonArray) and the engine's own Lua->UI bridge
---- (guihooks.trigger, used by communications/ui.lua's send()), so it serializes as a 0-indexed JS
---- array instead of an object. Angular then reads it with a 1-based sector/lap number and gets
---- either the WRONG neighboring entry (index N really holds sector/lap N+1's value) or nothing at
---- all for the last one (index == length is out of bounds). This is what was actually behind both
---- "sector 3 is misaligned" and "the last lap's sectors aren't counted". Prefixing the key with a
---- non-numeric character defeats the array heuristic on both ends, forcing a real object ; JS
---- indexing a plain object with a numeric key (p.bestSectorMs[3]) auto-coerces to the same string
---- key anyway, so this only needs a matching read-side convention, not a behavior change.
----@param t table<integer, any>?
----@param prefix string
----@return table<string, any>?
-local function keyify(t, prefix)
-    if not t then return t end
-    local out = {}
-    for k, v in pairs(t) do
-        out[prefix .. tostring(k)] = v
-    end
-    return out
 end
 
 --- lapSectorHistory is a table keyed by lap number whose own VALUES are themselves sector-indexed
@@ -1245,6 +1281,7 @@ local function pushRaceInfo()
     local payload = {
         active = true,
         state = session.state,
+        raceId = race.id,
         raceName = race.name,
         totalLaps = session.settings.laps or 1,
         totalGates = totalSteps(race),
@@ -1467,6 +1504,9 @@ local function pushSessionStatus()
         starterID = M.session.starterID,
         -- invite only, never listed (see services/raceGrid.lua raceStart)
         private = M.session.private == true,
+        -- the leader's "Change settings" form starts from these (services/raceGrid.lua)
+        raceId = M.session.raceId,
+        startOptions = starter and starter.playerName == participant.playerName and M.session.startOpts or nil,
         -- lets the status panel hide "Retire" once already retired/finished, instead of letting
         -- the player click a no-op button (raceDNF already silently guards against it server-side,
         -- this is purely so the UI doesn't look actionable when it isn't anymore)
@@ -1503,6 +1543,7 @@ local function onSessionUpdate(session)
     local wasRacing = M.session ~= nil and M.session.state == "RACE"
     local wasCountdown = M.session ~= nil and M.session.state == "COUNTDOWN"
     local wasSessionFinished = M.session ~= nil and M.session.state == "FINISHED"
+    local previousSettingsRev = M.session ~= nil and M.session.id == session.id and M.session.settingsRev or nil
     local wasDnf = false
     local wasFinished = false
     if M.session then
@@ -1516,11 +1557,17 @@ local function onSessionUpdate(session)
     -- as spectating's own raceElapsedMs handling : re-anchored on every GRID update (not just
     -- once), so it stays accurate/self-correcting and still ticks smoothly between updates via
     -- GetCurrentTimeMillis() locally (see updateGridCountdown below, driven from onUpdate)
+    -- each on its own : gridReadySecondsLeft only exists once everyone is ready, while the lobby's
+    -- closing deadline (gridTimeoutSecondsLeft) runs from the start. Tying the second to the first
+    -- hid "Lobby closes in" until everyone had readied
     if session.state == "GRID" and session.gridReadySecondsLeft ~= nil then
         M.gridReadyTargetMs = GetCurrentTimeMillis() + session.gridReadySecondsLeft * 1000
-        M.gridTimeoutTargetMs = GetCurrentTimeMillis() + (session.gridTimeoutSecondsLeft or 0) * 1000
     else
         M.gridReadyTargetMs = nil
+    end
+    if session.state == "GRID" and session.gridTimeoutSecondsLeft ~= nil then
+        M.gridTimeoutTargetMs = GetCurrentTimeMillis() + session.gridTimeoutSecondsLeft * 1000
+    else
         M.gridTimeoutTargetMs = nil
     end
 
@@ -1590,7 +1637,8 @@ local function onSessionUpdate(session)
     -- false, the very first session push this client has seen for ANY session, whether just
     -- starting one or just joining someone else's), not on every later GRID push. A vehicle that
     -- already matches is left completely alone, per direct request.
-    if session.state == "GRID" and not wasInSession then
+    local settingsChanged = previousSettingsRev ~= nil and session.settingsRev ~= previousSettingsRev
+    if session.state == "GRID" and (not wasInSession or settingsChanged) then
         -- activeVehicleRestriction() reads M.session, already reassigned above, so it already
         -- reflects this fresh session's own vehicleRestrictionStartMode (raceDefined/single/free)
         local restriction = activeVehicleRestriction()
@@ -2464,11 +2512,6 @@ local function onBJRequestCurrentVehicleReset(req, resetType, mpVeh)
     local participant = getSelfParticipant()
     if not participant or participant.finished or participant.dnf then return end
 
-    -- unconditional : fires for EVERY reset/recover attempt reaching this hook, regardless of
-    -- respawnStrategy or reset type, matching Hunter's own crash-reset penalty exactly (applyResetPenalty
-    -- itself no-ops if the setting is off or a lock is already being served)
-    applyResetPenalty(mpVeh.vid)
-
     local strategy = M.session.settings.respawnStrategy
     -- "all" (free respawn) still lets a plain Recover behave exactly like vanilla BeamNG: that's
     -- just fixing a tip-over in place, not restarting your run. But a *hard* reset (physics
@@ -2477,6 +2520,18 @@ local function onBJRequestCurrentVehicleReset(req, resetType, mpVeh)
     local isLightRecover = resetType == beamjoy_inputs.RESET.RECOVER or
         resetType == beamjoy_inputs.RESET.RECOVER_ALT
     local shouldRedirect = strategy == "lastcheckpoint" or (strategy == "all" and not isLightRecover)
+
+    -- the reset penalty, for EVERY reset/recover attempt reaching this hook (applyResetPenalty
+    -- itself no-ops if the setting is off or a lock is already being served). A hold-to-rewind
+    -- recover that really runs (not redirected to a checkpoint) starts it when the rewind ends
+    -- (onBJStopRecovering) : applied now, the freeze fought the rewind and the countdown ran out
+    -- while the button was still held
+    if isLightRecover and not shouldRedirect then
+        M.pendingRecoverPenaltyVid = mpVeh.vid
+    else
+        applyResetPenalty(mpVeh.vid)
+    end
+
     if not shouldRedirect then return end
     local race = getRace()
     if not race then return end
@@ -2512,6 +2567,15 @@ local function onBJRequestStationInteraction(req, kind)
     end
 end
 M.onBJRequestStationInteraction = onBJRequestStationInteraction
+
+--- a hold-to-rewind recover ended (beamjoy/inputs.lua) : its reset penalty starts now
+---@param vid integer
+local function onBJStopRecovering(vid)
+    local pending = M.pendingRecoverPenaltyVid
+    M.pendingRecoverPenaltyVid = nil
+    if pending and pending == vid then applyResetPenalty(vid) end
+end
+M.onBJStopRecovering = onBJStopRecovering
 
 -- teleporting a vehicle (spawn.safeTeleport, inside setVehiclePositionRotation below) fires
 -- BeamNG's own native reset detection, which calls straight back into onVehicleResetted. Without
@@ -2602,8 +2666,9 @@ end
 ---@param opts table?
 ---@param raceId integer
 ---@param opts table?
-local function startRace(raceId, opts)
-    opts = opts or {}
+--- "single" restriction : captures the current vehicle into opts, or falls back to "free"
+---@param opts table
+local function captureSingleRestriction(opts)
     -- per direct request : "single" (start-time) vehicle restriction captures whatever the
     -- STARTER is currently driving, right at the moment they click Start, not a pre-authored
     -- race property (see BJRace.vehicleRestrictionMode for that one). The Angular start-options
@@ -2611,23 +2676,46 @@ local function startRace(raceId, opts)
     -- itself (that's GE Lua-only), so the actual capture happens right here, the instant this
     -- message is about to leave the client, using the exact same getFullConfig technique the race
     -- editor's own "single" capture uses.
+    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    local full = myVeh and beamjoy_vehicles.getFullConfig(myVeh.veh)
+    if full then
+        opts.vehicleRestrictionModel = full.model
+        opts.vehicleRestrictionParts = full.parts or {}
+        opts.vehicleRestrictionVars = full.vars or {}
+        opts.vehicleRestrictionPaints = full.paints or {}
+        opts.vehicleRestrictionLabel = full.label
+    else
+        -- no vehicle to capture from. Falls back to "free" rather than silently starting an
+        -- uncapturable "single" restriction nobody (including the starter) could ever satisfy
+        toast.warn("You need a vehicle to start a single-config race. Starting without a restriction instead", nil, 6)
+        opts.vehicleRestrictionMode = "free"
+    end
+end
+
+local function startRace(raceId, opts)
+    opts = opts or {}
+    if opts.vehicleRestrictionMode == "single" then captureSingleRestriction(opts) end
+    beamjoy_communications.send("raceStart", raceId, opts)
+end
+
+--- the leader's "Change settings" in the lobby. A "single" restriction that was already one keeps
+--- its capture (re-capturing would silently swap it for whatever the leader drives now)
+local function updateSettings(opts)
+    if not M.session or M.session.state ~= "GRID" then return end
+    opts = opts or {}
     if opts.vehicleRestrictionMode == "single" then
-        local myVeh = beamjoy_vehicles.getCurrentOwn()
-        local full = myVeh and beamjoy_vehicles.getFullConfig(myVeh.veh)
-        if full then
-            opts.vehicleRestrictionModel = full.model
-            opts.vehicleRestrictionParts = full.parts or {}
-            opts.vehicleRestrictionVars = full.vars or {}
-            opts.vehicleRestrictionPaints = full.paints or {}
-            opts.vehicleRestrictionLabel = full.label
+        local s = M.session.settings or {}
+        if s.vehicleRestrictionStartMode == "single" and s.vehicleRestrictionModel then
+            opts.vehicleRestrictionModel = s.vehicleRestrictionModel
+            opts.vehicleRestrictionParts = s.vehicleRestrictionParts
+            opts.vehicleRestrictionVars = s.vehicleRestrictionVars
+            opts.vehicleRestrictionPaints = s.vehicleRestrictionPaints
+            opts.vehicleRestrictionLabel = s.vehicleRestrictionLabel
         else
-            -- no vehicle to capture from. Falls back to "free" rather than silently starting an
-            -- uncapturable "single" restriction nobody (including the starter) could ever satisfy
-            toast.warn("You need a vehicle to start a single-config race. Starting without a restriction instead", nil, 6)
-            opts.vehicleRestrictionMode = "free"
+            captureSingleRestriction(opts)
         end
     end
-    beamjoy_communications.send("raceStart", raceId, opts)
+    beamjoy_communications.send("raceUpdateSettings", M.session.id, opts)
 end
 
 ---@param sessionId string
@@ -2747,6 +2835,7 @@ M.pushPaintOptions = pushPaintOptions
 M.setPaint = setPaint
 
 M.startRace = startRace
+M.updateSettings = updateSettings
 M.joinRace = joinRace
 M.ready = ready
 M.setGridSlot = setGridSlot

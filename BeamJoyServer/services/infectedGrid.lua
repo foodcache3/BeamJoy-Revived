@@ -100,7 +100,7 @@
 ---re-checks isStaff itself
 
 local M = {
-    dependencies = { "services_infected", "utils_async", "services_identity" },
+    dependencies = { "services_infected", "services_vehiclePresets", "utils_async", "services_identity" },
 
     ---@type tablelib<string, BJInfectedSession>
     sessions = Table(),
@@ -343,6 +343,24 @@ local function buildSettings(arena, overrides)
         config = defaults.config
     end
 
+    -- a vehicle preset per side (hunterGrid.lua's way : resolved once here, never re-read live).
+    -- An arena that forces one vehicle on everyone (config) wins over both
+    local function presetPool(key)
+        if type(config) == "table" then return nil end
+        local id = tonumber(overrides[key])
+        if overrides[key] == nil then id = tonumber(defaults[key]) end
+        if not id then return nil end
+        local preset = services_vehiclePresets.getById(id)
+        if preset and table.isArray(preset.entries) and #preset.entries > 0 then
+            return id, preset.entries, preset.name
+        end
+        return nil
+    end
+    local survivorsPresetId, survivorsPool, survivorsLabel = presetPool("survivorsVehiclePresetId")
+    local infectedPresetId, infectedPool, infectedLabel = presetPool("infectedVehiclePresetId")
+    local randomizeVehiclePool = overrides.randomizeVehiclePool
+    if randomizeVehiclePool == nil then randomizeVehiclePool = defaults.randomizeVehiclePool end
+
     return {
         initialInfectedCount = math.max(1, math.floor(tonumber(overrides.initialInfectedCount) or
             defaults.initialInfectedCount or 1)),
@@ -370,6 +388,13 @@ local function buildSettings(arena, overrides)
         allowStations = (overrides.allowStations ~= nil and overrides.allowStations or
             defaults.allowStations) == true,
         config = type(config) == "table" and config or nil,
+        survivorsVehiclePresetId = survivorsPresetId,
+        survivorsVehiclePool = survivorsPool,
+        survivorsVehicleLabel = survivorsLabel,
+        infectedVehiclePresetId = infectedPresetId,
+        infectedVehiclePool = infectedPool,
+        infectedVehicleLabel = infectedLabel,
+        randomizeVehiclePool = randomizeVehiclePool == true,
     }
 end
 
@@ -524,6 +549,8 @@ local function infectedStart(ctxt, opts)
 
     pushSessionUpdate(session)
     pushOpenSessionsList()
+    -- the leader's crew comes along (services/crews.lua)
+    services_crews.pullIn(ctxt.senderID, "infected", session.id)
     return session.id
 end
 
@@ -660,6 +687,15 @@ local function infectedCancel(ctxt, sessionId)
     if not session then return end
     if session.starterID ~= ctxt.senderID and not services_permissions.isStaff(ctxt.sender.playerName) then
         return
+    end
+    if session.starterID ~= ctxt.senderID then
+        -- staff closing someone else's session : tell the players why it vanished
+        session.participants:forEach(function(_, playerID)
+            local player = services_players.players:find(function(p) return p.playerID == playerID end)
+            communications_tx.sendToPlayer(playerID, "toast", "info",
+                services_lang.get("infected.cancelledByStaff", player and player.lang)
+                :var({ name = ctxt.sender.playerName }))
+        end)
     end
     removeSession(session)
 end

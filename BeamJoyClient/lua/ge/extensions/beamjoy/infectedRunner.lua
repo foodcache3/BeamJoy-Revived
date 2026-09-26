@@ -321,6 +321,59 @@ local function isHiddenInfectedVehicle(mpVeh)
     return target ~= nil and target.role == "infected"
 end
 
+-- VEHICLE PRESETS : one per side, chosen at start (services/infectedGrid.lua), applied from the
+-- countdown on since roles are only drawn then. Same helpers as hunterRunner.lua's.
+
+---@return table[]? pool, string? label your side's vehicle preset
+local function activeVehiclePool()
+    if not M.session then return nil end
+    local participant = getSelfParticipant()
+    if not participant or participant.role == nil then return nil end
+    local s = M.session.settings
+    if participant.role == "infected" then return s.infectedVehiclePool, s.infectedVehicleLabel end
+    return s.survivorsVehiclePool, s.survivorsVehicleLabel
+end
+
+---@param veh NGVehicle
+---@param pool {model: string, parts: table}[]
+---@return boolean
+local function vehicleMatchesPool(veh, pool)
+    local full = beamjoy_vehicles.getFullConfig(veh)
+    if not full then return false end
+    return table.find(pool, function(v)
+        return v.model == full.model and v.parts ~= nil and table.deepcompare(full.parts or {}, v.parts)
+    end) ~= nil
+end
+
+---@param model string
+---@return boolean installed on this game
+local function modelAvailableLocally(model)
+    local configs = beamjoy_vehicles.getAllVehicleConfigs(nil, { trailers = true, props = true })
+    return configs[model] ~= nil
+end
+
+--- a random entry of the pool (installed ones only), spawned in place of your vehicle
+---@param pool {model: string, config: string}[]
+---@return boolean
+local function forceRandomPoolVehicle(pool)
+    local available = table.filter(pool, function(v) return modelAvailableLocally(v.model) end)
+    if #available == 0 then return false end
+    local entry = available[math.random(#available)]
+    local pos
+    local currVeh = beamjoy_vehicles.getCurrent()
+    if currVeh and camera.getCamera() ~= camera.CAMERAS.FREE then
+        pos = beamjoy_vehicles.getVehiclePositionRotation(currVeh.veh)
+    else
+        pos = camera.getPositionRotation(false)
+    end
+    if beamjoy_vehicles.getCurrentOwn() then beamjoy_vehicles.deleteCurrentOwnVehicle() end
+    local newVeh = core_vehicles.spawnNewVehicle(entry.model, { pos = pos, config = entry.config })
+    if not newVeh then return false end
+    be:enterVehicle(0, newVeh)
+    if camera.getCamera() == camera.CAMERAS.FREE then camera.toggleFreeCam() end
+    return true
+end
+
 ---@param req RequestAuthorization
 ---@param model string
 ---@param config string?
@@ -332,6 +385,12 @@ local function onBJRequestCanSpawnVehicle(req, model, config, action)
             req.state = false
             return
         end
+    end
+    -- your side's vehicle preset
+    local pool = activeVehiclePool()
+    if pool and table.find(pool, function(v) return v.model == model and v.config == config end) == nil then
+        req.state = false
+        return
     end
 
     if not isGameLocked() then return end
@@ -782,11 +841,17 @@ local function onSessionUpdate(session)
     end
     M.session = session
 
-    if session.state == "LOBBY" and session.joinable and session.gridReadySecondsLeft ~= nil then
+    -- each on its own : gridReadySecondsLeft only exists once everyone is ready, while the lobby's
+    -- closing deadline runs from the start (tying them hid "Lobby closes in" until all were ready)
+    local inLobby = session.state == "LOBBY" and session.joinable
+    if inLobby and session.gridReadySecondsLeft ~= nil then
         M.gridReadyTargetMs = GetCurrentTimeMillis() + session.gridReadySecondsLeft * 1000
-        M.gridTimeoutTargetMs = GetCurrentTimeMillis() + (session.gridTimeoutSecondsLeft or 0) * 1000
     else
         M.gridReadyTargetMs = nil
+    end
+    if inLobby and session.gridTimeoutSecondsLeft ~= nil then
+        M.gridTimeoutTargetMs = GetCurrentTimeMillis() + session.gridTimeoutSecondsLeft * 1000
+    else
         M.gridTimeoutTargetMs = nil
     end
 
@@ -848,6 +913,25 @@ local function onSessionUpdate(session)
         beamjoy_communications_ui.closeWindow("config")
         if beamjoy_ui_activityEditor then
             beamjoy_ui_activityEditor.onClose()
+        end
+
+        -- your side's vehicle preset : roles are drawn now. Not in one of its vehicles (or
+        -- randomize is on) : you're given one. The new vehicle is placed, frozen and ghosted by
+        -- onBJVehicleInstantiated's countdown branch
+        do
+            local pool, label = activeVehiclePool()
+            if pool then
+                local cur = beamjoy_vehicles.getCurrentOwn()
+                local matches = cur ~= nil and cur.veh.jbeam ~= beamjoy_vehicles.WALKING and vehicleMatchesPool(cur.veh, pool)
+                if session.settings.randomizeVehiclePool or not matches then
+                    if forceRandomPoolVehicle(pool) then
+                        toast.info(label and string.format("Your side drives: %s. You've been given one", label) or
+                            "You've been given a vehicle for your side", nil, 6)
+                    else
+                        toast.warn("Your side's vehicles aren't installed on your game", nil, 8)
+                    end
+                end
+            end
         end
 
         local myVeh = beamjoy_vehicles.getCurrentOwn()
@@ -1415,6 +1499,8 @@ local function onBJVehicleInstantiated(vid)
     end
     beamjoy_vehicles.setFreeze(vid, true)
     beamjoy_vehicles.setGhostReason(vid, "infected", true)
+    M.originalPaints = nil
+    applyRoleColor(participant.role)
     -- 0s respawn-ghost override, same reasoning as hunterRunner.lua's own identical treatment : the
     -- whole point of this mode is contact-based tagging, so a few free seconds of ghosting right
     -- after a countdown-time spawn would be exactly the wrong moment for it

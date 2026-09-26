@@ -75,7 +75,7 @@ angular.module("beamjoy").service("beamjoyNow", function ($rootScope, beamjoySto
 
 angular.module("beamjoy").component("bjMainNow", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/now/app.html",
-    controller: function ($rootScope, $scope, $filter, beamjoyStore, beamjoyNow, beamjoyDelivery) {
+    controller: function ($rootScope, $scope, $filter, $timeout, beamjoyStore, beamjoyNow, beamjoyDelivery) {
         const translate = $filter("translate");
         this.now = beamjoyNow;
         this.jobs = null;
@@ -95,8 +95,28 @@ angular.module("beamjoy").component("bjMainNow", {
         const fill = (key, values) =>
             Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, v), translate(key));
 
-        // the activity you're in, as one card ; section is the Activities sub-tab that manages it
+        // the activity you're in, as one card ; section is the Activities sub-tab that manages it.
+        // The same object while its text is unchanged : ng-if watches it by reference, and a fresh
+        // object every call never settles the digest
+        let mineCache = null;
         this.mine = () => {
+            const next = buildMine();
+            if (!next) return (mineCache = null);
+            if (!mineCache || mineCache.section !== next.section || mineCache.title !== next.title || mineCache.line !== next.line
+                || mineCache.timer !== next.timer) {
+                mineCache = next;
+            }
+            return mineCache;
+        };
+        // a forming lobby's clock : the start once everyone's ready, before that the lobby closing
+        const mm = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
+        const lobbyTimer = (st, lobbyState) => {
+            if (!st || st.state !== lobbyState) return null;
+            if (st.gridReadySecondsLeft != null) return `${translate("beamjoy.window.main.tabs.races.startingIn")} ${mm(st.gridReadySecondsLeft)}`;
+            if (st.gridTimeoutSecondsLeft != null) return `${translate("beamjoy.window.main.tabs.races.lobbyClosesIn")} ${mm(st.gridTimeoutSecondsLeft)}`;
+            return null;
+        };
+        const buildMine = () => {
             const s = beamjoyNow.status;
             if (s.race) {
                 return {
@@ -104,6 +124,7 @@ angular.module("beamjoy").component("bjMainNow", {
                     title: s.race.raceName || translate("beamjoy.window.main.now.kind.race"),
                     line: fill(`beamjoy.window.main.now.mine.${s.race.state === "GRID" ? "lobby" : "running"}`,
                         { count: s.race.participantCount || 0, max: s.race.maxParticipants || 0 }),
+                    timer: lobbyTimer(s.race, "GRID"),
                 };
             }
             if (s.hunter) {
@@ -112,6 +133,7 @@ angular.module("beamjoy").component("bjMainNow", {
                     title: translate("beamjoy.window.main.now.kind.hunter"),
                     line: fill(`beamjoy.window.main.now.mine.${s.hunter.state === "LOBBY" ? "lobby" : "running"}`,
                         { count: s.hunter.participantCount || 0, max: s.hunter.maxParticipants || 0 }),
+                    timer: lobbyTimer(s.hunter, "LOBBY"),
                 };
             }
             if (s.infected) {
@@ -120,6 +142,7 @@ angular.module("beamjoy").component("bjMainNow", {
                     title: translate("beamjoy.window.main.now.kind.infected"),
                     line: fill(`beamjoy.window.main.now.mine.${s.infected.state === "LOBBY" ? "lobby" : "running"}`,
                         { count: s.infected.participantCount || 0, max: s.infected.maxParticipants || 0 }),
+                    timer: lobbyTimer(s.infected, "LOBBY"),
                 };
             }
             if (s.convoy) {
@@ -211,6 +234,21 @@ angular.module("beamjoy").component("bjMainNow", {
             beamjoyStore.send(event, [row.session.id]);
         };
         this.spectate = (row) => beamjoyStore.send("BJRaceSpectate", [row.session.id]);
+        // staff : cancel anyone's race, hunt or infected game (the server checks staff again)
+        this.cancelArmed = null;
+        let disarm = null;
+        this.canCancel = (row) => row.kind !== "convoy" && beamjoyStore.permissions.isStaff();
+        this.cancel = (row) => {
+            $timeout.cancel(disarm);
+            if (this.cancelArmed !== row.id) {
+                this.cancelArmed = row.id;
+                disarm = $timeout(() => (this.cancelArmed = null), 4000);
+                return;
+            }
+            this.cancelArmed = null;
+            beamjoyStore.send("BJStaffSessionCancel", [row.kind, row.session.id]);
+        };
+        $scope.$on("$destroy", () => $timeout.cancel(disarm));
         this.open = (section) => $rootScope.$broadcast("BJMainOpenPanel", "play", section);
         this.startActivity = () => $rootScope.$broadcast("BJMainOpenPanel", "play");
 

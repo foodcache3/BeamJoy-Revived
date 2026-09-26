@@ -1,6 +1,10 @@
 <!-- a player's actions, shown when their row in the player list is expanded. The staff buttons that
      act on ALL of the player's vehicles at once only show in the full window ($ctrl.full) ; the
      side panel keeps the per-vehicle buttons below -->
+<button type="button" class="bjr-btn small" ng-if="$ctrl.crew.canInvite($ctrl.player.playerName)"
+    ng-click="$ctrl.inviteToCrew($event)">
+    {{'beamjoy.crew.inviteToCrew' | translate}}
+</button>
 <button type="button" class="bjr-btn small" ng-if="$ctrl.actions.focus !== undefined"
     ng-disabled="!$ctrl.actions.focus" ng-click="$ctrl.action($event,'focus')">
     {{'beamjoy.window.main.playerlist.actions.focus' | translate}}

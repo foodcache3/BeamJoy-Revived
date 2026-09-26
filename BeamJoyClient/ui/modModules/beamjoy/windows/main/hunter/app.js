@@ -94,17 +94,24 @@ angular.module("beamjoy").component("bjMainHunter", {
             const r = sec % 60;
             return `${m}:${r < 10 ? "0" : ""}${r}`;
         };
+        // the same object while nothing changed : ng-if watches it by reference, and a fresh object
+        // every call never settles the digest (infdig, thousands of errors a second)
+        let timerCache = null;
+        const timer = (label, value) => {
+            if (!timerCache || timerCache.label !== label || timerCache.value !== value) timerCache = { label, value };
+            return timerCache;
+        };
         this.lobbyTimer = () => {
             const s = this.status;
             if (!s) return null;
             if (s.state === "COUNTDOWN" && this.countdownSeconds !== null) {
-                return { label: "beamjoy.window.main.tabs.hunter.startingIn", value: `${this.countdownSeconds}` };
+                return timer("beamjoy.window.main.tabs.hunter.startingIn", `${this.countdownSeconds}`);
             }
             if (s.state === "LOBBY" && this.allReady && s.gridReadySecondsLeft != null) {
-                return { label: "beamjoy.window.main.tabs.hunter.startingIn", value: formatSeconds(s.gridReadySecondsLeft) };
+                return timer("beamjoy.window.main.tabs.hunter.startingIn", formatSeconds(s.gridReadySecondsLeft));
             }
             if (s.state === "LOBBY" && s.gridTimeoutSecondsLeft != null) {
-                return { label: "beamjoy.window.main.tabs.hunter.lobbyClosesIn", value: formatSeconds(s.gridTimeoutSecondsLeft) };
+                return timer("beamjoy.window.main.tabs.hunter.lobbyClosesIn", formatSeconds(s.gridTimeoutSecondsLeft));
             }
             return null;
         };

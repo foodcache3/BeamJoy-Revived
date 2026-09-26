@@ -6,7 +6,12 @@ angular.module("beamjoy").component("bjPlayerLine", {
     },
     templateUrl:
         "/ui/modModules/beamjoy/windows/main/main/player-line/app.html",
-    controller: function ($scope, beamjoyStore, $filter) {
+    controller: function ($scope, beamjoyStore, $filter, beamjoyCrew) {
+        this.crew = beamjoyCrew;
+        this.inviteToCrew = (evt) => {
+            evt.stopPropagation();
+            beamjoyCrew.invite(this.player.playerID);
+        };
         const translate = $filter("translate");
 
         this.actions = {};

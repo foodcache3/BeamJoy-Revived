@@ -739,6 +739,8 @@ local function hunterStart(ctxt, opts)
 
     pushSessionUpdate(session)
     pushOpenSessionsList()
+    -- the leader's crew comes along (services/crews.lua)
+    services_crews.pullIn(ctxt.senderID, "hunter", session.id)
     return session.id
 end
 
@@ -861,6 +863,15 @@ local function hunterCancel(ctxt, sessionId)
     if not session then return end
     if session.starterID ~= ctxt.senderID and not services_permissions.isStaff(ctxt.sender.playerName) then
         return
+    end
+    if session.starterID ~= ctxt.senderID then
+        -- staff closing someone else's session : tell the players why it vanished
+        session.participants:forEach(function(_, playerID)
+            local player = services_players.players:find(function(p) return p.playerID == playerID end)
+            communications_tx.sendToPlayer(playerID, "toast", "info",
+                services_lang.get("hunter.cancelledByStaff", player and player.lang)
+                :var({ name = ctxt.sender.playerName }))
+        end)
     end
     removeSession(session)
 end

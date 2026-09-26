@@ -82,7 +82,7 @@
 </style>
 
 <!-- IN A RACE : the lobby, the countdown or the race itself (same layout as the convoy lobby) -->
-<section class="bjr-lobby" ng-if="$ctrl.status" aria-label="{{$ctrl.status.raceName}}">
+<section class="bjr-lobby" ng-if="$ctrl.status && !$ctrl.editing" aria-label="{{$ctrl.status.raceName}}">
     <header class="lobby-head">
         <div>
             <h3 class="bjr-title">{{$ctrl.status.raceName}}</h3>
@@ -122,7 +122,7 @@
                 <span class="bjr-muted" ng-if="slot.player.vehicleModel">{{slot.player.vehicleModel}}</span>
             </span>
             <span class="who" ng-if="slot.open">
-                <span class="n">{{'beamjoy.window.main.tabs.races.openSlot' | translate}}</span>
+                <span class="n">{{slot.text}}</span>
                 <span class="bjr-muted">{{'beamjoy.window.main.tabs.races.openSlotDetail' | translate}}</span>
             </span>
             <span style="display: flex; align-items: center; gap: 0.3em" ng-if="!slot.open">
@@ -162,6 +162,10 @@
         <button type="button" class="bjr-btn" data-pad-a ng-if="$ctrl.status.state === 'RACE' && !$ctrl.status.finished && !$ctrl.status.dnf"
             ng-click="$ctrl.retire($event)" title="{{'beamjoy.window.main.tabs.races.retire.tooltip' | translate}}">
             {{'beamjoy.window.main.tabs.races.retire' | translate}}
+        </button>
+        <button type="button" class="bjr-btn" ng-if="$ctrl.canEditSettings()" ng-click="$ctrl.openEdit($event)"
+            title="{{'beamjoy.window.main.tabs.races.changeSettings.tooltip' | translate}}">
+            {{'beamjoy.window.main.tabs.races.changeSettings' | translate}}
         </button>
         <button type="button" class="bjr-btn danger"
             ng-if="$ctrl.status.isStarter && ($ctrl.status.state === 'GRID' || $ctrl.status.participantCount <= 1)"
@@ -203,7 +207,8 @@
 </section>
 
 <!-- FREE : pick a race -->
-<div ng-if="!$ctrl.status && !$ctrl.spectateStatus" style="display: flex; flex-direction: column; gap: 0.4em">
+<div ng-if="(!$ctrl.status || $ctrl.editing) && !$ctrl.spectateStatus" style="display: flex; flex-direction: column; gap: 0.4em">
+    <span class="bjr-muted" ng-if="$ctrl.editing">{{'beamjoy.window.main.tabs.races.changeSettings.note' | translate}}</span>
     <div class="races-head" ng-if="!$ctrl.startingId">
         <span class="bjr-muted">{{'beamjoy.window.main.tabs.races.pickRace' | translate}}</span>
         <button type="button" class="bjr-btn small ghost" ng-if="$ctrl.canEditRaces()" ng-click="$ctrl.openRaceEditor($event)"
@@ -263,6 +268,8 @@
                         {{'beamjoy.window.config.tabs.races.vehicleRestriction.modes.single' | translate}}
                     </button>
                     <button type="button" ng-class="{on: $ctrl.startOptions.vehicleRestrictionMode === 'pool'}"
+                        ng-disabled="$ctrl.vehiclePresets.length === 0"
+                        title="{{$ctrl.vehiclePresets.length === 0 ? ('beamjoy.vehiclePresets.noneYet' | translate) : ''}}"
                         ng-click="$ctrl.startOptions.vehicleRestrictionMode = 'pool'">
                         {{'beamjoy.window.config.tabs.races.vehicleRestriction.modes.pool' | translate}}
                     </button>
@@ -393,17 +400,26 @@
                     <span class="name" title="{{'beamjoy.window.config.tabs.races.countdown.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.countdown' | translate}}</span>
                     <bj-slider ng-model="$ctrl.startOptions.countdown" min="0" max="30" hard-max="600" step="1"></bj-slider>
                 </div>
-                <div class="bjr-field" ng-if="race.startPositions > 1">
+                <div class="bjr-field" ng-if="race.startPositions > 1 && !$ctrl.editing">
                     <span class="name" title="{{'beamjoy.window.config.tabs.races.gridReadyTimeout.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.gridReadyTimeout' | translate}}</span>
                     <bj-slider ng-model="$ctrl.startOptions.gridReadyTimeout" min="0" max="60" hard-max="600" step="1"></bj-slider>
                 </div>
-                <div class="bjr-field" ng-if="race.startPositions > 1">
+                <div class="bjr-field" ng-if="race.startPositions > 1 && !$ctrl.editing">
                     <span class="name" title="{{'beamjoy.window.config.tabs.races.gridTimeout.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.gridTimeout' | translate}}</span>
                     <bj-slider ng-model="$ctrl.startOptions.gridTimeout" min="10" max="300" hard-max="600" step="5"></bj-slider>
                 </div>
             </div>
 
-            <div class="start-actions" ng-class="{'solo-only': race.startPositions <= 1}">
+            <!-- changing a lobby's settings : Cancel / Save instead of the start buttons -->
+            <div class="start-actions solo-only" ng-if="$ctrl.editing">
+                <button type="button" class="bjr-btn ghost" data-pad-b ng-click="$ctrl.cancelStart($event)">
+                    <span class="bjr-glyph" aria-hidden="true">B</span>{{'beamjoy.common.cancel' | translate}}
+                </button>
+                <button type="button" data-pad-x class="bjr-btn primary" ng-disabled="$ctrl.startBlocked()" ng-click="$ctrl.saveEdit($event, race)">
+                    <span class="bjr-glyph" aria-hidden="true">X</span>{{'beamjoy.window.main.tabs.races.changeSettings.save' | translate}}
+                </button>
+            </div>
+            <div class="start-actions" ng-if="!$ctrl.editing" ng-class="{'solo-only': race.startPositions <= 1}">
                 <button type="button" class="bjr-btn ghost" data-pad-b ng-click="$ctrl.cancelStart($event)">
                     <span class="bjr-glyph" aria-hidden="true">B</span>{{'beamjoy.common.cancel' | translate}}
                 </button>

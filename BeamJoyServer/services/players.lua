@@ -171,6 +171,7 @@ local function onInit()
     communications_rx.addHandler("changeLang", onPlayerChangeLang)
     communications_rx.addHandler("toggleFreeze", M.toggleFreeze)
     communications_rx.addHandler("toggleEngine", M.toggleEngine)
+    communications_rx.addHandler("staffAllVehicles", M.staffAllVehicles)
     communications_rx.addHandler("toggleReplayState", M.toggleReplayState)
     communications_rx.addHandler("demote", M.demote)
     communications_rx.addHandler("promote", M.promote)
@@ -330,6 +331,47 @@ local function toggleFreeze(ctxt, targetName, vid)
         target.froze = not target.froze
     end
     M.sendCacheUpdate()
+end
+
+local ALL_VEHICLES_ACTIONS = { freeze = true, unfreeze = true, stopEngines = true, startEngines = true, remove = true }
+
+--- staff : one action on every vehicle of every player ranked below the sender (the same rule
+--- as moderation), from the full window's Players tab. Sets rather than toggles, so a mixed
+--- server ends up all frozen / all running
+---@param ctxt BJSContext
+---@param action "freeze"|"unfreeze"|"stopEngines"|"startEngines"|"remove"
+local function staffAllVehicles(ctxt, action)
+    if not ctxt.sender then return end
+    if not services_permissions.isStaff(ctxt.sender.playerName) then return end
+    if not ALL_VEHICLES_ACTIONS[action] then return end
+
+    local count = 0
+    M.players:forEach(function(target)
+        if target.playerID == ctxt.senderID then return end
+        local targetIndex = services_groups.getGroupIndex(target.group) or 0
+        if ctxt.groupIndex and ctxt.groupIndex <= targetIndex then return end
+        count = count + 1
+        if action == "freeze" then
+            target.froze = true
+        elseif action == "unfreeze" then
+            target.froze = false
+            target.vehicles:forEach(function(v) v.froze = false end)
+        elseif action == "stopEngines" then
+            target.shut = true
+        elseif action == "startEngines" then
+            target.shut = false
+            target.vehicles:forEach(function(v) v.shut = false end)
+        elseif action == "remove" then
+            target.vehicles:filter(function(v)
+                return not v.isAi
+            end):forEach(function(v)
+                communications_tx.sendToPlayer(target.playerID, "deleteVehicle", v.vid)
+            end)
+        end
+    end)
+    if action ~= "remove" then M.sendCacheUpdate() end
+    communications_tx.sendToPlayer(ctxt.senderID, "toast", "info",
+        services_lang.get("players.allVehicles.done", ctxt.sender.lang):var({ count = count }))
 end
 
 ---@param ctxt BJSContext
@@ -1128,6 +1170,7 @@ M.getConnectedByName = getConnectedByName
 M.sendCacheUpdate = sendCacheUpdate
 M.toggleFreeze = toggleFreeze
 M.toggleEngine = toggleEngine
+M.staffAllVehicles = staffAllVehicles
 M.toggleReplayState = toggleReplayState
 M.demote = demote
 M.promote = promote

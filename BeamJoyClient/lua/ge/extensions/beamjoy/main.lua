@@ -40,7 +40,7 @@ local M = {
         "beamjoy_freeroamData", "beamjoy_stations",
         "beamjoy_busLines", "beamjoy_busRun",
         "beamjoy_deliveryPoints", "beamjoy_delivery", "beamjoy_deliveryPool",
-        "beamjoy_notices", "beamjoy_mainNav" },
+        "beamjoy_crews", "beamjoy_notices", "beamjoy_mainNav" },
 
     world_ready = false,
     client_ready = false,

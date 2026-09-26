@@ -1,103 +1,456 @@
 <style>
     bj-race-info-results {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        font-variant-numeric: tabular-nums;
+    }
+    bj-race-info-results .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4em;
+        padding-bottom: 0.8em;
+    }
+    bj-race-info-results .chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.2em 0.6em;
+        border-radius: 0.25em;
+        background: #282b33;
+        color: #c8cedc;
+        font-size: 0.8em;
+        white-space: nowrap;
+    }
+    bj-race-info-results .chip.ok {
+        background: rgba(73, 182, 114, 0.16);
+        color: #73eb9d;
+    }
+    bj-race-info-results .ov {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+    }
+
+    /* the slanted position plate */
+    bj-race-info-results .plate {
+        flex-shrink: 0;
+        width: 2.1em;
+        height: 1.4em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform: skewX(-10deg);
+        background: #282b33;
+        border-radius: 2px;
+    }
+    bj-race-info-results .plate > span {
+        transform: skewX(10deg);
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        font-size: 0.85em;
+    }
+    bj-race-info-results .plate.p1 {
+        background: #c24b00;
+        color: #fff;
+    }
+    bj-race-info-results .plate.out {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+    }
+    bj-race-info-results .plate.big {
+        width: 2.75em;
+        height: 1.9em;
+    }
+    bj-race-info-results .plate.big > span {
+        font-size: 1.15em;
+    }
+
+    /* the top three */
+    bj-race-info-results .podium {
+        display: flex;
+        gap: 0.5em;
+        padding-bottom: 0.75em;
+    }
+    bj-race-info-results .pod {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.75em;
+        padding: 0.5em 0.9em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0 0.375em 0.375em 0;
+    }
+    bj-race-info-results .pod.first {
+        background: rgba(255, 102, 0, 0.1);
+        box-shadow: inset 3px 0 0 #ff6600;
+    }
+    bj-race-info-results .pod b {
         display: block;
-        height: 100%;
-        overflow: auto;
+        overflow: hidden;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
-    bj-race-info-results tr.winner {
-        color: #ba68f8;
+    bj-race-info-results .pod small {
+        font-size: 0.8em;
+        color: #a7aebf;
     }
-    bj-race-info-results tr.dnf {
-        color: #e57373;
-        opacity: 0.7;
+
+    bj-race-info-results .body {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+        /* one row, held to the window's height so each side scrolls on its own */
+        grid-template-rows: minmax(0, 1fr);
+        gap: 1em;
     }
-    bj-race-info-results tr.selectable {
+    bj-race-info-results .col {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    bj-race-info-results .scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+    bj-race-info-results .r {
+        text-align: right;
+    }
+
+    /* the classification */
+    bj-race-info-results .cl {
+        display: grid;
+        grid-template-columns: 2.5em minmax(0, 1fr) 4.4em 4em 3.9em;
+        align-items: center;
+        column-gap: 0.5em;
+    }
+    bj-race-info-results .cl.head {
+        padding: 0 0.6em 0.3em;
+        font-size: 0.75em;
+        color: #979dad;
+    }
+    bj-race-info-results button.cl {
+        width: 100%;
+        padding: 0.28em 0.6em;
+        border: 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-size: 0.82em;
+        text-align: left;
         cursor: pointer;
     }
-    bj-race-info-results tr.selectable:hover {
+    bj-race-info-results button.cl:hover {
+        background: rgba(255, 255, 255, 0.05);
+    }
+    bj-race-info-results button.cl.sel {
+        background: rgba(255, 102, 0, 0.1);
+        box-shadow: inset 3px 0 0 #ff6600;
+    }
+    bj-race-info-results button.cl.out {
+        color: #979dad;
+    }
+    bj-race-info-results .who {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4em;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+    bj-race-info-results .who b {
+        overflow: hidden;
+        font-weight: 600;
+        text-overflow: ellipsis;
+    }
+    bj-race-info-results .who small {
+        overflow: hidden;
+        font-size: 0.88em;
+        color: #979dad;
+        text-overflow: ellipsis;
+    }
+
+    /* one driver's laps */
+    bj-race-info-results .card {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 0.65em 0.75em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0.375em;
+    }
+    bj-race-info-results .card-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 0.6em;
+        padding: 0 0.4em 0.5em;
+    }
+    bj-race-info-results .card-head h3 {
+        margin: 0;
+        overflow: hidden;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-style: italic;
+        font-size: 1em;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    bj-race-info-results .card-head span {
+        flex-shrink: 0;
+        font-size: 0.78em;
+        color: #a7aebf;
+    }
+    bj-race-info-results .lp {
+        display: grid;
+        grid-template-columns: 2.2em 4.3em 3.6em minmax(0, 1fr);
+        align-items: center;
+        column-gap: 0.5em;
+        width: 100%;
+        padding: 0.25em 0.4em;
+        border: 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-size: 0.82em;
+        text-align: left;
+    }
+    bj-race-info-results button.lp {
+        cursor: pointer;
+    }
+    bj-race-info-results button.lp:hover,
+    bj-race-info-results .lp.open {
+        background: rgba(255, 255, 255, 0.06);
+    }
+    bj-race-info-results .lp.ideal {
+        border-top: 0;
+        background: rgba(115, 235, 157, 0.07);
+    }
+    bj-race-info-results .lp .n {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        color: #979dad;
+    }
+    bj-race-info-results .lp.ideal .n {
+        color: #73eb9d;
+    }
+    bj-race-info-results .lp .d {
+        text-align: right;
+        font-size: 0.9em;
+        color: #a7aebf;
+    }
+    bj-race-info-results .strip {
+        display: flex;
+        gap: 2px;
+    }
+    bj-race-info-results .cell {
+        flex: 1;
+        min-width: 3px;
+        height: 0.62em;
+        transform: skewX(-10deg);
+        border-radius: 1px;
         background: rgba(255, 255, 255, 0.08);
     }
-    bj-race-info-results tr.selected {
-        background: rgba(230, 92, 0, 0.25);
+    bj-race-info-results .cell.fast {
+        background: #ba68f8;
     }
-    bj-race-info-results td.fastest {
+    bj-race-info-results .cell.pb {
+        background: #73eb9d;
+    }
+    bj-race-info-results .cell.near {
+        background: #9aa0ad;
+    }
+    bj-race-info-results .cell.ok {
+        background: #6b7180;
+    }
+    bj-race-info-results .cell.slow {
+        background: #ffc768;
+    }
+    bj-race-info-results .detail {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 0.25em;
+        padding: 0.4em 0.4em 0.5em;
+        background: rgba(255, 255, 255, 0.06);
+    }
+    bj-race-info-results .dcell {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        padding: 0.25em 0.4em;
+        background: rgba(10, 11, 14, 0.5);
+        border-radius: 3px;
+        font-size: 0.75em;
+    }
+    bj-race-info-results .dcell .s {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        font-size: 0.9em;
+        color: #979dad;
+    }
+    bj-race-info-results .dcell .x {
+        font-size: 0.9em;
+        color: #a7aebf;
+    }
+    bj-race-info-results .fast {
         color: #ba68f8;
-        font-weight: bold;
+        font-weight: 700;
     }
-    bj-race-info-results h5 {
-        margin: 0.6em 0 0.3em;
-        opacity: 0.8;
+    bj-race-info-results .pbt {
+        color: #73eb9d;
+    }
+    bj-race-info-results .slowt {
+        color: #ffc768;
+    }
+    bj-race-info-results .dcell .x.fast,
+    bj-race-info-results .dcell .x.pbt,
+    bj-race-info-results .dcell .x.slowt {
+        font-weight: 400;
+    }
+
+    bj-race-info-results footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1em;
+        margin-top: 0.75em;
+        padding-top: 0.75em;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    bj-race-info-results .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4em 1em;
+        font-size: 0.75em;
+        color: #a7aebf;
+    }
+    bj-race-info-results .legend > span {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4em;
+    }
+    bj-race-info-results .dot {
+        width: 0.65em;
+        height: 0.65em;
+        display: inline-block;
+        transform: skewX(-10deg);
+        border-radius: 1px;
+    }
+    bj-race-info-results .btns {
+        display: flex;
+        flex-shrink: 0;
+        gap: 0.4em;
+    }
+    bj-race-info-results .btn {
+        min-height: 2.3em;
+        padding: 0 0.9em;
+        border: 0;
+        border-radius: 0.25em;
+        background: #363a45;
+        color: #ebebeb;
+        font: inherit;
+        cursor: pointer;
+    }
+    bj-race-info-results .btn:hover {
+        filter: brightness(1.15);
+    }
+    bj-race-info-results .empty {
+        padding: 1em 0;
+        color: #a7aebf;
     }
 </style>
 
-<div ng-if="!$ctrl.active" class="opacity-70 p-2">
-    {{'beamjoy.window.main.tabs.races.raceInfo.noActiveRace' | translate}}
+<p class="empty" ng-if="!$ctrl.active">{{'beamjoy.window.main.tabs.races.raceInfo.noActiveRace' | translate}}</p>
+
+<div class="chips" ng-if="$ctrl.active">
+    <span class="chip" ng-repeat="c in $ctrl.v.chips track by $index" ng-class="{ok: c.cls === 'ok'}">{{c.text}}</span>
 </div>
 
-<div ng-if="$ctrl.active">
-    <div ng-if="!$ctrl.finished" class="opacity-70 mb-2">
-        {{'beamjoy.window.main.tabs.races.raceInfo.stillRunning' | translate}}
+<div class="podium" ng-if="$ctrl.active && $ctrl.v.podium.length > 0">
+    <div class="pod" ng-repeat="p in $ctrl.v.podium track by $index" ng-class="p.cls">
+        <div class="plate big" ng-class="p.plateCls"><span>{{p.pos}}</span></div>
+        <div style="min-width: 0"><b>{{p.name}}</b><small>{{p.line}}</small></div>
+    </div>
+</div>
+
+<div class="body" ng-if="$ctrl.active">
+    <div class="col">
+        <div class="cl head">
+            <span style="text-align: center">{{'beamjoy.raceInfo.pos' | translate}}</span>
+            <span>{{'beamjoy.raceInfo.driver' | translate}}</span>
+            <span class="r">{{'beamjoy.raceInfo.total' | translate}}</span>
+            <span class="r">{{'beamjoy.raceInfo.gap' | translate}}</span>
+            <span class="r">{{'beamjoy.raceInfo.bestLap' | translate}}</span>
+        </div>
+        <div class="scroll">
+            <button type="button" class="cl" ng-repeat="p in $ctrl.v.rows track by p.playerName" ng-class="p.rowCls"
+                aria-pressed="{{p.selected}}" ng-click="$ctrl.selectPlayer(p.playerName)">
+                <span style="display: flex; justify-content: center"><span class="plate" ng-class="p.plateCls"><span>{{p.pos}}</span></span></span>
+                <span class="who"><b>{{p.name}}</b><small ng-if="p.car">{{p.car}}</small></span>
+                <span class="r">{{p.total}}</span>
+                <span class="r">{{p.gap}}</span>
+                <span class="r" ng-class="p.bestCls">{{p.best}}</span>
+            </button>
+        </div>
     </div>
 
-    <h5>{{'beamjoy.window.main.tabs.races.raceInfo.classification' | translate}}</h5>
-    <table class="race-info-table">
-        <thead>
-            <tr>
-                <th class="text-center">#</th>
-                <th class="text-left">{{'beamjoy.window.main.tabs.races.raceInfo.player' | translate}}</th>
-                <th>{{'beamjoy.window.main.tabs.races.raceInfo.totalTime' | translate}}</th>
-                <th>{{'beamjoy.window.main.tabs.races.raceInfo.gap' | translate}}</th>
-                <th>{{'beamjoy.window.main.tabs.races.raceInfo.bestLap' | translate}}</th>
-                <th ng-if="$ctrl.sectorCount > 0">{{'beamjoy.window.main.tabs.races.raceInfo.theoretical' | translate}}</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr
-                ng-repeat="p in $ctrl.classification track by $index"
-                ng-class="{winner: $index === 0 && p.totalMs !== null, dnf: p.dnf, selectable: true, selected: p.playerName === $ctrl.selectedPlayerName}"
-                ng-click="$ctrl.selectPlayer(p.playerName)"
-            >
-                <td class="text-center">{{$index + 1}}</td>
-                <td class="text-left">
-                    {{p.displayName || p.playerName}}
-                    <span ng-if="p.vehicleModel" class="small opacity-70">({{p.vehicleModel}})</span>
-                </td>
-                <td>
-                    <span ng-if="p.dnf">{{'beamjoy.window.main.tabs.races.raceInfo.dnf' | translate}}</span>
-                    <span ng-if="!p.dnf">{{$ctrl.formatTime(p.totalMs)}}</span>
-                </td>
-                <td>{{$ctrl.formatGap(p.gapMs)}}</td>
-                <td ng-class="{fastest: $ctrl.isFastestLap(p)}">
-                    {{$ctrl.formatTime(p.bestLapMs)}}
-                </td>
-                <td ng-if="$ctrl.sectorCount > 0">{{$ctrl.theoreticalBest(p) !== undefined ? $ctrl.formatTime($ctrl.theoreticalBest(p)) : '-'}}</td>
-            </tr>
-        </tbody>
-    </table>
-
-    <h5 ng-if="$ctrl.selectedLaps.length > 0">
-        {{'beamjoy.window.main.tabs.races.raceInfo.lapBreakdown' | translate}}:
-        {{$ctrl.selectedPlayerName}}
-    </h5>
-    <table class="race-info-table" ng-if="$ctrl.selectedLaps.length > 0">
-        <thead>
-            <tr>
-                <th class="text-center">{{'beamjoy.window.main.tabs.races.raceInfo.lap' | translate}}</th>
-                <th class="text-center">{{'beamjoy.window.main.tabs.races.raceInfo.lapTime' | translate}}</th>
-                <th ng-repeat="sector in $ctrl.sectors">S{{sector}}</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr ng-repeat="lap in $ctrl.selectedLaps track by $index">
-                <td class="text-center">{{lap.lap}}</td>
-                <td class="text-center">{{$ctrl.formatTime(lap.lapMs)}}</td>
-                <td
-                    ng-repeat="sector in $ctrl.sectors"
-                    ng-class="{fastest: $ctrl.isFastestSector(sector, lap.sectors[sector])}"
-                >
-                    {{lap.sectors[sector] !== undefined ? $ctrl.formatTime(lap.sectors[sector]) : '-'}}
-                </td>
-            </tr>
-        </tbody>
-    </table>
+    <div class="card" ng-if="$ctrl.v.sel">
+        <div class="card-head">
+            <h3>{{$ctrl.v.sel.name}}</h3>
+            <span>{{$ctrl.v.sel.summary}}</span>
+        </div>
+        <div class="lp ideal" ng-if="$ctrl.v.ideal">
+            <span class="n">{{'beamjoy.raceInfo.best' | translate}}</span>
+            <span>{{$ctrl.v.ideal.time}}</span>
+            <span class="d">{{$ctrl.v.ideal.delta}}</span>
+            <div class="strip" title="{{'beamjoy.raceInfo.bestPossible' | translate}}">
+                <div class="cell" ng-repeat="c in $ctrl.v.ideal.cells track by $index" ng-class="c"></div>
+            </div>
+        </div>
+        <div class="scroll">
+            <p class="empty" ng-if="$ctrl.v.laps.length === 0">{{'beamjoy.raceInfo.noLaps' | translate}}</p>
+            <div ng-repeat="l in $ctrl.v.laps track by l.idx">
+                <button type="button" class="lp" ng-class="{open: l.open}" aria-expanded="{{l.open}}"
+                    ng-disabled="$ctrl.v.sectors < 2" ng-click="$ctrl.toggleLap(l)">
+                    <span class="n">{{l.n}}</span>
+                    <span ng-class="l.tCls">{{l.time}}</span>
+                    <span class="d">{{l.delta}}</span>
+                    <div class="strip" ng-if="$ctrl.v.sectors > 1" aria-hidden="true">
+                        <div class="cell" ng-repeat="c in l.cells track by $index" ng-class="c"></div>
+                    </div>
+                </button>
+                <div class="detail" ng-if="l.open">
+                    <div class="dcell" ng-repeat="d in l.detail track by $index">
+                        <span class="s">S{{d.n}}</span>
+                        <span ng-class="d.cls">{{d.time}}</span>
+                        <span class="x" ng-class="d.cls">{{d.delta}}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+
+<footer ng-if="$ctrl.active">
+    <div class="legend">
+        <span><span class="dot" style="background: #ba68f8"></span>{{'beamjoy.raceInfo.legend.fastest' | translate}}</span>
+        <span ng-if="$ctrl.v.sectors > 1"><span class="dot" style="background: #73eb9d"></span>{{'beamjoy.raceInfo.legend.yourBest' | translate}}</span>
+        <span ng-if="$ctrl.v.sectors > 1"><span class="dot" style="background: #9aa0ad"></span>{{'beamjoy.raceInfo.legend.near' | translate}}</span>
+        <span ng-if="$ctrl.v.sectors > 1"><span class="dot" style="background: #ffc768"></span>{{'beamjoy.raceInfo.legend.slow' | translate}}</span>
+    </div>
+    <div class="btns">
+        <button type="button" class="btn" ng-if="$ctrl.v.raceId !== undefined && $ctrl.v.raceId !== null" ng-click="$ctrl.openLeaderboard()">
+            {{'beamjoy.window.main.tabs.races.leaderboard.title' | translate}}
+        </button>
+        <button type="button" class="btn" ng-click="$ctrl.close()">{{'beamjoy.raceInfo.close' | translate}}</button>
+    </div>
+</footer>

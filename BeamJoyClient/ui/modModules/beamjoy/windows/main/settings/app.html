@@ -23,6 +23,37 @@
     <tr>
         <td colspan="3" class="settings-category d-flex align-center gap-2">
             <span>
+                <icon name="settings" class="light"></icon>
+            </span>
+            <h3>{{ "beamjoy.window.main.tabs.settings.sections.menu.title" | translate }}</h3>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <span title="{{ 'beamjoy.window.main.tabs.settings.sections.menu.railAutoHide.tooltip' | translate }}">
+                {{ "beamjoy.window.main.tabs.settings.sections.menu.railAutoHide" | translate }}
+            </span>
+        </td>
+        <td>
+            <div class="d-flex align-center w-fitcontent">
+                <bj-toggle ng-model="$ctrl.railAutoHide"></bj-toggle>
+            </div>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <span title="{{ 'beamjoy.window.main.tabs.settings.sections.menu.raceHud.tooltip' | translate }}">
+                {{ "beamjoy.window.main.tabs.settings.sections.menu.raceHud" | translate }}
+            </span>
+        </td>
+        <td>
+            <bj-select ng-model="$ctrl.raceHudLayout" options="$ctrl.raceHudLayouts"></bj-select>
+        </td>
+    </tr>
+
+    <tr>
+        <td colspan="3" class="settings-category d-flex align-center gap-2">
+            <span>
                 <icon name="car" class="light"></icon>
             </span>
             <h3>

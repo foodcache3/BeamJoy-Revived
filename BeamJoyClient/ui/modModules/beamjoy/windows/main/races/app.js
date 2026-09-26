@@ -258,17 +258,21 @@ angular.module("beamjoy").component("bjMainRaces", {
         const draft = beamjoyNow.raceDraft;
         this.startingId = draft ? draft.startingId : null;
         this.startOptions = draft ? draft.startOptions : null;
+        // the same form, opened from the lobby by its leader to change the settings
+        this.editing = draft ? !!draft.editing : false;
         $scope.$watch(
             () => this.startingId,
             () => {
+                if (!this.startingId) this.editing = false;
                 beamjoyNow.raceDraft = this.startingId
-                    ? { startingId: this.startingId, startOptions: this.startOptions, showAdvanced: this.showAdvanced }
+                    ? { startingId: this.startingId, startOptions: this.startOptions, showAdvanced: this.showAdvanced, editing: this.editing }
                     : null;
             }
         );
         this.openStart = (event, race) => {
             event.stopPropagation();
             this.startingId = race.id;
+            this.editing = false;
             this.showAdvanced = false;
             // seed from the race's own saved defaults (host-configurable per the plan; these
             // are just the starting point, not fixed), not generic hardcoded values
@@ -343,6 +347,48 @@ angular.module("beamjoy").component("bjMainRaces", {
             this.startOptions = null;
         };
 
+        // CHANGE SETTINGS : the leader reopens the start form on the open lobby, filled with what
+        // it runs now. Saving sends everyone back to not ready (services/raceGrid.lua)
+        this.canEditSettings = () =>
+            !!this.status && this.status.isStarter && this.status.state === "GRID" && !!this.status.startOptions &&
+            this.races.some((r) => r.id === this.status.raceId);
+        this.openEdit = (event) => {
+            const race = this.races.find((r) => this.status && r.id === this.status.raceId);
+            if (!race) return;
+            this.openStart(event, race);
+            Object.assign(this.startOptions, this.status.startOptions);
+            this.editing = true;
+            if (beamjoyNow.raceDraft) beamjoyNow.raceDraft.editing = true;
+        };
+        this.saveEdit = (event, race) => {
+            event.stopPropagation();
+            if (this.startBlocked()) return;
+            const options = this.startOptions;
+            const doSave = () => {
+                beamjoyStore.send("BJRaceUpdateSettings", [options]);
+                this.startingId = null;
+                this.startOptions = null;
+            };
+            const anticheatDisabled = ANTICHEAT_KEYS.some((k) => options[k] !== true) ||
+                (!!race.vehicleRestrictionMode && race.vehicleRestrictionMode !== "free" &&
+                    options.vehicleRestrictionMode !== "raceDefined");
+            if (anticheatDisabled) {
+                beamjoyConfirm.ask(translate("beamjoy.window.main.tabs.races.confirmStartAnticheatWarning"), doSave);
+            } else {
+                doSave();
+            }
+        };
+        // the lobby started or closed while the leader was still editing : drop the form
+        $scope.$watch(
+            () => this.editing && (!this.status || this.status.state !== "GRID"),
+            (gone) => {
+                if (gone) {
+                    this.startingId = null;
+                    this.startOptions = null;
+                }
+            }
+        );
+
         // redesigned start : laps / vehicles / respawns up front, everything else folded under
         // Advanced settings ; two ways to go instead of a "joinable" toggle, X starts alone and A
         // opens a lobby others can join (a one-slot race only has the solo start)
@@ -390,17 +436,24 @@ angular.module("beamjoy").component("bjMainRaces", {
         };
         // the one timer that matters right now : the start countdown, the all-ready countdown, or
         // how long the lobby stays open
+        // the same object while nothing changed : ng-if watches it by reference, and a fresh object
+        // every call never settles the digest (infdig, thousands of errors a second)
+        let timerCache = null;
+        const timer = (label, value) => {
+            if (!timerCache || timerCache.label !== label || timerCache.value !== value) timerCache = { label, value };
+            return timerCache;
+        };
         this.lobbyTimer = () => {
             const s = this.status;
             if (!s) return null;
             if (s.state === "COUNTDOWN" && this.countdownSeconds !== null) {
-                return { label: "beamjoy.window.main.tabs.races.startingIn", value: `${this.countdownSeconds}` };
+                return timer("beamjoy.window.main.tabs.races.startingIn", `${this.countdownSeconds}`);
             }
             if (s.state === "GRID" && this.allReady && s.gridReadySecondsLeft != null) {
-                return { label: "beamjoy.window.main.tabs.races.startingIn", value: this.formatSeconds(s.gridReadySecondsLeft) };
+                return timer("beamjoy.window.main.tabs.races.startingIn", this.formatSeconds(s.gridReadySecondsLeft));
             }
             if (s.state === "GRID" && s.gridTimeoutSecondsLeft != null) {
-                return { label: "beamjoy.window.main.tabs.races.lobbyClosesIn", value: this.formatSeconds(s.gridTimeoutSecondsLeft) };
+                return timer("beamjoy.window.main.tabs.races.lobbyClosesIn", this.formatSeconds(s.gridTimeoutSecondsLeft));
             }
             return null;
         };
@@ -430,14 +483,24 @@ angular.module("beamjoy").component("bjMainRaces", {
             event.stopPropagation();
             if (this.status && this.status.isStarter) beamjoyStore.send("BJRaceStartNow");
         };
-        // the grid as the lobby shows it : players by slot, then the free slots. Built once per
-        // status push (a fresh array per digest never settles)
+        // the grid as the lobby shows it : players by slot, then ONE row saying how many slots are
+        // free (a row per free slot made big grids far too long). Built once per status push (a
+        // fresh array per digest never settles)
         this.slots = [];
         const buildSlots = () => {
             const s = this.status;
             if (!s) return (this.slots = []);
             const rows = (s.participants || []).map((p, i) => ({ key: `p${p.playerID}`, num: p.gridSlot || i + 1, player: p, ready: this.isReady(p) }));
-            for (let i = rows.length; i < (s.maxParticipants || 0); i++) rows.push({ key: `o${i}`, num: i + 1, open: true });
+            const free = Math.max(0, (s.maxParticipants || 0) - rows.length);
+            if (free > 0) {
+                rows.push({
+                    key: "open",
+                    num: "+",
+                    open: true,
+                    text: translate(free === 1 ? "beamjoy.window.main.tabs.races.openSlotsOne" : "beamjoy.window.main.tabs.races.openSlots")
+                        .replace("{n}", free),
+                });
+            }
             this.slots = rows;
         };
         $scope.$watch(() => this.status, buildSlots);

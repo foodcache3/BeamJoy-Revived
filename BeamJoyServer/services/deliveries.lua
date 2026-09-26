@@ -774,6 +774,9 @@ local function deliveryStart(ctxt, offerId, serverVid)
     if not near(vehiclePosition(ctxt.senderID, serverVid), depot, M.START_SLACK) then
         return refuseStart(ctxt, "notAtDepot")
     end
+    if services_crews.pullSize(ctxt.senderID) > maxPlayers(offer) then
+        return refuseStart(ctxt, "crewTooBig")
+    end
 
     table.remove(M.boards[offer.depotId], index)
     fillBoard(depot)
@@ -1166,6 +1169,8 @@ local function deliveryConvoyCreate(ctxt, offerId, serverVid)
     M.nextConvoyId = M.nextConvoyId + 1
     M.convoys[c.id] = c
     addToLobby(c, ctxt.senderID, serverVid)
+    -- the leader's crew comes along (services/crews.lua)
+    services_crews.pullIn(ctxt.senderID, "convoy", c.id)
 end
 
 ---@param ctxt BJSContext

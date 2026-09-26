@@ -9,6 +9,7 @@ await import(`/ui/modModules/beamjoy/windows/main/vote/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/you/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/leaderboards/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/lobbyInvite/app.js`);
+await import(`/ui/modModules/beamjoy/windows/main/crew/app.js`);
 
 // Main window, redesigned (edge rail). A slim rail (right edge by default, draggable by its logo
 // anywhere on screen) ; each of its buttons opens a small panel beside it, on the side away from
@@ -20,14 +21,14 @@ await import(`/ui/modModules/beamjoy/windows/main/lobbyInvite/app.js`);
 // rail's own Hide button closes it.
 angular.module("beamjoy").component("bjMain", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/app.html",
-    controller: function ($rootScope, $scope, $element, $timeout, beamjoyStore, beamjoyNow, beamjoyDelivery) {
+    controller: function ($rootScope, $scope, $element, $timeout, beamjoyStore, beamjoyNow, beamjoyDelivery, beamjoyCrew) {
         this.visible = false;
         this.closable = false;
         // null or one of PANELS : the small panel open beside the rail
         this.panel = null;
         this.full = false;
         this.fullTab = "home";
-        this.FULL_TABS = ["home", "activities", "players", "leaderboards", "settings"];
+        this.FULL_TABS = ["home", "activities", "crew", "players", "leaderboards", "settings"];
 
         $rootScope.$on("BJUpdateWindowSettings", (_, data) => {
             const el = data["beamjoy-main"];
@@ -69,12 +70,12 @@ angular.module("beamjoy").component("bjMain", {
         };
         // shrinking goes back to the panel matching the tab you were on
         this.shrink = () => {
-            const back = { home: "now", activities: "play", players: "players", leaderboards: "now", settings: "settings" };
+            const back = { home: "now", activities: "play", crew: "crew", players: "players", leaderboards: "now", settings: "settings" };
             this.full = false;
             this.panel = back[this.fullTab] || "now";
         };
         this.fullFor = (panel) =>
-            ({ now: "home", play: "activities", players: "players", settings: "settings" })[panel] || "home";
+            ({ now: "home", play: "activities", crew: "crew", players: "players", settings: "settings" })[panel] || "home";
         this.setFullTab = (tab) => (this.fullTab = tab);
 
         // other components ask for a panel (Happening now's "Start an activity", an activity
@@ -153,6 +154,8 @@ angular.module("beamjoy").component("bjMain", {
         // how many lobbies you could join right now, as a badge on the rail's Now button while its
         // panel is closed (opening it is looking at the list)
         this.nowCount = () => beamjoyNow.joinableCount();
+        // players asking to join your crew (you lead it)
+        this.crewCount = () => beamjoyCrew.requestCount();
         this.$onInit = () => {
             beamjoyNow.refresh();
             beamjoyStore.send("BJMainPadRequest");
@@ -177,7 +180,7 @@ angular.module("beamjoy").component("bjMain", {
         this.padLevel = "rail";
         this.railCursor = "now";
         const PAD_CLASS = "bjr-pad-focus";
-        const PANEL_IDS = ["now", "play", "players", "vote", "settings"];
+        const PANEL_IDS = ["now", "play", "crew", "players", "vote", "settings"];
         const SELECTOR =
             'button, a[href], input[type="range"], input[type="text"], input[type="number"], md-select, [ng-click]';
         let padEl = null;
@@ -185,10 +188,14 @@ angular.module("beamjoy").component("bjMain", {
         const root = () => $element[0];
         const railIds = () =>
             [...root().querySelectorAll(".bjr-rail [data-rail]")].map((el) => el.getAttribute("data-rail"));
+        // where the cursor last was : when its element goes away (Start opened a form in its
+        // place, a lobby replaced the list) the cursor lands near there, not back at the top
+        let padRect = null;
         const setPadEl = (el) => {
             if (padEl) padEl.classList.remove(PAD_CLASS);
             padEl = el || null;
             if (padEl) {
+                padRect = padEl.getBoundingClientRect();
                 padEl.classList.add(PAD_CLASS);
                 if (padEl.scrollIntoView) padEl.scrollIntoView({ block: "nearest" });
                 // lets a list follow the cursor (the Jobs depot table selects the focused row)
@@ -230,22 +237,53 @@ angular.module("beamjoy").component("bjMain", {
             const ay = a.top + a.height / 2;
             let best = null;
             let bestScore = Infinity;
+            // up / down : the nearest row first, then the closest thing in it. Scoring sideways
+            // drift against distance skipped a control sitting at the far end of its row (a
+            // toggle right of its label) for a full-width one further down
+            if (dy !== 0) {
+                const rows = [];
+                focusables().forEach((el) => {
+                    if (el === from || from.contains(el) || el.contains(from)) return;
+                    const b = el.getBoundingClientRect();
+                    const gap = dy > 0 ? b.top - a.bottom : a.top - b.bottom;
+                    if (gap < -2) return;
+                    rows.push({ el, gap, off: Math.abs(b.left + b.width / 2 - ax), b });
+                });
+                if (rows.length === 0) return null;
+                const nearest = Math.min(...rows.map((r) => r.gap));
+                rows.filter((r) => r.gap <= nearest + 8).forEach((r) => {
+                    // overlapping sideways counts as straight ahead
+                    const overlap = r.b.right > a.left && r.b.left < a.right ? 0 : 1;
+                    const score = overlap * 10000 + r.off;
+                    if (score < bestScore) {
+                        bestScore = score;
+                        best = r.el;
+                    }
+                });
+                return best;
+            }
             focusables().forEach((el) => {
                 if (el === from || from.contains(el) || el.contains(from)) return;
                 const b = el.getBoundingClientRect();
-                if (dx > 0 && b.left < a.right - 2) return;
-                if (dx < 0 && b.right > a.left + 2) return;
-                if (dy > 0 && b.top < a.bottom - 2) return;
-                if (dy < 0 && b.bottom > a.top + 2) return;
                 const bx = b.left + b.width / 2;
                 const by = b.top + b.height / 2;
+                // sideways, a slanted neighbour (the Crew tab's skewed seats) has a box that
+                // overlaps this one's edge a little : its centre being well past ours counts too
+                const pastX = (d) => (d > 0 ? bx - ax : ax - bx) > Math.min(a.width, b.width) * 0.6;
+                if (dx > 0 && b.left < a.right - 2 && !pastX(1)) return;
+                if (dx < 0 && b.right > a.left + 2 && !pastX(-1)) return;
+                if (dy > 0 && b.top < a.bottom - 2) return;
+                if (dy < 0 && b.bottom > a.top + 2) return;
                 const ahead = dx !== 0 ? Math.abs(bx - ax) : Math.abs(by - ay);
                 // sideways : the gap between the two boxes' spans (0 when they overlap)
                 const side =
                     dx !== 0
                         ? Math.max(0, b.top - a.bottom, a.top - b.bottom)
                         : Math.max(0, b.left - a.right, a.left - b.right);
-                const score = ahead + side * 4;
+                // tie-break by how far the centres are out of line : slanted neighbours' boxes
+                // overlap sideways, so straight below and diagonally below can both have side 0
+                const offAxis = dx !== 0 ? Math.abs(by - ay) : Math.abs(bx - ax);
+                const score = ahead + side * 4 + offAxis * 0.1;
                 if (score < bestScore) {
                     bestScore = score;
                     best = el;
@@ -253,10 +291,37 @@ angular.module("beamjoy").component("bjMain", {
             });
             return best;
         };
+        // the cursor's element went away : the view's main action if it has one (a lobby's I'm
+        // ready), otherwise the first control at or below where the cursor was (a start form's
+        // first option), otherwise the top
+        // `before` : what was there before a press ; controls that just appeared (a start form's
+        // options) come first, so the race's own Leaderboard button beside Start isn't picked
+        const landAfterLoss = (before) => {
+            const list = focusables();
+            const main = list.find((el) => el.hasAttribute("data-pad-a"));
+            if (main) return setPadEl(main);
+            const fresh = before ? list.filter((el) => !before.has(el)) : [];
+            const pool = fresh.length > 0 ? fresh : list;
+            if (padRect) {
+                let best = null;
+                let bestScore = Infinity;
+                pool.forEach((el) => {
+                    const r = el.getBoundingClientRect();
+                    if (r.bottom < padRect.top - 2) return;
+                    const score = Math.abs(r.top - padRect.top) * 2 + Math.abs(r.left - padRect.left);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        best = el;
+                    }
+                });
+                if (best) return setPadEl(best);
+            }
+            setPadEl(pool[0]);
+        };
         // true when it moved
         const moveDir = (dir) => {
             if (!padEl || !document.contains(padEl)) {
-                setPadEl(focusables()[0]);
+                landAfterLoss();
                 return !!padEl;
             }
             const next = findDir(padEl, dir);
@@ -327,10 +392,12 @@ angular.module("beamjoy").component("bjMain", {
                     el.focus();
                     return;
                 }
+                const before = new Set(focusables());
                 el.click();
-                // the pressed button may be gone (a form opened, a card closed) : keep a cursor
+                // the pressed button may be gone (a form opened, a card closed) : keep a cursor,
+                // near where it was
                 $timeout(() => {
-                    if (!document.contains(padEl)) enterContent();
+                    if (!document.contains(padEl)) landAfterLoss(before);
                 }, 80);
             });
         };
@@ -507,6 +574,25 @@ angular.module("beamjoy").component("bjMain", {
         // Dragged by its logo, remembered per player (localStorage, as fractions of the screen so
         // it survives a resolution change). The side it's on decides where panels open : towards
         // the middle of the screen. Default : right edge, low enough to clear the race overlay.
+        // HIDE WHEN IDLE (Settings > Menu) : with nothing open and the pad elsewhere, the rail
+        // fades down to a small handle ; hovering it, the Focus binding or any panel brings it back
+        this.autoHide = false;
+        try {
+            this.autoHide = localStorage.getItem("beamjoy.rail.autoHide") === "1";
+        } catch (e) {
+            // storage unavailable : always shown
+        }
+        $rootScope.$on("BJRailAutoHide", (_, on) => (this.autoHide = !!on));
+        this.railHover = false;
+        let hoverOff = null;
+        this.hoverRail = (inside) => {
+            $timeout.cancel(hoverOff);
+            if (inside) this.railHover = true;
+            // a short grace so moving onto a panel or a notice doesn't flicker it away
+            else hoverOff = $timeout(() => (this.railHover = false), 700);
+        };
+        this.railTucked = () => this.autoHide && !this.panel && !this.full && !this.pad && !this.railHover && !drag;
+
         const STORE_KEY = "beamjoy.rail.position";
         const GAP = 12;
         this.railPos = null;

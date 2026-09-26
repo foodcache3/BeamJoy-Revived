@@ -1,55 +1,156 @@
 <style>
-    bj-main-bus-lines .line-row {
-        transition: background-color 0.2s ease-in-out;
+    bj-main-bus-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5em;
     }
-    bj-main-bus-lines .line-row:hover {
-        background-color: rgba(0, 0, 0, 0.15);
+    bj-main-bus-lines .line-card {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
     }
-    bj-main-bus-lines .status-panel {
-        background: rgba(0, 0, 0, 0.2);
-        border-radius: 0.4em;
-        padding: 0.6em;
-        margin-bottom: 0.6em;
+    bj-main-bus-lines .info {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15em;
+        overflow-wrap: break-word;
     }
-    /* per direct request : the orange circular-arrow icon (before that, a plain white one) is
-       gone entirely now, plain parenthesized text instead - no icon/color styling needed */
-    bj-main-bus-lines .loopable-label {
-        opacity: 0.7;
+    bj-main-bus-lines .name {
+        font-size: 0.95em;
+        font-weight: 600;
+    }
+    /* the line table : laid out like Jobs' depot table, one grid for the header and every row */
+    bj-main-bus-lines .bus-count {
+        margin: 0;
+        font-size: 0.85em;
+        color: #979dad;
+    }
+    bj-main-bus-lines .bus-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(0, 0.45fr) minmax(0, 1.6fr);
+        gap: 0.8em;
+        align-items: center;
+        justify-items: start;
+        text-align: left;
+    }
+    bj-main-bus-lines .bus-head {
+        padding: 0 0.75em;
+        font-size: 0.78em;
+        color: #979dad;
+    }
+    bj-main-bus-lines .bus-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25em;
+    }
+    bj-main-bus-lines .bus-row {
+        width: 100%;
+        padding: 0.65em 0.75em;
+        border: 0;
+        border-radius: 0 0.4em 0.4em 0;
+        background: rgba(255, 255, 255, 0.03);
+        color: #ebebeb;
+        font-size: 1em;
+        cursor: pointer;
+    }
+    bj-main-bus-lines .bus-row:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+    bj-main-bus-lines .bus-row.selected {
+        background: rgba(255, 102, 0, 0.12);
+        box-shadow: inset 3px 0 0 #ff6600, 0 0 0 2px rgba(255, 102, 0, 0.55);
+    }
+    bj-main-bus-lines .bus-row:disabled {
+        opacity: 0.5;
+        cursor: default;
+    }
+    bj-main-bus-lines .bus-row > span {
+        min-width: 0;
+        max-width: 100%;
+    }
+    bj-main-bus-lines .bus-name {
+        display: block;
+        overflow: hidden;
+        font-size: 0.95em;
+        font-weight: 600;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    bj-main-bus-lines .bus-kind {
+        display: block;
+        margin-top: 0.2em;
+        font-size: 0.76em;
+        color: #979dad;
+    }
+    bj-main-bus-lines .bus-row.selected .bus-kind {
+        color: #ffbca0;
+    }
+    bj-main-bus-lines .bus-num {
+        font-size: 0.9em;
+        font-variant-numeric: tabular-nums;
+    }
+    bj-main-bus-lines .bus-route {
+        font-size: 0.82em;
+        color: #c8cedc;
+        white-space: normal;
+    }
+    bj-main-bus-lines .bus-empty {
+        padding: 0.8em 0.75em;
+        font-size: 0.9em;
+        line-height: 1.5;
+        color: #979dad;
+        white-space: normal;
+    }
+    bj-main-bus-lines .bus-foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.4em;
+        padding-top: 0.65em;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
 </style>
 
-<div class="status-panel d-flex align-center gap-1" ng-if="$ctrl.runActive">
-    <span class="flex-grow-1">
-        <span class="opacity-70">{{'beamjoy.buslines.main.currentlyRunning' | translate}}</span>
-        <b>{{$ctrl.runLineName}}</b>
+<!-- RUNNING : the line you're driving -->
+<div class="bjr-card hot line-card" ng-if="$ctrl.runActive">
+    <span class="info">
+        <span class="bjr-muted">{{'beamjoy.buslines.main.currentlyRunning' | translate}}</span>
+        <span class="name">{{$ctrl.runLineName}}</span>
     </span>
-    <button class="btn danger" ng-click="$ctrl.stopRun($event)">
+    <button type="button" class="bjr-btn danger" data-pad-a ng-click="$ctrl.stopRun($event)">
         {{'beamjoy.window.busHud.stopRun' | translate}}
     </button>
 </div>
 
-<div class="opacity-70 small mb-2" ng-if="$ctrl.lines.length === 0">
-    {{'beamjoy.buslines.edit.empty' | translate}}
-</div>
-
-<div
-    class="line-row d-flex p-1 px-2 gap-1 align-center"
-    ng-repeat="line in $ctrl.lines track by $index"
->
-    <span class="flex-grow-1">
-        {{$ctrl.lineLabel(line, $index)}}
-        <span class="opacity-70 small">
-            ({{line.stops.length}} {{'beamjoy.buslines.edit.stops' | translate}})
-            <span class="loopable-label" ng-if="line.loopable">
-                ({{'beamjoy.buslines.edit.loopableLabel' | translate}})
+<!-- EVERY LINE : the pad's cursor selects the row it lands on ; A (or a second click) starts it.
+     Bus lines are solo : it starts straight away, no lobby -->
+<section ng-if="!$ctrl.runActive" style="display: flex; flex-direction: column; gap: 0.5em" aria-label="{{'beamjoy.buslines.edit.lines' | translate}}">
+    <p class="bus-count">{{$ctrl.countLine}}</p>
+    <div class="bus-grid bus-head" role="row" ng-if="$ctrl.rows.length > 0">
+        <span>{{'beamjoy.buslines.col.line' | translate}}</span>
+        <span>{{'beamjoy.buslines.col.stops' | translate}}</span>
+        <span>{{'beamjoy.buslines.col.route' | translate}}</span>
+    </div>
+    <div class="bus-list">
+        <div class="bus-empty" ng-if="$ctrl.rows.length === 0">{{'beamjoy.buslines.edit.empty' | translate}}</div>
+        <button type="button" class="bus-row bus-grid" ng-repeat="r in $ctrl.rows track by r.key" data-row="{{$index}}"
+            ng-class="{selected: $index === $ctrl.selected}" aria-pressed="{{$index === $ctrl.selected}}"
+            ng-disabled="!r.startable" ng-click="$ctrl.rowClick($index)">
+            <span>
+                <span class="bus-name">{{r.name}}</span>
+                <span class="bus-kind">{{r.kind}}</span>
             </span>
-        </span>
-    </span>
-    <button
-        class="btn success"
-        ng-disabled="$ctrl.runActive || line.stops.length < 2"
-        ng-click="$ctrl.startLine($event, line)"
-    >
-        {{'beamjoy.buslines.play.start' | translate}}
-    </button>
-</div>
+            <span class="bus-num">{{r.stops}}</span>
+            <span class="bus-route">{{r.route}}</span>
+        </button>
+    </div>
+
+    <footer class="bus-foot" ng-if="$ctrl.rows.length > 0" aria-label="{{'beamjoy.delivery.controls' | translate}}">
+        <button type="button" class="bjr-btn primary" ng-disabled="!$ctrl.current() || !$ctrl.current().startable"
+            ng-click="$ctrl.start($ctrl.current())">
+            <span class="bjr-glyph" aria-hidden="true">A</span>{{'beamjoy.buslines.play.start' | translate}}
+        </button>
+    </footer>
+</section>

@@ -4,6 +4,9 @@
 ---   * announce : someone opened a lobby (the runners' onSessionsList, replacing the old centre
 ---                screen "X started a race" text)
 --- Each has Join and Dismiss. The convoy invite stays delivery.lua's own, drawn in the same stack.
+--- Crew invites (services/crews.lua, kind "crew") ride along : they stay while you're busy, and
+--- joining opens the Crew tab. So does "pulled" : your crew's leader brought you into their lobby
+--- (or convoy) ; A opens it in the main window, and it goes away once you're out of it.
 ---
 --- Pad : like the convoy invite, a notice only takes A / B once focused with the Focus
 --- notification control (beamjoy/mainNav.lua walks delivery's invite first, then these). A joins
@@ -17,6 +20,7 @@ local M = {
     OWNER = "notices",
     INVITE_SEC = 20,
     ANNOUNCE_SEC = 12,
+    PULLED_SEC = 15,
     ---@type table[] newest first : {id, type, kind, sessionId, fromName, title, count, max, expiresAtMs}
     list = {},
     focused = false,
@@ -44,7 +48,37 @@ end
 --- the notice's session, if it's still a lobby you could join
 ---@param n table
 ---@return table?
+--- the section and whether you're still in that lobby, for a "pulled" notice
+local PULLED = {
+    race = { section = "races", runner = function() return beamjoy_raceRunner end, lobby = "GRID" },
+    hunter = { section = "hunter", runner = function() return beamjoy_hunterRunner end, lobby = "LOBBY" },
+    infected = { section = "infected", runner = function() return beamjoy_infectedRunner end, lobby = "LOBBY" },
+    convoy = { section = "jobs" },
+}
+
+---@param n table a "pulled" notice
+---@return boolean
+local function stillIn(n)
+    if n.kind == "convoy" then
+        local l = beamjoy_delivery and beamjoy_delivery.lobby
+        return l ~= nil and l.id == n.sessionId
+    end
+    local k = PULLED[n.kind]
+    local runner = k and k.runner and k.runner()
+    local s = runner and runner.session
+    return s ~= nil and s.id == n.sessionId and s.state == k.lobby
+end
+
 local function liveSession(n)
+    if n.type == "pulled" then
+        -- the lobby's own (bigger, maybe chunked) update can land just after this notice : give
+        -- it a moment before deciding you're not in it
+        local settling = GetCurrentTimeMillis() - (n.addedAtMs or 0) < 3000
+        return (stillIn(n) or settling) and {} or nil
+    end
+    if n.kind == "crew" then
+        return beamjoy_crews and beamjoy_crews.joinable(n.sessionId) and {} or nil
+    end
     local k = KINDS[n.kind]
     local runner = k and k.runner()
     for _, s in ipairs(runner and runner.openSessions or {}) do
@@ -70,7 +104,7 @@ local function push()
             count = s and s.participantCount or n.count,
             max = s and s.maxParticipants or n.max,
             expiresIn = math.max(0, (n.expiresAtMs - now) / 1000),
-            total = n.type == "invite" and M.INVITE_SEC or M.ANNOUNCE_SEC,
+            total = n.total or (n.type == "invite" and M.INVITE_SEC or M.ANNOUNCE_SEC),
         }
     end
     beamjoy_communications_ui.send("BJNotices", { items = items, padActive = M.padActive })
@@ -135,6 +169,41 @@ local function onServerInvite(data)
     })
 end
 
+--- your crew's leader opened a lobby or convoy and you were joined into it (services/crews.lua
+--- pullIn)
+---@param data table {kind, sessionId, fromName, title}
+local function crewPulled(data)
+    if type(data) ~= "table" or not PULLED[data.kind] then return end
+    add({
+        type = "pulled",
+        kind = data.kind,
+        sessionId = data.sessionId,
+        fromName = data.fromName,
+        title = data.title,
+        total = M.PULLED_SEC,
+        addedAtMs = GetCurrentTimeMillis(),
+        expiresAtMs = GetCurrentTimeMillis() + M.PULLED_SEC * 1000,
+    })
+end
+
+--- a crew leader invited you (services/crews.lua crewInvite)
+---@param data table {crewId, fromName, title, count, max, expiresIn}
+local function crewInvite(data)
+    if type(data) ~= "table" or data.crewId == nil then return end
+    local seconds = tonumber(data.expiresIn) or M.INVITE_SEC
+    add({
+        type = "invite",
+        kind = "crew",
+        sessionId = data.crewId,
+        fromName = data.fromName,
+        title = data.title,
+        count = data.count,
+        max = data.max,
+        total = seconds,
+        expiresAtMs = GetCurrentTimeMillis() + seconds * 1000,
+    })
+end
+
 ---@param want boolean
 local function updatePad(want)
     if want == M.padActive then return end
@@ -151,7 +220,13 @@ local function reply(id, accept)
     end
     if not notice then return end
     remove(id)
-    if accept then
+    if notice.type == "pulled" then
+        -- you're already in : A just opens it
+        if accept and beamjoy_mainNav then beamjoy_mainNav.focusOn("play", PULLED[notice.kind].section) end
+    elseif notice.kind == "crew" then
+        if beamjoy_crews then beamjoy_crews.inviteReply(notice.sessionId, accept) end
+        if accept and beamjoy_mainNav then beamjoy_mainNav.focusOn("crew") end
+    elseif accept then
         local k = KINDS[notice.kind]
         beamjoy_communications_ui.dispatch(k.join, { notice.sessionId })
         -- the lobby opens in the main window, with the pad
@@ -193,7 +268,7 @@ local function onUpdate()
     for i = #M.list, 1, -1 do
         local n = M.list[i]
         -- expired, joined something else, or the lobby is gone / started / full
-        if now >= n.expiresAtMs or isBusy or not liveSession(n) then
+        if now >= n.expiresAtMs or (isBusy and n.kind ~= "crew" and n.type ~= "pulled") or not liveSession(n) then
             table.remove(M.list, i)
             changed = true
         end
@@ -219,6 +294,11 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJLobbyInvite", function(kind, targetID)
         beamjoy_communications.send("lobbyInvite", kind, targetID)
     end)
+    -- staff : cancel someone else's race / hunt / infected game from Happening now
+    beamjoy_communications_ui.addHandler("BJStaffSessionCancel", function(kind, sessionId)
+        local event = ({ race = "raceCancel", hunter = "hunterCancel", infected = "infectedCancel" })[kind]
+        if event and sessionId then beamjoy_communications.send(event, sessionId) end
+    end)
 end
 
 local function onServerLeave()
@@ -232,6 +312,8 @@ M.onUpdate = onUpdate
 M.onServerLeave = onServerLeave
 M.onExtensionUnloaded = onServerLeave
 M.announce = announce
+M.crewInvite = crewInvite
+M.crewPulled = crewPulled
 M.notificationFocusable = focusable
 M.notificationFocused = isFocused
 M.setNotificationFocus = setFocus

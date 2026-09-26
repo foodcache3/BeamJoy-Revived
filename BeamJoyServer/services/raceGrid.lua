@@ -1030,6 +1030,16 @@ local function raceStartNow(ctxt, sessionId)
     onGridTimeout(session.id)
 end
 
+local CAPTURE_KEYS = { "vehicleRestrictionModel", "vehicleRestrictionParts", "vehicleRestrictionVars",
+    "vehicleRestrictionPaints" }
+---@param opts table
+---@return table
+local function editableOpts(opts)
+    local copy = table.clone(opts)
+    for _, k in ipairs(CAPTURE_KEYS) do copy[k] = nil end
+    return copy
+end
+
 ---@param ctxt BJSContext
 ---@param raceId integer
 ---@param opts {joinable: boolean?, laps: integer?, respawnStrategy: string?, placementMode: string?, gridTimeout: integer?, gridReadyTimeout: integer?, countdown: integer?, dnfEnabled: boolean?, dnfTimeout: integer?, resetPenaltyEnabled: boolean?, resetPenaltySeconds: integer?, autoSpectateOnFinish: boolean?, disableNodegrabber: boolean?, disableCameras: boolean?, disableGravityChange: boolean?, vehicleRestrictionMode: string?, vehicleRestrictionModel: string?, vehicleRestrictionParts: table?, vehicleRestrictionVars: table?, vehicleRestrictionPaints: table?, vehicleRestrictionLabel: string?, vehicleRestrictionPoolPresetId: integer?, ghostOnCountdown: boolean?, disableCollisions: boolean?, ghostBackmarkers: boolean?, showGateNametags: boolean?, limitVisibleGates: boolean?, visibleGateCount: integer?, allowTuning: boolean?}?
@@ -1078,6 +1088,8 @@ local function raceStart(ctxt, raceId, opts)
     -- a private lobby : joinable by invitation only, never listed (so never announced). While
     -- nobody else is in it, it behaves like a solo start (see tryStartFromGrid)
     session.private = session.joinable and opts.private == true
+    session.startOpts = editableOpts(opts)
+    session.settingsRev = 0
     addParticipant(session, ctxt.senderID, ctxt.sender.playerName)
     M.sessions[session.id] = session
 
@@ -1096,6 +1108,10 @@ local function raceStart(ctxt, raceId, opts)
 
     pushSessionUpdate(session)
     pushOpenSessionsList()
+    if session.joinable then
+        -- the leader's crew comes along (services/crews.lua)
+        services_crews.pullIn(ctxt.senderID, "race", session.id)
+    end
     return session.id
 end
 
@@ -1108,7 +1124,8 @@ local function raceJoin(ctxt, sessionId)
     if session.participants[ctxt.senderID] then return end
     -- private lobbies take invited players only
     if session.private and not (services_lobbyInvites and
-            services_lobbyInvites.isInvited("race", ctxt.senderID, session.id)) then
+            services_lobbyInvites.isInvited("race", ctxt.senderID, session.id)) and
+        not services_crews.sameCrew(ctxt.senderID, session.starterID) then
         return
     end
     -- see raceStart's own identical check / findSessionByParticipant's comment. Joining a second
@@ -1207,7 +1224,64 @@ local function raceCancel(ctxt, sessionId)
         not services_permissions.isStaff(ctxt.sender.playerName) then
         return
     end
+    if session.starterID ~= ctxt.senderID then
+        -- staff closing someone else's session : tell the players why it vanished
+        session.participants:forEach(function(_, playerID)
+            local player = services_players.players:find(function(p) return p.playerID == playerID end)
+            communications_tx.sendToPlayer(playerID, "toast", "info",
+                services_lang.get("race.cancelledByStaff", player and player.lang)
+                :var({ name = ctxt.sender.playerName }))
+        end)
+    end
     removeSession(session)
+end
+
+--- the leader changes the race's settings while the lobby is still forming. Checked exactly like
+--- a start (buildSettings), except the lobby's own timers, which were scheduled when it opened and
+--- stay as they were. Everyone goes back to not ready : nobody stays ready for rules they didn't
+--- see. settingsRev lets clients re-run their vehicle steering for a new restriction
+---@param ctxt BJSContext
+---@param sessionId string
+---@param opts table
+local function raceUpdateSettings(ctxt, sessionId, opts)
+    if not ctxt.sender or type(opts) ~= "table" then return end
+    local session = M.sessions[sessionId]
+    if not session or session.state ~= "GRID" or session.starterID ~= ctxt.senderID then return end
+    local race = getRace(session)
+    if not race then return end
+
+    local previous = session.settings
+    local settings = buildSettings(race, opts)
+    settings.gridTimeout = previous.gridTimeout
+    settings.gridReadyTimeout = previous.gridReadyTimeout
+    session.settings = settings
+    opts.gridTimeout = previous.gridTimeout
+    opts.gridReadyTimeout = previous.gridReadyTimeout
+    session.startOpts = editableOpts(opts)
+    session.settingsRev = (session.settingsRev or 0) + 1
+
+    -- "manual" placement keeps a slot per player : seed them in join order when switching to it,
+    -- drop them when switching away
+    if settings.placementMode ~= previous.placementMode then
+        if settings.placementMode == services_races.PLACEMENT_MODES.MANUAL then
+            local list = session.participants:values()
+            table.sort(list, function(a, b) return a.joinIndex < b.joinIndex end)
+            for i, p in ipairs(list) do p.gridSlot = i end
+        else
+            session.participants:forEach(function(p) p.gridSlot = nil end)
+        end
+    end
+
+    session.participants:forEach(function(p) p.ready = false end)
+    updateAllReadyState(session)
+    session.participants:forEach(function(_, playerID)
+        if playerID ~= ctxt.senderID then
+            local player = services_players.players:find(function(p) return p.playerID == playerID end)
+            communications_tx.sendToPlayer(playerID, "toast", "info",
+                services_lang.get("race.settingsChanged", player and player.lang))
+        end
+    end)
+    pushSessionUpdate(session)
 end
 
 ---@param ctxt BJSContext
@@ -1556,6 +1630,7 @@ local function onInit()
     communications_rx.addHandler("raceSpectate", M.raceSpectate)
     communications_rx.addHandler("raceStopSpectate", M.raceStopSpectate)
     communications_rx.addHandler("raceStartNow", M.raceStartNow)
+    communications_rx.addHandler("raceUpdateSettings", M.raceUpdateSettings)
 
     services_chatCommands.addCommand("race", "chat.command.race.desc", M.chatRace,
         { commandKey = "chat.command.race.command" })
@@ -1662,6 +1737,7 @@ M.raceStart = raceStart
 M.raceJoin = raceJoin
 M.raceLeave = raceLeave
 M.raceCancel = raceCancel
+M.raceUpdateSettings = raceUpdateSettings
 M.raceReady = raceReady
 M.raceSetGridSlot = raceSetGridSlot
 M.unreadyOnVehicleChange = unreadyOnVehicleChange

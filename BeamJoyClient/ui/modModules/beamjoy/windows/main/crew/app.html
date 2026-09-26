@@ -1,0 +1,370 @@
+<style>
+    bj-main-crew {
+        --crew-free: #73eb9d;
+        --crew-busy: #ffc768;
+        --crew-off: #606570;
+        display: flex;
+        flex-direction: column;
+        gap: 0.7em;
+        max-width: 46em;
+    }
+    bj-main-crew p {
+        margin: 0;
+        white-space: normal;
+        line-height: 1.45;
+    }
+
+    /* the crew's name, set in the wordmark's face : the only large type in the tab */
+    bj-main-crew .crew-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 0.6em;
+    }
+    bj-main-crew .crew-name {
+        margin: 0;
+        font-family: "Overpass", sans-serif;
+        font-weight: 900;
+        font-style: italic;
+        font-size: 1.7em;
+        line-height: 1;
+        overflow-wrap: anywhere;
+    }
+    bj-main-crew.is-full .crew-name {
+        font-size: 2.3em;
+    }
+
+    /* THE FORMATION : one seat per member, slanted at the logo bars' angle. Two by two in the
+       side panel, four across in the full window */
+    bj-main-crew .formation {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.45em 0.6em;
+        margin: 0;
+        padding: 0 0.4em;
+        list-style: none;
+    }
+    bj-main-crew.is-full .formation {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    bj-main-crew .seat {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 0.3em;
+        width: 100%;
+        min-height: 3.9em;
+        padding: 0.55em 0.8em;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid transparent;
+        border-radius: 0.3em;
+        color: #ebebeb;
+        text-align: left;
+        transform: skewX(-10deg);
+        cursor: default;
+    }
+    bj-main-crew .seat > * {
+        transform: skewX(10deg);
+    }
+    bj-main-crew .seat.pickable {
+        cursor: pointer;
+    }
+    bj-main-crew .seat.pickable:hover {
+        background: rgba(255, 255, 255, 0.09);
+    }
+    bj-main-crew .seat.leader {
+        background: rgba(255, 102, 0, 0.12);
+        box-shadow: inset 3px 0 0 #ff6600;
+    }
+    bj-main-crew .seat.selected {
+        border-color: #ff8955;
+    }
+    bj-main-crew .seat.open {
+        background: transparent;
+        border: 1px dashed var(--crew-off);
+        color: #a7aebf;
+    }
+    bj-main-crew .seat .n {
+        display: flex;
+        align-items: center;
+        gap: 0.35em;
+        min-width: 0;
+        font-size: 0.92em;
+        font-weight: 600;
+    }
+    bj-main-crew .seat .n .txt {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    bj-main-crew .seat.offline .n {
+        color: #a7aebf;
+    }
+    bj-main-crew .seat .sig {
+        display: flex;
+        align-items: center;
+        gap: 0.4em;
+        font-size: 0.78em;
+        color: #a7aebf;
+    }
+    bj-main-crew .sig svg {
+        flex-shrink: 0;
+    }
+    bj-main-crew .sig .off {
+        fill: rgba(255, 255, 255, 0.14);
+    }
+    bj-main-crew .sig.free .on {
+        fill: var(--crew-free);
+    }
+    bj-main-crew .sig.busy .on {
+        fill: var(--crew-busy);
+    }
+
+    bj-main-crew .row-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35em;
+    }
+    bj-main-crew .requests,
+    bj-main-crew .crew-list,
+    bj-main-crew .invite-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25em;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    bj-main-crew .line {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.15em 0.7em;
+        padding: 0.5em 0.75em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0 0.375em 0.375em 0;
+    }
+    bj-main-crew .line.request {
+        background: rgba(255, 102, 0, 0.1);
+        box-shadow: inset 3px 0 0 #ff6600;
+    }
+    bj-main-crew .line .title {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        min-width: 0;
+        font-size: 0.92em;
+        font-weight: 600;
+    }
+    bj-main-crew .line .title .txt {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    bj-main-crew .line .sub {
+        grid-column: 1;
+        font-size: 0.8em;
+        color: #a7aebf;
+    }
+    bj-main-crew .line .actions {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        display: flex;
+        gap: 0.3em;
+    }
+    /* a crew's seats in the list, the formation in miniature */
+    /* whole pixels : em sizes land on fractions at the game's UI scale and round unevenly */
+    bj-main-crew .mini {
+        display: inline-flex;
+        gap: 3px;
+        flex-shrink: 0;
+    }
+    bj-main-crew .mini i {
+        width: 5px;
+        height: 12px;
+        background: rgba(255, 255, 255, 0.14);
+        border-radius: 1px;
+        transform: skewX(-10deg);
+    }
+    bj-main-crew .mini i.taken {
+        background: #ff6600;
+    }
+
+    bj-main-crew .create {
+        display: flex;
+        gap: 0.4em;
+    }
+    bj-main-crew .create input {
+        flex: 1 1 auto;
+        min-width: 0;
+        padding: 0 0.7em;
+        min-height: 2.3em;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 0.25em;
+        color: #ebebeb;
+        font: inherit;
+    }
+    bj-main-crew .create input:focus {
+        outline: none;
+        border-color: #ff8955;
+    }
+    bj-main-crew h4 {
+        margin: 0.2em 0 0;
+        font-size: 0.78em;
+        font-weight: 600;
+        color: #979dad;
+    }
+    bj-main-crew .foot {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5em;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+        bj-main-crew .seat {
+            transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+    }
+</style>
+
+<!-- IN A CREW -->
+<div ng-if="$ctrl.c.crew" style="display: contents">
+    <header class="crew-head">
+        <h3 class="crew-name">{{$ctrl.c.crew.name}}</h3>
+        <span class="bjr-chip">{{($ctrl.c.crew.open ? 'beamjoy.crew.openChip' : 'beamjoy.crew.closedChip') | translate}}</span>
+    </header>
+
+    <ol class="formation" ng-if="!$ctrl.inviting" aria-label="{{'beamjoy.crew.members' | translate}}">
+        <li ng-repeat="seat in $ctrl.seatsOf track by seat.key">
+            <button type="button" class="seat" ng-if="!seat.open" ng-click="$ctrl.pick(seat)"
+                ng-class="{leader: seat.member.leader, offline: seat.member.status === 'offline', selected: $ctrl.selected === seat.member.playerName,
+                    pickable: $ctrl.c.crew.isLeader && !seat.member.you}"
+                aria-pressed="{{$ctrl.selected === seat.member.playerName}}">
+                <span class="n">
+                    <svg ng-if="seat.member.leader" role="img" aria-label="{{'beamjoy.crew.leader' | translate}}" width="13" height="13" viewBox="0 0 16 16" fill="#ffc768" style="flex-shrink: 0">
+                        <title>{{'beamjoy.crew.leader' | translate}}</title>
+                        <path d="M2 5.5l3.2 2.6L8 3l2.8 5.1L14 5.5l-1.3 7H3.3L2 5.5z"></path>
+                    </svg>
+                    <span class="txt">{{seat.member.displayName}}</span>
+                    <span class="bjr-muted" ng-if="seat.member.you" style="font-weight: 400">{{'beamjoy.window.main.playerlist.you' | translate}}</span>
+                </span>
+                <span class="sig" ng-if="!seat.member.you" ng-class="seat.member.status === 'withYou' ? 'free' : seat.member.status">
+                    <svg width="17" height="13" viewBox="16 18 78 64" aria-hidden="true">
+                        <polygon points="18,80 33,80 38.5,54 23.5,54" ng-attr-class="{{$ctrl.bars(seat.member.status) >= 1 ? 'on' : 'off'}}"></polygon>
+                        <polygon points="41,80 56,80 64.8,38 49.8,38" ng-attr-class="{{$ctrl.bars(seat.member.status) >= 2 ? 'on' : 'off'}}"></polygon>
+                        <polygon points="64,80 79,80 91.6,20 76.6,20" ng-attr-class="{{$ctrl.bars(seat.member.status) >= 3 ? 'on' : 'off'}}"></polygon>
+                    </svg>
+                    {{$ctrl.statusLine(seat.member)}}
+                </span>
+            </button>
+            <button type="button" class="seat open" ng-if="seat.open" ng-class="{pickable: $ctrl.c.crew.isLeader}"
+                ng-click="$ctrl.pick(seat)" ng-disabled="!$ctrl.c.crew.isLeader">
+                <span class="n">{{'beamjoy.crew.openSeat' | translate}}</span>
+                <span class="sig">{{($ctrl.c.crew.isLeader ? 'beamjoy.crew.openSeatLeader' : 'beamjoy.crew.openSeatMember') | translate}}</span>
+            </button>
+        </li>
+    </ol>
+
+    <p class="bjr-muted" ng-if="!$ctrl.inviting">{{$ctrl.pullLine()}}</p>
+
+    <!-- the leader's picked crewmate -->
+    <p class="bjr-muted" ng-if="$ctrl.c.crew.isLeader && $ctrl.c.crew.members.length > 1 && !$ctrl.selectedMember() && !$ctrl.inviting">
+        {{'beamjoy.crew.pickHint' | translate}}
+    </p>
+    <div class="row-actions" ng-if="$ctrl.selectedMember() && !$ctrl.inviting">
+        <button type="button" class="bjr-btn small primary" ng-click="$ctrl.promote()">
+            {{$ctrl.promoteLabel()}}
+        </button>
+        <button type="button" class="bjr-btn small danger" ng-click="$ctrl.kick()">
+            {{'beamjoy.crew.kick' | translate}}
+        </button>
+    </div>
+
+    <!-- players asking to join (leader) -->
+    <div ng-if="$ctrl.c.crew.isLeader && $ctrl.c.crew.requests.length > 0 && !$ctrl.inviting">
+        <h4>{{'beamjoy.crew.requests' | translate}}</h4>
+        <ul class="requests">
+            <li class="line request" ng-repeat="req in $ctrl.c.crew.requests track by req.playerName">
+                <span class="title"><span class="txt">{{req.displayName}}</span></span>
+                <span class="sub">{{'beamjoy.crew.wantsToJoin' | translate}}</span>
+                <span class="actions">
+                    <button type="button" class="bjr-btn small ghost" ng-click="$ctrl.reply(req, false)">{{'beamjoy.crew.decline' | translate}}</button>
+                    <button type="button" class="bjr-btn small primary" ng-disabled="$ctrl.c.crew.members.length >= $ctrl.c.crew.max"
+                        ng-click="$ctrl.reply(req, true)">{{'beamjoy.crew.accept' | translate}}</button>
+                </span>
+            </li>
+        </ul>
+    </div>
+
+    <!-- inviting (leader) : everyone online -->
+    <div ng-if="$ctrl.inviting" style="display: flex; flex-direction: column; gap: 0.45em">
+        <h4>{{'beamjoy.crew.invitePlayers' | translate}}</h4>
+        <p class="bjr-muted" ng-if="$ctrl.invitePlayers === null">{{'beamjoy.common.loading' | translate}}</p>
+        <p class="bjr-muted" ng-if="$ctrl.invitePlayers.length === 0">{{'beamjoy.crew.nobodyToInvite' | translate}}</p>
+        <ul class="invite-list">
+            <li class="line" ng-repeat="p in $ctrl.invitePlayers track by p.playerID">
+                <span class="title"><span class="txt">{{p.name}}</span></span>
+                <span class="sub" ng-if="$ctrl.inviteStatus(p)">{{$ctrl.inviteStatus(p)}}</span>
+                <span class="actions">
+                    <button type="button" class="bjr-btn small" ng-if="!p.inCrew" ng-disabled="p.invited" ng-click="$ctrl.invite(p)">
+                        {{(p.invited ? 'beamjoy.delivery.lobby.inviteSent' : 'beamjoy.crew.invite') | translate}}
+                    </button>
+                </span>
+            </li>
+        </ul>
+        <div class="row-actions">
+            <button type="button" class="bjr-btn ghost" data-pad-b ng-click="$ctrl.setInviting(false)">
+                <span class="bjr-glyph" aria-hidden="true">B</span>{{'beamjoy.crew.back' | translate}}
+            </button>
+        </div>
+    </div>
+
+    <div class="foot" ng-if="!$ctrl.inviting">
+        <span class="row-actions">
+            <button type="button" class="bjr-btn primary" data-pad-x ng-if="$ctrl.c.crew.isLeader"
+                ng-disabled="$ctrl.c.crew.members.length >= $ctrl.c.crew.max" ng-click="$ctrl.setInviting(true)">
+                <span class="bjr-glyph" aria-hidden="true">X</span>{{'beamjoy.crew.invitePlayers' | translate}}
+            </button>
+            <button type="button" class="bjr-btn ghost" ng-click="$ctrl.leave()">{{'beamjoy.crew.leave' | translate}}</button>
+        </span>
+        <span class="bjr-toggle-row" ng-if="$ctrl.c.crew.isLeader" style="display: flex; align-items: center; gap: 0.5em">
+            <span title="{{'beamjoy.crew.openToggle.tooltip' | translate}}">{{'beamjoy.crew.openToggle' | translate}}</span>
+            <bj-toggle ng-model="$ctrl.openModel"></bj-toggle>
+        </span>
+    </div>
+</div>
+
+<!-- NOT IN A CREW -->
+<div ng-if="!$ctrl.c.crew" style="display: contents">
+    <p>{{'beamjoy.crew.intro' | translate}}</p>
+
+    <form class="create" ng-submit="$ctrl.create()">
+        <input type="text" ng-model="$ctrl.newName" maxlength="24" aria-label="{{'beamjoy.crew.nameLabel' | translate}}"
+            placeholder="{{'beamjoy.crew.namePlaceholder' | translate}}">
+        <button type="submit" class="bjr-btn primary" data-pad-x>
+            <span class="bjr-glyph" aria-hidden="true">X</span>{{'beamjoy.crew.create' | translate}}
+        </button>
+    </form>
+
+    <h4>{{'beamjoy.crew.listTitle' | translate}}</h4>
+    <p class="bjr-muted" ng-if="$ctrl.otherCrews().length === 0">{{'beamjoy.crew.listEmpty' | translate}}</p>
+    <ul class="crew-list">
+        <li class="line" ng-repeat="crew in $ctrl.otherCrews() track by crew.id">
+            <span class="title">
+                <span class="mini" aria-hidden="true"><i ng-repeat="taken in $ctrl.seats(crew) track by $index" ng-class="{taken: taken}"></i></span>
+                <span class="txt">{{crew.name}}</span>
+            </span>
+            <span class="sub">
+                {{'beamjoy.crew.ledBy' | translate}} {{crew.leaderName}}, {{crew.count}}/{{crew.max}}{{crew.open ? '' : ', '}}{{crew.open ? '' : ('beamjoy.crew.askFirst' | translate)}}
+            </span>
+            <span class="actions">
+                <button type="button" class="bjr-btn small" ng-class="{primary: crew.open && crew.count < crew.max}"
+                    ng-disabled="crew.count >= crew.max" ng-click="$ctrl.join(crew)">
+                    {{$ctrl.joinLabel(crew) | translate}}
+                </button>
+            </span>
+        </li>
+    </ul>
+</div>

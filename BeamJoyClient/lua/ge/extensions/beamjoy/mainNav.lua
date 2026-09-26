@@ -29,7 +29,29 @@ local M = {
     autoHeld = {},
     ---@type table<string, true>
     autoDismissed = {},
+    -- the race HUD has the pad (its Race info / Retire buttons, windows/raceHud)
+    hudFocused = false,
 }
+
+---@return boolean racing (or watching a race) : the Focus control goes to the race HUD
+local function racing()
+    local r = beamjoy_raceRunner
+    local s = r and (r.session or r.spectatingSession)
+    return s ~= nil and s.state == "RACE"
+end
+
+---@param focused boolean
+local function setHudFocus(focused)
+    focused = focused == true
+    if focused == M.hudFocused then return end
+    M.hudFocused = focused
+    if focused then
+        beamjoy_uiNav.acquire("raceHud")
+    else
+        beamjoy_uiNav.release("raceHud")
+    end
+    beamjoy_communications_ui.send("BJRaceHudFocus", { active = focused })
+end
 
 --- where focusing lands when nothing asked for a place
 ---@return string panel, string? section
@@ -139,6 +161,9 @@ local function setNotificationFocus(focused)
 end
 
 local function onBJFocusNotification()
+    -- the race HUD : the control toggles it while racing, before anything else
+    if M.hudFocused then return setHudFocus(false) end
+    if racing() and not M.focused and not notificationFocused() then return setHudFocus(true) end
     if M.focused then
         setFocused(false)
         if notificationFocusable() and not notificationFocused() then
@@ -202,12 +227,37 @@ local function onInit()
         setFocused(true, panel, nil, "rail")
     end)
     beamjoy_communications_ui.addHandler("BJFocusBindingRequest", pushBinding)
+    beamjoy_communications_ui.addHandler("BJRaceHudRelease", function() setHudFocus(false) end)
+    -- the info overlay (race info, leaderboards) : driven by the pad while it's open
+    beamjoy_communications_ui.addHandler("BJInfoPanelPad", function(open)
+        if open == true then
+            beamjoy_uiNav.acquire("infoPanel", beamjoy_uiNav.TAB_ACTIONS)
+        else
+            beamjoy_uiNav.release("infoPanel")
+        end
+    end)
     beamjoy_communications_ui.addHandler("BJMainPadRequest", function()
         if M.focused then beamjoy_communications_ui.send("BJMainPad", { active = true }) end
     end)
 end
 
+--- the game's pause menu opened : the pad is the menu's now, so the main window and any focused
+--- notification let go of it
+---@param show boolean
+local function onMenuToggled(show)
+    if show ~= true then return end
+    if M.focused then setFocused(false) end
+    setHudFocus(false)
+    if notificationFocused() then setNotificationFocus(false) end
+end
+
+--- the race ended (or was left) : the HUD lets go of the pad
+local function onBJScenarioChanged()
+    if M.hudFocused and not racing() then setHudFocus(false) end
+end
+
 local function onServerLeave()
+    setHudFocus(false)
     M.focused = false
     M.openedRail = false
     M.autoHeld = {}
@@ -219,6 +269,8 @@ M.onInit = onInit
 M.onInputBindingsChanged = pushBinding
 M.onBJFocusNotification = onBJFocusNotification
 M.onServerLeave = onServerLeave
+M.onMenuToggled = onMenuToggled
+M.onBJScenarioChanged = onBJScenarioChanged
 M.onExtensionUnloaded = onServerLeave
 M.setFocused = setFocused
 M.focusOn = focusOn

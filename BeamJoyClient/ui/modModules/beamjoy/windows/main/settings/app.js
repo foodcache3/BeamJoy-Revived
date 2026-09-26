@@ -14,6 +14,53 @@ angular.module("beamjoy").component("bjMainSettings", {
         // (imgui/menu.lua), where a "copy link" action via `ui_imgui.SetClipboardText` actually
         // works, and the version is already correctly shown there too.
 
+        // the rail hides until you need it (windows/main/app.js) : a per-player UI preference,
+        // kept in the UI's own storage like the rail's position
+        this.railAutoHide = false;
+        try {
+            this.railAutoHide = localStorage.getItem("beamjoy.rail.autoHide") === "1";
+        } catch (e) {
+            // storage unavailable : off
+        }
+        // the race HUD's layout (windows/raceHud/app.js), kept the same way
+        this.raceHudLayouts = [
+            { value: "standard", label: "beamjoy.window.main.tabs.settings.sections.menu.raceHud.standard" },
+            { value: "compact", label: "beamjoy.window.main.tabs.settings.sections.menu.raceHud.compact" },
+            { value: "full", label: "beamjoy.window.main.tabs.settings.sections.menu.raceHud.full" },
+        ];
+        this.raceHudLayout = "standard";
+        try {
+            const saved = localStorage.getItem("beamjoy.raceHud.layout");
+            if (this.raceHudLayouts.some((o) => o.value === saved)) this.raceHudLayout = saved;
+        } catch (e) {
+            // storage unavailable : standard
+        }
+        $scope.$watch(
+            () => this.raceHudLayout,
+            (layout, old) => {
+                if (layout === old) return;
+                try {
+                    localStorage.setItem("beamjoy.raceHud.layout", layout);
+                } catch (e) {
+                    // not remembered, still applied for this session
+                }
+                $rootScope.$broadcast("BJRaceHudLayout", layout);
+            }
+        );
+
+        $scope.$watch(
+            () => this.railAutoHide,
+            (on, old) => {
+                if (on === old) return;
+                try {
+                    localStorage.setItem("beamjoy.rail.autoHide", on ? "1" : "0");
+                } catch (e) {
+                    // not remembered, still applied for this session
+                }
+                $rootScope.$broadcast("BJRailAutoHide", on);
+            }
+        );
+
         $scope.$watch(
             () => this.settings,
             () => {

@@ -31,6 +31,8 @@ angular.module("beamjoy").component("bjNotices", {
             race: "beamjoy.notices.kind.race",
             hunter: "beamjoy.notices.kind.hunter",
             infected: "beamjoy.notices.kind.infected",
+            crew: "beamjoy.notices.kind.crew",
+            convoy: "beamjoy.notices.kind.convoy",
         };
         this.heading = (n) =>
             translate(`beamjoy.notices.${n.type}.title`)
@@ -43,6 +45,8 @@ angular.module("beamjoy").component("bjNotices", {
             return parts.join(", ");
         };
         this.progress = (n) => `${Math.max(0, Math.min(100, ((n.expiresIn || 0) / (n.total || 1)) * 100))}%`;
+        // what A does : join, or (already in, brought by your crew) open it
+        this.acceptLabel = (n) => (n.type === "pulled" ? "beamjoy.notices.openLobby" : "beamjoy.notices.join");
         this.reply = (n, accept) => beamjoyStore.send("BJNoticeReply", [n.id, accept]);
         // the main window has the pad : the stack steps back until it's focused again
         this.dimmed = () => !this.padActive && $rootScope.bjMainPadActive === true;

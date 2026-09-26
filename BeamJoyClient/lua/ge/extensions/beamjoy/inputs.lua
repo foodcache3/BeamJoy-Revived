@@ -348,6 +348,8 @@ end
 local function onStopRecovering()
     local mpVeh = beamjoy_vehicles.getCurrent()
     if not mpVeh then return end
+    -- the rewind is over (the race's reset penalty starts here, not while it's still rewinding)
+    extensions.hook("onBJStopRecovering", mpVeh.vid)
     if rewindProcess then
         async.delayTask(function()
             mpVeh.veh:queueLuaCommand("recovery.reset.stopRecovering()")

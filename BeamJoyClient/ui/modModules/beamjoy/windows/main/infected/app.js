@@ -79,17 +79,24 @@ angular.module("beamjoy").component("bjMainInfected", {
             const r = sec % 60;
             return `${m}:${r < 10 ? "0" : ""}${r}`;
         };
+        // the same object while nothing changed : ng-if watches it by reference, and a fresh object
+        // every call never settles the digest (infdig, thousands of errors a second)
+        let timerCache = null;
+        const timer = (label, value) => {
+            if (!timerCache || timerCache.label !== label || timerCache.value !== value) timerCache = { label, value };
+            return timerCache;
+        };
         this.lobbyTimer = () => {
             const s = this.status;
             if (!s) return null;
             if (s.state === "COUNTDOWN" && this.countdownSeconds !== null) {
-                return { label: "beamjoy.window.main.tabs.infected.startingIn", value: `${this.countdownSeconds}` };
+                return timer("beamjoy.window.main.tabs.infected.startingIn", `${this.countdownSeconds}`);
             }
             if (s.state === "LOBBY" && this.allReady && s.gridReadySecondsLeft != null) {
-                return { label: "beamjoy.window.main.tabs.infected.startingIn", value: formatSeconds(s.gridReadySecondsLeft) };
+                return timer("beamjoy.window.main.tabs.infected.startingIn", formatSeconds(s.gridReadySecondsLeft));
             }
             if (s.state === "LOBBY" && s.gridTimeoutSecondsLeft != null) {
-                return { label: "beamjoy.window.main.tabs.infected.lobbyClosesIn", value: formatSeconds(s.gridTimeoutSecondsLeft) };
+                return timer("beamjoy.window.main.tabs.infected.lobbyClosesIn", formatSeconds(s.gridTimeoutSecondsLeft));
             }
             return null;
         };
@@ -151,7 +158,21 @@ angular.module("beamjoy").component("bjMainInfected", {
             this.countdownSeconds = data.active && !data.finished ? data.seconds : null;
         });
 
+        // vehicle presets for each side (the hunt's list)
+        this.vehiclePresetOptions = [];
+        $rootScope.$on("BJVehiclePresetList", (_, presets) => {
+            // Lua sends an empty list as {} : normalize
+            const list = Array.isArray(presets) ? presets : [];
+            this.vehiclePresetOptions = [
+                { value: null, label: "beamjoy.window.config.tabs.races.vehicleRestriction.pool.select" },
+                ...list.map((p) => ({ value: p.id, label: p.name })),
+            ];
+        });
+        // an arena that forces one vehicle on everyone has no per-side choice
+        this.arenaForcesVehicle = () => !!(this.arena && this.arena.defaults && this.arena.defaults.config);
+
         this.$onInit = () => {
+            beamjoyStore.send("BJVehiclePresetListRequest");
             beamjoyStore.send("BJInfectedArenaInfoRequest");
             beamjoyStore.send("BJInfectedSessionStatusRequest");
             beamjoyStore.send("BJInfectedOpenSessionsRequest");
@@ -172,6 +193,9 @@ angular.module("beamjoy").component("bjMainInfected", {
                 survivorColor: d.survivorColor || null,
                 infectedColor: d.infectedColor || null,
                 disableResets: d.disableResets === true,
+                survivorsVehiclePresetId: d.survivorsVehiclePresetId ?? null,
+                infectedVehiclePresetId: d.infectedVehiclePresetId ?? null,
+                randomizeVehiclePool: d.randomizeVehiclePool === true,
             };
         };
         this.cancelStart = (event) => {

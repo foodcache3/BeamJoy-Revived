@@ -35,6 +35,21 @@ local function isBusy(playerID)
     return services_deliveries ~= nil and services_deliveries.isBusy ~= nil and services_deliveries.isBusy(playerID)
 end
 
+---@param playerID integer
+---@return string? key the activity the player is in ("race:<id>", "convoy:<id>"...), the same for
+---everyone in it ; nil when free (a solo delivery is its own)
+local function activityOf(playerID)
+    for kind, k in pairs(KINDS) do
+        local grid = k.grid()
+        local session = grid and grid.findSessionByParticipant and grid.findSessionByParticipant(playerID)
+        if session then return kind .. ":" .. tostring(session.id) end
+    end
+    local d = services_deliveries
+    if d and d.memberOf and d.memberOf[playerID] ~= nil then return "convoy:" .. tostring(d.memberOf[playerID]) end
+    if d and d.jobs and d.jobs[playerID] ~= nil then return "job:" .. tostring(playerID) end
+    return nil
+end
+
 ---@param kind string
 ---@param playerID integer
 ---@return table? session the sender's own lobby of that kind, still forming and joinable
@@ -131,6 +146,7 @@ M.onPlayerDisconnect = onPlayerDisconnect
 M.lobbyInviteList = lobbyInviteList
 M.lobbyInvite = lobbyInvite
 M.isBusy = isBusy
+M.activityOf = activityOf
 M.isInvited = isInvited
 
 return M

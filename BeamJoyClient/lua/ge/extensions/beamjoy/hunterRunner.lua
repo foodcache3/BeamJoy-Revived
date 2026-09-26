@@ -758,11 +758,17 @@ local function onSessionUpdate(session)
     local wasFinished = M.session ~= nil and M.session.state == "FINISHED"
     M.session = session
 
-    if session.state == "LOBBY" and session.joinable and session.gridReadySecondsLeft ~= nil then
+    -- each on its own : gridReadySecondsLeft only exists once everyone is ready, while the lobby's
+    -- closing deadline runs from the start (tying them hid "Lobby closes in" until all were ready)
+    local inLobby = session.state == "LOBBY" and session.joinable
+    if inLobby and session.gridReadySecondsLeft ~= nil then
         M.gridReadyTargetMs = GetCurrentTimeMillis() + session.gridReadySecondsLeft * 1000
-        M.gridTimeoutTargetMs = GetCurrentTimeMillis() + (session.gridTimeoutSecondsLeft or 0) * 1000
     else
         M.gridReadyTargetMs = nil
+    end
+    if inLobby and session.gridTimeoutSecondsLeft ~= nil then
+        M.gridTimeoutTargetMs = GetCurrentTimeMillis() + session.gridTimeoutSecondsLeft * 1000
+    else
         M.gridTimeoutTargetMs = nil
     end
 

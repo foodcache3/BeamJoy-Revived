@@ -226,6 +226,11 @@
         background-color: rgba(255, 0, 0, 0.425);
     }
 
+    /* nothing to pick (e.g. no vehicle presets on the server) : greyed and unclickable */
+    bj-select.disabled {
+        opacity: 0.45;
+        pointer-events: none;
+    }
     /* real bug fixed here : whichever option a bj-select's dropdown panel opens on (always the
        first one when nothing is selected yet, e.g. a race gate's "reachable from" picker before
        anything's been chosen), and any option you hover/click, gets Angular Material's own

@@ -712,6 +712,8 @@
                                     ng-repeat="mode in ['free', 'single', 'pool']"
                                     class="btn info"
                                     ng-class="{success: $ctrl.race.vehicleRestrictionMode === mode}"
+                                    ng-disabled="mode === 'pool' && $ctrl.vehiclePresets.length === 0"
+                                    title="{{mode === 'pool' && $ctrl.vehiclePresets.length === 0 ? ('beamjoy.vehiclePresets.noneYet' | translate) : ''}}"
                                     ng-click="$ctrl.race.vehicleRestrictionMode = mode"
                                 >
                                     {{('beamjoy.window.config.tabs.races.vehicleRestriction.modes.' + mode) | translate}}

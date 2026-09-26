@@ -1,233 +1,653 @@
 <style>
     /* position: fixed + viewport units, not position-absolute/percentage sizing: this
        component's parent (<beamjoy>) has no explicit size of its own, so a percentage-sized
-       absolute box here could collapse to zero size and render invisibly */
+       absolute box here could collapse to zero size and render invisibly.
+       Same tokens as the main window (windows/main/app.html's .bjr) */
     #beamjoy-race-hud {
         position: fixed;
         top: 2vh;
         right: 1vw;
         z-index: 4;
-        width: 15em;
-        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC",
-            sans-serif;
-        color: white;
-        background: rgba(0, 0, 0, 0.5);
-        border-radius: 0.5em;
-        padding: 0.7em 0.9em;
-    }
-
-    #beamjoy-race-hud .hud-header {
+        box-sizing: border-box;
         display: flex;
-        justify-content: space-between;
-        align-items: baseline;
-        margin-bottom: 0.35em;
+        flex-direction: column;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        color: #ebebeb;
+        background: rgba(10, 11, 14, 0.84);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 0.5em;
+        font-variant-numeric: tabular-nums;
+        pointer-events: none;
+    }
+    #beamjoy-race-hud.standard {
+        width: 22em;
+    }
+    #beamjoy-race-hud.compact {
+        width: 17em;
+        gap: 0.55em;
+        padding: 0.75em 0.9em;
+    }
+    #beamjoy-race-hud.full {
+        width: 18.25em;
+        overflow: hidden;
+    }
+    #beamjoy-race-hud .ov {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        line-height: 1;
+    }
+    #beamjoy-race-hud .muted {
+        color: #a7aebf;
+    }
+    #beamjoy-race-hud .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+    #beamjoy-race-hud .flag {
+        flex-shrink: 0;
     }
 
-    #beamjoy-race-hud .hud-name {
-        font-weight: bold;
-        font-size: 1em;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    /* the slanted position plate, as in the lobby and the Crew tab */
+    #beamjoy-race-hud .plate {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 2em;
+        height: 1.375em;
+        transform: skewX(-10deg);
+        background: #282b33;
+        border-radius: 2px;
+    }
+    #beamjoy-race-hud .plate > span {
+        transform: skewX(10deg);
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        font-size: 0.8125em;
+    }
+    #beamjoy-race-hud .plate.p1 {
+        background: #c24b00;
+        color: #fff;
+    }
+    #beamjoy-race-hud .plate.out {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+    }
+    #beamjoy-race-hud .plate.me {
+        height: auto;
+        padding: 0.3em 0.65em;
+        background: #ff6600;
+        color: #fff;
+    }
+    #beamjoy-race-hud .plate.me > span {
+        font-weight: 900;
+        font-size: 1.25em;
+        line-height: 1.1;
+    }
+    #beamjoy-race-hud .plate.hero {
+        width: 4.6em;
+        height: 3.25em;
+        background: #ff6600;
+        color: #fff;
+    }
+    #beamjoy-race-hud .plate.hero > span {
+        font-weight: 900;
+        font-size: 1.875em;
+    }
+
+    /* this lap's sectors */
+    #beamjoy-race-hud .secs {
+        display: flex;
+        gap: 2px;
+    }
+    #beamjoy-race-hud .sec {
+        flex: 1;
+        min-width: 3px;
+        height: 0.5em;
+        transform: skewX(-10deg);
+        border-radius: 1px;
+        background: rgba(255, 255, 255, 0.08);
+    }
+    #beamjoy-race-hud .sec.done {
+        background: #6b7180;
+    }
+    #beamjoy-race-hud .sec.best {
+        background: #ba68f8;
+    }
+    #beamjoy-race-hud .sec.live {
+        background: rgba(255, 102, 0, 0.55);
+    }
+
+    /* gaps to the cars either side : the number first, the name small */
+    #beamjoy-race-hud .gap {
+        display: grid;
+        grid-template-columns: 0.75em auto minmax(0, 1fr);
+        align-items: center;
+        column-gap: 0.5em;
+    }
+    #beamjoy-race-hud .gap .num {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        line-height: 1;
+    }
+    #beamjoy-race-hud .gap .num small {
+        margin-left: 1px;
+        font-size: 0.6em;
+        font-weight: 700;
+        color: #a7aebf;
+    }
+    #beamjoy-race-hud .gap .num.soft {
+        color: #c8cedc;
+    }
+    #beamjoy-race-hud .gap .nm {
+        display: flex;
+        align-items: center;
+        gap: 0.4em;
+        min-width: 0;
+        font-size: 0.75em;
+        color: #979dad;
+    }
+    #beamjoy-race-hud .gap .nm .t {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
-    #beamjoy-race-hud .hud-spectating {
-        font-size: 0.8em;
+    #beamjoy-race-hud .timer {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
         font-style: italic;
-        opacity: 0.8;
-        margin-bottom: 0.35em;
-        color: #ffd54f;
-    }
-
-    #beamjoy-race-hud .hud-position {
-        font-weight: bold;
-        font-size: 2em;
         line-height: 1;
-        opacity: 0.95;
+    }
+    #beamjoy-race-hud .delta {
+        padding: 0.2em 0.45em;
+        border-radius: 3px;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        line-height: 1;
+    }
+    #beamjoy-race-hud .delta.faster {
+        background: rgba(73, 182, 114, 0.18);
+        color: #73eb9d;
+    }
+    #beamjoy-race-hud .delta.slower {
+        background: rgba(255, 110, 100, 0.16);
+        color: #ff9a8f;
+    }
+    #beamjoy-race-hud .laps {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.75em;
+        color: #a7aebf;
+    }
+    #beamjoy-race-hud .laps .pb {
+        color: #73eb9d;
+    }
+
+    /* STANDARD */
+    #beamjoy-race-hud .std-head {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3em;
+        padding: 0.75em 1em 0.6em;
+    }
+    #beamjoy-race-hud .eyebrow {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 900;
+        font-style: italic;
+        font-size: 0.75em;
+        line-height: 1;
+        color: #ff8955;
+    }
+    #beamjoy-race-hud .std-head h2 {
+        margin: 0;
+        overflow: hidden;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-style: italic;
+        font-size: 1.25em;
+        line-height: 1.2;
+        text-overflow: ellipsis;
         white-space: nowrap;
-        margin-left: 0.5em;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
     }
-
-    #beamjoy-race-hud .hud-progress {
+    #beamjoy-race-hud .std-body {
         display: flex;
-        justify-content: space-between;
-        font-size: 0.85em;
-        opacity: 0.75;
-        margin-bottom: 0.15em;
+        flex-direction: column;
+        gap: 0.65em;
+        padding: 0 0.75em 0.85em;
     }
-
-    #beamjoy-race-hud .hud-timer {
-        font-variant-numeric: tabular-nums;
-        font-weight: bold;
-        font-size: 1.6em;
-        line-height: 1.1;
-        margin-bottom: 0.15em;
+    #beamjoy-race-hud .herobox {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        column-gap: 0.9em;
+        padding: 0.75em 0.9em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0 0.375em 0.375em 0;
     }
-
-    #beamjoy-race-hud .hud-laps {
+    #beamjoy-race-hud .posblk {
         display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.3em;
+        font-size: 0.75em;
+    }
+    #beamjoy-race-hud .posblk .plate.hero {
+        font-size: 1.333em;
+    }
+    #beamjoy-race-hud .herobox .gaps {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5em;
+        padding-left: 0.9em;
+        border-left: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    #beamjoy-race-hud .herobox .gap .num {
+        font-size: 1.45em;
+    }
+    #beamjoy-race-hud .lapline {
+        display: flex;
+        align-items: baseline;
         justify-content: space-between;
+        gap: 0.6em;
+    }
+    #beamjoy-race-hud .lapline .big {
+        font-size: 1.125em;
+    }
+    #beamjoy-race-hud .lapline .big small,
+    #beamjoy-race-hud .compact .lap small,
+    #beamjoy-race-hud .fullhead .lap small {
+        font-size: 0.72em;
+        color: #a7aebf;
+    }
+    #beamjoy-race-hud .lapline .clock {
+        display: flex;
+        align-items: baseline;
+        gap: 0.45em;
+    }
+    #beamjoy-race-hud .lapline .timer {
+        font-size: 1.125em;
+    }
+    #beamjoy-race-hud .lapline .delta {
         font-size: 0.8em;
-        font-variant-numeric: tabular-nums;
-        opacity: 0.85;
-        margin-bottom: 0.3em;
     }
-
-    #beamjoy-race-hud .hud-laps .best {
-        color: #ba68f8;
-    }
-
-    #beamjoy-race-hud .hud-delta {
-        display: inline-block;
-        font-variant-numeric: tabular-nums;
-        font-weight: bold;
-        font-size: 0.95em;
-        padding: 0.1em 0.5em;
-        border-radius: 0.3em;
-        margin-bottom: 0.4em;
-    }
-
-    #beamjoy-race-hud .hud-delta.ahead {
-        background: rgba(139, 195, 74, 0.3);
-        color: #aed581;
-    }
-
-    #beamjoy-race-hud .hud-delta.behind {
-        background: rgba(229, 115, 115, 0.3);
-        color: #ef9a9a;
-    }
-
-    #beamjoy-race-hud .hud-gaps {
-        border-top: 1px solid rgba(255, 255, 255, 0.15);
-        padding-top: 0.35em;
+    #beamjoy-race-hud .row {
+        display: flex;
+        align-items: center;
+        gap: 0.6em;
+        padding: 0.35em 0.5em;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
         font-size: 0.85em;
     }
+    #beamjoy-race-hud .row.you {
+        background: rgba(255, 102, 0, 0.1);
+        box-shadow: inset 3px 0 0 #ff6600;
+    }
+    #beamjoy-race-hud .row.out {
+        color: #979dad;
+    }
+    #beamjoy-race-hud .row .nm {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        font-weight: 500;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #beamjoy-race-hud .row .g {
+        color: #a7aebf;
+    }
+    #beamjoy-race-hud .fold {
+        padding: 0.2em 0.5em 0.2em 3.1em;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        font-size: 0.75em;
+        color: #979dad;
+    }
 
-    #beamjoy-race-hud .hud-gap-row {
+    /* COMPACT */
+    #beamjoy-race-hud .compact-top {
         display: flex;
+        align-items: center;
+        gap: 0.5em;
+    }
+    #beamjoy-race-hud .ofcol {
+        display: flex;
+        flex-direction: column;
+        gap: 0.2em;
+        font-size: 0.75em;
+        color: #a7aebf;
+    }
+    #beamjoy-race-hud .fins {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35em;
+        color: #c8cedc;
+    }
+    #beamjoy-race-hud .compact .lap {
+        margin-left: auto;
+        font-size: 1em;
+    }
+    #beamjoy-race-hud .compact .clockrow {
+        display: flex;
+        align-items: baseline;
         justify-content: space-between;
-        opacity: 0.9;
+        gap: 0.6em;
+    }
+    #beamjoy-race-hud .compact .timer {
+        font-size: 1.875em;
+    }
+    #beamjoy-race-hud .compact .delta {
+        font-size: 0.95em;
+    }
+    #beamjoy-race-hud .compact .gaps {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3em;
+        padding-top: 0.5em;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    #beamjoy-race-hud .compact .gap .num {
+        font-size: 1.05em;
+    }
+    #beamjoy-race-hud .spec {
+        font-size: 0.75em;
+        color: #ffc768;
+    }
+
+    /* FOCUSED : Race info / Retire, only while the HUD has the pad */
+    #beamjoy-race-hud.focused {
+        pointer-events: auto;
+        box-shadow: 0 0 0 2px rgba(255, 102, 0, 0.55);
+    }
+    #beamjoy-race-hud .hud-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.4em;
+        padding: 0.6em 0.75em 0.75em;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    #beamjoy-race-hud.compact .hud-actions {
+        margin: 0.1em -0.9em -0.75em;
+    }
+    #beamjoy-race-hud .hud-actions button {
+        min-height: 2.3em;
+        padding: 0 0.6em;
+        border: 0;
+        border-radius: 0.25em;
+        background: #363a45;
+        color: #ebebeb;
+        font: inherit;
+        font-size: 0.85em;
         cursor: pointer;
     }
-
-    #beamjoy-race-hud .hud-gap-row .name {
+    #beamjoy-race-hud .hud-actions button.danger {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px rgba(255, 110, 100, 0.5);
+        color: #ff9a8f;
+    }
+    /* Retire is a 5 s hold : the fill shows how far along it is */
+    #beamjoy-race-hud .hud-actions button.hold {
+        position: relative;
         overflow: hidden;
+    }
+    #beamjoy-race-hud .hud-actions button.hold .fill {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        background: rgba(255, 110, 100, 0.35);
+        pointer-events: none;
+    }
+    #beamjoy-race-hud .hud-actions button.hold .label {
+        position: relative;
+    }
+    #beamjoy-race-hud .hud-actions button.cursor {
+        outline: 2px solid #ff6600;
+        outline-offset: -2px;
+    }
+    #beamjoy-race-hud .hud-actions .hint {
+        grid-column: 1 / -1;
+        font-size: 0.72em;
+        color: #a7aebf;
+    }
+
+    /* FULL STANDINGS */
+    #beamjoy-race-hud .fullhead {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35em;
+        padding: 0.7em 0.9em 0.6em;
+    }
+    #beamjoy-race-hud .fullhead .name {
+        overflow: hidden;
+        font-size: 0.75em;
+        color: #a7aebf;
         text-overflow: ellipsis;
         white-space: nowrap;
-        margin-right: 0.5em;
     }
-
-    #beamjoy-race-hud .hud-gap-row .gap {
-        font-variant-numeric: tabular-nums;
+    #beamjoy-race-hud .fullhead .lap {
+        font-size: 1.375em;
+        font-weight: 900;
+    }
+    #beamjoy-race-hud .prog {
+        height: 3px;
+        background: rgba(255, 255, 255, 0.08);
+    }
+    #beamjoy-race-hud .prog > div {
+        height: 100%;
+        background: #ff6600;
+    }
+    #beamjoy-race-hud .tower {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+    #beamjoy-race-hud .tower li {
+        display: grid;
+        grid-template-columns: 2.1em minmax(0, 1fr) auto 4.4em;
+        align-items: center;
+        column-gap: 0.5em;
+        height: 1.8em;
+        padding: 0 0.75em 0 0.6em;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        font-size: 0.85em;
+    }
+    #beamjoy-race-hud .tower li.you {
+        background: rgba(255, 102, 0, 0.1);
+        box-shadow: inset 3px 0 0 #ff6600;
+    }
+    #beamjoy-race-hud .tower li.out {
+        color: #979dad;
+    }
+    #beamjoy-race-hud .tower .nm {
+        overflow: hidden;
+        font-weight: 600;
+        text-overflow: ellipsis;
         white-space: nowrap;
     }
-
-    #beamjoy-race-hud .hud-standings {
-        margin-top: 0.3em;
-        max-height: 12em;
-        overflow-y: auto;
+    #beamjoy-race-hud .tower .fl {
+        display: flex;
+        justify-content: flex-end;
+        min-width: 0.95em;
     }
-
-    #beamjoy-race-hud .hud-standings tr.finished {
-        color: #8bc34a;
-    }
-
-    #beamjoy-race-hud .hud-standings tr.dnf {
-        color: #e57373;
-        opacity: 0.7;
-    }
-
-    #beamjoy-race-hud .hud-standings tr.self {
-        font-weight: bold;
-    }
-
-    #beamjoy-race-hud .hud-standings table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    #beamjoy-race-hud .hud-standings td {
-        padding: 0.1em 0.2em;
-    }
-
-    #beamjoy-race-hud .hud-standings td.rank {
-        opacity: 0.7;
-        width: 1.5em;
-    }
-
-    #beamjoy-race-hud .hud-standings td.gap {
+    #beamjoy-race-hud .tower .tg {
         text-align: right;
-        font-variant-numeric: tabular-nums;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-style: italic;
+    }
+    #beamjoy-race-hud .tower .tg.soft {
+        font-family: inherit;
+        font-style: normal;
+        font-weight: 400;
+        font-size: 0.9em;
+        color: #a7aebf;
+    }
+    #beamjoy-race-hud .fastest {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.5em 0.75em;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(186, 104, 248, 0.1);
+        font-size: 0.78em;
+    }
+    #beamjoy-race-hud .fastest .bar {
+        width: 4px;
+        height: 1.2em;
+        transform: skewX(-10deg);
+        background: #ba68f8;
+        border-radius: 1px;
+    }
+    #beamjoy-race-hud .fastest b {
+        font-weight: 600;
+    }
+    #beamjoy-race-hud .fastest .t {
+        margin-left: auto;
+        font-weight: 700;
+        color: #ba68f8;
     }
 </style>
 
-<div id="beamjoy-race-hud" ng-if="$ctrl.active">
-    <div class="hud-header">
-        <div class="hud-name">{{$ctrl.raceName}}</div>
-        <div class="hud-position" ng-if="$ctrl.position">
-            P{{$ctrl.position}}/{{$ctrl.totalRacers}}
+<!-- the chequered flag, drawn at the plates' slant (one template, used wherever someone finished) -->
+<script type="text/ng-template" id="bjRaceHudFlag.html">
+    <svg class="flag" width="15" height="11" viewBox="0 0 15 11" aria-hidden="true"><g transform="skewX(-10) translate(2 0)"><rect x="0" y="0" width="13" height="11" fill="#ebebeb"></rect><rect x="0" y="0" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="6.5" y="0" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="3.25" y="3.67" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="9.75" y="3.67" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="0" y="7.34" width="3.25" height="3.66" fill="#2a2d33"></rect><rect x="6.5" y="7.34" width="3.25" height="3.66" fill="#2a2d33"></rect></g></svg>
+</script>
+
+<section id="beamjoy-race-hud" ng-if="$ctrl.active" ng-class="[$ctrl.layout, {focused: $ctrl.focused}]" aria-label="{{$ctrl.v.raceName}}">
+
+    <!-- STANDARD -->
+    <div ng-if="$ctrl.layout === 'standard'">
+        <header class="std-head">
+            <span class="eyebrow">{{$ctrl.v.spectating || ('beamjoy.raceHud.racing' | translate)}}</span>
+            <h2>{{$ctrl.v.raceName}}</h2>
+        </header>
+        <div class="std-body">
+            <div class="herobox" ng-if="$ctrl.v.multi">
+                <div class="posblk">
+                    <div class="plate hero"><span>P{{$ctrl.v.pos}}</span></div>
+                    <span class="muted">{{$ctrl.v.ofCount}}</span>
+                </div>
+                <div class="gaps">
+                    <div class="gap" ng-if="$ctrl.v.ahead">
+                        <svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><polygon points="6,0 12,10 0,10" fill="#ff8955"></polygon></svg>
+                        <span class="num">{{$ctrl.v.ahead.num}}<small>{{$ctrl.v.ahead.unit}}</small></span>
+                        <span class="nm"><span class="sr">{{'beamjoy.raceHud.carAhead' | translate}}</span><span class="t">{{$ctrl.v.ahead.name}}</span><span ng-if="$ctrl.v.ahead.fin" ng-include="'bjRaceHudFlag.html'"></span></span>
+                    </div>
+                    <div class="gap" ng-if="$ctrl.v.behind">
+                        <svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><polygon points="0,0 12,0 6,10" fill="#6b7180"></polygon></svg>
+                        <span class="num soft">{{$ctrl.v.behind.num}}<small>{{$ctrl.v.behind.unit}}</small></span>
+                        <span class="nm"><span class="sr">{{'beamjoy.raceHud.carBehind' | translate}}</span><span class="t">{{$ctrl.v.behind.name}}</span></span>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.4em">
+                <div class="lapline">
+                    <span class="ov big">{{$ctrl.v.progress}}<small>{{$ctrl.v.progressOf}}</small></span>
+                    <span class="clock">
+                        <span class="timer" role="timer">{{$ctrl.v.timer}}</span>
+                        <span class="delta" ng-if="$ctrl.v.delta" ng-class="$ctrl.v.deltaCls">{{$ctrl.v.delta}}</span>
+                    </span>
+                </div>
+                <div class="secs" ng-if="$ctrl.v.secs.length > 0" aria-hidden="true">
+                    <div class="sec" ng-repeat="s in $ctrl.v.secs track by $index" ng-class="s"></div>
+                </div>
+                <div class="laps" ng-if="$ctrl.v.showLaps">
+                    <span>{{'beamjoy.raceHud.last' | translate}} {{$ctrl.v.last}}</span>
+                    <span class="pb">{{'beamjoy.raceHud.best' | translate}} {{$ctrl.v.best}}</span>
+                </div>
+            </div>
+            <div ng-if="$ctrl.v.short.length > 0">
+                <div ng-repeat="r in $ctrl.v.short track by $index">
+                    <div class="fold" ng-if="r.kind === 'fold'">{{r.text}}</div>
+                    <div class="row" ng-if="r.kind === 'car'" ng-class="r.rowCls">
+                        <span class="plate" ng-class="r.plateCls"><span>{{r.pos}}</span></span>
+                        <span class="nm">{{r.name}}</span>
+                        <span ng-if="r.fin" ng-include="'bjRaceHudFlag.html'"></span>
+                        <span class="g">{{r.gap || ('beamjoy.raceHud.leader' | translate)}}</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="hud-spectating" ng-if="$ctrl.spectatingPlayerName">
-        Spectating {{$ctrl.spectatingPlayerName}}
-    </div>
-
-    <div class="hud-progress" ng-if="$ctrl.self">
-        <span ng-if="$ctrl.totalLaps > 1">Lap {{$ctrl.self.currentLap}}/{{$ctrl.totalLaps}}</span>
-        <span ng-if="$ctrl.totalLaps <= 1">&nbsp;</span>
-        <span>Gate {{$ctrl.self.currentGate}}/{{$ctrl.totalGates}}</span>
-        <span ng-if="$ctrl.totalSectors > 1">Sector {{$ctrl.self.currentSector}}/{{$ctrl.totalSectors}}</span>
-    </div>
-
-    <div class="hud-timer" ng-if="$ctrl.self">
-        {{$ctrl.formatTime($ctrl.totalLaps > 1 ? $ctrl.self.currentLapElapsedMs : $ctrl.elapsedMs)}}
-    </div>
-
-    <div class="hud-laps" ng-if="$ctrl.self && $ctrl.totalLaps > 1">
-        <span>Last {{$ctrl.formatTime($ctrl.self.lastLapMs)}}</span>
-        <span class="best">Best {{$ctrl.formatTime($ctrl.self.bestLapMs)}}</span>
-    </div>
-
-    <div
-        class="hud-delta"
-        ng-if="$ctrl.self.liveDeltaMs !== null && $ctrl.self.liveDeltaMs !== undefined"
-        ng-class="$ctrl.self.liveDeltaMs <= 0 ? 'ahead' : 'behind'"
-    >
-        {{$ctrl.formatDelta($ctrl.self.liveDeltaMs)}}
-    </div>
-
-    <div class="hud-gaps" ng-if="$ctrl.position">
-        <div class="hud-gap-row" ng-if="$ctrl.ahead" ng-click="$ctrl.toggleExpanded()">
-            <span class="name">▲ {{$ctrl.ahead.displayName || $ctrl.ahead.playerName}}</span>
-            <span class="gap">{{$ctrl.opponentLabel($ctrl.ahead)}}</span>
+    <!-- COMPACT -->
+    <div ng-if="$ctrl.layout === 'compact'" style="display: contents">
+        <span class="spec" ng-if="$ctrl.v.spectating">{{$ctrl.v.spectating}}</span>
+        <div class="compact-top">
+            <div class="plate me" ng-if="$ctrl.v.multi"><span>P{{$ctrl.v.pos}}</span></div>
+            <div class="ofcol" ng-if="$ctrl.v.multi">
+                <span>{{$ctrl.v.ofCount}}</span>
+                <span class="fins" ng-if="$ctrl.v.finishedCount > 0"><span ng-include="'bjRaceHudFlag.html'"></span>{{$ctrl.v.finishedText}}</span>
+            </div>
+            <span class="ov lap">{{$ctrl.v.progress}}<small>{{$ctrl.v.progressOf}}</small></span>
         </div>
-        <div class="hud-gap-row" ng-if="$ctrl.behind" ng-click="$ctrl.toggleExpanded()">
-            <span class="name">▼ {{$ctrl.behind.displayName || $ctrl.behind.playerName}}</span>
-            <span class="gap">{{$ctrl.opponentLabel($ctrl.behind)}}</span>
+        <div class="clockrow">
+            <span class="timer" role="timer">{{$ctrl.v.timer}}</span>
+            <span class="delta" ng-if="$ctrl.v.delta" ng-class="$ctrl.v.deltaCls">{{$ctrl.v.delta}}</span>
         </div>
-        <div
-            class="hud-gap-row"
-            ng-if="!$ctrl.ahead && !$ctrl.behind"
-            ng-click="$ctrl.toggleExpanded()"
-        >
-            <span class="name">Standings</span>
-            <span class="gap">{{$ctrl.expanded ? '▲' : '▼'}}</span>
+        <div class="secs" ng-if="$ctrl.v.secs.length > 0" aria-hidden="true">
+            <div class="sec" ng-repeat="s in $ctrl.v.secs track by $index" ng-class="s"></div>
         </div>
-
-        <div class="hud-standings" ng-if="$ctrl.expanded">
-            <table>
-                <tr
-                    ng-repeat="row in $ctrl.standings track by $index"
-                    ng-class="{finished: row.finished, dnf: row.dnf, self: row.playerName === $ctrl.self.playerName}"
-                >
-                    <td class="rank">{{$index + 1}}</td>
-                    <td>{{row.displayName || row.playerName}}</td>
-                    <td class="gap">{{$ctrl.opponentLabel(row)}}</td>
-                </tr>
-            </table>
+        <div class="gaps" ng-if="$ctrl.v.ahead || $ctrl.v.behind">
+            <div class="gap" ng-if="$ctrl.v.ahead">
+                <svg width="10" height="9" viewBox="0 0 12 10" aria-hidden="true"><polygon points="6,0 12,10 0,10" fill="#ff8955"></polygon></svg>
+                <span class="num">{{$ctrl.v.ahead.num}}<small>{{$ctrl.v.ahead.unit}}</small></span>
+                <span class="nm"><span class="sr">{{'beamjoy.raceHud.carAhead' | translate}}</span><span class="t">{{$ctrl.v.ahead.name}}</span><span ng-if="$ctrl.v.ahead.fin" ng-include="'bjRaceHudFlag.html'"></span></span>
+            </div>
+            <div class="gap" ng-if="$ctrl.v.behind">
+                <svg width="10" height="9" viewBox="0 0 12 10" aria-hidden="true"><polygon points="0,0 12,0 6,10" fill="#6b7180"></polygon></svg>
+                <span class="num soft">{{$ctrl.v.behind.num}}<small>{{$ctrl.v.behind.unit}}</small></span>
+                <span class="nm"><span class="sr">{{'beamjoy.raceHud.carBehind' | translate}}</span><span class="t">{{$ctrl.v.behind.name}}</span></span>
+            </div>
+        </div>
+        <div class="laps" ng-if="$ctrl.v.showLaps">
+            <span>{{'beamjoy.raceHud.last' | translate}} {{$ctrl.v.last}}</span>
+            <span class="pb">{{'beamjoy.raceHud.best' | translate}} {{$ctrl.v.best}}</span>
         </div>
     </div>
-</div>
+
+    <!-- FULL STANDINGS -->
+    <div ng-if="$ctrl.layout === 'full'">
+        <div class="fullhead">
+            <span class="name">{{$ctrl.v.spectating || $ctrl.v.raceName}}</span>
+            <span class="ov lap" ng-if="$ctrl.v.fullLap">{{$ctrl.v.fullLap}}<small>{{$ctrl.v.fullLapOf}}</small></span>
+            <span class="ov lap" ng-if="!$ctrl.v.fullLap">{{$ctrl.v.timer}}</span>
+        </div>
+        <div class="prog" aria-hidden="true"><div ng-style="{width: $ctrl.v.progressPct}"></div></div>
+        <ol class="tower">
+            <li ng-repeat="r in $ctrl.v.full track by $index" ng-class="r.rowCls">
+                <span class="plate" ng-class="r.plateCls"><span>{{r.pos}}</span></span>
+                <span class="nm">{{r.name}}</span>
+                <span class="fl"><span ng-if="r.fin" ng-include="'bjRaceHudFlag.html'"></span></span>
+                <span class="tg" ng-class="r.gapCls">{{r.gap}}</span>
+            </li>
+        </ol>
+        <div class="fastest" ng-if="$ctrl.v.fastestLap">
+            <span class="bar" aria-hidden="true"></span>
+            <span>{{'beamjoy.raceHud.fastestLap' | translate}} <b>{{$ctrl.v.fastestLap.name}}</b></span>
+            <span class="t">{{$ctrl.v.fastestLap.time}}</span>
+        </div>
+    </div>
+
+    <!-- the Focus control's buttons (hidden otherwise) -->
+    <div class="hud-actions" ng-if="$ctrl.focused">
+        <button type="button" ng-class="{cursor: $ctrl.cursor === 0}" ng-click="$ctrl.openRaceInfo()">
+            {{'beamjoy.window.main.tabs.races.raceInfo.info' | translate}}
+        </button>
+        <button type="button" class="danger hold" ng-if="$ctrl.v.canRetire" ng-class="{cursor: $ctrl.cursor === 1}"
+            ng-mousedown="$ctrl.startRetire()" ng-mouseup="$ctrl.stopRetire()" ng-mouseleave="$ctrl.stopRetire()">
+            <span class="fill" ng-style="$ctrl.retireFill()" aria-hidden="true"></span>
+            <span class="label">{{($ctrl.retireProgress > 0 ? 'beamjoy.raceHud.retireHolding' : 'beamjoy.raceHud.retireHold') | translate}}</span>
+        </button>
+        <span class="hint">{{'beamjoy.raceHud.focusHint' | translate}}</span>
+    </div>
+</section>

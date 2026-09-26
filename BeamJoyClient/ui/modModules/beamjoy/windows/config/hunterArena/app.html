@@ -242,7 +242,7 @@
                 </td>
                 <td>
                     <div class="d-flex align-center gap-1">
-                        <bj-select class="flex-grow-1" ng-model="$ctrl.defaults.huntedVehiclePresetId" options="$ctrl.vehiclePresetOptions"></bj-select>
+                        <bj-select class="flex-grow-1" ng-model="$ctrl.defaults.huntedVehiclePresetId" options="$ctrl.vehiclePresetOptions" ng-class="{disabled: $ctrl.vehiclePresetOptions.length <= 1}" ng-attr-title="{{$ctrl.vehiclePresetOptions.length <= 1 ? ('beamjoy.vehiclePresets.noneYet' | translate) : undefined}}"></bj-select>
                         <button class="btn info" ng-click="$ctrl.openVehiclePresets($event)" title="{{'beamjoy.window.config.tabs.races.vehicleRestriction.managePresets.tooltip' | translate}}">
                             {{'beamjoy.window.config.tabs.races.vehicleRestriction.managePresets' | translate}}
                         </button>
@@ -254,7 +254,7 @@
                     {{'beamjoy.window.config.tabs.hunterArena.huntersVehiclePool' | translate}}
                 </td>
                 <td>
-                    <bj-select ng-model="$ctrl.defaults.huntersVehiclePresetId" options="$ctrl.vehiclePresetOptions"></bj-select>
+                    <bj-select ng-model="$ctrl.defaults.huntersVehiclePresetId" options="$ctrl.vehiclePresetOptions" ng-class="{disabled: $ctrl.vehiclePresetOptions.length <= 1}" ng-attr-title="{{$ctrl.vehiclePresetOptions.length <= 1 ? ('beamjoy.vehiclePresets.noneYet' | translate) : undefined}}"></bj-select>
                 </td>
             </tr>
             <tr ng-if="$ctrl.defaults.huntedVehiclePresetId || $ctrl.defaults.huntersVehiclePresetId">

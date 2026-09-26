@@ -4,6 +4,30 @@
         flex-direction: column;
         gap: 0.2em;
     }
+    bj-players-list .all-vehicles {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3em;
+        margin-bottom: 0.5em;
+        padding: 0.6em 0.8em 0.8em;
+        border: 1px solid rgba(255, 102, 0, 0.35);
+        border-radius: 0.375em;
+    }
+    bj-players-list .all-vehicles h4 {
+        margin: 0;
+        font-size: 0.78em;
+        color: #ffbca0;
+    }
+    bj-players-list .all-vehicles .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3em;
+        margin-top: 0.2em;
+    }
+    bj-players-list .all-vehicles .bjr-btn.armed {
+        background: #b3261e;
+        color: #fff;
+    }
     bj-players-list .p-row {
         display: flex;
         flex-direction: column;
@@ -128,6 +152,18 @@
         width: 6em;
     }
 </style>
+
+<!-- staff, full window : every lower-ranked player's vehicles at once -->
+<div class="all-vehicles" ng-if="$ctrl.full && $ctrl.isStaff()">
+    <h4>{{'beamjoy.window.main.playerlist.allVehicles.title' | translate}}</h4>
+    <span class="bjr-muted">{{'beamjoy.window.main.playerlist.allVehicles.hint' | translate}}</span>
+    <div class="buttons">
+        <button type="button" class="bjr-btn small" ng-repeat="a in $ctrl.ALL_ACTIONS track by a"
+            ng-class="{danger: a === 'remove', armed: $ctrl.allArmed === a}" ng-click="$ctrl.allVehicles(a)">
+            {{($ctrl.allArmed === a ? 'beamjoy.window.main.playerlist.allVehicles.confirm' : 'beamjoy.window.main.playerlist.allVehicles.' + a) | translate}}
+        </button>
+    </div>
+</div>
 
 <div class="p-row" ng-repeat="player in $ctrl.players track by player.playerName" ng-class="{open: $ctrl.expanded[player.playerName]}">
     <button type="button" class="p-head" ng-click="$ctrl.toggle(player)" aria-expanded="{{!!$ctrl.expanded[player.playerName]}}">
