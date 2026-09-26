@@ -111,7 +111,8 @@ local M = {
     -- multi-stop : chance a package offer tries to be one, and the score factor per stop count
     MULTI_STOP_CHANCE = 0.35,
     STOP_BONUS = { 1, 1.15, 1.3 },
-    INVITE_SEC = 20,
+    -- an unanswered convoy invite lapses after this : the leader's picker offers Invite again
+    INVITE_SEC = 15,
     -- everyone ready, or the leader's "Start now" : the countdown drops to this
     QUICK_START_SEC = 5,
     -- grace period after the first delivery : this share of the target, clamped
@@ -148,6 +149,8 @@ end
 
 ---@param playerID integer
 ---@return string
+local scoreKey
+
 local function nameOf(playerID)
     local ok, name = pcall(MP.GetPlayerName, playerID)
     return ok and type(name) == "string" and #name > 0 and name or "?"
@@ -172,6 +175,15 @@ end
 ---@param kind string
 ---@param playerName string
 ---@return integer rank 1-based, integer players on the board
+--- the name a player's delivery scores are kept under, or nil when they can't keep any
+---@param ctxt BJSContext
+---@return string?
+scoreKey = function(ctxt)
+    local key = services_identity and services_identity.getIdentityKey(ctxt.senderID) or ctxt.sender.playerName
+    if ctxt.sender.guest and not ctxt.sender.identityNickname then return nil end
+    return key
+end
+
 local function rankOf(kind, playerName)
     local board = M.scores[kind] or {}
     local mine = board[playerName] and board[playerName].total or 0
@@ -865,9 +877,12 @@ local function deliveryArrive(ctxt, serverVid, condition)
         (convoy and convoy.sizeFactor or 1) * (convoy and convoy.cohesionFactor or 1))
 
     local kind = offer.kind
-    local playerName = ctxt.sender.playerName
+    -- scores follow the player's identity (their chosen nickname when they logged in with one,
+    -- the account name otherwise ; see services/identity.lua) so a BeamMP guest with a nickname
+    -- keeps a stable place. A guest without one has a throwaway name : nothing to keep
+    local playerName = scoreKey(ctxt)
     local total, rank, players
-    if not ctxt.sender.guest then
+    if playerName then
         local entry = M.scores[kind][playerName] or { total = 0, count = 0 }
         entry.total = entry.total + score
         entry.count = entry.count + 1
@@ -1337,7 +1352,7 @@ end
 ---@param ctxt BJSContext
 local function deliveryLeaderboardRequest(ctxt)
     if not ctxt.sender then return end
-    local me = ctxt.sender.playerName
+    local me = scoreKey(ctxt) or ctxt.sender.playerName
     local payload = {}
     for _, kind in ipairs({ "packages", "vehicles" }) do
         local rows = {}
@@ -1526,6 +1541,7 @@ M.deliveryConvoyJoin = function(ctxt, convoyId, serverVid) deliveryConvoyJoin(ct
 M.deliveryConvoyReady = deliveryConvoyReady
 M.deliveryConvoyStartNow = deliveryConvoyStartNow
 M.deliveryConvoyLeave = deliveryConvoyLeave
+M.isBusy = isBusy
 M.deliveryConvoyInviteList = deliveryConvoyInviteList
 M.deliveryConvoyInvite = deliveryConvoyInvite
 M.deliveryConvoyInviteReply = deliveryConvoyInviteReply

@@ -373,6 +373,10 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJInfectedReady", M.ready)
     beamjoy_communications_ui.addHandler("BJInfectedLeave", M.leave)
     beamjoy_communications_ui.addHandler("BJInfectedCancel", M.cancel)
+    -- the leader starts now with whoever is ready (services/infectedGrid.lua)
+    beamjoy_communications_ui.addHandler("BJInfectedStartNow", function()
+        if M.session then beamjoy_communications.send("infectedStartNow", M.session.id) end
+    end)
     beamjoy_communications_ui.addHandler("BJInfectedForceInfected", M.forceInfected)
     beamjoy_communications_ui.addHandler("BJInfectedSpectate", M.spectateSession)
     beamjoy_communications_ui.addHandler("BJInfectedStopSpectate", M.stopSpectating)
@@ -589,6 +593,8 @@ local function pushSessionStatus_impl(session)
         role = participant.role,
         ready = participant.ready,
         isStarter = starter and starter.playerName == participant.playerName,
+        -- the lobby panel marks the leader with a crown
+        starterID = session.starterID,
         winner = session.winner,
         settings = {
             roundDuration = session.settings.roundDuration,
@@ -632,8 +638,7 @@ local function onSessionsList(list)
     local selfName = MPConfig.getNickname()
     table.forEach(list, function(s)
         if not table.includes(previousIds, s.id) and s.starterName ~= selfName then
-            beamjoy_communications_ui.uiBroadcast("beamjoy.infected.newJoinableSession",
-                { starterName = s.starterName }, nil, 4)
+            if beamjoy_notices then beamjoy_notices.announce("infected", s) end
         end
     end)
 

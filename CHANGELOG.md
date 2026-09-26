@@ -8,7 +8,69 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Client build 2516, server build 2361.
+Client build 2520, server build 2363.
+
+- **Private race lobbies.** The race start form's buttons are now Private lobby and Open lobby
+  (X). A private lobby is invite only: it's never listed in Happening now or announced, and if
+  nobody joins it starts like a solo run as soon as you're ready. One-slot races just have Start.
+  The delivery job board keeps X = start solo. *(client + server)*
+- **Invites lapse after 15 seconds.** An unanswered race, hunt, infected or convoy invite expires
+  after 15 s and the picker (which now refreshes while open) offers Invite again. *(client +
+  server)*
+- **Delivery leaderboard.** Scores are kept under your nickname when you set one (the same
+  identity race leaderboards use), so BeamMP guests who pick a nickname now get on the board;
+  guests without one still don't. The Leaderboards tab and the You column refresh every 15 s and
+  right after a delivery. *(client + server)*
+- **Controller.** A on a dropdown (vehicle pool, grid slot) opens its options as a list: up/down
+  pick, A chooses, B closes (left/right still step through them). *(client only)*
+- **Fixes.** Picked options in the hunter and infected start forms (waypoints / timed, respawn
+  strategy) are orange instead of grey. Double-clicking the rail's logo puts it back again (the
+  game's UI didn't pass the double-click on). Starting a bus line closes the menu so the vehicle
+  picker is usable. The host's own ready tag matching is sturdier (ids compared as text).
+  *(client only)*
+
+### Main window: notifications, lobbies and controller round 2
+
+- **Notification stack.** Race, hunt and infected invites and new lobbies ("X opened a race
+  lobby", which used to flash in the middle of the screen) now show as cards beside the rail,
+  with Join and Dismiss, in the same stack as the convoy invite. The Focus notification control
+  focuses them after the convoy invite: A joins, B dismisses. Joining opens the lobby in the main
+  window. *(client only)*
+- **Invite players and Start now in every lobby.** Race, hunt and infected lobbies get Invite
+  player (X, a player picker showing who's free, busy or already invited) and Start now (Y,
+  leader only: starts with everyone who's ready, like the lobby timing out). Hunt and infected
+  lobbies now use the same layout as race and convoy lobbies (crown on the leader, ready tags,
+  free slots, round settings folded away). *(client + server)*
+- **Accepting a convoy invite** opens the convoy's lobby in the main window. *(client only)*
+- **Controller.** B on a race's start form cancels back to the race list; the A shortcut on
+  Open lobby and the A glyph on I'm ready are gone. Dropdowns (vehicle pool, grid slot) are
+  reachable and A / left / right step through their options. The Focus control opens Happening
+  now with the cursor on the rail's Now button. Opening a panel with the mouse hands the pad to
+  the menu until the panel closes. *(client only)*
+- **The menu gets out of the way** when an activity gets under way (a race or game counting
+  down, a delivery, a bus run). *(client only)*
+- **The rail moves.** It sits lower by default (clear of the race overlay), can be dragged by
+  its logo anywhere on screen (double-click the logo to put it back), and remembers where you put
+  it. On the left half of the screen, panels, the full window and notifications open to its
+  right. *(client only)*
+- **Players.** Expanded rows have more room inside the outline. The side panel and Home show a
+  Moderate button instead of the moderation box; it opens that player in the full window's
+  Players tab, where the box now wraps instead of running off screen. *(client only)*
+- **Smaller fixes.** The Welcome screen button only shows when the welcome screen is enabled. Your
+  own ready tag in a lobby turns green as soon as you ready up. Settings no longer shows the
+  nametag previews that pushed the list off screen. The focus hints ("RB + X") follow your own
+  binding of the Focus notification control. *(client only)*
+
+- **The depot list is a table again.** Activities > Jobs shows the depots the way the Jobs window
+  did: a count line and filter chips, column headers (depot, distance, jobs, convoy) and one row
+  per depot with the selected row highlighted, then Set GPS (A), Join convoy (X) and Change filter
+  (Y) underneath. Click a row to select it and click it again to set GPS ; with the pad, the
+  cursor selects the row it's on. *(client only)*
+
+- **Convoys in Happening now.** Every convoy forming on the map is its own row (cargo and
+  destination, leader, depot, how full) with a Join button that works from anywhere, and counts
+  toward the Now badge. Before, other players' convoys only showed as a count on the Delivery
+  jobs card. Your own convoy stays as the card at the top. *(client only)*
 
 ### Main window redesign: controller and layout fixes
 

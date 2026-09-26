@@ -61,8 +61,6 @@
     /* RAIL */
     .bjr-rail {
         position: fixed;
-        right: var(--bjr-right);
-        top: var(--bjr-top);
         z-index: 3;
         width: var(--bjr-rail-w);
         box-sizing: border-box;
@@ -75,7 +73,9 @@
         border-radius: 0.5em;
         pointer-events: auto;
     }
+    /* the logo is the rail's drag handle (double-click puts it back) */
     .bjr-rail .rail-logo {
+        cursor: grab;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -123,6 +123,10 @@
         box-shadow: inset -3px 0 0 var(--bjr-orange);
         color: var(--bjr-text);
     }
+    /* on the left of the screen the panel opens to the right : the marker follows it */
+    .bjr.side-left .bjr-rail .rail-item.active {
+        box-shadow: inset 3px 0 0 var(--bjr-orange);
+    }
     .bjr-rail .rail-item span.label {
         font-size: 0.62em;
         font-weight: 600;
@@ -156,8 +160,6 @@
     /* SIDE PANEL : opens beside the rail, never moves while open */
     .bjr-panel {
         position: fixed;
-        right: calc(var(--bjr-right) + var(--bjr-rail-w) + 0.75em);
-        top: var(--bjr-top);
         z-index: 3;
         width: 22em;
         max-height: 75vh;
@@ -201,8 +203,6 @@
     /* FULL WINDOW */
     .bjr-full {
         position: fixed;
-        left: 6vw;
-        right: calc(var(--bjr-right) + var(--bjr-rail-w) + 1.25em);
         top: 6vh;
         bottom: 6vh;
         z-index: 3;
@@ -341,6 +341,16 @@
     .bjr .btn.info,
     .bjr .btn.neutral {
         background: var(--bjr-button);
+    }
+    /* a picked option in the older forms is "btn info" + "success" (hunter / infected start) :
+       it has to read as picked, not as another grey button */
+    .bjr .btn.info.success,
+    .bjr .btn.neutral.success,
+    .bjr .btn.info.primary {
+        background: var(--bjr-primary);
+        box-shadow: inset 0 0 0 1px rgba(255, 170, 120, 0.55);
+        color: #fff;
+        fill: #fff;
     }
     .bjr .btn.warning {
         background: rgba(255, 176, 32, 0.14);
@@ -663,6 +673,34 @@
     .bjr-rail.pad {
         border-color: rgba(255, 102, 0, 0.6);
     }
+    /* a dropdown's options, opened with the pad */
+    .bjr .bjr-picker {
+        position: fixed;
+        z-index: 9;
+        max-height: 40vh;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        padding: 0.3em;
+        background: rgba(20, 22, 27, 0.97);
+        border: 1px solid rgba(255, 102, 0, 0.5);
+        border-radius: 0.375em;
+        pointer-events: auto;
+    }
+    .bjr .bjr-picker button {
+        padding: 0.5em 0.75em;
+        background: transparent;
+        border: 0;
+        border-radius: 0.25em;
+        color: var(--bjr-text);
+        font-size: 0.9em;
+        text-align: left;
+        cursor: pointer;
+    }
+    .bjr .bjr-picker button.on {
+        background: rgba(255, 102, 0, 0.18);
+        box-shadow: inset 3px 0 0 var(--bjr-orange);
+    }
     .bjr .pad-hints {
         display: flex;
         flex-wrap: wrap;
@@ -692,9 +730,10 @@
     }
 </style>
 
-<div id="beamjoy-main" class="bjr" ng-if="$ctrl.visible">
-    <nav class="bjr-rail" ng-class="{pad: $ctrl.pad, dimmed: $ctrl.dimmed()}" aria-label="{{'beamjoy.window.main.rail.label' | translate}}">
-        <div class="rail-logo" title="BeamJoy Revived">
+<div id="beamjoy-main" class="bjr" ng-if="$ctrl.visible" ng-class="{'side-left': $ctrl.side() === 'left'}">
+    <nav class="bjr-rail" ng-class="{pad: $ctrl.pad, dimmed: $ctrl.dimmed()}" ng-style="$ctrl.railStyle()" aria-label="{{'beamjoy.window.main.rail.label' | translate}}">
+        <div class="rail-logo" title="{{'beamjoy.window.main.rail.drag' | translate}}"
+            ng-mousedown="$ctrl.startDrag($event)">
             <svg width="30" height="30" viewBox="0 0 100 100" aria-hidden="true">
                 <rect width="100" height="100" rx="24" fill="#ff6600"></rect>
                 <polygon points="18,80 33,80 38.5,54 23.5,54" fill="#1c1f26"></polygon>
@@ -740,7 +779,7 @@
 
         <div class="rail-sep"></div>
         <button type="button" class="rail-item" ng-class="{active: $ctrl.full}"
-            ng-click="$ctrl.full ? $ctrl.shrink() : $ctrl.openFull()" data-rail="full" bjr-pad-cursor="{{$ctrl.railPad('full')}}"
+            ng-click="$ctrl.clickFull()" data-rail="full" bjr-pad-cursor="{{$ctrl.railPad('full')}}"
             aria-label="{{($ctrl.full ? 'beamjoy.window.main.rail.shrinkLong' : 'beamjoy.window.main.rail.fullLong') | translate}}"
             title="{{($ctrl.full ? 'beamjoy.window.main.rail.shrinkLong' : 'beamjoy.window.main.rail.fullLong') | translate}}">
             <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="16" height="14" rx="2"></rect><path d="M12.5 7.5h3v3M15.5 7.5l-4 4"></path></svg>
@@ -760,7 +799,7 @@
         </button>
     </nav>
 
-    <section class="bjr-panel" ng-if="$ctrl.panel && !$ctrl.full" ng-class="{wide: $ctrl.panel === 'play' || $ctrl.panel === 'settings', dimmed: $ctrl.dimmed()}"
+    <section class="bjr-panel" ng-if="$ctrl.panel && !$ctrl.full" ng-style="$ctrl.panelStyle()" ng-class="{wide: $ctrl.panel === 'play' || $ctrl.panel === 'settings', dimmed: $ctrl.dimmed()}"
         aria-label="{{('beamjoy.window.main.panels.' + $ctrl.panel) | translate}}">
         <header>
             <div>
@@ -801,7 +840,15 @@
         </footer>
     </section>
 
-    <section class="bjr-full" ng-if="$ctrl.full" ng-class="{dimmed: $ctrl.dimmed()}" aria-label="BeamJoy Revived">
+    <div class="bjr-picker" ng-if="$ctrl.picker" ng-style="$ctrl.picker.style" role="listbox">
+        <button type="button" role="option" ng-repeat="o in $ctrl.picker.options track by $index"
+            ng-class="{on: $index === $ctrl.picker.index}" aria-selected="{{$index === $ctrl.picker.index}}"
+            ng-mouseenter="$ctrl.picker.index = $index" ng-click="$ctrl.pickOption($index)">
+            {{o.label | translate}}
+        </button>
+    </div>
+
+    <section class="bjr-full" ng-if="$ctrl.full" ng-style="$ctrl.fullStyle()" ng-class="{dimmed: $ctrl.dimmed()}" aria-label="BeamJoy Revived">
         <header>
             <div style="display: flex; align-items: center; gap: 1.1em">
                 <span class="brand">
@@ -847,7 +894,7 @@
                 </section>
             </div>
             <bj-main-activities ng-if="$ctrl.fullTab === 'activities'"></bj-main-activities>
-            <bj-players-list ng-if="$ctrl.fullTab === 'players'" full="true"></bj-players-list>
+            <bj-players-list ng-if="$ctrl.fullTab === 'players'" full="true" moderation="true"></bj-players-list>
             <bj-main-leaderboards ng-if="$ctrl.fullTab === 'leaderboards'"></bj-main-leaderboards>
             <bj-main-settings ng-if="$ctrl.fullTab === 'settings'"></bj-main-settings>
         </div>

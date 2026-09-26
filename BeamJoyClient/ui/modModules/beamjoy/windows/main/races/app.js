@@ -353,11 +353,21 @@ angular.module("beamjoy").component("bjMainRaces", {
         };
         this.startSolo = (event, race) => {
             this.startOptions.joinable = false;
+            this.startOptions.private = false;
             this.confirmStart(event, race);
         };
         this.startLobby = (event, race) => {
             if (race.startPositions <= 1) return this.startSolo(event, race);
             this.startOptions.joinable = true;
+            this.startOptions.private = false;
+            this.confirmStart(event, race);
+        };
+        // a private lobby : invite only, never listed or announced ; while nobody else is in it,
+        // it starts like a solo run as soon as you're ready (services/raceGrid.lua)
+        this.startPrivate = (event, race) => {
+            if (race.startPositions <= 1) return this.startSolo(event, race);
+            this.startOptions.joinable = true;
+            this.startOptions.private = true;
             this.confirmStart(event, race);
         };
         this.startBlocked = () =>
@@ -401,7 +411,25 @@ angular.module("beamjoy").component("bjMainRaces", {
             if (s.vehicleRestrictionMode === "pool") return `${s.vehicleRestrictionPoolLabel} (${s.vehicleRestrictionPoolCount})`;
             return translate("beamjoy.window.main.tabs.races.noVehicleRestrictions");
         };
-        this.isLeader = (player) => !!this.status && player.playerID === this.status.starterID;
+        this.isLeader = (player) => !!this.status && String(player.playerID) === String(this.status.starterID);
+        // your own row follows the status push's own ready flag (the participant list can lag
+        // a push behind it)
+        this.isReady = (player) => {
+            const s = this.status;
+            const self = beamjoyStore.players.self;
+            // ids can arrive as numbers or strings depending on the push : compare loosely
+            const isSelf =
+                (self && String(player.playerID) === String(self.playerID)) ||
+                (s && s.isStarter && String(player.playerID) === String(s.starterID));
+            if (s && isSelf) return !!s.ready;
+            return player.ready === true || player.ready === 1 || player.ready === "true";
+        };
+        this.inviting = false;
+        this.setInviting = (open) => (this.inviting = open);
+        this.startNow = (event) => {
+            event.stopPropagation();
+            if (this.status && this.status.isStarter) beamjoyStore.send("BJRaceStartNow");
+        };
         // the grid as the lobby shows it : players by slot, then the free slots. Built once per
         // status push (a fresh array per digest never settles)
         this.slots = [];
@@ -417,6 +445,11 @@ angular.module("beamjoy").component("bjMainRaces", {
             const s = this.status;
             if (!s) return "";
             if (!s.joinable) return translate("beamjoy.window.main.tabs.races.soloLine");
+            if (s.private && s.isStarter) {
+                return translate("beamjoy.window.main.tabs.races.privateLobby")
+                    .replace("{count}", s.participantCount || 0)
+                    .replace("{max}", s.maxParticipants || 0);
+            }
             const leader = (s.participants || []).find((p) => p.playerID === s.starterID);
             return translate(s.isStarter ? "beamjoy.window.main.tabs.races.yourLobby" : "beamjoy.window.main.tabs.races.theirLobby")
                 .replace("{name}", leader ? leader.displayName || leader.playerName : "?")

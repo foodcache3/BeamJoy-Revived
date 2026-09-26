@@ -10,7 +10,7 @@
 // main window's own navigation ; A lands on Ready, X invites, Y starts now (leader).
 angular.module("beamjoy").component("bjMainJobs", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/activities/jobs/app.html",
-    controller: function ($rootScope, $scope, $filter, beamjoyStore, beamjoyDelivery) {
+    controller: function ($rootScope, $scope, $element, $filter, $interval, beamjoyStore, beamjoyDelivery) {
         const translate = $filter("translate");
         this.fmt = beamjoyDelivery;
         const offs = [];
@@ -71,14 +71,37 @@ angular.module("beamjoy").component("bjMainJobs", {
         this.filter = "all";
         this.data = { depots: [], loading: true };
         this.rows = [];
+        this.selected = 0;
+        // built once per push (a fresh array per digest never settles) ; the selected depot stays
+        // selected across the once-a-second refresh
         const rebuild = () => {
+            const previous = this.rows[this.selected];
             this.rows = (this.data.depots || []).filter(
                 (d) =>
                     this.filter === "all" ||
                     (this.filter === "packages" && d.sendsPackages) ||
                     (this.filter === "vehicles" && d.sendsVehicles)
             );
+            const kept = previous ? this.rows.findIndex((r) => r.id === previous.id) : -1;
+            this.selected = kept >= 0 ? kept : Math.min(this.selected, Math.max(0, this.rows.length - 1));
         };
+        this.current = () => this.rows[this.selected];
+        // a click selects, a click on the selected row sets GPS (the pad : its cursor selects the
+        // row it lands on, so A sets GPS)
+        this.rowClick = (index) => {
+            if (index === this.selected) this.gps(this.rows[index]);
+            else this.selected = index;
+        };
+        const offPad = (e) => {
+            const row = e.target && e.target.getAttribute && e.target.getAttribute("data-row");
+            if (row === null || row === undefined) return;
+            $scope.$applyAsync(() => (this.selected = Number(row)));
+        };
+        $element[0].addEventListener("bjrpadfocus", offPad);
+        this.countLine = () =>
+            translate(this.rows.length === 1 ? "beamjoy.delivery.jobs.countOne" : "beamjoy.delivery.jobs.count")
+                .replace("{1}", this.rows.length);
+        this.cycleFilter = () => this.setFilter(this.FILTERS[(this.FILTERS.indexOf(this.filter) + 1) % this.FILTERS.length]);
         on("BJDeliveryJobs", (_, data) => {
             data = data || {};
             if (!data.open) return;
@@ -103,7 +126,7 @@ angular.module("beamjoy").component("bjMainJobs", {
         this.openConvoy = (d) => (d && (d.convoys || []).find((c) => c.count < c.max)) || null;
         this.convoyLabel = (d) => {
             const c = (d.convoys || [])[0];
-            if (!c) return "";
+            if (!c) return translate("beamjoy.delivery.jobs.noConvoy");
             let label = translate("beamjoy.delivery.convoy.ofLeader").replace("{1}", c.leaderName);
             label += `, ${c.count}/${c.max}`;
             if (d.convoys.length > 1) {
@@ -115,7 +138,9 @@ angular.module("beamjoy").component("bjMainJobs", {
             const c = this.openConvoy(d);
             return c ? translate("beamjoy.delivery.convoy.joinNamed").replace("{1}", c.leaderName) : "";
         };
-        this.gps = (d) => beamjoyStore.send("BJDeliveryJobsGps", [d.id]);
+        this.gps = (d) => {
+            if (d) beamjoyStore.send("BJDeliveryJobsGps", [d.id]);
+        };
         this.join = (d) => {
             const c = this.openConvoy(d);
             if (c && !this.data.busy) beamjoyStore.send("BJDeliveryJobsJoin", [c.id]);
@@ -125,8 +150,14 @@ angular.module("beamjoy").component("bjMainJobs", {
             beamjoyStore.send("BJDeliveryLobbyRequest");
             beamjoyStore.send("BJDeliveryJobsOpenWindow");
         };
+        // the convoy's invite picker : an unanswered invite lapses after 15 s, keep it fresh
+        const inviteRefresh = $interval(() => {
+            if (this.l && this.l.inviting) beamjoyStore.send("BJDeliveryLobbyInviteRefresh");
+        }, 3000);
+        $scope.$on("$destroy", () => $interval.cancel(inviteRefresh));
         $scope.$on("$destroy", () => {
             offs.forEach((off) => off());
+            $element[0].removeEventListener("bjrpadfocus", offPad);
             beamjoyStore.send("BJDeliveryJobsClose");
         });
     },

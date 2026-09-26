@@ -324,6 +324,14 @@ Phase 0-2 (energy stations, garages, bus lines) are shipped — see CHANGELOG. S
     depot takes the pad through `mainNav.autoFocus("lobby", ...)`, "All depots" through
     `mainNav.focusOn("play", "jobs")`), race lobby rebuilt on the shared `.bjr-lobby` layout,
     `beamjoyNow.activeSection()` filters Activities, `beamjoyNow.raceDraft` keeps a start form.
+  - **Round 2 (client 2519 / server 2362), untested:** notification stack (`beamjoy/notices.lua`,
+    `windows/notices` ; the convoy invite renders inside it), lobby invites + Start now for race /
+    hunter / infected (`services/lobbyInvites.lua`, `raceStartNow` / `hunterStartNow` /
+    `infectedStartNow`, picker `windows/main/lobbyInvite`), hunter / infected lobbies on
+    `.bjr-lobby`, draggable rail with side detection (`railRect` / `side()` in windows/main),
+    dropdown pad support (`cycleSelect`), `data-pad-b`, mouse click takes the pad
+    (`BJMainPadFocus`), menu closes on `beamjoyNow.runningKey()` change, binding hint
+    (`mainNav` pushBinding -> `$rootScope.bjFocusLabel`).
   - Known debt: the hosted old components register `$rootScope.$on` listeners without cleanup,
     and panels now mount/unmount them often ; fix as each is restyled.
   - **Change race settings from inside the lobby** (feature idea from the mockup's "Change" link):

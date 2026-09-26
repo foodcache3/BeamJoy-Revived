@@ -3,7 +3,9 @@
 ---
 --- BJS's "Focus notification" control (core/input/actions/beamjoy.json bjFocusNotification ; RB + X,
 --- Shift + J by default) walks a short focus order, notifications first :
----   * nothing focused       -> a convoy invite if there is one, otherwise the main window
+---   * nothing focused       -> a notification if there is one (the convoy invite, then the
+---                              notification stack : lobby invites and new lobbies), otherwise
+---                              the main window
 ---   * notification focused  -> the main window
 ---   * main window focused   -> a notification that turned up meanwhile, otherwise let go
 --- While the main window is focused it borrows the pad's menu buttons (beamjoy/uiNav.lua, plus
@@ -39,12 +41,14 @@ end
 ---@param focused boolean
 ---@param panel string? rail panel to open (default : see defaultTarget)
 ---@param section string? Activities section, with panel "play"
-local function setFocused(focused, panel, section)
+---@param cursor "rail"|nil where the pad's cursor starts : the rail's button for that panel, or
+---(default) inside the panel
+local function setFocused(focused, panel, section, cursor)
     focused = focused == true
     if focused == M.focused then
         -- already focused : just go where asked
         if focused and panel then
-            beamjoy_communications_ui.send("BJMainPad", { active = true, panel = panel, section = section })
+            beamjoy_communications_ui.send("BJMainPad", { active = true, panel = panel, section = section, cursor = cursor })
         end
         return
     end
@@ -54,7 +58,11 @@ local function setFocused(focused, panel, section)
         M.openedRail = beamjoy_communications_ui.windowStates.main == false
         beamjoy_communications_ui.requestOpenWindow("main")
         beamjoy_uiNav.acquire(M.OWNER, beamjoy_uiNav.TAB_ACTIONS)
-        if not panel then panel, section = defaultTarget() end
+        if not panel then
+            -- the Focus control : the panel opens, the cursor sits on its rail button
+            panel, section = defaultTarget()
+            cursor = "rail"
+        end
     else
         beamjoy_uiNav.release(M.OWNER)
         if M.openedRail and not beamjoy_communications_ui.isMainForced() then
@@ -65,7 +73,7 @@ local function setFocused(focused, panel, section)
         for key in pairs(M.autoHeld) do M.autoDismissed[key] = true end
         M.autoHeld = {}
     end
-    beamjoy_communications_ui.send("BJMainPad", { active = focused, panel = panel, section = section })
+    beamjoy_communications_ui.send("BJMainPad", { active = focused, panel = panel, section = section, cursor = cursor })
 end
 
 --- focus the main window on a given panel (a depot prompt's "All depots")
@@ -95,35 +103,105 @@ local function autoFocus(key, want, panel, section)
     end
 end
 
+--- notification sources, in focus order : the convoy invite, then the notification stack
+local function sources()
+    return { beamjoy_delivery, beamjoy_notices }
+end
+
 ---@return boolean
 local function notificationFocusable()
-    return beamjoy_delivery ~= nil and beamjoy_delivery.notificationFocusable()
+    for _, src in ipairs(sources()) do
+        if src and src.notificationFocusable() then return true end
+    end
+    return false
 end
 
 ---@return boolean
 local function notificationFocused()
-    return beamjoy_delivery ~= nil and beamjoy_delivery.notificationFocused()
+    for _, src in ipairs(sources()) do
+        if src and src.notificationFocused() then return true end
+    end
+    return false
+end
+
+--- focus the first notification, or let go of whichever is focused
+---@param focused boolean
+local function setNotificationFocus(focused)
+    for _, src in ipairs(sources()) do
+        if src then
+            if focused and src.notificationFocusable() then
+                return src.setNotificationFocus(true)
+            elseif not focused and src.notificationFocused() then
+                src.setNotificationFocus(false)
+            end
+        end
+    end
 end
 
 local function onBJFocusNotification()
     if M.focused then
         setFocused(false)
         if notificationFocusable() and not notificationFocused() then
-            beamjoy_delivery.setNotificationFocus(true)
+            setNotificationFocus(true)
         end
     elseif notificationFocused() then
-        beamjoy_delivery.setNotificationFocus(false)
+        setNotificationFocus(false)
         setFocused(true)
     elseif notificationFocusable() then
-        beamjoy_delivery.setNotificationFocus(true)
+        setNotificationFocus(true)
     else
         setFocused(true)
     end
 end
 
+-- BINDING HINT ----------------------------------------------------------------------------------
+-- The UI's "RB + X" hints follow the player's own binding of the Focus notification control.
+
+local PAD_NAMES = {
+    btn_a = "A", btn_b = "B", btn_x = "X", btn_y = "Y", btn_l = "LB", btn_r = "RB",
+    btn_lt = "LT", btn_rt = "RT", btn_back = "View", btn_start = "Menu",
+    btn_thumbl = "LS", btn_thumbr = "RS", modifier1 = "RB", modifier2 = "LB",
+    dpov = "D-pad",
+}
+
+---@param control string e.g. "modifier1 btn_x", "shift j"
+---@param pad boolean
+---@return string
+local function formatControl(control, pad)
+    local parts = {}
+    for word in tostring(control):gmatch("%S+") do
+        if pad then
+            parts[#parts + 1] = PAD_NAMES[word] or (word:gsub("^btn_", "")):upper()
+        else
+            parts[#parts + 1] = #word == 1 and word:upper() or (word:sub(1, 1):upper() .. word:sub(2))
+        end
+    end
+    return table.concat(parts, " + ")
+end
+
+local function pushBinding()
+    local pad, key
+    local bindings = extensions.core_input_bindings and extensions.core_input_bindings.bindings or {}
+    for _, device in ipairs(bindings) do
+        local devname = tostring(device.devname or "")
+        for _, b in ipairs(device.contents and device.contents.bindings or {}) do
+            if b.action == "bjFocusNotification" and b.control then
+                if not pad and devname:find("^xinput") then pad = formatControl(b.control, true) end
+                if not key and devname:find("^keyboard") then key = formatControl(b.control, false) end
+            end
+        end
+    end
+    beamjoy_communications_ui.send("BJFocusBinding", { pad = pad, key = key })
+end
+
 local function onInit()
     -- the UI lets go itself (B on the rail, hiding the rail) and re-asks after a reload
     beamjoy_communications_ui.addHandler("BJMainPadRelease", function() setFocused(false) end)
+    -- a mouse click on the rail : the pad follows, from that button, until the panel closes
+    beamjoy_communications_ui.addHandler("BJMainPadFocus", function(panel)
+        setFocused(true, panel, nil, "rail")
+    end)
+    beamjoy_communications_ui.addHandler("BJFocusBindingRequest", pushBinding)
     beamjoy_communications_ui.addHandler("BJMainPadRequest", function()
         if M.focused then beamjoy_communications_ui.send("BJMainPad", { active = true }) end
     end)
@@ -138,6 +216,7 @@ local function onServerLeave()
 end
 
 M.onInit = onInit
+M.onInputBindingsChanged = pushBinding
 M.onBJFocusNotification = onBJFocusNotification
 M.onServerLeave = onServerLeave
 M.onExtensionUnloaded = onServerLeave

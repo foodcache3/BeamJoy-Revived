@@ -33,6 +33,8 @@ angular.module("beamjoy").component("bjMainBusLines", {
         this.startLine = (event, line) => {
             event.stopPropagation();
             beamjoyStore.send("BJMainStartBusLine", [line.id]);
+            // the run may start with the game's own vehicle picker : get out of its way
+            $rootScope.$broadcast("BJMainClose");
         };
         this.stopRun = (event) => {
             event.stopPropagation();

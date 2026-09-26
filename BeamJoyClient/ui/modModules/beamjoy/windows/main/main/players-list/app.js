@@ -11,6 +11,9 @@ await import(`/ui/modModules/beamjoy/windows/main/main/vehicle-line/app.js`);
 angular.module("beamjoy").component("bjPlayersList", {
     bindings: {
         full: "<",
+        // the full window's Players tab : the whole moderation box. Elsewhere (the side panel,
+        // Home's column) a Moderate button takes you there instead, the box doesn't fit
+        moderation: "<",
     },
     templateUrl:
         "/ui/modModules/beamjoy/windows/main/main/players-list/app.html",
@@ -25,6 +28,15 @@ angular.module("beamjoy").component("bjPlayersList", {
             this.expanded = {};
             if (open) this.expanded[player.playerName] = true;
         };
+        // opened from a Moderate button : that player starts expanded
+        this.$onInit = () => {
+            const name = $rootScope.bjPlayersExpand;
+            if (name) {
+                this.expanded = { [name]: true };
+                $rootScope.bjPlayersExpand = null;
+            }
+        };
+        this.moderate = (player) => $rootScope.$broadcast("BJMainModerate", player.playerName);
         this.moderationInputs = {};
 
         this.updateList = () => {

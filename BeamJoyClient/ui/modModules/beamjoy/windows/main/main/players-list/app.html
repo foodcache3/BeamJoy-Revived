@@ -50,11 +50,12 @@
         text-overflow: ellipsis;
         white-space: nowrap;
     }
+    /* room between the row's header and its buttons, so the pad's outline never touches them */
     bj-players-list .p-body {
         display: flex;
         flex-direction: column;
-        gap: 0.7em;
-        padding: 0 0.8em 0.8em;
+        gap: 0.8em;
+        padding: 0.45em 1em 1em;
     }
     bj-players-list bj-player-line {
         display: flex;
@@ -101,9 +102,30 @@
     bj-players-list bj-player-moderation input[type="text"] {
         width: 100%;
     }
+    /* the moderation box wraps inside its column instead of running off the screen */
+    bj-players-list bj-player-moderation table {
+        width: 100%;
+        table-layout: fixed;
+    }
     bj-players-list bj-player-moderation table td {
-        padding: 0.15em 0.2em;
+        padding: 0.2em;
         font-size: 0.85em;
+        white-space: normal;
+        vertical-align: middle;
+    }
+    bj-players-list bj-player-moderation table td:first-child {
+        width: 34%;
+    }
+    bj-players-list bj-player-moderation table td:last-child {
+        width: 3em;
+    }
+    bj-players-list bj-player-moderation .d-flex {
+        flex-wrap: wrap;
+        width: auto;
+        max-width: 100%;
+    }
+    bj-players-list bj-player-moderation input[type="number"] {
+        width: 6em;
     }
 </style>
 
@@ -120,16 +142,20 @@
         </span>
     </button>
     <div class="p-body" ng-if="$ctrl.expanded[player.playerName]"
-        ng-class="{split: $ctrl.full && player.showVehicles && player.showModeration}">
+        ng-class="{split: $ctrl.moderation && player.showVehicles && player.showModeration}">
         <bj-player-line player="player" full="$ctrl.full"></bj-player-line>
         <div class="p-vehicles" ng-if="player.showVehicles">
             <h4>{{'beamjoy.window.main.playerlist.vehicles.title' | translate}}</h4>
             <bj-vehicle-line ng-repeat="vehicle in player.vehicles track by vehicle.vid" vehicle="vehicle" owner="player"></bj-vehicle-line>
         </div>
-        <div class="p-mod" ng-if="player.showModeration">
+        <div class="p-mod" ng-if="player.showModeration && $ctrl.moderation">
             <h4>{{'beamjoy.window.main.playerlist.moderation.title' | translate}}</h4>
             <bj-player-moderation player="player"></bj-player-moderation>
         </div>
+        <button type="button" class="bjr-btn small ghost" ng-if="player.showModeration && !$ctrl.moderation"
+            style="align-self: flex-start" ng-click="$ctrl.moderate(player)">
+            {{'beamjoy.window.main.playerlist.moderate' | translate}}
+        </button>
     </div>
 </div>
 <p class="bjr-muted" ng-if="$ctrl.players.length === 0" style="margin: 0.3em 0">

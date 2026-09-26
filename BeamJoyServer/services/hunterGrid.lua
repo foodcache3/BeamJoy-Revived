@@ -669,6 +669,20 @@ local function onGridTimeout(sessionId)
     beginCountdown(session)
 end
 
+--- the leader starts now with everyone who's ready (and is marked ready themselves) ; like the
+--- lobby timing out, the game still needs its minimum player count
+---@param ctxt BJSContext
+---@param sessionId string
+local function hunterStartNow(ctxt, sessionId)
+    if not ctxt.sender then return end
+    local session = M.sessions[sessionId]
+    if not session or session.state ~= "LOBBY" or session.starterID ~= ctxt.senderID then return end
+    local leader = session.participants[ctxt.senderID]
+    if leader then leader.ready = true end
+    utils_async.removeTask("BJHunterGrid-" .. session.id .. "-gridTimeout")
+    onGridTimeout(session.id)
+end
+
 ---@param ctxt BJSContext
 ---@param opts table? see BJHunterSessionSettings for every overridable field
 local function hunterStart(ctxt, opts)
@@ -1217,6 +1231,7 @@ end
 
 local function onInit()
     communications_rx.addHandler("hunterStart", M.hunterStart)
+    communications_rx.addHandler("hunterStartNow", M.hunterStartNow)
     communications_rx.addHandler("hunterJoin", M.hunterJoin)
     communications_rx.addHandler("hunterLeave", M.hunterLeave)
     communications_rx.addHandler("hunterCancel", M.hunterCancel)
@@ -1276,6 +1291,9 @@ M.onInit = onInit
 M.onPlayerDisconnect = onPlayerDisconnect
 
 M.hunterStart = hunterStart
+M.hunterStartNow = hunterStartNow
+M.findSessionByParticipant = findSessionByParticipant
+M.summarize = summarize
 M.hunterJoin = hunterJoin
 M.hunterLeave = hunterLeave
 M.hunterCancel = hunterCancel

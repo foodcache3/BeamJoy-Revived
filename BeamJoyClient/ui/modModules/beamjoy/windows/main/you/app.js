@@ -2,11 +2,17 @@
 // standings, and personal shortcuts (nametags, start a vote, change nickname, welcome screen).
 angular.module("beamjoy").component("bjMainYou", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/you/app.html",
-    controller: function ($rootScope, $scope, $filter, beamjoyStore) {
+    controller: function ($rootScope, $scope, $filter, $interval, beamjoyStore) {
         const translate = $filter("translate");
         const offs = [];
         const on = (event, fn) => offs.push($rootScope.$on(event, fn));
-        $scope.$on("$destroy", () => offs.forEach((off) => off()));
+        // standings move : ask again every 15 s while shown, and when a delivery just finished
+        const refresh = $interval(() => beamjoyStore.send("BJDeliveryLeaderboardRequest"), 15000);
+        on("BJDeliveryResults", () => beamjoyStore.send("BJDeliveryLeaderboardRequest"));
+        $scope.$on("$destroy", () => {
+            offs.forEach((off) => off());
+            $interval.cancel(refresh);
+        });
 
         this.carLabel = () => {
             const store = beamjoyStore.players;
@@ -49,7 +55,15 @@ angular.module("beamjoy").component("bjMainYou", {
         this.startVote = () => $rootScope.$broadcast("BJMainOpenPanel", "vote");
         this.changeNickname = () => $rootScope.$broadcast("BJLoginShow", { change: true });
         this.welcome = () => beamjoyStore.send("BJOpenIntroPanel");
+        // only when the host has the welcome screen turned on (Config > Welcome screen)
+        this.welcomeEnabled = false;
+        on("BJSendIntroPanelData", (_, data) => {
+            this.welcomeEnabled = !!(data && data.settings && data.settings.enabled);
+        });
 
-        this.$onInit = () => beamjoyStore.send("BJDeliveryLeaderboardRequest");
+        this.$onInit = () => {
+            beamjoyStore.send("BJDeliveryLeaderboardRequest");
+            beamjoyStore.send("BJRequestIntroPanelData");
+        };
     },
 });

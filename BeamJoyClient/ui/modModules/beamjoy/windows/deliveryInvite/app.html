@@ -1,10 +1,8 @@
 <style>
+    /* drawn inside the notification stack (windows/notices), which places it */
     #beamjoy-delivery-invite {
-        position: fixed;
-        right: 1vw;
-        top: 2vh;
-        z-index: 7;
-        width: min(25em, 92vw);
+        width: 100%;
+        pointer-events: auto;
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
@@ -71,13 +69,13 @@
     }
 </style>
 
-<section id="beamjoy-delivery-invite" class="bj-dlv" ng-if="$ctrl.open" ng-class="{focused: $ctrl.i.padActive, dimmed: $ctrl.dimmed()}" ng-style="$ctrl.position()"
+<section id="beamjoy-delivery-invite" class="bj-dlv" ng-if="$ctrl.open" ng-class="{focused: $ctrl.i.padActive, dimmed: $ctrl.dimmed()}"
     aria-label="{{'beamjoy.delivery.invite.label' | translate}}">
     <h2>{{$ctrl.heading()}}</h2>
     <p>{{$ctrl.body()}}</p>
     <div class="bar" role="timer"><div ng-style="{width: $ctrl.progress()}"></div></div>
     <div class="focus-hint" ng-if="!$ctrl.i.padActive">
-        <span class="dlv-glyph wide" aria-hidden="true">RB + X</span>{{'beamjoy.delivery.invite.focusHint' | translate}}
+        <span class="dlv-glyph wide" aria-hidden="true">{{$root.bjFocusLabel || 'RB + X'}}</span>{{'beamjoy.delivery.invite.focusHint' | translate}}
     </div>
     <div class="actions">
         <button type="button" class="dlv-btn" ng-click="$ctrl.decline()">

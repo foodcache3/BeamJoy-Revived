@@ -141,6 +141,10 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJRaceSetGridSlot", M.setGridSlot)
     beamjoy_communications_ui.addHandler("BJRaceLeave", M.leave)
     beamjoy_communications_ui.addHandler("BJRaceCancel", M.cancel)
+    -- the leader starts now with whoever is ready (services/raceGrid.lua)
+    beamjoy_communications_ui.addHandler("BJRaceStartNow", function()
+        if M.session then beamjoy_communications.send("raceStartNow", M.session.id) end
+    end)
     beamjoy_communications_ui.addHandler("BJRaceRetire", M.retire)
     beamjoy_communications_ui.addHandler("BJRaceSpectate", M.spectateSession)
     beamjoy_communications_ui.addHandler("BJRaceStopSpectate", M.stopSpectating)
@@ -1461,6 +1465,8 @@ local function pushSessionStatus()
         isStarter = starter and starter.playerName == participant.playerName,
         -- the lobby panel marks the leader with a crown
         starterID = M.session.starterID,
+        -- invite only, never listed (see services/raceGrid.lua raceStart)
+        private = M.session.private == true,
         -- lets the status panel hide "Retire" once already retired/finished, instead of letting
         -- the player click a no-op button (raceDNF already silently guards against it server-side,
         -- this is purely so the UI doesn't look actionable when it isn't anymore)
@@ -1990,8 +1996,8 @@ local function onSessionsList(list)
             -- durationSecs was previously omitted entirely, which uiBroadcast/BJHUDText both
             -- treat as "infinite" (no auto-hide timer gets scheduled at all). The ping just sat
             -- on screen forever until some other broadcast happened to overwrite it
-            beamjoy_communications_ui.uiBroadcast("beamjoy.race.newJoinableSession",
-                { raceName = s.raceName, starterName = s.starterName }, nil, 4)
+            -- the notification stack beside the main window (beamjoy/notices.lua), with Join
+            if beamjoy_notices then beamjoy_notices.announce("race", s) end
         end
     end)
 

@@ -42,140 +42,99 @@
     }
 </style>
 
-<div class="status-panel" ng-if="$ctrl.status">
-    <div class="d-flex align-center gap-1 mb-1">
-        <b class="flex-grow-1">{{'beamjoy.window.main.tabs.hunter.title' | translate}}</b>
-        <span
-            class="opacity-70"
-            ng-if="!($ctrl.status.state === 'COUNTDOWN' && ($ctrl.countdownSeconds !== null || $ctrl.countdownWaiting || $ctrl.countdownChoosingOwn)) &&
-                   !($ctrl.status.state === 'LOBBY' && $ctrl.allReady && $ctrl.status.gridReadySecondsLeft != null)"
-        >
-            {{('beamjoy.window.main.tabs.hunter.states.' + $ctrl.status.state) | translate}}
-        </span>
-        <span class="opacity-70" ng-if="$ctrl.status.state === 'COUNTDOWN' && $ctrl.countdownChoosingOwn">
-            {{'beamjoy.window.hunterCountdown.chooseVehicle' | translate}}
-        </span>
-        <span class="opacity-70" ng-if="$ctrl.status.state === 'COUNTDOWN' && $ctrl.countdownWaiting && !$ctrl.countdownChoosingOwn">
-            {{'beamjoy.window.main.tabs.hunter.selectingVehicles' | translate}}
-        </span>
-        <span class="countdown-badge" ng-if="$ctrl.status.state === 'COUNTDOWN' && $ctrl.countdownSeconds !== null">
-            {{'beamjoy.window.main.tabs.hunter.startingIn' | translate}} {{$ctrl.countdownSeconds}}s
-        </span>
-        <span
-            class="countdown-badge"
-            ng-if="$ctrl.status.state === 'LOBBY' && $ctrl.allReady && $ctrl.status.gridReadySecondsLeft != null"
-        >
-            {{'beamjoy.window.main.tabs.hunter.startingIn' | translate}} {{$ctrl.status.gridReadySecondsLeft}}s
-        </span>
+<!-- IN A GAME : the lobby, the countdown or the game itself (same layout as the race and convoy
+     lobbies) -->
+<section class="bjr-lobby" ng-if="$ctrl.status" aria-label="{{'beamjoy.window.main.tabs.hunter.title' | translate}}">
+    <header class="lobby-head">
+        <div>
+            <h3 class="bjr-title">{{'beamjoy.window.main.tabs.hunter.title' | translate}}</h3>
+            <span class="bjr-muted">{{$ctrl.lobbyLine()}}</span>
+        </div>
+        <div class="lobby-timer" role="timer" ng-if="$ctrl.lobbyTimer()">
+            <span class="bjr-muted">{{$ctrl.lobbyTimer().label | translate}}</span>
+            <span class="value">{{$ctrl.lobbyTimer().value}}</span>
+        </div>
+        <div class="lobby-timer" ng-if="!$ctrl.lobbyTimer() && $ctrl.status.state !== 'LOBBY'">
+            <span class="bjr-muted">{{('beamjoy.window.main.tabs.hunter.states.' + $ctrl.status.state) | translate}}</span>
+        </div>
+    </header>
+
+    <div class="chips" ng-if="$ctrl.status.role || $ctrl.status.state === 'LOBBY'">
+        <span class="bjr-chip" ng-if="$ctrl.status.role">{{'beamjoy.window.main.tabs.hunter.yourRole' | translate}} {{('beamjoy.window.hunterHud.role.' + $ctrl.status.role) | translate}}</span>
+        <span class="bjr-chip" ng-if="!$ctrl.status.role && $ctrl.status.state === 'LOBBY'">{{'beamjoy.window.main.tabs.hunter.roleUndecided' | translate}}</span>
     </div>
-    <div
-        class="opacity-70 small mb-1"
-        ng-if="$ctrl.status.state === 'LOBBY' && !$ctrl.allReady && $ctrl.status.gridTimeoutSecondsLeft != null"
-    >
-        {{'beamjoy.window.main.tabs.hunter.lobbyClosesIn' | translate}} {{$ctrl.status.gridTimeoutSecondsLeft}}s
-    </div>
-    <div class="d-flex align-center gap-1 mb-1" ng-if="$ctrl.status.role">
-        <span class="opacity-70">{{'beamjoy.window.main.tabs.hunter.yourRole' | translate}}</span>
-        <b ng-class="{'role-hunted': $ctrl.status.role === 'hunted'}">
-            {{('beamjoy.window.hunterHud.role.' + $ctrl.status.role) | translate}}
-        </b>
-    </div>
-    <div
-        class="opacity-70 small mb-1"
-        ng-if="!$ctrl.status.role && $ctrl.status.state === 'LOBBY'"
-    >
-        {{'beamjoy.window.main.tabs.hunter.roleUndecided' | translate}}
-    </div>
-    <div ng-if="$ctrl.status.state === 'FINISHED' && $ctrl.status.winner" class="mb-1">
-        <b>{{('beamjoy.window.main.tabs.hunter.winner.' + $ctrl.status.winner) | translate}}</b>
-    </div>
-    <div
-        class="opacity-70 small cursor-pointer"
-        ng-click="$ctrl.togglePlayers($event)"
-    >
-        {{$ctrl.status.participantCount}}/{{$ctrl.status.maxParticipants}}
-        {{'beamjoy.window.main.tabs.hunter.joined' | translate}}
-    </div>
-    <div class="player-list" ng-if="$ctrl.showPlayers">
-        <div ng-repeat="p in $ctrl.status.participants" class="d-flex align-center gap-1">
-            <span class="flex-grow-1" ng-class="{'role-hunted': p.role === 'hunted'}">
-                {{p.displayName || p.playerName}}
-                <span ng-if="p.vehicleModel" class="small opacity-70">({{p.vehicleModel}})</span>
+    <p class="note" ng-if="$ctrl.status.state === 'COUNTDOWN' && $ctrl.countdownChoosingOwn">{{'beamjoy.window.hunterCountdown.chooseVehicle' | translate}}</p>
+    <p class="note" ng-if="$ctrl.status.state === 'COUNTDOWN' && $ctrl.countdownWaiting && !$ctrl.countdownChoosingOwn">{{'beamjoy.window.main.tabs.hunter.selectingVehicles' | translate}}</p>
+    <p class="note" ng-if="$ctrl.status.state === 'FINISHED' && $ctrl.status.winner"><b>{{('beamjoy.window.main.tabs.hunter.winner.' + $ctrl.status.winner) | translate}}</b></p>
+
+    <ol class="slots" ng-if="!$ctrl.inviting && $ctrl.status.state !== 'FINISHED'">
+        <li ng-repeat="slot in $ctrl.slots track by slot.key" ng-class="{open: slot.open}">
+            <span class="num">{{slot.num}}</span>
+            <span class="who" ng-if="!slot.open">
+                <span class="n" ng-class="{'role-hunted': slot.player.role === 'hunted'}">
+                    <svg ng-if="$ctrl.isLeader(slot.player)" role="img" aria-label="{{'beamjoy.window.main.tabs.races.leader' | translate}}"
+                        width="14" height="14" viewBox="0 0 16 16" fill="#ffc768" style="flex-shrink: 0">
+                        <title>{{'beamjoy.window.main.tabs.races.leader' | translate}}</title>
+                        <path d="M2 5.5l3.2 2.6L8 3l2.8 5.1L14 5.5l-1.3 7H3.3L2 5.5z"></path>
+                    </svg>
+                    {{slot.player.displayName || slot.player.playerName}}
+                </span>
+                <span class="bjr-muted" ng-if="slot.player.vehicleModel">{{slot.player.vehicleModel}}</span>
             </span>
-            <span ng-if="p.ready" class="ready">✓</span>
-            <button
-                class="btn info force-role-btn"
-                ng-if="$ctrl.isStaff() && p.role !== 'hunted' && $ctrl.status.state !== 'HUNT' && $ctrl.status.state !== 'FINISHED'"
-                ng-click="$ctrl.forceFugitive($event, p)"
-                title="{{'beamjoy.window.main.tabs.hunter.forceFugitive.tooltip' | translate}}"
-            >
-                <icon name="focus"></icon>
-            </button>
-        </div>
-    </div>
-    <div
-        class="opacity-70 small cursor-pointer"
-        ng-click="$ctrl.toggleSettings($event)"
-        ng-if="$ctrl.status.settings"
-    >
-        {{'beamjoy.window.main.tabs.hunter.sessionSettings' | translate}}
-    </div>
-    <div class="player-list" ng-if="$ctrl.showSettings && $ctrl.status.settings">
-        <div class="d-flex align-center gap-1">
-            <span class="flex-grow-1 opacity-70">{{'beamjoy.window.config.tabs.hunterArena.huntedVehiclePool' | translate}}</span>
-            <span>{{$ctrl.status.settings.huntedVehicleLabel || ('beamjoy.window.config.tabs.hunterArena.vehiclePool.none' | translate)}}</span>
-        </div>
-        <div class="d-flex align-center gap-1">
-            <span class="flex-grow-1 opacity-70">{{'beamjoy.window.config.tabs.hunterArena.huntersVehiclePool' | translate}}</span>
-            <span>{{$ctrl.status.settings.huntersVehicleLabel || ('beamjoy.window.config.tabs.hunterArena.vehiclePool.none' | translate)}}</span>
-        </div>
-        <div class="d-flex align-center gap-1" ng-if="$ctrl.status.settings.huntedVehicleLabel || $ctrl.status.settings.huntersVehicleLabel">
-            <span class="flex-grow-1 opacity-70">{{'beamjoy.window.config.tabs.hunterArena.randomizeVehiclePool' | translate}}</span>
-            <span>{{(($ctrl.status.settings.randomizeVehiclePool ? 'beamjoy.common.enabled' : 'beamjoy.common.disabled')) | translate}}</span>
-        </div>
-        <div class="d-flex align-center gap-1">
-            <span class="flex-grow-1 opacity-70">{{'beamjoy.window.config.tabs.hunterArena.winCondition' | translate}}</span>
-            <span ng-if="$ctrl.status.settings.winCondition !== 'timed'">
-                {{'beamjoy.window.config.tabs.hunterArena.waypointCount' | translate}}: {{$ctrl.status.settings.waypointCount}}
+            <span class="who" ng-if="slot.open">
+                <span class="n">{{'beamjoy.window.main.tabs.races.openSlot' | translate}}</span>
+                <span class="bjr-muted">{{'beamjoy.window.main.tabs.races.openSlotDetail' | translate}}</span>
             </span>
-            <span ng-if="$ctrl.status.settings.winCondition === 'timed'">
-                {{'beamjoy.window.config.tabs.hunterArena.winCondition.options.timed' | translate}}: {{$ctrl.status.settings.timedModeDuration}}m
+            <span style="display: flex; align-items: center; gap: 0.3em" ng-if="!slot.open">
+                <button type="button" class="bjr-btn small ghost" ng-if="$ctrl.isStaff() && slot.player.role !== 'hunted' && $ctrl.status.state !== 'HUNT' && $ctrl.status.state !== 'FINISHED'"
+                    ng-click="$ctrl.forceFugitive($event, slot.player)" title="{{'beamjoy.window.main.tabs.hunter.forceFugitive.tooltip' | translate}}">
+                    {{'beamjoy.window.main.tabs.hunter.forceFugitive.tooltip' | translate}}
+                </button>
+                <span class="bjr-chip" ng-class="{ready: $ctrl.isReady(slot.player)}" ng-if="$ctrl.status.state === 'LOBBY'">
+                    {{($ctrl.isReady(slot.player) ? 'beamjoy.window.main.tabs.races.ready' : 'beamjoy.window.main.tabs.races.unready') | translate}}
+                </span>
             </span>
-        </div>
-        <div class="d-flex align-center gap-1">
-            <span class="flex-grow-1 opacity-70">{{'beamjoy.window.config.tabs.hunterArena.huntersRespawnDelay' | translate}}</span>
-            <span>{{$ctrl.status.settings.huntersRespawnDelay}}s ({{('beamjoy.window.config.tabs.hunterArena.hunterRespawnStrategy.options.' + $ctrl.status.settings.hunterRespawnStrategy) | translate}})</span>
-        </div>
-        <div class="d-flex align-center gap-1">
-            <span class="flex-grow-1 opacity-70">{{'beamjoy.window.config.tabs.hunterArena.huntedResetDistanceThreshold' | translate}}</span>
-            <span>{{$ctrl.status.settings.huntedResetDistanceThreshold}}m</span>
-        </div>
-        <div class="d-flex align-center gap-1">
-            <span class="flex-grow-1 opacity-70">{{'beamjoy.window.config.tabs.hunterArena.revealProximityDistance' | translate}}</span>
-            <span>{{$ctrl.status.settings.revealProximityDistance}}m</span>
-        </div>
-    </div>
-    <div class="d-flex gap-1 mt-2">
-        <button
-            class="btn"
-            ng-class="{success: !$ctrl.status.ready, warning: $ctrl.status.ready}"
-            ng-if="$ctrl.status.state === 'LOBBY'"
-            ng-click="$ctrl.setReady($event, !$ctrl.status.ready)"
-        >
-            {{($ctrl.status.ready ? 'beamjoy.window.main.tabs.hunter.readyOff' : 'beamjoy.window.main.tabs.hunter.readyOn') | translate}}
+            <span class="bjr-chip" ng-if="slot.open" style="background: transparent">{{'beamjoy.window.main.tabs.races.open' | translate}}</span>
+        </li>
+    </ol>
+
+    <bj-lobby-invite ng-if="$ctrl.inviting" kind="hunter" on-back="$ctrl.setInviting(false)"></bj-lobby-invite>
+
+    <div class="controls" ng-if="!$ctrl.inviting" aria-label="{{'beamjoy.delivery.controls' | translate}}">
+        <button type="button" class="bjr-btn primary" data-pad-a ng-if="$ctrl.status.state === 'LOBBY'"
+            ng-click="$ctrl.setReady($event, !$ctrl.status.ready)">
+            {{($ctrl.status.ready ? 'beamjoy.window.main.tabs.races.imNotReady' : 'beamjoy.window.main.tabs.races.imReady') | translate}}
         </button>
-        <button
-            class="btn danger"
-            ng-if="$ctrl.status.isStarter"
-            ng-click="$ctrl.cancelSession($event)"
-        >
+        <button type="button" class="bjr-btn" data-pad-y ng-if="$ctrl.status.state === 'LOBBY'"
+            ng-disabled="!$ctrl.status.isStarter" ng-click="$ctrl.startNow($event)">
+            <span class="bjr-glyph" aria-hidden="true">Y</span>{{'beamjoy.delivery.lobby.startNow' | translate}}
+        </button>
+        <button type="button" class="bjr-btn" data-pad-x ng-if="$ctrl.status.state === 'LOBBY'" ng-click="$ctrl.setInviting(true)">
+            <span class="bjr-glyph" aria-hidden="true">X</span>{{'beamjoy.delivery.lobby.invitePlayer' | translate}}
+        </button>
+        <button type="button" class="bjr-btn danger" ng-if="$ctrl.status.isStarter" ng-click="$ctrl.cancelSession($event)">
             {{'beamjoy.common.cancel' | translate}}
         </button>
-        <button class="btn warning" ng-click="$ctrl.leaveSession($event)">
+        <button type="button" class="bjr-btn ghost" ng-click="$ctrl.leaveSession($event)">
             {{'beamjoy.window.main.tabs.hunter.leave' | translate}}
         </button>
     </div>
-</div>
+
+    <div class="extras" ng-if="!$ctrl.inviting && $ctrl.status.settings">
+        <button type="button" class="bjr-btn small ghost" ng-click="$ctrl.toggleSettings($event)" aria-expanded="{{$ctrl.showSettings}}">
+            {{'beamjoy.window.main.tabs.hunter.sessionSettings' | translate}} {{$ctrl.showSettings ? '▲' : '▼'}}
+        </button>
+    </div>
+    <div class="bjr-card" ng-if="!$ctrl.inviting && $ctrl.showSettings && $ctrl.status.settings">
+        <div class="bjr-toggle-row"><span class="bjr-muted">{{'beamjoy.window.config.tabs.hunterArena.huntedVehiclePool' | translate}}</span><span>{{$ctrl.status.settings.huntedVehicleLabel || ('beamjoy.window.config.tabs.hunterArena.vehiclePool.none' | translate)}}</span></div>
+        <div class="bjr-toggle-row"><span class="bjr-muted">{{'beamjoy.window.config.tabs.hunterArena.huntersVehiclePool' | translate}}</span><span>{{$ctrl.status.settings.huntersVehicleLabel || ('beamjoy.window.config.tabs.hunterArena.vehiclePool.none' | translate)}}</span></div>
+        <div class="bjr-toggle-row" ng-if="$ctrl.status.settings.huntedVehicleLabel || $ctrl.status.settings.huntersVehicleLabel"><span class="bjr-muted">{{'beamjoy.window.config.tabs.hunterArena.randomizeVehiclePool' | translate}}</span><span>{{(($ctrl.status.settings.randomizeVehiclePool ? 'beamjoy.common.enabled' : 'beamjoy.common.disabled')) | translate}}</span></div>
+        <div class="bjr-toggle-row"><span class="bjr-muted">{{'beamjoy.window.config.tabs.hunterArena.winCondition' | translate}}</span><span><span ng-if="$ctrl.status.settings.winCondition !== 'timed'">{{'beamjoy.window.config.tabs.hunterArena.waypointCount' | translate}}: {{$ctrl.status.settings.waypointCount}}</span><span ng-if="$ctrl.status.settings.winCondition === 'timed'">{{'beamjoy.window.config.tabs.hunterArena.winCondition.options.timed' | translate}}: {{$ctrl.status.settings.timedModeDuration}}m</span></span></div>
+        <div class="bjr-toggle-row"><span class="bjr-muted">{{'beamjoy.window.config.tabs.hunterArena.huntersRespawnDelay' | translate}}</span><span>{{$ctrl.status.settings.huntersRespawnDelay}}s ({{('beamjoy.window.config.tabs.hunterArena.hunterRespawnStrategy.options.' + $ctrl.status.settings.hunterRespawnStrategy) | translate}})</span></div>
+        <div class="bjr-toggle-row"><span class="bjr-muted">{{'beamjoy.window.config.tabs.hunterArena.huntedResetDistanceThreshold' | translate}}</span><span>{{$ctrl.status.settings.huntedResetDistanceThreshold}}m</span></div>
+        <div class="bjr-toggle-row"><span class="bjr-muted">{{'beamjoy.window.config.tabs.hunterArena.revealProximityDistance' | translate}}</span><span>{{$ctrl.status.settings.revealProximityDistance}}m</span></div>
+    </div>
+</section>
 
 <div ng-if="!$ctrl.status">
     <div class="d-flex align-center gap-1 mb-1">

@@ -8,10 +8,12 @@ await import(`/ui/modModules/beamjoy/windows/main/now/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/vote/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/you/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/leaderboards/app.js`);
+await import(`/ui/modModules/beamjoy/windows/main/lobbyInvite/app.js`);
 
-// Main window, redesigned (edge rail). A slim rail sits on the right edge of the screen ; each of
-// its buttons opens a small panel beside it (Happening now, Activities, Players, Vote, Settings),
-// and "Full" opens the big window with the same content in tabs. Mockups (revision 3 page):
+// Main window, redesigned (edge rail). A slim rail (right edge by default, draggable by its logo
+// anywhere on screen) ; each of its buttons opens a small panel beside it, on the side away from
+// the screen edge (Happening now, Activities, Players, Vote, Settings), and "Full" opens the big
+// window with the same content in tabs. Mockups (revision 3 page):
 // https://claude.ai/artifact/CGvMdFLWjZdj1J2nTNe18C. Visibility still comes from
 // communications/ui.lua (BJUpdateWindowSettings "beamjoy-main") : when it's forced open (staff,
 // or the host's ForceHud) the rail can't be hidden, otherwise the F4 menu toggles it and the
@@ -48,10 +50,17 @@ angular.module("beamjoy").component("bjMain", {
             beamjoyStore.send("BJCloseWindow", ["main"]);
         };
 
-        // a second press on the open panel's button closes it
+        // a second press on the open panel's button closes it. Opening one with the mouse also
+        // hands the pad over (from that rail button) until the panel closes again
         this.togglePanel = (id) => {
             this.full = false;
             this.panel = this.panel === id ? null : id;
+            if (this.panel && !this.pad) beamjoyStore.send("BJMainPadFocus", [this.panel]);
+        };
+        this.clickFull = () => {
+            if (this.full) return this.shrink();
+            this.openFull();
+            if (!this.pad) beamjoyStore.send("BJMainPadFocus", ["full"]);
         };
         this.openFull = (tab) => {
             this.fullTab = tab || this.fullFor(this.panel);
@@ -88,6 +97,27 @@ angular.module("beamjoy").component("bjMain", {
                 if (section) {
                     $rootScope.bjMainActivitiesSection = section;
                     $rootScope.$broadcast("BJMainActivitiesSection", section);
+                }
+            });
+        });
+        // something needs the screen (a bus line's vehicle picker) : close the menu, let go of the pad
+        $rootScope.$on("BJMainClose", () => {
+            $rootScope.$applyAsync(() => {
+                this.panel = null;
+                this.full = false;
+                if (this.pad) this.releasePad();
+            });
+        });
+        // a player row's Moderate button (side panel, Home) : the full Players tab, that player open
+        $rootScope.$on("BJMainModerate", (_, playerName) => {
+            $rootScope.$applyAsync(() => {
+                $rootScope.bjPlayersExpand = playerName;
+                this.panel = null;
+                this.full = true;
+                this.fullTab = "players";
+                if (this.pad) {
+                    this.padLevel = "full";
+                    enterContent();
                 }
             });
         });
@@ -149,7 +179,7 @@ angular.module("beamjoy").component("bjMain", {
         const PAD_CLASS = "bjr-pad-focus";
         const PANEL_IDS = ["now", "play", "players", "vote", "settings"];
         const SELECTOR =
-            'button, a[href], input[type="range"], input[type="text"], input[type="number"], [ng-click]';
+            'button, a[href], input[type="range"], input[type="text"], input[type="number"], md-select, [ng-click]';
         let padEl = null;
 
         const root = () => $element[0];
@@ -161,6 +191,8 @@ angular.module("beamjoy").component("bjMain", {
             if (padEl) {
                 padEl.classList.add(PAD_CLASS);
                 if (padEl.scrollIntoView) padEl.scrollIntoView({ block: "nearest" });
+                // lets a list follow the cursor (the Jobs depot table selects the focused row)
+                padEl.dispatchEvent(new CustomEvent("bjrpadfocus", { bubbles: true }));
             }
         };
         const container = () =>
@@ -176,10 +208,16 @@ angular.module("beamjoy").component("bjMain", {
         const focusables = () => {
             const c = container();
             if (!c) return [];
+            // a dropdown counts as one target (never its inner parts)
             const all = [...c.querySelectorAll(SELECTOR)].filter(
-                (el) => el.offsetParent !== null && !isDisabled(el)
+                (el) =>
+                    el.offsetParent !== null &&
+                    !isDisabled(el) &&
+                    (el.tagName === "MD-SELECT" || !el.parentElement || !el.parentElement.closest("md-select"))
             );
-            return all.filter((el) => !all.some((other) => other !== el && el.contains(other)));
+            return all.filter(
+                (el) => el.tagName === "MD-SELECT" || !all.some((other) => other !== el && el.contains(other))
+            );
         };
         // the nearest target in a direction : candidates must lie past the current element's
         // edge, and sideways drift costs more than distance ahead, so down from a race's Start
@@ -231,9 +269,59 @@ angular.module("beamjoy").component("bjMain", {
                 const list = focusables();
                 setPadEl(list.find((el) => el.hasAttribute("data-pad-a")) || list[0]);
             }, 60);
+        // a bj-select dropdown under the cursor : step to the previous / next option
+        const cycleSelect = (el, step) => {
+            const host = el.closest("bj-select");
+            const ctrl = host && angular.element(host).controller("bjSelect");
+            const options = (ctrl && ctrl.options) || [];
+            if (options.length === 0) return;
+            const i = options.findIndex((o) => o.value === ctrl.ngModel);
+            const next = options[(Math.max(i, 0) + step + options.length) % options.length];
+            $rootScope.$applyAsync(() => {
+                ctrl.ngModel = next.value;
+                // the parent's copy of the model updates on this digest ; handleChange passes the
+                // new value along itself
+                $timeout(() => ctrl.handleChange());
+            });
+        };
+        const isSelect = (el) => !!el && el.tagName === "MD-SELECT";
+        // A on a dropdown : its options as a list the pad can move through (the dropdown's own
+        // popup renders outside the panel, out of the pad's reach). Up / down pick, A chooses, B
+        // closes ; the mouse works on it too
+        this.picker = null;
+        const openPicker = (el) => {
+            const host = el.closest("bj-select");
+            const ctrl = host && angular.element(host).controller("bjSelect");
+            const options = (ctrl && ctrl.options) || [];
+            if (options.length === 0) return;
+            const r = el.getBoundingClientRect();
+            $rootScope.$applyAsync(() => {
+                this.picker = {
+                    ctrl,
+                    options,
+                    index: Math.max(0, options.findIndex((o) => o.value === ctrl.ngModel)),
+                    style: {
+                        left: `${r.left}px`,
+                        top: `${Math.min(r.bottom + 4, window.innerHeight * 0.6)}px`,
+                        minWidth: `${Math.max(r.width, 200)}px`,
+                    },
+                };
+            });
+        };
+        this.pickOption = (index) => {
+            const p = this.picker;
+            if (!p) return;
+            const option = p.options[index];
+            this.picker = null;
+            if (!option) return;
+            p.ctrl.ngModel = option.value;
+            $timeout(() => p.ctrl.handleChange());
+        };
+        this.closePicker = () => (this.picker = null);
         // ng-click runs its own $apply : press outside of Angular's digest
         const press = (el) => {
             if (!el) return;
+            if (isSelect(el)) return openPicker(el);
             setTimeout(() => {
                 if (el.tagName === "INPUT" && (el.type === "text" || el.type === "number")) {
                     el.focus();
@@ -247,6 +335,10 @@ angular.module("beamjoy").component("bjMain", {
             });
         };
         const nudge = (dir) => {
+            if (isSelect(padEl)) {
+                cycleSelect(padEl, dir);
+                return true;
+            }
             if (!padEl || padEl.tagName !== "INPUT" || (padEl.type !== "range" && padEl.type !== "number")) {
                 return false;
             }
@@ -319,13 +411,27 @@ angular.module("beamjoy").component("bjMain", {
                         $rootScope.bjMainActivitiesSection = data.section;
                         $rootScope.$broadcast("BJMainActivitiesSection", data.section);
                     }
-                    if (data.panel) {
+                    if (data.panel === "full") {
+                        // the rail's Full button, clicked : stay in the full window
+                        this.full = true;
+                        this.padLevel = "full";
+                        enterContent();
+                    } else if (data.panel) {
                         if (this.full && data.panel !== "vote") {
                             this.fullTab = this.fullFor(data.panel);
                             this.padLevel = "full";
                             enterContent();
                         } else {
                             openPanel(data.panel);
+                        }
+                        // the Focus control, or a click on the rail : the cursor starts on the
+                        // panel's rail button
+                        if (data.cursor === "rail" && !this.full) {
+                            $timeout(() => {
+                                setPadEl(null);
+                                this.padLevel = "rail";
+                                this.railCursor = data.panel;
+                            }, 70);
                         }
                     } else if (!wasPad) {
                         // re-sync after a UI reload : keep what's open
@@ -348,6 +454,15 @@ angular.module("beamjoy").component("bjMain", {
             const rising = isRising(name, value);
             if (!this.pad || !rising || !this.visible || beamjoyDelivery.otherNavOwner("main")) return;
             $rootScope.$applyAsync(() => {
+                // a dropdown's list is open : it has the pad
+                if (this.picker) {
+                    const p = this.picker;
+                    if (name === "focus_u") p.index = Math.max(0, p.index - 1);
+                    else if (name === "focus_d") p.index = Math.min(p.options.length - 1, p.index + 1);
+                    else if (name === "ok") this.pickOption(p.index);
+                    else if (name === "back") this.closePicker();
+                    return;
+                }
                 // the panel or full window went away under the cursor (mouse, a finished action)
                 if (this.padLevel === "panel" && !this.panel) toRail();
                 if (this.padLevel === "full" && !this.full) {
@@ -379,6 +494,7 @@ angular.module("beamjoy").component("bjMain", {
                 else if (name === "context") {
                     if (!shortcut("y")) toggleFull();
                 } else if (name === "back") {
+                    if (shortcut("b")) return;
                     if (full) toggleFull();
                     else toRail();
                 } else if (full && name === "tab_l") switchTab(-1);
@@ -387,15 +503,137 @@ angular.module("beamjoy").component("bjMain", {
         });
         $scope.$on("$destroy", offNav);
 
-        // where the rail and its panel are, for notifications that must sit beside them rather
-        // than on top (the convoy invite) : an open panel never moves under your cursor
+        // RAIL POSITION ----------------------------------------------------------------------
+        // Dragged by its logo, remembered per player (localStorage, as fractions of the screen so
+        // it survives a resolution change). The side it's on decides where panels open : towards
+        // the middle of the screen. Default : right edge, low enough to clear the race overlay.
+        const STORE_KEY = "beamjoy.rail.position";
+        const GAP = 12;
+        this.railPos = null;
+        try {
+            const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+            if (saved && typeof saved.x === "number" && typeof saved.y === "number") this.railPos = saved;
+        } catch (e) {
+            // storage can be unavailable in CEF : the default position is fine
+        }
+        const railSize = () => {
+            const rail = root().querySelector(".bjr-rail");
+            return { w: rail ? rail.offsetWidth : 64, h: rail ? rail.offsetHeight : 420 };
+        };
+        this.railRect = () => {
+            const { w, h } = railSize();
+            const W = window.innerWidth;
+            const H = window.innerHeight;
+            let left = this.railPos ? this.railPos.x * W : W - w - W * 0.01;
+            let top = this.railPos ? this.railPos.y * H : H * 0.3;
+            left = Math.max(4, Math.min(W - w - 4, left));
+            top = Math.max(4, Math.min(H - Math.min(h, H - 8) - 4, top));
+            return { left, top, right: left + w, bottom: top + h, width: w };
+        };
+        this.side = () => {
+            const r = this.railRect();
+            return r.left + r.width / 2 < window.innerWidth / 2 ? "left" : "right";
+        };
+        this.railStyle = () => {
+            const r = this.railRect();
+            return { left: `${r.left}px`, top: `${r.top}px` };
+        };
+        this.panelStyle = () => {
+            const r = this.railRect();
+            const style = { top: `${r.top}px`, maxHeight: `calc(100vh - ${r.top}px - 2vh)` };
+            if (this.side() === "left") style.left = `${r.right + GAP}px`;
+            else style.right = `${window.innerWidth - r.left + GAP}px`;
+            return style;
+        };
+        this.fullStyle = () => {
+            const r = this.railRect();
+            return this.side() === "left"
+                ? { left: `${r.right + GAP + 8}px`, right: "6vw" }
+                : { left: "6vw", right: `${window.innerWidth - r.left + GAP + 8}px` };
+        };
+        let drag = null;
+        let lastDown = 0;
+        this.startDrag = (event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            // a second press within 400 ms : back to the default position
+            const now = Date.now();
+            if (now - lastDown < 400) {
+                lastDown = 0;
+                drag = null;
+                return this.resetRail();
+            }
+            lastDown = now;
+            const r = this.railRect();
+            drag = { dx: event.clientX - r.left, dy: event.clientY - r.top, x: event.clientX, y: event.clientY, moved: false };
+        };
+        const onMove = (event) => {
+            if (!drag) return;
+            if (!drag.moved && Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) < 5) return;
+            drag.moved = true;
+            $scope.$applyAsync(() => {
+                this.railPos = {
+                    x: (event.clientX - drag.dx) / window.innerWidth,
+                    y: (event.clientY - drag.dy) / window.innerHeight,
+                };
+            });
+        };
+        const onUp = () => {
+            if (!drag) return;
+            const moved = drag.moved;
+            drag = null;
+            if (!moved) return;
+            try {
+                localStorage.setItem(STORE_KEY, JSON.stringify(this.railPos));
+            } catch (e) {
+                // not remembered this time, still moved
+            }
+        };
+        const onResize = () => $scope.$applyAsync();
+        window.addEventListener("mousemove", onMove);
+        window.addEventListener("mouseup", onUp);
+        window.addEventListener("resize", onResize);
+        $scope.$on("$destroy", () => {
+            window.removeEventListener("mousemove", onMove);
+            window.removeEventListener("mouseup", onUp);
+            window.removeEventListener("resize", onResize);
+        });
+        this.resetRail = () => {
+            this.railPos = null;
+            try {
+                localStorage.removeItem(STORE_KEY);
+            } catch (e) {
+                // nothing stored
+            }
+        };
+
+        // where the rail and its panel are, for the notification stack (windows/notices) : it sits
+        // beside them, never on top of the panel you're using
         const PANEL_WIDTH_EM = { play: 28, settings: 28 };
-        $scope.$watchGroup([() => this.visible, () => this.panel, () => this.full], () => {
+        $scope.$watch(() => {
+            const r = this.railRect();
+            return [this.visible, this.panel, this.full, Math.round(r.left), Math.round(r.top), window.innerWidth].join("|");
+        }, () => {
             $rootScope.bjMainLayout = {
                 rail: !!this.visible,
                 full: !!this.full,
+                side: this.side(),
+                railRect: this.railRect(),
                 panelEm: this.visible && this.panel && !this.full ? PANEL_WIDTH_EM[this.panel] || 22 : 0,
             };
+        });
+
+        // closing the panel (mouse, or its own close button) lets go of the pad it took
+        $scope.$watchGroup([() => this.panel, () => this.full], () => {
+            if (this.pad && !this.panel && !this.full) this.releasePad();
+        });
+        // an activity getting under way (a race counting down, a hunt, a delivery...) : the menu
+        // gets out of the way
+        $scope.$watch(() => beamjoyNow.runningKey(), (key, previous) => {
+            if (!key || key === previous) return;
+            this.panel = null;
+            this.full = false;
+            if (this.pad) this.releasePad();
         });
     },
 });

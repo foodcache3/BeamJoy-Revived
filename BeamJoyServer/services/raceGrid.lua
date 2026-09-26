@@ -502,6 +502,7 @@ end
 --- `summarize`'s own `state` field is what the client uses to tell "Join" apart from "Spectate".
 local function pushOpenSessionsList()
     local visible = M.sessions:filter(function(s)
+        if s.private then return false end
         return (s.state == "GRID" and s.joinable) or
             s.state == "COUNTDOWN" or s.state == "RACE"
     end):map(summarize):values()
@@ -944,7 +945,7 @@ end
 
 -- forward-declared: updateAllReadyState's own rescheduled delayTask (below) needs to call this
 -- from a closure defined lexically before tryStartFromGrid's own definition
-local tryStartFromGrid
+local tryStartFromGrid, onGridTimeout
 
 --- Tracks the moment (server GetCurrentTime() domain) this session's participants most recently
 --- became ALL ready, clearing it again the instant that's no longer true (someone leaves unready,
@@ -983,7 +984,8 @@ end
 tryStartFromGrid = function(session)
     if session.state ~= "GRID" then return end
     updateAllReadyState(session)
-    if not session.joinable then
+    -- a private lobby nobody joined is a solo start
+    if not session.joinable or (session.private and session.participants:length() == 1) then
         -- solo path: starts the instant its lone participant is ready, no grace period
         if session.participants:every(function(p) return p.ready end) then
             beginCountdown(session)
@@ -994,6 +996,38 @@ tryStartFromGrid = function(session)
         GetCurrentTime() - session.allReadyAt >= session.settings.gridReadyTimeout then
         beginCountdown(session)
     end
+end
+
+--- the lobby's time is up (or the leader pressed Start now) : whoever isn't ready is dropped and
+--- the rest go to the countdown
+---@param sessionId string
+onGridTimeout = function(sessionId)
+    local s = M.sessions[sessionId]
+    if not s or s.state ~= "GRID" then return end
+    utils_async.removeTask("BJRaceGrid-" .. s.id .. "-gridTimeout")
+    local kicked = s.participants:filter(function(p) return not p.ready end):values()
+    s.participants = s.participants:filter(function(p) return p.ready end)
+    -- notify anyone kicked for not readying up in time directly. pushSessionUpdate only ever
+    -- reaches current participants, and they're no longer one
+    table.forEach(kicked, function(p)
+        communications_tx.sendToPlayer(p.playerID, "raceSessionRemoved", s.id)
+    end)
+    if s.participants:length() == 0 then
+        return removeSession(s)
+    end
+    beginCountdown(s)
+end
+
+--- the leader starts the race now with everyone who's ready (and is marked ready themselves)
+---@param ctxt BJSContext
+---@param sessionId string
+local function raceStartNow(ctxt, sessionId)
+    if not ctxt.sender then return end
+    local session = M.sessions[sessionId]
+    if not session or session.state ~= "GRID" or session.starterID ~= ctxt.senderID then return end
+    local leader = session.participants[ctxt.senderID]
+    if leader then leader.ready = true end
+    onGridTimeout(session.id)
 end
 
 ---@param ctxt BJSContext
@@ -1041,6 +1075,9 @@ local function raceStart(ctxt, raceId, opts)
         createdAt = ctxt.time,
         participants = Table(),
     }
+    -- a private lobby : joinable by invitation only, never listed (so never announced). While
+    -- nobody else is in it, it behaves like a solo start (see tryStartFromGrid)
+    session.private = session.joinable and opts.private == true
     addParticipant(session, ctxt.senderID, ctxt.sender.playerName)
     M.sessions[session.id] = session
 
@@ -1053,26 +1090,8 @@ local function raceStart(ctxt, raceId, opts)
         -- no readyTimeout task scheduled here anymore: updateAllReadyState (tryStartFromGrid's own
         -- helper) now schedules it dynamically the moment everyone's actually ready, since the
         -- floor is anchored to that moment, not session creation - see its own doc comment
-        utils_async.delayTask(function()
-            print(string.format("[BJ raceGrid] gridTimeout fired for session=%s", session.id))
-            local s = M.sessions[session.id]
-            if not s or s.state ~= "GRID" then
-                print(string.format("[BJ raceGrid] gridTimeout: session gone or not in GRID (state=%s)",
-                    s and s.state or "nil"))
-                return
-            end
-            local kicked = s.participants:filter(function(p) return not p.ready end):values()
-            s.participants = s.participants:filter(function(p) return p.ready end)
-            -- notify anyone kicked for not readying up in time directly. pushSessionUpdate
-            -- only ever reaches current participants, and they're no longer one
-            table.forEach(kicked, function(p)
-                communications_tx.sendToPlayer(p.playerID, "raceSessionRemoved", s.id)
-            end)
-            if s.participants:length() == 0 then
-                return removeSession(s)
-            end
-            beginCountdown(s)
-        end, session.settings.gridTimeout, "BJRaceGrid-" .. session.id .. "-gridTimeout")
+        utils_async.delayTask(function() onGridTimeout(session.id) end,
+            session.settings.gridTimeout, "BJRaceGrid-" .. session.id .. "-gridTimeout")
     end
 
     pushSessionUpdate(session)
@@ -1087,6 +1106,11 @@ local function raceJoin(ctxt, sessionId)
     local session = M.sessions[sessionId]
     if not session or session.state ~= "GRID" or not session.joinable then return end
     if session.participants[ctxt.senderID] then return end
+    -- private lobbies take invited players only
+    if session.private and not (services_lobbyInvites and
+            services_lobbyInvites.isInvited("race", ctxt.senderID, session.id)) then
+        return
+    end
     -- see raceStart's own identical check / findSessionByParticipant's comment. Joining a second
     -- session while already a participant in another one (this one included, already covered by
     -- the check just above, or any other) is what actually isn't allowed. Multiple concurrent
@@ -1531,6 +1555,7 @@ local function onInit()
     communications_rx.addHandler("raceDNF", M.raceDNF)
     communications_rx.addHandler("raceSpectate", M.raceSpectate)
     communications_rx.addHandler("raceStopSpectate", M.raceStopSpectate)
+    communications_rx.addHandler("raceStartNow", M.raceStartNow)
 
     services_chatCommands.addCommand("race", "chat.command.race.desc", M.chatRace,
         { commandKey = "chat.command.race.command" })
@@ -1644,6 +1669,9 @@ M.raceGateCrossed = raceGateCrossed
 M.raceDNF = raceDNF
 M.raceSpectate = raceSpectate
 M.raceStopSpectate = raceStopSpectate
+M.raceStartNow = raceStartNow
+M.findSessionByParticipant = findSessionByParticipant
+M.summarize = summarize
 M.beginRace = beginRace
 M.computeLeaderboard = computeLeaderboard
 M.chatRace = chatRace

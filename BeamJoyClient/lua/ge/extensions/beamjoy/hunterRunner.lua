@@ -385,6 +385,10 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJHunterReady", M.ready)
     beamjoy_communications_ui.addHandler("BJHunterLeave", M.leave)
     beamjoy_communications_ui.addHandler("BJHunterCancel", M.cancel)
+    -- the leader starts now with whoever is ready (services/hunterGrid.lua)
+    beamjoy_communications_ui.addHandler("BJHunterStartNow", function()
+        if M.session then beamjoy_communications.send("hunterStartNow", M.session.id) end
+    end)
     beamjoy_communications_ui.addHandler("BJHunterForceFugitive", M.forceFugitive)
     beamjoy_communications_ui.addHandler("BJHunterSpectate", M.spectateSession)
     beamjoy_communications_ui.addHandler("BJHunterStopSpectate", M.stopSpectating)
@@ -579,6 +583,8 @@ local function pushSessionStatus_impl(session)
         role = participant.role,
         ready = participant.ready,
         isStarter = starter and starter.playerName == participant.playerName,
+        -- the lobby panel marks the leader with a crown
+        starterID = session.starterID,
         eliminated = participant.role == "hunted" and participant.eliminated or nil,
         waypointsReached = participant.role == "hunted" and participant.waypointsReached or nil,
         totalWaypoints = participant.role == "hunted" and session.route and #session.route or nil,
@@ -639,8 +645,7 @@ local function onSessionsList(list)
     local selfName = MPConfig.getNickname()
     table.forEach(list, function(s)
         if not table.includes(previousIds, s.id) and s.starterName ~= selfName then
-            beamjoy_communications_ui.uiBroadcast("beamjoy.hunter.newJoinableSession",
-                { starterName = s.starterName }, nil, 4)
+            if beamjoy_notices then beamjoy_notices.announce("hunter", s) end
         end
     end)
 

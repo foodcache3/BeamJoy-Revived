@@ -466,6 +466,20 @@ local function onGridTimeout(sessionId)
     beginCountdown(session)
 end
 
+--- the leader starts now with everyone who's ready (and is marked ready themselves) ; like the
+--- lobby timing out, the game still needs its minimum player count
+---@param ctxt BJSContext
+---@param sessionId string
+local function infectedStartNow(ctxt, sessionId)
+    if not ctxt.sender then return end
+    local session = M.sessions[sessionId]
+    if not session or session.state ~= "LOBBY" or session.starterID ~= ctxt.senderID then return end
+    local leader = session.participants[ctxt.senderID]
+    if leader then leader.ready = true end
+    utils_async.removeTask("BJInfectedGrid-" .. session.id .. "-gridTimeout")
+    onGridTimeout(session.id)
+end
+
 ---@param ctxt BJSContext
 ---@param opts table? see BJInfectedSessionSettings for every overridable field
 local function infectedStart(ctxt, opts)
@@ -914,6 +928,7 @@ end
 
 local function onInit()
     communications_rx.addHandler("infectedStart", M.infectedStart)
+    communications_rx.addHandler("infectedStartNow", M.infectedStartNow)
     communications_rx.addHandler("infectedJoin", M.infectedJoin)
     communications_rx.addHandler("infectedLeave", M.infectedLeave)
     communications_rx.addHandler("infectedCancel", M.infectedCancel)
@@ -966,6 +981,9 @@ M.onInit = onInit
 M.onPlayerDisconnect = onPlayerDisconnect
 
 M.infectedStart = infectedStart
+M.infectedStartNow = infectedStartNow
+M.findSessionByParticipant = findSessionByParticipant
+M.summarize = summarize
 M.infectedJoin = infectedJoin
 M.infectedLeave = infectedLeave
 M.infectedCancel = infectedCancel

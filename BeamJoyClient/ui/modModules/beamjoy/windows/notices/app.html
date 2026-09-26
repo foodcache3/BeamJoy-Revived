@@ -1,0 +1,147 @@
+<style>
+    #beamjoy-notices {
+        position: fixed;
+        z-index: 7;
+        width: min(25em, 92vw);
+        display: flex;
+        flex-direction: column;
+        gap: 0.5em;
+        pointer-events: none;
+    }
+    #beamjoy-notices .notice {
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 0.55em;
+        padding: 0.9em 1.1em 0.85em;
+        background: rgba(10, 11, 14, 0.82);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 0 0.5em 0.5em 0;
+        box-shadow: inset 3px 0 0 #ff6600;
+        color: #ebebeb;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        pointer-events: auto;
+        transition: opacity 0.2s ease-in-out;
+    }
+    #beamjoy-notices .notice.focused {
+        border-color: rgba(255, 102, 0, 0.6);
+    }
+    #beamjoy-notices .notice.dimmed {
+        opacity: 0.5;
+    }
+    #beamjoy-notices h2 {
+        margin: 0;
+        font-family: "Overpass", sans-serif;
+        font-size: 1.1em;
+        font-weight: 700;
+        white-space: normal;
+    }
+    #beamjoy-notices p {
+        margin: 0;
+        font-size: 0.86em;
+        line-height: 1.5;
+        color: #c8cedc;
+        white-space: normal;
+    }
+    #beamjoy-notices .bar {
+        height: 4px;
+        border-radius: 2px;
+        background: #363a45;
+        overflow: hidden;
+    }
+    #beamjoy-notices .bar div {
+        height: 4px;
+        background: #ff6600;
+        transition: width 0.25s linear;
+    }
+    #beamjoy-notices .foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5em;
+    }
+    #beamjoy-notices .hint {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45em;
+        font-size: 0.8em;
+        color: #979dad;
+    }
+    #beamjoy-notices .key {
+        height: 1.6em;
+        padding: 0 0.45em;
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid #979dad;
+        border-radius: 0.25em;
+        font-family: "Overpass", sans-serif;
+        font-weight: 700;
+        color: #c8cedc;
+    }
+    #beamjoy-notices .actions {
+        display: flex;
+        gap: 0.35em;
+        margin-left: auto;
+    }
+    #beamjoy-notices button {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45em;
+        min-height: 2.3em;
+        padding: 0 0.85em;
+        border: 0;
+        border-radius: 0.25em;
+        background: #363a45;
+        color: #ebebeb;
+        font-family: inherit;
+        font-size: 0.86em;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    #beamjoy-notices button.primary {
+        background: #c24b00;
+        color: #fff;
+    }
+    #beamjoy-notices .glyph {
+        width: 1.5em;
+        height: 1.5em;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: #ebebeb;
+        color: #151820;
+        font-family: "Overpass", sans-serif;
+        font-size: 0.85em;
+        font-weight: 800;
+    }
+    #beamjoy-notices button.primary .glyph {
+        background: #fff;
+        color: #a54106;
+    }
+</style>
+
+<div id="beamjoy-notices" ng-style="$ctrl.position()" aria-live="polite">
+    <bj-delivery-invite></bj-delivery-invite>
+
+    <section class="notice" ng-repeat="n in $ctrl.items track by n.id"
+        ng-class="{focused: $ctrl.padActive && $first, dimmed: $ctrl.dimmed()}"
+        aria-label="{{$ctrl.heading(n)}}">
+        <h2>{{$ctrl.heading(n)}}</h2>
+        <p ng-if="$ctrl.body(n)">{{$ctrl.body(n)}}</p>
+        <div class="bar" role="timer"><div ng-style="{width: $ctrl.progress(n)}"></div></div>
+        <div class="foot">
+            <span class="hint" ng-if="$first && !$ctrl.padActive">
+                <span class="key" aria-hidden="true">{{$root.bjFocusLabel || 'RB + X'}}</span>{{'beamjoy.notices.focusHint' | translate}}
+            </span>
+            <span class="actions">
+                <button type="button" ng-click="$ctrl.reply(n, false)">
+                    <span class="glyph" aria-hidden="true" ng-if="$ctrl.padActive && $first">B</span>{{'beamjoy.notices.dismiss' | translate}}
+                </button>
+                <button type="button" class="primary" ng-click="$ctrl.reply(n, true)">
+                    <span class="glyph" aria-hidden="true" ng-if="$ctrl.padActive && $first">A</span>{{'beamjoy.notices.join' | translate}}
+                </button>
+            </span>
+        </div>
+    </section>
+</div>

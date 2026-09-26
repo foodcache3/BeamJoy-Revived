@@ -75,21 +75,6 @@
                 ></bj-toggle>
             </div>
         </td>
-        <td
-            class="d-flex align-center"
-            ng-hide="$ctrl.settings.nametags.hideNameTags"
-        >
-            {{ "beamjoy.common.preview" | translate }}
-            <div
-                class="nametag-preview w-fitcontent"
-                ng-style="{
-                backgroundColor: $ctrl.settings.nametags.playerBgColor,
-                color: $ctrl.settings.nametags.playerColor,
-            }"
-            >
-                Joel123
-            </div>
-        </td>
     </tr>
     <tr>
         <td>
@@ -164,22 +149,6 @@
                 ></bj-toggle>
             </div>
         </td>
-        <td
-            class="d-flex align-center"
-            ng-hide="$ctrl.settings.nametags.hideNameTags || !$ctrl.settings.nametags.nameTagFadeEnabled || !$ctrl.settings.nametags.nameTagDontFullyHide"
-        >
-            {{ "beamjoy.common.preview" | translate }}
-            <div
-                class="nametag-preview w-fitcontent"
-                ng-style="{
-                backgroundColor: $ctrl.settings.nametags.playerBgColor,
-                color: $ctrl.settings.nametags.playerColor,
-                opacity: .3
-            }"
-            >
-                Joel123
-            </div>
-        </td>
     </tr>
     <tr>
         <td>
@@ -197,24 +166,6 @@
                     ng-model="$ctrl.settings.nametags.shortenNametags"
                     disabled="$ctrl.settings.nametags.hideNameTags"
                 ></bj-toggle>
-            </div>
-        </td>
-        <td
-            class="d-flex align-center"
-            ng-hide="$ctrl.settings.nametags.hideNameTags"
-        >
-            {{ "beamjoy.common.preview" | translate }}
-            <div
-                class="nametag-preview w-fitcontent"
-                ng-style="{
-                backgroundColor: $ctrl.settings.nametags.playerBgColor,
-                color: $ctrl.settings.nametags.playerColor,
-            }"
-            >
-                {{ $ctrl.settings.nametags.shortenNametags ?
-                "StarryNebulaSkyx0".slice(0,
-                $ctrl.settings.nametags.nametagCharLimit)+"..." :
-                "StarryNebulaSkyx0" }}
             </div>
         </td>
     </tr>
@@ -315,21 +266,6 @@
                 ></bj-color-picker>
             </div>
         </td>
-        <td
-            class="d-flex align-center"
-            ng-hide="$ctrl.settings.nametags.hideNameTags"
-        >
-            {{ "beamjoy.common.preview" | translate }}
-            <div
-                class="nametag-preview w-fitcontent"
-                ng-style="{
-                backgroundColor: $ctrl.settings.nametags.playerBgColor,
-                color: $ctrl.settings.nametags.playerColor,
-            }"
-            >
-                Joel123
-            </div>
-        </td>
     </tr>
     <tr>
         <td>
@@ -378,21 +314,6 @@
                 ></bj-color-picker>
             </div>
         </td>
-        <td
-            class="d-flex align-center"
-            ng-hide="$ctrl.settings.nametags.hideNameTags"
-        >
-            {{ "beamjoy.common.preview" | translate }}
-            <div
-                class="nametag-preview w-fitcontent"
-                ng-style="{
-                backgroundColor: $ctrl.settings.nametags.idleBgColor,
-                color: $ctrl.settings.nametags.idleColor,
-            }"
-            >
-                Joel123
-            </div>
-        </td>
     </tr>
     <tr>
         <td>
@@ -439,21 +360,6 @@
                     ng-model="$ctrl.settings.nametags.specColor"
                     disabled="$ctrl.settings.nametags.hideNameTags || !$ctrl.settings.nametags.showSpectators"
                 ></bj-color-picker>
-            </div>
-        </td>
-        <td
-            class="d-flex align-center"
-            ng-hide="$ctrl.settings.nametags.hideNameTags || !$ctrl.settings.nametags.showSpectators"
-        >
-            {{ "beamjoy.common.preview" | translate }}
-            <div
-                class="nametag-preview w-fitcontent"
-                ng-style="{
-                backgroundColor: $ctrl.settings.nametags.specBgColor,
-                color: $ctrl.settings.nametags.specColor,
-            }"
-            >
-                Joel123
             </div>
         </td>
     </tr>

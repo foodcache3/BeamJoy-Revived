@@ -796,10 +796,30 @@ local function onServerLobbyClosed(reason)
     end
 end
 
+--- every convoy forming on the map, for the main window's Happening now (rows with Join)
+local function pushConvoys()
+    local list = {}
+    for _, c in ipairs(M.convoys) do
+        local depot = beamjoy_deliveryPoints.getPoint(c.depotId)
+        list[#list + 1] = {
+            id = c.id,
+            leaderName = c.leaderName,
+            count = c.count,
+            max = c.max,
+            kind = c.kind,
+            title = cargoTitle(c.kind, c.cargo, c.vehicle),
+            destName = c.destName,
+            depotName = depot and depot.name or nil,
+        }
+    end
+    beamjoy_communications_ui.send("BJDeliveryConvoys", list)
+end
+
 ---@param list table[]
 local function onServerConvoys(list)
     M.convoys = table.isArray(list) and list or {}
     if M.jobsUi.open then M.pushJobs() end
+    pushConvoys()
 end
 
 ---@param list table[] {playerID, name, busy, invited}
@@ -892,6 +912,8 @@ local function onInviteReply(accept)
     if accept and not own then accept = false end
     beamjoy_communications.send("deliveryConvoyInviteReply", i.convoyId, accept == true,
         own and own.serverVID or nil)
+    -- the convoy's lobby opens in the main window, with the pad
+    if accept and beamjoy_mainNav then beamjoy_mainNav.focusOn("play", "jobs") end
 end
 
 --- the invite takes the pad's A/B only once focused with the Focus notification control (see
@@ -1311,6 +1333,11 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJDeliveryJoinConvoy", function(convoyId) M.joinConvoy(convoyId) end)
     beamjoy_communications_ui.addHandler("BJDeliveryUnstuck", onUnstuck)
     beamjoy_communications_ui.addHandler("BJDeliveryLobbyRequest", pushLobby)
+    beamjoy_communications_ui.addHandler("BJDeliveryConvoysRequest", pushConvoys)
+    -- the convoy's invite picker, open : its list again (an unanswered invite lapses after 15 s)
+    beamjoy_communications_ui.addHandler("BJDeliveryLobbyInviteRefresh", function()
+        if M.lobby and M.lobby.inviting then beamjoy_communications.send("deliveryConvoyInviteList") end
+    end)
     beamjoy_communications_ui.addHandler("BJDeliveryLobbyReady", onLobbyReady)
     beamjoy_communications_ui.addHandler("BJDeliveryLobbyStartNow", function()
         beamjoy_communications.send("deliveryConvoyStartNow")

@@ -46,7 +46,7 @@ local M = {
         "services_infected", "services_infectedGrid",
         "services_freeroamData",
         "services_busLines", "services_busRuns",
-        "services_deliveryPoints", "services_deliveries",
+        "services_deliveryPoints", "services_deliveries", "services_lobbyInvites",
         "services_identity",
         "communications_rx", "communications_tx" },
 }

@@ -49,6 +49,66 @@ angular.module("beamjoy").component("bjMainInfected", {
                 !!this.status &&
                 (this.status.minParticipants == null || this.status.participantCount >= this.status.minParticipants);
         });
+        // LOBBY (shared layout with races / convoys) ---------------------------------------
+        // the grid as the lobby shows it : players, then the free slots. Built once per status
+        // push (a fresh array per digest never settles)
+        this.slots = [];
+        const buildSlots = () => {
+            const s = this.status;
+            if (!s) return (this.slots = []);
+            const rows = (s.participants || []).map((p, i) => ({ key: `p${p.playerID}`, num: i + 1, player: p }));
+            for (let i = rows.length; i < (s.maxParticipants || 0); i++) rows.push({ key: `o${i}`, num: i + 1, open: true });
+            this.slots = rows;
+        };
+        $rootScope.$on("BJInfectedSessionStatus", () => buildSlots());
+        this.isLeader = (player) => !!this.status && String(player.playerID) === String(this.status.starterID);
+        // your own row follows the status push's own ready flag
+        this.isReady = (player) => {
+            const s = this.status;
+            const self = beamjoyStore.players.self;
+            // ids can arrive as numbers or strings depending on the push : compare loosely
+            const isSelf =
+                (self && String(player.playerID) === String(self.playerID)) ||
+                (s && s.isStarter && String(player.playerID) === String(s.starterID));
+            if (s && isSelf) return !!s.ready;
+            return player.ready === true || player.ready === 1 || player.ready === "true";
+        };
+        const formatSeconds = (sec) => {
+            sec = Math.max(0, Math.round(Number(sec) || 0));
+            const m = Math.floor(sec / 60);
+            const r = sec % 60;
+            return `${m}:${r < 10 ? "0" : ""}${r}`;
+        };
+        this.lobbyTimer = () => {
+            const s = this.status;
+            if (!s) return null;
+            if (s.state === "COUNTDOWN" && this.countdownSeconds !== null) {
+                return { label: "beamjoy.window.main.tabs.infected.startingIn", value: `${this.countdownSeconds}` };
+            }
+            if (s.state === "LOBBY" && this.allReady && s.gridReadySecondsLeft != null) {
+                return { label: "beamjoy.window.main.tabs.infected.startingIn", value: formatSeconds(s.gridReadySecondsLeft) };
+            }
+            if (s.state === "LOBBY" && s.gridTimeoutSecondsLeft != null) {
+                return { label: "beamjoy.window.main.tabs.infected.lobbyClosesIn", value: formatSeconds(s.gridTimeoutSecondsLeft) };
+            }
+            return null;
+        };
+        this.lobbyLine = () => {
+            const s = this.status;
+            if (!s) return "";
+            const leader = (s.participants || []).find((p) => p.playerID === s.starterID);
+            return translate(s.isStarter ? "beamjoy.window.main.tabs.infected.yourLobby" : "beamjoy.window.main.tabs.infected.theirLobby")
+                .replace("{name}", leader ? leader.displayName || leader.playerName : "?")
+                .replace("{count}", s.participantCount || 0)
+                .replace("{max}", s.maxParticipants || 0);
+        };
+        this.inviting = false;
+        this.setInviting = (open) => (this.inviting = open);
+        this.startNow = (event) => {
+            event.stopPropagation();
+            if (this.status && this.status.isStarter) beamjoyStore.send("BJInfectedStartNow");
+        };
+
         this.togglePlayers = (event) => {
             event.stopPropagation();
             this.showPlayers = !this.showPlayers;

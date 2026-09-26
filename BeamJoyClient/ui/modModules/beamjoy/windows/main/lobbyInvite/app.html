@@ -1,0 +1,41 @@
+<style>
+    bj-lobby-invite {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3em;
+    }
+    bj-lobby-invite .picker-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.45em 0.5em 0.45em 0.65em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0 0.375em 0.375em 0;
+    }
+    bj-lobby-invite .who {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+    bj-lobby-invite .who .n {
+        font-size: 0.9em;
+        font-weight: 600;
+    }
+</style>
+
+<h4>{{'beamjoy.delivery.lobby.inviteTitle' | translate}}</h4>
+<p class="bjr-muted" ng-if="!$ctrl.players">{{'beamjoy.delivery.board.loading' | translate}}</p>
+<p class="bjr-muted" ng-if="$ctrl.players && $ctrl.players.length === 0">{{'beamjoy.delivery.lobby.nobody' | translate}}</p>
+<div class="picker-row" ng-repeat="p in $ctrl.players track by p.playerID">
+    <span class="who">
+        <span class="n">{{p.name}}</span>
+        <span class="bjr-muted">{{$ctrl.status(p)}}</span>
+    </span>
+    <button type="button" class="bjr-btn small primary" ng-if="$ctrl.canInvite(p)" ng-click="$ctrl.invite(p)">
+        {{'beamjoy.delivery.lobby.invite' | translate}}
+    </button>
+</div>
+<button type="button" class="bjr-btn ghost" data-pad-b ng-click="$ctrl.onBack()">
+    {{'beamjoy.delivery.lobby.back' | translate}}
+</button>

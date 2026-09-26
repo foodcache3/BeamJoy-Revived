@@ -39,129 +39,98 @@
     }
 </style>
 
-<div class="status-panel" ng-if="$ctrl.status">
-    <div class="d-flex align-center gap-1 mb-1">
-        <b class="flex-grow-1">{{'beamjoy.window.main.tabs.infected.title' | translate}}</b>
-        <span
-            class="opacity-70"
-            ng-if="!($ctrl.status.state === 'COUNTDOWN' && $ctrl.countdownSeconds !== null) &&
-                   !($ctrl.status.state === 'LOBBY' && $ctrl.allReady && $ctrl.enoughParticipants && $ctrl.status.gridReadySecondsLeft != null)"
-        >
-            {{('beamjoy.window.main.tabs.infected.states.' + $ctrl.status.state) | translate}}
-        </span>
-        <span class="countdown-badge" ng-if="$ctrl.status.state === 'COUNTDOWN' && $ctrl.countdownSeconds !== null">
-            {{'beamjoy.window.main.tabs.infected.startingIn' | translate}} {{$ctrl.countdownSeconds}}s
-        </span>
-        <span
-            class="countdown-badge"
-            ng-if="$ctrl.status.state === 'LOBBY' && $ctrl.allReady && $ctrl.enoughParticipants && $ctrl.status.gridReadySecondsLeft != null"
-        >
-            {{'beamjoy.window.main.tabs.infected.startingIn' | translate}} {{$ctrl.status.gridReadySecondsLeft}}s
-        </span>
+<!-- IN A GAME : the lobby, the countdown or the game itself (same layout as the race and convoy
+     lobbies) -->
+<section class="bjr-lobby" ng-if="$ctrl.status" aria-label="{{'beamjoy.window.main.tabs.infected.title' | translate}}">
+    <header class="lobby-head">
+        <div>
+            <h3 class="bjr-title">{{'beamjoy.window.main.tabs.infected.title' | translate}}</h3>
+            <span class="bjr-muted">{{$ctrl.lobbyLine()}}</span>
+        </div>
+        <div class="lobby-timer" role="timer" ng-if="$ctrl.lobbyTimer()">
+            <span class="bjr-muted">{{$ctrl.lobbyTimer().label | translate}}</span>
+            <span class="value">{{$ctrl.lobbyTimer().value}}</span>
+        </div>
+        <div class="lobby-timer" ng-if="!$ctrl.lobbyTimer() && $ctrl.status.state !== 'LOBBY'">
+            <span class="bjr-muted">{{('beamjoy.window.main.tabs.infected.states.' + $ctrl.status.state) | translate}}</span>
+        </div>
+    </header>
+
+    <div class="chips" ng-if="$ctrl.status.role || $ctrl.status.state === 'LOBBY'">
+        <span class="bjr-chip" ng-if="$ctrl.status.role">{{'beamjoy.window.main.tabs.infected.yourRole' | translate}} {{('beamjoy.window.infectedHud.role.' + $ctrl.status.role) | translate}}</span>
+        <span class="bjr-chip" ng-if="!$ctrl.status.role && $ctrl.status.state === 'LOBBY'">{{'beamjoy.window.main.tabs.infected.roleUndecided' | translate}}</span>
     </div>
-    <!-- Real bug: with exactly the minimum-minus-one people readied (2, Infected needs 3, unlike
-         Hunter's floor of 2), the badge above used to tick down to 0 and sit there forever with no
-         explanation - the server was silently refusing to ever leave LOBBY. Shown instead of (never
-         alongside) the countdown badge whenever ready alone isn't actually enough to start. -->
-    <div
-        class="opacity-70 small mb-1"
-        ng-if="$ctrl.status.state === 'LOBBY' && $ctrl.status.minParticipants != null &&
-               $ctrl.status.participantCount < $ctrl.status.minParticipants"
-    >
-        {{'beamjoy.window.main.tabs.infected.needMorePlayers' | translate}}
-        ({{$ctrl.status.participantCount}}/{{$ctrl.status.minParticipants}})
+    <!-- with fewer than the minimum ready, the lobby can't start : say so instead of a countdown -->
+    <p class="note" ng-if="$ctrl.status.state === 'LOBBY' && $ctrl.status.minParticipants != null && $ctrl.status.participantCount < $ctrl.status.minParticipants">
+        {{'beamjoy.window.main.tabs.infected.needMorePlayers' | translate}} ({{$ctrl.status.participantCount}}/{{$ctrl.status.minParticipants}})
+    </p>
+    <p class="note" ng-if="$ctrl.status.state === 'FINISHED' && $ctrl.status.winner"><b>{{('beamjoy.window.main.tabs.infected.winner.' + $ctrl.status.winner) | translate}}</b></p>
+    <div class="extras" ng-if="$ctrl.status.state === 'FINISHED'">
+        <button type="button" class="bjr-btn" ng-click="$ctrl.openResults($event)">{{'beamjoy.window.main.tabs.infected.results.open' | translate}}</button>
     </div>
-    <div
-        class="opacity-70 small mb-1"
-        ng-if="$ctrl.status.state === 'LOBBY' && !$ctrl.allReady && $ctrl.status.gridTimeoutSecondsLeft != null"
-    >
-        {{'beamjoy.window.main.tabs.infected.lobbyClosesIn' | translate}} {{$ctrl.status.gridTimeoutSecondsLeft}}s
-    </div>
-    <div class="d-flex align-center gap-1 mb-1" ng-if="$ctrl.status.role">
-        <span class="opacity-70">{{'beamjoy.window.main.tabs.infected.yourRole' | translate}}</span>
-        <b ng-class="{'role-infected': $ctrl.status.role === 'infected'}">
-            {{('beamjoy.window.infectedHud.role.' + $ctrl.status.role) | translate}}
-        </b>
-    </div>
-    <div
-        class="opacity-70 small mb-1"
-        ng-if="!$ctrl.status.role && $ctrl.status.state === 'LOBBY'"
-    >
-        {{'beamjoy.window.main.tabs.infected.roleUndecided' | translate}}
-    </div>
-    <div ng-if="$ctrl.status.state === 'FINISHED' && $ctrl.status.winner" class="mb-1">
-        <b>{{('beamjoy.window.main.tabs.infected.winner.' + $ctrl.status.winner) | translate}}</b>
-    </div>
-    <button
-        class="btn info"
-        ng-if="$ctrl.status.state === 'FINISHED'"
-        ng-click="$ctrl.openResults($event)"
-    >
-        {{'beamjoy.window.main.tabs.infected.results.open' | translate}}
-    </button>
-    <div
-        class="opacity-70 small cursor-pointer"
-        ng-click="$ctrl.togglePlayers($event)"
-        ng-if="$ctrl.status.state !== 'FINISHED'"
-    >
-        {{$ctrl.status.participantCount}}/{{$ctrl.status.maxParticipants}}
-        {{'beamjoy.window.main.tabs.infected.joined' | translate}}
-    </div>
-    <div class="player-list" ng-if="$ctrl.showPlayers && $ctrl.status.state !== 'FINISHED'">
-        <div ng-repeat="p in $ctrl.status.participants" class="d-flex align-center gap-1">
-            <span class="flex-grow-1" ng-class="{'role-infected': p.role === 'infected'}">
-                {{p.displayName || p.playerName}}
-                <span ng-if="p.tagCount" class="small opacity-70">({{p.tagCount}})</span>
+    <ol class="slots" ng-if="!$ctrl.inviting && $ctrl.status.state !== 'FINISHED'">
+        <li ng-repeat="slot in $ctrl.slots track by slot.key" ng-class="{open: slot.open}">
+            <span class="num">{{slot.num}}</span>
+            <span class="who" ng-if="!slot.open">
+                <span class="n" ng-class="{'role-infected': slot.player.role === 'infected'}">
+                    <svg ng-if="$ctrl.isLeader(slot.player)" role="img" aria-label="{{'beamjoy.window.main.tabs.races.leader' | translate}}"
+                        width="14" height="14" viewBox="0 0 16 16" fill="#ffc768" style="flex-shrink: 0">
+                        <title>{{'beamjoy.window.main.tabs.races.leader' | translate}}</title>
+                        <path d="M2 5.5l3.2 2.6L8 3l2.8 5.1L14 5.5l-1.3 7H3.3L2 5.5z"></path>
+                    </svg>
+                    {{slot.player.displayName || slot.player.playerName}}
+                </span>
+                <span class="bjr-muted" ng-if="slot.player.tagCount">{{slot.player.tagCount}}</span>
             </span>
-            <span ng-if="p.ready" class="ready">✓</span>
-            <button
-                class="btn info force-role-btn"
-                ng-if="$ctrl.isStaff() && p.role !== 'infected' && $ctrl.status.state !== 'GAME' && $ctrl.status.state !== 'FINISHED'"
-                ng-click="$ctrl.forceInfected($event, p)"
-                title="{{'beamjoy.window.main.tabs.infected.forceInfected.tooltip' | translate}}"
-            >
-                <icon name="focus"></icon>
-            </button>
-        </div>
-    </div>
-    <div
-        class="opacity-70 small cursor-pointer"
-        ng-click="$ctrl.toggleSettings($event)"
-        ng-if="$ctrl.status.settings"
-    >
-        {{'beamjoy.window.main.tabs.infected.sessionSettings' | translate}}
-    </div>
-    <div class="player-list" ng-if="$ctrl.showSettings && $ctrl.status.settings">
-        <div class="d-flex align-center gap-1">
-            <span class="flex-grow-1 opacity-70">{{'beamjoy.window.config.tabs.infectedArena.roundDuration' | translate}}</span>
-            <span>{{$ctrl.status.settings.roundDuration}}m</span>
-        </div>
-        <div class="d-flex align-center gap-1">
-            <span class="flex-grow-1 opacity-70">{{'beamjoy.window.config.tabs.infectedArena.initialInfectedCount' | translate}}</span>
-            <span>{{$ctrl.status.settings.initialInfectedCount}}</span>
-        </div>
-    </div>
-    <div class="d-flex gap-1 mt-2">
-        <button
-            class="btn"
-            ng-class="{success: !$ctrl.status.ready, warning: $ctrl.status.ready}"
-            ng-if="$ctrl.status.state === 'LOBBY'"
-            ng-click="$ctrl.setReady($event, !$ctrl.status.ready)"
-        >
-            {{($ctrl.status.ready ? 'beamjoy.window.main.tabs.infected.readyOff' : 'beamjoy.window.main.tabs.infected.readyOn') | translate}}
+            <span class="who" ng-if="slot.open">
+                <span class="n">{{'beamjoy.window.main.tabs.races.openSlot' | translate}}</span>
+                <span class="bjr-muted">{{'beamjoy.window.main.tabs.races.openSlotDetail' | translate}}</span>
+            </span>
+            <span style="display: flex; align-items: center; gap: 0.3em" ng-if="!slot.open">
+                <button type="button" class="bjr-btn small ghost" ng-if="$ctrl.isStaff() && slot.player.role !== 'infected' && $ctrl.status.state !== 'GAME' && $ctrl.status.state !== 'FINISHED'"
+                    ng-click="$ctrl.forceInfected($event, slot.player)" title="{{'beamjoy.window.main.tabs.infected.forceInfected.tooltip' | translate}}">
+                    {{'beamjoy.window.main.tabs.infected.forceInfected.tooltip' | translate}}
+                </button>
+                <span class="bjr-chip" ng-class="{ready: $ctrl.isReady(slot.player)}" ng-if="$ctrl.status.state === 'LOBBY'">
+                    {{($ctrl.isReady(slot.player) ? 'beamjoy.window.main.tabs.races.ready' : 'beamjoy.window.main.tabs.races.unready') | translate}}
+                </span>
+            </span>
+            <span class="bjr-chip" ng-if="slot.open" style="background: transparent">{{'beamjoy.window.main.tabs.races.open' | translate}}</span>
+        </li>
+    </ol>
+
+    <bj-lobby-invite ng-if="$ctrl.inviting" kind="infected" on-back="$ctrl.setInviting(false)"></bj-lobby-invite>
+
+    <div class="controls" ng-if="!$ctrl.inviting" aria-label="{{'beamjoy.delivery.controls' | translate}}">
+        <button type="button" class="bjr-btn primary" data-pad-a ng-if="$ctrl.status.state === 'LOBBY'"
+            ng-click="$ctrl.setReady($event, !$ctrl.status.ready)">
+            {{($ctrl.status.ready ? 'beamjoy.window.main.tabs.races.imNotReady' : 'beamjoy.window.main.tabs.races.imReady') | translate}}
         </button>
-        <button
-            class="btn danger"
-            ng-if="$ctrl.status.isStarter"
-            ng-click="$ctrl.cancelSession($event)"
-        >
+        <button type="button" class="bjr-btn" data-pad-y ng-if="$ctrl.status.state === 'LOBBY'"
+            ng-disabled="!$ctrl.status.isStarter" ng-click="$ctrl.startNow($event)">
+            <span class="bjr-glyph" aria-hidden="true">Y</span>{{'beamjoy.delivery.lobby.startNow' | translate}}
+        </button>
+        <button type="button" class="bjr-btn" data-pad-x ng-if="$ctrl.status.state === 'LOBBY'" ng-click="$ctrl.setInviting(true)">
+            <span class="bjr-glyph" aria-hidden="true">X</span>{{'beamjoy.delivery.lobby.invitePlayer' | translate}}
+        </button>
+        <button type="button" class="bjr-btn danger" ng-if="$ctrl.status.isStarter" ng-click="$ctrl.cancelSession($event)">
             {{'beamjoy.common.cancel' | translate}}
         </button>
-        <button class="btn warning" ng-click="$ctrl.leaveSession($event)">
+        <button type="button" class="bjr-btn ghost" ng-click="$ctrl.leaveSession($event)">
             {{'beamjoy.window.main.tabs.infected.leave' | translate}}
         </button>
     </div>
-</div>
+
+    <div class="extras" ng-if="!$ctrl.inviting && $ctrl.status.settings">
+        <button type="button" class="bjr-btn small ghost" ng-click="$ctrl.toggleSettings($event)" aria-expanded="{{$ctrl.showSettings}}">
+            {{'beamjoy.window.main.tabs.infected.sessionSettings' | translate}} {{$ctrl.showSettings ? '▲' : '▼'}}
+        </button>
+    </div>
+    <div class="bjr-card" ng-if="!$ctrl.inviting && $ctrl.showSettings && $ctrl.status.settings">
+        <div class="bjr-toggle-row"><span class="bjr-muted">{{'beamjoy.window.config.tabs.infectedArena.roundDuration' | translate}}</span><span>{{$ctrl.status.settings.roundDuration}}m</span></div>
+        <div class="bjr-toggle-row"><span class="bjr-muted">{{'beamjoy.window.config.tabs.infectedArena.initialInfectedCount' | translate}}</span><span>{{$ctrl.status.settings.initialInfectedCount}}</span></div>
+    </div>
+</section>
 
 <div ng-if="!$ctrl.status">
     <div class="d-flex align-center gap-1 mb-1">
