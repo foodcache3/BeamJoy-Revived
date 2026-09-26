@@ -90,8 +90,9 @@
                     ng-click="$ctrl.forceFugitive($event, slot.player)" title="{{'beamjoy.window.main.tabs.hunter.forceFugitive.tooltip' | translate}}">
                     {{'beamjoy.window.main.tabs.hunter.forceFugitive.tooltip' | translate}}
                 </button>
-                <span class="bjr-chip" ng-class="{ready: $ctrl.isReady(slot.player)}" ng-if="$ctrl.status.state === 'LOBBY'">
-                    {{($ctrl.isReady(slot.player) ? 'beamjoy.window.main.tabs.races.ready' : 'beamjoy.window.main.tabs.races.unready') | translate}}
+                <span class="bjr-chip" ng-if="$ctrl.status.state === 'LOBBY'"
+                    ng-style="slot.ready ? {background: 'rgba(73, 182, 114, 0.16)', color: '#73eb9d'} : {}">
+                    {{(slot.ready ? 'beamjoy.window.main.tabs.races.ready' : 'beamjoy.window.main.tabs.races.unready') | translate}}
                 </span>
             </span>
             <span class="bjr-chip" ng-if="slot.open" style="background: transparent">{{'beamjoy.window.main.tabs.races.open' | translate}}</span>
@@ -258,8 +259,16 @@
                 <td><bj-toggle ng-model="$ctrl.startOptions.randomizeVehiclePool"></bj-toggle></td>
             </tr>
         </table>
+        <!-- both sides need a vehicle preset : players who aren't in a car when the hunt starts
+             pick from it, and an empty picker leaves them stuck -->
+        <p class="bjr-muted" ng-if="$ctrl.vehiclePresets.length === 0" style="margin: 0.4em 0">
+            {{'beamjoy.window.main.tabs.hunter.noPresets' | translate}}
+        </p>
+        <p class="bjr-muted" ng-if="$ctrl.vehiclePresets.length > 0 && !$ctrl.presetsPicked()" style="margin: 0.4em 0">
+            {{'beamjoy.window.main.tabs.hunter.pickPresets' | translate}}
+        </p>
         <div class="d-flex gap-1 mt-1">
-            <button class="btn success" ng-click="$ctrl.confirmStart($event)">
+            <button class="btn success" ng-disabled="!$ctrl.presetsPicked()" ng-click="$ctrl.confirmStart($event)">
                 {{'beamjoy.window.main.tabs.hunter.start' | translate}}
             </button>
             <button class="btn warning" ng-click="$ctrl.cancelStart($event)">

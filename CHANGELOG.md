@@ -8,7 +8,14 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Client build 2520, server build 2363.
+Client build 2521, server build 2364.
+
+- **Hunts need vehicle presets.** A hunt can't start without a vehicle preset for the fugitive
+  and one for the hunters (players who weren't in a car when it started got an empty vehicle
+  picker). The start form says what's missing and keeps Start disabled; the server refuses too.
+  *(client + server)*
+- **Lobby ready tags.** Each player's ready tag now takes its colour from the same check as its
+  text, so a ready leader shows green like everyone else. *(client only)*
 
 - **Private race lobbies.** The race start form's buttons are now Private lobby and Open lobby
   (X). A private lobby is invite only: it's never listed in Happening now or announced, and if

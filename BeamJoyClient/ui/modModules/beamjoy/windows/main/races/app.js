@@ -436,11 +436,12 @@ angular.module("beamjoy").component("bjMainRaces", {
         const buildSlots = () => {
             const s = this.status;
             if (!s) return (this.slots = []);
-            const rows = (s.participants || []).map((p, i) => ({ key: `p${p.playerID}`, num: p.gridSlot || i + 1, player: p }));
+            const rows = (s.participants || []).map((p, i) => ({ key: `p${p.playerID}`, num: p.gridSlot || i + 1, player: p, ready: this.isReady(p) }));
             for (let i = rows.length; i < (s.maxParticipants || 0); i++) rows.push({ key: `o${i}`, num: i + 1, open: true });
             this.slots = rows;
         };
         $scope.$watch(() => this.status, buildSlots);
+        $scope.$watch(() => this.status && this.status.ready, buildSlots);
         this.lobbyLine = () => {
             const s = this.status;
             if (!s) return "";

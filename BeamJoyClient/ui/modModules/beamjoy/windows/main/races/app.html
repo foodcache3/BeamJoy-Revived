@@ -133,8 +133,9 @@
                     ng-change="$ctrl.setGridSlot(slot.player, value)"
                     title="{{'beamjoy.window.main.tabs.races.gridSlot.tooltip' | translate}}"
                 ></bj-select>
-                <span class="bjr-chip" ng-class="{ready: $ctrl.isReady(slot.player)}" ng-if="$ctrl.status.state === 'GRID'">
-                    {{($ctrl.isReady(slot.player) ? 'beamjoy.window.main.tabs.races.ready' : 'beamjoy.window.main.tabs.races.unready') | translate}}
+                <span class="bjr-chip" ng-if="$ctrl.status.state === 'GRID'"
+                    ng-style="slot.ready ? {background: 'rgba(73, 182, 114, 0.16)', color: '#73eb9d'} : {}">
+                    {{(slot.ready ? 'beamjoy.window.main.tabs.races.ready' : 'beamjoy.window.main.tabs.races.unready') | translate}}
                 </span>
             </span>
             <span class="bjr-chip" ng-if="slot.open" style="background: transparent">{{'beamjoy.window.main.tabs.races.open' | translate}}</span>

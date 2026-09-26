@@ -71,7 +71,7 @@ angular.module("beamjoy").component("bjMainHunter", {
         const buildSlots = () => {
             const s = this.status;
             if (!s) return (this.slots = []);
-            const rows = (s.participants || []).map((p, i) => ({ key: `p${p.playerID}`, num: i + 1, player: p }));
+            const rows = (s.participants || []).map((p, i) => ({ key: `p${p.playerID}`, num: i + 1, player: p, ready: this.isReady(p) }));
             for (let i = rows.length; i < (s.maxParticipants || 0); i++) rows.push({ key: `o${i}`, num: i + 1, open: true });
             this.slots = rows;
         };
@@ -196,8 +196,13 @@ angular.module("beamjoy").component("bjMainHunter", {
             this.starting = false;
             this.startOptions = null;
         };
+        this.presetsPicked = () =>
+            !!this.startOptions &&
+            !!this.presetById(this.startOptions.huntedVehiclePresetId) &&
+            !!this.presetById(this.startOptions.huntersVehiclePresetId);
         this.confirmStart = (event) => {
             event.stopPropagation();
+            if (!this.presetsPicked()) return;
             beamjoyStore.send("BJHunterStart", [this.startOptions]);
             this.starting = false;
             this.startOptions = null;

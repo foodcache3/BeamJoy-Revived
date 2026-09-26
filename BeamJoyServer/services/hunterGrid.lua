@@ -700,6 +700,12 @@ local function hunterStart(ctxt, opts)
     end
 
     opts = opts or {}
+    local settings = buildSettings(arena, opts)
+    if not settings.huntedVehiclePool or #settings.huntedVehiclePool == 0 or
+        not settings.huntersVehiclePool or #settings.huntersVehiclePool == 0 then
+        return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
+            services_lang.get("error.hunter.needVehiclePresets", ctxt.sender.lang))
+    end
     ---@type BJHunterSession
     local session = {
         id = UUID(),
@@ -709,7 +715,7 @@ local function hunterStart(ctxt, opts)
         -- "Multiplayer" toggle the way races does: unlike a race, a solo hunt is meaningless, not
         -- just less interesting
         joinable = true,
-        settings = buildSettings(arena, opts),
+        settings = settings,
         state = "LOBBY",
         createdAt = ctxt.time,
         participants = Table(),

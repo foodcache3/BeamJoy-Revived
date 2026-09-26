@@ -125,6 +125,8 @@
     "beamjoy.window.main.now.jobs.open": "Open jobs",
     "beamjoy.window.main.now.empty": "Nothing's running right now. Start something and others can join you.",
     "beamjoy.window.main.now.start": "Start an activity",
+    "beamjoy.window.main.tabs.hunter.noPresets": "This server has no vehicle presets yet. Staff can make some in Config > Vehicle presets.",
+    "beamjoy.window.main.tabs.hunter.pickPresets": "Pick a vehicle preset for the fugitive and one for the hunters.",
     "beamjoy.window.main.tabs.races.startPrivate": "Private lobby",
     "beamjoy.window.main.tabs.races.startPrivate.tooltip": "Invite only, never listed or announced. If nobody joins, it starts like a solo run as soon as you're ready.",
     "beamjoy.window.main.tabs.races.privateChip": "Private",

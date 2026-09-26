@@ -29,6 +29,7 @@
     "error.notRaceAuthor": "You can only edit or delete races you created",
     "error.race.alreadyInSession": "You're already in a race session",
     "error.hunter.alreadyInSession": "You're already in a hunter session",
+    "error.hunter.needVehiclePresets": "Pick a vehicle preset for the fugitive and one for the hunters before starting a hunt",
     "error.hunter.arenaFull": "The hunter lobby is full",
     "error.infected.alreadyInSession": "You're already in an infected session",
     "error.infected.arenaFull": "The infected lobby is full",
