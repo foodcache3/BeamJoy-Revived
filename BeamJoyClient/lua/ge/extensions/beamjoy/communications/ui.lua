@@ -48,6 +48,9 @@ local M = {
     -- per real server connection, not once per "BJReady" call. Reset on server leave so the NEXT
     -- real connection still gets its own welcome screen.
     introPanelShown = false,
+    -- bumped on every server leave : a start-up job from an earlier session stops instead of
+    -- running against the new (or no) session's data
+    session = 0,
 
     EVENT = "BJEvent",
     handlers = Table(),
@@ -68,11 +71,16 @@ end
 --- still has to happen up front, in onUIReady, so the login prompt's own text is translated).
 local function proceedAfterLogin()
     beamjoy_communications.send("clientConnection", beamjoy_lang.lang)
+    local session = M.session
     core_jobsystem.create(function(job)
         job.sleep(2)
         while not beamjoy_cache.loaded do
+            -- the connection dropped (the launcher closing, a rejoin) : this session's start-up
+            -- is over, the next one runs its own
+            if M.session ~= session then return end
             job.sleep(.01)
         end
+        if M.session ~= session then return end
         M.initWindows()
         M.sendWindowsSizesAndPositions()
         -- one-time push for the Settings tab's About section (version/build display + GitHub link)
@@ -80,7 +88,8 @@ local function proceedAfterLogin()
         extensions.core_gamestate.requestExitLoadingScreen("serverConnection")
         uiHelpers.hideGameMenu()
 
-        if beamjoy_config.data.IntroPanel.enabled and not M.introPanelShown then
+        local intro = beamjoy_config.data and beamjoy_config.data.IntroPanel
+        if intro and intro.enabled and not M.introPanelShown then
             M.introPanelShown = true
             async.delayTask(function()
                 local self
@@ -88,7 +97,7 @@ local function proceedAfterLogin()
                     self = beamjoy_players.getSelf()
                     job.sleep(.2)
                 end
-                if not beamjoy_config.data.IntroPanel.onlyFirstConnection or
+                if not intro.onlyFirstConnection or
                     self.firstConnection then
                     M.openIntroPanel()
                 end
@@ -206,6 +215,7 @@ local function onBJClientReady()
 end
 
 local function onServerLeave()
+    M.session = M.session + 1
     M.send("BJUnload")
     M.introPanelShown = false
 end

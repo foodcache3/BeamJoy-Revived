@@ -8,8 +8,21 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Client build 2523, server build 2366.
+Client build 2524, server build 2367.
 
+- **Fixed: the BeamMP launcher dropping players right after they joined.** The server sent every
+  part of every message at once, so a join's data burst (well over half a megabyte, ~27 large
+  compressed packets in the same instant) reached the launcher together and one arrived corrupt
+  (launcher log: `zlib uncompress() failed (code: -3, message: data error)`, then
+  `Decompression failed`), which made the launcher quit and drop the game's connection. Messages
+  now queue per player and go out at about 40 KB every 100 ms ; small messages still go straight
+  out when nothing is queued, and each player's messages keep their order. *(server only)*
+- **Fixed: no BeamJoy UI after the connection dropped and the game rejoined.** The start-up that
+  builds the UI after the login prompt kept running across a disconnect and crashed on the wiped
+  config (`ui.lua:83 attempt to index field 'IntroPanel'`), and the "server data received" flag
+  was never reset on leaving, so a rejoin built the UI before the new server's data arrived. The
+  start-up now belongs to its session and stops if the session ends, the flag resets on leave,
+  and the intro panel check tolerates a missing config. *(client only)*
 - **Race HUD takes the Focus control.** During a race the Focus control now focuses the race HUD
   instead of the main window, and shows its Race info and Retire buttons (hidden otherwise). The
   d-pad picks, A presses, B or the control again lets go. Retire is a 5 second hold (A or the
