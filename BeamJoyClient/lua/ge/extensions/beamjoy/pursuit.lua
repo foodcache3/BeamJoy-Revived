@@ -23,6 +23,27 @@ local M = {
     },
 }
 
+--- Real, confirmed annoyance (direct report): "pursuit tick shouldn't apply to parked vehicles."
+--- Parked traffic is still `isAi`, so the target filter below happily picked a car sat in a parking
+--- space and started a pursuit against something that was never driving anywhere. Two sources,
+--- because the two spawners are separate: BJS's own parked pool (beamjoy_traffic.parkedVehs, the
+--- cars this client spawned into parking spots - see traffic.lua's own updateParkedVehs) and
+--- native's (gameplay_parking's own list, which also covers a level's pre-placed parked cars).
+--- Both are plain vid lists.
+---@param v BJVehicle
+---@return boolean
+local function isParked(v)
+    if not v or not v.vid then return true end
+    local bjParked = beamjoy_traffic and beamjoy_traffic.parkedVehs
+    if bjParked and bjParked.includes and bjParked:includes(v.vid) then return true end
+    local parking = extensions.gameplay_parking
+    if parking and parking.getParkedCarsList then
+        local ok, list = pcall(parking.getParkedCarsList)
+        if ok and type(list) == "table" and table.includes(list, v.vid) then return true end
+    end
+    return false
+end
+
 -- Tick to find a fugitive to start a pursuit<br/>
 -- Can only be an owned traffic vehicle otherwise the pursuit<br/>
 -- behavior is dumb (drive into walls and vehicles) :/
@@ -44,6 +65,7 @@ local function tick()
                 ---@type BJVehicle?
                 local target = beamjoy_vehicles.vehicles:filter(function(v)
                     if not v.isAi then return false end
+                    if isParked(v) then return false end -- see isParked's own comment
                     if not v.isLocal and
                         mpVeh.vid ~= beamjoy_players.players[v.ownerName].currentVehicle then
                         -- owner is not close => pursuit behavior would be dumb

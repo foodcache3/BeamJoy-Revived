@@ -3,7 +3,7 @@
 // stop's radius, and a Stop button. Modelled on hunterHud.
 angular.module("beamjoy").component("bjBusHud", {
     templateUrl: "/ui/modModules/beamjoy/windows/busHud/app.html",
-    controller: function ($rootScope, beamjoyStore) {
+    controller: function ($rootScope, $scope, beamjoyStore, beamjoyDelivery) {
         this.active = false;
         this.lineName = "";
         this.stopIndex = 0;
@@ -41,5 +41,36 @@ angular.module("beamjoy").component("bjBusHud", {
         this.stop = () => {
             beamjoyStore.send("BJBusHudStop");
         };
+
+        // FOCUS : the Focus control during a bus run (beamjoy/mainNav.lua) gives this HUD the pad
+        // and shows its Stop button ; B (or the control again) lets go. Same hidden-until-focused
+        // behaviour the race HUD has always had (windows/raceHud), per direct request - the button
+        // used to sit there permanently.
+        this.focused = false;
+        this.cursor = 0;
+        this.buttons = () => ["stop"];
+        $rootScope.$on("BJBusHudFocus", (_, data) => {
+            $rootScope.$applyAsync(() => {
+                this.focused = !!(data && data.active);
+                this.cursor = 0;
+                beamjoyDelivery.setNavOwner("busHud", this.focused);
+            });
+        });
+        const isRising = beamjoyDelivery.pressTracker();
+        const offNav = $rootScope.$on("UINavigation", (_, name, value) => {
+            const rising = isRising(name, value);
+            if (!this.focused || !rising || beamjoyDelivery.otherNavOwner("busHud")) return;
+            $scope.$applyAsync(() => {
+                const n = this.buttons().length;
+                if (name === "focus_l" || name === "focus_u") this.cursor = Math.max(0, this.cursor - 1);
+                else if (name === "focus_r" || name === "focus_d") this.cursor = Math.min(n - 1, this.cursor + 1);
+                else if (name === "ok") this.stop();
+                else if (name === "back") beamjoyStore.send("BJBusHudRelease");
+            });
+        });
+        $scope.$on("$destroy", () => {
+            offNav();
+            beamjoyDelivery.setNavOwner("busHud", false);
+        });
     },
 });

@@ -180,6 +180,7 @@ local function onInit()
     M.addHandler("BJOpenIntroPanel", M.openIntroPanel)
     M.addHandler("BJResetIntroPanelData", M.saveIntroPanelData)
     M.addHandler("BJRequestIntroPanelImagesInFolder", M.listIntroPanelImagesInFolder)
+    M.addHandler("BJIntroPanelPad", M.setIntroPanelPad)
     beamjoy_communications.addHandler("sendCache", function(caches)
         if caches.config then
             async.delayTask(M.getIntroPanelData, 0)
@@ -218,6 +219,9 @@ local function onServerLeave()
     M.session = M.session + 1
     M.send("BJUnload")
     M.introPanelShown = false
+    -- the UI is about to be torn down : nothing left to report the popup closing, so don't leave
+    -- the pad's menu maps held open
+    M.setIntroPanelPad(false)
 end
 
 ---@param key string
@@ -468,10 +472,37 @@ end
 ---@param title string?
 ---@param content string?
 ---@param image string?
+--- The welcome screen is BeamNG's OWN popup (uiHelpers.openPanel triggers `introPopupTutorial`,
+--- handled by ui/modules/introPopup/intro.js), not a BJS window, so it can't be given the pad the
+--- way windows/mapVote or the run HUDs are. Native's "tutorial" preset does already try to make
+--- itself controller-usable (its own beforeShow calls `uiNavService.activate()` -- the comment
+--- there literally says it's a fix for "not being able to get out of intro popups with the
+--- controller"), but that only covers the Vue side's own tracker. The physical pad buttons only
+--- reach the UI at all while the MenuIndependent action maps are enabled (see beamjoy/uiNav.lua),
+--- and nothing here was enabling them for a popup BJS itself raised mid-freeroam.
+---
+--- So: hold those maps open for as long as the popup is up, and let native's own popup handle the
+--- presses. The Angular side watches `vueGlobalStore.__introPopupShown` (intro.js sets it) and
+--- reports the close back through BJIntroPanelPad -- Lua has no way to observe the popup itself.
+---@param open boolean
+local function setIntroPanelPad(open)
+    if not beamjoy_uiNav then return end
+    if open == true then
+        beamjoy_uiNav.acquire("introPanel")
+    else
+        beamjoy_uiNav.release("introPanel")
+    end
+end
+
+---@param title string?
+---@param content string?
+---@param image string?
 local function openIntroPanel(title, content, image)
     uiHelpers.openPanel(title or beamjoy_config.data.IntroPanel.title,
         content or beamjoy_config.data.IntroPanel.content,
         image or beamjoy_config.data.IntroPanel.image)
+    -- the Angular side starts watching for the popup closing again (see setIntroPanelPad)
+    M.send("BJIntroPanelOpened")
 end
 
 ---@param message string label or key
@@ -509,6 +540,7 @@ M.getIntroPanelData = getIntroPanelData
 M.saveIntroPanelData = saveIntroPanelData
 M.listIntroPanelImagesInFolder = listIntroPanelImagesInFolder
 M.openIntroPanel = openIntroPanel
+M.setIntroPanelPad = setIntroPanelPad
 M.uiBroadcast = broadcast
 
 return M

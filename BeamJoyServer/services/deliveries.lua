@@ -60,6 +60,14 @@
 ---@field slot integer? convoy member index (vehicle convoys : the start slot)
 ---@field leg integer? multi-stop : the stop being driven to (1-based)
 
+---@class BJDeliveryScore
+---@field total integer
+---@field count integer
+---@field failed integer?
+---@field meters integer?
+---@field resets integer?
+---@field vehicles table<string, integer>? packages : vehicle label -> jobs
+
 ---@class BJDeliveryConvoyMember
 ---@field ready boolean
 ---@field serverVid any
@@ -107,7 +115,7 @@ local M = {
     -- vehicle has synced to the other players before anyone can drive (frozen until then)
     VEHICLE_SYNC_SEC = 8,
     MAX_CONVOY = 4,
-    LEADERBOARD_SIZE = 50,
+    LEADERBOARD_SIZE = 100,
     -- multi-stop : chance a package offer tries to be one, and the score factor per stop count
     MULTI_STOP_CHANCE = 0.35,
     STOP_BONUS = { 1, 1.15, 1.3 },
@@ -130,7 +138,10 @@ local M = {
     jobs = {},
     ---@type table<integer, integer> playerID -> depotId whose board they have open
     viewers = {},
-    ---@type {packages: table<string, {total: integer, count: integer}>, vehicles: table<string, {total: integer, count: integer}>}
+    -- per player : points, jobs delivered, jobs failed (ran out of time or abandoned), metres of
+    -- delivered routes, and for packages the resets during delivered jobs and how many jobs each
+    -- vehicle did (the favorite is the most used). Entries from older builds only have total/count
+    ---@type {packages: table<string, BJDeliveryScore>, vehicles: table<string, BJDeliveryScore>}
     scores = { packages = {}, vehicles = {} },
     ---@type {vehicles: BJDeliveryVehicle[], blacklist: string[], configBlacklist: {model: string, config: string}[]}
     pool = { vehicles = {}, blacklist = {}, configBlacklist = {} },
@@ -183,6 +194,29 @@ scoreKey = function(ctxt)
     if ctxt.sender.guest and not ctxt.sender.identityNickname then return nil end
     return key
 end
+
+--- a delivered or failed job, on the player's score entry
+---@param kind string
+---@param playerName string?
+---@param fn fun(entry: BJDeliveryScore)
+local function updateScore(kind, playerName, fn)
+    if not playerName or not M.scores[kind] then return end
+    local entry = M.scores[kind][playerName] or { total = 0, count = 0 }
+    fn(entry)
+    M.scores[kind][playerName] = entry
+    dao_main.save(M.SCORES_FILE, M.scores)
+end
+
+--- a job ran out of time or was given up : counts against the success rate
+---@param playerID integer
+---@param kind string
+local function recordFailed(playerID, kind)
+    local ok, ctxt = pcall(InitContext, playerID)
+    if not ok or not ctxt or not ctxt.sender then return end
+    updateScore(kind, scoreKey(ctxt), function(entry) entry.failed = (entry.failed or 0) + 1 end)
+end
+
+local MAX_VEHICLE_LABELS = 20
 
 local function rankOf(kind, playerName)
     local board = M.scores[kind] or {}
@@ -720,8 +754,10 @@ end
 ---@param playerID integer
 ---@param reason string
 local function endJob(playerID, reason)
-    if not M.jobs[playerID] then return end
+    local job = M.jobs[playerID]
+    if not job then return end
     M.jobs[playerID] = nil
+    if reason == "timedOut" or reason == "abandoned" then recordFailed(playerID, job.offer.kind) end
     communications_tx.sendToPlayer(playerID, "deliveryEnded", reason)
     convoyMemberOut(playerID, reason == "timedOut" and "failed" or "left")
 end
@@ -814,7 +850,8 @@ end
 ---@param ctxt BJSContext
 ---@param serverVid integer
 ---@param condition table? vehicle jobs : {broken, total}
-local function deliveryArrive(ctxt, serverVid, condition)
+---@param stats table? {resets: integer, vehicle: string} the client's count for this job
+local function deliveryArrive(ctxt, serverVid, condition, stats)
     if not ctxt.sender then return end
     local job = M.jobs[ctxt.senderID]
     if not job then return end
@@ -886,12 +923,29 @@ local function deliveryArrive(ctxt, serverVid, condition)
     local playerName = scoreKey(ctxt)
     local total, rank, players
     if playerName then
-        local entry = M.scores[kind][playerName] or { total = 0, count = 0 }
-        entry.total = entry.total + score
-        entry.count = entry.count + 1
-        M.scores[kind][playerName] = entry
-        dao_main.save(M.SCORES_FILE, M.scores)
-        total = entry.total
+        stats = type(stats) == "table" and stats or {}
+        updateScore(kind, playerName, function(entry)
+            entry.total = entry.total + score
+            entry.count = entry.count + 1
+            entry.meters = (entry.meters or 0) + math.round(tonumber(offer.meters) or 0)
+            if kind == "packages" then
+                entry.resets = (entry.resets or 0) + math.max(0, math.floor(tonumber(stats.resets) or 0))
+                local label = type(stats.vehicle) == "string" and stats.vehicle:sub(1, 60) or ""
+                if #label > 0 then
+                    entry.vehicles = entry.vehicles or {}
+                    entry.vehicles[label] = (entry.vehicles[label] or 0) + 1
+                    -- keep the list short : the least used goes
+                    if table.length(entry.vehicles) > MAX_VEHICLE_LABELS then
+                        local least, leastN
+                        for l, n in pairs(entry.vehicles) do
+                            if l ~= label and (not leastN or n < leastN) then least, leastN = l, n end
+                        end
+                        if least then entry.vehicles[least] = nil end
+                    end
+                end
+            end
+            total = entry.total
+        end)
         rank, players = rankOf(kind, playerName)
     end
 
@@ -1353,18 +1407,54 @@ local function deliveryDepotsRequest(ctxt)
     communications_tx.sendToPlayer(ctxt.senderID, "deliveryDepots", list)
 end
 
---- both leaderboards : the top LEADERBOARD_SIZE by total, plus the sender's own place
+--- what the leaderboard can be ranked by : higher first, except resets (fewest per job first)
+local SORTS = {
+    total = function(r) return r.total end,
+    count = function(r) return r.count end,
+    rate = function(r)
+        local tries = r.count + r.failed
+        return tries > 0 and r.count / tries or 0
+    end,
+    meters = function(r) return r.meters end,
+    resets = function(r) return r.count > 0 and -((r.resets or 0) / r.count) or -math.huge end,
+}
+
+---@param vehicles table<string, integer>?
+---@return string?
+local function favoriteOf(vehicles)
+    local best, bestN
+    for label, n in pairs(vehicles or {}) do
+        if not bestN or n > bestN or (n == bestN and label < best) then best, bestN = label, n end
+    end
+    return best
+end
+
+--- both leaderboards : the top LEADERBOARD_SIZE, plus the sender's own place, ranked by `sort`
+--- (points by default ; see SORTS)
 ---@param ctxt BJSContext
-local function deliveryLeaderboardRequest(ctxt)
+---@param sort string?
+local function deliveryLeaderboardRequest(ctxt, sort)
     if not ctxt.sender then return end
+    sort = SORTS[sort] and sort or "total"
+    local value = SORTS[sort]
     local me = scoreKey(ctxt) or ctxt.sender.playerName
-    local payload = {}
+    local payload = { sort = sort }
     for _, kind in ipairs({ "packages", "vehicles" }) do
         local rows = {}
         for name, entry in pairs(M.scores[kind] or {}) do
-            rows[#rows + 1] = { name = name, total = entry.total or 0, count = entry.count or 0 }
+            rows[#rows + 1] = {
+                name = name,
+                total = entry.total or 0,
+                count = entry.count or 0,
+                failed = entry.failed or 0,
+                meters = entry.meters or 0,
+                resets = kind == "packages" and (entry.resets or 0) or nil,
+                vehicle = kind == "packages" and favoriteOf(entry.vehicles) or nil,
+            }
         end
         table.sort(rows, function(a, b)
+            local va, vb = value(a), value(b)
+            if va ~= vb then return va > vb end
             if a.total ~= b.total then return a.total > b.total end
             return a.name:lower() < b.name:lower()
         end)
@@ -1377,7 +1467,12 @@ local function deliveryLeaderboardRequest(ctxt)
             end
             if i <= M.LEADERBOARD_SIZE then top[#top + 1] = row end
         end
-        payload[kind] = { rows = top, players = #rows, mine = mine }
+        -- five places either side of the sender (the "Around you" view), from the full list
+        local around = {}
+        if mine then
+            for i = math.max(1, mine.rank - 5), math.min(#rows, mine.rank + 5) do around[#around + 1] = rows[i] end
+        end
+        payload[kind] = { rows = top, players = #rows, mine = mine, around = around }
     end
     communications_tx.sendToPlayer(ctxt.senderID, "deliveryLeaderboard", payload)
 end
@@ -1386,7 +1481,8 @@ end
 ---@param reason string? client-side reason, logged only
 local function deliveryAbandon(ctxt, reason)
     if not ctxt.sender then return end
-    endJob(ctxt.senderID, "abandoned")
+    -- the job's vehicle couldn't spawn : not the player's failure
+    endJob(ctxt.senderID, reason == "spawnFailed" and "spawnFailed" or "abandoned")
 end
 
 --- a reconnecting/reloading client asks whether it still has a job (a UI reload keeps the player

@@ -599,7 +599,15 @@
         font-size: 0.85em;
     }
     /* CONTROLLER : the rail button under the pad's cursor, and the focused element in a panel */
-    .bjr-rail .rail-item[bjr-pad-cursor="true"] {
+    /* Real, confirmed bug (direct report): on a LEFT-hand rail the pad cursor's outline vanished on
+       whichever button was already open. Both this and the .active edge marker set `box-shadow`, so
+       one simply replaces the other - and `.bjr.side-left .bjr-rail .rail-item.active` above is a
+       5-class selector, beating this rule's 3 (on the right, the two tie and this one wins purely by
+       coming later in the file, which is why only the left side was ever affected). The side-left
+       selector below matches that specificity and comes after it, so the cursor now wins on both
+       sides - same as the right-hand rail already behaved. */
+    .bjr .bjr-rail .rail-item[bjr-pad-cursor="true"],
+    .bjr.side-left .bjr-rail .rail-item[bjr-pad-cursor="true"] {
         box-shadow: inset 0 0 0 2px var(--bjr-orange);
         color: var(--bjr-text);
     }

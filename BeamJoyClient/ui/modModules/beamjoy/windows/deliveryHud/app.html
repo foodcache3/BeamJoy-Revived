@@ -105,6 +105,31 @@
         border-radius: 0.25em;
         cursor: pointer;
     }
+    /* the pad's cursor and Abandon's hold fill, matching the race HUD's own action buttons */
+    #beamjoy-delivery-hud .hud-buttons button.cursor {
+        outline: 2px solid #ff6600;
+        outline-offset: -2px;
+    }
+    #beamjoy-delivery-hud .hud-buttons button.hold {
+        position: relative;
+        overflow: hidden;
+    }
+    #beamjoy-delivery-hud .hud-buttons button.hold .fill {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        background: rgba(255, 110, 100, 0.35);
+        pointer-events: none;
+    }
+    #beamjoy-delivery-hud .hud-buttons button.hold .label {
+        position: relative;
+    }
+    #beamjoy-delivery-hud .hud-buttons .hint {
+        flex-basis: 100%;
+        font-size: 0.72em;
+        color: #a7aebf;
+    }
     #beamjoy-delivery-hud .hud-abandon:hover {
         background: rgba(255, 82, 82, 0.25);
         color: #fff;
@@ -143,14 +168,20 @@
     <div class="hud-state" ng-if="$ctrl.data.confirming">
         {{'beamjoy.delivery.hud.confirming' | translate}}
     </div>
-    <div class="hud-buttons">
+    <!-- the Focus control's buttons (hidden otherwise), same as the race HUD -->
+    <div class="hud-buttons" ng-if="$ctrl.focused">
         <button type="button" class="hud-unstuck" ng-if="$ctrl.data.unstuck"
+            ng-class="{cursor: $ctrl.cursor === $ctrl.indexOf('unstuck')}"
             ng-disabled="$ctrl.data.unstuck.state !== 'ready'" ng-click="$ctrl.unstuck()"
             title="{{'beamjoy.delivery.hud.unstuck.tooltip' | translate}}">
             {{$ctrl.unstuckLabel()}}
         </button>
-        <button type="button" class="hud-abandon" ng-click="$ctrl.abandon()">
-            {{'beamjoy.delivery.hud.abandon' | translate}}
+        <button type="button" class="hud-abandon hold"
+            ng-class="{cursor: $ctrl.cursor === $ctrl.indexOf('abandon')}"
+            ng-mousedown="$ctrl.startAbandon()" ng-mouseup="$ctrl.stopAbandon()" ng-mouseleave="$ctrl.stopAbandon()">
+            <span class="fill" ng-style="$ctrl.abandonFill()" aria-hidden="true"></span>
+            <span class="label">{{($ctrl.abandonProgress > 0 ? 'beamjoy.delivery.hud.abandonHolding' : 'beamjoy.delivery.hud.abandonHold') | translate}}</span>
         </button>
+        <span class="hint">{{'beamjoy.raceHud.focusHint' | translate}}</span>
     </div>
 </div>

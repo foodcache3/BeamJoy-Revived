@@ -60,6 +60,15 @@ local M = {
     SPAWN_TIMEOUT_MS = 20000,
     -- a start slot counts as taken when any vehicle sits this close to it
     SLOT_CLEARANCE = 3.5,
+    -- Real, confirmed annoyance (direct report): "you get ghosted randomly while driving around
+    -- normally" - every delivery point's zone ghosted anything of yours inside it regardless of
+    -- what you were doing, so merely driving past a depot flicked collisions off for a moment.
+    -- Ghosting now only ENGAGES below this speed (m/s), i.e. when you're actually slowing down to
+    -- use the depot. It deliberately does NOT dis-engage on speeding up again (see
+    -- updateZoneGhosts): dropping collisions back on while still sat among the depot's other
+    -- vehicles is exactly the collision pop the ghosting exists to avoid - leaving the zone is
+    -- what ends it, same as before.
+    GHOST_MAX_SPEED = 8, -- ~29 km/h
     -- Unstuck : only below this speed (m/s), and once per cooldown
     UNSTUCK_MAX_SPEED = 2,
     UNSTUCK_COOLDOWN_MS = 30000,
@@ -1125,9 +1134,17 @@ local function updateZoneGhosts()
                 end
             end
         end
-        if inside ~= (M.ghosted[v.vid] == true) then
-            M.ghosted[v.vid] = inside or nil
-            beamjoy_vehicles.setGhostReason(v.vid, "delivery", inside)
+        local wasGhosted = M.ghosted[v.vid] == true
+        local ghost = inside
+        -- see M.GHOST_MAX_SPEED: only ENGAGE slowly. Already ghosted and still inside keeps it,
+        -- whatever the speed, so pulling away doesn't restore collisions mid-zone.
+        if inside and not wasGhosted then
+            local vel = v.veh:getVelocity()
+            if (vel and vel:length() or 0) > M.GHOST_MAX_SPEED then ghost = false end
+        end
+        if ghost ~= wasGhosted then
+            M.ghosted[v.vid] = ghost or nil
+            beamjoy_vehicles.setGhostReason(v.vid, "delivery", ghost)
         end
     end)
     for vid in pairs(M.ghosted) do
@@ -1232,7 +1249,11 @@ local function tickJob()
                     beamjoy_communications.send("deliveryArrive", j.serverVID, cond)
                 end, 'getPartConditions')
             else
-                beamjoy_communications.send("deliveryArrive", j.serverVID)
+                local veh = jobVeh and jobVeh.veh
+                beamjoy_communications.send("deliveryArrive", j.serverVID, false, {
+                    resets = j.resets or 0,
+                    vehicle = veh and beamjoy_vehicles.getCurrentConfigDisplayLabel(veh) or nil,
+                })
             end
         end
     elseif not inside then
@@ -1271,6 +1292,17 @@ end
 --- refuelling stays allowed, and package jobs don't restrict either
 ---@param req RequestAuthorization
 ---@param kind "refuel"|"repair"|nil
+--- package jobs count their resets (the leaderboard's Resets column) ; saving a home spot isn't one
+---@param req table
+---@param resetType string
+---@param mpVeh table?
+local function onBJRequestCurrentVehicleReset(req, resetType, mpVeh)
+    local j = M.job
+    if not j or j.kind == "vehicles" or not mpVeh or mpVeh.vid ~= j.vid then return end
+    if resetType == beamjoy_inputs.RESET.SAVE_HOME then return end
+    j.resets = (j.resets or 0) + 1
+end
+
 local function onBJRequestStationInteraction(req, kind)
     if M.job and M.job.kind == "vehicles" and kind == "repair" then req.state = false end
 end
@@ -1362,8 +1394,9 @@ local function onInit()
     end)
     beamjoy_communications_ui.addHandler("BJDeliveryJobsGps", onJobsGps)
     beamjoy_communications_ui.addHandler("BJDeliveryJobsJoin", function(convoyId) M.joinConvoy(convoyId) end)
-    beamjoy_communications_ui.addHandler("BJDeliveryLeaderboardRequest", function()
-        beamjoy_communications.send("deliveryLeaderboardRequest")
+    -- sort : what the board is ranked by (services/deliveries.lua SORTS), points when nil
+    beamjoy_communications_ui.addHandler("BJDeliveryLeaderboardRequest", function(sort)
+        beamjoy_communications.send("deliveryLeaderboardRequest", sort)
     end)
     beamjoy_communications_ui.addHandler("BJDeliveryInviteReply", onInviteReply)
     beamjoy_communications_ui.addHandler("BJDeliveryHudRequest", pushHud)
@@ -1397,6 +1430,7 @@ M.onActivityAcceptGatherData = onActivityAcceptGatherData
 M.onBJRequestBigmapPOIs = onBJRequestBigmapPOIs
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onBJRequestStationInteraction = onBJRequestStationInteraction
+M.onBJRequestCurrentVehicleReset = onBJRequestCurrentVehicleReset
 
 M.onBJDeliveryPointsChanged = onBJDeliveryPointsChanged
 M.onBJScenarioChanged = onBJScenarioChanged

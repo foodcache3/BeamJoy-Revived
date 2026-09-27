@@ -159,7 +159,7 @@
 ---`BJRaceGate.dir`'s convention: simpler to write/read/round-trip than a quat, and consistent
 ---with how gates already store facing
 ---@field defaults BJRaceDefaults
----@field leaderboard table<string, {time: integer, model: string, date: integer}>? playerName ->
+---@field leaderboard table<string, {time: integer, model: string, date: integer, fromRank: integer?}>? playerName ->
 ---that player's own personal-best completed lap for this race ; the source of truth for both PBs
 ---and the overall record (whoever has the lowest `time` here). Deliberately excluded from the
 ---general race-cache broadcast (`onBJRequestCache` sends a trimmed clone) since every player's
@@ -1240,9 +1240,41 @@ local function submitTime(raceId, playerName, model, time)
     local isNewPB = not existing or time < existing.time
     if not isNewPB then return false, false end
 
-    race.leaderboard[playerName] = { time = time, model = model, date = GetCurrentTime() }
+    -- the place the old best held, so the leaderboard can say "up N places" right after the race
+    local fromRank
+    if existing then
+        fromRank = 1
+        for otherName, entry in pairs(race.leaderboard) do
+            if otherName ~= playerName and entry.time < existing.time then fromRank = fromRank + 1 end
+        end
+    end
+    race.leaderboard[playerName] = { time = time, model = model, date = GetCurrentTime(), fromRank = fromRank }
     saveData()
     return true, time < previousBest
+end
+
+--- every entry, fastest first, ranked
+---@param race table
+---@return {playerName: string, time: integer, model: string, date: integer, rank: integer, fromRank: integer?}[]
+local function sortedEntries(race)
+    local list = {}
+    for playerName, entry in pairs(race.leaderboard or {}) do
+        table.insert(list, {
+            playerName = playerName,
+            time = entry.time,
+            model = entry.model,
+            date = entry.date,
+            fromRank = entry.fromRank,
+        })
+    end
+    table.sort(list, function(a, b)
+        if a.time ~= b.time then return a.time < b.time end
+        return a.playerName:lower() < b.playerName:lower()
+    end)
+    for i, entry in ipairs(list) do
+        entry.rank = i
+    end
+    return list
 end
 
 ---@param raceId integer
@@ -1253,19 +1285,7 @@ local function getLeaderboard(raceId, limit)
     if not race or not race.leaderboard then return {} end
     limit = limit or 100
 
-    local list = {}
-    for playerName, entry in pairs(race.leaderboard) do
-        table.insert(list, {
-            playerName = playerName,
-            time = entry.time,
-            model = entry.model,
-            date = entry.date,
-        })
-    end
-    table.sort(list, function(a, b) return a.time < b.time end)
-    for i, entry in ipairs(list) do
-        entry.rank = i
-    end
+    local list = sortedEntries(race)
     while #list > limit do
         table.remove(list)
     end
@@ -1286,27 +1306,40 @@ local function onRaceLeaderboardRequest(ctxt, raceId)
     -- their own PB - matching ctxt.sender.playerName alone would silently miss it for anyone
     -- logged in.
     local selfKey = services_identity.getIdentityKey(ctxt.senderID) or ctxt.sender.playerName
-    local entries = getLeaderboard(raceId, 100)
-    local selfEntry = table.find(entries, function(e) return e.playerName == selfKey end)
-    if not selfEntry and race.leaderboard and race.leaderboard[selfKey] then
-        -- own PB exists but fell outside the returned top N ; still worth showing, with a real
-        -- rank computed against the full (untrimmed) leaderboard rather than just "> 100"
-        local pb = race.leaderboard[selfKey]
-        local rank = 1
-        for otherName, entry in pairs(race.leaderboard) do
-            if otherName ~= selfKey and entry.time < pb.time then
-                rank = rank + 1
-            end
+    local all = sortedEntries(race)
+    -- own PB, with its real rank even outside the top 100
+    local selfEntry = table.find(all, function(e) return e.playerName == selfKey end)
+    -- five places either side of it (the "Around you" view), from the full list
+    local around = {}
+    if selfEntry then
+        for i = math.max(1, selfEntry.rank - 5), math.min(#all, selfEntry.rank + 5) do
+            around[#around + 1] = all[i]
         end
-        selfEntry = {
-            playerName = selfKey,
-            time = pb.time,
-            model = pb.model,
-            date = pb.date,
-            rank = rank,
+    end
+    local entries = {}
+    for i = 1, math.min(#all, 100) do entries[i] = all[i] end
+    -- false, not nil : a nil here would end the argument list before `around`
+    communications_tx.sendToPlayer(ctxt.senderID, "raceLeaderboard", raceId, entries, selfEntry or false, around, #all)
+end
+
+--- every race's record and the sender's own place, for the big screen's race list
+---@param ctxt BJSContext
+local function onRaceLeaderboardSummaryRequest(ctxt)
+    if not ctxt.sender then return end
+    local selfKey = services_identity.getIdentityKey(ctxt.senderID) or ctxt.sender.playerName
+    local list = {}
+    for _, race in ipairs(M.data) do
+        local all = sortedEntries(race)
+        local mine = table.find(all, function(e) return e.playerName == selfKey end)
+        list[#list + 1] = {
+            raceId = race.id,
+            players = #all,
+            recordTime = all[1] and all[1].time or nil,
+            recordName = all[1] and all[1].playerName or nil,
+            myRank = mine and mine.rank or nil,
         }
     end
-    communications_tx.sendToPlayer(ctxt.senderID, "raceLeaderboard", raceId, entries, selfEntry)
+    communications_tx.sendToPlayer(ctxt.senderID, "raceLeaderboardSummary", list)
 end
 
 -- TEMPORARY debug tooling, for testing leaderboard formatting/pagination (top-100 cap, pinned
@@ -1342,6 +1375,7 @@ local function onInit()
     communications_rx.addHandler("raceSave", M.raceSave)
     communications_rx.addHandler("raceDelete", M.raceDelete)
     communications_rx.addHandler("raceLeaderboardRequest", M.onRaceLeaderboardRequest)
+    communications_rx.addHandler("raceLeaderboardSummaryRequest", M.onRaceLeaderboardSummaryRequest)
     communications_rx.addHandler("raceLegacyImportPreview", M.raceLegacyImportPreview)
     communications_rx.addHandler("raceLegacyImportConfirm", M.raceLegacyImportConfirm)
 
@@ -1361,6 +1395,7 @@ M.getById = getById
 M.submitTime = submitTime
 M.getLeaderboard = getLeaderboard
 M.onRaceLeaderboardRequest = onRaceLeaderboardRequest
+M.onRaceLeaderboardSummaryRequest = onRaceLeaderboardSummaryRequest
 M.raceSave = raceSave
 M.raceDelete = raceDelete
 M.raceLegacyImportPreview = raceLegacyImportPreview

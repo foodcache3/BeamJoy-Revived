@@ -33,7 +33,11 @@ angular.module("beamjoy").component("bjMainYou", {
 
         // delivery standings, from the same push as the Jobs window's leaderboard
         this.board = null;
-        on("BJDeliveryLeaderboard", (_, data) => (this.board = data || null));
+        // points standings only : the Leaderboards tab can ask for the board ranked another way
+        on("BJDeliveryLeaderboard", (_, data) => {
+            if (data && data.sort && data.sort !== "total") return;
+            this.board = data || null;
+        });
         this.standing = (kind) => {
             const lb = this.board && this.board[kind];
             if (!lb || !lb.mine) return translate("beamjoy.window.main.you.noStanding");

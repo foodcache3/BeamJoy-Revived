@@ -33,6 +33,11 @@
         gap: 0.5em;
         justify-content: center;
     }
+    /* the pad's cursor (Focus control), matching the race HUD's own action buttons */
+    #beamjoy-kick-vote .btn.cursor {
+        outline: 2px solid #ff6600;
+        outline-offset: -2px;
+    }
 </style>
 
 <div id="beamjoy-kick-vote" ng-if="$ctrl.active">
@@ -49,7 +54,7 @@
         <button
             class="btn"
             ng-if="$ctrl.canVote()"
-            ng-class="$ctrl.hasVoted() ? 'neutral' : 'danger'"
+            ng-class="[$ctrl.hasVoted() ? 'neutral' : 'danger', {cursor: $ctrl.focused && $ctrl.cursor === $ctrl.indexOf('vote')}]"
             ng-click="$ctrl.toggleVote()"
         >
             {{($ctrl.hasVoted() ? 'beamjoy.mapVote.leave' : 'beamjoy.mapVote.join') | translate}}
@@ -57,6 +62,7 @@
         <button
             class="btn neutral"
             ng-if="$ctrl.canCancel()"
+            ng-class="{cursor: $ctrl.focused && $ctrl.cursor === $ctrl.indexOf('cancel')}"
             ng-click="$ctrl.cancel()"
         >
             {{'beamjoy.mapVote.cancel' | translate}}

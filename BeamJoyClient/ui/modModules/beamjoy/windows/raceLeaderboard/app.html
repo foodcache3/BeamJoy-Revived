@@ -1,86 +1,102 @@
 <style>
+    /* the .lbx-* leaderboard look is shared with the delivery board : cmps/beamjoy-style */
     bj-race-leaderboard {
         display: flex;
         flex-direction: column;
         height: 100%;
-    }
-    bj-race-leaderboard .leaderboard-scroll {
-        flex: 1 1 auto;
         min-height: 0;
-        overflow: auto;
     }
-    bj-race-leaderboard tr.self {
-        background: rgba(230, 92, 0, 0.25);
-    }
-    bj-race-leaderboard tr.rank-1 {
-        color: #ffd54f;
-    }
-    bj-race-leaderboard tr.rank-2 {
-        color: #cfd8dc;
-    }
-    bj-race-leaderboard tr.rank-3 {
-        color: #d7a06a;
-    }
-    /* pinned self-row, per direct request : separate from the scrollable top-100 table (not just
-       another row inside it), with a bit of spacing so it doesn't read as "part of" the list */
-    bj-race-leaderboard .leaderboard-self-pinned {
-        flex-shrink: 0;
-        margin-top: 0.6em;
-        padding-top: 0.6em;
-        border-top: thin solid rgba(255, 255, 255, 0.2);
+    /* the race board's columns */
+    bj-race-leaderboard .rlb-grid {
+        display: grid;
+        grid-template-columns: 3em minmax(0, 1.3fr) minmax(0, 1fr) 5.5em 4.8em 7em;
+        align-items: center;
+        column-gap: 0.75em;
     }
 </style>
 
-<div ng-if="!$ctrl.loaded" class="p-2 opacity-70">
+<div ng-if="!$ctrl.loaded" class="lbx-muted" style="padding: 0.5em">
     {{'beamjoy.window.main.tabs.races.leaderboard.loading' | translate}}
 </div>
-<div ng-if="$ctrl.loaded && $ctrl.entries.length === 0" class="p-2 opacity-70">
-    {{'beamjoy.window.main.tabs.races.leaderboard.empty' | translate}}
+
+<div class="lbx-empty" ng-if="$ctrl.loaded && $ctrl.entries.length === 0">
+    <h3 class="lbx-title" style="font-size: 1.2em">{{'beamjoy.leaderboard.race.emptyTitle' | translate}}</h3>
+    <p>{{'beamjoy.leaderboard.race.emptyBody' | translate}}</p>
 </div>
-<div class="leaderboard-scroll" ng-if="$ctrl.loaded && $ctrl.entries.length > 0">
-    <table class="race-info-table">
-        <thead>
-            <tr>
-                <th class="text-center">#</th>
-                <th class="text-left">
-                    {{'beamjoy.window.main.tabs.races.leaderboard.player' | translate}}
-                </th>
-                <th>{{'beamjoy.window.main.tabs.races.leaderboard.time' | translate}}</th>
-                <th class="text-left">
-                    {{'beamjoy.window.main.tabs.races.leaderboard.vehicle' | translate}}
-                </th>
-                <th>{{'beamjoy.window.main.tabs.races.leaderboard.date' | translate}}</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr
-                ng-repeat="entry in $ctrl.entries track by entry.playerName"
-                ng-class="{
-                    self: $ctrl.selfEntry && entry.playerName === $ctrl.selfEntry.playerName,
-                    'rank-1': entry.rank === 1,
-                    'rank-2': entry.rank === 2,
-                    'rank-3': entry.rank === 3
-                }"
-            >
-                <td class="text-center">{{entry.rank}}</td>
-                <td class="text-left">{{entry.playerName}}</td>
-                <td>{{$ctrl.formatTime(entry.time)}}</td>
-                <td class="text-left">{{entry.model}}</td>
-                <td>{{$ctrl.formatDate(entry.date)}}</td>
-            </tr>
-        </tbody>
-    </table>
+
+<div class="lbx-bar" ng-if="$ctrl.loaded && $ctrl.entries.length > 0">
+    <div class="lbx-chips">
+        <span class="lbx-chip">{{'beamjoy.leaderboard.race.bestLap' | translate}}</span>
+        <span class="lbx-chip">{{$ctrl.driversText}}</span>
+    </div>
+    <div class="lbx-seg" role="group" ng-if="$ctrl.selfEntry">
+        <button type="button" ng-class="{on: !$ctrl.near}" aria-pressed="{{!$ctrl.near}}" ng-click="$ctrl.setNear(false)">
+            {{'beamjoy.leaderboard.top100' | translate}}
+        </button>
+        <button type="button" ng-class="{on: $ctrl.near}" aria-pressed="{{$ctrl.near}}" ng-click="$ctrl.setNear(true)">
+            {{'beamjoy.leaderboard.aroundYou' | translate}}
+        </button>
+    </div>
 </div>
-<div class="leaderboard-self-pinned" ng-if="$ctrl.selfEntry && !$ctrl.selfInTop()">
-    <table class="race-info-table">
-        <tbody>
-            <tr class="self">
-                <td class="text-center">{{$ctrl.selfEntry.rank}}</td>
-                <td class="text-left">{{$ctrl.selfEntry.playerName}}</td>
-                <td>{{$ctrl.formatTime($ctrl.selfEntry.time)}}</td>
-                <td class="text-left">{{$ctrl.selfEntry.model}}</td>
-                <td>{{$ctrl.formatDate($ctrl.selfEntry.date)}}</td>
-            </tr>
-        </tbody>
-    </table>
+
+<div class="lbx-cards" ng-if="$ctrl.loaded && $ctrl.recordCard">
+    <div class="lbx-card rec">
+        <span class="lbx-plate big rec"><span>1</span></span>
+        <div class="who">
+            <span class="lbl">{{'beamjoy.leaderboard.race.record' | translate}}</span>
+            <b>{{$ctrl.recordCard.name}}</b>
+            <small>{{$ctrl.recordCard.line}}</small>
+        </div>
+        <span class="lbx-big" style="color: #ba68f8">{{$ctrl.recordCard.time}}</span>
+    </div>
+    <div class="lbx-card me" ng-if="$ctrl.meCard">
+        <span class="lbx-plate big" ng-class="$ctrl.meCard.rank === 1 ? 'rec' : 'me'"><span>{{$ctrl.meCard.rank}}</span></span>
+        <div class="who">
+            <span class="lbl">{{'beamjoy.leaderboard.race.yourBest' | translate}}</span>
+            <b>
+                {{$ctrl.selfEntry.playerName}}
+                <span class="lbx-chip ok" ng-if="$ctrl.meCard.fresh">{{$ctrl.meCard.fresh}}</span>
+            </b>
+            <small>{{$ctrl.meCard.toNext}}</small>
+        </div>
+        <span class="lbx-big" style="color: #73eb9d">{{$ctrl.meCard.time}}</span>
+    </div>
+    <div class="lbx-card" ng-if="!$ctrl.meCard">
+        <span class="lbx-plate big"><span>-</span></span>
+        <div class="who">
+            <span class="lbl">{{'beamjoy.leaderboard.race.yourBest' | translate}}</span>
+            <b>{{'beamjoy.leaderboard.race.noTimeYet' | translate}}</b>
+            <small>{{'beamjoy.leaderboard.race.noTimeHint' | translate}}</small>
+        </div>
+    </div>
+</div>
+
+<div class="rlb-grid lbx-head" ng-if="$ctrl.loaded && $ctrl.entries.length > 0">
+    <span style="text-align: center">{{'beamjoy.leaderboard.col.pos' | translate}}</span>
+    <span>{{'beamjoy.leaderboard.col.driver' | translate}}</span>
+    <span>{{'beamjoy.leaderboard.col.vehicle' | translate}}</span>
+    <span class="lbx-r">{{'beamjoy.leaderboard.col.bestLap' | translate}}</span>
+    <span class="lbx-r">{{'beamjoy.leaderboard.col.gap' | translate}}</span>
+    <span class="lbx-r">{{'beamjoy.leaderboard.col.set' | translate}}</span>
+</div>
+<div class="lbx-scroll rlb-scroll" ng-if="$ctrl.loaded && $ctrl.entries.length > 0" bj-on-scroll="$ctrl.onScroll()">
+    <div ng-repeat="r in $ctrl.rows track by r.key">
+        <span class="lbx-cut" ng-if="r.cut">{{r.text}}</span>
+        <div class="rlb-grid lbx-row rlb-row" ng-if="!r.cut" ng-class="r.cls">
+            <span class="lbx-pos"><span class="lbx-plate" ng-class="r.plateCls"><span>{{r.rank}}</span></span></span>
+            <span class="lbx-name">{{r.name}}</span>
+            <span class="lbx-dim">{{r.vehicle}}</span>
+            <span class="lbx-r" ng-class="r.timeCls">{{r.time}}</span>
+            <span class="lbx-r lbx-muted">{{r.gap}}</span>
+            <span class="lbx-when">{{r.when}}</span>
+        </div>
+    </div>
+</div>
+<div class="rlb-grid lbx-row me lbx-pinned" ng-if="$ctrl.selfRow && !$ctrl.selfVisible">
+    <span class="lbx-pos"><span class="lbx-plate" ng-class="$ctrl.selfRow.plateCls"><span>{{$ctrl.selfRow.rank}}</span></span></span>
+    <span class="lbx-name">{{$ctrl.selfRow.name}}</span>
+    <span class="lbx-dim">{{$ctrl.selfRow.vehicle}}</span>
+    <span class="lbx-r" ng-class="$ctrl.selfRow.timeCls">{{$ctrl.selfRow.time}}</span>
+    <span class="lbx-r lbx-muted">{{$ctrl.selfRow.gap}}</span>
+    <span class="lbx-when">{{$ctrl.selfRow.when}}</span>
 </div>

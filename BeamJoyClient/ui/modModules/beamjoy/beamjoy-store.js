@@ -113,6 +113,36 @@ angular
                     $rootScope.$broadcast(data.event, data.payload);
                 });
             });
+            // WELCOME SCREEN + CONTROLLER (see communications/ui.lua's setIntroPanelPad) : that's
+            // BeamNG's own introPopup, not a BJS window, so Lua can't tell when it closes. intro.js
+            // publishes exactly that as `vueGlobalStore.__introPopupShown`, so poll it and report
+            // the close back. The cap is a safety net : if that flag never appears (a UI rework,
+            // the popup failing to open at all), the pad's menu maps are handed back anyway rather
+            // than staying held open and stolen from driving.
+            const INTRO_POLL_MS = 250;
+            const INTRO_MAX_MS = 120000;
+            let introPoll = null;
+            const endIntroPad = () => {
+                if (introPoll) {
+                    clearInterval(introPoll);
+                    introPoll = null;
+                }
+                this.send("BJIntroPanelPad", [false]);
+            };
+            $rootScope.$on("BJIntroPanelOpened", () => {
+                if (introPoll) clearInterval(introPoll);
+                this.send("BJIntroPanelPad", [true]);
+                const startedAt = Date.now();
+                let sawOpen = false;
+                introPoll = setInterval(() => {
+                    const shown = !!(window.vueGlobalStore && window.vueGlobalStore.__introPopupShown);
+                    if (shown) sawOpen = true;
+                    // closed again after we saw it open, or it never showed up in time
+                    if ((sawOpen && !shown) || Date.now() - startedAt > INTRO_MAX_MS) endIntroPad();
+                }, INTRO_POLL_MS);
+            });
+            $rootScope.$on("BJUnload", endIntroPad);
+
             $timeout(() => {
                 this.send("BJReady");
                 this.send("BJRequestNametagsState");

@@ -23,6 +23,12 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJEditorRaceListRequest", M.pushListToUI)
     beamjoy_communications_ui.addHandler("BJRaceLeaderboardRequest", M.requestLeaderboard)
     beamjoy_communications.addHandler("raceLeaderboard", M.onLeaderboardReceived)
+    beamjoy_communications_ui.addHandler("BJRaceLeaderboardSummaryRequest", function()
+        beamjoy_communications.send("raceLeaderboardSummaryRequest")
+    end)
+    beamjoy_communications.addHandler("raceLeaderboardSummary", function(list)
+        beamjoy_communications_ui.send("BJRaceLeaderboardSummary", list or {})
+    end)
 
     -- legacy BeamJoy Free (BJI) race import. See services/races.lua's own doc comment for the full
     -- design (non-destructive: always ADDS new races, never overwrites). Preview is relayed
@@ -71,12 +77,16 @@ end
 
 ---@param raceId integer
 ---@param entries {playerName: string, time: integer, model: string, date: integer, rank: integer}[]
----@param selfEntry {playerName: string, time: integer, model: string, date: integer, rank: integer}?
-local function onLeaderboardReceived(raceId, entries, selfEntry)
+---@param selfEntry {playerName: string, time: integer, model: string, date: integer, rank: integer, fromRank: integer?}?
+---@param around table[]? the entries five places either side of selfEntry
+---@param players integer? everyone on the board
+local function onLeaderboardReceived(raceId, entries, selfEntry, around, players)
     beamjoy_communications_ui.send("BJRaceLeaderboard", {
         raceId = raceId,
         entries = entries,
-        selfEntry = selfEntry,
+        selfEntry = type(selfEntry) == "table" and selfEntry or nil,
+        around = around or {},
+        players = players or (entries and #entries or 0),
     })
 end
 

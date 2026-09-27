@@ -8,8 +8,56 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Client build 2524, server build 2367.
+Client build 2527, server build 2368.
 
+- **Leaderboards redesigned.** A race's leaderboard (from its results, the Races list, or the big
+  screen) now opens on two cards, the track record and your best lap, with how far you are from
+  the next place and from the record. Right after a race that set your best it says "New best, up
+  N places" (or "First time on the board"). The list shows position, driver, vehicle, best lap,
+  gap to the record and when it was set ("3 days ago"). A Top 100 / Around you switch shows the
+  record plus five places either side of yours, even outside the top 100, and your row stays
+  pinned under the list while it's out of sight. *(server and client)*
+- **Big screen Leaderboards tab:** a Races / Deliveries switch. Races lists every race with its
+  record and your place (with a search box once there are more than six) ; picking one shows its
+  board. Deliveries lists Package delivery and Vehicle delivery with their leaders and your place,
+  plus your totals across both. *(server and client)*
+- **Delivery leaderboard stats.** The delivery boards now show jobs, success rate, total distance
+  and points, and for packages resets and favorite vehicle ; click a column to rank by it (fewest
+  resets a job for Resets). Your stats for the board sit above the list. The server now records,
+  per player: failed jobs (ran out of time or abandoned ; a vehicle that couldn't spawn doesn't
+  count), the route distance of each delivered job, and for package jobs the resets during the
+  job and the vehicle it was done in. Scores from before this build have none of these yet, so
+  they start from zero (a 100% success rate until a job fails). The boards now hold the top 100
+  instead of 50. *(server and client)*
+
+- **The Focus control reaches more overlays.** Besides the race HUD, it now hands the pad to
+  the map vote and kick vote overlays (their Vote and Cancel buttons were mouse-only), the bus line
+  HUD and the delivery HUD. A running vote comes first, then whichever run is active. The d-pad
+  picks, A presses, B or the control again lets go ; the pad is also handed back when the run or
+  vote ends. *(client only)*
+- **Bus and delivery HUD buttons only show while focused,** like the race HUD's: the bus HUD's
+  Stop and the delivery HUD's Unstuck and Abandon no longer sit on screen the whole run. Abandon
+  is now a 5 second hold (A or the mouse) instead of a confirm dialog, the same as the race HUD's
+  Retire. *(client only)*
+- **Fixed: other players saw "Not in Service" on your bus.** Their game put your line's sign on
+  the first vehicle you owned rather than the one you were driving, so anyone with another vehicle
+  showed the bus's default sign to everyone else. It now follows the vehicle you're in, and moves
+  if you switch bus mid-run. *(client only)*
+- **Fixed: no bus sign when you had to pick a bus to start a line.** The sign was applied once as
+  the run began, sometimes before the new bus was ready, and never retried. It's now reapplied
+  whenever the bus you're driving isn't the one showing it, which also covers a respawn or a bus
+  swap. *(client only)*
+- **Delivery points only ghost you when you slow down.** Every depot zone switched off your
+  collisions as soon as you entered it, so driving past one flickered them. Ghosting now starts
+  only below about 29 km/h ; once on, it lasts until you leave the zone. *(client only)*
+- **Police pursuits skip parked cars.** A parked traffic car (this server's parking pool, or the
+  map's own parked cars) could be picked as the fugitive. *(client only)*
+- **The controller works on the server's welcome screen.** The pad's menu buttons are held open
+  while the welcome popup is up and handed back when it closes, or after two minutes if the close
+  is never seen. *(client only)*
+- **Main window:** with the rail on the left, the controller cursor is visible again on the
+  section that's already open (its active marker was hiding it). The You page's delivery standing
+  reads "{points} points, #{rank}". *(client only)*
 - **Fixed: the BeamMP launcher dropping players right after they joined.** The server sent every
   part of every message at once, so a join's data burst (well over half a megabyte, ~27 large
   compressed packets in the same instant) reached the launcher together and one arrived corrupt

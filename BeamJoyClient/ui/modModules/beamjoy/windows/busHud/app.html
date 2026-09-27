@@ -92,6 +92,10 @@
     #beamjoy-bus-hud .hud-stop-btn:hover {
         background: rgba(255, 82, 82, 0.32);
     }
+    /* the pad's cursor, same marker the race HUD's own action buttons use */
+    #beamjoy-bus-hud .hud-stop-btn.cursor {
+        box-shadow: inset 0 0 0 2px #f60;
+    }
 </style>
 
 <div id="beamjoy-bus-hud" ng-if="$ctrl.active">
@@ -113,8 +117,11 @@
     <div class="hud-pending" ng-if="$ctrl.pending">
         {{('beamjoy.window.busHud.pending.' + $ctrl.pending) | translate}}
     </div>
+    <!-- the Focus control's buttons (hidden otherwise), same as the race HUD -->
     <button
         class="hud-stop-btn"
+        ng-if="$ctrl.focused"
+        ng-class="{cursor: $ctrl.cursor === 0}"
         ng-click="$ctrl.stop()"
         title="{{'beamjoy.window.busHud.stopRun.tooltip' | translate}}"
     >

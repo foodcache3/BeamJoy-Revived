@@ -1,92 +1,416 @@
 <style>
+    /* the board fills the window ; its lists scroll inside (the .lbx-* look comes from
+       windows/raceLeaderboard/app.html) */
     bj-main-leaderboards {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+        grid-template-columns: 20em minmax(0, 1fr);
         gap: 1.5em;
-        align-items: start;
+        height: calc(88vh - 7.5em);
+        min-height: 24em;
     }
-    bj-main-leaderboards .col {
+    bj-main-leaderboards .lb-side,
+    bj-main-leaderboards .lb-main {
         display: flex;
         flex-direction: column;
-        gap: 0.6em;
+        min-height: 0;
         min-width: 0;
     }
-    bj-main-leaderboards table {
+    bj-main-leaderboards .lb-side {
+        gap: 0.75em;
+    }
+    bj-main-leaderboards .lb-find {
+        position: relative;
+    }
+    bj-main-leaderboards .lb-find svg {
+        position: absolute;
+        left: 0.7em;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+    bj-main-leaderboards .lb-find input {
         width: 100%;
-        border-collapse: collapse;
+        box-sizing: border-box;
+        min-height: 2.3em;
+        padding: 0 0.75em 0 2.1em;
+        border: 0;
+        border-radius: 0.25em;
+        background: #282b33;
+        color: #ebebeb;
+        font: inherit;
         font-size: 0.88em;
+    }
+    bj-main-leaderboards .lb-find input::placeholder {
+        color: #979dad;
+    }
+    bj-main-leaderboards .lb-colhead {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.25em 0.75em 0;
+        font-size: 0.75em;
+        color: #979dad;
+    }
+    bj-main-leaderboards .lb-pick {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        column-gap: 0.6em;
+        width: 100%;
+        padding: 0.5em 0.6em 0.5em 0.75em;
+        border: 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    bj-main-leaderboards .lb-pick:hover {
+        background: rgba(255, 255, 255, 0.04);
+    }
+    bj-main-leaderboards .lb-pick.on {
+        background: rgba(255, 102, 0, 0.1);
+        box-shadow: inset 3px 0 0 #ff6600;
+    }
+    bj-main-leaderboards .lb-pick b {
+        display: block;
+        font-weight: 600;
+        font-size: 0.88em;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    bj-main-leaderboards .lb-pick small {
+        display: block;
+        font-size: 0.78em;
+        color: #a7aebf;
+        font-variant-numeric: tabular-nums;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    bj-main-leaderboards .lb-pick .none {
+        font-size: 0.75em;
+        color: #979dad;
+    }
+    bj-main-leaderboards .lb-totals {
+        margin-top: 0.5em;
+        padding: 0.75em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0.4em;
+    }
+    bj-main-leaderboards .lb-totals dl {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        row-gap: 0.4em;
+        margin: 0.5em 0 0;
+        font-size: 0.82em;
         font-variant-numeric: tabular-nums;
     }
-    bj-main-leaderboards th {
-        padding: 0.3em 0.5em;
-        font-weight: 600;
-        color: #979dad;
-        text-align: left;
+    bj-main-leaderboards .lb-totals dt {
+        color: #a7aebf;
     }
-    bj-main-leaderboards td {
-        padding: 0.4em 0.5em;
-        border-top: 1px solid rgba(255, 255, 255, 0.06);
-    }
-    bj-main-leaderboards .num {
+    bj-main-leaderboards .lb-totals dd {
+        margin: 0;
         text-align: right;
     }
-    bj-main-leaderboards tr.you td {
-        background: rgba(255, 102, 0, 0.1);
-    }
-    bj-main-leaderboards .race-picks {
+    bj-main-leaderboards .lb-race {
+        flex: 1 1 auto;
+        min-height: 0;
         display: flex;
-        flex-wrap: wrap;
-        gap: 0.25em;
+        flex-direction: column;
+    }
+
+    /* your stats for the picked delivery board */
+    bj-main-leaderboards .dlb-stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1px;
+        margin-bottom: 0.9em;
+        background: rgba(255, 255, 255, 0.07);
+        border-radius: 0.4em;
+        overflow: hidden;
+    }
+    bj-main-leaderboards .dlb-stat {
+        min-width: 0;
+        padding: 0.55em 0.9em;
+        background: #15171c;
+    }
+    bj-main-leaderboards .dlb-stat span {
+        display: block;
+        font-size: 0.75em;
+        color: #a7aebf;
+    }
+    bj-main-leaderboards .dlb-stat b {
+        display: block;
+        margin-top: 0.1em;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        font-size: 1.15em;
+        line-height: 1.25;
+        font-variant-numeric: tabular-nums;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    bj-main-leaderboards .dlb-stat small {
+        font-family: "Noto Sans", sans-serif;
+        font-style: normal;
+        font-weight: 400;
+        font-size: 0.65em;
+        color: #a7aebf;
+    }
+    bj-main-leaderboards .dlb-grid {
+        display: grid;
+        align-items: center;
+        column-gap: 0.65em;
+    }
+    bj-main-leaderboards .dlb-grid.packages {
+        grid-template-columns: 3em minmax(0, 1.2fr) 3.6em 7em 5.6em 3.8em minmax(0, 1fr) 5.6em;
+    }
+    bj-main-leaderboards .dlb-grid.vehicles {
+        grid-template-columns: 3em minmax(0, 1.4fr) 4.5em 8em 6.5em 6em;
+    }
+    bj-main-leaderboards .lbx-head button {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: inherit;
+        cursor: pointer;
+    }
+    bj-main-leaderboards .lbx-head button:hover {
+        color: #ebebeb;
+    }
+    bj-main-leaderboards .lbx-head button.on {
+        color: #ebebeb;
+        font-weight: 600;
+    }
+    bj-main-leaderboards .lbx-head button.on::after {
+        content: "";
+        display: inline-block;
+        margin-left: 0.35em;
+        vertical-align: 0.15em;
+        border-left: 0.28em solid transparent;
+        border-right: 0.28em solid transparent;
+        border-top: 0.33em solid #ff8955;
+    }
+    bj-main-leaderboards .dlb-rate {
+        display: grid;
+        grid-template-columns: 2.4em minmax(0, 1fr);
+        align-items: center;
+        column-gap: 0.5em;
+    }
+    bj-main-leaderboards .dlb-meter {
+        position: relative;
+        height: 0.5em;
+        transform: skewX(-10deg);
+        background: rgba(255, 255, 255, 0.07);
+        border-radius: 1px;
+        overflow: hidden;
+    }
+    bj-main-leaderboards .dlb-meter i {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        background: #6b7180;
+    }
+    bj-main-leaderboards .dlb-meter.low i {
+        background: #ffc768;
+    }
+    bj-main-leaderboards .dlb-meter.me i {
+        background: #ff6600;
+    }
+    bj-main-leaderboards .dlb-low {
+        color: #ffc768;
+    }
+    bj-main-leaderboards .dlb-pts {
+        font-weight: 600;
     }
 </style>
 
-<section class="col" aria-labelledby="bjr-lb-deliveries">
-    <h2 class="bjr-h2" id="bjr-lb-deliveries">{{'beamjoy.window.main.leaderboards.deliveries' | translate}}</h2>
-    <div class="bjr-seg">
-        <button type="button" ng-repeat="k in $ctrl.KINDS" ng-class="{on: $ctrl.kind === k}" ng-click="$ctrl.kind = k">
-            {{('beamjoy.delivery.kindLong.' + k) | translate}}
+<aside class="lb-side">
+    <div class="lbx-seg" role="group">
+        <button type="button" ng-class="{on: $ctrl.section === 'races'}" aria-pressed="{{$ctrl.section === 'races'}}" ng-click="$ctrl.setSection('races')">
+            {{'beamjoy.leaderboard.races' | translate}}
+        </button>
+        <button type="button" ng-class="{on: $ctrl.section === 'deliveries'}" aria-pressed="{{$ctrl.section === 'deliveries'}}" ng-click="$ctrl.setSection('deliveries')">
+            {{'beamjoy.leaderboard.deliveries' | translate}}
         </button>
     </div>
-    <span class="bjr-muted">{{$ctrl.mineLine()}}</span>
-    <p class="bjr-muted" ng-if="$ctrl.board && $ctrl.lb().rows.length === 0">
-        {{('beamjoy.delivery.jobs.lbEmpty.' + $ctrl.kind) | translate}}
-    </p>
-    <table ng-if="$ctrl.lb().rows.length > 0">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>{{'beamjoy.window.main.leaderboards.player' | translate}}</th>
-                <th class="num">{{'beamjoy.window.main.leaderboards.jobs' | translate}}</th>
-                <th class="num">{{'beamjoy.window.main.leaderboards.points' | translate}}</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr ng-repeat="r in $ctrl.lb().rows track by r.rank" ng-class="{you: r.you}">
-                <td>{{r.rank}}</td>
-                <td>{{r.name}}</td>
-                <td class="num">{{r.count}}</td>
-                <td class="num">{{r.total | number}}</td>
-            </tr>
-            <tr class="you" ng-if="$ctrl.mineOutside()">
-                <td>{{$ctrl.mineOutside().rank}}</td>
-                <td>{{'beamjoy.window.main.playerlist.you' | translate}}</td>
-                <td class="num">{{$ctrl.mineOutside().count}}</td>
-                <td class="num">{{$ctrl.mineOutside().total | number}}</td>
-            </tr>
-        </tbody>
-    </table>
-</section>
 
-<section class="col" aria-labelledby="bjr-lb-races">
-    <h2 class="bjr-h2" id="bjr-lb-races">{{'beamjoy.window.main.leaderboards.races' | translate}}</h2>
-    <p class="bjr-muted" ng-if="$ctrl.races.length === 0">{{'beamjoy.window.main.tabs.races.empty' | translate}}</p>
-    <div class="race-picks bjr-seg" ng-if="$ctrl.races.length > 0">
-        <button type="button" ng-repeat="race in $ctrl.races track by race.id" ng-class="{on: $ctrl.raceId === race.id}" ng-click="$ctrl.pickRace(race)">
-            {{race.name}}
+    <!-- RACES : every race, its record and your place -->
+    <div class="lb-find" ng-if="$ctrl.section === 'races' && $ctrl.races.length > 6">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#979dad" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5l3.5 3.5"></path></svg>
+        <input type="search" ng-model="$ctrl.query" placeholder="{{'beamjoy.leaderboard.findRace' | translate}}" aria-label="{{'beamjoy.leaderboard.findRace' | translate}}">
+    </div>
+    <p class="bjr-muted" ng-if="$ctrl.section === 'races' && $ctrl.races.length === 0">{{'beamjoy.window.main.tabs.races.empty' | translate}}</p>
+    <div class="lb-colhead" ng-if="$ctrl.section === 'races' && $ctrl.races.length > 0">
+        <span>{{'beamjoy.leaderboard.race.listHead' | translate}}</span><span>{{'beamjoy.leaderboard.you' | translate}}</span>
+    </div>
+    <div class="lbx-scroll" ng-if="$ctrl.section === 'races'">
+        <button type="button" class="lb-pick" ng-repeat="race in $ctrl.shownRaces() track by race.id"
+            ng-class="{on: $ctrl.raceId === race.id}" aria-pressed="{{$ctrl.raceId === race.id}}" ng-click="$ctrl.pickRace(race)">
+            <span style="min-width: 0"><b>{{race.name}}</b><small>{{$ctrl.raceLine(race)}}</small></span>
+            <span class="lbx-plate" ng-if="$ctrl.myRank(race)" ng-class="$ctrl.myRank(race) === 1 ? 'rec' : 'me'"><span>{{$ctrl.myRank(race)}}</span></span>
+            <span class="none" ng-if="!$ctrl.myRank(race)">{{'beamjoy.leaderboard.race.noTime' | translate}}</span>
         </button>
     </div>
+
+    <!-- DELIVERIES : the two boards, then your totals across both -->
+    <div class="lb-colhead" ng-if="$ctrl.section === 'deliveries'">
+        <span>{{'beamjoy.leaderboard.delivery.listHead' | translate}}</span><span>{{'beamjoy.leaderboard.you' | translate}}</span>
+    </div>
+    <div ng-if="$ctrl.section === 'deliveries'">
+        <button type="button" class="lb-pick" ng-repeat="k in $ctrl.KINDS" ng-class="{on: $ctrl.kind === k}" aria-pressed="{{$ctrl.kind === k}}" ng-click="$ctrl.pickKind(k)">
+            <span style="min-width: 0"><b>{{('beamjoy.delivery.kindLong.' + k) | translate}}</b><small>{{$ctrl.kindLine(k)}}</small></span>
+            <span class="lbx-plate" ng-if="$ctrl.kindRank(k)" ng-class="$ctrl.kindRank(k) === 1 ? 'rec' : 'me'"><span>{{$ctrl.kindRank(k)}}</span></span>
+            <span class="none" ng-if="!$ctrl.kindRank(k)">-</span>
+        </button>
+    </div>
+    <section class="lb-totals" ng-if="$ctrl.section === 'deliveries' && $ctrl.allMine()">
+        <h3 class="lbx-title" style="font-size: 0.95em">{{'beamjoy.leaderboard.delivery.allYours' | translate}}</h3>
+        <dl>
+            <dt>{{'beamjoy.leaderboard.delivery.stat.count' | translate}}</dt><dd>{{$ctrl.allMine().count}}</dd>
+            <dt>{{'beamjoy.leaderboard.delivery.stat.rate' | translate}}</dt><dd>{{$ctrl.allMine().rate}}</dd>
+            <dt>{{'beamjoy.leaderboard.delivery.stat.meters' | translate}}</dt><dd>{{$ctrl.allMine().meters}}</dd>
+            <dt>{{'beamjoy.leaderboard.delivery.stat.total' | translate}}</dt><dd>{{$ctrl.allMine().total}}</dd>
+        </dl>
+    </section>
+</aside>
+
+<!-- RACES : the picked race's board -->
+<main class="lb-main" ng-if="$ctrl.section === 'races'">
+    <h2 class="lbx-title" style="font-size: 1.6em; padding-bottom: 0.3em" ng-if="$ctrl.race()">{{$ctrl.race().name}}</h2>
     <!-- remounted per race : bj-race-leaderboard reads its race id once, on init -->
-    <div ng-repeat="id in [$ctrl.raceId] track by id" ng-if="$ctrl.raceId !== null">
+    <div class="lb-race" ng-repeat="id in [$ctrl.raceId] track by id" ng-if="$ctrl.raceId !== null">
         <bj-race-leaderboard race-id="{{id}}"></bj-race-leaderboard>
     </div>
-</section>
+</main>
+
+<!-- DELIVERIES : the picked board -->
+<main class="lb-main" ng-if="$ctrl.section === 'deliveries'">
+    <div class="lbx-bar">
+        <div style="display: flex; flex-direction: column; gap: 0.4em; min-width: 0">
+            <h2 class="lbx-title" style="font-size: 1.6em">{{('beamjoy.delivery.kindLong.' + $ctrl.kind) | translate}}</h2>
+            <div class="lbx-chips">
+                <span class="lbx-chip">{{$ctrl.rankedBy()}}</span>
+                <span class="lbx-chip" ng-if="$ctrl.board">{{$ctrl.driversText()}}</span>
+            </div>
+        </div>
+        <div class="lbx-seg" role="group" ng-if="$ctrl.lb().mine">
+            <button type="button" ng-class="{on: !$ctrl.near}" aria-pressed="{{!$ctrl.near}}" ng-click="$ctrl.near = false">
+                {{'beamjoy.leaderboard.top100' | translate}}
+            </button>
+            <button type="button" ng-class="{on: $ctrl.near}" aria-pressed="{{$ctrl.near}}" ng-click="$ctrl.near = true">
+                {{'beamjoy.leaderboard.aroundYou' | translate}}
+            </button>
+        </div>
+    </div>
+
+    <p class="lbx-muted" ng-if="!$ctrl.board" style="margin: 0; font-size: 0.88em">
+        {{'beamjoy.window.main.tabs.races.leaderboard.loading' | translate}}
+    </p>
+    <div class="lbx-empty" ng-if="$ctrl.board && $ctrl.lb().rows.length === 0">
+        <p>{{('beamjoy.delivery.jobs.lbEmpty.' + $ctrl.kind) | translate}}</p>
+    </div>
+
+    <div class="lbx-cards" ng-if="$ctrl.leader()">
+        <div class="lbx-card rec">
+            <span class="lbx-plate big rec"><span>1</span></span>
+            <div class="who">
+                <span class="lbl">{{'beamjoy.leaderboard.delivery.leader' | translate}}</span>
+                <b>{{$ctrl.leader().name}}</b>
+                <small>{{$ctrl.leader().line}}</small>
+            </div>
+            <span class="lbx-big" style="color: #ba68f8">{{$ctrl.leader().value}}<small>{{$ctrl.unit()}}</small></span>
+        </div>
+        <div class="lbx-card me" ng-if="$ctrl.mine()">
+            <span class="lbx-plate big" ng-class="$ctrl.mine().rank === 1 ? 'rec' : 'me'"><span>{{$ctrl.mine().rank}}</span></span>
+            <div class="who">
+                <span class="lbl">{{'beamjoy.leaderboard.you' | translate}}</span>
+                <b>{{$ctrl.lb().mine.name}}</b>
+                <small>{{$ctrl.mine().behind}}</small>
+            </div>
+            <span class="lbx-big" style="color: #ffbca0">{{$ctrl.mine().value}}<small>{{$ctrl.unit()}}</small></span>
+        </div>
+        <div class="lbx-card" ng-if="!$ctrl.mine()">
+            <span class="lbx-plate big"><span>-</span></span>
+            <div class="who">
+                <span class="lbl">{{'beamjoy.leaderboard.you' | translate}}</span>
+                <small style="white-space: normal">{{('beamjoy.delivery.jobs.lbNone.' + $ctrl.kind) | translate}}</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="dlb-stats" ng-if="$ctrl.mine()">
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.delivery.stat.rate' | translate}}</span>
+            <b>{{$ctrl.mine().rate}} <small>{{$ctrl.mine().failed}}</small></b>
+        </div>
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.delivery.stat.meters' | translate}}</span>
+            <b>{{$ctrl.mine().meters}}</b>
+        </div>
+        <div class="dlb-stat" ng-if="$ctrl.kind === 'packages'">
+            <span>{{'beamjoy.leaderboard.delivery.stat.resets' | translate}}</span>
+            <b>{{$ctrl.mine().resets}} <small>{{$ctrl.mine().perJob}}</small></b>
+        </div>
+        <div class="dlb-stat" ng-if="$ctrl.kind === 'packages'">
+            <span>{{'beamjoy.leaderboard.delivery.stat.vehicle' | translate}}</span>
+            <b>{{$ctrl.mine().vehicle}}</b>
+        </div>
+        <div class="dlb-stat" ng-if="$ctrl.kind === 'vehicles'">
+            <span>{{'beamjoy.leaderboard.delivery.stat.count' | translate}}</span>
+            <b>{{$ctrl.mine().count}}</b>
+        </div>
+        <div class="dlb-stat" ng-if="$ctrl.kind === 'vehicles'">
+            <span>{{'beamjoy.leaderboard.delivery.stat.total' | translate}}</span>
+            <b>{{$ctrl.mine().total}}</b>
+        </div>
+    </div>
+
+    <div class="dlb-grid lbx-head {{$ctrl.kind}}" ng-if="$ctrl.lb().rows.length > 0">
+        <span style="text-align: center">{{'beamjoy.leaderboard.col.pos' | translate}}</span>
+        <span>{{'beamjoy.leaderboard.col.driver' | translate}}</span>
+        <span ng-repeat="col in $ctrl.COLUMNS[$ctrl.kind]" ng-class="{'lbx-r': col !== 'rate' && col !== 'vehicle'}">
+            <button type="button" ng-if="$ctrl.sortable(col)" ng-class="{on: $ctrl.sort === col}" aria-pressed="{{$ctrl.sort === col}}" ng-click="$ctrl.setSort(col)">
+                {{('beamjoy.leaderboard.delivery.col.' + col) | translate}}
+            </button>
+            <span ng-if="!$ctrl.sortable(col)">{{('beamjoy.leaderboard.delivery.col.' + col) | translate}}</span>
+        </span>
+    </div>
+    <div class="lbx-scroll" ng-if="$ctrl.lb().rows.length > 0">
+        <div ng-repeat="r in $ctrl.rows() track by r.key">
+            <span class="lbx-cut" ng-if="r.cut">{{r.text}}</span>
+            <div class="dlb-grid lbx-row {{$ctrl.kind}}" ng-if="!r.cut" ng-class="{me: r.you}">
+                <span class="lbx-pos"><span class="lbx-plate" ng-class="{rec: r.rank === 1, me: r.rank !== 1 && r.you}"><span>{{r.rank}}</span></span></span>
+                <span class="lbx-name">{{r.name}}</span>
+                <span class="lbx-r">{{r.count}}</span>
+                <span class="dlb-rate">
+                    <span class="lbx-r" ng-class="{'dlb-low': r.low}">{{r.rate}}</span>
+                    <span class="dlb-meter" ng-class="{me: r.you, low: !r.you && r.low}"><i ng-style="{width: r.ratePct + '%'}"></i></span>
+                </span>
+                <span class="lbx-r">{{r.meters}}</span>
+                <span class="lbx-r lbx-muted" ng-if="$ctrl.kind === 'packages'">{{r.resets}}</span>
+                <span class="lbx-dim" ng-if="$ctrl.kind === 'packages'">{{r.vehicle}}</span>
+                <span class="lbx-r dlb-pts" ng-class="{'lbx-fast': r.rank === 1 && $ctrl.sort === 'total'}">{{r.total}}</span>
+            </div>
+        </div>
+    </div>
+    <div class="dlb-grid lbx-row me lbx-pinned {{$ctrl.kind}}" ng-if="$ctrl.pinMine()">
+        <span class="lbx-pos"><span class="lbx-plate me"><span>{{$ctrl.mineRow().rank}}</span></span></span>
+        <span class="lbx-name">{{$ctrl.mineRow().name}}</span>
+        <span class="lbx-r">{{$ctrl.mineRow().count}}</span>
+        <span class="dlb-rate">
+            <span class="lbx-r" ng-class="{'dlb-low': $ctrl.mineRow().low}">{{$ctrl.mineRow().rate}}</span>
+            <span class="dlb-meter me"><i ng-style="{width: $ctrl.mineRow().ratePct + '%'}"></i></span>
+        </span>
+        <span class="lbx-r">{{$ctrl.mineRow().meters}}</span>
+        <span class="lbx-r lbx-muted" ng-if="$ctrl.kind === 'packages'">{{$ctrl.mineRow().resets}}</span>
+        <span class="lbx-dim" ng-if="$ctrl.kind === 'packages'">{{$ctrl.mineRow().vehicle}}</span>
+        <span class="lbx-r dlb-pts">{{$ctrl.mineRow().total}}</span>
+    </div>
+</main>

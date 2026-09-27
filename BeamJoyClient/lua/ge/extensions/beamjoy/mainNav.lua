@@ -29,8 +29,9 @@ local M = {
     autoHeld = {},
     ---@type table<string, true>
     autoDismissed = {},
-    -- the race HUD has the pad (its Race info / Retire buttons, windows/raceHud)
-    hudFocused = false,
+    --- which run HUD currently borrows the pad for its own action buttons (a HUDS key), or nil
+    ---@type string?
+    hudFocused = nil,
 }
 
 ---@return boolean racing (or watching a race) : the Focus control goes to the race HUD
@@ -40,17 +41,76 @@ local function racing()
     return s ~= nil and s.state == "RACE"
 end
 
----@param focused boolean
-local function setHudFocus(focused)
-    focused = focused == true
-    if focused == M.hudFocused then return end
-    M.hudFocused = focused
-    if focused then
-        beamjoy_uiNav.acquire("raceHud")
-    else
-        beamjoy_uiNav.release("raceHud")
+--- Every overlay the Focus control can hand the pad to, in priority order. Two kinds:
+---   * the vote overlays (windows/mapVote, windows/kickVote) - always visible, but their Vote /
+---     Cancel buttons were mouse-only until now. First in the order because a vote runs on a
+---     timer : it's the thing you most likely want to answer right now, even mid-race.
+---   * the run HUDs, whose action buttons stay HIDDEN until focused. The race HUD always worked
+---     that way ; per direct request the bus and delivery HUDs now match it instead of showing
+---     theirs permanently.
+--- `key` doubles as the beamjoy_uiNav owner name and the Angular side's event prefix.
+local HUDS = {
+    {
+        key = "mapVote",
+        event = "BJMapVoteFocus",
+        active = function()
+            return beamjoy_mapVote ~= nil and beamjoy_mapVote.data ~= nil
+                and beamjoy_mapVote.data.active == true
+        end,
+    },
+    {
+        key = "kickVote",
+        event = "BJKickVoteFocus",
+        active = function()
+            return beamjoy_kickVote ~= nil and beamjoy_kickVote.data ~= nil
+                and beamjoy_kickVote.data.active == true
+        end,
+    },
+    { key = "raceHud", event = "BJRaceHudFocus", active = racing },
+    {
+        key = "busHud",
+        event = "BJBusHudFocus",
+        active = function() return beamjoy_busRun ~= nil and beamjoy_busRun.run ~= nil end,
+    },
+    {
+        key = "deliveryHud",
+        event = "BJDeliveryHudFocus",
+        active = function() return beamjoy_delivery ~= nil and beamjoy_delivery.job ~= nil end,
+    },
+}
+
+---@return table? the HUD the Focus control should hand the pad to right now
+local function activeHud()
+    for _, hud in ipairs(HUDS) do
+        if hud.active() then return hud end
     end
-    beamjoy_communications_ui.send("BJRaceHudFocus", { active = focused })
+    return nil
+end
+
+---@param key string?
+---@return table?
+local function hudByKey(key)
+    if not key then return nil end
+    for _, hud in ipairs(HUDS) do
+        if hud.key == key then return hud end
+    end
+    return nil
+end
+
+--- @param hud table? one of HUDS, or nil to let go of whichever holds the pad
+local function setHudFocus(hud)
+    local key = hud and hud.key or nil
+    if key == M.hudFocused then return end
+    local previous = hudByKey(M.hudFocused)
+    if previous then
+        beamjoy_uiNav.release(previous.key)
+        beamjoy_communications_ui.send(previous.event, { active = false })
+    end
+    M.hudFocused = key
+    if hud then
+        beamjoy_uiNav.acquire(hud.key)
+        beamjoy_communications_ui.send(hud.event, { active = true })
+    end
 end
 
 --- where focusing lands when nothing asked for a place
@@ -161,9 +221,10 @@ local function setNotificationFocus(focused)
 end
 
 local function onBJFocusNotification()
-    -- the race HUD : the control toggles it while racing, before anything else
-    if M.hudFocused then return setHudFocus(false) end
-    if racing() and not M.focused and not notificationFocused() then return setHudFocus(true) end
+    -- a run HUD (race / bus line / delivery) : the control toggles it first, while one is running
+    if M.hudFocused then return setHudFocus(nil) end
+    local hud = activeHud()
+    if hud and not M.focused and not notificationFocused() then return setHudFocus(hud) end
     if M.focused then
         setFocused(false)
         if notificationFocusable() and not notificationFocused() then
@@ -227,7 +288,12 @@ local function onInit()
         setFocused(true, panel, nil, "rail")
     end)
     beamjoy_communications_ui.addHandler("BJFocusBindingRequest", pushBinding)
-    beamjoy_communications_ui.addHandler("BJRaceHudRelease", function() setHudFocus(false) end)
+    -- B on a focused run HUD : each one sends its own release
+    beamjoy_communications_ui.addHandler("BJRaceHudRelease", function() setHudFocus(nil) end)
+    beamjoy_communications_ui.addHandler("BJBusHudRelease", function() setHudFocus(nil) end)
+    beamjoy_communications_ui.addHandler("BJDeliveryHudRelease", function() setHudFocus(nil) end)
+    beamjoy_communications_ui.addHandler("BJMapVoteRelease", function() setHudFocus(nil) end)
+    beamjoy_communications_ui.addHandler("BJKickVoteRelease", function() setHudFocus(nil) end)
     -- the info overlay (race info, leaderboards) : driven by the pad while it's open
     beamjoy_communications_ui.addHandler("BJInfoPanelPad", function(open)
         if open == true then
@@ -247,17 +313,26 @@ end
 local function onMenuToggled(show)
     if show ~= true then return end
     if M.focused then setFocused(false) end
-    setHudFocus(false)
+    setHudFocus(nil)
     if notificationFocused() then setNotificationFocus(false) end
 end
 
 --- the race ended (or was left) : the HUD lets go of the pad
 local function onBJScenarioChanged()
-    if M.hudFocused and not racing() then setHudFocus(false) end
+    local hud = hudByKey(M.hudFocused)
+    if hud and not hud.active() then setHudFocus(nil) end
+end
+
+--- A bus run or delivery job ending has no equivalent of onBJScenarioChanged, so the HUD holding
+--- the pad would keep it (and its buttons) after the thing it belongs to was already over. Cheap:
+--- one predicate, and only while a HUD actually has the pad.
+local function onSlowUpdate()
+    local hud = hudByKey(M.hudFocused)
+    if M.hudFocused and (not hud or not hud.active()) then setHudFocus(nil) end
 end
 
 local function onServerLeave()
-    setHudFocus(false)
+    setHudFocus(nil)
     M.focused = false
     M.openedRail = false
     M.autoHeld = {}
@@ -271,6 +346,7 @@ M.onBJFocusNotification = onBJFocusNotification
 M.onServerLeave = onServerLeave
 M.onMenuToggled = onMenuToggled
 M.onBJScenarioChanged = onBJScenarioChanged
+M.onSlowUpdate = onSlowUpdate
 M.onExtensionUnloaded = onServerLeave
 M.setFocused = setFocused
 M.focusOn = focusOn

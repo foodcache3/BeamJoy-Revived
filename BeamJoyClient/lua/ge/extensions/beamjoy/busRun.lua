@@ -72,7 +72,10 @@
 --- POIs disappear then too (locked() guards every contribution hook).
 
 local M = {
-    dependencies = { "beamjoy_lang", "beamjoy_busLines", "beamjoy_context", "beamjoy_vehicles" },
+    -- beamjoy_players: findRemoteVehicle reads a remote driver's `currentVehicle` from the players
+    -- cache to mirror the sign onto the bus they're actually in rather than any vehicle they own
+    dependencies = { "beamjoy_lang", "beamjoy_busLines", "beamjoy_context", "beamjoy_vehicles",
+        "beamjoy_players" },
 
     ---@type { line: table, nextStop: integer, holdUntil: integer? }?
     run = nil,
@@ -98,6 +101,12 @@ local M = {
 
     lastTargetKey = nil,
     lastLocked = nil,
+
+    --- The vehicle this client last actually applied the LOCAL run's bus displays to. Compared
+    --- against the vehicle being driven on every tick so a bus picked/swapped/respawned after the
+    --- run began still gets its sign - see onSlowUpdate's own comment.
+    ---@type NGVehicle?
+    displaysVeh = nil,
 
     --- Other players' currently-running lines, as last reported through the server relay (see
     --- services/busRuns.lua) - playerName -> {lineId, stopIndex}. Used to mirror the destination
@@ -723,6 +732,12 @@ local function updateBusDisplaysForLine(line)
     local own = beamjoy_vehicles.getCurrentOwn()
     if not own or not own.veh then return end
     local veh = own.veh
+    -- Marked as dispatched up front, not once the (asynchronous) apply below actually lands:
+    -- onSlowUpdate calls this every tick while they differ, and without this a vehicle that takes a
+    -- moment to report ready would get a fresh job queued every second until it did. A dispatch
+    -- that never applies is self-correcting anyway - whenVehicleReady's stillValid() can only fail
+    -- because the player left this vehicle, which is exactly what makes the next tick re-dispatch.
+    M.displaysVeh = veh
     whenVehicleReady(veh,
         function()
             if not M.run or M.run.line ~= line then return false end
@@ -747,9 +762,27 @@ end
 --- scripted-mission system, with no display/UI output at all, so there's nothing else worth
 --- syncing (checked against the actual controller source, not assumed).
 
+--- Real, confirmed bug (direct report): "when I started with a bus the other players couldn't see
+--- it and only saw out of service." This used to return the player's FIRST registered vehicle,
+--- which is only the bus for someone who owns nothing else - a driver who had any other vehicle
+--- (always true after the "pick a bus" flow, and usual otherwise) had the sign applied to the wrong
+--- one, leaving the bus itself on its jbeam default "Not in Service" on every other client. The
+--- driver's own side never hit this because it goes through getCurrentOwn(), not this lookup.
+--- `currentVehicle` (a remoteVID, from the players cache) is the same "which one are they actually
+--- driving" field players.lua's own teleport/spectate lookups already key off. Falls back to the
+--- old any-vehicle behaviour only when that isn't resolvable yet, so a run still mirrors for a
+--- player whose cache entry hasn't landed.
 ---@param playerName string
 ---@return table? mpVeh
 local function findRemoteVehicle(playerName)
+    local players = beamjoy_players and beamjoy_players.players
+    local player = players and players[playerName]
+    if player and player.currentVehicle then
+        local current = beamjoy_vehicles.vehicles:find(function(v)
+            return v.remoteVID == player.currentVehicle
+        end)
+        if current then return current end
+    end
     return beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == playerName end)
 end
 
@@ -890,6 +923,7 @@ local function stopRun(reason)
     pushHud()
     -- real transit displays go back to "off duty" once the bus comes out of service, not just
     -- freeze on whatever the last run's destination/next-stop happened to be
+    M.displaysVeh = nil
     local own = beamjoy_vehicles.getCurrentOwn()
     if own then resetBusDisplays(own.veh) end
     beamjoy_communications.send("busRunStopped")
@@ -1029,6 +1063,21 @@ local function onSlowUpdate()
     end
     M.lastLocked = isLocked
 
+    -- Remote drivers: re-target the mirrored sign whenever the vehicle this client resolves for a
+    -- running player stops matching the one it last applied to - a driver switching bus mid-run,
+    -- their bus only now registering here, or (the reported case) findRemoteVehicle having resolved
+    -- a different vehicle of theirs earlier. applyRemoteRun is idempotent per (line, stop, vehicle),
+    -- so a steady state costs one table lookup per player actually driving a line right now.
+    -- Ahead of the needBus block below on purpose: that one returns early, and other people's buses
+    -- shouldn't stop being mirrored for the 30s this player might spend in the vehicle selector.
+    for playerName, remote in pairs(M.remoteRuns) do
+        local mpVeh = findRemoteVehicle(playerName)
+        local applied = remoteApplied[playerName]
+        if mpVeh and mpVeh.veh and (not applied or applied.veh ~= mpVeh.veh) then
+            applyRemoteRun(playerName, remote.lineId, remote.stopIndex)
+        end
+    end
+
     -- waiting for a bus to start a pending line
     if M.needBus then
         if currentIsBus() then
@@ -1055,6 +1104,18 @@ local function onSlowUpdate()
     if not own or not own.veh or not currentIsBus() then
         stopRun("stopped")
         return
+    end
+
+    -- Real, confirmed bug (direct report): "if you start a bus line but have to choose a bus, the
+    -- sign does not apply." beginRun fires the moment currentIsBus() flips true, and the one-shot
+    -- updateBusDisplaysForLine it runs captures whichever vehicle getCurrentOwn() returned right
+    -- then - during a spawn/replace that can still be the OLD vehicle, or nothing at all, and its
+    -- own stillValid() guard then (correctly) refuses to apply to a vehicle the player is no longer
+    -- in. Nothing re-tried afterwards, so the sign simply never appeared. Re-applying whenever the
+    -- vehicle actually holding the displays isn't the one being driven covers that, plus a mid-run
+    -- bus swap or a respawn, without depending on the spawn timing being right.
+    if M.displaysVeh ~= own.veh then
+        updateBusDisplaysForLine(M.run.line)
     end
 
     local r = M.run
