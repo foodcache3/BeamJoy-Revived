@@ -1230,6 +1230,9 @@ local function pushHud()
         -- to label the panel accordingly) without having to separately compare playerName against
         -- some other locally-known "self" value
         spectatingPlayerName = M.spectatingPlayerName,
+        -- watching rather than racing (a spectator, or a racer who finished / retired and follows
+        -- someone) : the HUD shows its full standings layout then
+        spectator = M.spectatingSession ~= nil or M.spectatingPlayerName ~= nil,
     })
 end
 

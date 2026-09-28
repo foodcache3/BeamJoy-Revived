@@ -9,6 +9,34 @@ local M = {
     },
 }
 
+--- The group's vehicle cap (services/vehicles.lua enforces it too, but a refused spawn there has
+--- the game drop the player into the nearest vehicle). `adds` : the pick would be one vehicle more
+--- (a new spawn or clone, or replacing the unicycle / nothing). Says so and returns true when full.
+---@param adds boolean
+---@return boolean
+local function capReached(adds)
+    if not adds then return false end
+    local self = beamjoy_players and beamjoy_players.getSelf()
+    if not self then return false end
+    local group = beamjoy_groups and Table(beamjoy_groups.data):find(function(g) return g.name == self.group end)
+    local cap = group and tonumber(group.vehicleCap)
+    if not cap or cap < 0 then return false end
+    local count = 0
+    for _, v in pairs(self.vehicles or {}) do
+        if type(v) == "table" and not v.isAi then count = count + 1 end
+    end
+    if count < cap then return false end
+    toast.error(beamjoy_lang.translate("beamjoy.toast.vehicleSelector.capReached"):gsub("{cap}", tostring(cap)), nil, 6)
+    return true
+end
+
+--- replacing adds a vehicle when there's nothing real to replace (walking, or no vehicle)
+---@return boolean
+local function replaceAdds()
+    local own = beamjoy_vehicles.getCurrentOwn()
+    return not own or own.jbeam == beamjoy_vehicles.WALKING
+end
+
 local function cloneCurrent()
     local veh = be:getPlayerVehicle(0)
     if not veh then return end
@@ -21,7 +49,7 @@ local function cloneCurrent()
     -- exactly like "spawn" below. It calls spawnNewVehicle internally and never deletes the
     -- original, always leaving the player with two vehicles at once.
     extensions.hook("onBJRequestCanSpawnVehicle", req, veh.jbeam, config, "clone")
-    if req.state then
+    if req.state and not capReached(true) then
         return M.baseFunctions.core_vehicles.cloneCurrent()
     end
 end
@@ -59,7 +87,7 @@ local function spawnNewVehicle(model, opt)
     -- genuinely ADDITIVE path. It never deletes any existing vehicle, unlike replaceVehicle below,
     -- which is what a normal tile pick/double-click actually goes through.
     extensions.hook("onBJRequestCanSpawnVehicle", req, model, config, "spawn")
-    if req.state then
+    if req.state and not capReached(true) then
         return M.baseFunctions.core_vehicles.spawnNewVehicle(model, opt)
     end
 end
@@ -84,7 +112,7 @@ local function replaceVehicle(model, opt, otherVeh)
     -- calls when a vehicle already exists. It deletes the old one itself, so this is never a
     -- "second simultaneous vehicle" concern the way "spawn"/"clone" are.
     extensions.hook("onBJRequestCanSpawnVehicle", req, model, config, "replace")
-    if req.state then
+    if req.state and not capReached(replaceAdds()) then
         return M.baseFunctions.core_vehicles.replaceVehicle(model, opt, otherVeh)
     end
 end

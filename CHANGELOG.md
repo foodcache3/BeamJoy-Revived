@@ -8,8 +8,45 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Client build 2527, server build 2368.
+Version 1.11.0 : client build 2529, server build 2370.
 
+- **The UI appears about 2 seconds sooner after the nickname screen.** Start-up waited a fixed 2
+  seconds before even checking whether the server's data had arrived. It now goes as soon as it has. *(client only)*
+- **Fixed: map and kick vote chat messages showed placeholder text.** The server sends each vote
+  message as a translation key and the game translates it with the client's own strings, which
+  never had the ten vote messages. They're now in the client's language file. *(client only)*
+- **Simple traffic cars are never delivery vehicles.** simple_traffic, and any model named like it
+  (starting with "simple", or with "traffic" in the name), is left out when staff build the
+  delivery pool, never picked for a job even from a pool built before this, and not listed in the
+  pool summary. *(server and client)*
+- **Spectating a race shows the full standings.** While watching rather than racing (spectating,
+  or following someone after you finish or retire) the race HUD uses its full layout ; it goes
+  back to your chosen layout (Settings) when you race again. *(client only)*
+- **Fixed: walking players couldn't spawn a car.** Picking a car on the unicycle replaces the
+  unicycle, which BeamMP sends as an edit of that vehicle rather than a spawn ; the server only
+  accepted edits of vehicles it already listed, and never lists the unicycle, so every one was
+  refused and the game dropped the player into the nearest vehicle. It now counts as a new vehicle
+  against the group's vehicle cap. The vehicle selector also checks the cap itself before spawning,
+  cloning or leaving the unicycle, and says so instead of letting the server refuse it.
+  *(server and client)*
+- **No resetting other players' vehicles while spectating.** Every reset, recover, reload, repair
+  and flip is refused while the vehicle you're watching isn't yours, from key presses and from the
+  pause menu's buttons alike. *(client only)*
+- **Less lag after joining a server with many vehicle mods.** Each time a server's vehicle mod
+  was mounted, BeamJoy's traffic settings rescanned every jbeam file in /vehicles/common/ for
+  license plate designs, fully parsing one file per frame (up to 50 ms and several MB a frame, for
+  about a minute ; the same scan ran at startup). Files are now read as text and only parsed when
+  they mention a plate design, a few milliseconds of files per frame, and a newer scan replaces
+  one still running. *(client only)*
+- **Also on joining:** BeamJoy built its
+  vehicle list by test-loading every mod vehicle's jbeam files, one model per frame, to leave out
+  mods that don't load. Every one of those loads also made the game rebuild its whole part index
+  from all the files read so far, so each frame took longer than the last (5 ms growing to 40 ms,
+  plus garbage collection pauses of up to 120 ms) for about a minute. The list is now built from
+  the game's own vehicle data without loading any jbeam, and a mod vehicle is only test-loaded
+  where BeamJoy picks vehicles at random (traffic, and the delivery pool when staff rebuild it),
+  once per model. A mod vehicle that doesn't load can now appear in BeamJoy's vehicle lists ;
+  spawning it fails the same way it does outside BeamJoy. *(client only)*
 - **Leaderboards redesigned.** A race's leaderboard (from its results, the Races list, or the big
   screen) now opens on two cards, the track record and your best lap, with how far you are from
   the next place and from the record. Right after a race that set your best it says "New best, up

@@ -93,20 +93,41 @@ end
 -- packs get installed.
 ---@param job NGJob
 ---@return tablelib<integer, {id: string, name: string}>
+--
+-- Real, confirmed lag (BJSpikeProfiler, joining a server with many vehicle mods: this job at up to
+-- 50 ms a frame, several MB allocated each, for about a minute): it fully JSON-parsed every jbeam
+-- file under /vehicles/common/, one per frame, to find the few that hold a plate design. Now each
+-- file is read as text and only parsed when it mentions the slot at all, and files are taken in
+-- a few-millisecond budget per frame instead of one each. A newer scan (another mod mounted)
+-- stops an older one still running.
+local PLATE_SLOT = "licenseplate_design_2_1"
+local PLATE_SCAN_BUDGET_MS = 3
+local plateScanGeneration = 0
 local function scanPlateDesigns(job)
+    plateScanGeneration = plateScanGeneration + 1
+    local generation = plateScanGeneration
     local found = Table()
     local jbeamFiles = FS:findFiles("/vehicles/common/", "*.jbeam", -1, true, false) or {}
+    local sliceStart = GetCurrentTimeMillis()
     for _, filePath in ipairs(jbeamFiles) do
-        local ok, jbeamData = pcall(jsonReadFile, filePath)
-        if ok and type(jbeamData) == "table" then
-            for partKey, part in pairs(jbeamData) do
-                if type(part) == "table" and part.slotType == "licenseplate_design_2_1" and
-                    part.information and part.information.name then
-                    found:insert({ id = partKey, name = part.information.name })
+        local text = readFile(filePath)
+        if type(text) == "string" and text:find(PLATE_SLOT, 1, true) then
+            local ok, jbeamData = pcall(jsonDecode, text, filePath)
+            if ok and type(jbeamData) == "table" then
+                for partKey, part in pairs(jbeamData) do
+                    if type(part) == "table" and part.slotType == PLATE_SLOT and
+                        part.information and part.information.name then
+                        found:insert({ id = partKey, name = part.information.name })
+                    end
                 end
             end
         end
-        if job then job.sleep(.01) end
+        if job and GetCurrentTimeMillis() - sliceStart >= PLATE_SCAN_BUDGET_MS then
+            job.sleep(.01)
+            -- a newer scan took over : its result is the one that counts
+            if generation ~= plateScanGeneration then return nil end
+            sliceStart = GetCurrentTimeMillis()
+        end
     end
     found:sort(function(a, b) return a.name < b.name end)
     return found
@@ -373,7 +394,8 @@ local function createGroup(job, amount)
     -- bigger one dominating purely by having more configs.
     local sources = Table()
     table.filter(beamjoy_vehicles.getAllVehicleConfigs(job, { traffic = true }),
-        function(_, model) return table.includes(selectedModels, model) end)
+        -- a vehicle mod that doesn't load would only fail to spawn
+        function(_, model) return table.includes(selectedModels, model) and beamjoy_vehicles.isModelLoadable(model) end)
         :forEach(function(data, model)
             local configs = table.keys(data.configs):map(function(config)
                 return { model = model, config = config }
@@ -947,14 +969,14 @@ end
 -- vehicles.lua:onBJVehicleModChanged) keeps the vehGroup list from going stale after connecting.
 local function onBJVehicleModChanged()
     M.vehGroups = scanVehGroups()
-    core_jobsystem.create(function(job) M.plateDesigns = scanPlateDesigns(job) end)
+    core_jobsystem.create(function(job) M.plateDesigns = scanPlateDesigns(job) or M.plateDesigns end)
 end
 
 local function onInit()
     InitPreloadedDependencies(M)
 
     M.vehGroups = scanVehGroups()
-    core_jobsystem.create(function(job) M.plateDesigns = scanPlateDesigns(job) end)
+    core_jobsystem.create(function(job) M.plateDesigns = scanPlateDesigns(job) or M.plateDesigns end)
 
     beamjoy_communications.addHandler("sendCache", function(caches)
         if caches.traffic then

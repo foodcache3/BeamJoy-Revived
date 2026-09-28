@@ -17,6 +17,39 @@ local function onInit()
     communications_rx.addHandler("updateVehicleGhost", M.updateGhost)
 end
 
+--- a real (non-walking) vehicle joins the player's list, within their group's vehicle cap
+---@param player BJSPlayer
+---@param group table
+---@param vehID integer
+---@param vehData ServerVehicleConfig
+---@param jbeam string
+---@return boolean added false : the cap is reached
+local function addVehicle(player, group, vehID, vehData, jbeam)
+    if group.vehicleCap > -1 then
+        local currentCount = player.vehicles:filter(function(v) return not v.isAi end):length()
+        if currentCount >= group.vehicleCap then
+            return false -- maximum vehicles reached
+        end
+    end
+
+    player.vehicles[vehID] = {
+        vid = vehData.vid,
+        pid = vehData.pid,
+        vehicleID = vehID,
+        serverVehicleID = string.format("%d-%d", vehData.pid, vehID),
+        froze = false,
+        shut = false,
+        jbeam = jbeam,
+        parts = vehData.vcf.parts,
+        paints = vehData.vcf.paints,
+        isAi = isAi(jbeam),
+    }
+
+    communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
+        player.playerName, player)
+    return true
+end
+
 ---@param playerID integer
 ---@param vehID integer
 ---@param vehDataStr string
@@ -41,28 +74,7 @@ local function onVehicleSpawn(playerID, vehID, vehDataStr)
 
     local jbeam = tostring(vehData.jbm or vehData.vcf.model or vehData.vcf.mainPartName)
     if jbeam ~= M.WALKING then
-        if group.vehicleCap > -1 then
-            local currentCount = player.vehicles:filter(function(v) return not v.isAi end):length()
-            if currentCount >= group.vehicleCap then
-                return 1 -- maximum vehicles reached
-            end
-        end
-
-        player.vehicles[vehID] = {
-            vid = vehData.vid,
-            pid = vehData.pid,
-            vehicleID = vehID,
-            serverVehicleID = string.format("%d-%d", vehData.pid, vehID),
-            froze = false,
-            shut = false,
-            jbeam = jbeam,
-            parts = vehData.vcf.parts,
-            paints = vehData.vcf.paints,
-            isAi = isAi(jbeam),
-        }
-
-        communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
-            playerName, player)
+        if not addVehicle(player, group, vehID, vehData, jbeam) then return 1 end
     else
         if not services_config.data.AllowWalking then
             return 1
@@ -100,10 +112,26 @@ local function onVehicleEdited(playerID, vehID, vehDataStr)
     if not services_players.players[playerName] then return 1 end
 
     if jbeam == M.WALKING then
+        local was = services_players.players[playerName].vehicles[vehID]
         services_players.players[playerName].vehicles[vehID] = nil
+        if was then
+            communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
+                playerName, services_players.players[playerName])
+        end
         return
     end
-    if not services_players.players[playerName].vehicles[vehID] then return 1 end
+    if not services_players.players[playerName].vehicles[vehID] then
+        -- Real, confirmed bug (direct report: a guest with a 1-vehicle cap, walking, "can't spawn
+        -- a car and gets put in the nearest vehicle"): picking a car while on the unicycle
+        -- REPLACES the unicycle, which BeamMP sends as an edit of that vehicle, not a spawn. The
+        -- unicycle is never in the list, so every such edit was rejected. It's a new vehicle as far
+        -- as the cap goes : counted and added like a spawn
+        local player = services_players.players[playerName]
+        local groupIndex = services_groups.getGroupIndex(player.group)
+        local group = groupIndex and services_groups.data[groupIndex]
+        if not group or not addVehicle(player, group, vehID, vehData, jbeam) then return 1 end
+        return
+    end
 
     local veh = services_players.players[playerName].vehicles[vehID]
     veh.jbeam = jbeam

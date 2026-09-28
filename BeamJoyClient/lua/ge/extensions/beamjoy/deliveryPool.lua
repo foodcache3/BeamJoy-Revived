@@ -55,7 +55,12 @@ local function buildAndUpload()
         for key, model in pairs(models) do
             local kind = model.Type == beamjoy_vehicles.TYPES.TRUCK and "trucks"
                 or model.Type == beamjoy_vehicles.TYPES.CAR and "cars" or nil
-            if kind then
+            -- a vehicle mod that doesn't load would fail every job it's drawn for (one model per
+            -- frame : the job yields below)
+            -- simplified traffic models (simple_traffic and packs named like it) never deliver
+            local lower = tostring(key):lower()
+            local simple = lower:find("^simple") ~= nil or lower:find("traffic", 1, true) ~= nil
+            if kind and not simple and beamjoy_vehicles.isModelLoadable(key) then
                 for _, c in ipairs(eligibleConfigs(model)) do
                     list[#list + 1] = {
                         model = key,

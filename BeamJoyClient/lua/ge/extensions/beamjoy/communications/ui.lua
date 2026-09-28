@@ -73,7 +73,9 @@ local function proceedAfterLogin()
     beamjoy_communications.send("clientConnection", beamjoy_lang.lang)
     local session = M.session
     core_jobsystem.create(function(job)
-        job.sleep(2)
+        -- no fixed head start (it used to sleep 2 s here first, a flat delay between the nickname
+        -- prompt and the UI on every join) : the server's caches landing is the real signal, and
+        -- beamjoy_cache.loaded is reset on leave so it can't be a stale session's
         while not beamjoy_cache.loaded do
             -- the connection dropped (the launcher closing, a rejoin) : this session's start-up
             -- is over, the next one runs its own

@@ -196,6 +196,8 @@ local function overrideResetInputs()
         if isNearOwnCurrentPos then
             local resetType = resetVehicle and M.RESET.REPAIR or M.RESET.FLIP_UPRIGHT
             local mpVeh = beamjoy_vehicles.getCurrent()
+            -- spectating someone else : their vehicle is never ours to repair or flip
+            if mpVeh and not mpVeh.isLocal then return end
             local req = CreateRequestAuthorization(true)
             extensions.hook("onBJRequestCurrentVehicleReset", req, resetType, mpVeh)
             -- denied : silently swallowed, same "key press, nothing happens" feel every other
@@ -311,6 +313,12 @@ local function onReset(resetType, release)
     local mpVeh = beamjoy_vehicles.getCurrent()
     if not mpVeh and
         not table.includes({ M.RESET.RESET_ALL_PHYSICS, M.RESET.RELOAD_ALL }, resetType) then
+        return
+    end
+    -- per direct request : spectating another player, no reset / recover / reload of any kind
+    -- reaches their vehicle (or everyone's, for the "all vehicles" ones), whoever is watching
+    if mpVeh and not mpVeh.isLocal then
+        rewindProcess = false
         return
     end
     local req = CreateRequestAuthorization(true)

@@ -257,8 +257,18 @@ end
 --- not blacklisted as a model, as that config, or by the spawn ModelBlacklist
 ---@param v {model: string, config: string}
 ---@return boolean
+--- simplified traffic models (simple_traffic, and mod packs named like it) : low-detail stand-ins
+--- meant for AI traffic, never a delivery. Always excluded, whatever the pool holds
+---@param model string?
+---@return boolean
+local function isSimpleTraffic(model)
+    local m = tostring(model or ""):lower()
+    return m:find("^simple") ~= nil or m:find("traffic", 1, true) ~= nil
+end
+
 local function vehicleAllowed(v)
-    return not table.includes(M.pool.blacklist, v.model) and
+    return not isSimpleTraffic(v.model) and
+        not table.includes(M.pool.blacklist, v.model) and
         not configBlacklistIndex(v.model, v.config) and
         not table.includes(services_config.data.ModelBlacklist or {}, v.model)
 end
@@ -279,29 +289,34 @@ end
 local function poolSummary()
     local byModel, order = {}, {}
     local cars, trucks = 0, 0
+    local counted = 0
     for _, v in ipairs(M.pool.vehicles) do
-        if v.kind == "trucks" then trucks = trucks + 1 else cars = cars + 1 end
-        local row = byModel[v.model]
-        if not row then
-            row = { model = v.model, label = v.modelLabel or v.model, kind = v.kind, configs = 0,
-                blocked = 0, blacklisted = table.includes(M.pool.blacklist, v.model), list = {} }
-            byModel[v.model] = row
-            order[#order + 1] = row
+        -- never picked (isSimpleTraffic) : not shown either
+        if not isSimpleTraffic(v.model) then
+            counted = counted + 1
+            if v.kind == "trucks" then trucks = trucks + 1 else cars = cars + 1 end
+            local row = byModel[v.model]
+            if not row then
+                row = { model = v.model, label = v.modelLabel or v.model, kind = v.kind, configs = 0,
+                    blocked = 0, blacklisted = table.includes(M.pool.blacklist, v.model), list = {} }
+                byModel[v.model] = row
+                order[#order + 1] = row
+            end
+            row.configs = row.configs + 1
+            local off = configBlacklistIndex(v.model, v.config) ~= nil
+            if off then row.blocked = row.blocked + 1 end
+            local label = v.configLabel
+            if not label and v.modelLabel and v.label:sub(1, #v.modelLabel + 1) == v.modelLabel .. " " then
+                label = v.label:sub(#v.modelLabel + 2)
+            end
+            row.list[#row.list + 1] = { config = v.config, label = label or v.label, blacklisted = off }
         end
-        row.configs = row.configs + 1
-        local off = configBlacklistIndex(v.model, v.config) ~= nil
-        if off then row.blocked = row.blocked + 1 end
-        local label = v.configLabel
-        if not label and v.modelLabel and v.label:sub(1, #v.modelLabel + 1) == v.modelLabel .. " " then
-            label = v.label:sub(#v.modelLabel + 2)
-        end
-        row.list[#row.list + 1] = { config = v.config, label = label or v.label, blacklisted = off }
     end
     for _, row in ipairs(order) do
         table.sort(row.list, function(a, b) return a.label:lower() < b.label:lower() end)
     end
     table.sort(order, function(a, b) return a.label:lower() < b.label:lower() end)
-    return { count = #M.pool.vehicles, cars = cars, trucks = trucks, models = order }
+    return { count = counted, cars = cars, trucks = trucks, models = order }
 end
 
 ---@param playerID integer

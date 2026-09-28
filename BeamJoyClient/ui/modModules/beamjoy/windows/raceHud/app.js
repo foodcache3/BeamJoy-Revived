@@ -19,15 +19,21 @@ angular.module("beamjoy").component("bjRaceHud", {
         this.active = false;
         this.v = null;
 
-        this.layout = "standard";
+        // the player's own choice (Settings), and the one showing : the full standings while
+        // spectating (the HUD data's `spectator`), the player's choice otherwise
+        this.chosenLayout = "standard";
         try {
             const saved = localStorage.getItem(RACE_HUD_LAYOUT_KEY);
-            if (RACE_HUD_LAYOUTS.includes(saved)) this.layout = saved;
+            if (RACE_HUD_LAYOUTS.includes(saved)) this.chosenLayout = saved;
         } catch (e) {
             // storage unavailable : the standard layout
         }
+        this.spectator = false;
+        this.layout = this.chosenLayout;
+        const applyLayout = () => (this.layout = this.spectator ? "full" : this.chosenLayout);
         $rootScope.$on("BJRaceHudLayout", (_, layout) => {
-            if (RACE_HUD_LAYOUTS.includes(layout)) this.layout = layout;
+            if (RACE_HUD_LAYOUTS.includes(layout)) this.chosenLayout = layout;
+            applyLayout();
         });
 
         // 1:48.21 for lap times and clocks
@@ -59,6 +65,8 @@ angular.module("beamjoy").component("bjRaceHud", {
         const nameOf = (row) => (row && (row.displayName || row.playerName)) || "";
 
         const build = (data) => {
+            this.spectator = !!data.spectator;
+            applyLayout();
             const self = data.self || {};
             const laps = data.totalLaps || 1;
             const sectors = data.totalSectors || 0;

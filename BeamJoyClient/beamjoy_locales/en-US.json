@@ -1442,6 +1442,17 @@
     "beamjoy.window.hud": "BeamJoy HUD",
 
     // TOAST MESSAGES
+    "beamjoy.chat.event.mapVoteStarted": "{playerName} started a vote to switch to {map}",
+    "beamjoy.chat.event.mapVotePassed": "Vote passed! Switching to {map}",
+    "beamjoy.chat.event.mapVoteFailed": "The vote to switch to {map} did not pass",
+    "beamjoy.chat.event.mapVoteCancelled": "The vote to switch to {map} was cancelled",
+    "beamjoy.chat.event.mapVoteCancelledByCreator": "The vote to switch to {map} was cancelled by its creator",
+    "beamjoy.chat.event.kickVoteStarted": "{playerName} started a vote to kick {target}",
+    "beamjoy.chat.event.kickVotePassed": "Vote passed! {playerName} was kicked",
+    "beamjoy.chat.event.kickVoteFailed": "The vote to kick {playerName} did not pass",
+    "beamjoy.chat.event.kickVoteCancelled": "The vote to kick {playerName} was cancelled",
+    "beamjoy.chat.event.kickVoteCancelledByCreator": "The vote to kick {playerName} was cancelled by its creator",
+    "beamjoy.toast.vehicleSelector.capReached": "You already have the most vehicles your group allows ({cap}). Remove one to spawn another.",
     "beamjoy.toast.vehicleSelector.removeOtherVeh": "You are about to remove another player's vehicle. Are you sure you want to proceed?",
     "beamjoy.toast.traffic.waitForSpawn": "Spawning traffic vehicles... This will not take long.",
     "beamjoy.toast.mods.cannotDisableMandatory": "This mod cannot be removed !",

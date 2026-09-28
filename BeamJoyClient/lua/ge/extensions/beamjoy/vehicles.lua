@@ -28,6 +28,8 @@ local M = {
     vehicles = Table(),
 
     modelTypeCache = {},
+    ---@type table<string, boolean> model -> its jbeam loads (isModelLoadable), mods only
+    loadableModels = {},
 
     --- edge case, real report: a ghost-state broadcast ("updateVehicleGhost") for someone else's
     --- vehicle can arrive on this client BEFORE that vehicle has finished syncing in locally (its
@@ -696,6 +698,35 @@ end
 ---@field configs table<string, NGVehicleConfig> index config_key
 ---@field preview string
 
+--- whether a model's jbeam actually loads (a broken vehicle mod has no main part) ; only mods are
+--- checked, the answer is kept. For the places that pick vehicles at random (traffic, the delivery
+--- pool) : checking every installed mod up front, on every join, is what made joining slow.
+--- The check parses the model's own folder plus /vehicles/common, so it costs a frame the first
+--- time for each model ; call it from a job for many models.
+---@param model string
+---@return boolean
+local function isModelLoadable(model)
+    if type(model) ~= "string" then return false end
+    local cached = M.loadableModels[model]
+    if cached ~= nil then return cached end
+    local ok = true
+    local list = extensions.core_vehicles.getModel and extensions.core_vehicles.getModel(model)
+    local md = list and list.model
+    if md and md.aggregates and md.aggregates.Source and md.aggregates.Source.Mod then
+        local jbeamIO = require('jbeam/io')
+        ok = pcall(function()
+            if not jbeamIO.getMainPartName(jbeamIO.startLoading({
+                    string.var("/vehicles/{1}/", { model }),
+                    "/vehicles/common/"
+                })) then
+                error()
+            end
+        end)
+    end
+    M.loadableModels[model] = ok
+    return ok
+end
+
 ---@param job NGJob?
 ---@param data {cars: boolean?, trucks: boolean?, trailers: boolean?, props: boolean?, traffic: boolean?, forced: boolean?}?
 ---@return table<string, NGVehicleModel> allConfigs index model_key
@@ -741,6 +772,7 @@ local function getAllVehicleConfigs(job, data)
     local trailers = {}
     local props = {}
     local traffic = {}
+    M.loadableModels = {}
     local vehs = extensions.core_vehicles.getVehicleList().vehicles
     for _, veh in ipairs(vehs) do
         if veh.model then
@@ -760,21 +792,9 @@ local function getAllVehicleConfigs(job, data)
                 goto skipVeh
             end
 
-            if veh.model.aggregates.Source.Mod then
-                local jbeamIO = require('jbeam/io')
-                local function tryLoadVeh()
-                    if not jbeamIO.getMainPartName(jbeamIO.startLoading({
-                            string.var("/vehicles/{1}/", { veh.model.key }),
-                            "/vehicles/common/"
-                        })) then
-                        error()
-                    end
-                end
-                if not pcall(tryLoadVeh) then
-                    -- vehicle lot loaded
-                    goto skipVeh
-                end
-            end
+            -- Mod vehicles are no longer test-loaded here (see isModelLoadable) : parsing every
+            -- mod's jbeam files, each call rebuilding the game's part index from everything parsed
+            -- so far, was the minute of lag after joining a server with many vehicle mods.
 
             local target
             if isVeh then
@@ -1565,6 +1585,7 @@ M.getVehiclePositionRotation = getVehiclePositionRotation
 M.setVehiclePositionRotation = setVehiclePositionRotation
 M.getAllVehicleConfigs = getAllVehicleConfigs
 M.getAllVehicleLabels = getAllVehicleLabels
+M.isModelLoadable = isModelLoadable
 M.getModelLabel = getModelLabel
 M.getConfigLabel = getConfigLabel
 M.getCurrentConfigDisplayLabel = getCurrentConfigDisplayLabel
