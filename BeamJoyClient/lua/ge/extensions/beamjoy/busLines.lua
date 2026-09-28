@@ -35,8 +35,9 @@ local function onLegacyImportPreviewResult(results)
     beamjoy_communications_ui.send("BJBusLinesLegacyImportPreview", results or {})
 end
 
-local function confirmLegacyImport()
-    beamjoy_communications.send("busLinesLegacyImportConfirm")
+--- `selection` : the keys ticked in the import checklist
+local function confirmLegacyImport(selection)
+    beamjoy_communications.send("busLinesLegacyImportConfirm", selection)
 end
 
 ---@param imported integer

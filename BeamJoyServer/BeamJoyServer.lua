@@ -47,7 +47,7 @@ local M = {
         "services_freeroamData",
         "services_busLines", "services_busRuns",
         "services_deliveryPoints", "services_deliveries", "services_lobbyInvites", "services_crews",
-        "services_identity",
+        "services_identity", "services_discord",
         "communications_rx", "communications_tx" },
 }
 

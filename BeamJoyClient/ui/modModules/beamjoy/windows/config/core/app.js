@@ -71,6 +71,17 @@ angular.module("beamjoy").component("bjConfigCore", {
             );
         };
 
+        // Every importer shows a checklist of what it found (beamjoyConfirm.askChecklist) : one row
+        // per race or bus line, one per map for arenas and stations, all ticked to start with. The
+        // confirm sends only the ticked rows' keys, and the server imports only those.
+        //
+        // Real bug (applies to every preview below): an empty scan result ({} in Lua) round-trips
+        // through the GE->UI native guihooks bridge (a second, separate JSON encode from BJS's own
+        // server->client one) and can come out the other side as a plain object rather than [].
+        // `.length` on that is undefined, not 0, so each guard checks real arrayness too.
+        const importable = (results) => Array.isArray(results) && results.length > 0;
+        const byMap = (a, b) => a.map.localeCompare(b.map);
+
         this.hunterLegacyImportStatus = null;
         this.requestHunterLegacyImport = (event) => {
             event.stopPropagation();
@@ -78,31 +89,24 @@ angular.module("beamjoy").component("bjConfigCore", {
             beamjoyStore.send("BJHunterLegacyImportPreviewRequest");
         };
         $rootScope.$on("BJHunterLegacyImportPreview", (_, results) => {
-            // Real bug: an empty scan result ({} in Lua) round-trips through the GE->UI native
-            // guihooks bridge (a second, separate JSON encode from BJS's own server->client one)
-            // and can come out the other side as a plain object rather than []. `.length` on that
-            // is undefined, not 0, so the guard below has to check real arrayness too or this
-            // falls through to results.filter() on a non-array and throws.
-            if (!Array.isArray(results) || results.length === 0) {
+            if (!importable(results)) {
                 this.hunterLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.hunter.none";
                 return;
             }
-            const conflictCount = results.filter((r) => r.conflict).length;
-            const lines = results
-                .map((r) => {
-                    const counts = `${r.hunterSpawnCount}/${r.preySpawnCount}/${r.waypointCount}`;
-                    const overwrite = r.conflict
-                        ? ` (${translate("beamjoy.window.config.tabs.core.legacyImport.hunter.overwriteTag")})`
-                        : "";
-                    return `${r.map} · ${counts}${overwrite}`;
-                })
-                .join("\n");
-            const header = translate("beamjoy.window.config.tabs.core.legacyImport.hunter.confirm")
-                .replace("{count}", results.length)
-                .replace("{conflicts}", conflictCount);
-            beamjoyConfirm.ask(`${header}\n\n${lines}`, () => {
-                beamjoyStore.send("BJHunterLegacyImportConfirm");
-            });
+            const items = results.slice().sort(byMap).map((r) => ({
+                key: r.key || r.map,
+                label: r.map,
+                detail: translate("beamjoy.window.config.tabs.core.legacyImport.hunter.counts")
+                    .replace("{hunters}", r.hunterSpawnCount)
+                    .replace("{fugitives}", r.preySpawnCount)
+                    .replace("{waypoints}", r.waypointCount),
+                tag: r.conflict ? translate("beamjoy.window.config.tabs.core.legacyImport.hunter.overwriteTag") : "",
+            }));
+            beamjoyConfirm.askChecklist(
+                translate("beamjoy.window.config.tabs.core.legacyImport.hunter.pick"),
+                items,
+                (keys) => beamjoyStore.send("BJHunterLegacyImportConfirm", [keys])
+            );
         });
 
         // same "will overwrite" framing as Hunter's own importer above (they share the exact same
@@ -114,33 +118,28 @@ angular.module("beamjoy").component("bjConfigCore", {
             beamjoyStore.send("BJInfectedLegacyImportPreviewRequest");
         };
         $rootScope.$on("BJInfectedLegacyImportPreview", (_, results) => {
-            // see BJHunterLegacyImportPreview's own comment above: same guihooks round-trip gap
-            if (!Array.isArray(results) || results.length === 0) {
+            if (!importable(results)) {
                 this.infectedLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.infected.none";
                 return;
             }
-            const conflictCount = results.filter((r) => r.conflict).length;
-            const lines = results
-                .map((r) => {
-                    const counts = `${r.survivorSpawnCount}/${r.infectedSpawnCount}`;
-                    const overwrite = r.conflict
-                        ? ` (${translate("beamjoy.window.config.tabs.core.legacyImport.infected.overwriteTag")})`
-                        : "";
-                    return `${r.map} · ${counts}${overwrite}`;
-                })
-                .join("\n");
-            const header = translate("beamjoy.window.config.tabs.core.legacyImport.infected.confirm")
-                .replace("{count}", results.length)
-                .replace("{conflicts}", conflictCount);
-            beamjoyConfirm.ask(`${header}\n\n${lines}`, () => {
-                beamjoyStore.send("BJInfectedLegacyImportConfirm");
-            });
+            const items = results.slice().sort(byMap).map((r) => ({
+                key: r.key || r.map,
+                label: r.map,
+                detail: translate("beamjoy.window.config.tabs.core.legacyImport.infected.counts")
+                    .replace("{survivors}", r.survivorSpawnCount)
+                    .replace("{infected}", r.infectedSpawnCount),
+                tag: r.conflict ? translate("beamjoy.window.config.tabs.core.legacyImport.infected.overwriteTag") : "",
+            }));
+            beamjoyConfirm.askChecklist(
+                translate("beamjoy.window.config.tabs.core.legacyImport.infected.pick"),
+                items,
+                (keys) => beamjoyStore.send("BJInfectedLegacyImportConfirm", [keys])
+            );
         });
 
         // races' own importer is deliberately NON-DESTRUCTIVE (per direct request) : every
         // convertible race is ADDED as a brand-new race, never overwriting anything already in the
-        // list; a name collision is skipped and reported instead, so this preview's own wording
-        // and confirm flow differ from Hunter's own "will overwrite" framing above on purpose.
+        // list ; a name collision can't be imported, so it shows as a greyed-out row with its reason
         this.raceLegacyImportStatus = null;
         this.requestRaceLegacyImport = (event) => {
             event.stopPropagation();
@@ -148,41 +147,45 @@ angular.module("beamjoy").component("bjConfigCore", {
             beamjoyStore.send("BJRaceLegacyImportPreviewRequest");
         };
         $rootScope.$on("BJRaceLegacyImportPreview", (_, results) => {
-            // see BJHunterLegacyImportPreview's own comment above: same guihooks round-trip gap
-            if (!Array.isArray(results) || results.length === 0) {
+            if (!importable(results)) {
                 this.raceLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.races.none";
                 return;
             }
-            const importable = results.filter((r) => !r.conflict && !r.invalid);
-            const conflictCount = results.filter((r) => r.conflict).length;
-            const invalidCount = results.filter((r) => r.invalid).length;
-            const lines = results
-                .map((r) => {
-                    const counts = `${r.gateCount} gates / ${r.startCount} starts${r.branching ? " (branching)" : ""}${r.loopable ? " (loopable)" : ""}`;
-                    const tag = r.conflict
-                        ? ` (${translate("beamjoy.window.config.tabs.core.legacyImport.races.skipTag")})`
+            const items = results.slice().sort(byMap).map((r) => {
+                const shape = [
+                    translate("beamjoy.window.config.tabs.core.legacyImport.races.counts")
+                        .replace("{gates}", r.gateCount)
+                        .replace("{starts}", r.startCount),
+                ];
+                if (r.loopable) shape.push(translate("beamjoy.window.config.tabs.core.legacyImport.races.loopable"));
+                if (r.branching) shape.push(translate("beamjoy.window.config.tabs.core.legacyImport.races.branching"));
+                if (r.author) shape.push(translate("beamjoy.window.config.tabs.core.legacyImport.races.by").replace("{author}", r.author));
+                return {
+                    key: r.key,
+                    group: r.map,
+                    label: r.name,
+                    detail: shape.join(" · "),
+                    disabled: !r.key || r.conflict || r.invalid,
+                    tag: r.conflict
+                        ? translate("beamjoy.window.config.tabs.core.legacyImport.races.skipTag")
                         : r.invalid
-                        ? ` (${translate("beamjoy.window.config.tabs.core.legacyImport.races.invalidTag")})`
-                        : "";
-                    const author = r.author ? ` (by ${r.author})` : "";
-                    return `${r.map} · ${r.name}${author} · ${counts}${tag}`;
-                })
-                .join("\n");
-            if (importable.length === 0) {
+                        ? translate("beamjoy.window.config.tabs.core.legacyImport.races.invalidTag")
+                        : "",
+                };
+            });
+            if (!items.some((i) => !i.disabled)) {
                 this.raceLegacyImportStatus = null;
-                beamjoyConfirm.ask(
-                    `${translate("beamjoy.window.config.tabs.core.legacyImport.races.noneImportable")}\n\n${lines}`,
-                    () => {}
+                beamjoyConfirm.info(
+                    `${translate("beamjoy.window.config.tabs.core.legacyImport.races.noneImportable")}\n\n` +
+                        items.map((i) => `${i.group} · ${i.label} (${i.tag})`).join("\n")
                 );
                 return;
             }
-            const header = translate("beamjoy.window.config.tabs.core.legacyImport.races.confirm")
-                .replace("{count}", importable.length)
-                .replace("{skipped}", conflictCount)
-                .replace("{invalid}", invalidCount);
-            beamjoyConfirm.ask(`${header}\n\n${lines}`, () => {
-                beamjoyStore.send("BJRaceLegacyImportConfirm");
-            });
+            beamjoyConfirm.askChecklist(
+                translate("beamjoy.window.config.tabs.core.legacyImport.races.pick"),
+                items,
+                (keys) => beamjoyStore.send("BJRaceLegacyImportConfirm", [keys])
+            );
         });
 
         // Freeroam stations/garages, and Bus Lines: same non-destructive "always ADD, never
@@ -196,22 +199,63 @@ angular.module("beamjoy").component("bjConfigCore", {
             beamjoyStore.send("BJFreeroamDataLegacyImportPreviewRequest");
         };
         $rootScope.$on("BJFreeroamDataLegacyImportPreview", (_, results) => {
-            // see BJHunterLegacyImportPreview's own comment above: same guihooks round-trip gap
-            if (!Array.isArray(results) || results.length === 0) {
+            if (!importable(results)) {
                 this.freeroamLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.freeroam.none";
                 return;
             }
-            const totalStations = results.reduce((sum, r) => sum + r.stationCount, 0);
-            const totalGarages = results.reduce((sum, r) => sum + r.garageCount, 0);
-            const lines = results
-                .map((r) => `${r.map} · ${r.stationCount} stations / ${r.garageCount} garages`)
-                .join("\n");
-            const header = translate("beamjoy.window.config.tabs.core.legacyImport.freeroam.confirm")
-                .replace("{stations}", totalStations)
-                .replace("{garages}", totalGarages);
-            beamjoyConfirm.ask(`${header}\n\n${lines}`, () => {
-                beamjoyStore.send("BJFreeroamDataLegacyImportConfirm");
+            const items = results.slice().sort(byMap).map((r) => ({
+                key: r.key || r.map,
+                label: r.map,
+                detail: translate("beamjoy.window.config.tabs.core.legacyImport.freeroam.counts")
+                    .replace("{stations}", r.stationCount)
+                    .replace("{garages}", r.garageCount),
+            }));
+            beamjoyConfirm.askChecklist(
+                translate("beamjoy.window.config.tabs.core.legacyImport.freeroam.pick"),
+                items,
+                (keys) => beamjoyStore.send("BJFreeroamDataLegacyImportConfirm", [keys])
+            );
+        });
+
+        // Delivery points : BeamJoy Free hubs become depots, its points drop-offs, one row per map.
+        // Additive ; spots already covered by a point on that map are skipped (the row says how many)
+        this.deliveriesLegacyImportStatus = null;
+        this.requestDeliveriesLegacyImport = (event) => {
+            event.stopPropagation();
+            this.deliveriesLegacyImportStatus = null;
+            beamjoyStore.send("BJDeliveryPointsLegacyImportPreviewRequest");
+        };
+        $rootScope.$on("BJDeliveryPointsLegacyImportPreview", (_, results) => {
+            if (!importable(results)) {
+                this.deliveriesLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.deliveries.none";
+                return;
+            }
+            const items = results.slice().sort(byMap).map((r) => {
+                const nothingNew = r.depotCount + r.dropOffCount === 0;
+                return {
+                    key: r.key || r.map,
+                    label: r.map,
+                    detail: translate("beamjoy.window.config.tabs.core.legacyImport.deliveries.counts")
+                        .replace("{depots}", r.depotCount)
+                        .replace("{dropOffs}", r.dropOffCount),
+                    disabled: nothingNew,
+                    tag: nothingNew
+                        ? translate("beamjoy.window.config.tabs.core.legacyImport.deliveries.allThere")
+                        : r.skippedCount > 0
+                        ? translate("beamjoy.window.config.tabs.core.legacyImport.deliveries.skipped")
+                              .replace("{count}", r.skippedCount)
+                        : "",
+                };
             });
+            if (!items.some((i) => !i.disabled)) {
+                this.deliveriesLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.deliveries.none";
+                return;
+            }
+            beamjoyConfirm.askChecklist(
+                translate("beamjoy.window.config.tabs.core.legacyImport.deliveries.pick"),
+                items,
+                (keys) => beamjoyStore.send("BJDeliveryPointsLegacyImportConfirm", [keys])
+            );
         });
 
         this.busLinesLegacyImportStatus = null;
@@ -221,17 +265,25 @@ angular.module("beamjoy").component("bjConfigCore", {
             beamjoyStore.send("BJBusLinesLegacyImportPreviewRequest");
         };
         $rootScope.$on("BJBusLinesLegacyImportPreview", (_, results) => {
-            if (!Array.isArray(results) || results.length === 0) {
+            if (!importable(results)) {
                 this.busLinesLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.busLines.none";
                 return;
             }
-            const total = results.reduce((sum, r) => sum + r.lineCount, 0);
-            const lines = results.map((r) => `${r.map} · ${r.lineCount} lines`).join("\n");
-            const header = translate("beamjoy.window.config.tabs.core.legacyImport.busLines.confirm")
-                .replace("{count}", total);
-            beamjoyConfirm.ask(`${header}\n\n${lines}`, () => {
-                beamjoyStore.send("BJBusLinesLegacyImportConfirm");
-            });
+            const items = results.slice().sort(byMap).map((r) => ({
+                key: r.key,
+                group: r.map,
+                label: r.name,
+                detail: translate(r.loopable
+                    ? "beamjoy.window.config.tabs.core.legacyImport.busLines.stopsLoop"
+                    : "beamjoy.window.config.tabs.core.legacyImport.busLines.stops")
+                    .replace("{stops}", r.stopCount),
+                disabled: !r.key,
+            }));
+            beamjoyConfirm.askChecklist(
+                translate("beamjoy.window.config.tabs.core.legacyImport.busLines.pick"),
+                items,
+                (keys) => beamjoyStore.send("BJBusLinesLegacyImportConfirm", [keys])
+            );
         });
 
         this.data = {

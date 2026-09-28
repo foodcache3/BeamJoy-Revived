@@ -13,6 +13,7 @@ await import(`/ui/modModules/beamjoy/windows/config/general/raceEditor/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/general/freeroam/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/general/voting/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/general/deliveries/app.js`);
+await import(`/ui/modModules/beamjoy/windows/config/general/discord/app.js`);
 
 angular.module("beamjoy").component("bjConfigGeneral", {
     templateUrl: "/ui/modModules/beamjoy/windows/config/general/app.html",
@@ -65,6 +66,7 @@ angular.module("beamjoy").component("bjConfigGeneral", {
             freeroam: false,
             voting: false,
             deliveries: false,
+            discord: false,
         };
         const updateDisplayAndPermissions = () => {
             this.showConfigs = beamjoyStore.permissions.hasAllPermissions(
@@ -119,6 +121,7 @@ angular.module("beamjoy").component("bjConfigGeneral", {
                 beamjoyStore.permissions.PERMISSIONS.SetConfig
             );
             this.display.deliveries = this.display.voting;
+            this.display.discord = this.display.voting;
         };
 
         ["BJUpdateSelf", "BJUpdatePermissions", "BJUpdateGroups"].forEach(

@@ -20,11 +20,14 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
         inputMaxLength: null,
         dangerous: true,
         infoOnly: false,
+        // askChecklist's rows ; null for every other kind of dialog
+        checklist: null,
         onConfirm: null,
         onCancel: null,
     };
 
     this.ask = (message, onConfirm, onCancel) => {
+        this.state.checklist = null;
         this.state.visible = true;
         this.state.message = message;
         this.state.showInput = false;
@@ -39,6 +42,7 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
     // Reuses the same modal (full-viewport backdrop, scrollable message box) rather than building
     // a second primitive just for "explain something, then dismiss".
     this.info = (message, onClose) => {
+        this.state.checklist = null;
         this.state.visible = true;
         this.state.message = message;
         this.state.showInput = false;
@@ -57,6 +61,7 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
     // has its own server-enforced limit (e.g. a race name), so the input can't be typed past
     // it and silently fail to save later.
     this.askForInput = (message, defaultValue, placeholder, onConfirm, onCancel, maxLength) => {
+        this.state.checklist = null;
         this.state.visible = true;
         this.state.message = message;
         this.state.showInput = true;
@@ -69,8 +74,42 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
         this.state.onCancel = onCancel;
     };
 
+    // same modal, with a list of rows the player ticks before confirming (the legacy importers :
+    // which races, arenas, maps go ahead). items : {key, label, detail?, group?, tag?, disabled?,
+    // checked?} ; rows start ticked unless `checked === false`, and a disabled row (something
+    // that can't be imported, `tag` says why) can't be ticked at all. Rows sharing a `group` sit
+    // under one heading that ticks or unticks the whole group. onConfirm receives the ticked keys ;
+    // confirm stays disabled while nothing is ticked.
+    this.askChecklist = (message, items, onConfirm, onCancel) => {
+        this.state.visible = true;
+        this.state.message = message;
+        this.state.showInput = false;
+        this.state.inputValue = "";
+        this.state.dangerous = false;
+        this.state.infoOnly = false;
+        const rows = (items || []).map((item) =>
+            Object.assign({}, item, { checked: !item.disabled && item.checked !== false })
+        );
+        const groups = [];
+        rows.forEach((row) => {
+            let group = groups.find((g) => g.name === (row.group || ""));
+            if (!group) {
+                group = { name: row.group || "", rows: [] };
+                groups.push(group);
+            }
+            group.rows.push(row);
+        });
+        this.state.checklist = groups;
+        this.state.onConfirm = onConfirm;
+        this.state.onCancel = onCancel;
+    };
+
     this.resolve = (confirmed) => {
-        const { onConfirm, onCancel, showInput, inputValue } = this.state;
+        const { onConfirm, onCancel, showInput, inputValue, checklist } = this.state;
+        const picked = checklist
+            ? checklist.flatMap((g) => g.rows.filter((r) => r.checked).map((r) => r.key))
+            : undefined;
+        this.state.checklist = null;
         this.state.visible = false;
         this.state.message = "";
         this.state.showInput = false;
@@ -79,7 +118,7 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
         this.state.infoOnly = false;
         this.state.onConfirm = null;
         this.state.onCancel = null;
-        if (confirmed && onConfirm) onConfirm(showInput ? inputValue.trim() : undefined);
+        if (confirmed && onConfirm) onConfirm(checklist ? picked : showInput ? inputValue.trim() : undefined);
         if (!confirmed && onCancel) onCancel();
     };
 });
@@ -115,12 +154,44 @@ angular.module("beamjoy").service("beamjoyNavGuard", function (beamjoyConfirm) {
 
 angular.module("beamjoy").component("bjConfirm", {
     templateUrl: "/ui/modModules/beamjoy/cmps/confirm/app.html",
-    controller: function (beamjoyConfirm) {
+    controller: function (beamjoyConfirm, $filter) {
+        const translate = $filter("translate");
         this.state = beamjoyConfirm.state;
         this.confirm = (event) => {
             event.stopPropagation();
             if (this.state.showInput && !this.state.inputValue.trim()) return;
+            if (this.state.checklist && this.checkedCount() === 0) return;
             beamjoyConfirm.resolve(true);
+        };
+
+        // CHECKLIST
+        const rows = () => (this.state.checklist || []).flatMap((g) => g.rows);
+        this.checkedCount = () => rows().filter((r) => r.checked).length;
+        this.selectableCount = () => rows().filter((r) => !r.disabled).length;
+        this.countText = () => translate("beamjoy.confirm.checklist.count")
+            .replace("{count}", this.checkedCount())
+            .replace("{total}", this.selectableCount());
+        this.toggleRow = (row, event) => {
+            if (event) event.stopPropagation();
+            if (!row.disabled) row.checked = !row.checked;
+        };
+        const setAll = (list, value) => list.forEach((r) => {
+            if (!r.disabled) r.checked = value;
+        });
+        // a heading ticks the whole group, or unticks it once every row in it is ticked
+        this.toggleGroup = (group, event) => {
+            if (event) event.stopPropagation();
+            const selectable = group.rows.filter((r) => !r.disabled);
+            setAll(group.rows, !selectable.every((r) => r.checked));
+        };
+        this.groupState = (group) => {
+            const selectable = group.rows.filter((r) => !r.disabled);
+            const ticked = selectable.filter((r) => r.checked).length;
+            return ticked === 0 ? "none" : ticked === selectable.length ? "all" : "some";
+        };
+        this.selectAll = (value, event) => {
+            if (event) event.stopPropagation();
+            setAll(rows(), value);
         };
         this.cancel = (event) => {
             event.stopPropagation();

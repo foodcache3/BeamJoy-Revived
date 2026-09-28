@@ -38,8 +38,9 @@ local function onLegacyImportPreviewResult(results)
     beamjoy_communications_ui.send("BJFreeroamDataLegacyImportPreview", results or {})
 end
 
-local function confirmLegacyImport()
-    beamjoy_communications.send("freeroamDataLegacyImportConfirm")
+--- `selection` : the keys ticked in the import checklist
+local function confirmLegacyImport(selection)
+    beamjoy_communications.send("freeroamDataLegacyImportConfirm", selection)
 end
 
 ---@param stationCount integer

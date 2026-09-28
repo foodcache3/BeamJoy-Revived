@@ -65,6 +65,12 @@ local M = {
         AllowClientMods = false,
         DefaultGroup = "default",
         DiscordChatHookLang = "en-US",
+        -- services/discord.lua : posts straight to Discord webhooks. Their URLs are secret (anyone
+        -- holding it can post to the channel), so it only ever goes to SetConfig holders
+        -- {Name, Url, RaceFinishes, RacePBsOnly, Votes, JoinLeave, Chat}[], see services/discord.lua
+        Discord = {
+            Webhooks = {},
+        },
         ---@type string[]
         ModelBlacklist = {},
         AllowWalking = true,
@@ -277,6 +283,7 @@ local function onBJRequestCache(caches, targetID, forced)
         table.assign(caches.config, {
             DefaultGroup = M.data.DefaultGroup,
             DiscordChatHookLang = M.data.DiscordChatHookLang,
+            Discord = M.data.Discord,
             Broadcasts = M.data.Broadcasts,
             -- was never sent at all, so the Voting settings panel always showed its hardcoded
             -- defaults instead of the saved values
@@ -313,6 +320,8 @@ local function sanitizeConfigValue(key, value)
         elseif not services_lang.langs[value] then
             return nil, "Invalid lang"
         end
+    elseif key == "Discord" then
+        return services_discord.sanitize(value)
     elseif key == "ModelBlacklist" then
         if type(value) ~= "table" then return nil, "Value must be a table" end
     elseif key == "Broadcasts" then

@@ -1,0 +1,189 @@
+<div ng-if="$ctrl.init">
+    <p class="discord-help">
+        {{"beamjoy.window.config.tabs.general.discord.help"|translate}}
+    </p>
+
+    <p class="discord-empty" ng-if="$ctrl.hooks.length === 0">
+        {{"beamjoy.window.config.tabs.general.discord.empty"|translate}}
+    </p>
+
+    <div class="discord-hook" ng-repeat="hook in $ctrl.hooks track by $index">
+        <div class="discord-row">
+            <input
+                type="text"
+                class="discord-name"
+                ng-model="hook.Name"
+                maxlength="40"
+                placeholder="{{'beamjoy.window.config.tabs.general.discord.name'|translate}}"
+            />
+            <button
+                class="btn w-fitcontent"
+                ng-class="{'disabled': !$ctrl.canTest($index)}"
+                ng-disabled="!$ctrl.canTest($index)"
+                ng-click="$ctrl.test($index)"
+                title="{{($ctrl.dirty() ? 'beamjoy.window.config.tabs.general.discord.testUnsaved' : 'beamjoy.window.config.tabs.general.discord.testTooltip')|translate}}"
+            >
+                {{"beamjoy.window.config.tabs.general.discord.test"|translate}}
+            </button>
+            <button
+                class="btn danger w-fitcontent"
+                ng-click="$ctrl.remove($index)"
+            >
+                {{"beamjoy.common.remove"|translate}}
+            </button>
+        </div>
+        <div class="discord-row">
+            <input
+                type="{{$ctrl.shown[$index] ? 'text' : 'password'}}"
+                class="discord-url"
+                ng-model="hook.Url"
+                ng-class="{'invalid': !$ctrl.urlValid(hook)}"
+                placeholder="https://discord.com/api/webhooks/..."
+            />
+            <button
+                class="btn w-fitcontent"
+                ng-click="$ctrl.shown[$index] = !$ctrl.shown[$index]"
+                title="{{'beamjoy.window.config.tabs.general.discord.showUrl'|translate}}"
+            >
+                <icon
+                    name="eye"
+                    class="discord-eye"
+                    ng-style="{opacity: $ctrl.shown[$index] ? 1 : 0.5}"
+                ></icon>
+            </button>
+        </div>
+        <p class="discord-error" ng-if="!$ctrl.urlValid(hook)">
+            {{"beamjoy.window.config.tabs.general.discord.invalidUrl"|translate}}
+        </p>
+        <table>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.general.discord.raceFinishes.tooltip'|translate}}">
+                    {{"beamjoy.window.config.tabs.general.discord.raceFinishes"|translate}}
+                </td>
+                <td><bj-toggle ng-model="hook.RaceFinishes"></bj-toggle></td>
+            </tr>
+            <tr ng-if="hook.RaceFinishes">
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.general.discord.racePBsOnly.tooltip'|translate}}">
+                    {{"beamjoy.window.config.tabs.general.discord.racePBsOnly"|translate}}
+                </td>
+                <td><bj-toggle ng-model="hook.RacePBsOnly"></bj-toggle></td>
+            </tr>
+            <tr>
+                <td class="text-right">
+                    {{"beamjoy.window.config.tabs.general.discord.deliveries"|translate}}
+                </td>
+                <td><bj-toggle ng-model="hook.Deliveries"></bj-toggle></td>
+            </tr>
+            <tr>
+                <td class="text-right">
+                    {{"beamjoy.window.config.tabs.general.discord.hunter"|translate}}
+                </td>
+                <td><bj-toggle ng-model="hook.Hunter"></bj-toggle></td>
+            </tr>
+            <tr>
+                <td class="text-right">
+                    {{"beamjoy.window.config.tabs.general.discord.infected"|translate}}
+                </td>
+                <td><bj-toggle ng-model="hook.Infected"></bj-toggle></td>
+            </tr>
+            <tr>
+                <td class="text-right">
+                    {{"beamjoy.window.config.tabs.general.discord.busLines"|translate}}
+                </td>
+                <td><bj-toggle ng-model="hook.BusLines"></bj-toggle></td>
+            </tr>
+            <tr>
+                <td class="text-right">
+                    {{"beamjoy.window.config.tabs.general.discord.votes"|translate}}
+                </td>
+                <td><bj-toggle ng-model="hook.Votes"></bj-toggle></td>
+            </tr>
+            <tr>
+                <td class="text-right">
+                    {{"beamjoy.window.config.tabs.general.discord.joinLeave"|translate}}
+                </td>
+                <td><bj-toggle ng-model="hook.JoinLeave"></bj-toggle></td>
+            </tr>
+            <tr>
+                <td class="text-right">
+                    {{"beamjoy.window.config.tabs.general.discord.chat"|translate}}
+                </td>
+                <td><bj-toggle ng-model="hook.Chat"></bj-toggle></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="discord-row discord-actions">
+        <button
+            class="btn info w-fitcontent"
+            ng-class="{'disabled': $ctrl.hooks.length >= $ctrl.max}"
+            ng-disabled="$ctrl.hooks.length >= $ctrl.max"
+            ng-click="$ctrl.add()"
+        >
+            {{"beamjoy.window.config.tabs.general.discord.add"|translate}}
+        </button>
+        <span class="discord-spacer"></span>
+        <button
+            class="btn success w-fitcontent"
+            ng-class="{'disabled': !$ctrl.dirty() || !$ctrl.valid()}"
+            ng-disabled="!$ctrl.dirty() || !$ctrl.valid()"
+            ng-click="$ctrl.save()"
+        >
+            {{"beamjoy.common.save"|translate}}
+        </button>
+        <button
+            class="btn danger w-fitcontent"
+            ng-class="{'disabled': !$ctrl.dirty()}"
+            ng-disabled="!$ctrl.dirty()"
+            ng-click="$ctrl.discard()"
+        >
+            {{"beamjoy.window.config.tabs.general.discord.discard"|translate}}
+        </button>
+    </div>
+</div>
+
+<style>
+    bj-config-general-discord .discord-help,
+    bj-config-general-discord .discord-empty {
+        white-space: normal;
+        opacity: 0.8;
+        margin: 0 0 0.6em;
+    }
+    bj-config-general-discord .discord-hook {
+        padding: 0.5em;
+        margin-bottom: 0.6em;
+        border-radius: 0.3em;
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-config-general-discord .discord-row {
+        display: flex;
+        gap: 0.3em;
+        align-items: center;
+        margin-bottom: 0.3em;
+    }
+    bj-config-general-discord .discord-name {
+        flex: 1;
+        min-width: 0;
+        font-weight: bold;
+    }
+    bj-config-general-discord .discord-url {
+        flex: 1;
+        min-width: 0;
+    }
+    bj-config-general-discord .discord-url.invalid {
+        outline: thin solid rgba(255, 100, 100, 0.8);
+    }
+    bj-config-general-discord .discord-eye {
+        display: inline-block;
+        height: 1.1em;
+        width: 1.1em;
+    }
+    bj-config-general-discord .discord-error {
+        color: rgb(255, 130, 130);
+        white-space: normal;
+        margin: 0 0 0.3em;
+    }
+    bj-config-general-discord .discord-spacer {
+        flex: 1;
+    }
+</style>

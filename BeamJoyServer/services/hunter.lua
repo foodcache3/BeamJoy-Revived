@@ -449,6 +449,7 @@ local function scanLegacyArenas()
                 local existingHasContent = existing ~= nil and (#(existing.hunterSpawns or {}) > 0 or
                     #(existing.preySpawns or {}) > 0 or #(existing.waypoints or {}) > 0)
                 table.insert(results, {
+                    key = mapName,
                     map = mapName,
                     hunterSpawnCount = #converted.hunterSpawns,
                     preySpawnCount = #converted.preySpawns,
@@ -475,7 +476,9 @@ local function hunterLegacyImportPreview(ctxt)
 end
 
 ---@param ctxt BJSContext
-local function hunterLegacyImportConfirm(ctxt)
+---@param selection string[]? the ticked maps ; nil = all
+local function hunterLegacyImportConfirm(ctxt, selection)
+    local picked = ImportSelection(selection)
     if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
             BJ_PERMISSIONS.EditHunterArenas) then
         return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
@@ -487,7 +490,7 @@ local function hunterLegacyImportConfirm(ctxt)
     if FS.Exists(dir) then
         for _, filename in pairs(FS.ListFiles(dir)) do
             local mapName = filename:match("^(.+)_hunter%.json$")
-            if mapName then
+            if mapName and (not picked or picked[mapName]) then
                 local raw = dao_main.get(LEGACY_DIR .. "/" .. filename)
                 local converted = convertLegacyArena(raw)
                 if converted and (#converted.hunterSpawns > 0 or #converted.preySpawns > 0 or

@@ -29,8 +29,9 @@ local function onLegacyImportPreviewResult(results)
     beamjoy_communications_ui.send("BJInfectedLegacyImportPreview", results or {})
 end
 
-local function confirmLegacyImport()
-    beamjoy_communications.send("infectedLegacyImportConfirm")
+--- `selection` : the keys ticked in the import checklist
+local function confirmLegacyImport(selection)
+    beamjoy_communications.send("infectedLegacyImportConfirm", selection)
 end
 
 ---@param imported integer

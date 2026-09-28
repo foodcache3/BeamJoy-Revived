@@ -375,6 +375,18 @@
                 {{$ctrl.freeroamLegacyImportStatus | translate}}
             </span>
         </div>
+        <div class="d-flex align-center gap-1 mb-1" ng-if="$ctrl.canImportFreeroam" style="font-size: 1.15em;">
+            <button
+                class="btn info w-fitcontent"
+                ng-click="$ctrl.requestDeliveriesLegacyImport($event)"
+                title="{{'beamjoy.window.config.tabs.core.legacyImport.deliveries.tooltip' | translate}}"
+            >
+                {{'beamjoy.window.config.tabs.core.legacyImport.deliveries.button' | translate}}
+            </button>
+            <span class="opacity-70 small" ng-if="$ctrl.deliveriesLegacyImportStatus">
+                {{$ctrl.deliveriesLegacyImportStatus | translate}}
+            </span>
+        </div>
         <div class="d-flex align-center gap-1" ng-if="$ctrl.canImportBusLines" style="font-size: 1.15em;">
             <button
                 class="btn info w-fitcontent"

@@ -307,6 +307,7 @@ local function scanLegacyArenas()
                 local existingHasContent = existing ~= nil and (#(existing.survivorSpawns or {}) > 0 or
                     #(existing.infectedSpawns or {}) > 0)
                 table.insert(results, {
+                    key = mapName,
                     map = mapName,
                     survivorSpawnCount = #converted.survivorSpawns,
                     infectedSpawnCount = #converted.infectedSpawns,
@@ -332,7 +333,9 @@ local function infectedLegacyImportPreview(ctxt)
 end
 
 ---@param ctxt BJSContext
-local function infectedLegacyImportConfirm(ctxt)
+---@param selection string[]? the ticked maps ; nil = all
+local function infectedLegacyImportConfirm(ctxt, selection)
+    local picked = ImportSelection(selection)
     if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
             BJ_PERMISSIONS.EditInfectedArenas) then
         return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
@@ -344,7 +347,7 @@ local function infectedLegacyImportConfirm(ctxt)
     if FS.Exists(dir) then
         for _, filename in pairs(FS.ListFiles(dir)) do
             local mapName = filename:match("^(.+)_hunter%.json$")
-            if mapName then
+            if mapName and (not picked or picked[mapName]) then
                 local raw = dao_main.get(LEGACY_DIR .. "/" .. filename)
                 local converted = convertLegacyArena(raw)
                 if converted and (#converted.survivorSpawns > 0 or #converted.infectedSpawns > 0) then

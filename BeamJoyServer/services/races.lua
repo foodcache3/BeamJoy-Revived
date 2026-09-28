@@ -854,7 +854,7 @@ local function convertLegacyRace(oldData)
     }
 end
 
----@return {map: string, name: string, author: string, gateCount: integer, startCount: integer, loopable: boolean, branching: boolean, conflict: boolean, invalid: boolean}[]
+---@return {key: string, map: string, name: string, author: string, gateCount: integer, startCount: integer, loopable: boolean, branching: boolean, conflict: boolean, invalid: boolean}[]
 local function scanLegacyRaces()
     local results = {}
     local dir = dao_main.dbPath .. "/" .. LEGACY_DIR
@@ -866,11 +866,12 @@ local function scanLegacyRaces()
             if table.isArray(raw) then
                 local isCurrentMap = mapName == services_core.getCurrentMap()
                 local existing = isCurrentMap and M.data or (dao_activity.get(mapName, M.ACTIVITY_TYPE) or {})
-                for _, oldRace in ipairs(raw) do
+                for index, oldRace in ipairs(raw) do
                     local converted = convertLegacyRace(oldRace)
                     if converted then
                         local err = sanitizeRace(converted, existing)
                         table.insert(results, {
+                            key = mapName .. "#" .. index,
                             map = mapName,
                             name = converted.name,
                             author = converted.author,
@@ -902,7 +903,9 @@ local function raceLegacyImportPreview(ctxt)
 end
 
 ---@param ctxt BJSContext
-local function raceLegacyImportConfirm(ctxt)
+---@param selection string[]? the ticked rows' keys (see scanLegacyRaces) ; nil = all
+local function raceLegacyImportConfirm(ctxt, selection)
+    local picked = ImportSelection(selection)
     if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
             BJ_PERMISSIONS.EditRaces) then
         return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
@@ -923,8 +926,9 @@ local function raceLegacyImportConfirm(ctxt)
                     -- any OTHER map's targetList is a fresh fetch, written back explicitly afterward
                     local targetList = isCurrentMap and M.data or (dao_activity.get(mapName, M.ACTIVITY_TYPE) or {})
                     local changedThisMap = false
-                    for _, oldRace in ipairs(raw) do
-                        local converted = convertLegacyRace(oldRace)
+                    for index, oldRace in ipairs(raw) do
+                        local converted = (not picked or picked[mapName .. "#" .. index]) and
+                            convertLegacyRace(oldRace)
                         if converted then
                             local err = sanitizeRace(converted, targetList)
                             if err then
@@ -1078,6 +1082,205 @@ local function seedBundledRaces()
 end
 
 ---@param caches table
+
+--- A race's length in metres, following its route. The route runs from gate to gate through
+--- each gate's `parents` (the gate(s) it's reached from ; 0 = the start), taking the shortest
+--- branch where the route splits. A circuit's length is one lap : back round to the first gate.
+--- A point-to-point race also counts the run from the grid to its first gate. The editor
+--- (ui/raceEditor.lua) and services/races.lua carry the same code, kept in step by hand.
+---@param race table gates with pos (and, while branching is on, parents/step/isFinish)
+---@return integer
+local function computeRaceDistance(race)
+    local gates = race.gates
+    if type(gates) ~= "table" or #gates == 0 then return 0 end
+    local function dist(a, b)
+        local dx, dy, dz = (a.x or 0) - (b.x or 0), (a.y or 0) - (b.y or 0), (a.z or 0) - (b.z or 0)
+        return math.sqrt(dx * dx + dy * dy + dz * dz)
+    end
+    local branching = race.branchingEnabled == true
+    local function parentsOf(i)
+        local p = gates[i].parents
+        if branching and type(p) == "table" and #p > 0 then return p end
+        return { i - 1 }
+    end
+    local function stepOf(i)
+        return branching and tonumber(gates[i].step) or i
+    end
+    local order = {}
+    for i = 1, #gates do order[i] = i end
+    table.sort(order, function(a, b)
+        local sa, sb = stepOf(a), stepOf(b)
+        if sa ~= sb then return sa < sb end
+        return a < b
+    end)
+
+    local start = type(race.startPositions) == "table" and race.startPositions[1] and race.startPositions[1].pos
+    local best, firsts, hasChild = {}, {}, {}
+    for _, i in ipairs(order) do
+        for _, p in ipairs(parentsOf(i)) do
+            p = tonumber(p)
+            local via
+            if p == 0 then
+                firsts[#firsts + 1] = i
+                via = (race.loopable or not start) and 0 or dist(start, gates[i].pos)
+            elseif p and gates[p] and best[p] then
+                hasChild[p] = true
+                via = best[p] + dist(gates[p].pos, gates[i].pos)
+            end
+            if via and (not best[i] or via < best[i]) then best[i] = via end
+        end
+    end
+
+    local total
+    for i = 1, #gates do
+        if best[i] then
+            if race.loopable then
+                -- a gate the route doesn't continue from closes the lap, back to a first gate
+                if not hasChild[i] then
+                    for _, f in ipairs(firsts) do
+                        if f ~= i then
+                            local lap = best[i] + dist(gates[i].pos, gates[f].pos)
+                            if not total or lap < total then total = lap end
+                        end
+                    end
+                end
+            elseif (branching and gates[i].isFinish) or (not branching and i == #gates) then
+                if not total or best[i] < total then total = best[i] end
+            end
+        end
+    end
+    if not total then
+        -- a route that can't be followed (broken links) : gate to gate, in list order
+        total = 0
+        for i = 2, #gates do total = total + dist(gates[i - 1].pos, gates[i].pos) end
+    end
+    return math.floor(total + .5)
+end
+
+--- Temporary console command, `bj racedistances` : recalculates and saves every race's distance
+--- on every map this server has race data for. Many bundled races shipped without one.
+---@param args string[]
+---@param printUsage fun()
+local function consoleRaceDistances(args, printUsage)
+    local dir = dao_main.dbPath .. "/" .. dao_activity.path
+    if not FS.Exists(dir) then return print("[BJ races] no race data found") end
+    local maps, changed = 0, 0
+    for _, filename in pairs(FS.ListFiles(dir)) do
+        local mapName = filename:match("^(.+)_" .. M.ACTIVITY_TYPE .. "%.json$")
+        local list = mapName and dao_activity.get(mapName, M.ACTIVITY_TYPE)
+        if table.isArray(list) and #list > 0 then
+            maps = maps + 1
+            local mapChanged = false
+            for _, race in ipairs(list) do
+                if table.isArray(race.gates) and #race.gates > 0 then
+                    -- steps/parents as the race would have them after a save
+                    local copy = table.clone(race)
+                    normalizeGateSteps(copy)
+                    local distance = computeRaceDistance(copy)
+                    if distance ~= race.distance then
+                        print(string.format("[BJ races] %s / %s : %s -> %d m", mapName, tostring(race.name),
+                            tostring(race.distance or "none"), distance))
+                        race.distance = distance
+                        changed = changed + 1
+                        mapChanged = true
+                    end
+                end
+            end
+            if mapChanged then dao_activity.save(mapName, M.ACTIVITY_TYPE, list) end
+        end
+    end
+    print(string.format("[BJ races] %d race distances updated across %d maps", changed, maps))
+    if changed > 0 then loadData() end
+end
+
+--- Course fixes to races BeamJoy already shipped. Seeding (above) only ever adds a bundled race
+--- once, so a later fix to its course never reached servers that already had it. Each entry here
+--- replaces one race's course, once per server (dao_bundled's ledger, under "<name>@<revision>"),
+--- and only when that server's copy is still the course BeamJoy shipped before the fix, told by
+--- its gate count and saved distance (servers that old never recalculated distances) : an admin
+--- who edited the race themselves keeps their version. A copy that's already the fixed course is
+--- told by its gate positions, since `bj racedistances` may have changed its distance.
+--- Only the course changes. The race's id, name, leaderboard, default settings and vehicle rule
+--- stay as they are on that server.
+local BUNDLED_COURSE_UPDATES = {
+    -- one gate removed
+    { map = "west_coast_usa", name = "Street Course 2", revision = 2, previous = { gates = 19, distance = 2472 } },
+}
+local COURSE_FIELDS = { "mode", "gates", "startPositions", "distance", "loopable", "branchingEnabled",
+    "oneWayGates", "sectorCount", "manualSectors" }
+
+---@param race table
+---@param shape {gates: integer, distance: number}
+---@return boolean
+local function courseMatches(race, shape)
+    return table.isArray(race.gates) and #race.gates == shape.gates and
+        math.abs((tonumber(race.distance) or -1) - shape.distance) < 1
+end
+
+--- same gates, in the same places (to half a metre)
+---@param a table race
+---@param b table race
+---@return boolean
+local function sameGates(a, b)
+    if not table.isArray(a.gates) or not table.isArray(b.gates) or #a.gates ~= #b.gates then return false end
+    for i, ga in ipairs(a.gates) do
+        local pa, pb = ga.pos or {}, b.gates[i].pos or {}
+        local dx, dy, dz = (pa.x or 0) - (pb.x or 0), (pa.y or 0) - (pb.y or 0), (pa.z or 0) - (pb.z or 0)
+        if dx * dx + dy * dy + dz * dz > .25 then return false end
+    end
+    return true
+end
+
+local function applyBundledCourseUpdates()
+    local lists = {}
+    for _, update in ipairs(BUNDLED_COURSE_UPDATES) do
+        local key = string.format("%s@%d", update.name, update.revision)
+        if not dao_bundled.isSeeded(update.map, M.ACTIVITY_TYPE, key) then
+            -- a failed update is retried on the next boot
+            local failed = false
+            local bundled = table.find(dao_bundled.get(update.map, M.ACTIVITY_TYPE) or {},
+                function(r) return r.name == update.name end)
+            if bundled then
+                lists[update.map] = lists[update.map] or dao_activity.get(update.map, M.ACTIVITY_TYPE) or {}
+                local list = lists[update.map]
+                local live = table.find(list, function(r)
+                    return type(r.name) == "string" and r.name:lower() == update.name:lower()
+                end)
+                if not live then
+                    -- deleted on purpose, or never seeded here : nothing to fix
+                elseif sameGates(live, bundled) then
+                    -- already the fixed course (a fresh install seeds it directly)
+                elseif courseMatches(live, update.previous) then
+                    local candidate = table.deepcopy(live)
+                    for _, field in ipairs(COURSE_FIELDS) do
+                        -- table.deepcopy turns a non-table into an empty table
+                        local v = bundled[field]
+                        candidate[field] = type(v) == "table" and table.deepcopy(v) or v
+                    end
+                    local err = sanitizeRace(candidate, list)
+                    if err then
+                        failed = true
+                        LogError(string.format("bundled course update %s / %s failed: %s",
+                            update.map, update.name, err))
+                    else
+                        for i, r in ipairs(list) do
+                            if r == live then list[i] = candidate end
+                        end
+                        dao_activity.save(update.map, M.ACTIVITY_TYPE, list)
+                        LogInfo(string.format("bundled course update: %s / %s updated to revision %d",
+                            update.map, update.name, update.revision))
+                    end
+                else
+                    LogInfo(string.format(
+                        "bundled course update: %s / %s left alone, it was edited on this server",
+                        update.map, update.name))
+                end
+            end
+            if not failed then dao_bundled.markSeeded(update.map, M.ACTIVITY_TYPE, key) end
+        end
+    end
+end
+
 local function onBJRequestCache(caches)
     -- Visible to every player, not staff-gated: races are meant to be played, not just administered.
     -- Leaderboard is deliberately stripped here (see BJRace.leaderboard's own doc comment): it's
@@ -1379,11 +1582,15 @@ local function onInit()
     communications_rx.addHandler("raceLegacyImportPreview", M.raceLegacyImportPreview)
     communications_rx.addHandler("raceLegacyImportConfirm", M.raceLegacyImportConfirm)
 
+    services_consoleCommands.register("racedistances", "",
+        "recalculate and save every race's distance, on every map (temporary)",
+        consoleRaceDistances)
     services_consoleCommands.register("racedebugleaderboard", "<raceId> <count> <timeMs>",
         "inject <count> fake leaderboard entries around <timeMs> for <raceId> (debug)",
         consoleDebugLeaderboard)
 
     seedBundledRaces()
+    applyBundledCourseUpdates()
     loadData()
 end
 

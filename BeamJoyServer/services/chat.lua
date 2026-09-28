@@ -41,6 +41,7 @@ local function onChatMessage(senderID, senderName, chatMessage)
 
     communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "chatMessage",
         senderName, chatMessage)
+    services_discord.onPlayerChat(services_identity.getIdentityKey(senderID) or senderName, chatMessage)
 end
 
 ---@param playerID integer
@@ -77,6 +78,8 @@ local function sendEvent(eventKey, eventParams)
             :var(eventParams or {})
         MP.TriggerGlobalEvent("onScriptMessage", discordMessage, "BeamJoy")
     end
+    -- BeamJoy's own webhook (services/discord.lua), no plugin needed
+    services_discord.onChatEvent(eventKey, eventParams)
 end
 
 local function sendWelcomeMessage(playerName)

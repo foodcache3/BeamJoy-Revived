@@ -323,6 +323,24 @@ local function endGame(session, winner)
     pushSessionUpdate(session)
     utils_async.delayTask(function() removeSession(session) end,
         session.settings.endTimeout, "BJInfectedGrid-" .. session.id .. "-cleanup")
+    if not session.debugSolo and services_discord then
+        local survivors, players, top = {}, 0, nil
+        session.participants:forEach(function(p)
+            players = players + 1
+            if not p.originalInfected and not p.infectedAt then
+                survivors[#survivors + 1] = resolveDisplayName(p.playerID, p.playerName)
+            end
+            if (p.tagCount or 0) > 0 and (not top or p.tagCount > top.tagCount) then top = p end
+        end)
+        pcall(services_discord.onInfectedEnd, {
+            winner = winner,
+            survivors = survivors,
+            players = players,
+            topTagger = top and resolveDisplayName(top.playerID, top.playerName),
+            topTags = top and top.tagCount,
+            durationSec = session.startedAt and (GetCurrentTime() - session.startedAt) or nil,
+        })
+    end
 end
 
 ---@param arena BJInfectedArena

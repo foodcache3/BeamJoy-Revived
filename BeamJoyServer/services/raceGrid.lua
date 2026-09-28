@@ -74,6 +74,8 @@
 ---leaderboard's vehicle column (services_races.submitTime)
 ---@field isNewPB boolean? set once at finishParticipant, from services_races.submitTime; not
 ---currently surfaced to the client (no popup wired up yet), kept for future use/debugging
+---@field finishOrder integer? 1 for the first to finish this session, and so on
+---@field discordResult table? what this run meant for the leaderboard, set by trySubmitTime
 ---@field isNewRecord boolean? same as isNewPB, true when this PB is now the race's overall best
 
 ---@class BJRaceSessionSettings host-configurable at start time, seeded from BJRaceDefaults
@@ -864,12 +866,15 @@ local function beginRace(sessionId)
 
     session.state = "RACE"
     session.startedAt = GetCurrentTime()
+    session.finishCounter = 0
     session.participants:forEach(function(p)
         p.currentGate = 0
         p.lastCrossedGate = 0
         p.currentLap = 1
         p.gateTimes = {}
         p.lapTimes = {}
+        p.finishOrder = nil
+        p.discordResult = nil
         p.bestLapMs = nil
         p.bestLapGateTimes = nil
         p.liveDeltaMs = nil
@@ -886,9 +891,51 @@ local function beginRace(sessionId)
 end
 
 ---@param session BJRaceSession
+local function postToDiscord(session)
+    local race = getRace(session)
+    if not race or not services_discord then return end
+    local board = services_races.getLeaderboard(session.raceId, math.huge)
+    local info = {
+        raceName = race.name or "?",
+        laps = session.settings.laps or 1,
+        recordMs = board[1] and board[1].time,
+        recordHolder = board[1] and board[1].playerName,
+    }
+    local results = {}
+    session.participants:forEach(function(p)
+        if p.playerID < 0 then return end -- racedebug ghosts
+        local total = 0
+        for _, t in ipairs(p.lapTimes) do total = total + t end
+        local r = p.discordResult or { counted = false }
+        r.playerName = services_identity.getIdentityKey(p.playerID) or p.playerName
+        r.vehicle = p.vehicleModel
+        r.dnf = not p.finished
+        r.totalMs = p.finished and total or nil
+        r.bestLapMs = #p.lapTimes > 0 and math.min(table.unpack(p.lapTimes)) or nil
+        r.order = p.finishOrder or math.huge
+        if r.counted then
+            for _, entry in ipairs(board) do
+                if entry.playerName == r.playerName then r.rank = entry.rank end
+            end
+            r.entries = #board
+        end
+        table.insert(results, r)
+    end)
+    if #results == 0 then return end
+    if #results == 1 then
+        return services_discord.onRaceFinish(info, results[1])
+    end
+    table.sort(results, function(a, b)
+        if a.dnf ~= b.dnf then return not a.dnf end
+        return a.order < b.order
+    end)
+    services_discord.onRaceStandings(info, results)
+end
+
 local function checkSessionComplete(session)
     if session.participants:every(function(p) return p.finished or p.dnf end) then
         session.state = "FINISHED"
+        pcall(postToDiscord, session)
         pushSessionUpdate(session)
         utils_async.delayTask(function() removeSession(session) end,
             10, "BJRaceGrid-" .. session.id .. "-cleanup")
@@ -929,15 +976,25 @@ local function trySubmitTime(session, participant, timeMs)
     -- playerName as before otherwise. Only the leaderboard's own key changes here - this session's
     -- OWN bookkeeping (participant.playerName itself, used everywhere else in this file) is
     -- untouched.
+    local key = services_identity.getIdentityKey(participant.playerID) or participant.playerName
+    local previous = race and race.leaderboard and race.leaderboard[key]
+    local previousMs = previous and previous.time
     participant.isNewPB, participant.isNewRecord = services_races.submitTime(
-        session.raceId, services_identity.getIdentityKey(participant.playerID) or participant.playerName,
-        participant.vehicleModel or "", timeMs)
+        session.raceId, key, participant.vehicleModel or "", timeMs)
+    participant.discordResult = {
+        counted = true,
+        isNewPB = participant.isNewPB,
+        isNewRecord = participant.isNewRecord,
+        previousMs = previousMs,
+    }
 end
 
 ---@param session BJRaceSession
 ---@param participant BJRaceParticipant
 local function finishParticipant(session, participant)
     participant.finished = true
+    session.finishCounter = (session.finishCounter or 0) + 1
+    participant.finishOrder = session.finishCounter
     local bestLap = math.min(table.unpack(participant.lapTimes))
     trySubmitTime(session, participant, bestLap)
     checkSessionComplete(session)

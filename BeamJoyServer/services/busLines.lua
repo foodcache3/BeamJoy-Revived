@@ -300,12 +300,13 @@ local function scanLegacyBusLines()
     return byMap
 end
 
----@return {map: string, lineCount: integer}[]
+---@return {key: string, map: string, name: string, stopCount: integer, loopable: boolean}[]
 local function previewLegacyBusLines()
     local results = {}
     for mapName, lines in pairs(scanLegacyBusLines()) do
-        if #lines > 0 then
-            table.insert(results, { map = mapName, lineCount = #lines })
+        for i, line in ipairs(lines) do
+            table.insert(results, { key = mapName .. "#" .. i, map = mapName, name = line.name,
+                stopCount = #(line.stops or {}), loopable = line.loopable == true })
         end
     end
     return results
@@ -325,7 +326,9 @@ local function busLinesLegacyImportPreview(ctxt)
 end
 
 ---@param ctxt BJSContext
-local function busLinesLegacyImportConfirm(ctxt)
+---@param selection string[]? the ticked lines' keys (see previewLegacyBusLines) ; nil = all
+local function busLinesLegacyImportConfirm(ctxt, selection)
+    local picked = ImportSelection(selection)
     if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
             BJ_PERMISSIONS.EditBusLines) then
         local permErr = services_lang.get("error.insufficientPermissions", ctxt.sender.lang)
@@ -338,13 +341,19 @@ local function busLinesLegacyImportConfirm(ctxt)
         if #lines > 0 then
             local isCurrentMap = mapName == services_core.getCurrentMap()
             local target = isCurrentMap and M.lines or (dao_activity.get(mapName, M.BUSLINES_TYPE) or {})
-            for _, line in ipairs(lines) do
-                table.insert(target, line)
-                imported = imported + 1
+            local added = 0
+            for i, line in ipairs(lines) do
+                if not picked or picked[mapName .. "#" .. i] then
+                    table.insert(target, line)
+                    added = added + 1
+                end
             end
-            sanitizeBusLines(target)
-            if isCurrentMap then M.lines = target end
-            dao_activity.save(mapName, M.BUSLINES_TYPE, #target > 0 and target or nil)
+            imported = imported + added
+            if added > 0 then
+                sanitizeBusLines(target)
+                if isCurrentMap then M.lines = target end
+                dao_activity.save(mapName, M.BUSLINES_TYPE, #target > 0 and target or nil)
+            end
         end
     end
 

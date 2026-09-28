@@ -926,7 +926,8 @@ local function stopRun(reason)
     M.displaysVeh = nil
     local own = beamjoy_vehicles.getCurrentOwn()
     if own then resetBusDisplays(own.veh) end
-    beamjoy_communications.send("busRunStopped")
+    -- the reason lets the server tell a finished line (posted to Discord) from a stopped one
+    beamjoy_communications.send("busRunStopped", reason)
     local key = ({
         finish = "beamjoy.buslines.play.finished",
         blocked = "beamjoy.buslines.play.blocked",

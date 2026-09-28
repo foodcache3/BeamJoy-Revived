@@ -16,6 +16,30 @@ local M = {
 
 local function onInit()
     beamjoy_communications.addHandler("sendCache", M.retrieveCache)
+    -- BeamJoy Free import (Config > Core > Legacy Import), same bridge as beamjoy_freeroamData's
+    beamjoy_communications_ui.addHandler("BJDeliveryPointsLegacyImportPreviewRequest", function()
+        beamjoy_communications.send("deliveryPointsLegacyImportPreview")
+    end)
+    beamjoy_communications_ui.addHandler("BJDeliveryPointsLegacyImportConfirm", function(selection)
+        beamjoy_communications.send("deliveryPointsLegacyImportConfirm", selection)
+    end)
+    beamjoy_communications.addHandler("deliveryPointsLegacyImportPreviewResult", function(results)
+        beamjoy_communications_ui.send("BJDeliveryPointsLegacyImportPreview", results or {})
+    end)
+    beamjoy_communications.addHandler("deliveryPointsLegacyImportDone", M.onLegacyImportDone)
+end
+
+--- the new points only get jobs once their road lengths are measured, which happens when the
+--- delivery editor saves on that map : the toast says where
+---@param count integer
+---@param maps string[]
+local function onLegacyImportDone(count, maps)
+    maps = type(maps) == "table" and maps or {}
+    if (count or 0) == 0 then
+        return toast.info(beamjoy_lang.translate("beamjoy.window.config.tabs.core.legacyImport.deliveries.doneNone"), nil, 6)
+    end
+    toast.info(beamjoy_lang.translate("beamjoy.window.config.tabs.core.legacyImport.deliveries.done")
+        :gsub("{count}", tostring(count)):gsub("{maps}", table.concat(maps, ", ")), nil, 15)
 end
 
 ---@param caches table
@@ -37,6 +61,7 @@ end
 M.onInit = onInit
 
 M.retrieveCache = retrieveCache
+M.onLegacyImportDone = onLegacyImportDone
 M.getPoint = getPoint
 
 return M

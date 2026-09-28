@@ -27,7 +27,8 @@
 ---M.MAX_SLOTS), only kept when the point provides vehicles
 
 local M = {
-    dependencies = { "dao_activity", "services_core" },
+    -- services_hunter : its quatToFlatDir helper, for the BeamJoy Free importer below
+    dependencies = { "dao_activity", "services_core", "services_hunter" },
 
     POINTS_TYPE = "deliverypoints",
     ROUTES_TYPE = "deliveryroutes",
@@ -322,9 +323,198 @@ local function getRouteLength(fromId, toId)
     return M.routes[fromId] and M.routes[fromId][toId]
 end
 
+-- LEGACY IMPORT (BeamJoy Free) -------------------------------------------------------------------
+--
+-- BeamJoy Free kept `<dbPath>/scenarii/<map>_deliveries.json` : `{Hubs = [...], Points = [...]}`,
+-- each entry just `{pos, rot, radius}` (no names, no cargo kinds). Hubs become depots sending
+-- packages and vehicles, with a vehicle start slot where the hub stood and faced ; Points become
+-- drop-offs taking packages, cars and trucks. Additive, like the other importers : a spot sitting on
+-- a point the map already has is skipped. Routes can't be measured here (the server has no road
+-- graph), so an imported map offers jobs from these points once an admin saves it in the delivery
+-- editor on that map.
+
+local LEGACY_DIR = "scenarii"
+local LEGACY_SUFFIX = "_deliveries.json"
+-- a legacy spot this close to a point already there (or already taken in) is the same place
+local LEGACY_DUPLICATE_METERS = 10
+
+---@param a table
+---@param b table
+---@return number
+local function distance(a, b)
+    local dx, dy, dz = a.x - b.x, a.y - b.y, a.z - b.z
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+end
+
+---@param entry any
+---@return table? pos, number radius, table? rot
+local function legacyEntry(entry)
+    if type(entry) ~= "table" or type(entry.pos) ~= "table" then return nil, 0 end
+    local pos = { x = tonumber(entry.pos.x), y = tonumber(entry.pos.y), z = tonumber(entry.pos.z) }
+    if not validVec3(pos) then return nil, 0 end
+    return pos, cleanRadius(entry.radius), type(entry.rot) == "table" and entry.rot or nil
+end
+
+--- the points a map's legacy file would add on top of `existing` (not saved)
+---@param raw table
+---@param existing BJDeliveryPoint[]
+---@return BJDeliveryPoint[] added, integer depots, integer dropOffs, integer skipped
+local function convertLegacyDeliveries(raw, existing)
+    local added, depots, drops, skipped = {}, 0, 0, 0
+    local usedNames = {}
+    for _, p in ipairs(existing) do
+        if type(p.name) == "string" then usedNames[p.name:lower()] = true end
+    end
+    local function nextName(prefix, n)
+        repeat
+            n = n + 1
+        until not usedNames[(prefix .. " " .. n):lower()]
+        usedNames[(prefix .. " " .. n):lower()] = true
+        return prefix .. " " .. n, n
+    end
+    local function taken(pos)
+        for _, list in ipairs({ existing, added }) do
+            for _, p in ipairs(list) do
+                if validVec3(p.pos) and distance(p.pos, pos) < LEGACY_DUPLICATE_METERS then return true end
+            end
+        end
+        return false
+    end
+
+    local depotN, dropN = 0, 0
+    for _, hub in ipairs(table.isArray(raw.Hubs) and raw.Hubs or {}) do
+        local pos, radius, rot = legacyEntry(hub)
+        if pos then
+            if taken(pos) then
+                skipped = skipped + 1
+            else
+                local name
+                name, depotN = nextName("Depot", depotN)
+                added[#added + 1] = {
+                    name = name,
+                    pos = pos,
+                    radius = radius,
+                    provides = { "packages", "vehicles" },
+                    receives = {},
+                    slots = { {
+                        pos = { x = pos.x, y = pos.y, z = pos.z },
+                        dir = rot and services_hunter.quatToFlatDir(rot) or { x = 1, y = 0, z = 0 },
+                    } },
+                }
+                depots = depots + 1
+            end
+        end
+    end
+    for _, point in ipairs(table.isArray(raw.Points) and raw.Points or {}) do
+        local pos, radius = legacyEntry(point)
+        if pos then
+            if taken(pos) then
+                skipped = skipped + 1
+            else
+                local name
+                name, dropN = nextName("Drop-off", dropN)
+                added[#added + 1] = {
+                    name = name,
+                    pos = pos,
+                    radius = radius,
+                    provides = {},
+                    receives = { "packages", "cars", "trucks" },
+                }
+                drops = drops + 1
+            end
+        end
+    end
+    return added, depots, drops, skipped
+end
+
+--- every map with a legacy deliveries file : what importing it would add
+---@return table<string, {added: BJDeliveryPoint[], depots: integer, dropOffs: integer, skipped: integer, existing: integer}>
+local function scanLegacyDeliveries()
+    local byMap = {}
+    local dir = dao_main.dbPath .. "/" .. LEGACY_DIR
+    if not FS.Exists(dir) then return byMap end
+    for _, filename in pairs(FS.ListFiles(dir)) do
+        local mapName = #filename > #LEGACY_SUFFIX and filename:sub(-#LEGACY_SUFFIX) == LEGACY_SUFFIX and
+            filename:sub(1, -#LEGACY_SUFFIX - 1) or nil
+        if mapName then
+            local raw = dao_main.get(LEGACY_DIR .. "/" .. filename)
+            if type(raw) == "table" then
+                local existing = mapName == services_core.getCurrentMap() and M.points or
+                    (dao_activity.get(mapName, M.POINTS_TYPE) or {})
+                local added, depots, drops, skipped = convertLegacyDeliveries(raw, existing)
+                if #added > 0 or skipped > 0 then
+                    byMap[mapName] = { added = added, depots = depots, dropOffs = drops,
+                        skipped = skipped, existing = #existing }
+                end
+            end
+        end
+    end
+    return byMap
+end
+
+---@param ctxt BJSContext
+local function deliveryPointsLegacyImportPreview(ctxt)
+    if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
+            BJ_PERMISSIONS.EditFreeroamData) then
+        return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
+            services_lang.get("error.insufficientPermissions", ctxt.sender.lang))
+    end
+    local results = {}
+    for mapName, entry in pairs(scanLegacyDeliveries()) do
+        results[#results + 1] = { key = mapName, map = mapName, depotCount = entry.depots,
+            dropOffCount = entry.dropOffs, skippedCount = entry.skipped, existingCount = entry.existing }
+    end
+    if ctxt.sender then
+        communications_tx.sendToPlayer(ctxt.senderID, "deliveryPointsLegacyImportPreviewResult", results)
+    end
+end
+
+---@param ctxt BJSContext
+---@param selection string[]? the ticked maps ; nil = all
+local function deliveryPointsLegacyImportConfirm(ctxt, selection)
+    if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
+            BJ_PERMISSIONS.EditFreeroamData) then
+        local permErr = services_lang.get("error.insufficientPermissions", ctxt.sender.lang)
+        communications_tx.sendToPlayer(ctxt.senderID, "toast", "error", permErr)
+        return communications_tx.sendToPlayer(ctxt.senderID, "deliveryPointsLegacyImportDone", 0, {})
+    end
+    local picked = ImportSelection(selection)
+    local imported, maps = 0, {}
+    local currentMap = services_core.getCurrentMap()
+    for mapName, entry in pairs(scanLegacyDeliveries()) do
+        if #entry.added > 0 and (not picked or picked[mapName]) then
+            local isCurrentMap = mapName == currentMap
+            local target = isCurrentMap and M.points or (dao_activity.get(mapName, M.POINTS_TYPE) or {})
+            for _, point in ipairs(entry.added) do table.insert(target, point) end
+            local err = sanitizePoints(target)
+            if err then
+                LogError(string.format("deliveryPointsLegacyImportConfirm: %s failed sanitation: %s", mapName, err))
+            else
+                -- routes stay as they were : the old points keep theirs (ids are kept), the new ones
+                -- get theirs on the next save in the editor
+                dao_activity.save(mapName, M.POINTS_TYPE, target)
+                imported = imported + #entry.added
+                maps[#maps + 1] = mapName
+                if isCurrentMap then
+                    M.points = target
+                    M.routes = indexRoutes(flattenRoutes(M.routes), M.points)
+                    extensions.hook("onBJDeliveryPointsChanged")
+                    pushCacheToAll()
+                end
+            end
+        end
+    end
+    table.sort(maps)
+    if ctxt.sender then
+        communications_tx.sendToPlayer(ctxt.senderID, "deliveryPointsLegacyImportDone", imported, maps)
+    end
+end
+
 local function onInit()
     communications_rx.addHandler("deliveryPointsSave", M.deliveryPointsSave)
     communications_rx.addHandler("deliveryRoutesRequest", M.deliveryRoutesRequest)
+    communications_rx.addHandler("deliveryPointsLegacyImportPreview", M.deliveryPointsLegacyImportPreview)
+    communications_rx.addHandler("deliveryPointsLegacyImportConfirm", M.deliveryPointsLegacyImportConfirm)
     loadData()
 end
 
@@ -334,6 +524,8 @@ M.onMapChanged = loadData
 
 M.deliveryPointsSave = deliveryPointsSave
 M.deliveryRoutesRequest = deliveryRoutesRequest
+M.deliveryPointsLegacyImportPreview = deliveryPointsLegacyImportPreview
+M.deliveryPointsLegacyImportConfirm = deliveryPointsLegacyImportConfirm
 M.getPoint = getPoint
 M.getRouteLength = getRouteLength
 M.isDepot = isDepot

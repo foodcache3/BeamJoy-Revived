@@ -69,13 +69,82 @@ local parent
 local draggingHandle = nil
 local lastHandlePush = 0
 
-local function computeDistance()
-    local total = 0
-    for i = 2, #M.race.gates do
-        local a, b = M.race.gates[i - 1].pos, M.race.gates[i].pos
-        total = total + vec3(a.x, a.y, a.z):distance(vec3(b.x, b.y, b.z))
+--- A race's length in metres, following its route. The route runs from gate to gate through
+--- each gate's `parents` (the gate(s) it's reached from ; 0 = the start), taking the shortest
+--- branch where the route splits. A circuit's length is one lap : back round to the first gate.
+--- A point-to-point race also counts the run from the grid to its first gate. The editor
+--- (ui/raceEditor.lua) and services/races.lua carry the same code, kept in step by hand.
+---@param race table gates with pos (and, while branching is on, parents/step/isFinish)
+---@return integer
+local function computeRaceDistance(race)
+    local gates = race.gates
+    if type(gates) ~= "table" or #gates == 0 then return 0 end
+    local function dist(a, b)
+        local dx, dy, dz = (a.x or 0) - (b.x or 0), (a.y or 0) - (b.y or 0), (a.z or 0) - (b.z or 0)
+        return math.sqrt(dx * dx + dy * dy + dz * dz)
     end
-    M.race.distance = math.round(total)
+    local branching = race.branchingEnabled == true
+    local function parentsOf(i)
+        local p = gates[i].parents
+        if branching and type(p) == "table" and #p > 0 then return p end
+        return { i - 1 }
+    end
+    local function stepOf(i)
+        return branching and tonumber(gates[i].step) or i
+    end
+    local order = {}
+    for i = 1, #gates do order[i] = i end
+    table.sort(order, function(a, b)
+        local sa, sb = stepOf(a), stepOf(b)
+        if sa ~= sb then return sa < sb end
+        return a < b
+    end)
+
+    local start = type(race.startPositions) == "table" and race.startPositions[1] and race.startPositions[1].pos
+    local best, firsts, hasChild = {}, {}, {}
+    for _, i in ipairs(order) do
+        for _, p in ipairs(parentsOf(i)) do
+            p = tonumber(p)
+            local via
+            if p == 0 then
+                firsts[#firsts + 1] = i
+                via = (race.loopable or not start) and 0 or dist(start, gates[i].pos)
+            elseif p and gates[p] and best[p] then
+                hasChild[p] = true
+                via = best[p] + dist(gates[p].pos, gates[i].pos)
+            end
+            if via and (not best[i] or via < best[i]) then best[i] = via end
+        end
+    end
+
+    local total
+    for i = 1, #gates do
+        if best[i] then
+            if race.loopable then
+                -- a gate the route doesn't continue from closes the lap, back to a first gate
+                if not hasChild[i] then
+                    for _, f in ipairs(firsts) do
+                        if f ~= i then
+                            local lap = best[i] + dist(gates[i].pos, gates[f].pos)
+                            if not total or lap < total then total = lap end
+                        end
+                    end
+                end
+            elseif (branching and gates[i].isFinish) or (not branching and i == #gates) then
+                if not total or best[i] < total then total = best[i] end
+            end
+        end
+    end
+    if not total then
+        -- a route that can't be followed (broken links) : gate to gate, in list order
+        total = 0
+        for i = 2, #gates do total = total + dist(gates[i - 1].pos, gates[i].pos) end
+    end
+    return math.floor(total + .5)
+end
+
+local function computeDistance()
+    M.race.distance = computeRaceDistance(M.race)
 end
 
 --- client-side mirror of services/races.lua's own deriveStepsFromParents (same algorithm,

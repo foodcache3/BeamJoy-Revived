@@ -747,6 +747,20 @@ local function pushConvoyResults(c)
         communications_tx.sendToPlayer(pid, "deliveryConvoyResults", payload)
         if c.rows[pid] and c.rows[pid].status == "driving" then finished = false end
     end
+    if finished and c.size > 1 and services_discord then
+        local offer = c.offer
+        local from = services_deliveryPoints.getPoint(offer.depotId)
+        local dest = services_deliveryPoints.getPoint(offer.destId)
+        pcall(services_discord.onConvoyEnd, {
+            what = offer.kind == "vehicles" and offer.vehicle and offer.vehicle.label or
+                tostring(offer.cargo or "packages"),
+            fromName = from and from.name or "?",
+            toName = dest and dest.name or "?",
+            meters = offer.meters,
+            targetSec = offer.targetSec,
+            rows = payload.rows,
+        })
+    end
     if finished then
         M.convoys[c.id] = nil
         for _, pid in ipairs(c.order) do
@@ -988,6 +1002,25 @@ local function deliveryArrive(ctxt, serverVid, condition, stats)
         players = players,
         convoy = convoy,
     })
+
+    if services_discord and not (c and c.size > 1) then
+        pcall(services_discord.onDelivery, {
+            playerName = playerName or ctxt.sender.playerName,
+            kind = kind,
+            cargo = offer.cargo,
+            vehicle = offer.vehicle and offer.vehicle.label,
+            fromName = from and from.name or "?",
+            toName = dest.name,
+            meters = offer.meters,
+            stops = stopCount > 1 and stopCount or nil,
+            actualSec = actual,
+            targetSec = offer.targetSec,
+            condition = cond and cond.band or nil,
+            score = score,
+            rank = rank,
+            players = players,
+        })
+    end
 
     if c then
         c.rows[ctxt.senderID] = {

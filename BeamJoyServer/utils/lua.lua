@@ -1,6 +1,19 @@
 TrueFn = TrueFn or function() return true end
 FalseFn = FalseFn or function() return false end
 
+--- Legacy importers : the keys the admin ticked in the import checklist, as a set. nil when no
+--- list was sent (an older client, a console call) : everything imports, as before
+---@param selection any
+---@return table<string, boolean>?
+function ImportSelection(selection)
+    if type(selection) ~= "table" then return nil end
+    local set = {}
+    for _, key in pairs(selection) do
+        if type(key) == "string" then set[key] = true end
+    end
+    return set
+end
+
 ---@return integer
 function GetCurrentTime()
     return os.time(os.date("!*t")) ---@diagnostic disable-line

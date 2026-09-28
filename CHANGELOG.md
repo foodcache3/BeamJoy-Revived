@@ -8,8 +8,47 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2529, server build 2370.
+Version 1.11.0 : client build 2536, server build 2377.
 
+- **Full name in the menus.** The side panels now say BeamJoy and the big screen says BeamJoy Revived
+  instead of BJR ; the sidebar keeps BJR. *(client only)*
+- **Import delivery points from BeamJoy Free.** A new Legacy Import row, with the same per-map
+  checklist: BeamJoy Free hubs become depots sending packages and vehicles (with a vehicle start slot
+  where the hub stood), its points become drop-offs taking packages, cars and trucks. Added alongside
+  existing points, skipping any spot within 10 m of one. The new points get jobs once the map is
+  saved in the delivery editor, which measures their routes.
+- **Pick what Legacy Import brings over.** Each BeamJoy Free importer now shows a checklist instead
+  of a yes/no list: one row per race or bus line (grouped by map, and a map's heading ticks or
+  unticks all of it), one per map for Hunter and Infected arenas and for stations and garages. Only
+  the ticked rows import. Races that can't be imported show greyed out with the reason.
+- **Easier to see what's selected with a controller.** The selection highlight in BeamJoy's windows
+  is now a white ring with a dark gap instead of orange, which vanished on orange boxes and buttons
+  (some buttons showed no ring at all). The pad cursor in the main window, HUDs, vote windows and
+  info panel gets the same look, drawn inside the box. *(client only)*
+- **Activity posts on Discord.** Each webhook can also post deliveries (each delivery, or one post
+  per convoy with everyone's result), hunter rounds (who won, the fugitive and hunters, waypoints),
+  infected rounds (who won, the survivors, most infections) and bus lines (a line driven to its last
+  stop, or once around a looping line). All off by default, one toggle each.
+- **Race distances follow the route.** A race's distance now follows its gates the way the route
+  runs (the shortest branch where it splits), includes the stretch back to the first gate on a
+  circuit and from the grid to the first gate on a sprint. Every bundled race has one now, and the
+  console command `bj racedistances` recalculates and saves them on every map (temporary).
+- **Fixed: Discord join and leave posts showed placeholder text.** The server's own language file
+  never had those two messages. *(server only)*
+- **Fixed Street Course 2 (West Coast USA).** One gate removed from the course. Servers that already
+  had the race get the fixed course once, automatically, keeping its leaderboard and settings; a
+  server whose admin edited the race keeps their own version. *(server only)*
+- **Discord posts without a plugin.** Add channel webhooks in Config > General > Discord and the
+  server posts there directly, no ChatHook or other plugin needed (it uses curl, which comes with
+  Windows 10+ and most Linux). Up to 10 webhooks, each with its own name and choice of posts (say,
+  race results in one channel and votes and chat in another), and a test button for each.
+- **Race results on Discord.** A solo run posts its time, what it meant (new server record, new
+  personal best and by how much, or how far off the player's best), leaderboard place and vehicle.
+  A race with several players posts one message when it ends with the full standings:
+  medals for the podium, each time and personal best, and anyone who didn't finish. Can be limited
+  to personal bests and records only.
+- **Votes, joins and leaves, and chat on Discord.** Map and kick votes post by default; joins,
+  leaves and player chat can be turned on. Nothing posted can ping anyone.
 - **The UI appears about 2 seconds sooner after the nickname screen.** Start-up waited a fixed 2
   seconds before even checking whether the server's data had arrived. It now goes as soon as it has. *(client only)*
 - **Fixed: map and kick vote chat messages showed placeholder text.** The server sends each vote

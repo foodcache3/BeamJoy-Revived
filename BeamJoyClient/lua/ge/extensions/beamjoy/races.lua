@@ -50,8 +50,9 @@ local function onLegacyImportPreviewResult(results)
     beamjoy_communications_ui.send("BJRaceLegacyImportPreview", results or {})
 end
 
-local function confirmLegacyImport()
-    beamjoy_communications.send("raceLegacyImportConfirm")
+--- `selection` : the keys ticked in the import checklist
+local function confirmLegacyImport(selection)
+    beamjoy_communications.send("raceLegacyImportConfirm", selection)
 end
 
 ---@param imported integer

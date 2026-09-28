@@ -398,6 +398,25 @@ local function endHunt(session, winner)
     pushSessionUpdate(session)
     utils_async.delayTask(function() removeSession(session) end,
         10, "BJHunterGrid-" .. session.id .. "-cleanup")
+    if not session.debugSolo and services_discord then
+        local fugitive, hunters = nil, {}
+        session.participants:forEach(function(p)
+            if p.role == "hunted" then
+                fugitive = p
+            elseif p.role == "hunter" then
+                hunters[#hunters + 1] = resolveDisplayName(p.playerID, p.playerName)
+            end
+        end)
+        pcall(services_discord.onHunterEnd, {
+            winner = winner,
+            fugitive = fugitive and resolveDisplayName(fugitive.playerID, fugitive.playerName),
+            fugitiveVehicle = fugitive and fugitive.vehicleModel,
+            hunters = hunters,
+            waypoints = fugitive and fugitive.waypointsReached,
+            route = session.route and #session.route or nil,
+            durationSec = session.startedAt and (GetCurrentTime() - session.startedAt) or nil,
+        })
+    end
 end
 
 ---@param arena BJHunterArena

@@ -424,7 +424,7 @@ local function previewLegacyFreeroamData()
     local results = {}
     for mapName, entries in pairs(scanLegacyFreeroamData()) do
         if #entries.stations > 0 or #entries.garages > 0 then
-            table.insert(results, { map = mapName, stationCount = #entries.stations,
+            table.insert(results, { key = mapName, map = mapName, stationCount = #entries.stations,
                 garageCount = #entries.garages })
         end
     end
@@ -448,7 +448,9 @@ end
 --- legacy importer - an admin migrating a whole server's worth of old data shouldn't have to
 --- switch maps repeatedly to import each one.
 ---@param ctxt BJSContext
-local function freeroamDataLegacyImportConfirm(ctxt)
+---@param selection string[]? the ticked maps ; nil = all
+local function freeroamDataLegacyImportConfirm(ctxt, selection)
+    local picked = ImportSelection(selection)
     if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
             BJ_PERMISSIONS.EditFreeroamData) then
         local permErr = services_lang.get("error.insufficientPermissions", ctxt.sender.lang)
@@ -459,6 +461,9 @@ local function freeroamDataLegacyImportConfirm(ctxt)
     local importedStations, importedGarages = 0, 0
     for mapName, entries in pairs(scanLegacyFreeroamData()) do
         local isCurrentMap = mapName == services_core.getCurrentMap()
+        if picked and not picked[mapName] then
+            entries = { stations = {}, garages = {} }
+        end
         if #entries.stations > 0 then
             local target = isCurrentMap and M.stations or (dao_activity.get(mapName, M.STATIONS_TYPE) or {})
             for _, s in ipairs(entries.stations) do

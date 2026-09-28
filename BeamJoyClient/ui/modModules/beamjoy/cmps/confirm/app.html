@@ -40,6 +40,112 @@
         width: 100%;
         margin-bottom: 1em;
     }
+
+    /* CHECKLIST (askChecklist) : the list scrolls, the message above it stays short */
+    #beamjoy-confirm .confirm-box.has-checklist {
+        max-width: 38em;
+        width: 38em;
+    }
+    #beamjoy-confirm .has-checklist .confirm-message {
+        flex: 0 0 auto;
+        max-height: 20vh;
+        margin-bottom: 0.6em;
+    }
+    #beamjoy-confirm .checklist-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.4em;
+        margin-bottom: 0.4em;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9em;
+    }
+    #beamjoy-confirm .checklist-bar .spacer {
+        flex: 1;
+    }
+    #beamjoy-confirm .checklist {
+        flex: 1 1 auto;
+        min-height: 4em;
+        overflow-y: auto;
+        margin-bottom: 1em;
+        padding: 0.2em;
+        border-radius: 0.3em;
+        background: rgba(0, 0, 0, 0.3);
+    }
+    #beamjoy-confirm .checklist-group + .checklist-group {
+        margin-top: 0.4em;
+    }
+    #beamjoy-confirm .checklist-row,
+    #beamjoy-confirm .checklist-heading {
+        display: flex;
+        align-items: center;
+        gap: 0.6em;
+        width: 100%;
+        padding: 0.35em 0.5em;
+        border: none;
+        border-radius: 0.25em;
+        background: transparent;
+        color: white;
+        text-align: left;
+        font: inherit;
+        cursor: pointer;
+    }
+    #beamjoy-confirm .checklist-heading {
+        font-weight: bold;
+        color: #ff8955;
+    }
+    #beamjoy-confirm .checklist-row:hover,
+    #beamjoy-confirm .checklist-heading:hover {
+        background: rgba(255, 255, 255, 0.08);
+    }
+    #beamjoy-confirm .checklist-row.off .label {
+        opacity: 0.55;
+    }
+    #beamjoy-confirm .checklist-row.disabled {
+        cursor: default;
+        opacity: 0.5;
+    }
+    #beamjoy-confirm .checklist-row .text {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+    }
+    #beamjoy-confirm .checklist-row .detail {
+        font-size: 0.85em;
+        color: rgba(255, 255, 255, 0.6);
+    }
+    #beamjoy-confirm .checklist-row .tag {
+        font-size: 0.8em;
+        color: #ffbca0;
+        white-space: nowrap;
+    }
+    /* a drawn box, not a native checkbox : the whole row is the button, and a native input
+       inside a button can't be clicked on its own anyway */
+    #beamjoy-confirm .box {
+        flex: none;
+        width: 1.1em;
+        height: 1.1em;
+        border-radius: 0.2em;
+        border: 2px solid rgba(255, 255, 255, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8em;
+        line-height: 1;
+    }
+    #beamjoy-confirm .box.all {
+        background: #ff6600;
+        border-color: #ff6600;
+    }
+    #beamjoy-confirm .box.all::after {
+        content: "\2713";
+    }
+    #beamjoy-confirm .box.some::after {
+        content: "";
+        width: 0.55em;
+        height: 2px;
+        background: white;
+    }
 </style>
 
 <div
@@ -48,8 +154,41 @@
     ng-if="$ctrl.state.visible"
     ng-click="$ctrl.cancel($event)"
 >
-    <div class="confirm-box cursor-default" ng-click="$event.stopPropagation()">
+    <div class="confirm-box cursor-default" ng-class="{'has-checklist': $ctrl.state.checklist}"
+        ng-click="$event.stopPropagation()">
         <div class="confirm-message">{{$ctrl.state.message}}</div>
+        <div class="checklist-bar" ng-if="$ctrl.state.checklist">
+            <span>{{$ctrl.countText()}}</span>
+            <span class="spacer"></span>
+            <button class="btn neutral" ng-click="$ctrl.selectAll(true, $event)">
+                {{'beamjoy.confirm.checklist.all' | translate}}
+            </button>
+            <button class="btn neutral" ng-click="$ctrl.selectAll(false, $event)">
+                {{'beamjoy.confirm.checklist.none' | translate}}
+            </button>
+        </div>
+        <div class="checklist" ng-if="$ctrl.state.checklist">
+            <div class="checklist-group" ng-repeat="group in $ctrl.state.checklist">
+                <button class="checklist-heading" ng-if="group.name" ng-click="$ctrl.toggleGroup(group, $event)">
+                    <span class="box" ng-class="$ctrl.groupState(group)"></span>
+                    <span>{{group.name}}</span>
+                </button>
+                <button
+                    class="checklist-row"
+                    ng-repeat="row in group.rows"
+                    ng-class="{off: !row.checked, disabled: row.disabled}"
+                    ng-disabled="row.disabled"
+                    ng-click="$ctrl.toggleRow(row, $event)"
+                >
+                    <span class="box" ng-class="{all: row.checked}"></span>
+                    <span class="text">
+                        <span class="label">{{row.label}}</span>
+                        <span class="detail" ng-if="row.detail">{{row.detail}}</span>
+                    </span>
+                    <span class="tag" ng-if="row.tag">{{row.tag}}</span>
+                </button>
+            </div>
+        </div>
         <input
             ng-if="$ctrl.state.showInput"
             type="text"
@@ -66,7 +205,7 @@
             <button
                 class="btn"
                 ng-class="{danger: $ctrl.state.dangerous, success: !$ctrl.state.dangerous}"
-                ng-disabled="$ctrl.state.showInput && !$ctrl.state.inputValue.trim()"
+                ng-disabled="($ctrl.state.showInput && !$ctrl.state.inputValue.trim()) || ($ctrl.state.checklist && $ctrl.checkedCount() === 0)"
                 ng-click="$ctrl.confirm($event)"
             >
                 {{($ctrl.state.infoOnly ? 'beamjoy.common.close' : 'beamjoy.common.confirm') | translate}}

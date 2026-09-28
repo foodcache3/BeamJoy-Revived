@@ -52,6 +52,14 @@
         <bj-config-general-voting></bj-config-general-voting>
     </accordion-content>
 </bj-accordion>
+<bj-accordion id="config-discord" ng-hide="!$ctrl.display.discord">
+    <accordion-title>
+        {{"beamjoy.window.config.tabs.general.discord.title"|translate}}
+    </accordion-title>
+    <accordion-content>
+        <bj-config-general-discord></bj-config-general-discord>
+    </accordion-content>
+</bj-accordion>
 <bj-accordion id="config-whitelist" ng-hide="!$ctrl.display.whitelist">
     <accordion-title>
         {{"beamjoy.window.config.tabs.general.whitelist"|translate}}

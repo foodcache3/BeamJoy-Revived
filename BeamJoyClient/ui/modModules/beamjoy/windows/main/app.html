@@ -23,8 +23,9 @@
         font-family: inherit;
     }
     .bjr button:focus-visible {
-        outline: 2px solid var(--bjr-orange);
-        outline-offset: 2px;
+        outline: 2px solid #ffffff;
+        outline-offset: 3px;
+        box-shadow: 0 0 0 3px rgba(10, 11, 14, 0.85);
     }
     .bjr .bjr-title {
         margin: 0;
@@ -38,6 +39,7 @@
         font-weight: 900;
         font-style: italic;
         line-height: 1;
+        white-space: nowrap;
     }
     .bjr .bjr-icon-btn {
         width: 2.3em;
@@ -613,8 +615,9 @@
     }
     /* inset, so it never spills over the buttons below a player row */
     .bjr .bjr-pad-focus {
-        outline: 2px solid var(--bjr-orange) !important;
+        outline: 2px solid #ffffff !important;
         outline-offset: -2px;
+        box-shadow: inset 0 0 0 4px rgba(10, 11, 14, 0.85) !important;
     }
     /* another window has the pad (a focused invite, the job board) : this one steps back */
     .bjr-rail,
@@ -874,7 +877,7 @@
                         <polygon points="41,80 56,80 64.8,38 49.8,38" fill="#1c1f26"></polygon>
                         <polygon points="64,80 79,80 91.6,20 76.6,20" fill="#1c1f26"></polygon>
                     </svg>
-                    <span class="bjr-word">BJR</span>
+                    <span class="bjr-word">BeamJoy</span>
                 </span>
                 <h2 class="bjr-title">{{('beamjoy.window.main.panels.' + $ctrl.panel) | translate}}</h2>
             </div>
@@ -923,7 +926,7 @@
                         <polygon points="41,80 56,80 64.8,38 49.8,38" fill="#1c1f26"></polygon>
                         <polygon points="64,80 79,80 91.6,20 76.6,20" fill="#1c1f26"></polygon>
                     </svg>
-                    <span class="bjr-word">BJR</span>
+                    <span class="bjr-word">BeamJoy Revived</span>
                 </span>
                 <span class="sep" aria-hidden="true"></span>
                 <nav class="full-tabs" aria-label="{{'beamjoy.window.main.rail.sections' | translate}}">

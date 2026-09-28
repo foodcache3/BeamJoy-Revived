@@ -193,11 +193,22 @@
         color: white;
     }
 
+    /* Selection highlight (controller / keyboard). The game draws an orange ring (::before) around
+       the selected element, which disappeared on BeamJoy's orange boxes and buttons (and buttons
+       had it switched off entirely). Here it's a white ring with a dark gap, which reads on orange,
+       grey and the world behind. A plain outline + solid shadow : no blur, redrawn only when the
+       selection moves. BeamJoy's own pad cursors (.cursor / pad-focus classes in the windows) use
+       the inset form of the same look. */
     beamjoy .focus-visible::before {
-        border-radius: unset;
-    }
-    beamjoy .btn.focus-visible::before {
         content: none;
+    }
+    /* text fields and dropdowns keep their own orange underline (a clicked text box counts as
+       :focus-visible even with the mouse) */
+    beamjoy .focus-visible:not(input):not(textarea):not(md-select),
+    beamjoy :focus-visible:not(input):not(textarea):not(md-select) {
+        outline: 2px solid #ffffff;
+        outline-offset: 3px;
+        box-shadow: 0 0 0 3px rgba(10, 11, 14, 0.85);
     }
 
     beamjoy input:disabled,
