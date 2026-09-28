@@ -8,7 +8,7 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2536, server build 2377.
+Version 1.11.0 : client build 2536, server build 2378.
 
 - **Full name in the menus.** The side panels now say BeamJoy and the big screen says BeamJoy Revived
   instead of BJR ; the sidebar keeps BJR. *(client only)*
@@ -31,8 +31,7 @@ Version 1.11.0 : client build 2536, server build 2377.
   stop, or once around a looping line). All off by default, one toggle each.
 - **Race distances follow the route.** A race's distance now follows its gates the way the route
   runs (the shortest branch where it splits), includes the stretch back to the first gate on a
-  circuit and from the grid to the first gate on a sprint. Every bundled race has one now, and the
-  console command `bj racedistances` recalculates and saves them on every map (temporary).
+  circuit and from the grid to the first gate on a sprint. Every bundled race has one now.
 - **Fixed: Discord join and leave posts showed placeholder text.** The server's own language file
   never had those two messages. *(server only)*
 - **Fixed Street Course 2 (West Coast USA).** One gate removed from the course. Servers that already

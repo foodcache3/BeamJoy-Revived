@@ -27,7 +27,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 180,
+        "distance": 238,
         "gates": [
             {
                 "dir": {
@@ -336,7 +336,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 175,
+        "distance": 237,
         "gates": [
             {
                 "dir": {
@@ -573,7 +573,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 947,
+        "distance": 1127,
         "gates": [
             {
                 "dir": {

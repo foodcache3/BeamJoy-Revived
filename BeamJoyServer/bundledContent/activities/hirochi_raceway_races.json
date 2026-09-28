@@ -16,7 +16,7 @@
             "laps": 3,
             "respawnStrategy": "lastcheckpoint"
         },
-        "distance": 1595,
+        "distance": 1795,
         "gates": [
             {
                 "dir": {
@@ -283,7 +283,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2782,
+        "distance": 2889,
         "gates": [
             {
                 "dir": {
@@ -585,7 +585,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2810,
+        "distance": 2931,
         "gates": [
             {
                 "dir": {
@@ -887,7 +887,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2355,
+        "distance": 2462,
         "gates": [
             {
                 "dir": {
@@ -1171,7 +1171,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2398,
+        "distance": 2519,
         "gates": [
             {
                 "dir": {
@@ -1455,7 +1455,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2447,
+        "distance": 2667,
         "gates": [
             {
                 "dir": {
@@ -1973,7 +1973,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2548,
+        "distance": 2726,
         "gates": [
             {
                 "dir": {
@@ -2509,7 +2509,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2222,
+        "distance": 2442,
         "gates": [
             {
                 "dir": {
@@ -3027,7 +3027,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2314,
+        "distance": 2493,
         "gates": [
             {
                 "dir": {
@@ -3563,7 +3563,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 1660,
+        "distance": 1880,
         "gates": [
             {
                 "dir": {
@@ -4081,7 +4081,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 1704,
+        "distance": 1883,
         "gates": [
             {
                 "dir": {
@@ -4581,7 +4581,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 505,
+        "distance": 639,
         "gates": [
             {
                 "dir": {

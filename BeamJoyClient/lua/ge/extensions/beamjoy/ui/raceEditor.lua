@@ -72,8 +72,8 @@ local lastHandlePush = 0
 --- A race's length in metres, following its route. The route runs from gate to gate through
 --- each gate's `parents` (the gate(s) it's reached from ; 0 = the start), taking the shortest
 --- branch where the route splits. A circuit's length is one lap : back round to the first gate.
---- A point-to-point race also counts the run from the grid to its first gate. The editor
---- (ui/raceEditor.lua) and services/races.lua carry the same code, kept in step by hand.
+--- A point-to-point race also counts the run from the grid to its first gate. Measured on every
+--- save.
 ---@param race table gates with pos (and, while branching is on, parents/step/isFinish)
 ---@return integer
 local function computeRaceDistance(race)

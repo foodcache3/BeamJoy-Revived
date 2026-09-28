@@ -26,7 +26,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 0,
+        "distance": 4261,
         "gates": [
             {
                 "dir": {
@@ -317,7 +317,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 0,
+        "distance": 4254,
         "gates": [
             {
                 "dir": {
@@ -608,7 +608,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 189,
+        "distance": 264,
         "gates": [
             {
                 "dir": {
@@ -784,7 +784,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 208,
+        "distance": 253,
         "gates": [
             {
                 "dir": {
@@ -960,7 +960,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 0,
+        "distance": 1285,
         "gates": [
             {
                 "dir": {
@@ -1352,7 +1352,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2286,
+        "distance": 2862,
         "gates": [
             {
                 "dir": {
@@ -1672,7 +1672,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2671,
+        "distance": 2891,
         "gates": [
             {
                 "dir": {
@@ -1992,7 +1992,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 3172,
+        "distance": 3274,
         "gates": [
             {
                 "dir": {
@@ -2384,7 +2384,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2895,
+        "distance": 3282,
         "gates": [
             {
                 "dir": {
@@ -2776,7 +2776,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 12782,
+        "distance": 13293,
         "gates": [
             {
                 "dir": {
@@ -3427,7 +3427,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 12232,
+        "distance": 13253,
         "gates": [
             {
                 "dir": {
@@ -4077,7 +4077,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 3890,
+        "distance": 4021,
         "gates": [
             {
                 "dir": {
@@ -4529,7 +4529,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 3905,
+        "distance": 4050,
         "gates": [
             {
                 "dir": {
@@ -4981,7 +4981,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 793,
+        "distance": 897,
         "gates": [
             {
                 "dir": {
@@ -5271,7 +5271,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 881,
+        "distance": 975,
         "gates": [
             {
                 "dir": {
@@ -5579,7 +5579,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 1902,
+        "distance": 1984,
         "gates": [
             {
                 "dir": {
@@ -6007,7 +6007,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 6102,
+        "distance": 6322,
         "gates": [
             {
                 "dir": {
@@ -6399,7 +6399,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 6307,
+        "distance": 6332,
         "gates": [
             {
                 "dir": {
@@ -6809,7 +6809,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2774,
+        "distance": 3137,
         "gates": [
             {
                 "dir": {
@@ -7165,7 +7165,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 3022,
+        "distance": 3128,
         "gates": [
             {
                 "dir": {
@@ -7455,7 +7455,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 0,
+        "distance": 4722,
         "gates": [
             {
                 "dir": {
@@ -7763,7 +7763,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 4152,
+        "distance": 4585,
         "gates": [
             {
                 "dir": {
@@ -8119,7 +8119,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 5550,
+        "distance": 5678,
         "gates": [
             {
                 "dir": {
@@ -8715,7 +8715,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 5405,
+        "distance": 5624,
         "gates": [
             {
                 "dir": {
@@ -9311,7 +9311,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 5492,
+        "distance": 5516,
         "gates": [
             {
                 "dir": {
@@ -9961,7 +9961,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2506,
+        "distance": 2529,
         "gates": [
             {
                 "dir": {
@@ -10281,7 +10281,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2943,
+        "distance": 3013,
         "gates": [
             {
                 "dir": {
@@ -10673,7 +10673,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2210,
+        "distance": 2280,
         "gates": [
             {
                 "dir": {
@@ -10975,7 +10975,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 1241,
+        "distance": 1393,
         "gates": [
             {
                 "dir": {
@@ -11187,7 +11187,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 3136,
+        "distance": 3206,
         "gates": [
             {
                 "dir": {
@@ -11597,7 +11597,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 5457,
+        "distance": 5527,
         "gates": [
             {
                 "dir": {
@@ -12169,7 +12169,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 3180,
+        "distance": 3211,
         "gates": [
             {
                 "dir": {
@@ -12688,7 +12688,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 3115,
+        "distance": 3272,
         "gates": [
             {
                 "dir": {
@@ -13200,7 +13200,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 953,
+        "distance": 1014,
         "gates": [
             {
                 "dir": {
@@ -13676,7 +13676,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 0,
+        "distance": 1129,
         "gates": [
             {
                 "dir": {
@@ -14086,7 +14086,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2327,
+        "distance": 2315,
         "gates": [
             {
                 "dir": {
@@ -14918,7 +14918,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 1929,
+        "distance": 1971,
         "gates": [
             {
                 "dir": {
@@ -15310,7 +15310,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 2537,
+        "distance": 2586,
         "gates": [
             {
                 "dir": {
@@ -15738,7 +15738,7 @@
             "showGateNametags": false,
             "visibleGateCount": 2
         },
-        "distance": 3060,
+        "distance": 3140,
         "gates": [
             {
                 "dir": {
