@@ -6,6 +6,9 @@ angular.module("beamjoy").component("bjMainSettings", {
         $rootScope.$on("BJUserSettings", () => {
            this.settings = angular.copy(beamjoyStore.settings.data)
         });
+        // the vehicle settings saved on this PC (automatic lights, dust and particles) : until they
+        // arrive the page's own defaults stand in
+        beamjoyStore.send("BJRequestVehicleSettings");
 
         // Real, confirmed bug: this "About" section's version display never worked and its
         // GitHub link (a plain `<a href>`) never opened a browser - CEF's `local://` UI scheme has
@@ -61,9 +64,13 @@ angular.module("beamjoy").component("bjMainSettings", {
             }
         );
 
+        // Real bug: this used to save on the watch's first run too, when nothing had changed,
+        // sending the page's own defaults before the saved values had even arrived : opening
+        // Settings put every saved vehicle setting back to its default
         $scope.$watch(
             () => this.settings,
-            () => {
+            (value, old) => {
+                if (value === old) return;
                 beamjoyStore.settings.save(this.settings);
             },
             true

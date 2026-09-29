@@ -20,6 +20,9 @@ angular.module("beamjoy").component("bjPointListEditorToolbar", {
         $rootScope.$on("BJEditorChangeTool", (_, tool) => {
             this.tool = tool;
         });
+        // a toolbar built after the tool was last set (the freeroam editor builds one per section,
+        // on each tab switch) missed that broadcast and showed no tool selected : ask for it
+        this.$onInit = () => beamjoyStore.send("BJEditorToolRequest");
 
         this.snapToGroundEnabled = true;
         $rootScope.$on(this.events.snapToGround, (_, state) => {

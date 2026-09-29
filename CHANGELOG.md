@@ -8,14 +8,31 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2536, server build 2378.
+Version 1.11.0 : client build 2540, server build 2379.
 
+- **Staff explode matches the game's own.** It now blasts the car's parts apart like the game's Boom
+  (a short repelling burst under the car, fire, every breakable part broken), but only on that car,
+  so nearby players' cars aren't thrown about. *(client only)*
+- **Dust and particles setting.** Settings > Vehicle has a 0-100 % slider for how much dust, gravel,
+  mud, sparks and tyre smoke vehicles throw up, for your game only. *(client only)*
+- **Fixed: opening Settings reset saved vehicle settings** (like Automatic lights) to their defaults.
+  *(client only)*
+- **Arenas tab.** The Hunter and Infected arena editors are now one Config tab with a section each;
+  switching sections with unsaved changes asks to discard them first, like switching tabs. The Hunter
+  and Infected menus' edit shortcuts open the right section. *(client only)*
+- **Fixed: a delivery point's hover text kept saying "Drop-off only"** after it was set to send
+  something (the dot's colour already changed). *(client only)*
+- **Fixed: couldn't go back to a depot, bus line or station after selecting one of its start slots,
+  stops or pumps.** Clicking it deselected it instead ; it now goes back to editing it. *(client only)*
+- **Fixed: the editor toolbar showed no tool selected** after switching freeroam sections, or opening
+  the Hunter or Infected arena editor, until a tool was clicked. *(client only)*
 - **Full name in the menus.** The side panels now say BeamJoy and the big screen says BeamJoy Revived
   instead of BJR ; the sidebar keeps BJR. *(client only)*
 - **Import delivery points from BeamJoy Free.** A new Legacy Import row, with the same per-map
   checklist: BeamJoy Free hubs become depots sending packages and vehicles (with a vehicle start slot
   where the hub stood), its points become drop-offs taking packages, cars and trucks. Added alongside
-  existing points, skipping any spot within 10 m of one. The new points get jobs once the map is
+  existing points, skipping any spot within 10 m of one ; a BeamJoy Free point on one of its own hubs
+  makes that depot take deliveries too. The new points get jobs once the map is
   saved in the delivery editor, which measures their routes.
 - **Pick what Legacy Import brings over.** Each BeamJoy Free importer now shows a checklist instead
   of a yes/no list: one row per race or bus line (grouped by map, and a map's heading ticks or

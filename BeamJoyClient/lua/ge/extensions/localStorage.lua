@@ -10,6 +10,11 @@ local M = {
             key = "beamjoy.vehicle.automatic_lights",
             default = false,
         },
+        -- Settings > Vehicle > Dust and particles, 0-100 % (beamjoy/particles.lua)
+        PARTICLE_AMOUNT = {
+            key = "beamjoy.vehicle.particle_amount",
+            default = 100,
+        },
 
         NAMETAGS_COLOR_PLAYER_TEXT = {
             key = "beamjoy.nametags.colors.player.text",

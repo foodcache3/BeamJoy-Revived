@@ -19,6 +19,10 @@ local upColumn, upSign
 
 local function onInit()
     beamjoy_communications_ui.addHandler("BJEditorChangeTool", M.setTool)
+    -- a toolbar shown after the last change (switching editor tabs builds a new one) asks for it
+    beamjoy_communications_ui.addHandler("BJEditorToolRequest", function()
+        beamjoy_communications_ui.send("BJEditorChangeTool", M.tool)
+    end)
     if not editor.AxisGizmoMode_Translate then
         require("editor/api/gui").initialize(editor)
         require("editor/api/gizmo").initialize(editor)

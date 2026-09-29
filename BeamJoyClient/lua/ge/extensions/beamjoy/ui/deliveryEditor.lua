@@ -236,8 +236,10 @@ end
 ---@param index integer?
 local function onSelectPoint(index)
     if not isActive() then return end
+    -- clicking the selected depot while one of its start slots is selected goes back to editing the
+    -- depot itself ; only a click on the depot alone deselects it
     index = tonumber(index)
-    if index and state.points[index] and state.activeIndex ~= index then
+    if index and state.points[index] and (state.activeIndex ~= index or state.activeSlot) then
         state.activeIndex = index
     else
         state.activeIndex = nil

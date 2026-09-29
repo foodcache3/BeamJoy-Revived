@@ -193,9 +193,11 @@ end
 ---@param li integer?
 local function onSelectLine(li)
     if not isActive() then return end
+    -- clicking the selected line while one of its stops is selected goes back to editing the
+    -- line itself ; only a click on the line alone deselects it
     li = tonumber(li)
     if li and state.lines[li] then
-        state.activeLine = (state.activeLine == li) and nil or li
+        state.activeLine = (state.activeLine == li and not state.activeStop) and nil or li
     else
         state.activeLine = nil
     end

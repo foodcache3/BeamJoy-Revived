@@ -88,8 +88,12 @@
         ng-class="{active: $ctrl.activeIndex === pointIdx}"
         ng-click="$ctrl.selectPoint($event, pointIdx)"
     >
-        <span class="kind-dot" ng-class="{depot: $ctrl.isDepot(point)}"
-            title="{{($ctrl.isDepot(point) ? 'beamjoy.window.config.tabs.freeroam.deliveries.kind.depot' : 'beamjoy.window.config.tabs.freeroam.deliveries.kind.dropOff') | translate}}"></span>
+        <!-- one element per kind, not one element with a changing title : the hover text kept
+             showing the old kind after a point's tags changed, so the swap builds a fresh one -->
+        <span class="kind-dot depot" ng-if="$ctrl.isDepot(point)"
+            title="{{'beamjoy.window.config.tabs.freeroam.deliveries.kind.depot' | translate}}"></span>
+        <span class="kind-dot" ng-if="!$ctrl.isDepot(point)"
+            title="{{'beamjoy.window.config.tabs.freeroam.deliveries.kind.dropOff' | translate}}"></span>
         <input type="text" class="item-name name-input" maxlength="40" ng-model="point.name"
             ng-click="$event.stopPropagation()"
             ng-change="$ctrl.setName(pointIdx, point.name)"

@@ -1,0 +1,60 @@
+<style>
+    /* the mode bar stays put ; the active editor below keeps its own pinned header and scrolling
+       list, exactly as it had as a tab of its own */
+    bj-config-arenas {
+        display: block;
+        height: 100%;
+        overflow: hidden;
+    }
+    bj-config-arenas .arenas-root {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    bj-config-arenas .mode-bar {
+        flex-shrink: 0;
+        display: flex;
+        gap: 0.3em;
+        margin-bottom: 0.6em;
+    }
+    bj-config-arenas .mode-tab {
+        flex: 1;
+        padding: 0.4em 0.8em;
+        border: thin solid gray;
+        border-radius: 0.3em;
+        background-color: rgba(0, 0, 0, 0.25);
+        color: white;
+        font: inherit;
+        font-weight: bold;
+        cursor: pointer;
+        transition: background-color 0.2s ease-in-out;
+    }
+    bj-config-arenas .mode-tab:hover {
+        background-color: rgba(255, 255, 255, 0.08);
+    }
+    bj-config-arenas .mode-tab.active {
+        background-color: rgba(230, 92, 0, 0.55);
+        border-color: rgba(255, 140, 60, 0.9);
+    }
+    bj-config-arenas .mode-body {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+</style>
+
+<div class="arenas-root">
+    <div class="mode-bar" ng-if="$ctrl.sections.length > 1">
+        <button
+            class="mode-tab"
+            ng-repeat="section in $ctrl.sections"
+            ng-class="{active: $ctrl.activeSection === section}"
+            ng-click="$ctrl.changeSection($event, section)"
+        >
+            {{('beamjoy.window.config.tabs.arenas.sections.' + section) | translate}}
+        </button>
+    </div>
+    <div class="mode-body">
+        <bj-config-hunter-arena ng-if="$ctrl.activeSection === 'hunter'"></bj-config-hunter-arena>
+        <bj-config-infected-arena ng-if="$ctrl.activeSection === 'infected'"></bj-config-infected-arena>
+    </div>
+</div>

@@ -4,6 +4,7 @@ await import(`/ui/modModules/beamjoy/windows/config/races/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/vehiclePresets/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/hunterArena/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/infectedArena/app.js`);
+await import(`/ui/modModules/beamjoy/windows/config/arenas/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/freeroam/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/permissions/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/maps/app.js`);
@@ -95,23 +96,15 @@ angular.module("beamjoy").component("bjConfig", {
                 template: "<bj-config-vehicle-presets></bj-config-vehicle-presets>",
                 permissions: ["EditVehiclePresets"],
             },
-            hunterArena: {
-                id: "hunterArena",
+            // Hunter and Infected arena editors, one section each (windows/config/arenas)
+            arenas: {
+                id: "arenas",
                 order: 5,
-                title: "beamjoy.window.config.tabs.hunterArena.title",
+                title: "beamjoy.window.config.tabs.arenas.title",
                 visible: false,
                 closable: false,
-                template: "<bj-config-hunter-arena></bj-config-hunter-arena>",
-                permissions: ["EditHunterArenas"],
-            },
-            infectedArena: {
-                id: "infectedArena",
-                order: 6,
-                title: "beamjoy.window.config.tabs.infectedArena.title",
-                visible: false,
-                closable: false,
-                template: "<bj-config-infected-arena></bj-config-infected-arena>",
-                permissions: ["EditInfectedArenas"],
+                template: "<bj-config-arenas></bj-config-arenas>",
+                permissions: ["EditHunterArenas", "EditInfectedArenas"],
             },
             freeroam: {
                 id: "freeroam",
@@ -248,7 +241,15 @@ angular.module("beamjoy").component("bjConfig", {
                 onTabListUpdated();
             }
         };
+        // the arena editors used to be tabs of their own : their shortcuts now open the Arenas
+        // tab on that section
+        const ARENA_SECTIONS = { hunterArena: "hunter", infectedArena: "infected" };
         $rootScope.$on("BJOpenTab", (_, tabId) => {
+            if (ARENA_SECTIONS[tabId]) {
+                beamjoyStore.arenasSection = ARENA_SECTIONS[tabId];
+                $rootScope.$broadcast("BJArenasSection", ARENA_SECTIONS[tabId]);
+                tabId = "arenas";
+            }
             if (this.tabsData[tabId]) {
                 if (!this.tabsData[tabId].visible) {
                     this.tabsData[tabId].visible = true;

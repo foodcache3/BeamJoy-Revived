@@ -329,7 +329,8 @@ end
 -- each entry just `{pos, rot, radius}` (no names, no cargo kinds). Hubs become depots sending
 -- packages and vehicles, with a vehicle start slot where the hub stood and faced ; Points become
 -- drop-offs taking packages, cars and trucks. Additive, like the other importers : a spot sitting on
--- a point the map already has is skipped. Routes can't be measured here (the server has no road
+-- a point the map already has is skipped. A BeamJoy Free point sitting on one of its own hubs (the
+-- same place was both) merges into that depot, which then also takes deliveries. Routes can't be measured here (the server has no road
 -- graph), so an imported map offers jobs from these points once an admin saves it in the delivery
 -- editor on that map.
 
@@ -358,9 +359,9 @@ end
 --- the points a map's legacy file would add on top of `existing` (not saved)
 ---@param raw table
 ---@param existing BJDeliveryPoint[]
----@return BJDeliveryPoint[] added, integer depots, integer dropOffs, integer skipped
+---@return BJDeliveryPoint[] added, integer depots, integer dropOffs, integer skipped, integer merged
 local function convertLegacyDeliveries(raw, existing)
-    local added, depots, drops, skipped = {}, 0, 0, 0
+    local added, depots, drops, skipped, merged = {}, 0, 0, 0, 0
     local usedNames = {}
     for _, p in ipairs(existing) do
         if type(p.name) == "string" then usedNames[p.name:lower()] = true end
@@ -372,21 +373,23 @@ local function convertLegacyDeliveries(raw, existing)
         usedNames[(prefix .. " " .. n):lower()] = true
         return prefix .. " " .. n, n
     end
-    local function taken(pos)
-        for _, list in ipairs({ existing, added }) do
-            for _, p in ipairs(list) do
-                if validVec3(p.pos) and distance(p.pos, pos) < LEGACY_DUPLICATE_METERS then return true end
-            end
+    ---@param list BJDeliveryPoint[]
+    ---@param pos table
+    ---@return BJDeliveryPoint?
+    local function near(list, pos)
+        for _, p in ipairs(list) do
+            if validVec3(p.pos) and distance(p.pos, pos) < LEGACY_DUPLICATE_METERS then return p end
         end
-        return false
     end
 
     local depotN, dropN = 0, 0
     for _, hub in ipairs(table.isArray(raw.Hubs) and raw.Hubs or {}) do
         local pos, radius, rot = legacyEntry(hub)
         if pos then
-            if taken(pos) then
+            if near(existing, pos) then
                 skipped = skipped + 1
+            elseif near(added, pos) then
+                merged = merged + 1 -- two hubs in one place : one depot
             else
                 local name
                 name, depotN = nextName("Depot", depotN)
@@ -407,9 +410,14 @@ local function convertLegacyDeliveries(raw, existing)
     end
     for _, point in ipairs(table.isArray(raw.Points) and raw.Points or {}) do
         local pos, radius = legacyEntry(point)
+        local sameSpot = pos and near(added, pos)
         if pos then
-            if taken(pos) then
+            if near(existing, pos) then
                 skipped = skipped + 1
+            elseif sameSpot then
+                -- the hub here was a drop-off too : its depot takes deliveries as well
+                if #sameSpot.receives == 0 then sameSpot.receives = { "packages", "cars", "trucks" } end
+                merged = merged + 1
             else
                 local name
                 name, dropN = nextName("Drop-off", dropN)
@@ -424,7 +432,7 @@ local function convertLegacyDeliveries(raw, existing)
             end
         end
     end
-    return added, depots, drops, skipped
+    return added, depots, drops, skipped, merged
 end
 
 --- every map with a legacy deliveries file : what importing it would add
@@ -441,10 +449,10 @@ local function scanLegacyDeliveries()
             if type(raw) == "table" then
                 local existing = mapName == services_core.getCurrentMap() and M.points or
                     (dao_activity.get(mapName, M.POINTS_TYPE) or {})
-                local added, depots, drops, skipped = convertLegacyDeliveries(raw, existing)
+                local added, depots, drops, skipped, merged = convertLegacyDeliveries(raw, existing)
                 if #added > 0 or skipped > 0 then
                     byMap[mapName] = { added = added, depots = depots, dropOffs = drops,
-                        skipped = skipped, existing = #existing }
+                        skipped = skipped, merged = merged, existing = #existing }
                 end
             end
         end
@@ -462,7 +470,8 @@ local function deliveryPointsLegacyImportPreview(ctxt)
     local results = {}
     for mapName, entry in pairs(scanLegacyDeliveries()) do
         results[#results + 1] = { key = mapName, map = mapName, depotCount = entry.depots,
-            dropOffCount = entry.dropOffs, skippedCount = entry.skipped, existingCount = entry.existing }
+            dropOffCount = entry.dropOffs, skippedCount = entry.skipped, mergedCount = entry.merged,
+            existingCount = entry.existing }
     end
     if ctxt.sender then
         communications_tx.sendToPlayer(ctxt.senderID, "deliveryPointsLegacyImportPreviewResult", results)

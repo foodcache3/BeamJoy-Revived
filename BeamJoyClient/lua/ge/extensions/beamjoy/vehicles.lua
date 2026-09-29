@@ -1133,15 +1133,35 @@ local function explode(remoteVID)
     local mpVeh = M.vehicles:find(function(v) return v.remoteVID == remoteVID end)
     if mpVeh then
         if mpVeh.isLocal then
-            mpVeh.veh:applyClusterVelocityScaleAdd(mpVeh.veh:getRefNodeId(), 1, 0, 0, 3)
-            core_jobsystem.create(function(job)
-                job.sleep(.2)
+            -- the game's own "Boom" (core/funstuff.lua explodeVehicle) : a strongly repelling
+            -- point just under the car for a fifth of a second, then fire and every breakgroup
+            -- broken, so the parts fly apart. The game puts that point on every object ; here only
+            -- the exploded car gets it, so nobody else's car nearby is thrown about
+            local veh = mpVeh.veh
+            local halfExtents = veh:getSpawnWorldOOBB():getHalfExtents()
+            local rot = quatFromDir(veh:getDirectionVector(), veh:getDirectionVectorUp())
+            local localPoint = vec3(math.random() * .25 - .125, math.random() * .25 - .125, -halfExtents.z - .8)
+            local worldPoint = rot * localPoint + veh:getPosition()
+            local sizeFactor = math.max(halfExtents.x, halfExtents.y, halfExtents.z) / 3
+            veh:queueLuaCommand(string.format("obj:setPlanets({%f, %f, %f, %d, %f})",
+                worldPoint.x, worldPoint.y, worldPoint.z, 5, -30000000000000 * sizeFactor))
+            veh:queueLuaCommand("fire.explodeVehicle()")
+            veh:queueLuaCommand("beamstate.breakAllBreakgroups()")
+            core_jobsystem.create(function(job, dtTable)
+                local remaining = .2
+                while remaining >= 0 do
+                    remaining = remaining - ((dtTable and dtTable.dtSim) or .016)
+                    job.sleep(0)
+                end
                 if M.vehicles[mpVeh.vid] then
-                    mpVeh.veh:queueLuaCommand("beamstate.breakAllBreakgroups()")
+                    veh:queueLuaCommand("obj:setPlanets({})")
                 end
             end)
+        else
+            -- other players' copies : the fire only (the owner's game throws the parts, and the
+            -- result syncs from there)
+            mpVeh.veh:queueLuaCommand("fire.explodeVehicle()")
         end
-        mpVeh.veh:queueLuaCommand("fire.explodeVehicle()")
     end
 end
 

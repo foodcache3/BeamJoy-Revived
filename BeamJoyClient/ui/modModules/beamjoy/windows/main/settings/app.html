@@ -81,6 +81,21 @@
             </div>
         </td>
     </tr>
+    <tr>
+        <td>
+            <span title="{{ 'beamjoy.window.main.tabs.settings.sections.vehicle.particles.tooltip' | translate }}">
+                {{ "beamjoy.window.main.tabs.settings.sections.vehicle.particles" | translate }}
+            </span>
+        </td>
+        <td>
+            <bj-slider
+                min="0"
+                max="100"
+                step="5"
+                ng-model="$ctrl.settings.vehicle.particleAmount"
+            ></bj-slider>
+        </td>
+    </tr>
 
     <tr>
         <td colspan="3" class="settings-category d-flex align-center gap-2">

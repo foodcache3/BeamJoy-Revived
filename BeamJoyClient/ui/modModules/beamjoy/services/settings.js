@@ -2,6 +2,8 @@ const M = {
     data: {
         vehicle: {
             automaticLights: true,
+            // 0-100 %, see lua beamjoy/particles.lua
+            particleAmount: 100,
         },
         nametags: {
             hideNameTags: false,

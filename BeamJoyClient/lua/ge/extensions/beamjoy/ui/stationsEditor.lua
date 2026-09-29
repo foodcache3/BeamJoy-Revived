@@ -227,8 +227,10 @@ local function onSelectItem(list, index)
     if not isActive() then return end
     index = tonumber(index)
     if list == "stations" or list == "garages" then
+        -- clicking the selected station while one of its pumps is selected goes back to editing the
+        -- station itself ; only a click on the station alone deselects it
         if index and listOf(list)[index] then
-            if state.activeList == list and state.activeIndex == index then
+            if state.activeList == list and state.activeIndex == index and not state.activePump then
                 state.activeList, state.activeIndex = nil, nil
             else
                 state.activeList, state.activeIndex = list, index

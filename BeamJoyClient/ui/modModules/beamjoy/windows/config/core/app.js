@@ -235,9 +235,12 @@ angular.module("beamjoy").component("bjConfigCore", {
                 return {
                     key: r.key || r.map,
                     label: r.map,
-                    detail: translate("beamjoy.window.config.tabs.core.legacyImport.deliveries.counts")
+                    detail: translate(r.mergedCount > 0
+                        ? "beamjoy.window.config.tabs.core.legacyImport.deliveries.countsMerged"
+                        : "beamjoy.window.config.tabs.core.legacyImport.deliveries.counts")
                         .replace("{depots}", r.depotCount)
-                        .replace("{dropOffs}", r.dropOffCount),
+                        .replace("{dropOffs}", r.dropOffCount)
+                        .replace("{merged}", r.mergedCount),
                     disabled: nothingNew,
                     tag: nothingNew
                         ? translate("beamjoy.window.config.tabs.core.legacyImport.deliveries.allThere")
