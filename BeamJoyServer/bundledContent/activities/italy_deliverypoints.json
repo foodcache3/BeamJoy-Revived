@@ -1,0 +1,2466 @@
+[
+    {
+        "id": 1,
+        "name": "Port",
+        "pos": {
+            "x": 483.375,
+            "y": 1488.477,
+            "z": 139.01
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.0176,
+                    "y": -0.9998,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 487.635,
+                    "y": 1484.324,
+                    "z": 139.027
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0042,
+                    "y": -1,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 468.17,
+                    "y": 1495.411,
+                    "z": 139.023
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9999,
+                    "y": 0.0155,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 472.395,
+                    "y": 1485.114,
+                    "z": 139.032
+                }
+            },
+            {
+                "dir": {
+                    "x": 1,
+                    "y": 0.006,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 485.288,
+                    "y": 1476.631,
+                    "z": 139.029
+                }
+            }
+        ]
+    },
+    {
+        "id": 2,
+        "name": "Norte",
+        "pos": {
+            "x": 1151.419,
+            "y": 1238.733,
+            "z": 148.043
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 4,
+        "receives": [
+            "packages"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.0098,
+                    "y": -1,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 1151.419,
+                    "y": 1238.733,
+                    "z": 148.098
+                }
+            },
+            {
+                "dir": {
+                    "x": -1,
+                    "y": -0.0035,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 1134.716,
+                    "y": 1235.606,
+                    "z": 148.004
+                }
+            },
+            {
+                "dir": {
+                    "x": -1,
+                    "y": -0.0035,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 1141.007,
+                    "y": 1235.628,
+                    "z": 148.004
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9998,
+                    "y": -0.0173,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 1164.571,
+                    "y": 1237.182,
+                    "z": 148.004
+                }
+            }
+        ]
+    },
+    {
+        "id": 3,
+        "name": "Fastello",
+        "pos": {
+            "x": 1113.302,
+            "y": -697.25,
+            "z": 146.02
+        },
+        "provides": [
+            "packages"
+        ],
+        "radius": 6,
+        "receives": [
+            "packages",
+            "cars"
+        ]
+    },
+    {
+        "id": 4,
+        "name": "Citta Vecchia",
+        "pos": {
+            "x": 246.216,
+            "y": -802.097,
+            "z": 239.653
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 4,
+        "receives": [
+
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.371,
+                    "y": 0.9286,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 242.388,
+                    "y": -802.5,
+                    "z": 240.136
+                }
+            }
+        ]
+    },
+    {
+        "id": 5,
+        "name": "Portino",
+        "pos": {
+            "x": -787.627,
+            "y": -1367.972,
+            "z": 142.229
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 5,
+        "receives": [
+
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.8548,
+                    "y": -0.5189,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -788.89,
+                    "y": -1369.633,
+                    "z": 142.229
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8605,
+                    "y": 0.5095,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -784.282,
+                    "y": -1364.383,
+                    "z": 142.229
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8664,
+                    "y": -0.4993,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -793.023,
+                    "y": -1363.367,
+                    "z": 142.229
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8572,
+                    "y": 0.515,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -782.515,
+                    "y": -1369.27,
+                    "z": 142.229
+                }
+            }
+        ]
+    },
+    {
+        "id": 6,
+        "name": "Norte Marina",
+        "pos": {
+            "x": 1354.56,
+            "y": 1464.743,
+            "z": 140.009
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 7,
+        "name": "Norte Emergency Services",
+        "pos": {
+            "x": 1469.524,
+            "y": 1364.983,
+            "z": 148.019
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 8,
+        "name": "Pacchiarotti Residence",
+        "pos": {
+            "x": 1121.523,
+            "y": 1089.149,
+            "z": 159.255
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 9,
+        "name": "Zanotti Residence",
+        "pos": {
+            "x": 1146.814,
+            "y": 1088.763,
+            "z": 159.941
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 10,
+        "name": "Vollaro Residence",
+        "pos": {
+            "x": 1125.286,
+            "y": 1067.016,
+            "z": 158.815
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 11,
+        "name": "Parisi Residence",
+        "pos": {
+            "x": 1147.595,
+            "y": 1031.18,
+            "z": 161.867
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 12,
+        "name": "Lombardi Residence",
+        "pos": {
+            "x": 1111.799,
+            "y": 1030.091,
+            "z": 158.853
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 13,
+        "name": "Valentini Residence",
+        "pos": {
+            "x": 1083.519,
+            "y": 1079.325,
+            "z": 157.976
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 14,
+        "name": "Bellini Residence",
+        "pos": {
+            "x": 1030.92,
+            "y": 1066.921,
+            "z": 158.295
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 15,
+        "name": "Colombo Residence",
+        "pos": {
+            "x": 1055.963,
+            "y": 1046.777,
+            "z": 158.495
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 16,
+        "name": "Greco Residence",
+        "pos": {
+            "x": 1218.471,
+            "y": 1336.571,
+            "z": 141.456
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 17,
+        "name": "Port Office",
+        "pos": {
+            "x": 463.479,
+            "y": 1479.158,
+            "z": 139.027
+        },
+        "provides": [
+            "packages"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "trucks"
+        ]
+    },
+    {
+        "id": 18,
+        "name": "Port Crane",
+        "pos": {
+            "x": 585.326,
+            "y": 1629.538,
+            "z": 139.023
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 19,
+        "name": "Port Dock",
+        "pos": {
+            "x": 581.428,
+            "y": 1770.562,
+            "z": 139.023
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 20,
+        "name": "Norte Castle",
+        "pos": {
+            "x": 309.35,
+            "y": 1797.662,
+            "z": 207.655
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars"
+        ]
+    },
+    {
+        "id": 21,
+        "name": "Pellegrino Residence",
+        "pos": {
+            "x": 184.494,
+            "y": 1490.786,
+            "z": 183.378
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 22,
+        "name": "Dipartmento Fronto Intervento",
+        "pos": {
+            "x": 132.011,
+            "y": 1425.785,
+            "z": 187.027
+        },
+        "provides": [
+            "packages"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars"
+        ]
+    },
+    {
+        "id": 23,
+        "name": "Dipartmento Fronto Intervento",
+        "pos": {
+            "x": 219.999,
+            "y": 1360.904,
+            "z": 187.059
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars"
+        ]
+    },
+    {
+        "id": 24,
+        "name": "Apex Norte",
+        "pos": {
+            "x": 449.824,
+            "y": 1282.5,
+            "z": 171.705
+        },
+        "provides": [
+            "vehicles"
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.2023,
+                    "y": -0.9793,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 448.666,
+                    "y": 1273.921,
+                    "z": 171.553
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.3996,
+                    "y": -0.9167,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 453.657,
+                    "y": 1280.13,
+                    "z": 171.716
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9617,
+                    "y": 0.2741,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 462.111,
+                    "y": 1280.827,
+                    "z": 171.715
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9617,
+                    "y": 0.2741,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 472.756,
+                    "y": 1274.482,
+                    "z": 171.712
+                }
+            }
+        ]
+    },
+    {
+        "id": 25,
+        "name": "Conti Residence",
+        "pos": {
+            "x": 620.546,
+            "y": 1239.602,
+            "z": 156.058
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 26,
+        "name": "Fabbri Residence",
+        "pos": {
+            "x": 614.806,
+            "y": 1320.744,
+            "z": 156.353
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 27,
+        "name": "Caputo Residence",
+        "pos": {
+            "x": 904.264,
+            "y": 1295.064,
+            "z": 144.144
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 28,
+        "name": "Ricci Residence",
+        "pos": {
+            "x": 1223.218,
+            "y": 1037.332,
+            "z": 170.104
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 29,
+        "name": "Silvestri Residence",
+        "pos": {
+            "x": 1205.254,
+            "y": 1045.565,
+            "z": 169.547
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 30,
+        "name": "Ferrara Residence",
+        "pos": {
+            "x": 1196.314,
+            "y": 994.747,
+            "z": 169.091
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 31,
+        "name": "Bianchi Residence",
+        "pos": {
+            "x": 1155.324,
+            "y": 1124.648,
+            "z": 156.993
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 32,
+        "name": "Gallo Residence",
+        "pos": {
+            "x": 754.349,
+            "y": 903.935,
+            "z": 178.934
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 33,
+        "name": "Pellegrini Residence",
+        "pos": {
+            "x": 697.603,
+            "y": 839.229,
+            "z": 184.221
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 34,
+        "name": "Angelis Residence",
+        "pos": {
+            "x": 711.267,
+            "y": 847.062,
+            "z": 184.732
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 35,
+        "name": "Marino Residence",
+        "pos": {
+            "x": 673.936,
+            "y": 881.704,
+            "z": 182.703
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 36,
+        "name": "Vincent's Garage",
+        "pos": {
+            "x": 843.956,
+            "y": 518.102,
+            "z": 183.725
+        },
+        "provides": [
+            "vehicles"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.7633,
+                    "y": -0.646,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 839.369,
+                    "y": 509.897,
+                    "z": 183.725
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8327,
+                    "y": -0.5537,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 849.146,
+                    "y": 503.049,
+                    "z": 183.996
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8502,
+                    "y": -0.5265,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 857.454,
+                    "y": 497.944,
+                    "z": 183.299
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8511,
+                    "y": -0.525,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 865.235,
+                    "y": 492.97,
+                    "z": 182.408
+                }
+            }
+        ]
+    },
+    {
+        "id": 37,
+        "name": "Leone Residence",
+        "pos": {
+            "x": 877.229,
+            "y": 505.239,
+            "z": 184.069
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 38,
+        "name": "Donati Residence",
+        "pos": {
+            "x": 872.29,
+            "y": 545.53,
+            "z": 187.001
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 39,
+        "name": "Giuliani Residence",
+        "pos": {
+            "x": 926.299,
+            "y": 554.139,
+            "z": 188.326
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 40,
+        "name": "Gatti Residence",
+        "pos": {
+            "x": 945.747,
+            "y": 549.694,
+            "z": 187.212
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 41,
+        "name": "Church",
+        "pos": {
+            "x": 973.037,
+            "y": 606.879,
+            "z": 189.194
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 42,
+        "name": "Sartori Residence",
+        "pos": {
+            "x": 934.973,
+            "y": 592.839,
+            "z": 188.707
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 43,
+        "name": "Village Dropoff",
+        "pos": {
+            "x": 944.667,
+            "y": 493.109,
+            "z": 182.92
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 44,
+        "name": "Barone Residence",
+        "pos": {
+            "x": 1021.635,
+            "y": 490.124,
+            "z": 183.409
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 45,
+        "name": "Mancini Residence",
+        "pos": {
+            "x": 1061.045,
+            "y": 502.653,
+            "z": 185.671
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 46,
+        "name": "Galli Residence",
+        "pos": {
+            "x": 1076.589,
+            "y": 538.232,
+            "z": 182.634
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 47,
+        "name": "Neri Residence",
+        "pos": {
+            "x": 1090.846,
+            "y": 561.964,
+            "z": 182.582
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 48,
+        "name": "Bernardi Residence",
+        "pos": {
+            "x": 706.353,
+            "y": 416.737,
+            "z": 177.696
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 49,
+        "name": "Orlando Residence",
+        "pos": {
+            "x": 819.314,
+            "y": 198.961,
+            "z": 187.013
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 50,
+        "name": "Sorrentino Residence",
+        "pos": {
+            "x": 317.362,
+            "y": 241.607,
+            "z": 184.499
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 51,
+        "name": "Montanari Residence",
+        "pos": {
+            "x": 205.908,
+            "y": 91.593,
+            "z": 189.815
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 52,
+        "name": "Romano Residence",
+        "pos": {
+            "x": 243.978,
+            "y": 576.499,
+            "z": 178.311
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 53,
+        "name": "Giordano Residence",
+        "pos": {
+            "x": 78.542,
+            "y": 402.057,
+            "z": 190.054
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 54,
+        "name": "Coppola Residence",
+        "pos": {
+            "x": -112.845,
+            "y": 864.806,
+            "z": 210.71
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 55,
+        "name": "Basile Residence",
+        "pos": {
+            "x": -383.234,
+            "y": 734.149,
+            "z": 248.726
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 56,
+        "name": "Farelli Manor",
+        "pos": {
+            "x": -495.119,
+            "y": 707.325,
+            "z": 304.1
+        },
+        "provides": [
+
+        ],
+        "radius": 5.5,
+        "receives": [
+            "packages",
+            "cars"
+        ]
+    },
+    {
+        "id": 57,
+        "name": "Airport",
+        "pos": {
+            "x": -1027.459,
+            "y": 1646.522,
+            "z": 152.422
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.1334,
+                    "y": 0.9911,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1028.69,
+                    "y": 1653.894,
+                    "z": 152.422
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.1886,
+                    "y": 0.9821,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1031.035,
+                    "y": 1666.756,
+                    "z": 152.422
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.6352,
+                    "y": 0.7723,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1035.709,
+                    "y": 1680.18,
+                    "z": 152.422
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9803,
+                    "y": -0.1977,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1059.286,
+                    "y": 1688.025,
+                    "z": 152.422
+                }
+            }
+        ]
+    },
+    {
+        "id": 58,
+        "name": "Airport Lot",
+        "pos": {
+            "x": -1162.174,
+            "y": 1614.318,
+            "z": 152.422
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars"
+        ]
+    },
+    {
+        "id": 59,
+        "name": "Conca Azzura",
+        "pos": {
+            "x": -1767.432,
+            "y": 1402.475,
+            "z": 138.118
+        },
+        "provides": [
+            "packages"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 60,
+        "name": "Rizzo Residence",
+        "pos": {
+            "x": -1768.888,
+            "y": 1314.565,
+            "z": 139.15
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 61,
+        "name": "Guerra Residence",
+        "pos": {
+            "x": -1743.113,
+            "y": 1278.845,
+            "z": 143.935
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 62,
+        "name": "East Beach",
+        "pos": {
+            "x": -1629.728,
+            "y": 663.159,
+            "z": 138.676
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 63,
+        "name": "D'Angelo Residence",
+        "pos": {
+            "x": -1773.024,
+            "y": -90.914,
+            "z": 152.528
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 64,
+        "name": "Lombardo Residence",
+        "pos": {
+            "x": -1039.382,
+            "y": 837.683,
+            "z": 384.025
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 65,
+        "name": "Sala Residence",
+        "pos": {
+            "x": -956.121,
+            "y": 876.632,
+            "z": 385.139
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 66,
+        "name": "Conte Residence",
+        "pos": {
+            "x": -1044.843,
+            "y": 968.506,
+            "z": 386.017
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 67,
+        "name": "Rosa Residence",
+        "pos": {
+            "x": -994.847,
+            "y": 982.362,
+            "z": 385.858
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 68,
+        "name": "Castelletto Castle",
+        "pos": {
+            "x": -1013.982,
+            "y": 1007.7,
+            "z": 399
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 69,
+        "name": "Claudio Motors",
+        "pos": {
+            "x": -1107.27,
+            "y": 938.661,
+            "z": 383.76
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.9993,
+                    "y": 0.0363,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1107.538,
+                    "y": 914.124,
+                    "z": 383.76
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9993,
+                    "y": 0.0387,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1108.163,
+                    "y": 919.162,
+                    "z": 383.76
+                }
+            },
+            {
+                "dir": {
+                    "x": -1,
+                    "y": -0.0025,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1108.329,
+                    "y": 924.5,
+                    "z": 383.76
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9995,
+                    "y": 0.0304,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1107.763,
+                    "y": 929.774,
+                    "z": 383.76
+                }
+            }
+        ]
+    },
+    {
+        "id": 70,
+        "name": "Bianco Auto",
+        "pos": {
+            "x": -1804.38,
+            "y": 1518.113,
+            "z": 143.03
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.0639,
+                    "y": -0.998,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1800.009,
+                    "y": 1518.36,
+                    "z": 143.027
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0639,
+                    "y": -0.998,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1806.692,
+                    "y": 1518.789,
+                    "z": 143.027
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0639,
+                    "y": -0.998,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1810.864,
+                    "y": 1519.056,
+                    "z": 143.022
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9949,
+                    "y": -0.1011,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1797.56,
+                    "y": 1505.284,
+                    "z": 143.02
+                }
+            }
+        ]
+    },
+    {
+        "id": 71,
+        "name": "Benedetti Residence",
+        "pos": {
+            "x": 1477.095,
+            "y": 1587.401,
+            "z": 138.506
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 72,
+        "name": "Centro Cambio Marina",
+        "pos": {
+            "x": 1489.501,
+            "y": 1450.858,
+            "z": 138.506
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 73,
+        "name": "Gabelli Construction",
+        "pos": {
+            "x": 367.164,
+            "y": 1446.754,
+            "z": 158.006
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.9999,
+                    "y": 0.0106,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 360.749,
+                    "y": 1436.868,
+                    "z": 158.006
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9995,
+                    "y": 0.0322,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 371.679,
+                    "y": 1447.031,
+                    "z": 158.006
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0067,
+                    "y": -1,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 349.604,
+                    "y": 1451.857,
+                    "z": 158
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0125,
+                    "y": -0.9999,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 350.275,
+                    "y": 1469.984,
+                    "z": 157.77
+                }
+            }
+        ]
+    },
+    {
+        "id": 74,
+        "name": "Carlino Garage",
+        "pos": {
+            "x": 749.415,
+            "y": 412.81,
+            "z": 178.067
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.7064,
+                    "y": -0.7078,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 762.02,
+                    "y": 411.091,
+                    "z": 178.289
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.7153,
+                    "y": -0.6989,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 755.337,
+                    "y": 417.241,
+                    "z": 178.035
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.7153,
+                    "y": -0.6989,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 749.057,
+                    "y": 423.377,
+                    "z": 177.713
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.7153,
+                    "y": -0.6989,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 743.26,
+                    "y": 429.041,
+                    "z": 177.339
+                }
+            }
+        ]
+    },
+    {
+        "id": 75,
+        "name": "Grassi Residence",
+        "pos": {
+            "x": 308.84,
+            "y": -252.733,
+            "z": 195.987
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 76,
+        "name": "Serra Residence",
+        "pos": {
+            "x": 269.481,
+            "y": -342.9,
+            "z": 200.467
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 77,
+        "name": "Marchetti Residence",
+        "pos": {
+            "x": 234.698,
+            "y": -388.19,
+            "z": 207.651
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 78,
+        "name": "Garage Usato Garantito",
+        "pos": {
+            "x": 223.607,
+            "y": -336.812,
+            "z": 192.026
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.031,
+                    "y": -0.9995,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 227.333,
+                    "y": -324.211,
+                    "z": 192.027
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.0015,
+                    "y": -1,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 224.372,
+                    "y": -324.107,
+                    "z": 192.031
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9996,
+                    "y": 0.0272,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 210.387,
+                    "y": -337.043,
+                    "z": 192.03
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9996,
+                    "y": 0.0272,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 215.322,
+                    "y": -331.514,
+                    "z": 192.027
+                }
+            }
+        ]
+    },
+    {
+        "id": 79,
+        "name": "Lucera Construction Site",
+        "pos": {
+            "x": 148.667,
+            "y": -310.908,
+            "z": 192.026
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "trucks"
+        ]
+    },
+    {
+        "id": 80,
+        "name": "Milani Residence",
+        "pos": {
+            "x": 15.143,
+            "y": -339.002,
+            "z": 190.912
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 81,
+        "name": "Palmieri Inn",
+        "pos": {
+            "x": 68.019,
+            "y": -341.077,
+            "z": 192.971
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars"
+        ]
+    },
+    {
+        "id": 82,
+        "name": "Santoro Residence",
+        "pos": {
+            "x": 26.967,
+            "y": -348.631,
+            "z": 191.736
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 83,
+        "name": "Farina Residence",
+        "pos": {
+            "x": -7.754,
+            "y": -280.969,
+            "z": 189.447
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 84,
+        "name": "Morelli Residence",
+        "pos": {
+            "x": 72.442,
+            "y": -261.404,
+            "z": 193.254
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 85,
+        "name": "Ferri Residence",
+        "pos": {
+            "x": 271.147,
+            "y": -894.132,
+            "z": 247.461
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 86,
+        "name": "Piras Residence",
+        "pos": {
+            "x": 296.513,
+            "y": -905.288,
+            "z": 266.979
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 87,
+        "name": "Citta Vecchia Cathedral",
+        "pos": {
+            "x": 154.981,
+            "y": -927.495,
+            "z": 278.864
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 88,
+        "name": "Palumbo Residence",
+        "pos": {
+            "x": 181.55,
+            "y": -800.306,
+            "z": 265.143
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 89,
+        "name": "Esposito Residence",
+        "pos": {
+            "x": 225.963,
+            "y": -887.589,
+            "z": 245.37
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 90,
+        "name": "Citta Vecchia Castle",
+        "pos": {
+            "x": 254.244,
+            "y": -796.094,
+            "z": 238.802
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 91,
+        "name": "Amato Residence",
+        "pos": {
+            "x": 337.357,
+            "y": -776.808,
+            "z": 233.329
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 92,
+        "name": "De Residence",
+        "pos": {
+            "x": 826.902,
+            "y": -682.486,
+            "z": 180.146
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 93,
+        "name": "Longo Residence",
+        "pos": {
+            "x": 799.816,
+            "y": -655.958,
+            "z": 183.038
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 94,
+        "name": "Monti Residence",
+        "pos": {
+            "x": 883.209,
+            "y": -636.001,
+            "z": 175.588
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 95,
+        "name": "Vitale Residence",
+        "pos": {
+            "x": 922.22,
+            "y": -672.341,
+            "z": 166.986
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 96,
+        "name": "Vitali Residence",
+        "pos": {
+            "x": 989.625,
+            "y": -673.359,
+            "z": 160.028
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 97,
+        "name": "Moretti Residence",
+        "pos": {
+            "x": 1049.446,
+            "y": -631.445,
+            "z": 150.099
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 98,
+        "name": "Martini Residence",
+        "pos": {
+            "x": 1051.77,
+            "y": -688.236,
+            "z": 147.973
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 99,
+        "name": "Sanna Residence",
+        "pos": {
+            "x": 1061.254,
+            "y": -722.585,
+            "z": 146.025
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 100,
+        "name": "FBX Car Service",
+        "pos": {
+            "x": 1199.23,
+            "y": -831.843,
+            "z": 145.858
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.8301,
+                    "y": -0.5577,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 1194.545,
+                    "y": -826.985,
+                    "z": 145.857
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.5502,
+                    "y": 0.835,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 1199.202,
+                    "y": -835.02,
+                    "z": 145.853
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.602,
+                    "y": 0.7985,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 1205.682,
+                    "y": -826.003,
+                    "z": 145.812
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.6382,
+                    "y": 0.7698,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 1202.928,
+                    "y": -823.596,
+                    "z": 145.726
+                }
+            }
+        ]
+    },
+    {
+        "id": 101,
+        "name": "Maccari Apartments",
+        "pos": {
+            "x": 1119.024,
+            "y": -436.269,
+            "z": 140.318
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 102,
+        "name": "Fastello Beach",
+        "pos": {
+            "x": 1139.298,
+            "y": -421.869,
+            "z": 140.74
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 103,
+        "name": "Costantini Residence",
+        "pos": {
+            "x": 1817.177,
+            "y": -810.293,
+            "z": 153.269
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 104,
+        "name": "Testa Residence",
+        "pos": {
+            "x": 1857.304,
+            "y": -1314.354,
+            "z": 157.518
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 105,
+        "name": "Damico Residence",
+        "pos": {
+            "x": 1819.699,
+            "y": -1349.635,
+            "z": 162.501
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 106,
+        "name": "Battaglia Residence",
+        "pos": {
+            "x": 1858.262,
+            "y": -1370.11,
+            "z": 160.323
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 107,
+        "name": "South Beach",
+        "pos": {
+            "x": 1021.6,
+            "y": -1764.764,
+            "z": 141.316
+        },
+        "provides": [
+
+        ],
+        "radius": 4.5,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 108,
+        "name": "Portino Beach",
+        "pos": {
+            "x": -694.29,
+            "y": -1346.879,
+            "z": 140.268
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 109,
+        "name": "Portino Auto Service",
+        "pos": {
+            "x": -711.607,
+            "y": -1317.057,
+            "z": 143.251
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages",
+            "cars"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.9194,
+                    "y": -0.3934,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -718.891,
+                    "y": -1317.35,
+                    "z": 143.251
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9321,
+                    "y": -0.3622,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -727.676,
+                    "y": -1321.111,
+                    "z": 143.251
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9223,
+                    "y": -0.3864,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -736.337,
+                    "y": -1324.567,
+                    "z": 143.251
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8673,
+                    "y": -0.4978,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -739.883,
+                    "y": -1333.191,
+                    "z": 143.251
+                }
+            }
+        ]
+    }
+]

@@ -1,0 +1,414 @@
+[
+    {
+        "id": 1,
+        "name": "Port Depot",
+        "pos": {
+            "x": -654.559,
+            "y": 358.416,
+            "z": 129.89
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 4,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.5939,
+                    "y": -0.8046,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -654.559,
+                    "y": 358.416,
+                    "z": 129.89
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9998,
+                    "y": 0.0222,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -655.503,
+                    "y": 331.708,
+                    "z": 129.861
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9998,
+                    "y": 0.0222,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -655.203,
+                    "y": 345.212,
+                    "z": 129.861
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9998,
+                    "y": 0.0222,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -655.349,
+                    "y": 338.617,
+                    "z": 129.861
+                }
+            }
+        ]
+    },
+    {
+        "id": 2,
+        "name": "Industrial Site Depot",
+        "pos": {
+            "x": 50.846,
+            "y": 526.458,
+            "z": 158.03
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 4,
+        "receives": [
+
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.9996,
+                    "y": -0.0298,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 50.846,
+                    "y": 526.458,
+                    "z": 158.03
+                }
+            }
+        ]
+    },
+    {
+        "id": 3,
+        "name": "Observatory Depot",
+        "pos": {
+            "x": -849.228,
+            "y": 786.27,
+            "z": 185.938
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 5,
+        "receives": [
+
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.5096,
+                    "y": 0.8604,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -849.228,
+                    "y": 786.27,
+                    "z": 185.938
+                }
+            }
+        ]
+    },
+    {
+        "id": 4,
+        "name": "Hangar Depot",
+        "pos": {
+            "x": 370.15,
+            "y": -182.812,
+            "z": 160.03
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 7,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.6632,
+                    "y": 0.7484,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 370.15,
+                    "y": -182.812,
+                    "z": 160.03
+                }
+            }
+        ]
+    },
+    {
+        "id": 6,
+        "name": "Port Office",
+        "pos": {
+            "x": -797.574,
+            "y": 419.349,
+            "z": 125.946
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 7,
+        "name": "Port Drop Off",
+        "pos": {
+            "x": -713.919,
+            "y": 407.175,
+            "z": 129.855
+        },
+        "provides": [
+
+        ],
+        "radius": 5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 8,
+        "name": "Port Drop Off 2",
+        "pos": {
+            "x": -622.607,
+            "y": 399.323,
+            "z": 129.858
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 9,
+        "name": "Port Drop Off 3",
+        "pos": {
+            "x": -653.688,
+            "y": 309.507,
+            "z": 129.854
+        },
+        "provides": [
+
+        ],
+        "radius": 4,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 10,
+        "name": "Port Drop Off 4",
+        "pos": {
+            "x": -642.687,
+            "y": 156.532,
+            "z": 129.857
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 12,
+        "name": "Lighthouse",
+        "pos": {
+            "x": 948.829,
+            "y": -791.744,
+            "z": 132.231
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 13,
+        "name": "Resort",
+        "pos": {
+            "x": 645.264,
+            "y": 59.059,
+            "z": 132.393
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.998,
+                    "y": 0.0632,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 612.029,
+                    "y": 59.901,
+                    "z": 132.389
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.998,
+                    "y": 0.0632,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 621.853,
+                    "y": 57.337,
+                    "z": 132.397
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.998,
+                    "y": 0.0632,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 628.285,
+                    "y": 62.41,
+                    "z": 132.397
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.998,
+                    "y": 0.0632,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 635.075,
+                    "y": 57.004,
+                    "z": 132.397
+                }
+            }
+        ]
+    },
+    {
+        "id": 16,
+        "name": "Industrial Site Drop Off",
+        "pos": {
+            "x": 20.742,
+            "y": 666.457,
+            "z": 156.537
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 18,
+        "name": "Old Fort",
+        "pos": {
+            "x": 792.589,
+            "y": 932.059,
+            "z": 148.099
+        },
+        "provides": [
+            "packages"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars"
+        ]
+    },
+    {
+        "id": 19,
+        "name": "Summit",
+        "pos": {
+            "x": -63.26,
+            "y": 362.942,
+            "z": 285.216
+        },
+        "provides": [
+
+        ],
+        "radius": 9,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 20,
+        "name": "Jungle Building",
+        "pos": {
+            "x": 47.559,
+            "y": -424.985,
+            "z": 131.871
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    }
+]

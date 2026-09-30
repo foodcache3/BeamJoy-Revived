@@ -1,0 +1,52 @@
+[
+    {
+        "id": 1,
+        "name": "AJ Auto Repairs",
+        "pos": {
+            "x": 803.532,
+            "y": -179.894,
+            "z": 144.305
+        },
+        "radius": 10.5
+    },
+    {
+        "id": 2,
+        "name": "MacKenzie Field Hangar",
+        "pos": {
+            "x": -324.266,
+            "y": -530.951,
+            "z": 130.346
+        },
+        "radius": 6
+    },
+    {
+        "id": 3,
+        "name": "Canyon Auto",
+        "pos": {
+            "x": -798.644,
+            "y": -111.617,
+            "z": 296.624
+        },
+        "radius": 7.5
+    },
+    {
+        "id": 4,
+        "name": "West Rock Motors",
+        "pos": {
+            "x": 813.481,
+            "y": -2.885,
+            "z": 147.531
+        },
+        "radius": 5
+    },
+    {
+        "id": 5,
+        "name": "Acceler It Auto Sales",
+        "pos": {
+            "x": 757.491,
+            "y": -144.081,
+            "z": 144.305
+        },
+        "radius": 5
+    }
+]

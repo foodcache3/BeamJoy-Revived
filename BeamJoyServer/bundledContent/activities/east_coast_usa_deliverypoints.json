@@ -1,0 +1,883 @@
+[
+    {
+        "id": 1,
+        "name": "Fishing Village",
+        "pos": {
+            "x": -125.121,
+            "y": -774.31,
+            "z": 16.431
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.9936,
+                    "y": 0.1128,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -118.289,
+                    "y": -773.534,
+                    "z": 16.463
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9964,
+                    "y": 0.0844,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -131.657,
+                    "y": -775.094,
+                    "z": 16.432
+                }
+            }
+        ]
+    },
+    {
+        "id": 2,
+        "name": "Nodeline",
+        "pos": {
+            "x": 696.528,
+            "y": -36.207,
+            "z": 51.841
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 4,
+        "receives": [
+            "packages",
+            "cars"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.6221,
+                    "y": 0.7829,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 701.995,
+                    "y": -40.849,
+                    "z": 51.856
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.633,
+                    "y": 0.7741,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 704.537,
+                    "y": -42.388,
+                    "z": 51.853
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.601,
+                    "y": 0.7992,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 706.862,
+                    "y": -44.187,
+                    "z": 51.85
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.6087,
+                    "y": 0.7934,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 709.578,
+                    "y": -46.171,
+                    "z": 51.846
+                }
+            }
+        ]
+    },
+    {
+        "id": 3,
+        "name": "Nodeline",
+        "pos": {
+            "x": -768.236,
+            "y": 474.448,
+            "z": 23.435
+        },
+        "provides": [
+            "packages"
+        ],
+        "radius": 4,
+        "receives": [
+            "packages",
+            "cars"
+        ]
+    },
+    {
+        "id": 4,
+        "name": "Fred's Lake House",
+        "pos": {
+            "x": -306.222,
+            "y": -905.804,
+            "z": 12.004
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 5,
+        "name": "Fishing Dock",
+        "pos": {
+            "x": -218.848,
+            "y": -862.63,
+            "z": 12.874
+        },
+        "provides": [
+
+        ],
+        "radius": 4,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 6,
+        "name": "Jill's House",
+        "pos": {
+            "x": -146.114,
+            "y": -819.033,
+            "z": 14.399
+        },
+        "provides": [
+
+        ],
+        "radius": 4,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 7,
+        "name": "Dockhouse",
+        "pos": {
+            "x": -59.5,
+            "y": -887.884,
+            "z": 14.132
+        },
+        "provides": [
+            "packages"
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "trucks"
+        ]
+    },
+    {
+        "id": 8,
+        "name": "Jack's Fishing Hut",
+        "pos": {
+            "x": -114.904,
+            "y": -889.57,
+            "z": 9.919
+        },
+        "provides": [
+
+        ],
+        "radius": 4,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 9,
+        "name": "Sawmill",
+        "pos": {
+            "x": 266.609,
+            "y": -767.874,
+            "z": 46.059
+        },
+        "provides": [
+            "packages"
+        ],
+        "radius": 5,
+        "receives": [
+            "packages",
+            "trucks"
+        ]
+    },
+    {
+        "id": 10,
+        "name": "Gem Classics",
+        "pos": {
+            "x": 559.598,
+            "y": -760.83,
+            "z": 60.486
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 5,
+        "receives": [
+            "packages",
+            "cars"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.0822,
+                    "y": -0.9966,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 551.104,
+                    "y": -755.832,
+                    "z": 60.5
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0158,
+                    "y": -0.9999,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 554.802,
+                    "y": -755.636,
+                    "z": 60.5
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0318,
+                    "y": -0.9995,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 557.714,
+                    "y": -755.482,
+                    "z": 60.5
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0318,
+                    "y": -0.9995,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 560.756,
+                    "y": -755.386,
+                    "z": 60.5
+                }
+            }
+        ]
+    },
+    {
+        "id": 11,
+        "name": "Henderson's Garage",
+        "pos": {
+            "x": -77.861,
+            "y": -790.574,
+            "z": 16.173
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.9978,
+                    "y": -0.0667,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -69.334,
+                    "y": -788.028,
+                    "z": 15.979
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9854,
+                    "y": -0.1705,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -58.946,
+                    "y": -789.412,
+                    "z": 15.46
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9616,
+                    "y": -0.2743,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -48.282,
+                    "y": -790.455,
+                    "z": 14.89
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.992,
+                    "y": 0.1261,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -27.876,
+                    "y": -793.267,
+                    "z": 13.827
+                }
+            }
+        ]
+    },
+    {
+        "id": 12,
+        "name": "Clay Residence",
+        "pos": {
+            "x": -95.35,
+            "y": -710.199,
+            "z": 28.998
+        },
+        "provides": [
+
+        ],
+        "radius": 4,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 13,
+        "name": "Greywood Manor",
+        "pos": {
+            "x": -556.825,
+            "y": -827.952,
+            "z": 49.499
+        },
+        "provides": [
+
+        ],
+        "radius": 4,
+        "receives": [
+            "packages",
+            "cars"
+        ]
+    },
+    {
+        "id": 14,
+        "name": "TJ's Offroad World",
+        "pos": {
+            "x": -785.266,
+            "y": 554.195,
+            "z": 24.999
+        },
+        "provides": [
+            "vehicles"
+        ],
+        "radius": 4.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.6801,
+                    "y": -0.7331,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -792.409,
+                    "y": 558.627,
+                    "z": 24.999
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.5779,
+                    "y": -0.8161,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -795.143,
+                    "y": 560.674,
+                    "z": 24.999
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.6599,
+                    "y": -0.7514,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -797.766,
+                    "y": 562.564,
+                    "z": 24.999
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.6684,
+                    "y": -0.7438,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -800.611,
+                    "y": 565.034,
+                    "z": 24.999
+                }
+            }
+        ]
+    },
+    {
+        "id": 15,
+        "name": "Smiths Auto Services",
+        "pos": {
+            "x": -787.653,
+            "y": 500.216,
+            "z": 23.459
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 6,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.7878,
+                    "y": -0.6159,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -788.612,
+                    "y": 513.222,
+                    "z": 23.46
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.7777,
+                    "y": -0.6286,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -790.52,
+                    "y": 510.77,
+                    "z": 23.46
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.7777,
+                    "y": -0.6286,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -792.536,
+                    "y": 508.668,
+                    "z": 23.459
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.7777,
+                    "y": -0.6286,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -794.369,
+                    "y": 506.154,
+                    "z": 23.459
+                }
+            }
+        ]
+    },
+    {
+        "id": 16,
+        "name": "Franklin Residence",
+        "pos": {
+            "x": -562.126,
+            "y": 742.371,
+            "z": 33.038
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 17,
+        "name": "Nodeline Parking",
+        "pos": {
+            "x": 717.202,
+            "y": -64.143,
+            "z": 51.809
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 18,
+        "name": "Frieza Residence",
+        "pos": {
+            "x": 851.308,
+            "y": -171.185,
+            "z": 53.185
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 19,
+        "name": "Marilyn Residence",
+        "pos": {
+            "x": 818.283,
+            "y": -274.84,
+            "z": 53.273
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 20,
+        "name": "Fresh Froze Enterprises",
+        "pos": {
+            "x": 789.304,
+            "y": -262.841,
+            "z": 53.134
+        },
+        "provides": [
+            "packages"
+        ],
+        "radius": 4,
+        "receives": [
+            "packages",
+            "trucks"
+        ]
+    },
+    {
+        "id": 21,
+        "name": "Sneed's Seed N' Feed",
+        "pos": {
+            "x": 784.943,
+            "y": -191.978,
+            "z": 53.142
+        },
+        "provides": [
+            "packages"
+        ],
+        "radius": 4.5,
+        "receives": [
+            "packages",
+            "trucks"
+        ]
+    },
+    {
+        "id": 22,
+        "name": "Firwood Cafe",
+        "pos": {
+            "x": 743.044,
+            "y": -348.58,
+            "z": 53.317
+        },
+        "provides": [
+            "packages"
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 23,
+        "name": "Firwood Motor Company",
+        "pos": {
+            "x": 702.667,
+            "y": -346.429,
+            "z": 56.598
+        },
+        "provides": [
+            "vehicles"
+        ],
+        "radius": 5,
+        "receives": [
+            "packages",
+            "cars"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.9202,
+                    "y": 0.3914,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 701.116,
+                    "y": -332.94,
+                    "z": 56.574
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8554,
+                    "y": 0.518,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 707.806,
+                    "y": -328.906,
+                    "z": 56.562
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0936,
+                    "y": 0.9956,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 711.575,
+                    "y": -345.731,
+                    "z": 56.59
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.6069,
+                    "y": 0.7947,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 706.677,
+                    "y": -340.485,
+                    "z": 56.6
+                }
+            }
+        ]
+    },
+    {
+        "id": 24,
+        "name": "Crestner Residence",
+        "pos": {
+            "x": 707.407,
+            "y": -506.093,
+            "z": 57.576
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 25,
+        "name": "Firwood Garage",
+        "pos": {
+            "x": 583.473,
+            "y": -147.944,
+            "z": 53.491
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 4.5,
+        "receives": [
+            "packages",
+            "cars"
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.6655,
+                    "y": -0.7464,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 583.995,
+                    "y": -143.78,
+                    "z": 53.474
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7349,
+                    "y": -0.6782,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 586.188,
+                    "y": -146.84,
+                    "z": 53.478
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.6039,
+                    "y": -0.7971,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 581.467,
+                    "y": -141.808,
+                    "z": 53.476
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.5304,
+                    "y": -0.8478,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 579.941,
+                    "y": -150.317,
+                    "z": 53.492
+                }
+            }
+        ]
+    },
+    {
+        "id": 26,
+        "name": "Alderman Residence",
+        "pos": {
+            "x": 480.199,
+            "y": 39.774,
+            "z": 53.094
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 27,
+        "name": "Siegler Residence",
+        "pos": {
+            "x": 580.504,
+            "y": -41.118,
+            "z": 53.262
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 28,
+        "name": "Lockhead Estate",
+        "pos": {
+            "x": -610.18,
+            "y": -358.368,
+            "z": 34.452
+        },
+        "provides": [
+
+        ],
+        "radius": 4,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 29,
+        "name": "Firetower",
+        "pos": {
+            "x": 145.006,
+            "y": 8.198,
+            "z": 100.693
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages"
+        ]
+    },
+    {
+        "id": 30,
+        "name": "Firwood Emergency Services",
+        "pos": {
+            "x": 394.117,
+            "y": 103.604,
+            "z": 53.954
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages"
+        ]
+    }
+]
