@@ -1,7 +1,14 @@
 local M = {
     ALL_PLAYERS = -1,
 
-    LOG_EVENTS_BLACKLIST = { "tick", "trafficRubberbandTick" },
+    LOG_EVENTS_BLACKLIST = { "tick", "trafficRubberbandTick", "clockSync" },
+
+    --- small, time-critical replies that must not wait behind a backlog in the pacing queue
+    --- below. clockSync : the client times the round trip, and a reply held up behind queued race
+    --- updates looks like a slow return leg, skewing its estimate of the server clock (see
+    --- services/clockSync.lua). Skipping ahead only reorders it against other messages, which
+    --- doesn't matter for a standalone reply like this one
+    IMMEDIATE_KEYS = { clockSync = true },
 
     -- PACING : a message's parts used to go out all at once, and a join's cache burst (well over
     -- half a megabyte, ~27 compressed packets in the same instant) broke the BeamMP launcher
@@ -70,33 +77,77 @@ local function onSlowUpdate()
 end
 
 ---@param playerID integer
+---@param playerID integer
+---@return boolean
+local function isReachable(playerID)
+    return playerID == M.ALL_PLAYERS or #MP.GetPlayerName(playerID) > 0
+end
+
+--- encodes one message into its wire packets (a header, then the payload in parts). The packets
+--- don't depend on who receives them, so one encoding can go to any number of players
+---@param key string
+---@return {event: string, data: string}[] packets, integer partCount
+local function buildPackets(key, ...)
+    local constants = require("communications/constants")
+    local id = UUID()
+    local payload = #{ ... } > 0 and utils_json.stringifyRaw({ ... }) or ""
+    -- sliced by index : cutting the front off the remainder each time copied the whole rest of a
+    -- big payload once per part
+    local parts = {}
+    local size = constants.PAYLOAD_SIZE_THRESHOLD
+    for i = 1, #payload, size do
+        parts[#parts + 1] = payload:sub(i, i + size - 1)
+    end
+
+    local packets = { {
+        event = constants.BASE_EVENT,
+        data = utils_json.stringifyRaw({ id = id, key = key, parts = #parts }),
+    } }
+    for i, p in ipairs(parts) do
+        packets[#packets + 1] = {
+            event = constants.DATA_EVENT,
+            data = utils_json.stringifyRaw({ id = id, part = i, data = p }),
+        }
+    end
+    return packets, #parts
+end
+
+---@param playerID integer
+---@param key string
+---@param packets {event: string, data: string}[]
+---@param partCount integer
+local function deliver(playerID, key, packets, partCount)
+    if M.IMMEDIATE_KEYS[key] then
+        for _, pk in ipairs(packets) do rawSend(playerID, pk.event, pk.data) end
+    else
+        enqueue(playerID, packets)
+    end
+    if not table.includes(M.LOG_EVENTS_BLACKLIST, key) then
+        LogDebug(string.format("Event %s sent to %s (ID %d, %d parts data)",
+            key, playerID == -1 and services_lang.get("common.all") or
+            MP.GetPlayerName(playerID), playerID, partCount))
+    end
+end
+
+---@param playerID integer
 ---@param key string
 local function sendToPlayer(playerID, key, ...)
-    if playerID == M.ALL_PLAYERS or #MP.GetPlayerName(playerID) > 0 then
-        local id = UUID()
-        local parts = {}
-        local payload = #{ ... } > 0 and utils_json.stringifyRaw({ ... }) or ""
-        local constants = require("communications/constants")
-        while #payload > 0 do
-            table.insert(parts, payload:sub(1, constants.PAYLOAD_SIZE_THRESHOLD))
-            payload = payload:sub(constants.PAYLOAD_SIZE_THRESHOLD + 1)
-        end
+    if isReachable(playerID) then
+        deliver(playerID, key, buildPackets(key, ...))
+    end
+end
 
-        local packets = { {
-            event = constants.BASE_EVENT,
-            data = utils_json.stringifyRaw({ id = id, key = key, parts = #parts }),
-        } }
-        for i, p in ipairs(parts) do
-            packets[#packets + 1] = {
-                event = constants.DATA_EVENT,
-                data = utils_json.stringifyRaw({ id = id, part = i, data = p }),
-            }
-        end
-        enqueue(playerID, packets)
-        if not table.includes(M.LOG_EVENTS_BLACKLIST, key) then
-            LogDebug(string.format("Event %s sent to %s (ID %d, %d parts data)",
-                key, playerID == -1 and services_lang.get("common.all") or
-                MP.GetPlayerName(playerID), playerID, #parts))
+--- the same message to several players, encoded once. Sending the identical payload with
+--- sendToPlayer in a loop re-encoded it for every recipient : for a busy race's session updates
+--- that was most of the server's time (see raceGrid.lua's pushSessionUpdate)
+---@param playerIDs integer[]
+---@param key string
+local function sendToPlayers(playerIDs, key, ...)
+    local packets, partCount
+    for _, playerID in ipairs(playerIDs) do
+        if isReachable(playerID) then
+            if not packets then packets, partCount = buildPackets(key, ...) end
+            deliver(playerID, key, packets, partCount)
         end
     end
 end
@@ -117,6 +168,7 @@ M.onUpdate = onUpdate
 M.onPlayerDisconnect = onPlayerDisconnect
 
 M.sendToPlayer = sendToPlayer
+M.sendToPlayers = sendToPlayers
 M.sendByPermissions = sendByPermissions
 
 return M

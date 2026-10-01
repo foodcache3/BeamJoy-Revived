@@ -5,7 +5,7 @@
 // selection (never in template getters : fresh arrays per digest break ng-repeat).
 angular.module("beamjoy").component("bjRaceInfoResults", {
     templateUrl: "/ui/modModules/beamjoy/windows/raceInfo/results/app.html",
-    controller: function ($rootScope, $scope, $filter, beamjoyStore, beamjoyInfoPanel) {
+    controller: function ($rootScope, $scope, $filter, beamjoyStore, beamjoyInfoPanel, beamjoyLeaderboardFormat) {
         const translate = (key) => $filter("translate")(key);
         const fill = (key, values) =>
             Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, v), translate(key));
@@ -16,13 +16,12 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
         this.openLap = null; // null : the selected driver's best lap ; -1 : none open
         let data = null;
 
-        const clock = (ms) => {
-            if (typeof ms !== "number" || ms < 0) return "-";
-            const totalSec = ms / 1000;
-            return `${Math.floor(totalSec / 60)}:${(totalSec % 60).toFixed(2).padStart(5, "0")}`;
-        };
-        const secs = (ms) => (typeof ms === "number" ? (ms / 1000).toFixed(2) : "-");
-        const plus = (ms) => `+${(Math.abs(ms) / 1000).toFixed(2)}`;
+        // shared race time formats (hours from an hour up), see beamjoyLeaderboardFormat
+        const f = beamjoyLeaderboardFormat;
+        const clock = f.time;
+        const secs = (ms) => (typeof ms === "number" ? f.gap(ms) : "-");
+        const plus = (ms) => `+${f.gap(ms)}`;
+        const plusS = (ms) => `+${f.gapS(ms)}`;
         const nameOf = (p) => p.displayName || p.playerName;
 
         // finished (by total time) first, then still racing in race order, then retired
@@ -74,7 +73,7 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
                 name: nameOf(p),
                 car: p.vehicleModel || "",
                 total: p.totalMs !== null ? clock(p.totalMs) : translate(p.dnf ? "beamjoy.raceInfo.retired" : "beamjoy.raceInfo.racing"),
-                gap: p.totalMs !== null && winner && p !== winner ? `${plus(p.totalMs - winner.totalMs)}s` : "",
+                gap: p.totalMs !== null && winner && p !== winner ? plusS(p.totalMs - winner.totalMs) : "",
                 best: clock(p.bestLapMs),
                 bestCls: typeof p.bestLapMs === "number" && p.bestLapMs === fastestLap ? "fast" : "",
             }));
@@ -82,7 +81,7 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
                 ? order.filter((p) => p.totalMs !== null).slice(0, 3).map((p, i) => ({
                     pos: String(i + 1),
                     name: nameOf(p),
-                    line: i === 0 ? clock(p.totalMs) : `${plus(p.totalMs - winner.totalMs)}s`,
+                    line: i === 0 ? clock(p.totalMs) : plusS(p.totalMs - winner.totalMs),
                     cls: i === 0 ? "first" : "",
                     plateCls: i === 0 ? "p1" : "",
                 }))
@@ -138,7 +137,7 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
                     const sum = sectorList.reduce((a, s) => a + pb[s], 0);
                     ideal = {
                         time: clock(sum),
-                        delta: typeof sel.bestLapMs === "number" ? `-${(Math.max(0, sel.bestLapMs - sum) / 1000).toFixed(2)}` : "",
+                        delta: typeof sel.bestLapMs === "number" ? `-${f.gap(Math.max(0, sel.bestLapMs - sum))}` : "",
                         cells: sectorList.map((s) => (pb[s] === fastestSector[s] ? "fast" : "pb")),
                     };
                 }

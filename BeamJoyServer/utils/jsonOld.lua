@@ -137,38 +137,48 @@ function json.stringify(obj, key, pretty, level)
     if key then
         s[#s + 1] = "\"" .. key .. "\":" .. (pretty and " " or "")
     end
-    if table.includes({ "boolean", "number" }, type(obj)) then
+    -- plain loops and table.concat throughout : this runs for every message the server sends and
+    -- every file it saves. The Table/Range helpers it used before allocated wrapper objects for
+    -- every value and joined strings by repeated concatenation (slower the bigger the output), which
+    -- made big payloads (race session updates) cost tens of ms each. Same output, byte for byte.
+    local t = type(obj)
+    if t == "boolean" or t == "number" then
         s[#s + 1] = tostring(obj)
-    elseif type(obj) == "string" then
+    elseif t == "string" then
         s[#s + 1] = "\"" .. obj:escape() .. "\""
-    elseif type(obj) == "nil" then
+    elseif t == "nil" then
         s[#s + 1] = "null"
-    elseif type(obj) == "table" then
+    elseif t == "table" then
         local isArray, maxIndex = isJsonArray(obj)
         if isArray then
             s[#s + 1] = "[" .. lineBreak
             if maxIndex >= 1 then
-                s[#s + 1] = Range(1, maxIndex or 0):map(function(i)
-                    return obj[i] and json.stringify(obj[i], nil, pretty, level + 1) or "null"
-                end):join("," .. lineBreak)
+                local items = {}
+                for i = 1, maxIndex do
+                    items[i] = obj[i] and json.stringify(obj[i], nil, pretty, level + 1) or "null"
+                end
+                s[#s + 1] = table.concat(items, "," .. lineBreak)
             end
             s[#s + 1] = lineBreak
             s[#s + 1] = indent
             s[#s + 1] = "]"
         else
             s[#s + 1] = "{" .. lineBreak
-            s[#s + 1] = table.keys(obj)
-                :sort(function(a, b) return tostring(a) < tostring(b) end)
-                :map(function(k)
-                    return json.stringify(obj[k], k, pretty, level + 1)
-                end):join("," .. lineBreak)
+            local keys = {}
+            for k in pairs(obj) do keys[#keys + 1] = k end
+            table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+            local items = {}
+            for i, k in ipairs(keys) do
+                items[i] = json.stringify(obj[k], k, pretty, level + 1)
+            end
+            s[#s + 1] = table.concat(items, "," .. lineBreak)
             s[#s + 1] = lineBreak
             s[#s + 1] = indent
             s[#s + 1] = "}"
         end
     end
 
-    return table.join(s)
+    return table.concat(s)
 end
 
 json.null = "JSON_NULL_VALUE" -- This is a one-off value to represent the null value.

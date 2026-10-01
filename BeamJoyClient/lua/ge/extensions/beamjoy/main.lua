@@ -27,7 +27,7 @@ local M = {
         "async", "toast", "sound", "shape", "localStorage", "camera", "uiHelpers",
         "vehicleSelector", "replay", "gizmo", "bigmap", "mods", "icons", "navigation",
         -- beamjoy services
-        "beamjoy_lang", "beamjoy_communications", "beamjoy_cache", "beamjoy_context",
+        "beamjoy_lang", "beamjoy_communications", "beamjoy_cache", "beamjoy_context", "beamjoy_clockSync",
         "beamjoy_vehicles", "beamjoy_imgui_manager", "beamjoy_chat", "beamjoy_inputs",
         "beamjoy_restrictions", "beamjoy_config", "beamjoy_permissions", "beamjoy_groups",
         "beamjoy_players", "beamjoy_nametags", "beamjoy_contextMenu", "beamjoy_traffic",

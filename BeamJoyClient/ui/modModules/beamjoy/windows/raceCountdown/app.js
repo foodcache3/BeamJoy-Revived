@@ -1,6 +1,6 @@
 angular.module("beamjoy").component("bjRaceCountdown", {
     templateUrl: "/ui/modModules/beamjoy/windows/raceCountdown/app.html",
-    controller: function ($rootScope) {
+    controller: function ($rootScope, beamjoyLeaderboardFormat) {
         this.active = false;
         this.seconds = null;
         this.raceName = null;
@@ -30,12 +30,7 @@ angular.module("beamjoy").component("bjRaceCountdown", {
             }
         });
 
-        this.formatTime = (ms) => {
-            if (typeof ms !== "number" || ms < 0) return "-";
-            const totalSec = ms / 1000;
-            const min = Math.floor(totalSec / 60);
-            const sec = (totalSec % 60).toFixed(2);
-            return `${min}:${sec.padStart(5, "0")}`;
-        };
+        // shared race time format (hours from an hour up), see beamjoyLeaderboardFormat
+        this.formatTime = beamjoyLeaderboardFormat.time;
     },
 });

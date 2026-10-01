@@ -11,7 +11,7 @@ const RACE_HUD_LAYOUTS = ["standard", "compact", "full"];
 
 angular.module("beamjoy").component("bjRaceHud", {
     templateUrl: "/ui/modModules/beamjoy/windows/raceHud/app.html",
-    controller: function ($rootScope, $scope, $filter, $interval, beamjoyStore, beamjoyDelivery, beamjoyInfoPanel) {
+    controller: function ($rootScope, $scope, $filter, $interval, beamjoyStore, beamjoyDelivery, beamjoyInfoPanel, beamjoyLeaderboardFormat) {
         const translate = (key) => $filter("translate")(key);
         const fill = (key, values) =>
             Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, v), translate(key));
@@ -36,13 +36,9 @@ angular.module("beamjoy").component("bjRaceHud", {
             applyLayout();
         });
 
-        // 1:48.21 for lap times and clocks
-        const clock = (ms) => {
-            if (typeof ms !== "number" || ms < 0) return "-";
-            const totalSec = ms / 1000;
-            const min = Math.floor(totalSec / 60);
-            return `${min}:${(totalSec % 60).toFixed(2).padStart(5, "0")}`;
-        };
+        // 1:48.21 for lap times and clocks (hours from an hour up), see beamjoyLeaderboardFormat
+        const f = beamjoyLeaderboardFormat;
+        const clock = f.time;
         // a gap as a number and its unit, direction left to the arrows : {num: "2.31", unit: "s"}
         const gapParts = (desc) => {
             if (!desc) return null;
@@ -50,7 +46,8 @@ angular.module("beamjoy").component("bjRaceHud", {
                 const n = Math.abs(desc.lapsDiff);
                 return { num: String(n), unit: ` ${translate(n > 1 ? "beamjoy.raceHud.laps" : "beamjoy.raceHud.lap")}` };
             }
-            if (typeof desc.gapMs === "number") return { num: (Math.abs(desc.gapMs) / 1000).toFixed(2), unit: "s" };
+            // plain seconds get the "s", a gap of a minute or more reads as a clock time
+            if (typeof desc.gapMs === "number") return { num: f.gap(desc.gapMs), unit: Math.abs(desc.gapMs) < 59995 ? "s" : "" };
             return { num: "", unit: "" };
         };
         // "+4.28" / "+1 lap" behind the leader
@@ -59,7 +56,7 @@ angular.module("beamjoy").component("bjRaceHud", {
                 const n = Math.abs(row.leaderLapsDiff);
                 return `+${n} ${translate(n > 1 ? "beamjoy.raceHud.laps" : "beamjoy.raceHud.lap")}`;
             }
-            if (typeof row.leaderGapMs === "number") return `+${(Math.abs(row.leaderGapMs) / 1000).toFixed(2)}`;
+            if (typeof row.leaderGapMs === "number") return `+${f.gap(row.leaderGapMs)}`;
             return "";
         };
         const nameOf = (row) => (row && (row.displayName || row.playerName)) || "";
@@ -105,7 +102,7 @@ angular.module("beamjoy").component("bjRaceHud", {
             // running clock : this lap on a multi-lap race, the whole run otherwise
             v.timer = clock(laps > 1 ? self.currentLapElapsedMs : data.elapsedMs);
             if (typeof self.liveDeltaMs === "number" && !self.finished && !self.dnf) {
-                v.delta = `${self.liveDeltaMs <= 0 ? "-" : "+"}${(Math.abs(self.liveDeltaMs) / 1000).toFixed(2)}`;
+                v.delta = `${self.liveDeltaMs <= 0 ? "-" : "+"}${f.gap(self.liveDeltaMs)}`;
                 v.deltaCls = self.liveDeltaMs <= 0 ? "faster" : "slower";
             } else v.delta = null;
             v.showLaps = laps > 1 && typeof self.lastLapMs === "number";

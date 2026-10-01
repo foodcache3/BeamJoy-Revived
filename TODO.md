@@ -406,3 +406,39 @@ Reference source for native API research, if picking any of these up:
 - A bundled example bus line for a map or two.
 - "Add every available activity to the Big Map with its own start position" - user asked to skip
   this for now; open question of what to do about duplicate start positions if it's picked back up.
+
+## Races: rejoin grace period after a disconnect
+
+**Status:** planned, not started. User asked to add this to the plan rather than build it now.
+
+Today a racer who disconnects mid-race is marked DNF on the spot (`raceGrid.lua`
+`onPlayerDisconnect`, RACE branch) and can never get back in. Fine for a 5-minute sprint, fatal for
+endurance racing: a reported test case was a 40-lap race on a 37-mile lap (time to beat 31 hours),
+where a game crash, launcher hiccup or short internet drop after 20 hours of driving throws the whole
+race away. Over that long with several players, at least one disconnect is close to guaranteed.
+
+Agreed design:
+- On disconnect during RACE: mark the participant "disconnected" (with the time) instead of DNF and
+  keep their entry. Their race clock keeps running (it's the shared clock from the green light,
+  `session.goAtMs`), so time lost while away is the penalty. After the grace period runs out, DNF
+  them exactly as today.
+- Grace period: a per-race setting (e.g. 10 minutes default), alongside the other race settings.
+- Reconnect gets a NEW playerID, so match by BeamMP player name and re-key the participant entry
+  (`session.participants` is keyed by playerID) to the new ID, then push the session.
+- The race must not end while anyone is still inside their grace period (`checkSessionComplete`).
+- Client resume path in `raceRunner.lua` (a RACE-state session arriving while not in one): the
+  player's car was deleted by BeamMP on disconnect, so spawn it at their last crossed gate
+  (`lastCrossedGate`, same target the "lastcheckpoint" respawn strategy uses), enforcing the race's
+  vehicle restriction; reset `M.lastLy`; resume timing on the shared clock. Must wait for a fresh
+  `beamjoy_clockSync` estimate first, or the local fallback clock would restart the timer at zero.
+
+Other systems that need a "disconnected" state: HUD standings row and race info panels (plus locale
+strings), crews' "busy" status and lobby invites, spectators watching someone who drops,
+Discord race results ("disconnected" vs "retired"), backmarker ghosting.
+
+Open decisions: grace length/default; whether a rejoined racer's time can set a personal best or
+server record. Server restarts are out of scope: sessions are memory-only and the shared clock
+resets with the server, so hosts should disable scheduled restarts during an endurance race.
+
+Best done after the race update-size rework (server-side gaps, ID-list standings, history only at
+the finish), so the resume path is built against the final payload format.

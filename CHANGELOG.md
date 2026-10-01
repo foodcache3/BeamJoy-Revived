@@ -8,8 +8,41 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2540, server build 2379.
+Version 1.11.0 : client build 2546, server build 2385.
 
+- **Race updates are a fraction of the size.** Every gate crossing sends the race to every racer and
+  spectator, and each update carried every racer's time at every gate plus a second full copy of
+  every racer, encoded again for each recipient. On a long track with many racers that was hundreds
+  of KB per crossing and more than the server could keep up with, so everything BeamJoy does fell
+  further and further behind. Gaps are now worked out by the server and sent as numbers, the
+  standings are the racer list itself, each update is encoded once for everyone, and gate updates
+  leave out the race settings. The server's JSON encoding is also about 3x faster (same output),
+  which speeds up every message and save. Worst case measured (20 racers, 300 gates, lap 40):
+  about 1% server CPU instead of more than the whole server, and 80 KB/s per player instead of
+  1 MB/s. *(server and client, update both together)*
+- **Race times show hours.** From an hour up, times read `1:02:15.40` instead of `62:15.40`, and
+  gaps or sector times of a minute or more read as a time instead of thousands of seconds. One shared
+  format for the race HUD, race info, the finished popup and the leaderboards. Also fixed: a time
+  just under a whole minute could show as `1:60.00` (and `0:60` on the hunter and infected timers).
+  *(client only)*
+- **Everyone gets the green light at the same moment.** Each player's game now keeps an estimate of
+  the server's clock, and a race's countdown ends at one shared moment on it. Before, each car
+  unfroze and its timer started when the server's "go" reached that player, so higher ping meant a
+  later start, and the split between two players was off by the difference in their pings for the
+  whole race. The countdown numbers also tick over together, the race no longer starts up to two
+  seconds after the countdown reaches zero, and a spectator's live timer no longer includes their
+  own ping. A busy server can't skew the shared clock : its replies skip the server's send queue,
+  and a clock check made while the server was answering slowly is ignored. *(server and client)*
+- **Fixed: race splits drifting, worst on long races.** The gap to a car on a different lap number
+  (from when the leader crosses the line until the other car does) counted every completed lap
+  twice, so it came out wrong by about a lap time; the longer the race and the more spread out the
+  field, the more often it showed. Gaps to a leader who had already finished were also nonsense for
+  the rest of the final lap. Race times are also measured on one shared clock from the shared
+  green light (see above) instead of each player's own computer clock, which could be corrected by
+  the system mid-race and add or remove time. A gate crossing is timed between frames instead of
+  rounded up to the next one, the "Finished" popup shows the time the server recorded (it used to
+  add your ping), and a spectator's live timer no longer jumps by up to a second on each update.
+  *(server and client)*
 - **Staff explode matches the game's own.** It now blasts the car's parts apart like the game's Boom
   (a short repelling burst under the car, fire, every breakable part broken), but only on that car,
   so nearby players' cars aren't thrown about. *(client only)*

@@ -30,7 +30,28 @@ local M = {
 
     ---@type BJRaceSession?
     session = nil,
-    raceStartTimeMs = nil,
+    ---@type boolean? true when this race's times are measured on the server's shared clock
+    ---(beamjoy_clockSync) from the shared green light (session.goAtMs), decided once at the RACE
+    ---transition so a clock estimate arriving mid-race can't make the timer jump. Every racer on
+    ---one timeline is what makes splits between players comparable : each client used to time
+    ---itself on its own wall clock from whenever its own start message arrived.
+    ---
+    ---Deliberately real time, not simulation time (briefly tried) : in multiplayer the race
+    ---happens in one shared, real-time world. A client whose physics runs below real time really
+    ---is slower on everyone's screen, and the server orders finished racers by recorded time ;
+    ---sim-time totals would disagree with the on-track gaps and the order cars crossed the line.
+    raceUsesSharedClock = nil,
+    ---@type number? beamjoy_clockSync.localMs() at this client's own RACE transition, the
+    ---fallback timeline when there's no shared clock (no estimate yet, or an older server).
+    ---Monotonic, unlike the wall clock, so an OS time correction mid-race can't add or remove time
+    raceStartLocalMs = nil,
+    ---@type number? race elapsed ms as of this frame and the previous one (onUpdate), used to
+    ---place a gate crossing between the two frames
+    frameElapsedMs = nil,
+    prevFrameElapsedMs = nil,
+    ---@type string? id of the session this client already started on its own at the shared green
+    ---light (session.goAtMs, see startAtGreenLight), before the server's own RACE push arrived
+    goStartedFor = nil,
     ---@type integer? local GetCurrentTimeMillis()-domain virtual timestamp for when the lobby's
     ---gridReadyTimeout floor elapses (see onSessionUpdate's own re-anchoring comment)
     gridReadyTargetMs = nil,
@@ -1003,76 +1024,17 @@ local function releaseScenarioLock()
     beamjoy_communications_ui.send("BJRaceCountdown", { active = false })
 end
 
---- describes `other` relative to `self` for HUD display: one signed number (`gapMs`, positive
---- means `other` is behind `self`, negative means ahead) covers the common "still racing, same
---- lap" case ; `lapsDiff` covers a lap split (a raw gate-time diff across different laps would be
---- meaningless) ; a finished/dnf `other` just reports its own state, the caller decides how to
---- render it (no live gap makes sense once someone's actually done)
----@param self BJRaceParticipant
----@param other BJRaceParticipant
----@param totalGates integer? the race's own gate count, needed to tell "just crossed the
----start/finish line first" (still within the same lap of real progress) apart from "genuinely
----lapped them" (a full lap of gate progress ahead). self.currentLap ~= other.currentLap alone
----isn't enough for that : currentLap increments the instant gate 1 is (re)crossed, regardless of
----how close the field still is at that moment.
----@return {playerName: string, finished: boolean, dnf: boolean, gapMs: integer?, lapsDiff: integer?}
-local function describeOpponent(self, other, totalGates)
-    local desc = { playerName = other.playerName, displayName = other.displayName, finished = other.finished, dnf = other.dnf }
-    if self.dnf or other.dnf or self.finished ~= other.finished then
-        return desc
-    end
-    if self.finished then -- both finished, self.finished == other.finished already checked above
-        local selfTotal, otherTotal = 0, 0
-        table.forEach(self.lapTimes or {}, function(t) selfTotal = selfTotal + t end)
-        table.forEach(other.lapTimes or {}, function(t) otherTotal = otherTotal + t end)
-        desc.gapMs = otherTotal - selfTotal
-        return desc
-    end
-    if self.currentLap ~= other.currentLap and totalGates and totalGates > 0 then
-        local selfProgress = (self.currentLap - 1) * totalGates + self.currentGate
-        local otherProgress = (other.currentLap - 1) * totalGates + other.currentGate
-        local gateGap = selfProgress - otherProgress
-        if math.abs(gateGap) >= totalGates then
-            -- same sign convention as gapMs below : positive means `other` is behind `self`.
-            -- Whole-lap count derived from the real gate-progress gap, not self.currentLap -
-            -- other.currentLap directly. That raw lap-number difference is exactly what let a
-            -- "just crossed the line a moment before them" case show +1 lap prematurely, before
-            -- real track progress actually backed it up.
-            desc.lapsDiff = (gateGap > 0 and 1 or -1) * math.floor(math.abs(gateGap) / totalGates)
-            return desc
-        end
-        -- different lap numbers but not yet a genuine full lap apart (the window right after
-        -- either side crosses the start/finish line). Real, confirmed bug : this used to just
-        -- `return desc` with nothing set here at all, which is exactly "the relative gap
-        -- disappears" between crossing the line and actually completing a full lap ahead. The
-        -- same-lap commonGate comparison below can't be reused directly (gateTimes resets per lap,
-        -- so comparing raw gateTimes[gate] across two different laps compares two different lap-
-        -- relative clocks). Instead, each racer's own total RACE-relative elapsed time (every
-        -- already-completed lap's duration, plus their current lap's own lap-relative gate time)
-        -- gives a continuous, always-comparable proxy : not pinned to one exact shared reference
-        -- point the way the same-lap case is, but it converges to that same precise metric as the
-        -- gap closes, and never just vanishes.
-        local function raceRelativeMs(p)
-            local total = 0
-            table.forEach(p.lapTimes or {}, function(t) total = total + t end)
-            local gateMs = p.gateTimes and p.gateTimes[p.currentGate]
-            return gateMs and (total + gateMs) or nil
-        end
-        local selfMs, otherMs = raceRelativeMs(self), raceRelativeMs(other)
-        if selfMs and otherMs then
-            desc.gapMs = otherMs - selfMs
-        end
-        return desc
-    end
-    local commonGate = math.min(self.currentGate, other.currentGate)
-    if commonGate >= 1 then
-        local selfTime = self.gateTimes and self.gateTimes[commonGate]
-        local otherTime = other.gateTimes and other.gateTimes[commonGate]
-        if selfTime and otherTime then
-            desc.gapMs = otherTime - selfTime
+--- this player's race elapsed time right now, ms (see raceUsesSharedClock). nil outside RACE
+---@return number?
+local function raceElapsedNowMs()
+    if not M.session or M.session.state ~= "RACE" then return nil end
+    if M.raceUsesSharedClock then
+        local serverNow = beamjoy_clockSync.serverNowMs()
+        if serverNow and M.session.goAtMs then
+            return math.max(0, serverNow - M.session.goAtMs)
         end
     end
-    return desc
+    return M.raceStartLocalMs and (beamjoy_clockSync.localMs() - M.raceStartLocalMs) or nil
 end
 
 --- sector/lap indices here are plain small positive integers (1, 2, 3...). A table keyed that way
@@ -1121,7 +1083,7 @@ local function pushHud()
     -- auto-spectate kicked in, same as before. Pure spectating (M.spectatingSession, never a
     -- participant at all) : the spectated participant directly, there's no "self" to fall back to.
     local participant
-    local elapsedStartMs
+    local elapsedMs
     if M.session then
         participant = getSelfParticipant()
         if not participant then
@@ -1132,7 +1094,7 @@ local function pushHud()
                 function(p) return p.playerName == M.spectatingPlayerName end)
             if spectated then participant = spectated end
         end
-        elapsedStartMs = M.raceStartTimeMs
+        elapsedMs = raceElapsedNowMs() or 0
     else
         if not M.spectatingPlayerName then
             return beamjoy_communications_ui.send("BJRaceHud", { active = false })
@@ -1142,10 +1104,9 @@ local function pushHud()
         if not participant then
             return beamjoy_communications_ui.send("BJRaceHud", { active = false })
         end
-        elapsedStartMs = M.spectatingRaceStartTimeMs
+        elapsedMs = M.spectatingRaceStartTimeMs and (GetCurrentTimeMillis() - M.spectatingRaceStartTimeMs) or 0
     end
 
-    local elapsedMs = elapsedStartMs and (GetCurrentTimeMillis() - elapsedStartMs) or 0
     local previousLapsElapsed = 0
     table.forEach(participant.lapTimes or {}, function(t) previousLapsElapsed = previousLapsElapsed + t end)
 
@@ -1153,28 +1114,31 @@ local function pushHud()
     local position, totalRacers, ahead, behind, standings
     if leaderboard and #leaderboard > 1 then
         totalRacers = #leaderboard
+        -- gaps come worked out from the server (raceGrid.lua's gapBetween) : every row carries its
+        -- gap to the car in front (aheadGapMs/aheadLapsDiff) and to the leader (leaderGapMs/
+        -- leaderLapsDiff). The gap to the car behind is that car's own gap to this one. The HUD only
+        -- shows magnitudes (which side is which comes from the position), so no sign juggling.
+        local function opponent(row, gapMs, lapsDiff)
+            return { playerName = row.playerName, displayName = row.displayName,
+                finished = row.finished, dnf = row.dnf, gapMs = gapMs, lapsDiff = lapsDiff }
+        end
         for i, row in ipairs(leaderboard) do
             if row.playerName == participant.playerName then
                 position = i
-                if leaderboard[i - 1] then ahead = describeOpponent(participant, leaderboard[i - 1], totalSteps(race)) end
-                if leaderboard[i + 1] then behind = describeOpponent(participant, leaderboard[i + 1], totalSteps(race)) end
+                local aheadRow, behindRow = leaderboard[i - 1], leaderboard[i + 1]
+                if aheadRow then ahead = opponent(aheadRow, row.aheadGapMs, row.aheadLapsDiff) end
+                if behindRow then behind = opponent(behindRow, behindRow.aheadGapMs, behindRow.aheadLapsDiff) end
                 break
             end
         end
         -- every row also carries its gap to the leader (the full standings layout) and, once
         -- finished, its total time
-        local leader = leaderboard[1]
-        -- describeOpponent gives no gap between a finished and a still-racing car ; against the
-        -- leader, a still-racing row is measured as if the leader were still racing too
-        local racingLeader = setmetatable({ finished = false }, { __index = leader })
         standings = table.map(leaderboard, function(row)
-            local desc = describeOpponent(participant, row, totalSteps(race))
-            local toLeader = row ~= leader
-                and describeOpponent(row.finished and leader or racingLeader, row, totalSteps(race)) or nil
+            local desc = opponent(row)
             desc.currentLap = row.currentLap
             desc.currentGate = row.currentGate
-            desc.leaderGapMs = toLeader and toLeader.gapMs or nil
-            desc.leaderLapsDiff = toLeader and toLeader.lapsDiff or nil
+            desc.leaderGapMs = row.leaderGapMs
+            desc.leaderLapsDiff = row.leaderLapsDiff
             if row.finished then
                 local total = 0
                 table.forEach(row.lapTimes or {}, function(t) total = total + t end)
@@ -1296,18 +1260,10 @@ local function pushRaceInfo()
         -- trimmed neighbor rows)
         participants = (function()
             local rawParticipants = session.leaderboard or session.participants:values()
-            -- leaderboard is already sorted "most progress first" server-side, so the first entry
-            -- is the race leader. Reusing describeOpponent (built for the HUD's own ahead/behind
-            -- gap) against it gives every other row a "gap to leader" figure for free, with the
-            -- exact same finished/lap-split/live-gate-time rules the HUD already established,
-            -- rather than inventing a second gap convention just for this panel. Also computed
-            -- against the immediately-preceding row (aheadGapMs/aheadLapsDiff) for a live "gap to
-            -- the car in front" column, same shape, just a different reference participant.
-            local leader = rawParticipants[1]
-            return table.map(rawParticipants, function(p, i)
-                local gap = (leader and leader ~= p) and describeOpponent(leader, p, totalSteps(race)) or nil
-                local ahead = rawParticipants[i - 1]
-                local aheadGap = (ahead and ahead ~= p) and describeOpponent(ahead, p, totalSteps(race)) or nil
+            -- already in standings order server-side, each row with its gap to the leader and to
+            -- the car in front worked out there (raceGrid.lua's gapBetween), the same figures the
+            -- HUD shows
+            return table.map(rawParticipants, function(p)
                 return {
                     playerName = p.playerName,
                     displayName = p.displayName,
@@ -1321,10 +1277,10 @@ local function pushRaceInfo()
                     lapSectors = keyify(p.lapSectors, "s"),
                     lapSectorHistory = keyifyLapSectorHistory(p.lapSectorHistory),
                     bestSectorMs = keyify(p.bestSectorMs, "s"),
-                    gapMs = gap and gap.gapMs or nil,
-                    lapsDiff = gap and gap.lapsDiff or nil,
-                    aheadGapMs = aheadGap and aheadGap.gapMs or nil,
-                    aheadLapsDiff = aheadGap and aheadGap.lapsDiff or nil,
+                    gapMs = p.leaderGapMs,
+                    lapsDiff = p.leaderLapsDiff,
+                    aheadGapMs = p.aheadGapMs,
+                    aheadLapsDiff = p.aheadLapsDiff,
                 }
             end)
         end)(),
@@ -1378,8 +1334,27 @@ local function pushSpectateStatus()
     })
 end
 
+--- prepares a session payload from the server for use. The participants array is already in
+--- standings order and doubles as the leaderboard (the server no longer sends a second copy), and
+--- a slim gate-crossing push carries no settings (raceGrid.lua's buildSessionPayload), so the ones
+--- already known for that same session carry over.
+---@param session BJRaceSession
+---@param previous BJRaceSession?
+local function adoptSession(session, previous)
+    session.leaderboard = session.participants
+    if session.settings == nil then
+        if previous and previous.id == session.id and previous.settings then
+            session.settings = previous.settings
+        else
+            LogWarn("beamjoy_raceRunner: session update without settings for an unknown session")
+            session.settings = {}
+        end
+    end
+end
+
 ---@param session BJRaceSession
 local function onSpectateUpdate(session)
+    adoptSession(session, M.spectatingSession)
     local wasWatchingThis = M.spectatingSession ~= nil and M.spectatingSession.id == session.id
     M.spectatingSession = session
 
@@ -1393,8 +1368,10 @@ local function onSpectateUpdate(session)
     -- currentLapElapsedMs permanently negative and the HUD timer permanently showing "-". Re-
     -- anchoring every update keeps this self-correcting while still ticking smoothly between
     -- updates via GetCurrentTimeMillis() locally, same as before.
-    if session.state == "RACE" and session.raceElapsedMs then
-        M.spectatingRaceStartTimeMs = GetCurrentTimeMillis() - session.raceElapsedMs
+    local serverNow = session.goAtMs and beamjoy_clockSync.serverNowMs()
+    local raceElapsedMs = serverNow and math.max(0, serverNow - session.goAtMs) or session.raceElapsedMs
+    if session.state == "RACE" and raceElapsedMs then
+        M.spectatingRaceStartTimeMs = GetCurrentTimeMillis() - raceElapsedMs
     elseif session.state ~= "RACE" then
         M.spectatingRaceStartTimeMs = nil
     end
@@ -1542,6 +1519,13 @@ end
 
 ---@param session BJRaceSession
 local function onSessionUpdate(session)
+    adoptSession(session, M.session)
+    -- this client already went green on its own (startAtGreenLight) : a push the server sent
+    -- before its own RACE transition can still arrive afterwards. Without this it would read as
+    -- RACE -> COUNTDOWN and rerun the whole countdown setup, teleporting the car back to the grid
+    if session.state == "COUNTDOWN" and M.goStartedFor ~= nil and M.goStartedFor == session.id then
+        session.state = "RACE"
+    end
     local wasInSession = M.session ~= nil
     local wasRacing = M.session ~= nil and M.session.state == "RACE"
     local wasCountdown = M.session ~= nil and M.session.state == "COUNTDOWN"
@@ -1578,7 +1562,11 @@ local function onSessionUpdate(session)
     if not participant then
         -- no longer part of this session (left, kicked at gridTimeout, session gone)
         M.session = nil
-        M.raceStartTimeMs = nil
+        M.raceUsesSharedClock = nil
+        M.raceStartLocalMs = nil
+        M.frameElapsedMs = nil
+        M.prevFrameElapsedMs = nil
+        M.goStartedFor = nil
         M.gridReadyTargetMs = nil
         M.gridTimeoutTargetMs = nil
         M.spectatingVID = nil
@@ -1838,7 +1826,10 @@ local function onSessionUpdate(session)
     end
 
     if session.state == "RACE" and not wasRacing then
-        M.raceStartTimeMs = GetCurrentTimeMillis()
+        M.raceStartLocalMs = beamjoy_clockSync.localMs()
+        M.raceUsesSharedClock = session.goAtMs ~= nil and beamjoy_clockSync.isSynced()
+        M.frameElapsedMs = nil
+        M.prevFrameElapsedMs = nil
         M.lastLy = {}
         M.lastProgressPos = nil
         M.lastProgressCheckMs = GetCurrentTimeMillis()
@@ -1973,8 +1964,14 @@ local function onSessionUpdate(session)
             active = true,
             mode = "finished",
             raceName = race and race.name,
-            timeMs = loopable and participant.bestLapMs
-                or (M.raceStartTimeMs and (GetCurrentTimeMillis() - M.raceStartTimeMs) or nil),
+            timeMs = loopable and participant.bestLapMs or (function()
+                -- the server-recorded total (sum of lap durations), not a fresh clock read here :
+                -- this update only arrives a full round trip after the actual finish crossing, so
+                -- reading the clock now used to add the player's own latency to the shown time
+                local total = 0
+                table.forEach(participant.lapTimes or {}, function(t) total = total + t end)
+                return total > 0 and total or nil
+            end)(),
             isBestLap = loopable,
             -- set server-side in raceGrid.lua's finishParticipant (services_races.submitTime),
             -- carried here straight off the raw participant object in the session payload. No
@@ -2060,7 +2057,11 @@ end
 local function onSessionRemoved(sessionId)
     if M.session and M.session.id == sessionId then
         M.session = nil
-        M.raceStartTimeMs = nil
+        M.raceUsesSharedClock = nil
+        M.raceStartLocalMs = nil
+        M.frameElapsedMs = nil
+        M.prevFrameElapsedMs = nil
+        M.goStartedFor = nil
         M.gridReadyTargetMs = nil
         M.gridTimeoutTargetMs = nil
         M.spectatingVID = nil
@@ -2140,8 +2141,16 @@ local function updateCountdown()
         beamjoy_vehicles.setFreeze(myVeh.vid, true)
     end
 
-    local elapsedSec = (GetCurrentTimeMillis() - M.countdownStartMs) / 1000
-    local remaining = math.max(0, math.ceil(M.countdownTotal - elapsedSec))
+    local remaining
+    local serverNow = M.session.goAtMs and beamjoy_clockSync.serverNowMs()
+    if serverNow then
+        -- counts down to the shared green light, so every player's countdown shows the same
+        -- number at the same moment
+        remaining = math.max(0, math.ceil((M.session.goAtMs - serverNow) / 1000))
+    else
+        local elapsedSec = (GetCurrentTimeMillis() - M.countdownStartMs) / 1000
+        remaining = math.max(0, math.ceil(M.countdownTotal - elapsedSec))
+    end
 
     if remaining ~= M.lastSentSeconds then
         M.lastSentSeconds = remaining
@@ -2162,6 +2171,27 @@ local function updateCountdown()
         end
         extensions.hook("onBJScenarioChanged")
     end
+end
+
+--- starts this player's race at the shared green light (session.goAtMs on the server's clock,
+--- estimated locally by beamjoy_clockSync), instead of whenever the server's RACE push reaches
+--- this client. Real, reported issue : every player used to unfreeze and start their timer on
+--- receipt of that push, so a player with more ping started later, and every split between two
+--- players was off by the difference in their latencies for the whole race. Runs the exact same
+--- RACE transition a real push would (onSessionUpdate on a RACE copy of the current session) ;
+--- the server's own push then arrives as already-RACE and changes nothing. Without a clock
+--- estimate (no reply yet) or a goAtMs (older server) this never fires and the push starts the
+--- race as before.
+local function startAtGreenLight()
+    local session = M.session
+    if not session or session.state ~= "COUNTDOWN" or not session.goAtMs then return end
+    local serverNow = beamjoy_clockSync.serverNowMs()
+    if not serverNow or serverNow < session.goAtMs then return end
+    M.goStartedFor = session.id
+    local racing = {}
+    for k, v in pairs(session) do racing[k] = v end
+    racing.state = "RACE"
+    M.onSessionUpdate(racing)
 end
 
 --- replays the last countdown tick on request. Lets a freshly (re)mounted component (e.g. the
@@ -2243,11 +2273,14 @@ local function updateResetPenaltyLock()
 end
 
 local function onUpdate()
+    M.prevFrameElapsedMs = M.frameElapsedMs
+    M.frameElapsedMs = raceElapsedNowMs()
     if M.session and M.session.state == "GRID" then
         updateGridCountdown()
     end
     if M.session and M.session.state == "COUNTDOWN" then
         updateCountdown()
+        startAtGreenLight()
     end
     if M.resetPenaltyLockedUntilMs then
         updateResetPenaltyLock()
@@ -2383,8 +2416,16 @@ local function onUpdate()
                 math.abs(lx) <= gate.width / 2 + leniencyX and
                 lz >= -leniencyZ and lz <= gate.height + leniencyZ
             if crossed then
+                -- the plane was crossed somewhere between last frame and this one : place the
+                -- crossing proportionally between the two frames' race times (ly is the signed
+                -- distance to the gate plane) instead of rounding it up to the frame it was noticed
+                -- on, which at low framerates (busy servers) was worth tens of ms per gate
+                local span = math.abs(prevLy) + math.abs(ly)
+                local overshoot = span > 0 and (math.abs(ly) / span) or 0
+                local nowMs = M.frameElapsedMs or 0
+                local crossingMs = nowMs - overshoot * (nowMs - (M.prevFrameElapsedMs or nowMs))
                 beamjoy_communications.send("raceGateCrossed", M.session.id, gateIdx,
-                    GetCurrentTimeMillis() - M.raceStartTimeMs)
+                    math.max(0, math.round(crossingMs)))
                 M.lastLy[gateIdx] = nil -- fresh start for this gate index next lap
                 break -- only one candidate can actually be crossed in a single frame
             else

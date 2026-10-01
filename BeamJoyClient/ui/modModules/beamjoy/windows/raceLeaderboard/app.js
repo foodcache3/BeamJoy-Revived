@@ -1,18 +1,28 @@
-// shared by the race and delivery leaderboards : lap times, gaps and "set N days ago"
+// every race time on screen goes through here (leaderboards, race HUD, race info, the finished
+// popup) : lap times, gaps and "set N days ago"
 angular.module("beamjoy").factory("beamjoyLeaderboardFormat", function ($filter) {
     const translate = $filter("translate");
     const fill = (key, values) =>
         Object.keys(values).reduce((s, k) => s.split(`{${k}}`).join(values[k]), translate(key));
 
+    // 1:48.21, or 31:02:15.40 from an hour up. Rounded to hundredths BEFORE splitting into
+    // minutes and seconds : rounding the seconds on their own turned 1:59.996 into "1:60.00"
     const time = (ms) => {
         if (typeof ms !== "number" || ms < 0) return "-";
-        const totalSec = ms / 1000;
-        const min = Math.floor(totalSec / 60);
-        const sec = (totalSec % 60).toFixed(2);
-        return `${min}:${sec.padStart(5, "0")}`;
+        const cs = Math.round(ms / 10);
+        const h = Math.floor(cs / 360000);
+        const m = Math.floor(cs / 6000) % 60;
+        const sec = ((cs % 6000) / 100).toFixed(2).padStart(5, "0");
+        return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
     };
-    // seconds under a minute ("1.46"), a lap time past it
-    const gap = (ms) => (ms < 60000 ? (ms / 1000).toFixed(2) : time(ms));
+    // a gap or a sector time, unsigned : seconds under a minute ("1.46"), a clock time past it
+    // (endurance-race gaps run into minutes and hours, "2700.31" read as nothing useful)
+    const gap = (ms) => {
+        const abs = Math.abs(ms);
+        return Math.round(abs / 10) < 6000 ? (abs / 1000).toFixed(2) : time(abs);
+    };
+    // the same, with the "s" unit when it's in plain seconds ("1.46s", "1:05.20")
+    const gapS = (ms) => (Math.round(Math.abs(ms) / 10) < 6000 ? `${gap(ms)}s` : gap(ms));
 
     // unix seconds -> "Just now", "3 hours ago", "2 weeks ago"
     const ago = (unixSeconds) => {
@@ -28,7 +38,7 @@ angular.module("beamjoy").factory("beamjoyLeaderboardFormat", function ($filter)
         return fill("beamjoy.leaderboard.when.months", { n: n(sec / 2592000) });
     };
 
-    return { fill, time, gap, ago };
+    return { fill, time, gap, gapS, ago };
 });
 
 // One race's best-lap board : the record and your best on top, then the top 100 (or the places

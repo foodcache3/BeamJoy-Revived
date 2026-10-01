@@ -162,6 +162,9 @@
 ---@field state BJRaceSessionState
 ---@field createdAt integer
 ---@field startedAt integer?
+---@field goAtMs integer? the green light, on services_clockSync's shared clock. Set when the
+---countdown begins ; clients synced to that clock unfreeze and start their timers at exactly this
+---moment themselves, instead of whenever the RACE push happens to reach them
 ---@field joinCounter integer? monotonic source of BJRaceParticipant.joinIndex (see
 ---addParticipant); never decremented on leave
 ---@field participants tablelib<integer, BJRaceParticipant> index playerID
@@ -187,6 +190,11 @@ local M = {
     ---@type tablelib<integer, string> playerID -> sessionId
     spectators = Table(),
 }
+
+-- how early (ms, on the shared clock) a gate crossing may arrive while the server itself is still
+-- in COUNTDOWN : a synced client starts on its own at goAtMs, but the server only notices on its
+-- next ~100ms tick, and the client's clock estimate can be off by a little either way
+local GO_GRACE_MS = 1000
 
 ---@param session BJRaceSession
 ---@return BJRace?
@@ -382,12 +390,73 @@ local function resolveDisplayName(playerID, fallbackName)
     return services_identity.getIdentityKey(playerID) or fallbackName
 end
 
+-- per-gate tables never sent to clients : gateTimes holds every gate's crossing time, so on a
+-- track with hundreds of gates it was most of every session update, and it was only ever read to
+-- work out the gaps between racers, which the server now does itself (gapBetween below)
+local PAYLOAD_DROPPED_FIELDS = { gateTimes = true, bestLapGateTimes = true }
+
+--- the copy of a participant that goes out in session updates : shallow (nothing in a payload
+--- is modified after it's built), without the per-gate tables, plus a `displayName`
 ---@param p BJRaceParticipant
----@return table clone of p with a `displayName` field added
-local function withDisplayName(p)
-    local c = table.clone(p)
+---@return table
+local function payloadParticipant(p)
+    local c = {}
+    for k, v in pairs(p) do
+        if not PAYLOAD_DROPPED_FIELDS[k] then c[k] = v end
+    end
     c.displayName = resolveDisplayName(p.playerID, p.playerName)
     return c
+end
+
+---@param p BJRaceParticipant
+---@return integer
+local function lapTimesTotal(p)
+    local total = 0
+    for _, t in ipairs(p.lapTimes or {}) do total = total + t end
+    return total
+end
+
+--- the gap from `self` back to `other`, ms (positive : other is behind), or a whole-lap count once
+--- they're a genuine lap or more apart. Both nil when there's no meaningful gap (either retired,
+--- or one finished and the other still racing).
+---@param self BJRaceParticipant
+---@param other BJRaceParticipant
+---@param totalGates integer progress steps per lap (totalSteps)
+---@return integer? gapMs, integer? lapsDiff
+local function gapBetween(self, other, totalGates)
+    if self.dnf or other.dnf or self.finished ~= other.finished then return nil, nil end
+    if self.finished then
+        return lapTimesTotal(other) - lapTimesTotal(self), nil
+    end
+    local selfProgress = (self.currentLap - 1) * totalGates + self.currentGate
+    local otherProgress = (other.currentLap - 1) * totalGates + other.currentGate
+    -- whole laps from real gate progress, not the lap numbers : the leader's lap number goes up
+    -- the moment they cross the line, long before they're actually a lap ahead of anyone
+    if self.currentLap ~= other.currentLap and totalGates > 0 and
+        math.abs(selfProgress - otherProgress) >= totalGates then
+        local gateGap = selfProgress - otherProgress
+        return nil, (gateGap > 0 and 1 or -1) * math.floor(math.abs(gateGap) / totalGates)
+    end
+    -- compare both racers' race-cumulative times at the gate the TRAILING one is at (the latest
+    -- gate both have crossed). Same lap : the leader crossed it earlier this lap. Leader one lap
+    -- number ahead but less than a full lap of progress ahead : the leader hasn't reached that gate
+    -- again yet this lap, so their gateTimes entry still holds the previous lap's crossing, the
+    -- very lap the trailing racer is on. Either way the same physical point on the same lap.
+    -- (Fixed bug, reported as "splits drifting" on a 40-lap endurance race : this case used to add
+    -- each racer's completed lap times on top of their race-cumulative gate time, counting every
+    -- completed lap twice, so the gap came out wrong by about a lap time.)
+    local commonGate = math.min(self.currentGate, other.currentGate)
+    if self.currentLap ~= other.currentLap then
+        commonGate = (selfProgress < otherProgress and self or other).currentGate
+    end
+    if commonGate >= 1 then
+        local selfTime = self.gateTimes and self.gateTimes[commonGate]
+        local otherTime = other.gateTimes and other.gateTimes[commonGate]
+        if selfTime and otherTime then
+            return otherTime - selfTime, nil
+        end
+    end
+    return nil, nil
 end
 
 ---@param session BJRaceSession
@@ -409,20 +478,51 @@ local function summarize(session)
 end
 
 --- builds the outbound session payload shared by pushSessionUpdate and raceSpectate: participants
---- as a plain array (not the internal Table), the computed leaderboard, and, once actually racing,
---- a server-computed elapsed duration (raceElapsedMs), not a timestamp. session.startedAt is in
---- the server's own GetCurrentTime() clock domain, meaningless compared directly against a client's
---- own GetCurrentTimeMillis(). A plain duration crosses that boundary safely, letting any client
---- (including one that only started watching mid-race, e.g. a spectator) derive a correct elapsed
---- time locally without needing to have observed the actual RACE transition itself.
+--- as a plain array (not the internal Table) already in standings order (the client reads that same
+--- array as the leaderboard, there's no second copy), each with its gaps worked out here
+--- (aheadGapMs/aheadLapsDiff to the car in front, leaderGapMs/leaderLapsDiff to the leader), and,
+--- once actually racing, a server-computed elapsed duration (raceElapsedMs), not a timestamp.
+---
+--- Kept small on purpose. Every gate crossing by anyone sends this to every racer and spectator,
+--- and it used to carry each racer's time at every gate, plus a second full copy of every racer as
+--- the leaderboard : on a long track with many racers that was hundreds of KB per crossing, more
+--- than the server could encode and send (the reported 40-lap endurance race).
 ---@param session BJRaceSession
+---@param slim boolean? leave out `settings` (the client keeps the ones it already has, see
+---raceRunner.lua's onSessionUpdate) : only for gate-crossing pushes, the frequent ones, which
+---can't change settings and never reach anyone who hasn't already received them
 ---@return table
-local function buildSessionPayload(session)
-    local payload = table.clone(session)
-    payload.participants = table.map(session.participants:values(), withDisplayName)
-    payload.leaderboard = M.computeLeaderboard(session)
-    if session.state == "RACE" and session.startedAt then
-        payload.raceElapsedMs = math.floor((GetCurrentTime() - session.startedAt) * 1000)
+local function buildSessionPayload(session, slim)
+    local payload = {}
+    for k, v in pairs(session) do
+        if k ~= "participants" and not (slim and k == "settings") then payload[k] = v end
+    end
+
+    local race = getRace(session)
+    local totalGates = race and totalSteps(race) or 0
+    local ordered = M.computeLeaderboard(session)
+    local leader = ordered[1]
+    -- a still-racing row is measured against the leader as if the leader were still racing too,
+    -- so it keeps a gap after the leader has finished. A loopable race finishes on re-crossing
+    -- step 1, which leaves the finisher's currentLap on the final lap and currentGate back at 1 :
+    -- read as progress, that put a finished leader a whole lap BEHIND where they really are, so
+    -- every gap to them was nonsense for the rest of the final lap. They've completed that lap.
+    local racingLeader = leader and setmetatable({
+        finished = false,
+        currentLap = leader.currentLap + ((leader.finished and race and race.loopable) and 1 or 0),
+    }, { __index = leader })
+    payload.participants = {}
+    for i, p in ipairs(ordered) do
+        local row = payloadParticipant(p)
+        if i > 1 then
+            row.aheadGapMs, row.aheadLapsDiff = gapBetween(ordered[i - 1], p, totalGates)
+            row.leaderGapMs, row.leaderLapsDiff = gapBetween(p.finished and leader or racingLeader, p, totalGates)
+        end
+        payload.participants[i] = row
+    end
+
+    if session.state == "RACE" and session.goAtMs then
+        payload.raceElapsedMs = math.max(0, services_clockSync.nowMs() - session.goAtMs)
     end
     -- lobby-phase countdown feedback, same "push a duration, not a timestamp" reasoning as
     -- raceElapsedMs above (session.createdAt/allReadyAt are in the server's own GetCurrentTime()
@@ -450,7 +550,7 @@ local function buildSessionPayload(session)
     -- p.currentLap" alone would flag someone as a lapped backmarker the moment the leader crosses
     -- the line a fraction of a second ahead of them, even mid-pack and neck-and-neck, not actually
     -- lapped at all. Same class of bug (and same fix) as the client HUD's own "+1 lap" indicator.
-    -- See raceRunner.lua's describeOpponent: real gate-progress gap, only counted a genuine
+    -- See gapBetween above: real gate-progress gap, only counted a genuine
     -- backmarker once it's actually >= one full lap's worth of gates. leaderboard is already
     -- sorted "most progress first", so index 1 is the leader.
     --
@@ -459,13 +559,10 @@ local function buildSessionPayload(session)
     -- collision safety, since the two vehicles are already about to occupy the same space at that
     -- instant. Triggering a gate earlier gives the about-to-be-lapped car time to actually be
     -- ghosted before the leader arrives, not right as they do.
-    if session.settings.ghostBackmarkers and payload.leaderboard[1] then
-        local race = getRace(session)
-        local totalGates = race and totalSteps(race) or 0
+    if session.settings.ghostBackmarkers and leader then
         if totalGates > 0 then
             local BACKMARKER_GATE_SAFETY_MARGIN = 1
             local threshold = math.max(1, totalGates - BACKMARKER_GATE_SAFETY_MARGIN)
-            local leader = payload.leaderboard[1]
             local leaderProgress = (leader.currentLap - 1) * totalGates + (leader.currentGate or 0)
             table.forEach(payload.participants, function(p)
                 if p.finished or p.dnf then
@@ -485,16 +582,18 @@ end
 --- currently spectating this session. See M.spectators's own comment for why that has to be a
 --- separate channel rather than just also being sent "raceSessionUpdate"
 ---@param session BJRaceSession
-local function pushSessionUpdate(session)
-    local payload = buildSessionPayload(session)
-    session.participants:forEach(function(_, playerID)
-        communications_tx.sendToPlayer(playerID, "raceSessionUpdate", payload)
-    end)
+---@param slim boolean? see buildSessionPayload
+local function pushSessionUpdate(session, slim)
+    local payload = buildSessionPayload(session, slim)
+    -- encoded once per audience, not once per player (see communications_tx.sendToPlayers)
+    communications_tx.sendToPlayers(session.participants:keys(), "raceSessionUpdate", payload)
+    local watchers = {}
     M.spectators:forEach(function(sessionId, playerID)
-        if sessionId == session.id then
-            communications_tx.sendToPlayer(playerID, "raceSpectateUpdate", payload)
-        end
+        if sessionId == session.id then watchers[#watchers + 1] = playerID end
     end)
+    if #watchers > 0 then
+        communications_tx.sendToPlayers(watchers, "raceSpectateUpdate", payload)
+    end
 end
 
 --- pushes every session worth showing on the main HUD to every connected player: GRID+joinable
@@ -539,7 +638,8 @@ end
 ---@param session BJRaceSession
 ---@return BJRaceParticipant[]
 local function computeLeaderboard(session)
-    local list = table.map(session.participants:values(), withDisplayName)
+    local list = {}
+    session.participants:forEach(function(p) list[#list + 1] = p end)
     table.sort(list, function(a, b)
         if a.dnf ~= b.dnf then return not a.dnf end
         if a.finished ~= b.finished then return a.finished end
@@ -853,8 +953,13 @@ local function beginCountdown(session)
         end)
     end
 
-    utils_async.delayTask(function() M.beginRace(session.id) end,
-        session.settings.countdown, "BJRaceGrid-" .. session.id .. "-countdown")
+    -- the green light on the shared clock (see goAtMs). Polled every server tick rather than
+    -- utils_async.delayTask, whose whole-second clock fired up to ~2s after the countdown the
+    -- clients displayed
+    session.goAtMs = services_clockSync.nowMs() + math.floor(session.settings.countdown * 1000)
+    utils_async.task(function()
+        return services_clockSync.nowMs() >= session.goAtMs
+    end, function() M.beginRace(session.id) end, "BJRaceGrid-" .. session.id .. "-countdown")
     pushSessionUpdate(session)
     pushOpenSessionsList()
 end
@@ -1430,6 +1535,10 @@ end
 local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
     if not ctxt.sender then return end
     local session = M.sessions[sessionId]
+    if session and session.state == "COUNTDOWN" and session.goAtMs and
+        services_clockSync.nowMs() >= session.goAtMs - GO_GRACE_MS then
+        M.beginRace(session.id)
+    end
     if not session or session.state ~= "RACE" then return end
     local participant = session.participants[ctxt.senderID]
     if not participant or participant.finished or participant.dnf then return end
@@ -1582,7 +1691,8 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         end
     end
 
-    pushSessionUpdate(session)
+    -- slim : gate crossings are by far the most frequent pushes (see buildSessionPayload)
+    pushSessionUpdate(session, true)
 end
 
 ---@param ctxt BJSContext

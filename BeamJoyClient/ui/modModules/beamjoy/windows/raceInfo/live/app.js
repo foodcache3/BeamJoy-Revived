@@ -5,7 +5,7 @@
 // template getters : fresh arrays per digest break ng-repeat).
 angular.module("beamjoy").component("bjRaceInfoLive", {
     templateUrl: "/ui/modModules/beamjoy/windows/raceInfo/live/app.html",
-    controller: function ($rootScope, $scope, $filter, beamjoyStore, beamjoyInfoPanel) {
+    controller: function ($rootScope, $scope, $filter, beamjoyStore, beamjoyInfoPanel, beamjoyLeaderboardFormat) {
         const translate = (key) => $filter("translate")(key);
         const fill = (key, values) =>
             Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, v), translate(key));
@@ -13,20 +13,18 @@ angular.module("beamjoy").component("bjRaceInfoLive", {
         this.active = false;
         this.v = null;
 
-        const clock = (ms) => {
-            if (typeof ms !== "number" || ms < 0) return "-";
-            const totalSec = ms / 1000;
-            return `${Math.floor(totalSec / 60)}:${(totalSec % 60).toFixed(2).padStart(5, "0")}`;
-        };
-        const secs = (ms) => (typeof ms === "number" ? (ms / 1000).toFixed(2) : "-");
-        // generic {gapMs, lapsDiff} gap : both columns are describeOpponent()-derived (see
-        // raceRunner.lua's pushRaceInfo), measured against a different reference racer
+        // shared race time formats (hours from an hour up), see beamjoyLeaderboardFormat
+        const f = beamjoyLeaderboardFormat;
+        const clock = f.time;
+        const secs = (ms) => (typeof ms === "number" ? f.gap(ms) : "-");
+        // generic {gapMs, lapsDiff} gap : both columns come worked out by the server (raceGrid.lua's
+        // gapBetween, passed on by raceRunner.lua's pushRaceInfo), each against a different racer
         const gap = (gapMs, lapsDiff) => {
             if (typeof lapsDiff === "number" && lapsDiff !== 0) {
                 const n = Math.abs(lapsDiff);
                 return `+${n} ${translate(n > 1 ? "beamjoy.raceHud.laps" : "beamjoy.raceHud.lap")}`;
             }
-            if (typeof gapMs === "number" && gapMs !== 0) return `+${(Math.abs(gapMs) / 1000).toFixed(2)}s`;
+            if (typeof gapMs === "number" && gapMs !== 0) return `+${f.gapS(gapMs)}`;
             return "";
         };
         const total = (p) => (Array.isArray(p.lapTimes) ? p.lapTimes.reduce((a, b) => a + b, 0) : null);

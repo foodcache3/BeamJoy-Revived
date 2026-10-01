@@ -32,11 +32,13 @@ angular.module("beamjoy").component("bjInfectedInfoResults", {
             beamjoyStore.send("BJInfectedInfoRequest");
         };
 
+        // rounded to whole seconds BEFORE splitting into minutes : rounding the seconds on their
+        // own turned 0:59.6 into "0:60"
         this.formatTime = (ms) => {
             if (typeof ms !== "number" || ms < 0) return "-";
-            const totalSec = ms / 1000;
+            const totalSec = Math.round(ms / 1000);
             const min = Math.floor(totalSec / 60);
-            const sec = (totalSec % 60).toFixed(0).padStart(2, "0");
+            const sec = String(totalSec % 60).padStart(2, "0");
             return `${min}:${sec}`;
         };
     },

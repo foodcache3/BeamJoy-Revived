@@ -41,7 +41,7 @@ local M = {
         "services_permissions", "services_traffic", "services_consoleCommands",
         "services_activityConfig", "services_chatCommands", "services_environment",
         "services_broadcast", "services_maps", "services_mapVote", "services_kickVote",
-        "services_vehiclePresets", "services_races", "services_raceGrid",
+        "services_clockSync", "services_vehiclePresets", "services_races", "services_raceGrid",
         "services_hunter", "services_hunterGrid",
         "services_infected", "services_infectedGrid",
         "services_freeroamData",
