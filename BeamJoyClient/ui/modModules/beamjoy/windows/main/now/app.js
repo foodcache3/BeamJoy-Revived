@@ -10,9 +10,10 @@ angular.module("beamjoy").service("beamjoyNow", function ($rootScope, beamjoySto
     this.races = [];
     this.hunts = [];
     this.infected = [];
+    this.derbies = [];
     // delivery convoys forming anywhere on the map (beamjoy/delivery.lua BJDeliveryConvoys)
     this.convoys = [];
-    this.status = { race: null, hunter: null, infected: null, convoy: null, delivery: null, bus: null };
+    this.status = { race: null, hunter: null, infected: null, derby: null, convoy: null, delivery: null, bus: null };
     // a race's start form being filled in, kept while the Activities panel and the full window
     // swap (both mount their own copy of the races component)
     this.raceDraft = null;
@@ -20,10 +21,12 @@ angular.module("beamjoy").service("beamjoyNow", function ($rootScope, beamjoySto
     $rootScope.$on("BJRaceOpenSessions", (_, list) => (this.races = asList(list)));
     $rootScope.$on("BJHunterOpenSessions", (_, list) => (this.hunts = asList(list)));
     $rootScope.$on("BJInfectedOpenSessions", (_, list) => (this.infected = asList(list)));
+    $rootScope.$on("BJDerbyOpenSessions", (_, list) => (this.derbies = asList(list)));
     $rootScope.$on("BJDeliveryConvoys", (_, list) => (this.convoys = asList(list)));
     $rootScope.$on("BJRaceSessionStatus", (_, s) => (this.status.race = s || null));
     $rootScope.$on("BJHunterSessionStatus", (_, s) => (this.status.hunter = s || null));
     $rootScope.$on("BJInfectedSessionStatus", (_, s) => (this.status.infected = s || null));
+    $rootScope.$on("BJDerbySessionStatus", (_, s) => (this.status.derby = s || null));
     $rootScope.$on("BJDeliveryLobby", (_, d) => (this.status.convoy = d && d.open ? d : null));
     $rootScope.$on("BJDeliveryHud", (_, d) => (this.status.delivery = d && d.active ? d : null));
     $rootScope.$on("BJBusHud", (_, d) => (this.status.bus = d && d.active ? d : null));
@@ -33,9 +36,11 @@ angular.module("beamjoy").service("beamjoyNow", function ($rootScope, beamjoySto
             "BJRaceOpenSessionsRequest",
             "BJHunterOpenSessionsRequest",
             "BJInfectedOpenSessionsRequest",
+            "BJDerbyOpenSessionsRequest",
             "BJRaceSessionStatusRequest",
             "BJHunterSessionStatusRequest",
             "BJInfectedSessionStatusRequest",
+            "BJDerbySessionStatusRequest",
             "BJDeliveryLobbyRequest",
             "BJDeliveryConvoysRequest",
         ].forEach((event) => beamjoyStore.send(event));
@@ -49,6 +54,7 @@ angular.module("beamjoy").service("beamjoyNow", function ($rootScope, beamjoySto
         if (s.race && (s.race.state === "COUNTDOWN" || s.race.state === "RACE")) return `race:${s.race.id}`;
         if (s.hunter && (s.hunter.state === "COUNTDOWN" || s.hunter.state === "HUNT")) return `hunter:${s.hunter.id}`;
         if (s.infected && (s.infected.state === "COUNTDOWN" || s.infected.state === "GAME")) return `infected:${s.infected.id}`;
+        if (s.derby && (s.derby.state === "COUNTDOWN" || s.derby.state === "GAME")) return `derby:${s.derby.id}`;
         if (s.delivery) return "delivery";
         if (s.bus) return "bus";
         return null;
@@ -59,6 +65,7 @@ angular.module("beamjoy").service("beamjoyNow", function ($rootScope, beamjoySto
         if (s.race) return "races";
         if (s.hunter) return "hunter";
         if (s.infected) return "infected";
+        if (s.derby) return "derby";
         if (s.convoy || s.delivery) return "jobs";
         if (s.bus) return "busLines";
         return null;
@@ -70,6 +77,7 @@ angular.module("beamjoy").service("beamjoyNow", function ($rootScope, beamjoySto
             : this.races.filter(lobby).length +
               this.hunts.filter(lobby).length +
               this.infected.filter(lobby).length +
+              this.derbies.filter(lobby).length +
               this.convoys.filter((c) => c.count < c.max).length;
 });
 
@@ -145,6 +153,15 @@ angular.module("beamjoy").component("bjMainNow", {
                     timer: lobbyTimer(s.infected, "LOBBY"),
                 };
             }
+            if (s.derby) {
+                return {
+                    section: "derby",
+                    title: s.derby.arenaName || translate("beamjoy.window.main.now.kind.derby"),
+                    line: fill(`beamjoy.window.main.now.mine.${s.derby.state === "LOBBY" ? "lobby" : "running"}`,
+                        { count: s.derby.participantCount || 0, max: s.derby.maxParticipants || 0 }),
+                    timer: lobbyTimer(s.derby, "LOBBY"),
+                };
+            }
             if (s.convoy) {
                 return {
                     section: "jobs",
@@ -178,9 +195,11 @@ angular.module("beamjoy").component("bjMainNow", {
         let cacheKey = null;
         let cacheRows = [];
         this.rows = () => {
-            const mineId = (beamjoyNow.status.race || beamjoyNow.status.hunter || beamjoyNow.status.infected || {}).id;
+            const mineId = (beamjoyNow.status.race || beamjoyNow.status.hunter || beamjoyNow.status.infected ||
+                beamjoyNow.status.derby || {}).id;
             const convoyId = beamjoyNow.status.convoy ? beamjoyNow.status.convoy.id : null;
-            const key = [beamjoyNow.races, beamjoyNow.hunts, beamjoyNow.infected, beamjoyNow.convoys, mineId, convoyId];
+            const key = [beamjoyNow.races, beamjoyNow.hunts, beamjoyNow.infected, beamjoyNow.derbies, beamjoyNow.convoys,
+                mineId, convoyId];
             if (cacheKey && key.every((v, i) => v === cacheKey[i])) return cacheRows;
             cacheKey = key;
             const rows = [];
@@ -203,6 +222,7 @@ angular.module("beamjoy").component("bjMainNow", {
             beamjoyNow.races.forEach((s) => add("race", s, s.raceName || translate("beamjoy.window.main.now.kind.race")));
             beamjoyNow.hunts.forEach((s) => add("hunter", s, translate("beamjoy.window.main.now.kind.hunter")));
             beamjoyNow.infected.forEach((s) => add("infected", s, translate("beamjoy.window.main.now.kind.infected")));
+            beamjoyNow.derbies.forEach((s) => add("derby", s, s.raceName || translate("beamjoy.window.main.now.kind.derby")));
             beamjoyNow.convoys.forEach((c) => {
                 if (c.id === convoyId) return;
                 const open = c.count < c.max;
@@ -230,7 +250,7 @@ angular.module("beamjoy").component("bjMainNow", {
         this.join = (row) => {
             // joining a convoy works from anywhere : you're brought to the depot when it leaves
             if (row.kind === "convoy") return beamjoyStore.send("BJDeliveryJobsJoin", [row.session.id]);
-            const event = { race: "BJRaceJoin", hunter: "BJHunterJoin", infected: "BJInfectedJoin" }[row.kind];
+            const event = { race: "BJRaceJoin", hunter: "BJHunterJoin", infected: "BJInfectedJoin", derby: "BJDerbyJoin" }[row.kind];
             beamjoyStore.send(event, [row.session.id]);
         };
         this.spectate = (row) => beamjoyStore.send("BJRaceSpectate", [row.session.id]);

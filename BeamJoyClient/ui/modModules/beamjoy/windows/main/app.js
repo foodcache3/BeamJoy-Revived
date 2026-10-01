@@ -101,6 +101,16 @@ angular.module("beamjoy").component("bjMain", {
                 }
             });
         });
+        // an activity's Leaderboard button : the full window's Leaderboards, on that activity
+        // (read on init by the Leaderboards component, which may not be mounted yet)
+        $rootScope.$on("BJMainOpenLeaderboards", (_, section) => {
+            $rootScope.$applyAsync(() => {
+                $rootScope.bjLeaderboardsSection = section || null;
+                $rootScope.$broadcast("BJLeaderboardsSection", section);
+                this.openFull("leaderboards");
+                if (!this.pad) beamjoyStore.send("BJMainPadFocus", ["full"]);
+            });
+        });
         // something needs the screen (a bus line's vehicle picker) : close the menu, let go of the pad
         $rootScope.$on("BJMainClose", () => {
             $rootScope.$applyAsync(() => {

@@ -40,6 +40,16 @@
 ---@field defaultRadius number? only used when hasRadius ; default 5
 ---@field min integer? default 0, purely informational (the host's own save-time validation is
 ---still authoritative: this module never blocks a mutation over it)
+---@field max integer? at most this many points (the derby's single sumo circle) ; creating more
+---is refused
+---@field flatRadius boolean? only with hasRadius : drawn as a flat circle on the ground instead of
+---a sphere (a big area like the sumo circle), and picked by its centre only
+---@field drawExtra (fun(item: table, color: table))? extra world shapes drawn with each point
+---@field drawItem (fun(item: table, color: table, text: string): boolean)? draws an item itself
+---instead of the usual marker when it returns true (the derby's rectangular sumo zone)
+---
+---An item that carries a `dir` of its own (the host set one, e.g. the derby's rectangle) is
+---rotated by the gizmo and set from the vehicle's facing the same way as a hasDir list's items.
 
 ---@class BJPointListEditorEvents wire event names: explicit, not templated from a shared prefix,
 ---so a consumer can keep whatever naming it already established (or wants) without this module
@@ -161,7 +171,14 @@ local function new(config)
                 local color = active and ACTIVE_COLOR or spec.color
                 local text = (spec.hasName and type(item.name) == "string" and #item.name > 0)
                     and item.name or string.format("%s %d", label, i)
-                if spec.hasRadius then
+                if spec.drawItem and spec.drawItem(item, color, text) then
+                    -- drawn by the host
+                elseif spec.hasRadius and spec.flatRadius then
+                    local radius = item.radius or spec.defaultRadius or 5
+                    shape.addCylinder(pos - vec3(0, 0, .05), pos + vec3(0, 0, .05), radius, color)
+                    shape.addSphere(pos, .5, color)
+                    shape.addText(text, pos + vec3(0, 0, 1.5), color, TEXT_BG)
+                elseif spec.hasRadius then
                     local radius = item.radius or spec.defaultRadius or 5
                     shape.addSphere(pos, radius, color)
                     shape.addText(text, pos + vec3(0, 0, radius + 1), color, TEXT_BG)
@@ -173,6 +190,7 @@ local function new(config)
                     end
                     shape.addText(text, pos + vec3(0, 0, 1.5), color, TEXT_BG)
                 end
+                if spec.drawExtra then spec.drawExtra(item, color) end
             end)
         end
     end
@@ -184,15 +202,16 @@ local function new(config)
         local spec = listKey and specByKey[listKey]
         local item = spec and state.lists[listKey][index]
         if not item then return end
+        local hasDir = spec.hasDir or item.dir ~= nil
         gizmo.show({
             pos = vec3(item.pos.x, item.pos.y, item.pos.z),
-            dir = spec.hasDir and vec3(item.dir.x, item.dir.y, item.dir.z) or vec3(1, 0, 0),
+            dir = hasDir and vec3(item.dir.x, item.dir.y, item.dir.z) or vec3(1, 0, 0),
             up = vec3(0, 0, 1),
             scales = vec3(1, 1, 1), -- radius is Angular-side, not the native scale tool ; see file header
         }, function(updated) ---@param updated GizmoObject
             if not config.isActive() then return end
             item.pos = { x = updated.pos.x, y = updated.pos.y, z = updated.pos.z }
-            if spec.hasDir then
+            if hasDir then
                 local flatDir = vec3(updated.dir.x, updated.dir.y, 0)
                 if flatDir:length() < 1e-4 then
                     flatDir = vec3(item.dir.x, item.dir.y, 0)
@@ -231,6 +250,7 @@ local function new(config)
         if not config.isActive() then return end
         local spec = specByKey[listKey]
         if not spec then return end
+        if spec.max and #state.lists[listKey] >= spec.max then return end
         local pos, dir = currentPositionDirection(state.snapToGroundEnabled, state.snapMethod)
         if not pos then return end
         local item
@@ -258,7 +278,7 @@ local function new(config)
         if not item then return end
         local current = beamjoy_vehicles.getCurrentOwn()
         if not current then return end
-        local dir = spec.hasDir and vec3(item.dir.x, item.dir.y, item.dir.z) or vec3(1, 0, 0)
+        local dir = (spec.hasDir or item.dir) and vec3(item.dir.x, item.dir.y, item.dir.z) or vec3(1, 0, 0)
         beamjoy_vehicles.setVehiclePositionRotation(current.veh,
             vec3(item.pos.x, item.pos.y, item.pos.z), dir, vec3(0, 0, 1))
     end
@@ -288,7 +308,7 @@ local function new(config)
         local pos, dir = currentPositionDirection(state.snapToGroundEnabled, state.snapMethod)
         if not pos then return end
         item.pos = { x = pos.x, y = pos.y, z = pos.z }
-        if spec.hasDir then item.dir = { x = dir.x, y = dir.y, z = 0 } end
+        if spec.hasDir or item.dir then item.dir = { x = dir.x, y = dir.y, z = 0 } end
         renderAll()
         updateGizmo(listKey, index)
         pushListsUpdate()
@@ -389,7 +409,8 @@ local function new(config)
                 local along = (pos - camPos):dot(rayDir)
                 if along > 0 then
                     local closest = camPos + rayDir * along
-                    local radius = spec.hasRadius and math.max(1.5, item.radius or spec.defaultRadius or 5) or 1.5
+                    local radius = (spec.hasRadius and not spec.flatRadius) and
+                        math.max(1.5, item.radius or spec.defaultRadius or 5) or 1.5
                     if closest:distance(pos) <= radius and (not bestAlong or along < bestAlong) then
                         bestList, bestIndex, bestAlong = spec.key, i, along
                     end
@@ -403,14 +424,21 @@ local function new(config)
     end
 
     ---@param snapshot table<string, table[]> the host's own saved data, keyed by list key
-    local function open(snapshot)
+    ---@param keepSelection boolean? the same data again (it was just saved) : the selected point
+    ---stays selected while it still exists
+    local function open(snapshot, keepSelection)
         snapshot = snapshot or {}
         for _, spec in ipairs(config.lists) do
             state.lists[spec.key] = table.clone(snapshot[spec.key] or {})
         end
-        state.activeList, state.activeIndex = nil, nil
+        local kept = keepSelection and state.activeList and state.lists[state.activeList] and
+            state.lists[state.activeList][state.activeIndex]
+        if not kept then state.activeList, state.activeIndex = nil, nil end
         state.dirty = false
         renderAll()
+        -- the gizmo follows the selection : back on the kept point, or hidden. It used to be left
+        -- on screen with nothing selected once a save reloaded the arena
+        updateGizmo(state.activeList, state.activeIndex)
         pushFullState()
     end
 
@@ -460,6 +488,10 @@ local function new(config)
             pushFullState()
         end,
         getLists = function() return state.lists end,
+        -- the selected point : list key, 1-based index (both nil when nothing is selected)
+        getActive = function() return state.activeList, state.activeIndex end,
+        -- redraw the world shapes (a host setting a drawExtra reads just changed)
+        redraw = renderAll,
         isDirty = function() return state.dirty end,
         -- exposed so the host can flag dirty for its OWN non-list fields too (e.g. an `enabled`
         -- toggle or gameplay defaults). Dirty-ness is a whole-arena concept, this module only

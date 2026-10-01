@@ -62,14 +62,15 @@ end
 --- (re)loads M.enabled/defaults + the point lists from beamjoy_infected.data's current snapshot.
 --- shared by onOpen (first mount) and onArenaChanged (a legacy import, or any other server-side
 --- write, landing while this editor is already the active one)
-local function refresh()
+---@param keepSelection boolean? the same arena again (a save, an import) : the selected point stays
+local function refresh(keepSelection)
     local arena = beamjoy_infected.data or {}
     M.enabled = arena.enabled == true
     M.defaults = table.clone(arena.defaults or {})
     listEditor.open({
         survivorSpawns = arena.survivorSpawns,
         infectedSpawns = arena.infectedSpawns,
-    })
+    }, keepSelection)
     pushMeta()
 end
 
@@ -89,7 +90,7 @@ end
 --- own onArenaChanged.
 local function onArenaChanged()
     if not parent or parent.activeEditor ~= M then return end
-    refresh()
+    refresh(true)
 end
 
 ---@param enabled boolean

@@ -46,6 +46,7 @@
         </h5>
         <button
             class="btn success"
+            ng-if="!list.max || ($ctrl.data[list.key] || []).length < list.max"
             ng-click="$ctrl.create($event, list.key)"
             title="{{'beamjoy.window.config.editor.pointList.addAtCurrentPosition' | translate}}"
         >

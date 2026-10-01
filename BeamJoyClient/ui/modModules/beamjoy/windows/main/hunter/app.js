@@ -203,13 +203,8 @@ angular.module("beamjoy").component("bjMainHunter", {
             this.starting = false;
             this.startOptions = null;
         };
-        this.presetsPicked = () =>
-            !!this.startOptions &&
-            !!this.presetById(this.startOptions.huntedVehiclePresetId) &&
-            !!this.presetById(this.startOptions.huntersVehiclePresetId);
         this.confirmStart = (event) => {
             event.stopPropagation();
-            if (!this.presetsPicked()) return;
             beamjoyStore.send("BJHunterStart", [this.startOptions]);
             this.starting = false;
             this.startOptions = null;

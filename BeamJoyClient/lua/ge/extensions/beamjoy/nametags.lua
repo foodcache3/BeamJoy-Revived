@@ -182,6 +182,11 @@ local function drawNametag(mpVeh, orig)
         if isParticipant then
             textColor, bgColor = infTextColor, infBgColor
         end
+        -- Derby : a player who's out keeps a greyed tag over their wreck
+        local isOut, derbyTextColor, derbyBgColor = beamjoy_derbyRunner.derbyNametagColor(mpVeh)
+        if isOut then
+            textColor, bgColor = derbyTextColor, derbyBgColor
+        end
     end
 
     local dist = math.round(orig:distance(mpVeh.position) or 0)

@@ -7,7 +7,7 @@
 // beamjoy/mainNav.lua), kept on $rootScope.bjFocusLabel for every hint in the UI.
 angular.module("beamjoy").component("bjNotices", {
     templateUrl: "/ui/modModules/beamjoy/windows/notices/app.html",
-    controller: function ($rootScope, $scope, $filter, beamjoyStore, beamjoyDelivery) {
+    controller: function ($rootScope, $scope, $filter, beamjoyStore, beamjoyDelivery, beamjoyInfoPanel) {
         const translate = $filter("translate");
         this.items = [];
         this.padActive = false;
@@ -31,11 +31,12 @@ angular.module("beamjoy").component("bjNotices", {
             race: "beamjoy.notices.kind.race",
             hunter: "beamjoy.notices.kind.hunter",
             infected: "beamjoy.notices.kind.infected",
+            derby: "beamjoy.notices.kind.derby",
             crew: "beamjoy.notices.kind.crew",
             convoy: "beamjoy.notices.kind.convoy",
         };
         this.heading = (n) =>
-            translate(`beamjoy.notices.${n.type}.title`)
+            translate(`beamjoy.notices.${n.type}.title${n.type === "results" && !n.fromName ? ".noWinner" : ""}`)
                 .replace("{name}", n.fromName || "?")
                 .replace("{kind}", translate(KIND[n.kind] || KIND.race));
         this.body = (n) => {
@@ -46,8 +47,25 @@ angular.module("beamjoy").component("bjNotices", {
         };
         this.progress = (n) => `${Math.max(0, Math.min(100, ((n.expiresIn || 0) / (n.total || 1)) * 100))}%`;
         // what A does : join, or (already in, brought by your crew) open it
-        this.acceptLabel = (n) => (n.type === "pulled" ? "beamjoy.notices.openLobby" : "beamjoy.notices.join");
-        this.reply = (n, accept) => beamjoyStore.send("BJNoticeReply", [n.id, accept]);
+        this.acceptLabel = (n) =>
+            n.type === "pulled" ? "beamjoy.notices.openLobby"
+                : n.type === "results" ? "beamjoy.notices.openResults" : "beamjoy.notices.join";
+        // a finished game's results : the same info panel tab its section opens
+        const RESULTS = {
+            derby: {
+                title: "beamjoy.window.main.tabs.derby.title",
+                tab: "beamjoy.window.main.tabs.derby.results.title",
+                template: "<bj-derby-info-results></bj-derby-info-results>",
+            },
+        };
+        this.reply = (n, accept) => {
+            const results = accept && n.type === "results" && RESULTS[n.kind];
+            if (results) {
+                beamjoyInfoPanel.open(translate(results.title),
+                    [{ id: "results", title: results.tab, template: results.template }], "results");
+            }
+            beamjoyStore.send("BJNoticeReply", [n.id, accept]);
+        };
         // the main window has the pad : the stack steps back until it's focused again
         this.dimmed = () => !this.padActive && $rootScope.bjMainPadActive === true;
 

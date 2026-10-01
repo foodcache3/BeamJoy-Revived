@@ -433,7 +433,7 @@ end
 --- the crew's leader just opened a lobby : join every free crewmate into it through the
 --- activity's own join handler (which re-checks everything, a full lobby included)
 ---@param leaderID integer
----@param kind "race"|"hunter"|"infected"|"convoy"
+---@param kind "race"|"hunter"|"infected"|"derby"|"convoy"
 ---@param sessionId any
 local function pullIn(leaderID, kind, sessionId)
     local names = freeCrewmates(leaderID)
@@ -443,13 +443,15 @@ local function pullIn(leaderID, kind, sessionId)
         race = function(ctxt) services_raceGrid.raceJoin(ctxt, sessionId) end,
         hunter = function(ctxt) services_hunterGrid.hunterJoin(ctxt, sessionId) end,
         infected = function(ctxt) services_infectedGrid.infectedJoin(ctxt, sessionId) end,
+        derby = function(ctxt) services_derbyGrid.derbyJoin(ctxt, sessionId) end,
         convoy = function(ctxt) services_deliveries.deliveryConvoyJoin(ctxt, sessionId) end,
     })[kind]
     if not join then return end
     local leaderName = leader and (leader.displayName or leader.playerName) or "?"
     -- the lobby's name, for the notice (a convoy's job shows in its own lobby panel)
     local title
-    local grid = ({ race = services_raceGrid, hunter = services_hunterGrid, infected = services_infectedGrid })[kind]
+    local grid = ({ race = services_raceGrid, hunter = services_hunterGrid, infected = services_infectedGrid,
+        derby = services_derbyGrid })[kind]
     if grid and grid.sessions and grid.sessions[sessionId] and grid.summarize then
         title = grid.summarize(grid.sessions[sessionId]).raceName
     end

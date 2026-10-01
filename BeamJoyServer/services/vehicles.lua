@@ -149,6 +149,7 @@ local function onVehicleEdited(playerID, vehID, vehDataStr)
     services_raceGrid.unreadyOnVehicleChange(playerID)
     services_hunterGrid.unreadyOnVehicleChange(playerID)
     services_infectedGrid.unreadyOnVehicleChange(playerID)
+    services_derbyGrid.unreadyOnVehicleChange(playerID)
 end
 
 ---@param playerID integer

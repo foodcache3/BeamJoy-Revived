@@ -44,6 +44,7 @@ local M = {
         "services_clockSync", "services_vehiclePresets", "services_races", "services_raceGrid",
         "services_hunter", "services_hunterGrid",
         "services_infected", "services_infectedGrid",
+        "services_derby", "services_derbyGrid",
         "services_freeroamData",
         "services_busLines", "services_busRuns",
         "services_deliveryPoints", "services_deliveries", "services_lobbyInvites", "services_crews",
@@ -148,6 +149,20 @@ local function loadExtensions()
     extensions.hook("onInit")
 end
 
+--- BeamJoyServerHooks is a separate plugin folder (Resources/Server/BeamJoyServerHooks) that
+--- relays chat and console input to BeamJoy (see its own header for why). Real, reported case : a
+--- fresh install without that folder started with no error at all, but every `bj` console command
+--- answered "Unknown command" and chat never reached BeamJoy. Nothing inside this plugin can tell
+--- the events aren't coming, so check for the folder and say so loudly at startup instead.
+local function checkHooksPlugin()
+    local hooksFile = BJSPluginPath:gsub("BeamJoyServer$", "BeamJoyServerHooks") .. "/BeamJoyServerHooks.lua"
+    if not FS.Exists(hooksFile) then
+        LogError("BeamJoyServerHooks plugin not found (expected " .. hooksFile .. "). Chat, chat " ..
+            "commands and `bj` console commands won't work until the BeamJoyServerHooks folder from " ..
+            "the release zip is copied next to BeamJoyServer in Resources/Server, then the server restarted.")
+    end
+end
+
 local function loadHooks()
     for hook, data in pairs({
         BJSUpdate = { handler = "onUpdate", timer = 100 },
@@ -192,6 +207,7 @@ function _G.onInit() ---@diagnostic disable-line
     end
     loadExtensions()
     loadHooks()
+    checkHooksPlugin()
     LogInfo(string.format("BeamJoyServer loaded (v%s, build %d)", M.VERSION, M.BUILD))
 end
 

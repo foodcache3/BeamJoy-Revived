@@ -157,7 +157,6 @@ local function registerVehicle(vid, callback)
         M.vehicles[vid] = {
             vid = vid,
             serverVID = mpVeh.serverVehicleID,
-            serverVehicleString = mpVeh.serverVehicleString, -- "ownerID-slot", see onVehicleDestroyed
             remoteVID = mpVeh.remoteVehID ~= -1 and mpVeh.remoteVehID or vid,
             ownerID = owner.playerID,
             ownerName = owner.playerName,
@@ -302,11 +301,6 @@ local function onVehicleSwitched(previousVID, newVID)
     end
 end
 
--- Neutral position packet: tim = -1 makes BeamMP's positionVE treat it as "no data yet" (its
--- updateGFX bails while remoteData.timer < 0), while still being newer than nothing, so the very
--- next real packet (tim >= 0) is accepted normally.
-local NEUTRAL_POS_PACKET = '{"tim":-1,"ping":0,"pos":[0,0,0],"rot":[0,0,0,1],"vel":[0,0,0],"rvel":[0,0,0]}'
-
 -- PreserveFuelOnReset (Freeroam) support ------------------------------------------------------
 -- From old BeamJoy. Native vehicle reset (Ctrl+R) always refills every energy storage back to
 -- spawn state - confirmed by reading the installed game's own `lua/vehicle/main.lua`:
@@ -379,40 +373,8 @@ _bjPreserveFuelOnReset={1}
 end
 
 local function onVehicleDestroyed(vid)
-    -- Real, log-confirmed fix for "another player's beamling is desynced for a long time" (also
-    -- applies to any remote vehicle, the unicycle just triggers it constantly). BeamMP delivers a
-    -- remote vehicle's position packets through an engine mailbox named after its server vehicle
-    -- ID ("vehPosPckt<ownerID>-<slot>"), and the server hands the freed slot straight to that
-    -- player's next vehicle - every get-out-and-walk reuses the same ID as the previous unicycle.
-    -- The mailbox keeps the OLD vehicle's last packet. The new copy's positionVE reads it as
-    -- unread data on its first frame, teleports to where the old copy last was, and records that
-    -- packet's timestamp. Timestamps are the SENDER's per-vehicle clock, which restarts at 0 for
-    -- the new vehicle, so every real packet is then rejected as "older" (`remoteData.timer > tim`)
-    -- until the new vehicle has existed as long as the old one did. Captured with temporary
-    -- position logging: a new copy sat exactly on the previous unicycle's last spot, 5-7m from
-    -- the packets, for ~3s after a ~4s-old unicycle. It's a race (a fresh packet normally
-    -- overwrites the stale one before the new copy reads it), which is why pure vanilla rarely
-    -- shows it while a BJS server hit it constantly. Overwriting the mailbox with a neutral packet
-    -- the moment the old copy is gone removes the race entirely. Confirmed fixed live (build 2421).
-    local serverVehicleString
-    local mpVeh = M.vehicles[vid]
-    if mpVeh then
-        if not mpVeh.isLocal then serverVehicleString = mpVeh.serverVehicleString end
-    else
-        -- a copy destroyed before registerVehicle's async job finished (get in/out within a
-        -- fraction of a second) never made it into M.vehicles ; ask BeamMP directly instead
-        for sid, v in pairs(MPVehicleGE.getVehicles()) do
-            if v.gameVehicleID == vid and not v.isLocal then
-                serverVehicleString = sid
-                break
-            end
-        end
-    end
-    if type(serverVehicleString) == "string" then
-        pcall(function()
-            be:sendToMailbox("vehPosPckt" .. serverVehicleString, NEUTRAL_POS_PACKET)
-        end)
-    end
+    -- (the stale position mailbox a reused vehicle id inherited, which desynced remote unicycles,
+    -- is cleared by BeamMP itself now : BeamMP/BeamMP#974)
     M.vehicles[vid] = nil
     M.ghostReasons[vid] = nil
 end

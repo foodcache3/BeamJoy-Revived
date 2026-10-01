@@ -720,11 +720,6 @@ local function hunterStart(ctxt, opts)
 
     opts = opts or {}
     local settings = buildSettings(arena, opts)
-    if not settings.huntedVehiclePool or #settings.huntedVehiclePool == 0 or
-        not settings.huntersVehiclePool or #settings.huntersVehiclePool == 0 then
-        return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
-            services_lang.get("error.hunter.needVehiclePresets", ctxt.sender.lang))
-    end
     ---@type BJHunterSession
     local session = {
         id = UUID(),

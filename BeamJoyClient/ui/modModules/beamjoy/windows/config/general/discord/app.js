@@ -14,6 +14,7 @@ const TOGGLES = {
     Deliveries: false,
     Hunter: false,
     Infected: false,
+    Derby: false,
     BusLines: false,
 };
 

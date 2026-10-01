@@ -1,0 +1,168 @@
+<style>
+    #beamjoy-derby-hud {
+        position: fixed;
+        top: 2vh;
+        right: 1vw;
+        z-index: 4;
+        width: 16em;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        color: white;
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 0.5em;
+        padding: 0.7em 0.9em;
+    }
+    #beamjoy-derby-hud .hud-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 0.35em;
+        font-weight: bold;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    }
+    #beamjoy-derby-hud .hud-mode {
+        color: #ff9a57;
+    }
+    #beamjoy-derby-hud .hud-timer {
+        font-variant-numeric: tabular-nums;
+        font-weight: bold;
+        font-size: 1.6em;
+        line-height: 1.1;
+        margin-bottom: 0.3em;
+    }
+    #beamjoy-derby-hud .hud-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.9em;
+        opacity: 0.85;
+        margin-bottom: 0.15em;
+        font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-derby-hud .hud-row.zone {
+        color: #8fb8ff;
+    }
+    #beamjoy-derby-hud .hud-warn {
+        position: relative;
+        margin: 0.4em 0 0.2em;
+        padding: 0.3em 0.5em;
+        border-radius: 0.3em;
+        font-weight: bold;
+        text-align: center;
+        overflow: hidden;
+        background: rgba(255, 82, 82, 0.2);
+        color: #ff8a80;
+    }
+    #beamjoy-derby-hud .hud-warn .fill {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        background: rgba(255, 82, 82, 0.3);
+        transition: width 0.25s linear;
+    }
+    #beamjoy-derby-hud .hud-warn .label {
+        position: relative;
+    }
+    #beamjoy-derby-hud .hud-info {
+        margin: 0.4em 0 0.2em;
+        padding: 0.3em 0.5em;
+        border-radius: 0.3em;
+        text-align: center;
+        background: rgba(255, 255, 255, 0.08);
+        font-size: 0.9em;
+    }
+    #beamjoy-derby-hud .hud-feed {
+        margin-top: 0.5em;
+        padding-top: 0.4em;
+        border-top: thin solid rgba(255, 255, 255, 0.2);
+        font-size: 0.85em;
+    }
+    #beamjoy-derby-hud .hud-feed div {
+        margin-bottom: 0.15em;
+    }
+    #beamjoy-derby-hud .hud-feed .you {
+        color: #ffc768;
+        font-weight: bold;
+    }
+    #beamjoy-derby-hud .hud-hold-btn {
+        position: relative;
+        display: block;
+        width: 100%;
+        margin-top: 0.5em;
+        padding: 0.35em 0.5em;
+        text-align: center;
+        font-size: 0.85em;
+        font-weight: bold;
+        color: white;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        border-radius: 0.3em;
+        overflow: hidden;
+        cursor: pointer;
+        user-select: none;
+    }
+    #beamjoy-derby-hud .hud-hold-btn .fill {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        background: rgba(255, 82, 82, 0.45);
+        transition: width 0.1s linear;
+    }
+    #beamjoy-derby-hud .hud-hold-btn .label {
+        position: relative;
+    }
+</style>
+
+<div id="beamjoy-derby-hud" ng-if="$ctrl.hud.active">
+    <div class="hud-header">
+        <span>{{$ctrl.hud.arenaName || ('beamjoy.window.main.tabs.derby.title' | translate)}}</span>
+        <span class="hud-mode">{{$ctrl.modeLabel()}}</span>
+    </div>
+    <div class="hud-timer" role="timer">{{$ctrl.clock()}}</div>
+
+    <div class="hud-row" ng-if="$ctrl.hud.mode !== 'timed'">
+        <span>{{'beamjoy.window.derbyHud.carsLeft' | translate}}</span>
+        <span>{{$ctrl.hud.alive}} / {{$ctrl.hud.total}}</span>
+    </div>
+    <div class="hud-row" ng-if="!$ctrl.hud.spectating && $ctrl.hud.mode !== 'timed' && !$ctrl.hud.eliminated">
+        <span>{{'beamjoy.window.derbyHud.lives' | translate}}</span>
+        <span>{{$ctrl.hud.lives}}</span>
+    </div>
+    <div class="hud-row" ng-if="!$ctrl.hud.spectating">
+        <span>{{'beamjoy.window.derbyHud.wrecks' | translate}}</span>
+        <span>{{$ctrl.hud.wrecks}}</span>
+    </div>
+    <div class="hud-row" ng-if="!$ctrl.hud.spectating && $ctrl.hud.mode === 'timed'">
+        <span>{{'beamjoy.window.derbyHud.deaths' | translate}}</span>
+        <span>{{$ctrl.hud.deaths}}</span>
+    </div>
+    <div class="hud-row zone" ng-if="$ctrl.hud.zoneSizePct != null || $ctrl.hud.zoneEdge != null">
+        <span ng-if="$ctrl.hud.zoneEdge != null">{{'beamjoy.window.derbyHud.toEdge' | translate}} {{$ctrl.hud.zoneEdge}} m</span>
+        <span ng-if="$ctrl.hud.zoneEdge == null">{{'beamjoy.window.derbyHud.zone' | translate}} {{$ctrl.hud.zoneSizePct}}%</span>
+        <span ng-if="$ctrl.hud.zoneNextShrinkSec != null">{{'beamjoy.window.derbyHud.shrinksIn' | translate}} {{$ctrl.hud.zoneNextShrinkSec}}s</span>
+    </div>
+
+    <div class="hud-info" ng-if="$ctrl.hud.eliminated">{{'beamjoy.window.derbyHud.youAreOut' | translate}}</div>
+    <div class="hud-info" ng-if="$ctrl.hud.respawnProtected">{{'beamjoy.window.derbyHud.protected' | translate}}</div>
+    <div class="hud-warn" ng-if="$ctrl.hud.zoneOutSecondsLeft != null" role="alert">
+        <span class="label">{{'beamjoy.window.derbyHud.outsideZone' | translate}} {{$ctrl.hud.zoneOutSecondsLeft}}s</span>
+    </div>
+    <div class="hud-warn" ng-if="$ctrl.hud.engineDead" role="alert">
+        <span class="label">{{'beamjoy.window.derbyHud.engineDead' | translate}}</span>
+    </div>
+    <div class="hud-warn" ng-if="$ctrl.hud.stuckSecondsLeft != null" role="alert">
+        <div class="fill" style="width: {{($ctrl.hud.stuckShare || 0) * 100}}%"></div>
+        <span class="label">{{'beamjoy.window.derbyHud.stuck' | translate}} {{$ctrl.hud.stuckSecondsLeft}}s</span>
+    </div>
+
+    <div class="hud-feed" ng-if="$ctrl.hud.feed.length > 0" aria-live="polite">
+        <div ng-repeat="entry in $ctrl.hud.feed track by entry.seq" ng-class="{you: entry.you}">{{$ctrl.feedText(entry)}}</div>
+    </div>
+
+    <button class="hud-hold-btn" ng-if="$ctrl.hud.canForfeit"
+        ng-mousedown="$ctrl.startHold()" ng-mouseup="$ctrl.cancelHold()" ng-mouseleave="$ctrl.cancelHold()"
+        title="{{'beamjoy.window.derbyHud.forfeit.tooltip' | translate}}">
+        <div class="fill" style="width: {{$ctrl.holdPercent()}}%"></div>
+        <span class="label">{{'beamjoy.window.derbyHud.forfeit' | translate}}</span>
+    </button>
+</div>

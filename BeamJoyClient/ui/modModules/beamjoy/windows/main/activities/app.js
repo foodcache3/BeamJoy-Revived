@@ -1,6 +1,7 @@
 await import(`/ui/modModules/beamjoy/windows/main/activities/busLines/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/hunter/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/infected/app.js`);
+await import(`/ui/modModules/beamjoy/windows/main/derby/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/activities/jobs/app.js`);
 
 // The Main window's "Activities" tab (id "races", titled "Activities" - see
@@ -15,7 +16,7 @@ await import(`/ui/modModules/beamjoy/windows/main/activities/jobs/app.js`);
 angular.module("beamjoy").component("bjMainActivities", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/activities/app.html",
     controller: function ($rootScope, $scope, beamjoyNow) {
-        this.SECTIONS = ["races", "busLines", "hunter", "infected", "jobs"];
+        this.SECTIONS = ["races", "busLines", "hunter", "infected", "derby", "jobs"];
         // while you're in something (a race lobby, a convoy, a bus run...) only its section shows
         this.sections = () => {
             const mine = beamjoyNow.activeSection();

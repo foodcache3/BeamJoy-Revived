@@ -229,6 +229,50 @@
     bj-main-leaderboards .dlb-pts {
         font-weight: 600;
     }
+
+    /* derby : the ranked-by column reads brighter, and each row splits its wrecks into dealt
+       (filled) and taken (the rest of the bar) */
+    bj-main-leaderboards .dlb-grid.derby {
+        grid-template-columns: 3em minmax(0, 1.3fr) 3.6em 3.8em 7.2em 10em 5.4em;
+    }
+    bj-main-leaderboards .drb-on {
+        color: #fff;
+        font-weight: 600;
+    }
+    bj-main-leaderboards .drb-split {
+        display: grid;
+        grid-template-columns: 4.4em minmax(0, 1fr);
+        align-items: center;
+        column-gap: 0.5em;
+    }
+    bj-main-leaderboards .drb-split small {
+        color: #979dad;
+        font-size: 0.85em;
+    }
+    bj-main-leaderboards .drb-bar {
+        position: relative;
+        height: 0.5em;
+        transform: skewX(-10deg);
+        background: rgba(255, 255, 255, 0.07);
+        border-radius: 1px;
+        overflow: hidden;
+    }
+    bj-main-leaderboards .drb-bar i {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        background: #9a6a4f;
+    }
+    bj-main-leaderboards .drb-bar.me i {
+        background: #ff6600;
+    }
+    bj-main-leaderboards .drb-note {
+        margin: 0.25em 0.75em 0;
+        font-size: 0.78em;
+        line-height: 1.5;
+        color: #979dad;
+    }
 </style>
 
 <aside class="lb-side">
@@ -238,6 +282,9 @@
         </button>
         <button type="button" ng-class="{on: $ctrl.section === 'deliveries'}" aria-pressed="{{$ctrl.section === 'deliveries'}}" ng-click="$ctrl.setSection('deliveries')">
             {{'beamjoy.leaderboard.deliveries' | translate}}
+        </button>
+        <button type="button" ng-class="{on: $ctrl.section === 'derby'}" aria-pressed="{{$ctrl.section === 'derby'}}" ng-click="$ctrl.setSection('derby')">
+            {{'beamjoy.leaderboard.derby' | translate}}
         </button>
     </div>
 
@@ -279,6 +326,19 @@
             <dt>{{'beamjoy.leaderboard.delivery.stat.total' | translate}}</dt><dd>{{$ctrl.allMine().total}}</dd>
         </dl>
     </section>
+
+    <!-- DERBY : every ranking, its leader and your place -->
+    <div class="lb-colhead" ng-if="$ctrl.section === 'derby'">
+        <span>{{'beamjoy.leaderboard.derby.listHead' | translate}}</span><span>{{'beamjoy.leaderboard.you' | translate}}</span>
+    </div>
+    <div ng-if="$ctrl.section === 'derby'">
+        <button type="button" class="lb-pick" ng-repeat="s in $ctrl.DERBY_SORTS" ng-class="{on: $ctrl.dsort === s}" aria-pressed="{{$ctrl.dsort === s}}" ng-click="$ctrl.setDerbySort(s)">
+            <span style="min-width: 0"><b>{{('beamjoy.leaderboard.derby.by.' + s) | translate}}</b><small>{{$ctrl.rankingLine(s)}}</small></span>
+            <span class="lbx-plate" ng-if="$ctrl.rankingRank(s)" ng-class="$ctrl.rankingRank(s) === 1 ? 'rec' : 'me'"><span>{{$ctrl.rankingRank(s)}}</span></span>
+            <span class="none" ng-if="!$ctrl.rankingRank(s)">-</span>
+        </button>
+    </div>
+    <p class="drb-note" ng-if="$ctrl.section === 'derby'">{{'beamjoy.leaderboard.derby.creditNote' | translate}}</p>
 </aside>
 
 <!-- RACES : the picked race's board -->
@@ -412,5 +472,124 @@
         <span class="lbx-r lbx-muted" ng-if="$ctrl.kind === 'packages'">{{$ctrl.mineRow().resets}}</span>
         <span class="lbx-dim" ng-if="$ctrl.kind === 'packages'">{{$ctrl.mineRow().vehicle}}</span>
         <span class="lbx-r dlb-pts">{{$ctrl.mineRow().total}}</span>
+    </div>
+</main>
+
+<!-- DERBY : the board, ranked by the picked ranking -->
+<main class="lb-main" ng-if="$ctrl.section === 'derby'">
+    <div class="lbx-bar">
+        <div style="display: flex; flex-direction: column; gap: 0.4em; min-width: 0">
+            <h2 class="lbx-title" style="font-size: 1.6em">{{('beamjoy.leaderboard.derby.by.' + $ctrl.dsort) | translate}}</h2>
+            <div class="lbx-chips">
+                <span class="lbx-chip" ng-if="$ctrl.dboard">{{$ctrl.dDriversText()}}</span>
+            </div>
+        </div>
+        <div class="lbx-seg" role="group" ng-if="$ctrl.dlb().mine">
+            <button type="button" ng-class="{on: !$ctrl.dnear}" aria-pressed="{{!$ctrl.dnear}}" ng-click="$ctrl.dnear = false">
+                {{$ctrl.topText()}}
+            </button>
+            <button type="button" ng-class="{on: $ctrl.dnear}" aria-pressed="{{$ctrl.dnear}}" ng-click="$ctrl.dnear = true">
+                {{'beamjoy.leaderboard.aroundYou' | translate}}
+            </button>
+        </div>
+    </div>
+
+    <p class="lbx-muted" ng-if="!$ctrl.dboard" style="margin: 0; font-size: 0.88em">
+        {{'beamjoy.window.main.tabs.races.leaderboard.loading' | translate}}
+    </p>
+    <div class="lbx-empty" ng-if="$ctrl.dboard && $ctrl.dlb().rows.length === 0">
+        <p>{{'beamjoy.leaderboard.derby.none' | translate}}</p>
+    </div>
+
+    <div class="lbx-cards" ng-if="$ctrl.dLeader()">
+        <div class="lbx-card rec">
+            <span class="lbx-plate big rec"><span>1</span></span>
+            <div class="who">
+                <span class="lbl">{{'beamjoy.leaderboard.delivery.leader' | translate}}</span>
+                <b>{{$ctrl.dLeader().name}}</b>
+                <small>{{$ctrl.dLeader().line}}</small>
+            </div>
+            <span class="lbx-big" style="color: #ba68f8">{{$ctrl.dLeader().value}}<small>{{$ctrl.dunit()}}</small></span>
+        </div>
+        <div class="lbx-card me" ng-if="$ctrl.dMine()">
+            <span class="lbx-plate big" ng-class="$ctrl.dMine().rank === 1 ? 'rec' : 'me'"><span>{{$ctrl.dMine().rank}}</span></span>
+            <div class="who">
+                <span class="lbl">{{'beamjoy.leaderboard.you' | translate}}</span>
+                <b>{{$ctrl.dlb().mine.name}}</b>
+                <small>{{$ctrl.dMine().behind}}</small>
+            </div>
+            <span class="lbx-big" style="color: #ffbca0">{{$ctrl.dMine().value}}<small>{{$ctrl.dunit()}}</small></span>
+        </div>
+        <div class="lbx-card" ng-if="!$ctrl.dMine()">
+            <span class="lbx-plate big"><span>-</span></span>
+            <div class="who">
+                <span class="lbl">{{'beamjoy.leaderboard.you' | translate}}</span>
+                <small style="white-space: normal">{{'beamjoy.leaderboard.derby.none' | translate}}</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="dlb-stats" ng-if="$ctrl.dMine()">
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.derby.stat.rate' | translate}}</span>
+            <b>{{$ctrl.dMine().rate}} <small>{{$ctrl.dMine().rateOf}}</small></b>
+        </div>
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.derby.stat.wrecks' | translate}}</span>
+            <b>{{$ctrl.dMine().wrecks}} <small>{{$ctrl.dMine().wrecksPer}}</small></b>
+        </div>
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.derby.stat.deaths' | translate}}</span>
+            <b>{{$ctrl.dMine().deaths}} <small>{{$ctrl.dMine().deathsPer}}</small></b>
+        </div>
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.derby.stat.damage' | translate}}</span>
+            <b>{{$ctrl.dMine().damage}} <small>{{$ctrl.dMine().damagePer}}</small></b>
+        </div>
+    </div>
+
+    <div class="dlb-grid lbx-head derby" ng-if="$ctrl.dlb().rows.length > 0">
+        <span style="text-align: center">{{'beamjoy.leaderboard.col.pos' | translate}}</span>
+        <span>{{'beamjoy.leaderboard.col.driver' | translate}}</span>
+        <span class="lbx-r"><button type="button" ng-class="{on: $ctrl.dsort === 'wins'}" aria-pressed="{{$ctrl.dsort === 'wins'}}" ng-click="$ctrl.setDerbySort('wins')">{{'beamjoy.leaderboard.derby.col.wins' | translate}}</button></span>
+        <span class="lbx-r"><button type="button" ng-class="{on: $ctrl.dsort === 'games'}" aria-pressed="{{$ctrl.dsort === 'games'}}" ng-click="$ctrl.setDerbySort('games')">{{'beamjoy.leaderboard.derby.col.games' | translate}}</button></span>
+        <span><button type="button" ng-class="{on: $ctrl.dsort === 'rate'}" aria-pressed="{{$ctrl.dsort === 'rate'}}" ng-click="$ctrl.setDerbySort('rate')">{{'beamjoy.leaderboard.derby.col.rate' | translate}}</button></span>
+        <span><button type="button" ng-class="{on: $ctrl.dsort === 'wrecks'}" aria-pressed="{{$ctrl.dsort === 'wrecks'}}" ng-click="$ctrl.setDerbySort('wrecks')">{{'beamjoy.leaderboard.derby.col.wrecks' | translate}}</button></span>
+        <span class="lbx-r"><button type="button" ng-class="{on: $ctrl.dsort === 'damage'}" aria-pressed="{{$ctrl.dsort === 'damage'}}" ng-click="$ctrl.setDerbySort('damage')">{{'beamjoy.leaderboard.derby.col.damage' | translate}}</button></span>
+    </div>
+    <div class="lbx-scroll" ng-if="$ctrl.dlb().rows.length > 0">
+        <div ng-repeat="r in $ctrl.dRows() track by r.key">
+            <span class="lbx-cut" ng-if="r.cut">{{r.text}}</span>
+            <div class="dlb-grid lbx-row derby" ng-if="!r.cut" ng-class="{me: r.you}">
+                <span class="lbx-pos"><span class="lbx-plate" ng-class="{rec: r.rank === 1, me: r.rank !== 1 && r.you}"><span>{{r.rank}}</span></span></span>
+                <span class="lbx-name">{{r.name}}</span>
+                <span class="lbx-r" ng-class="{'drb-on': $ctrl.dsort === 'wins'}">{{r.wins}}</span>
+                <span class="lbx-r" ng-class="{'drb-on': $ctrl.dsort === 'games'}">{{r.games}}</span>
+                <span class="dlb-rate">
+                    <span class="lbx-r" ng-class="{'drb-on': $ctrl.dsort === 'rate'}">{{r.rate}}</span>
+                    <span class="dlb-meter" ng-class="{me: r.you}"><i ng-style="{width: r.ratePct + '%'}"></i></span>
+                </span>
+                <span class="drb-split" title="{{r.split}}">
+                    <span class="lbx-r" ng-class="{'drb-on': $ctrl.dsort === 'wrecks'}">{{r.wrecks}}<small> / {{r.deaths}}</small></span>
+                    <span class="drb-bar" ng-class="{me: r.you}"><i ng-style="{width: r.dealtPct + '%'}"></i></span>
+                </span>
+                <span class="lbx-r" ng-class="{'drb-on': $ctrl.dsort === 'damage'}">{{r.damage}}</span>
+            </div>
+        </div>
+    </div>
+    <div class="dlb-grid lbx-row me lbx-pinned derby" ng-if="$ctrl.dPinMine()">
+        <span class="lbx-pos"><span class="lbx-plate me"><span>{{$ctrl.dMineRow().rank}}</span></span></span>
+        <span class="lbx-name">{{$ctrl.dMineRow().name}}</span>
+        <span class="lbx-r">{{$ctrl.dMineRow().wins}}</span>
+        <span class="lbx-r">{{$ctrl.dMineRow().games}}</span>
+        <span class="dlb-rate">
+            <span class="lbx-r">{{$ctrl.dMineRow().rate}}</span>
+            <span class="dlb-meter me"><i ng-style="{width: $ctrl.dMineRow().ratePct + '%'}"></i></span>
+        </span>
+        <span class="drb-split" title="{{$ctrl.dMineRow().split}}">
+            <span class="lbx-r">{{$ctrl.dMineRow().wrecks}}<small> / {{$ctrl.dMineRow().deaths}}</small></span>
+            <span class="drb-bar me"><i ng-style="{width: $ctrl.dMineRow().dealtPct + '%'}"></i></span>
+        </span>
+        <span class="lbx-r">{{$ctrl.dMineRow().damage}}</span>
     </div>
 </main>

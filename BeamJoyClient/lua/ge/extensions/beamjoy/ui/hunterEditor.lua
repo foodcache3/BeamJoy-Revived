@@ -79,7 +79,8 @@ end
 --- (re)loads M.enabled/defaults + the point lists from beamjoy_hunter.data's current snapshot.
 --- shared by onOpen (first mount) and onArenaChanged (a legacy import, or any other server-side
 --- write, landing while this editor is already the active one)
-local function refresh()
+---@param keepSelection boolean? the same arena again (a save, an import) : the selected point stays
+local function refresh(keepSelection)
     local arena = beamjoy_hunter.data or {}
     M.enabled = arena.enabled == true
     M.defaults = table.clone(arena.defaults or {})
@@ -88,7 +89,7 @@ local function refresh()
         preySpawns = arena.preySpawns,
         waypoints = arena.waypoints,
         respawnHubs = arena.respawnHubs,
-    })
+    }, keepSelection)
     pushMeta()
 end
 
@@ -111,7 +112,7 @@ end
 --- the same map is an accepted, rare edge case, not guarded against.
 local function onArenaChanged()
     if not parent or parent.activeEditor ~= M then return end
-    refresh()
+    refresh(true)
 end
 
 ---@param enabled boolean

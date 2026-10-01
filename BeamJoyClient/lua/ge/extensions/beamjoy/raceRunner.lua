@@ -2787,7 +2787,7 @@ local function ready(state)
             -- activityEditorSafeZone's "Failed to save data", but this is just a transient
             -- validation nag the player will immediately resolve by spawning a car, not something
             -- that should sit on screen forever after the fact. Explicit fadeSecs fixes that.
-            toast.warn("You need a vehicle to ready up", nil, 4)
+            toast.warn(beamjoy_lang.translate("beamjoy.activities.needVehicleToReady"), nil, 4)
             return
         end
         -- per direct request : a race can restrict itself to a specific vehicle/config, or a pool

@@ -1,0 +1,40 @@
+<style>
+    #beamjoy-derby-countdown {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 5;
+    }
+    #beamjoy-derby-countdown .derby-countdown-number {
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        font-size: 6em;
+        font-weight: bold;
+        line-height: 1;
+        color: white;
+        text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.6);
+    }
+    #beamjoy-derby-countdown .derby-countdown-number.go {
+        color: #ff7a2e;
+    }
+    #beamjoy-derby-countdown .derby-countdown-finished {
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        font-size: 3em;
+        font-weight: bold;
+        line-height: 1.1;
+        color: #ffca28;
+        text-align: center;
+        text-shadow: 4px 4px 8px rgba(0, 0, 0, 0.6);
+    }
+</style>
+
+<div id="beamjoy-derby-countdown" class="pointer-events-none d-flex flex-column align-center justify-center" ng-if="$ctrl.active">
+    <div class="derby-countdown-finished" ng-if="$ctrl.finished">
+        <span ng-if="$ctrl.winnerName">{{'beamjoy.derby.winner' | translate}}<br />{{$ctrl.winnerName}}</span>
+        <span ng-if="!$ctrl.winnerName">{{'beamjoy.derby.over' | translate}}</span>
+    </div>
+    <div class="derby-countdown-number" ng-if="!$ctrl.finished" ng-class="{go: $ctrl.seconds === 0}">
+        {{$ctrl.seconds === 0 ? ('beamjoy.race.go' | translate) : $ctrl.seconds}}
+    </div>
+</div>

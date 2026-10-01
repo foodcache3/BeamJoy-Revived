@@ -1,0 +1,250 @@
+<style>
+    /* the arena bar, the section tabs and the placement toolbar stay put ; the section below scrolls */
+    bj-config-derby-arena {
+        display: block;
+        height: 100%;
+        overflow: hidden;
+    }
+    bj-config-derby-arena .editor-root {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+    bj-config-derby-arena .editor-pinned {
+        flex-shrink: 0;
+    }
+    bj-config-derby-arena .section-panel {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+    bj-config-derby-arena .arena-bar bj-select {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    bj-config-derby-arena .name-input {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    bj-config-derby-arena .section-bar {
+        border-bottom: thin solid gray;
+    }
+    bj-config-derby-arena .section-tab {
+        padding: 0.3em 0.6em;
+        border: thin solid gray;
+        border-radius: 0.3em;
+        border-bottom-left-radius: unset;
+        border-bottom-right-radius: unset;
+        background-color: rgba(0, 0, 0, 0.1);
+        transition: all 0.2s ease-in-out;
+    }
+    bj-config-derby-arena .section-tab.active {
+        background-color: rgba(230, 92, 0, 0.44);
+    }
+    bj-config-derby-arena .section-tab:hover {
+        color: rgb(241 255 164);
+    }
+    bj-config-derby-arena .warn {
+        color: #ffb74d;
+        font-size: 0.9em;
+    }
+</style>
+
+<div class="editor-root">
+    <div class="editor-pinned">
+        <div class="arena-bar d-flex gap-1 mb-2 align-center">
+            <bj-select ng-if="$ctrl.arenaOptions.length > 0 && !$ctrl.meta.isNew" ng-model="$ctrl.pickedId" options="$ctrl.arenaOptions"
+                ng-change="$ctrl.pickArena(value)"></bj-select>
+            <span class="flex-grow-1" ng-if="$ctrl.arenaOptions.length === 0 || $ctrl.meta.isNew">
+                <b ng-if="$ctrl.meta.isNew && !$ctrl.meta.blank">{{'beamjoy.window.config.tabs.derbyArena.newArena' | translate}}</b>
+            </span>
+            <button class="btn success" ng-click="$ctrl.newArena($event)" title="{{'beamjoy.window.config.tabs.derbyArena.add' | translate}}">
+                <icon name="add"></icon>
+            </button>
+            <button class="btn danger" ng-if="!$ctrl.meta.blank" ng-click="$ctrl.deleteArena($event)"
+                title="{{'beamjoy.window.config.tabs.derbyArena.delete' | translate}}">
+                <icon name="delete"></icon>
+            </button>
+            <button class="btn success" ng-if="!$ctrl.meta.blank" ng-click="$ctrl.save($event)" ng-disabled="!$ctrl.dirty"
+                title="{{'beamjoy.common.save' | translate}}">
+                <icon name="save"></icon>
+            </button>
+        </div>
+
+        <div ng-if="$ctrl.meta.blank" class="opacity-70 small mb-2">
+            {{'beamjoy.window.config.tabs.derbyArena.empty' | translate}}
+        </div>
+
+        <div ng-if="!$ctrl.meta.blank">
+            <div class="d-flex gap-1 mb-2 align-center">
+                <input type="text" class="name-input" maxlength="40" ng-model="$ctrl.name"
+                    placeholder="{{'beamjoy.window.config.tabs.derbyArena.name' | translate}}"
+                    aria-label="{{'beamjoy.window.config.tabs.derbyArena.name' | translate}}" />
+                <span title="{{'beamjoy.window.config.tabs.derbyArena.enabled.tooltip' | translate}}" class="d-flex align-center gap-1">
+                    {{'beamjoy.window.config.tabs.derbyArena.enabled' | translate}}
+                    <bj-toggle ng-model="$ctrl.enabled"></bj-toggle>
+                </span>
+            </div>
+            <p class="warn" ng-if="$ctrl.cannotEnable()">{{'beamjoy.window.config.tabs.derbyArena.needStarts' | translate}}</p>
+
+            <div class="section-bar d-flex flex-wrap">
+                <div class="section-tab cursor-pointer" ng-repeat="section in $ctrl.SECTIONS"
+                    ng-class="{active: $ctrl.activeSection === section}" ng-click="$ctrl.changeSection($event, section)">
+                    {{('beamjoy.window.config.tabs.derbyArena.sections.' + section) | translate}}
+                </div>
+            </div>
+            <bj-point-list-editor-toolbar ng-if="$ctrl.activeSection === 'positions'" events="$ctrl.pointListEvents"></bj-point-list-editor-toolbar>
+        </div>
+    </div>
+
+    <div class="section-panel" ng-if="!$ctrl.meta.blank && $ctrl.activeSection === 'positions'">
+        <p class="opacity-70 small">{{'beamjoy.window.config.tabs.derbyArena.positionsHelp' | translate}}</p>
+        <bj-point-list-editor lists="$ctrl.pointLists" events="$ctrl.pointListEvents"></bj-point-list-editor>
+        <table class="w-100" ng-if="$ctrl.hasZone">
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.derbyArena.zoneShape.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.derbyArena.zoneShape' | translate}}
+                </td>
+                <td><bj-select ng-model="$ctrl.zone.shape" options="$ctrl.zoneShapeOptions"></bj-select></td>
+            </tr>
+            <tr ng-if="$ctrl.zone.shape !== 'circle'">
+                <td class="text-right">{{'beamjoy.window.config.tabs.derbyArena.zoneWidth' | translate}}</td>
+                <td><bj-slider ng-model="$ctrl.zone.width" min="10" max="300" hard-max="2000" step="1"></bj-slider></td>
+            </tr>
+            <tr ng-if="$ctrl.zone.shape !== 'circle'">
+                <td class="text-right">{{'beamjoy.window.config.tabs.derbyArena.zoneLength' | translate}}</td>
+                <td><bj-slider ng-model="$ctrl.zone.length" min="10" max="300" hard-max="2000" step="1"></bj-slider></td>
+            </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.derbyArena.floorDepth.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.derbyArena.floorDepth' | translate}}
+                </td>
+                <td><bj-slider ng-model="$ctrl.floorDepth" min="1" max="50" hard-max="500" step="1"></bj-slider></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section-panel" ng-if="!$ctrl.meta.blank && $ctrl.activeSection === 'settings'">
+        <bj-accordion id="derby-arena-defaults-game" no-border-bottom="true">
+            <accordion-title>
+                <h5>{{'beamjoy.window.config.tabs.derbyArena.sections.game' | translate}}</h5>
+            </accordion-title>
+            <accordion-content>
+                <table class="w-100">
+                    <tr>
+                        <td class="text-right">{{'beamjoy.window.config.tabs.derbyArena.mode' | translate}}</td>
+                        <td><bj-select ng-model="$ctrl.defaults.mode" options="$ctrl.modeOptions"></bj-select></td>
+                    </tr>
+                    <tr ng-if="!$ctrl.hasZone">
+                        <td></td>
+                        <td class="opacity-70 small">{{'beamjoy.window.config.tabs.derbyArena.sumoNeedsZone' | translate}}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.derbyArena.lives.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.derbyArena.lives' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.defaults.lives" min="0" max="5" step="1"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.derbyArena.roundDuration.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.derbyArena.roundDuration' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.defaults.roundDuration" min="1" max="20" hard-max="60" step="1"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.derbyArena.stuckSeconds.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.derbyArena.stuckSeconds' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.defaults.stuckSeconds" min="5" max="60" hard-max="120" step="5"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.derbyArena.respawnGhostSeconds.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.derbyArena.respawnGhostSeconds' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.defaults.respawnGhostSeconds" min="0" max="10" hard-max="15" step="1"></bj-slider></td>
+                    </tr>
+                    <tr ng-if="$ctrl.hasZone">
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.derbyArena.zoneGraceSeconds.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.derbyArena.zoneGraceSeconds' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.defaults.zoneGraceSeconds" min="0" max="10" hard-max="30" step="1"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.main.tabs.derby.vehicles.tooltip' | translate}}">
+                            {{'beamjoy.window.main.tabs.derby.vehicles' | translate}}
+                        </td>
+                        <td><bj-select ng-model="$ctrl.defaults.vehiclePresetId" options="$ctrl.vehiclePresetOptions"></bj-select></td>
+                    </tr>
+                    <tr ng-if="$ctrl.defaults.vehiclePresetId">
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.derbyArena.randomizeVehiclePool.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.derbyArena.randomizeVehiclePool' | translate}}
+                        </td>
+                        <td><bj-toggle ng-model="$ctrl.defaults.randomizeVehiclePool"></bj-toggle></td>
+                    </tr>
+                </table>
+            </accordion-content>
+        </bj-accordion>
+
+        <bj-accordion id="derby-arena-defaults-sumo" no-border-bottom="true" ng-if="$ctrl.hasZone">
+            <accordion-title>
+                <h5>{{'beamjoy.window.config.tabs.derbyArena.sections.sumo' | translate}}</h5>
+            </accordion-title>
+            <accordion-content>
+                <table class="w-100">
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.derbyArena.shrinkEverySeconds.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.derbyArena.shrinkEverySeconds' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.defaults.shrinkEverySeconds" min="5" max="120" hard-max="300" step="5"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.derbyArena.shrinkSteps.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.derbyArena.shrinkSteps' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.defaults.shrinkSteps" min="1" max="20" step="1"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.derbyArena.minRadiusPercent.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.derbyArena.minRadiusPercent' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.defaults.minRadiusPercent" min="5" max="100" step="5"></bj-slider></td>
+                    </tr>
+                </table>
+            </accordion-content>
+        </bj-accordion>
+
+        <bj-accordion id="derby-arena-defaults-lobby" no-border-bottom="true">
+            <accordion-title>
+                <h5>{{'beamjoy.window.config.tabs.derbyArena.sections.lobby' | translate}}</h5>
+            </accordion-title>
+            <accordion-content>
+                <table class="w-100">
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.gridTimeout.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.infectedArena.gridTimeout' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.defaults.gridTimeout" min="10" max="300" hard-max="600" step="10"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.gridReadyTimeout.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.infectedArena.gridReadyTimeout' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.defaults.gridReadyTimeout" min="0" max="30" hard-max="600" step="1"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.countdown.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.infectedArena.countdown' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.defaults.countdown" min="0" max="30" hard-max="600" step="1"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.infectedArena.endTimeout.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.infectedArena.endTimeout' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.defaults.endTimeout" min="3" max="30" hard-max="120" step="1"></bj-slider></td>
+                    </tr>
+                </table>
+            </accordion-content>
+        </bj-accordion>
+    </div>
+</div>

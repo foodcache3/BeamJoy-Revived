@@ -46,6 +46,7 @@ local function isScenarioLocked()
     return (beamjoy_raceRunner and beamjoy_raceRunner.isRaceLocked()) or
         (beamjoy_hunterRunner and beamjoy_hunterRunner.isHuntLocked()) or
         (beamjoy_infectedRunner and beamjoy_infectedRunner.isGameLocked()) or
+        (beamjoy_derbyRunner and beamjoy_derbyRunner.isGameLocked()) or
         false
 end
 

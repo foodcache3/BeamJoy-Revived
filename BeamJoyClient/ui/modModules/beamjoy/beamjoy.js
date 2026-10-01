@@ -51,6 +51,8 @@ await import(`/ui/modModules/beamjoy/windows/hunterCountdown/app.js`);
 await import(`/ui/modModules/beamjoy/windows/hunterHud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/infectedCountdown/app.js`);
 await import(`/ui/modModules/beamjoy/windows/infectedHud/app.js`);
+await import(`/ui/modModules/beamjoy/windows/derbyCountdown/app.js`);
+await import(`/ui/modModules/beamjoy/windows/derbyHud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/busHud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/deliveryBoard/app.js`);
 await import(`/ui/modModules/beamjoy/windows/deliveryHud/app.js`);
@@ -63,6 +65,7 @@ await import(`/ui/modModules/beamjoy/windows/raceInfo/live/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceInfo/results/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceLeaderboard/app.js`);
 await import(`/ui/modModules/beamjoy/windows/infectedInfo/results/app.js`);
+await import(`/ui/modModules/beamjoy/windows/derbyInfo/results/app.js`);
 
 beamjoyModule.component("beamjoy", {
     template: ``,
@@ -91,6 +94,8 @@ beamjoyModule.component("beamjoy", {
                         <bj-hunter-hud></bj-hunter-hud>
                         <bj-infected-countdown></bj-infected-countdown>
                         <bj-infected-hud></bj-infected-hud>
+                        <bj-derby-countdown></bj-derby-countdown>
+                        <bj-derby-hud></bj-derby-hud>
                         <bj-bus-hud></bj-bus-hud>
                         <bj-delivery-board></bj-delivery-board>
                         <bj-delivery-hud></bj-delivery-hud>

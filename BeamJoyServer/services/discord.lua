@@ -27,7 +27,7 @@ local WEBHOOKS_MAX = 10
 -- off, so a webhook saved before they existed doesn't suddenly start posting them
 local TOGGLES = {
     RaceFinishes = true, RacePBsOnly = false, Votes = true, JoinLeave = false, Chat = false,
-    Deliveries = false, Hunter = false, Infected = false, BusLines = false,
+    Deliveries = false, Hunter = false, Infected = false, Derby = false, BusLines = false,
 }
 -- files are reused round-robin: by the time a slot comes back around (FILE_SLOTS * SEND_SPACING_SEC
 -- seconds later) the curl that read it has long finished
@@ -43,6 +43,7 @@ local COLORS = {
     DELIVERY = 0x2EB8A6,
     HUNTER = 0xE8743B,
     INFECTED = 0x8BC34A,
+    DERBY = 0xD64541,
     BUS = 0xF5C518,
 }
 
@@ -625,6 +626,41 @@ local function onInfectedEnd(r)
     }, function(hook) return hook.Infected == true end)
 end
 
+--- a derby ended (a cancelled one posts nothing) : the whole field, best first
+---@param d {mode: "lms"|"timed"|"sumo", arenaName: string, durationSec: integer?, standings: table[]}
+local function onDerbyEnd(d)
+    local lines = {}
+    for i, r in ipairs(d.standings or {}) do
+        if i > 20 then
+            lines[#lines + 1] = tr("beamjoy.discord.andMore", { count = #d.standings - 20 })
+            break
+        end
+        local name = clean(stripCodes(r.displayName or "?")):sub(1, 60)
+        local line = string.format("%s **%s**", MEDALS[r.place] or string.format("`%d.`", r.place), name)
+        local extra = { tr("beamjoy.discord.derby.wrecks", { count = r.wrecks or 0 }) }
+        if d.mode == "timed" then
+            extra[#extra + 1] = tr("beamjoy.discord.derby.deaths", { count = r.deaths or 0 })
+        end
+        if r.left then extra[#extra + 1] = tr("beamjoy.discord.derby.left") end
+        lines[#lines + 1] = line .. " \194\183 " .. table.concat(extra, " \194\183 ")
+    end
+    local fields = {
+        fieldOf("beamjoy.discord.derby.mode", tr("beamjoy.discord.derby.modes." .. tostring(d.mode))),
+        fieldOf("beamjoy.discord.derby.players", tostring(#(d.standings or {}))),
+    }
+    if d.durationSec then fields[#fields + 1] = fieldOf("beamjoy.discord.duration", formatDuration(d.durationSec)) end
+    post({
+        embeds = { {
+            title = tr("beamjoy.discord.derby.title", { arena = clean(d.arenaName or "?"), map = clean(mapLabel()) }):sub(1, 250),
+            description = table.concat(lines, "\n"):sub(1, 4000),
+            color = COLORS.DERBY,
+            fields = fields,
+            footer = { text = serverName() },
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+        } },
+    }, function(hook) return hook.Derby == true end)
+end
+
 --- a bus line driven to its last stop, or once around a looping line
 ---@param b {playerName: string, lineName: string, stops: integer, durationSec: integer?, loop: boolean?}
 local function onBusRun(b)
@@ -751,6 +787,7 @@ M.onDelivery = onDelivery
 M.onConvoyEnd = onConvoyEnd
 M.onHunterEnd = onHunterEnd
 M.onInfectedEnd = onInfectedEnd
+M.onDerbyEnd = onDerbyEnd
 M.onBusRun = onBusRun
 M.formatTime = formatTime
 M.webhooks = webhooks

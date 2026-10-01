@@ -21,6 +21,7 @@ local KINDS = {
     race = { grid = function() return services_raceGrid end, lobby = "GRID" },
     hunter = { grid = function() return services_hunterGrid end, lobby = "LOBBY" },
     infected = { grid = function() return services_infectedGrid end, lobby = "LOBBY" },
+    derby = { grid = function() return services_derbyGrid end, lobby = "LOBBY" },
 }
 
 ---@param playerID integer

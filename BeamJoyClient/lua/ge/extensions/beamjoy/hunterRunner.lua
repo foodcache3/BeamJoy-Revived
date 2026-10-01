@@ -346,6 +346,11 @@ local function onBJRequestCanSpawnVehicle(req, model, config, action)
     end
 
     if not isHuntLocked() then return end
+    -- Still choosing a vehicle in the countdown (none yet, or the wrong one for their role, see the
+    -- COUNTDOWN steering in onSessionUpdate) : the countdown waits for them, so picking is allowed
+    -- until onBJVehicleInstantiated confirms what they spawned. Without this every tile failed the
+    -- "replace" rule below and the selector it opens for them showed no vehicles at all.
+    if M.session.state == "COUNTDOWN" and not M.selfVehicleConfirmed and action ~= "clone" then return end
 
     -- Rejects a genuinely additional simultaneous vehicle for anyone locked into a hunt. Cloning is
     -- rejected outright, and spawning a fresh one on top of an existing real vehicle is rejected
@@ -1199,6 +1204,23 @@ local function updateGpsGuidance()
     end
 end
 
+-- the hunters' route to a revealed fugitive is red, line and floating arrows
+local REVEAL_GPS_COLORS = { decals = { 1, 0.12, 0.08 }, arrows = { 0.85, 0.1, 0.06 } }
+
+--- core_groundMarkers.setPath in red : the game takes the line color per route, but the floating
+--- arrows only from its active color set (core/groundMarkers.lua reads colorSets[colorSet] inside
+--- setPath), so a set of our own is switched in for this one call and the stock one put back
+---@param pos vec3
+local function setRevealGps(pos)
+    local gm = extensions.core_groundMarkers
+    gm.colorSets.bjHunterReveal = REVEAL_GPS_COLORS
+    local previous = gm.colorSet
+    gm.colorSet = "bjHunterReveal"
+    local ok, err = pcall(gm.setPath, pos)
+    gm.colorSet = previous
+    if not ok then LogError("beamjoy_hunterRunner: reveal GPS failed: " .. tostring(err)) end
+end
+
 --- Hunter-only: routes native GPS (core_groundMarkers) straight to the fugitive's own live
 --- position for as long as they're revealed, when the arena's gpsOnReveal setting is on (off by
 --- default: see services/hunter.lua's own doc comment). Never runs for the fugitive's own client
@@ -1217,7 +1239,7 @@ local function updateHunterGpsGuidance()
         local pos = mpVeh and mpVeh.veh and beamjoy_vehicles.getVehiclePositionRotation(mpVeh.veh)
         if pos then
             M.hunterGpsActive = true
-            extensions.core_groundMarkers.setPath(pos)
+            setRevealGps(pos)
             return
         end
     end
@@ -1728,16 +1750,18 @@ local function ready(state)
     local becomingReady = state ~= false
     local model
     if becomingReady then
-        -- role (and therefore which vehicle pool, if any, actually applies) isn't known until
-        -- COUNTDOWN (see hunterGrid.lua's beginCountdown, the random fugitive draw), so there is
-        -- nothing meaningful to validate a vehicle against yet at ready-up time ; requiring one
-        -- here first is just friction for a player who hasn't decided yet or doesn't own a car at
-        -- this exact moment. The COUNTDOWN-transition steering + hunterVehicleConfirmed gate (see
-        -- onSessionUpdate) is what actually enforces a matching vehicle, with genuinely unhurried
-        -- time to fix it, including from scratch with no vehicle at all. See that block's own
-        -- comments for why this is now safe to relax.
+        -- a car to ready up, unless both sides' presets hand out random ones at the countdown.
+        -- Role (and so which preset applies) is only drawn at the countdown : a car that turns out
+        -- wrong for it is swapped then (the COUNTDOWN steering + hunterVehicleConfirmed gate in
+        -- onSessionUpdate), so any car does here
         local veh = beamjoy_vehicles.getCurrentOwn()
-        if veh and veh.jbeam ~= beamjoy_vehicles.WALKING then
+        local hasCar = veh ~= nil and veh.jbeam ~= beamjoy_vehicles.WALKING
+        local s = M.session.settings
+        local given = s.randomizeVehiclePool and s.huntedVehiclePool and s.huntersVehiclePool
+        if not hasCar and not given then
+            return toast.warn(beamjoy_lang.translate("beamjoy.activities.needVehicleToReady"), nil, 4)
+        end
+        if hasCar then
             model = beamjoy_vehicles.getCurrentConfigDisplayLabel(veh.veh)
         end
     end

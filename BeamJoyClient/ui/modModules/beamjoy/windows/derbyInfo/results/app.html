@@ -1,0 +1,46 @@
+<style>
+    bj-derby-info-results {
+        display: block;
+        height: 100%;
+        overflow: auto;
+    }
+    bj-derby-info-results tr.winner {
+        color: #ffc768;
+    }
+    bj-derby-info-results tr.out td {
+        opacity: 0.7;
+    }
+</style>
+
+<div ng-if="!$ctrl.active" class="opacity-70 p-2">
+    {{'beamjoy.window.main.tabs.derby.results.none' | translate}}
+</div>
+
+<div ng-if="$ctrl.active">
+    <div class="mb-2">
+        <b>{{$ctrl.arenaName}}</b> · {{$ctrl.modeLabel()}}
+        <span class="opacity-70" ng-if="!$ctrl.finished"> · {{'beamjoy.window.main.tabs.derby.results.stillRunning' | translate}}</span>
+    </div>
+    <table class="race-info-table">
+        <thead>
+            <tr>
+                <th class="text-center">#</th>
+                <th class="text-left">{{'beamjoy.window.main.tabs.derby.board.player' | translate}}</th>
+                <th title="{{'beamjoy.window.main.tabs.derby.results.wrecks.tooltip' | translate}}">{{'beamjoy.window.main.tabs.derby.board.wrecks' | translate}}</th>
+                <th ng-if="$ctrl.mode === 'timed'" title="{{'beamjoy.window.main.tabs.derby.results.deaths.tooltip' | translate}}">{{'beamjoy.window.main.tabs.derby.results.deaths' | translate}}</th>
+                <th title="{{'beamjoy.window.main.tabs.derby.results.damage.tooltip' | translate}}">{{'beamjoy.window.main.tabs.derby.results.damage' | translate}}</th>
+                <th ng-if="$ctrl.mode !== 'timed'"></th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr ng-repeat="row in $ctrl.standings track by $index" ng-class="{winner: $ctrl.finished && row.place === 1, out: row.eliminated}">
+                <td class="text-center">{{row.place}}</td>
+                <td class="text-left">{{row.displayName}}</td>
+                <td>{{row.wrecks || 0}}</td>
+                <td ng-if="$ctrl.mode === 'timed'">{{row.deaths || 0}}</td>
+                <td>{{$ctrl.formatDamage(row.damage)}}</td>
+                <td ng-if="$ctrl.mode !== 'timed'">{{$ctrl.statusOf(row)}}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>

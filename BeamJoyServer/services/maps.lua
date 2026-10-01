@@ -330,6 +330,7 @@ local function onInit()
         M.data[services_core.getCurrentMap()].ignore then
         -- invalid current map
         LogWarn(services_lang.get("maps.start.fallback"):var({
+            oldMap = services_core.getCurrentMap(),
             newMap = "gridmap_v2"
         }))
         services_core.setMap("gridmap_v2")

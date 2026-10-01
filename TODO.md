@@ -407,6 +407,38 @@ Reference source for native API research, if picking any of these up:
 - "Add every available activity to the Big Map with its own start position" - user asked to skip
   this for now; open question of what to do about duplicate start positions if it's picked back up.
 
+## Opening other players' car doors
+
+**Status:** planned, not started. User asked to add this to the plan rather than build it now.
+
+BeamMP already syncs a car's own door/hood/trunk latches to everyone (`controllerSyncVE` forwards
+`advancedCouplerControl.toggleGroup`, and `couplerVE` sends group states via `Ot` packets on every
+latch change). But it deliberately no-ops door controller functions on remote ("R") copies to
+prevent ghost control, so nobody can open someone else's door; its own comment in
+`controllerSyncVE.replaceFunctions` notes this would need a way to send the request back to the
+owner. BJ's server relay is that path.
+
+Agreed design:
+- Requester (in walking mode, i.e. the `unicycle` model, see `vehicles.lua`) near another player's
+  car: query that remote car's VE for its `controller.getControllersByType("advancedCouplerControl")`
+  list (controller name, `soundNode` node id as the latch position, current group state), compute
+  world positions in GE, pick the latch nearest the walker, and show a "Press [key] to open/close
+  door" prompt (keyboard + controller binding).
+- Client sends a BJ request (server vehicle id + controller name) through `beamjoy_communications`.
+  The server validates (requester close enough, owner allows it, car nearly stopped) and forwards to
+  the owning player.
+- Owner's client calls `controller.getControllerSafe(name).toggleGroup()` on its own car; BeamMP's
+  existing sync then shows the result to everyone, requester included. Expect one round trip of
+  latency.
+- Permissions: per-player "lock my doors" setting, default unlocked; crew members always allowed.
+  Only allowed when the target car is nearly stopped.
+- Readable door names (front-left door, tailgate, hood...) need mapping from controller names like
+  `doorFLCoupler`; fall back to a generic label for unknown names.
+
+Known BeamMP gaps (not ours to fix, but relevant): latch state isn't resent to late joiners or when a
+car streams in, and only latched/unlatched is synced, not the door's swing angle. BJ could cover the
+late-join case by tracking open latches per vehicle and replaying them on join/spawn.
+
 ## Races: rejoin grace period after a disconnect
 
 **Status:** planned, not started. User asked to add this to the plan rather than build it now.

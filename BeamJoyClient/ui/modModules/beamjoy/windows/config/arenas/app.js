@@ -1,4 +1,4 @@
-// Config > Arenas : the Hunter and Infected arena editors in one tab, one section each (like the
+// Config > Arenas : the Hunter, Infected and Derby arena editors in one tab, one section each (like the
 // Freeroam tab's sections). Each section is the existing editor component, mounted only while it's
 // shown, so switching sections closes one editor and opens the other in Lua exactly as switching
 // config tabs used to. Each editor registers its own unsaved-changes guard (beamjoyNavGuard) ;
@@ -10,6 +10,7 @@ angular.module("beamjoy").component("bjConfigArenas", {
         const ALL = [
             { id: "hunter", permission: "EditHunterArenas" },
             { id: "infected", permission: "EditInfectedArenas" },
+            { id: "derby", permission: "EditDerbyArenas" },
         ];
         this.sections = [];
         this.activeSection = null;

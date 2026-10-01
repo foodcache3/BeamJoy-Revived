@@ -1566,6 +1566,12 @@ end
 local function ready(state)
     if not M.session then return end
     local myVeh = beamjoy_vehicles.getCurrentOwn()
+    local s = M.session.settings
+    -- random vehicles from both sides' presets : you're given one at the countdown
+    local given = s.randomizeVehiclePool and s.infectedVehiclePool and s.survivorsVehiclePool
+    if state == true and not given and (not myVeh or myVeh.veh.jbeam == beamjoy_vehicles.WALKING) then
+        return toast.warn(beamjoy_lang.translate("beamjoy.activities.needVehicleToReady"), nil, 4)
+    end
     beamjoy_communications.send("infectedReady", M.session.id, state == true,
         myVeh and myVeh.veh.jbeam or nil)
 end

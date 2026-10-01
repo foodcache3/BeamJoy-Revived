@@ -10,7 +10,7 @@
 // in this codebase uses as-is), no direct coupling between the two components at all.
 angular.module("beamjoy").component("bjPointListEditor", {
     bindings: {
-        // [{key, labelKey, min, hasRadius, hasName, hasTypes, typeOptions}]: color/hasDir/
+        // [{key, labelKey, min, max, hasRadius, hasName, hasTypes, typeOptions}]: color/hasDir/
         // defaultRadius are Lua-only rendering concerns, not needed here. typeOptions is
         // [{key, labelKey}], only meaningful when hasTypes.
         lists: "<",

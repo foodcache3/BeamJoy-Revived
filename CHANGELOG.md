@@ -8,7 +8,19 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2546, server build 2385.
+Version 1.11.0 : client build 2557, server build 2391.
+
+- **Removed the unicycle desync workaround.** The fix is in BeamMP itself now (BeamMP/BeamMP#974,
+  on its development branch), so BeamJoy no longer clears a destroyed remote vehicle's position
+  mailbox. *(client only)*
+- **Fixed: the Dust and particles slider ran off a small menu.** It spans the row now, like the
+  freecam sliders. *(client only)*
+- **Fixed: the gizmo stayed on screen after saving an arena.** Saving a derby, hunter or infected
+  arena with a point selected keeps that point selected (gizmo and all) ; a reload that drops
+  the selection hides the gizmo too. *(client only)*
+- **Hunters' GPS to the fugitive is red.** With GPS on reveal, the route to a revealed fugitive
+  (line, floating arrows, minimap route) is red instead of the stock blue ; every other route keeps
+  the stock color. *(client only)*
 
 - **Race updates are a fraction of the size.** Every gate crossing sends the race to every racer and
   spectator, and each update carried every racer's time at every gate plus a second full copy of
@@ -25,6 +37,10 @@ Version 1.11.0 : client build 2546, server build 2385.
   format for the race HUD, race info, the finished popup and the leaderboards. Also fixed: a time
   just under a whole minute could show as `1:60.00` (and `0:60` on the hunter and infected timers).
   *(client only)*
+- **The server says when BeamJoyServerHooks is missing.** Without that second plugin folder, chat,
+  chat commands and `bj` console commands silently don't work (the console just answers "Unknown
+  command"). The server now logs an error at startup saying where the folder should go. The "map is
+  invalid" startup warning also names the map it rejected. *(server only)*
 - **Everyone gets the green light at the same moment.** Each player's game now keeps an estimate of
   the server's clock, and a race's countdown ends at one shared moment on it. Before, each car
   unfroze and its timer started when the server's "go" reached that player, so higher ping meant a
@@ -43,6 +59,40 @@ Version 1.11.0 : client build 2546, server build 2385.
   rounded up to the next one, the "Finished" popup shows the time the server recorded (it used to
   add your ping), and a spectator's live timer no longer jumps by up to a second on each update.
   *(server and client)*
+- **Derby.** A new Activities section with three modes on the map's derby arenas :
+  - *Last man standing* : wrecked with no lives left (0-5 extra lives) and you're out ; the last car
+    running wins.
+  - *Timed* : wrecked cars respawn ; most wrecks when the time runs out wins.
+  - *Sumo* : the arena's zone (a circle, rectangle or ellipse) shrinks in steps toward its centre ; leave
+    it, fall below it or get wrecked with no lives left and you're out.
+  A car counts as wrecked when its engine is destroyed, it hasn't moved for the arena's stuck time
+  (pinned or not), or it stays outside the arena zone for a few seconds or falls below its floor, in
+  every mode (the zone has bright edge rails, and the derby panel shows how far you are from the
+  edge). The last player to hit you before you went down gets the wreck, even when the stuck time
+  only runs out later (a kill feed shows it), and the damage you deal is counted and breaks ties.
+  Respawns come back repaired at the free start position furthest from the other cars, ghosted for
+  a few seconds. A deliberate reset costs a life (only while nearly stopped) ; on your last life
+  (and any time in timed) the derby panel offers Forfeit. When a derby ends, a notice opens its
+  results. With a vehicle preset, joining the lobby opens the vehicle selector on the preset's
+  vehicles (or, with random vehicles, everyone is given one at the countdown) ; a player who still
+  has no car 10 seconds into the game is out. A car that's out stays in the arena as a wreck with its hazards on and a greyed nametag,
+  and its driver watches the others. Lobbies work like the other modes (invites, crews, Happening
+  now, notices), a vehicle preset can be required (or handed out at random), and the results show
+  wrecks and damage. Derby wins, wrecks and games go on a leaderboard, and a new Discord option
+  posts each derby's standings. The Derby section lists the map's arenas as cards like the race
+  list : each card starts a lobby on that arena (its settings open on the card), and an arena with a
+  game on shows it and joins its lobby from the card. One game per arena at a time. The full
+  window's Leaderboards has a Derby section : ranked by
+  wins, win rate, wrecks dealt, damage dealt or derbies played, with each ranking's leader and your
+  place listed beside it, your own stats, and every player's wrecks dealt against taken.
+- **Derby arenas.** A Derby section in Config > Arenas edits the map's arenas, several per map :
+  start positions (one per player), an optional arena zone with its floor depth (needed for sumo),
+  and each arena's default settings. The zone is a circle (a radius), a rectangle or an ellipse
+  for oval arenas (width and length, turned with the rotate tool, resized by dragging the race
+  editor's cyan handles on its sides) ; each keeps its proportions as it shrinks in sumo. The four BeamJoy Free Derby-map arenas come bundled, and Legacy Import brings
+  over BeamJoy Free derby arenas (their centre and radius become the sumo circle). A new
+  EditDerbyArenas permission (mod by default) guards it. *(server and client)*
+
 - **Staff explode matches the game's own.** It now blasts the car's parts apart like the game's Boom
   (a short repelling burst under the car, fire, every breakable part broken), but only on that car,
   so nearby players' cars aren't thrown about. *(client only)*
@@ -310,10 +360,14 @@ Version 1.11.0 : client build 2546, server build 2385.
 - **Bus lines restyled.** The Bus lines section uses the new card layout: stop count, first and
   last stop, a Loopable tag, and Start straight away (no lobby, bus lines are solo). *(client
   only)*
-- **Hunts need vehicle presets.** A hunt can't start without a vehicle preset for the fugitive
-  and one for the hunters (players who weren't in a car when it started got an empty vehicle
-  picker). The start form says what's missing and keeps Start disabled; the server refuses too.
-  *(client + server)*
+- **Fixed: empty vehicle picker at the start of a hunt.** A player who wasn't in a car (or was in
+  the wrong one for their role) when a hunt started got a vehicle picker with nothing in it, because
+  picks were already locked for the countdown. They can now pick freely until they've spawned one;
+  with no vehicle preset for their side, that's any vehicle. Hunts start without vehicle presets
+  again. *(client + server)*
+- **Pick a vehicle before readying up.** Races, hunts, infected games and derbies say so when you
+  ready up with no vehicle, unless the game hands everyone one (random vehicles from a preset).
+  Before, a hunt, infected game or derby let you in carless. *(client only)*
 - **Lobby ready tags.** Each player's ready tag now takes its colour from the same check as its
   text, so a ready leader shows green like everyone else. *(client only)*
 

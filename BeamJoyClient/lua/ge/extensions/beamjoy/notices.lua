@@ -7,6 +7,8 @@
 --- Crew invites (services/crews.lua, kind "crew") ride along : they stay while you're busy, and
 --- joining opens the Crew tab. So does "pulled" : your crew's leader brought you into their lobby
 --- (or convoy) ; A opens it in the main window, and it goes away once you're out of it.
+--- "results" : a game you played just ended (the runners call results()) ; A opens its results
+--- (the UI side opens the info panel, see windows/notices).
 ---
 --- Pad : like the convoy invite, a notice only takes A / B once focused with the Focus
 --- notification control (beamjoy/mainNav.lua walks delivery's invite first, then these). A joins
@@ -21,6 +23,7 @@ local M = {
     INVITE_SEC = 20,
     ANNOUNCE_SEC = 12,
     PULLED_SEC = 15,
+    RESULTS_SEC = 30,
     ---@type table[] newest first : {id, type, kind, sessionId, fromName, title, count, max, expiresAtMs}
     list = {},
     focused = false,
@@ -34,6 +37,7 @@ local KINDS = {
     race = { runner = function() return beamjoy_raceRunner end, join = "BJRaceJoin", section = "races", lobby = "GRID" },
     hunter = { runner = function() return beamjoy_hunterRunner end, join = "BJHunterJoin", section = "hunter", lobby = "LOBBY" },
     infected = { runner = function() return beamjoy_infectedRunner end, join = "BJInfectedJoin", section = "infected", lobby = "LOBBY" },
+    derby = { runner = function() return beamjoy_derbyRunner end, join = "BJDerbyJoin", section = "derby", lobby = "LOBBY" },
 }
 
 ---@return boolean in any activity : notices would only be noise
@@ -53,6 +57,7 @@ local PULLED = {
     race = { section = "races", runner = function() return beamjoy_raceRunner end, lobby = "GRID" },
     hunter = { section = "hunter", runner = function() return beamjoy_hunterRunner end, lobby = "LOBBY" },
     infected = { section = "infected", runner = function() return beamjoy_infectedRunner end, lobby = "LOBBY" },
+    derby = { section = "derby", runner = function() return beamjoy_derbyRunner end, lobby = "LOBBY" },
     convoy = { section = "jobs" },
 }
 
@@ -70,6 +75,7 @@ local function stillIn(n)
 end
 
 local function liveSession(n)
+    if n.type == "results" then return {} end
     if n.type == "pulled" then
         -- the lobby's own (bigger, maybe chunked) update can land just after this notice : give
         -- it a moment before deciding you're not in it
@@ -137,7 +143,7 @@ local function add(notice)
 end
 
 --- someone opened a lobby (called by the runners for each newly listed session)
----@param kind "race"|"hunter"|"infected"
+---@param kind "race"|"hunter"|"infected"|"derby"
 ---@param session table the runner's open-session summary
 local function announce(kind, session)
     local k = KINDS[kind]
@@ -204,6 +210,23 @@ local function crewInvite(data)
     })
 end
 
+--- a game you played just ended : a notice to open its results
+---@param kind "derby"
+---@param sessionId string
+---@param winnerName string?
+---@param title string? the arena / track name
+local function results(kind, sessionId, winnerName, title)
+    add({
+        type = "results",
+        kind = kind,
+        sessionId = sessionId,
+        fromName = winnerName,
+        title = title,
+        total = M.RESULTS_SEC,
+        expiresAtMs = GetCurrentTimeMillis() + M.RESULTS_SEC * 1000,
+    })
+end
+
 ---@param want boolean
 local function updatePad(want)
     if want == M.padActive then return end
@@ -220,7 +243,9 @@ local function reply(id, accept)
     end
     if not notice then return end
     remove(id)
-    if notice.type == "pulled" then
+    if notice.type == "results" then
+        -- nothing here : the UI opened the results itself (it owns the info panel)
+    elseif notice.type == "pulled" then
         -- you're already in : A just opens it
         if accept and beamjoy_mainNav then beamjoy_mainNav.focusOn("play", PULLED[notice.kind].section) end
     elseif notice.kind == "crew" then
@@ -268,7 +293,9 @@ local function onUpdate()
     for i = #M.list, 1, -1 do
         local n = M.list[i]
         -- expired, joined something else, or the lobby is gone / started / full
-        if now >= n.expiresAtMs or (isBusy and n.kind ~= "crew" and n.type ~= "pulled") or not liveSession(n) then
+        -- (a results notice stays : the finished game still counts as busy for a few seconds)
+        if now >= n.expiresAtMs or (isBusy and n.kind ~= "crew" and n.type ~= "pulled" and n.type ~= "results")
+            or not liveSession(n) then
             table.remove(M.list, i)
             changed = true
         end
@@ -296,7 +323,8 @@ local function onInit()
     end)
     -- staff : cancel someone else's race / hunt / infected game from Happening now
     beamjoy_communications_ui.addHandler("BJStaffSessionCancel", function(kind, sessionId)
-        local event = ({ race = "raceCancel", hunter = "hunterCancel", infected = "infectedCancel" })[kind]
+        local event = ({ race = "raceCancel", hunter = "hunterCancel", infected = "infectedCancel",
+            derby = "derbyCancel" })[kind]
         if event and sessionId then beamjoy_communications.send(event, sessionId) end
     end)
 end
@@ -314,6 +342,7 @@ M.onExtensionUnloaded = onServerLeave
 M.announce = announce
 M.crewInvite = crewInvite
 M.crewPulled = crewPulled
+M.results = results
 M.notificationFocusable = focusable
 M.notificationFocused = isFocused
 M.setNotificationFocus = setFocus

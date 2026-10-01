@@ -17,6 +17,7 @@ angular.module("beamjoy").component("bjConfigCore", {
         // comment on why Core's tab visibility itself is widened to match).
         this.canImportHunter = false;
         this.canImportInfected = false;
+        this.canImportDerby = false;
         this.canImportRaces = false;
         this.canImportFreeroam = false;
         this.canImportBusLines = false;
@@ -40,6 +41,7 @@ angular.module("beamjoy").component("bjConfigCore", {
                 undefined,
                 "EditInfectedArenas"
             );
+            this.canImportDerby = beamjoyStore.permissions.hasAllPermissions(undefined, "EditDerbyArenas");
             this.canImportRaces = beamjoyStore.permissions.hasAllPermissions(
                 undefined,
                 "EditRaces"
@@ -134,6 +136,35 @@ angular.module("beamjoy").component("bjConfigCore", {
                 translate("beamjoy.window.config.tabs.core.legacyImport.infected.pick"),
                 items,
                 (keys) => beamjoyStore.send("BJInfectedLegacyImportConfirm", [keys])
+            );
+        });
+
+        // derby : BJI keeps every arena of a map in <map>_derby.json ; one row per arena, grouped
+        // by map. An arena with the same name as one already here replaces it
+        this.derbyLegacyImportStatus = null;
+        this.requestDerbyLegacyImport = (event) => {
+            event.stopPropagation();
+            this.derbyLegacyImportStatus = null;
+            beamjoyStore.send("BJDerbyLegacyImportPreviewRequest");
+        };
+        $rootScope.$on("BJDerbyLegacyImportPreview", (_, results) => {
+            if (!importable(results)) {
+                this.derbyLegacyImportStatus = "beamjoy.window.config.tabs.core.legacyImport.derby.none";
+                return;
+            }
+            const items = results.slice().sort(byMap).map((r) => ({
+                key: r.key,
+                label: r.name,
+                group: r.map,
+                detail: translate(r.hasZone ? "beamjoy.window.config.tabs.core.legacyImport.derby.countsZone"
+                    : "beamjoy.window.config.tabs.core.legacyImport.derby.counts")
+                    .replace("{starts}", r.startCount),
+                tag: r.conflict ? translate("beamjoy.window.config.tabs.core.legacyImport.derby.overwriteTag") : "",
+            }));
+            beamjoyConfirm.askChecklist(
+                translate("beamjoy.window.config.tabs.core.legacyImport.derby.pick"),
+                items,
+                (keys) => beamjoyStore.send("BJDerbyLegacyImportConfirm", [keys])
             );
         });
 

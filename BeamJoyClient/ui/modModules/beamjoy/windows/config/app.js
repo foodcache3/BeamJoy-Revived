@@ -4,6 +4,7 @@ await import(`/ui/modModules/beamjoy/windows/config/races/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/vehiclePresets/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/hunterArena/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/infectedArena/app.js`);
+await import(`/ui/modModules/beamjoy/windows/config/derbyArena/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/arenas/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/freeroam/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/permissions/app.js`);
@@ -104,7 +105,7 @@ angular.module("beamjoy").component("bjConfig", {
                 visible: false,
                 closable: false,
                 template: "<bj-config-arenas></bj-config-arenas>",
-                permissions: ["EditHunterArenas", "EditInfectedArenas"],
+                permissions: ["EditHunterArenas", "EditInfectedArenas", "EditDerbyArenas"],
             },
             freeroam: {
                 id: "freeroam",
@@ -243,7 +244,7 @@ angular.module("beamjoy").component("bjConfig", {
         };
         // the arena editors used to be tabs of their own : their shortcuts now open the Arenas
         // tab on that section
-        const ARENA_SECTIONS = { hunterArena: "hunter", infectedArena: "infected" };
+        const ARENA_SECTIONS = { hunterArena: "hunter", infectedArena: "infected", derbyArena: "derby" };
         $rootScope.$on("BJOpenTab", (_, tabId) => {
             if (ARENA_SECTIONS[tabId]) {
                 beamjoyStore.arenasSection = ARENA_SECTIONS[tabId];

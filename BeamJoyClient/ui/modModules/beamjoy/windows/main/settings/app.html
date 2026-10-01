@@ -87,13 +87,16 @@
                 {{ "beamjoy.window.main.tabs.settings.sections.vehicle.particles" | translate }}
             </span>
         </td>
-        <td>
-            <bj-slider
-                min="0"
-                max="100"
-                step="5"
-                ng-model="$ctrl.settings.vehicle.particleAmount"
-            ></bj-slider>
+        <!-- both columns, like the freecam sliders : in one, the slider ran off a small window -->
+        <td colspan="2">
+            <div class="w-100">
+                <bj-slider
+                    min="0"
+                    max="100"
+                    step="5"
+                    ng-model="$ctrl.settings.vehicle.particleAmount"
+                ></bj-slider>
+            </div>
         </td>
     </tr>
 
