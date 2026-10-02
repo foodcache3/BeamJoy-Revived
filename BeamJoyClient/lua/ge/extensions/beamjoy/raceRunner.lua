@@ -291,7 +291,8 @@ end
 ---@return string[]
 local function raceBlockedCameras()
     local list = { camera.CAMERAS.BIG_MAP }
-    if M.session and M.session.settings.disableCameras then
+    -- not while the node grabber is in use (updateNodegrabberCamera below)
+    if M.session and M.session.settings.disableCameras and not M.nodegrabberCamera then
         table.insert(list, camera.CAMERAS.FREE)
         table.insert(list, camera.CAMERAS.CINEMATIC)
         table.insert(list, camera.CAMERAS.STEADYCAM)
@@ -2346,8 +2347,49 @@ local function updateResetPenaltyLock()
     end
 end
 
+-- the global cameras "Disable Free Cam" blocks, which the node grabber can switch to
+local GLOBAL_CAMERAS = { free = true, smoothFree = true, steadycam = true }
+
+---@return boolean the node grabber is in use : Ctrl held to show the nodes, or a node still held
+local function nodegrabberInUse()
+    local ng = extensions.core_nodegrabberGamepad
+    local st = ng and ng.state
+    if st and (st.mouseActive or st.grabbing or st.active) then return true end
+    return beamjoy_inputs ~= nil and beamjoy_inputs.isNodegrabberRenderActive == true
+end
+
+--- a race that blocks free cam but allows the node grabber : the node grabber can switch the
+--- camera to a free-type one (Cinematic, Steadycam), which the block then skipped away from every
+--- frame, so the camera went haywire whenever someone grabbed. While the node grabber is in use
+--- those cameras are allowed ; once it's let go, back to the vehicle camera the racer was on, and
+--- blocked again. Only while actually racing (the countdown has its own camera lock)
+local function updateNodegrabberCamera()
+    local s = M.session and M.session.settings
+    local own = M.session and getSelfParticipant()
+    local applies = s ~= nil and M.session.state == "RACE" and s.disableCameras == true and
+        s.disableNodegrabber ~= true and own ~= nil and not own.finished and not own.dnf
+    local inUse = applies and nodegrabberInUse()
+    if inUse and not M.nodegrabberCamera then
+        local current = camera.getCamera()
+        M.nodegrabberCamera = { back = not GLOBAL_CAMERAS[current] and current or nil }
+        camera.blockCameras(table.unpack(raceBlockedCameras()))
+        extensions.hook("onBJScenarioChanged")
+    elseif not inUse and M.nodegrabberCamera then
+        local back = M.nodegrabberCamera.back
+        M.nodegrabberCamera = nil
+        if applies then
+            if GLOBAL_CAMERAS[camera.getCamera()] then
+                camera.setCamera(back or camera.CAMERAS.ORBIT)
+            end
+            camera.blockCameras(table.unpack(raceBlockedCameras()))
+            extensions.hook("onBJScenarioChanged")
+        end
+    end
+end
+
 local function onUpdate()
     M.prevFrameElapsedMs = M.frameElapsedMs
+    updateNodegrabberCamera()
     M.frameElapsedMs = raceElapsedNowMs()
     if M.session and M.session.state == "GRID" then
         updateGridCountdown()

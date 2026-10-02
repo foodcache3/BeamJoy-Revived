@@ -8,7 +8,13 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2570, server build 2397.
+Version 1.11.0 : client build 2571, server build 2397.
+
+- **Fixed: the node grabber made the camera go haywire in races without free cam.** The node
+  grabber can switch to a free-type camera (Cinematic, Steadycam), which the free cam block then
+  kept skipping away from. In a race that blocks free cam but allows the node grabber, those
+  cameras are allowed while the node grabber is in use (Ctrl held, or a node still held), and
+  letting go puts you back on the vehicle camera you were on. *(client only)*
 
 - **Allowing the node grabber keeps the leaderboard.** A race started with "Disable node grabber"
   turned off still records times and PBs ; only free cameras and gravity changes being allowed
