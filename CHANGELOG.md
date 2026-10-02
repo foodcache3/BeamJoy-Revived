@@ -8,7 +8,13 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2571, server build 2397.
+Version 1.11.0 : client build 2572, server build 2398.
+
+- **Flip upright and Last road respawns.** Two more respawn options for races (start options and
+  the race editor) : every reset or recover during the race, whatever was pressed (a rewind, a
+  physics reset, a reload, the other recovery button), becomes the game's flip upright where the
+  car is, or its recover to last road. Both keep the car's damage, and the reset penalty applies
+  once per reset. *(server and client)*
 
 - **Fixed: the node grabber made the camera go haywire in races without free cam.** The node
   grabber can switch to a free-type camera (Cinematic, Steadycam), which the free cam block then
@@ -16,9 +22,6 @@ Version 1.11.0 : client build 2571, server build 2397.
   cameras are allowed while the node grabber is in use (Ctrl held, or a node still held), and
   letting go puts you back on the vehicle camera you were on. *(client only)*
 
-- **Allowing the node grabber keeps the leaderboard.** A race started with "Disable node grabber"
-  turned off still records times and PBs ; only free cameras and gravity changes being allowed
-  keep a run off the leaderboard (and the start warning only asks about those). *(server and client)*
 
 - **Reset penalties can add time instead of holding the car.** The race's reset penalty has a
   Penalty choice (start options and the race editor) : Hold the car, as before and the default,

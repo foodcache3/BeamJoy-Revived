@@ -2624,6 +2624,26 @@ local function lastCheckpointTarget(participant, race)
     return (gate and gate > 0) and race.gates[gate] or participant.startPosition
 end
 
+--- the "flipupright" / "lastroad" respawn options : the one recovery every reset becomes. Both
+--- keep the car's damage, like the pause menu's own buttons for them. The game's functions as they
+--- were before beamjoy_inputs wrapped them, so this doesn't come back through the reset gate
+---@param strategy "flipupright"|"lastroad"
+---@param mpVeh BJVehicle
+local function forceResetAction(strategy, mpVeh)
+    local base = beamjoy_inputs.baseFunctions and beamjoy_inputs.baseFunctions.extensions and
+        beamjoy_inputs.baseFunctions.extensions.spawn
+    if not base then return end
+    local veh = mpVeh.veh
+    if strategy == "flipupright" then
+        if base.safeTeleport then
+            base.safeTeleport(veh, veh:getPosition(), quatFromDir(veh:getDirectionVector()),
+                nil, nil, nil, nil, false)
+        end
+    elseif base.teleportToLastRoad then
+        base.teleportToLastRoad(veh, { resetVehicle = false })
+    end
+end
+
 --- respawnStrategy enforcement for "lastcheckpoint" (always) and "all" (hard resets only,
 --- see below). Primary path : intercepts BEFORE the native reset/recover actually runs
 --- (`inputs.lua`'s `overrideResetInputs` routes every reset-ish keybind through `onReset`, which
@@ -2673,6 +2693,14 @@ local function onBJRequestCurrentVehicleReset(req, resetType, mpVeh)
     if not participant or participant.finished or participant.dnf then return end
 
     local strategy = M.session.settings.respawnStrategy
+    -- "flipupright" / "lastroad" : whatever was pressed (a rewind, a physics reset, a reload, the
+    -- other recovery button...), the native one never runs, the forced recovery does instead
+    if strategy == "flipupright" or strategy == "lastroad" then
+        req.state = false
+        applyResetPenalty(mpVeh.vid)
+        forceResetAction(strategy, mpVeh)
+        return
+    end
     -- "all" (free respawn) still lets a plain Recover behave exactly like vanilla BeamNG: that's
     -- just fixing a tip-over in place, not restarting your run. But a *hard* reset (physics
     -- reset / reload vehicle) would otherwise strand you at a random default spawn far from the

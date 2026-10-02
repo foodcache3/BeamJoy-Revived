@@ -162,7 +162,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         // matches services/races.lua's own sanitizeRace truncation; see its comment for why a
         // limit exists at all
         this.NAME_MAX_LENGTH = 40;
-        this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint"];
+        this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint", "flipupright", "lastroad"];
         this.RESET_PENALTY_MODES = ["hold", "time"];
         // mirrors services/races.lua's PLACEMENT_MODES (grid slot assignment at countdown time)
         this.PLACEMENT_MODES = ["deterministic", "random", "manual"];

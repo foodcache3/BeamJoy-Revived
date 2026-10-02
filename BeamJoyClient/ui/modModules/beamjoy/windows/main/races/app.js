@@ -13,18 +13,20 @@ angular.module("beamjoy").component("bjMainRaces", {
         beamjoyNow
     ) {
         const translate = $filter("translate");
-        this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint"];
+        this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint", "flipupright", "lastroad"];
         // what a reset costs : the car held for the penalty, or the penalty added to the race time
         this.RESET_PENALTY_MODES = ["hold", "time"];
         // mirrors races.lua's PLACEMENT_MODES: how grid slots get assigned at countdown time
         // ("deterministic" = lobby join order, "random" = shuffled, "manual" = host-assigned)
         this.PLACEMENT_MODES = ["deterministic", "random", "manual"];
-        // mirrors raceGrid.lua's own trySubmitTime gate exactly (both must be enabled for a time
-        // to count at all ; the node grabber no longer counts against the leaderboard). Used here only to decide whether to warn before starting, not to
+        // mirrors raceGrid.lua's own trySubmitTime gate exactly (all three must be enabled for a
+        // time to count at all). Used here only to decide whether to warn before starting, not to
         // enforce anything; the server remains the real source of truth for that. Slow-mo/pause
         // isn't in this list: it's no longer a toggle at all, always forced off for every race, so
         // there's nothing to warn about for it.
-        const ANTICHEAT_KEYS = ["disableCameras", "disableGravityChange"];
+        const ANTICHEAT_KEYS = [
+            "disableNodegrabber", "disableCameras", "disableGravityChange",
+        ];
 
         // shortcut for non-staff editors : previously the only way to reach the race editor was
         // digging through the Config window's own tab list by hand. hasAllPermissions is rank-

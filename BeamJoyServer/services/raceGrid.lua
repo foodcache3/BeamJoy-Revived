@@ -1095,9 +1095,7 @@ local function trySubmitTime(session, participant, timeMs)
     -- a disqualified run never counts
     if participant.disqualified then return end
     local s = session.settings
-    -- the node grabber isn't one of them any more (per request) : a race can allow it and still
-    -- count, only free cameras and gravity changes keep a time off the leaderboard
-    if not (s.disableCameras and s.disableGravityChange) then
+    if not (s.disableNodegrabber and s.disableCameras and s.disableGravityChange) then
         return
     end
     -- same reasoning, for the vehicle restriction's own per-start choice. A race restricted to a

@@ -1,5 +1,5 @@
 ---@alias BJRaceMode "grid"|"passive"
----@alias BJRaceRespawnStrategy "all"|"norespawn"|"lastcheckpoint"
+---@alias BJRaceRespawnStrategy "all"|"norespawn"|"lastcheckpoint"|"flipupright"|"lastroad"
 ---@alias BJRacePlacementMode "deterministic"|"random"|"manual"
 
 ---@class BJRaceGate
@@ -229,6 +229,10 @@ local M = {
         ALL = "all",
         NORESPAWN = "norespawn",
         LASTCHECKPOINT = "lastcheckpoint",
+        -- every reset or recover becomes the game's flip upright (where the car is) or its recover
+        -- to last road, whatever was pressed (raceRunner.lua's onBJRequestCurrentVehicleReset)
+        FLIPUPRIGHT = "flipupright",
+        LASTROAD = "lastroad",
     },
     -- how grid slots map to participants at countdown (see raceGrid.lua's beginCountdown):
     -- "deterministic" = lobby join order (starter first), "random" = shuffled, "manual" = the
