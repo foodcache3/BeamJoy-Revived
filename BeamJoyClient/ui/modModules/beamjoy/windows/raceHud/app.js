@@ -4,10 +4,12 @@
 //              and a short standings list (the leader, then the cars around you)
 //   compact  : the essentials only, the old HUD's information in the new style
 //   full     : every racer with their gap to the leader, for broadcasting / spectating
+//   off      : no HUD, racing or spectating ; the Focus control still brings up the compact one
+//              for its Race info / Retire buttons
 // Everything shown is built once per BJRaceHud push (~20/s while racing, see raceRunner.lua's
 // pushHud), never in template getters : fresh arrays per digest break ng-repeat.
 const RACE_HUD_LAYOUT_KEY = "beamjoy.raceHud.layout";
-const RACE_HUD_LAYOUTS = ["standard", "compact", "full"];
+const RACE_HUD_LAYOUTS = ["standard", "compact", "full", "off"];
 
 angular.module("beamjoy").component("bjRaceHud", {
     templateUrl: "/ui/modModules/beamjoy/windows/raceHud/app.html",
@@ -30,7 +32,10 @@ angular.module("beamjoy").component("bjRaceHud", {
         }
         this.spectator = false;
         this.layout = this.chosenLayout;
-        const applyLayout = () => (this.layout = this.spectator ? "full" : this.chosenLayout);
+        const applyLayout = () => {
+            if (this.chosenLayout === "off") this.layout = this.focused ? "compact" : "off";
+            else this.layout = this.spectator ? "full" : this.chosenLayout;
+        };
         $rootScope.$on("BJRaceHudLayout", (_, layout) => {
             if (RACE_HUD_LAYOUTS.includes(layout)) this.chosenLayout = layout;
             applyLayout();
@@ -60,6 +65,12 @@ angular.module("beamjoy").component("bjRaceHud", {
             return "";
         };
         const nameOf = (row) => (row && (row.displayName || row.playerName)) || "";
+        // a racer's staff time penalty in seconds, for the penalty box ("5", "0.5") ; null : none to show
+        const penText = (ms) => {
+            const s = Math.round(ms / 100) / 10;
+            return Number.isInteger(s) ? String(s) : s.toFixed(1);
+        };
+        const penOf = (row) => (row && row.penaltyMs > 0 && !row.disqualified ? penText(row.penaltyMs) : null);
 
         const build = (data) => {
             this.spectator = !!data.spectator;
@@ -79,13 +90,15 @@ angular.module("beamjoy").component("bjRaceHud", {
                 finishedCount: data.finishedCount || 0,
                 finished: !!self.finished,
                 dnf: !!self.dnf,
+                pen: penOf(self),
             };
             v.ofCount = fill("beamjoy.raceHud.ofCount", { n: v.count });
             v.finishedText = fill("beamjoy.raceHud.finishedCount", { n: v.finishedCount });
 
             // where you are : the lap on a multi-lap race, else the sector (or gate) of the stage
             v.progressOf = "";
-            if (self.finished) v.progress = translate("beamjoy.raceHud.finished");
+            if (self.disqualified) v.progress = translate("beamjoy.raceHud.disqualified");
+            else if (self.finished) v.progress = translate("beamjoy.raceHud.finished");
             else if (self.dnf) v.progress = translate("beamjoy.raceHud.retired");
             else if (laps > 1 && self.currentLap >= laps) v.progress = translate("beamjoy.raceHud.finalLap");
             else if (laps > 1) {
@@ -134,18 +147,21 @@ angular.module("beamjoy").component("bjRaceHud", {
             const rowOf = (row, i) => {
                 const lead = i === 0;
                 let gap = "";
-                if (row.dnf) gap = translate("beamjoy.raceHud.out");
+                if (row.disqualified) gap = translate("beamjoy.raceHud.dsq");
+                else if (row.dnf) gap = translate("beamjoy.raceHud.out");
                 else if (lead) gap = row.finished ? clock(row.totalMs) : "";
                 else gap = leaderGap(row);
                 return {
                     kind: "car",
-                    pos: row.dnf ? "-" : String(i + 1),
-                    plateCls: row.dnf ? "out" : lead ? "p1" : "",
-                    rowCls: row.playerName === self.playerName ? "you" : row.dnf ? "out" : "",
+                    pos: row.disqualified ? "DSQ" : row.dnf ? "-" : String(i + 1),
+                    plateCls: row.disqualified ? "dsq" : row.dnf ? "out" : lead ? "p1" : "",
+                    rowCls: (row.playerName === self.playerName ? "you" : row.dnf || row.disqualified ? "out" : "") +
+                        (row.disqualified ? " dsq" : ""),
                     name: nameOf(row),
+                    pen: penOf(row),
                     fin: !!row.finished,
                     gap,
-                    gapCls: row.dnf ? "soft" : "",
+                    gapCls: row.dnf || row.disqualified ? "soft" : "",
                 };
             };
             v.full = standings.map(rowOf);
@@ -203,6 +219,7 @@ angular.module("beamjoy").component("bjRaceHud", {
                 this.focused = !!(data && data.active);
                 this.cursor = 0;
                 cancelRetire();
+                applyLayout();
                 beamjoyDelivery.setNavOwner("raceHud", this.focused);
             });
         });

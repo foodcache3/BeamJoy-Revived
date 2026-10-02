@@ -163,13 +163,21 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJRaceLeave", M.leave)
     beamjoy_communications_ui.addHandler("BJRaceCancel", M.cancel)
     beamjoy_communications_ui.addHandler("BJRaceUpdateSettings", M.updateSettings)
-    -- the leader starts now with whoever is ready (services/raceGrid.lua)
+    -- the leader starts now with whoever is ready. The server counts the leader as ready, so they
+    -- ready up here first, through the same checks as the Ready button (a car, the right one) :
+    -- without it a leader with no car could start the race carless (services/raceGrid.lua)
     beamjoy_communications_ui.addHandler("BJRaceStartNow", function()
-        if M.session then beamjoy_communications.send("raceStartNow", M.session.id) end
+        if M.session and M.ready(true) then beamjoy_communications.send("raceStartNow", M.session.id) end
     end)
     beamjoy_communications_ui.addHandler("BJRaceRetire", M.retire)
     beamjoy_communications_ui.addHandler("BJRaceSpectate", M.spectateSession)
     beamjoy_communications_ui.addHandler("BJRaceStopSpectate", M.stopSpectating)
+    -- race control, staff watching a race (services/raceGrid.lua's raceStaffAction)
+    beamjoy_communications_ui.addHandler("BJRaceStaffAction", function(playerID, action, seconds)
+        if M.spectatingSession then
+            beamjoy_communications.send("raceStaffAction", M.spectatingSession.id, playerID, action, seconds)
+        end
+    end)
     -- the race-info panel's tab components each mount fresh (bj-tabs only ever compiles the
     -- active tab's template, destroying/recreating on switch, see cmps/tabs/app.html), so a
     -- freshly-mounted tab has missed every BJRaceInfo broadcast that happened before it existed.
@@ -313,6 +321,8 @@ local function spectateAnotherRacer(session)
     beamjoy_vehicles.focusVehicle(mpVeh.vid)
     M.spectatingVID = mpVeh.vid
     M.spectatingPlayerName = target.playerName
+    -- the checkpoints follow who's watched (raceMarkers.lua)
+    extensions.hook("onBJRaceMarkersRefresh")
     return true
 end
 
@@ -1120,7 +1130,8 @@ local function pushHud()
         -- shows magnitudes (which side is which comes from the position), so no sign juggling.
         local function opponent(row, gapMs, lapsDiff)
             return { playerName = row.playerName, displayName = row.displayName,
-                finished = row.finished, dnf = row.dnf, gapMs = gapMs, lapsDiff = lapsDiff }
+                finished = row.finished, dnf = row.dnf, gapMs = gapMs, lapsDiff = lapsDiff,
+                penaltyMs = row.penaltyMs, disqualified = row.disqualified }
         end
         for i, row in ipairs(leaderboard) do
             if row.playerName == participant.playerName then
@@ -1140,7 +1151,8 @@ local function pushHud()
             desc.leaderGapMs = row.leaderGapMs
             desc.leaderLapsDiff = row.leaderLapsDiff
             if row.finished then
-                local total = 0
+                -- the race time : laps plus staff penalties
+                local total = row.penaltyMs or 0
                 table.forEach(row.lapTimes or {}, function(t) total = total + t end)
                 desc.totalMs = total
             end
@@ -1175,6 +1187,8 @@ local function pushHud()
             currentSector = participant.currentSector,
             finished = participant.finished,
             dnf = participant.dnf,
+            disqualified = participant.disqualified,
+            penaltyMs = participant.penaltyMs,
             currentLapElapsedMs = elapsedMs - previousLapsElapsed,
             lastLapMs = participant.lapTimes and participant.lapTimes[#participant.lapTimes] or nil,
             bestLapMs = participant.bestLapMs,
@@ -1270,6 +1284,8 @@ local function pushRaceInfo()
                     vehicleModel = p.vehicleModel,
                     finished = p.finished,
                     dnf = p.dnf,
+                    disqualified = p.disqualified,
+                    penaltyMs = p.penaltyMs,
                     currentLap = p.currentLap,
                     currentSector = p.currentSector,
                     lapTimes = p.lapTimes,
@@ -1326,11 +1342,24 @@ local function pushSpectateStatus()
         return beamjoy_communications_ui.send("BJRaceSpectateStatus", nil)
     end
     local race = getRaceForSession(M.spectatingSession)
+    -- staff get the racers, in standings order, for race control (penalties, disqualifying)
+    local staff = beamjoy_permissions.isStaff()
     beamjoy_communications_ui.send("BJRaceSpectateStatus", {
         sessionId = M.spectatingSession.id,
         raceName = race and race.name or "?",
         state = M.spectatingSession.state,
         participantCount = #M.spectatingSession.participants,
+        staff = staff,
+        racers = staff and table.map(M.spectatingSession.participants, function(p)
+            return {
+                playerID = p.playerID,
+                name = p.displayName or p.playerName,
+                finished = p.finished == true,
+                dnf = p.dnf == true,
+                disqualified = p.disqualified == true,
+                penaltyMs = p.penaltyMs or 0,
+            }
+        end) or nil,
     })
 end
 
@@ -1390,6 +1419,28 @@ local function onSpectateUpdate(session)
     pushHud()
     pushRaceInfo()
     pushSpectateStatus()
+    extensions.hook("onBJRaceMarkersRefresh")
+end
+
+--- watching a race (a spectator, or a racer whose own run is over) and switching to another
+--- racer's car with the game's own vehicle switching : the HUD and the checkpoints
+--- (raceMarkers.lua) follow that racer, like being moved to them by spectateAnotherRacer
+---@param newVID integer
+local function onVehicleSwitched(_, newVID)
+    local session = M.spectatingSession or M.session
+    if not session or session.state ~= "RACE" or not newVID or newVID == -1 then return end
+    if M.session then
+        local own = getSelfParticipant()
+        if own and not own.finished and not own.dnf then return end
+    end
+    local mpVeh = beamjoy_vehicles.vehicles[newVID]
+    if not mpVeh or mpVeh.isLocal or mpVeh.ownerName == M.spectatingPlayerName then return end
+    if not table.find(session.participants, function(p) return p.playerName == mpVeh.ownerName end) then
+        return
+    end
+    M.spectatingVID = newVID
+    M.spectatingPlayerName = mpVeh.ownerName
+    pushHud()
     extensions.hook("onBJRaceMarkersRefresh")
 end
 
@@ -1533,10 +1584,12 @@ local function onSessionUpdate(session)
     local previousSettingsRev = M.session ~= nil and M.session.id == session.id and M.session.settingsRev or nil
     local wasDnf = false
     local wasFinished = false
+    local wasDisqualified = false
     if M.session then
         local previousParticipant = getSelfParticipant()
         wasDnf = previousParticipant ~= nil and previousParticipant.dnf == true
         wasFinished = previousParticipant ~= nil and previousParticipant.finished == true
+        wasDisqualified = previousParticipant ~= nil and previousParticipant.disqualified == true
     end
     M.session = session
 
@@ -1978,16 +2031,20 @@ local function onSessionUpdate(session)
             -- extra plumbing needed, buildSessionPayload already sends participants unfiltered
             isNewPB = participant.isNewPB == true,
             isNewRecord = participant.isNewRecord == true,
+            -- staff time penalties so far, added to the race time (the popup shows the slip)
+            penaltyMs = participant.penaltyMs,
         })
         async.delayTask(function()
             beamjoy_communications_ui.send("BJRaceCountdown", { active = false })
         end, FINISH_POPUP_SECONDS * 1000, "BJRaceCountdownFinishedHide")
     end
-    if participant.dnf and not wasDnf then
+    -- staff disqualifying you shows instead (mid-race, it's also what put you out)
+    local disqualifiedNow = participant.disqualified == true and not wasDisqualified
+    if (participant.dnf and not wasDnf) or disqualifiedNow then
         local race = getRace()
         beamjoy_communications_ui.send("BJRaceCountdown", {
             active = true,
-            mode = "dnf",
+            mode = participant.disqualified and "dq" or "dnf",
             raceName = race and race.name,
         })
         async.delayTask(function()
@@ -2214,6 +2271,23 @@ end
 local function applyResetPenalty(vid)
     if not M.session or M.session.state ~= "RACE" then return end
     if not M.session.settings.resetPenaltyEnabled then return end
+    -- "time" : no hold, the seconds go on the race time instead (services/raceGrid.lua's
+    -- raceResetPenalty, which also ignores a repeat of the same reset). A short popup says so
+    if M.session.settings.resetPenaltyMode == "time" then
+        local now = GetCurrentTimeMillis()
+        if M.lastResetPenaltySentMs and now - M.lastResetPenaltySentMs < 1500 then return end
+        M.lastResetPenaltySentMs = now
+        beamjoy_communications.send("raceResetPenalty", M.session.id)
+        beamjoy_communications_ui.send("BJRaceCountdown", {
+            active = true,
+            mode = "timePenalty",
+            penaltyMs = math.floor((M.session.settings.resetPenaltySeconds or 5) * 1000),
+        })
+        async.delayTask(function()
+            beamjoy_communications_ui.send("BJRaceCountdown", { active = false })
+        end, 2500, "BJRaceTimePenaltyHide")
+        return
+    end
     -- already serving a penalty: ignore, don't restart/extend it. Same reasoning as Hunter's own
     -- identical guard, a repeated key press or the reset's own physics settling re-firing this
     -- hook must not keep pushing the release time back out
@@ -2768,6 +2842,7 @@ local function joinRace(sessionId)
 end
 
 ---@param state boolean?
+---@return boolean? sent true once sent, nil when a check refused it
 local function ready(state)
     if not M.session then return LogError("beamjoy_raceRunner: not in a race session") end
     local becomingReady = state ~= false
@@ -2820,6 +2895,7 @@ local function ready(state)
         model = beamjoy_vehicles.getCurrentConfigDisplayLabel(veh.veh)
     end
     beamjoy_communications.send("raceReady", M.session.id, becomingReady, model)
+    return true
 end
 
 --- "manual" placement mode only : the host assigning a participant's grid slot from the lobby's
@@ -2868,6 +2944,7 @@ M.onSpectateUpdate = onSpectateUpdate
 M.onSpectateRemoved = onSpectateRemoved
 M.onVehicleResetted = onVehicleResetted
 M.onVehicleDestroyed = onVehicleDestroyed
+M.onVehicleSwitched = onVehicleSwitched
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
 M.onBJRequestCurrentVehicleReset = onBJRequestCurrentVehicleReset
 M.pushRaceInfo = pushRaceInfo

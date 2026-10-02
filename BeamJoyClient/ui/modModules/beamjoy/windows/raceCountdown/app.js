@@ -25,10 +25,17 @@ angular.module("beamjoy").component("bjRaceCountdown", {
             // rather than stacking both; see app.html
             this.isNewPB = data.isNewPB ?? false;
             this.isNewRecord = data.isNewRecord ?? false;
+            // staff time penalties at the finish, in seconds ("5", "0.5" ; null : none, nothing shown)
+            this.penaltySeconds = data.penaltyMs > 0 ? penText(data.penaltyMs) : null;
             if (data.raceName) {
                 this.raceName = data.raceName;
             }
         });
+
+        const penText = (ms) => {
+            const s = Math.round(ms / 100) / 10;
+            return Number.isInteger(s) ? String(s) : s.toFixed(1);
+        };
 
         // shared race time format (hours from an hour up), see beamjoyLeaderboardFormat
         this.formatTime = beamjoyLeaderboardFormat.time;

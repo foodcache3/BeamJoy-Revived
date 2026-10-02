@@ -71,9 +71,46 @@ local M = {
     defaultGroups = nil,
 }
 
+--- the saved groups as the ordered list (lowest rank first) everything else expects. A groups.json
+--- in another shape, a map keyed by group name (an older BeamJoy, a hand edit), was merged over the
+--- built-in list as-is : its name keys made the groups go out as a JSON object instead of a list,
+--- and every player's UI broke on it (no BeamJoy UI at all, every permission check failing). Such a
+--- file is turned into a list, ordered like the built-in groups (with any rank number it carries
+--- for the others), and saved back that way.
+---@param saved table?
+---@return table? list, boolean converted
+local function savedGroupsList(saved)
+    if type(saved) ~= "table" or table.isArray(saved) then return saved, false end
+    local builtInOrder = {}
+    for i, g in ipairs(M.data) do builtInOrder[g.name] = i end
+    local list = {}
+    for key, group in pairs(saved) do
+        if type(group) == "table" then
+            if type(group.name) ~= "string" then group.name = tostring(key) end
+            list[#list + 1] = group
+        end
+    end
+    local function rank(g)
+        return builtInOrder[g.name] or tonumber(g.level) or tonumber(g.rank) or tonumber(g.index)
+    end
+    table.sort(list, function(a, b)
+        local ra, rb = rank(a), rank(b)
+        if ra and rb and ra ~= rb then return ra < rb end
+        if (ra ~= nil) ~= (rb ~= nil) then return ra ~= nil end
+        return a.name < b.name
+    end)
+    return list, true
+end
+
 local function onInit()
     M.defaultGroups = table.map(M.data, function(g) return g.name end):sort()
-    M.data = table.assign(M.data, dao_groups.get() or {})
+    local saved, converted = savedGroupsList(dao_groups.get())
+    M.data = table.assign(M.data, saved or {})
+    if converted then
+        LogWarn("groups.json wasn't a list of groups : converted it (" ..
+            table.map(M.data, function(g) return g.name end):join(", ") .. ") and saved it back")
+        dao_groups.save(M.data)
+    end
 
     communications_rx.addHandler("saveGroups", M.saveGroups)
 end

@@ -8,7 +8,69 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2560, server build 2391.
+Version 1.11.0 : client build 2570, server build 2397.
+
+- **Allowing the node grabber keeps the leaderboard.** A race started with "Disable node grabber"
+  turned off still records times and PBs ; only free cameras and gravity changes being allowed
+  keep a run off the leaderboard (and the start warning only asks about those). *(server and client)*
+
+- **Reset penalties can add time instead of holding the car.** The race's reset penalty has a
+  Penalty choice (start options and the race editor) : Hold the car, as before and the default,
+  or Add time, where a reset costs no wait but its seconds go on the racer's race time. It shows
+  in the same red box as staff penalties and counts the same way in the finishing order, and a
+  short "Reset penalty +5s" popup tells the racer. One reset is only counted once. Staff
+  clearing a racer's penalties clears these too. *(server and client)*
+
+- **Half-second penalties.** Race control has a +0.5 s button beside +5 s and +10 s, for a cut
+  corner or a nudge. Penalties add up to the tenth, and show that way everywhere (the box reads
+  "+0.5s", "+10.5s" ; whole seconds stay "+5s"), in the racer's message and the Discord post
+  too. *(server and client)*
+
+- **Fixed: no BeamJoy UI on a server whose groups file wasn't a list.** A groups.json keeping
+  the groups as a map keyed by name (an older BeamJoy, a hand edit) was merged over the built-in
+  groups as-is, so the groups went to players as an object instead of a list : the UI broke on
+  it ("findIndex is not a function"), every permission check failed and changing someone's
+  group showed nothing. The server turns such a file into a list in rank order at startup and
+  saves it back (it says so in the console), and the UI keeps only the list part of anything
+  else it gets. *(server and client)*
+
+- **`bj setgroup` works in the server console.** The same as `bj group <name> [group]`, under
+  the chat command's name (`/setgroup`), which was easy to type in the console and only printed
+  the help. Both now confirm a change ("Player X is now in group Y") ; they used to print
+  nothing, which looked like the command had failed. The console help for `bj staffpassword` and
+  `bj ownerpassword` no longer names `/staff` and `/owner`, which don't exist : players log in
+  with `/login <password>`. *(server only)*
+
+- **Penalties on screen.** A staff time penalty shows as a small red box, "+10s", next to the time :
+  beside the gap or time in the race HUD and full standings, the finishing time in race info
+  (the Total column widens for it), the podium, and your own clock while you race. The results
+  card shows the selected driver's race time with it, and the finish popup says it was added. A disqualified racer gets a black DSQ
+  plate and their name struck through. Nothing changes when nobody has a penalty.
+  *(client only)*
+
+- **Spectating shows the racer's checkpoints.** Watching a race (as a spectator, or after
+  finishing or retiring) shows the checkpoints of the racer you're watching : their next gate
+  highlighted, and only as many gates as the race shows its racers, instead of every gate on
+  the track. Switching to another racer's car with the game's own vehicle switching moves the
+  HUD and the checkpoints to them. *(client only)*
+
+- **The race HUD can be turned off.** Settings > Race HUD layout has a Disabled option : no race
+  HUD while racing or spectating. On a controller, the Focus control still brings up the compact
+  HUD for its Race info and Retire buttons. *(client only)*
+
+- **Fixed: Start now let the leader start without a car.** The server counts the leader as
+  ready when they press Start now, which skipped the vehicle checks the Ready button makes, so
+  a leader with no car (or the wrong one) could start a race, hunt, infected game or derby and
+  be put on the grid carless. Start now readies the leader up first, through the same checks.
+  *(client only)*
+
+- **Race control for staff.** Staff spectating a race get a Race control list in the Races
+  tab (under Watching) while it's running : give a racer a 5 s or 10 s time penalty, clear their
+  penalties, disqualify them or reinstate them. Penalties are added to a racer's time when they
+  finish, so the finishing order (HUD, race info, Discord post) is by time plus penalties.
+  A disqualified racer goes to the bottom as DSQ and their leaderboard time is withdrawn (the
+  time it replaced comes back) ; one still racing is out, like retiring. Reinstating a finisher
+  gives their time back. The racer is told each time. *(server and client)*
 
 - **Joining an activity clears your GPS route.** A route you set yourself (the big map, a
   station or other point) is cleared when you join a race, hunt, infected or derby lobby, take

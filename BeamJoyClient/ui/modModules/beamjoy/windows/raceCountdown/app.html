@@ -71,6 +71,22 @@
     #beamjoy-race-countdown .race-countdown-badge.pb {
         color: #4caf50;
     }
+    #beamjoy-race-countdown .race-countdown-badge.penalised {
+        display: flex;
+        align-items: center;
+        gap: 0.45em;
+        color: #eef0f4;
+    }
+    /* the staff penalty, a red box as in the race HUD */
+    #beamjoy-race-countdown .pen {
+        padding: 0.05em 0.4em;
+        border-radius: 3px;
+        background: #d63b3b;
+        color: #fff;
+        font-weight: 700;
+        text-shadow: none;
+        box-shadow: 3px 3px 5px rgba(0, 0, 0, 0.43);
+    }
 </style>
 
 <div
@@ -107,11 +123,22 @@
     >
         {{'beamjoy.race.newPB' | translate}}
     </div>
+    <div class="race-countdown-badge penalised" ng-if="$ctrl.mode === 'finished' && $ctrl.penaltySeconds">
+        <span class="pen">+{{$ctrl.penaltySeconds}}s</span>
+        <span>{{'beamjoy.race.penaltyAdded' | translate}}</span>
+    </div>
+    <div class="race-countdown-number dnf" ng-if="$ctrl.mode === 'dq'">
+        {{'beamjoy.race.disqualified' | translate}}
+    </div>
     <div class="race-countdown-number dnf" ng-if="$ctrl.mode === 'dnf'">
         {{'beamjoy.race.dnf' | translate}}
     </div>
     <div class="race-countdown-badge" ng-if="$ctrl.mode === 'penalty'" style="color: rgb(255, 152, 0);">
         {{'beamjoy.race.resetPenaltyLabel' | translate}}
+    </div>
+    <div class="race-countdown-badge penalised" ng-if="$ctrl.mode === 'timePenalty'">
+        <span>{{'beamjoy.race.resetPenaltyLabel' | translate}}</span>
+        <span class="pen">+{{$ctrl.penaltySeconds}}s</span>
     </div>
     <div class="race-countdown-number penalty" ng-if="$ctrl.mode === 'penalty'">
         {{$ctrl.seconds}}

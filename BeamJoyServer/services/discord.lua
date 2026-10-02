@@ -445,7 +445,9 @@ local function onRaceStandings(race, results)
     for _, r in ipairs(results) do
         local name = clean(stripCodes(r.playerName)):sub(1, 60)
         local line
-        if r.dnf then
+        if r.disqualified then
+            line = string.format("`DSQ` **%s**", name)
+        elseif r.dnf then
             line = string.format("`DNF` **%s**", name)
         else
             place = place + 1
@@ -460,6 +462,13 @@ local function onRaceStandings(race, results)
         if r.vehicle and #r.vehicle > 0 then extra[#extra + 1] = clean(r.vehicle):sub(1, 80) end
         if race.laps > 1 and r.bestLapMs and not r.dnf then
             extra[#extra + 1] = tr("beamjoy.discord.race.bestLapShort", { time = formatTime(r.bestLapMs) })
+        end
+        if r.penaltyMs and not r.dnf then
+            -- tenths kept : a half-second penalty reads "+0.5 s", whole ones "+5 s"
+            local tenths = math.floor(r.penaltyMs / 100 + 0.5)
+            extra[#extra + 1] = tr("beamjoy.discord.race.penalty", {
+                seconds = tenths % 10 == 0 and tostring(math.floor(tenths / 10)) or string.format("%.1f", tenths / 10),
+            })
         end
         lines[#lines + 1] = #extra > 0 and (line .. "\n-# " .. table.concat(extra, " \194\183 ")) or line
     end

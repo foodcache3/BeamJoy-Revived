@@ -680,6 +680,26 @@
             <tr ng-if="$ctrl.race.defaults.respawnStrategy !== 'norespawn' && $ctrl.race.defaults.resetPenaltyEnabled">
                 <td
                     class="text-right"
+                    title="{{'beamjoy.window.config.tabs.races.resetPenaltyMode.tooltip' | translate}}"
+                >
+                    {{'beamjoy.window.config.tabs.races.resetPenaltyMode' | translate}}
+                </td>
+                <td>
+                    <div class="d-flex gap-1 flex-wrap">
+                        <button
+                            ng-repeat="mode in $ctrl.RESET_PENALTY_MODES"
+                            class="btn info"
+                            ng-class="{success: ($ctrl.race.defaults.resetPenaltyMode || 'hold') === mode}"
+                            ng-click="$ctrl.race.defaults.resetPenaltyMode = mode"
+                        >
+                            {{('beamjoy.window.config.tabs.races.resetPenaltyModes.' + mode) | translate}}
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            <tr ng-if="$ctrl.race.defaults.respawnStrategy !== 'norespawn' && $ctrl.race.defaults.resetPenaltyEnabled">
+                <td
+                    class="text-right"
                     title="{{'beamjoy.window.config.tabs.races.resetPenaltySeconds.tooltip' | translate}}"
                 >
                     {{'beamjoy.window.config.tabs.races.resetPenaltySeconds' | translate}}

@@ -14,17 +14,17 @@ angular.module("beamjoy").component("bjMainRaces", {
     ) {
         const translate = $filter("translate");
         this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint"];
+        // what a reset costs : the car held for the penalty, or the penalty added to the race time
+        this.RESET_PENALTY_MODES = ["hold", "time"];
         // mirrors races.lua's PLACEMENT_MODES: how grid slots get assigned at countdown time
         // ("deterministic" = lobby join order, "random" = shuffled, "manual" = host-assigned)
         this.PLACEMENT_MODES = ["deterministic", "random", "manual"];
-        // mirrors raceGrid.lua's own trySubmitTime gate exactly (all three must be enabled for a
-        // time to count at all). Used here only to decide whether to warn before starting, not to
+        // mirrors raceGrid.lua's own trySubmitTime gate exactly (both must be enabled for a time
+        // to count at all ; the node grabber no longer counts against the leaderboard). Used here only to decide whether to warn before starting, not to
         // enforce anything; the server remains the real source of truth for that. Slow-mo/pause
         // isn't in this list: it's no longer a toggle at all, always forced off for every race, so
         // there's nothing to warn about for it.
-        const ANTICHEAT_KEYS = [
-            "disableNodegrabber", "disableCameras", "disableGravityChange",
-        ];
+        const ANTICHEAT_KEYS = ["disableCameras", "disableGravityChange"];
 
         // shortcut for non-staff editors : previously the only way to reach the race editor was
         // digging through the Config window's own tab list by hand. hasAllPermissions is rank-
@@ -295,6 +295,7 @@ angular.module("beamjoy").component("bjMainRaces", {
                 dnfTimeout: d.dnfTimeout || 30,
                 resetPenaltyEnabled: d.resetPenaltyEnabled === true,
                 resetPenaltySeconds: d.resetPenaltySeconds || 5,
+                resetPenaltyMode: d.resetPenaltyMode === "time" ? "time" : "hold",
                 disableNodegrabber: d.disableNodegrabber !== false,
                 disableCameras: d.disableCameras !== false,
                 disableGravityChange: d.disableGravityChange !== false,
@@ -570,6 +571,38 @@ angular.module("beamjoy").component("bjMainRaces", {
         this.stopSpectating = (event) => {
             event.stopPropagation();
             beamjoyStore.send("BJRaceStopSpectate");
+        };
+
+        // race control, staff watching a race (services/raceGrid.lua's raceStaffAction)
+        // the half second : a light touch, for a cut corner or a nudge
+        this.PENALTY_STEPS = [0.5, 5, 10];
+        const penText = (ms) => {
+            const s = Math.round(ms / 100) / 10;
+            return Number.isInteger(s) ? String(s) : s.toFixed(1);
+        };
+        const fillIn = (key, values) =>
+            Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, v), translate(key));
+        this.penaltyTag = (seconds) => fillIn("beamjoy.race.penaltyTag", { seconds });
+        this.penaltySeconds = (r) => penText(r.penaltyMs);
+        this.penaltyText = (r) =>
+            fillIn("beamjoy.window.main.tabs.races.raceControl.penalty", { seconds: penText(r.penaltyMs) });
+        this.racerState = (r) =>
+            translate(
+                r.disqualified ? "beamjoy.window.main.tabs.races.raceControl.disqualified"
+                    : r.dnf ? "beamjoy.window.main.tabs.races.raceControl.retired"
+                    : r.finished ? "beamjoy.window.main.tabs.races.raceControl.finished"
+                    : "beamjoy.window.main.tabs.races.raceControl.racing"
+            );
+        this.staffAction = (event, r, action, seconds) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJRaceStaffAction", [r.playerID, action, seconds]);
+        };
+        this.disqualify = (event, r) => {
+            event.stopPropagation();
+            beamjoyConfirm.ask(
+                fillIn("beamjoy.window.main.tabs.races.raceControl.confirmDisqualify", { name: r.name }),
+                () => beamjoyStore.send("BJRaceStaffAction", [r.playerID, "disqualify"])
+            );
         };
 
         this.setReady = (event, state) => {

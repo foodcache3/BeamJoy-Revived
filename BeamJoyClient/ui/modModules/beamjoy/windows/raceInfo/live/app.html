@@ -109,6 +109,38 @@
         color: #979dad;
         text-overflow: ellipsis;
     }
+    /* a staff time penalty : a plain red box beside the time, "+10s" ; only when there is one */
+    bj-race-info-live .pen {
+        flex-shrink: 0;
+        display: inline-block;
+        padding: 0.05em 0.35em;
+        border-radius: 3px;
+        background: #d63b3b;
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.78em;
+        font-style: normal;
+        line-height: 1.3;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+    bj-race-info-live .lapcell .pen {
+        margin-left: 0.35em;
+    }
+    /* disqualified : the black flag */
+    bj-race-info-live .plate.dsq {
+        background: #050506;
+        box-shadow: inset 0 0 0 1px rgba(238, 240, 244, 0.55);
+        color: #eef0f4;
+    }
+    bj-race-info-live .plate.dsq > span {
+        font-size: 0.68em;
+    }
+    bj-race-info-live .dsq .nm,
+    bj-race-info-live .dsq .who b {
+        text-decoration: line-through;
+        text-decoration-color: rgba(238, 240, 244, 0.45);
+    }
     bj-race-info-live .secs {
         display: flex;
         gap: 2px;
@@ -215,9 +247,9 @@
     <div class="grid row" ng-repeat="p in $ctrl.v.rows track by $index" ng-class="p.rowCls" ng-style="$ctrl.v.cols">
         <div class="c"><div class="plate" ng-class="p.plateCls"><span>{{p.pos}}</span></div></div>
         <div class="who"><b>{{p.name}}</b><small ng-if="p.car">{{p.car}}</small></div>
-        <span>{{p.lap}}</span>
+        <span class="lapcell">{{p.lap}}<span class="pen" ng-if="p.pen && $ctrl.v.sectors < 2">+{{p.pen}}s</span></span>
         <div ng-if="$ctrl.v.sectors > 1">
-            <div class="fintime" ng-if="p.finished"><span ng-include="'bjRaceInfoFlag.html'" style="display: inline-flex"></span><span>{{'beamjoy.raceInfo.finished' | translate}} {{p.total}}</span></div>
+            <div class="fintime" ng-if="p.finished"><span ng-include="'bjRaceInfoFlag.html'" style="display: inline-flex"></span><span>{{'beamjoy.raceInfo.finished' | translate}} {{p.total}}</span><span class="pen" ng-if="p.pen">+{{p.pen}}s</span></div>
             <div class="secs" ng-if="!p.finished" aria-hidden="true"><div class="sec" ng-repeat="s in p.strip track by $index" ng-class="s"></div></div>
         </div>
         <span class="r" ng-class="p.lastCls">{{p.last}}</span>

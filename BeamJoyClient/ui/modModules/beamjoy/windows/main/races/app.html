@@ -29,6 +29,60 @@
         font-size: 0.95em;
         font-weight: 600;
     }
+    /* race control (staff watching) : one row per racer, its actions wrapping under the name on
+       a narrow menu */
+    bj-main-races .race-control {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35em;
+        margin-top: 0.5em;
+        padding-top: 0.5em;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    bj-main-races .race-control .rc-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.3em 0.5em;
+    }
+    bj-main-races .race-control .rc-row.out .rc-who b {
+        opacity: 0.55;
+        text-decoration: line-through;
+    }
+    bj-main-races .race-control .rc-who {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        overflow-wrap: break-word;
+    }
+    bj-main-races .race-control .rc-who small {
+        color: var(--bjr-muted);
+    }
+    /* a staff time penalty : a plain red box beside the time, "+10s" ; only when there is one */
+    bj-main-races .race-control .pen {
+        flex-shrink: 0;
+        display: inline-block;
+        padding: 0.05em 0.35em;
+        border-radius: 3px;
+        background: #d63b3b;
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.78em;
+        font-style: normal;
+        line-height: 1.3;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+    bj-main-races .race-control .rc-who .pen {
+        align-self: flex-start;
+        margin-top: 0.2em;
+    }
+    bj-main-races .race-control .rc-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25em;
+    }
     bj-main-races .icon-btn {
         width: 2.1em;
         height: 2.1em;
@@ -204,6 +258,36 @@
             {{'beamjoy.window.main.tabs.races.stopSpectating' | translate}}
         </button>
     </div>
+    <!-- staff : penalties and disqualifying, while the race is running -->
+    <div class="race-control" ng-if="$ctrl.spectateStatus.staff && $ctrl.spectateStatus.state === 'RACE' && $ctrl.spectateStatus.racers.length">
+        <span class="bjr-muted" title="{{'beamjoy.window.main.tabs.races.raceControl.tooltip' | translate}}">
+            {{'beamjoy.window.main.tabs.races.raceControl.title' | translate}}
+        </span>
+        <div class="rc-row" ng-repeat="r in $ctrl.spectateStatus.racers track by r.playerID" ng-class="{out: r.disqualified}">
+            <div class="rc-who">
+                <b>{{r.name}}</b>
+                <small>{{$ctrl.racerState(r)}}</small>
+                <span class="pen" ng-if="r.penaltyMs > 0 && !r.disqualified" title="{{$ctrl.penaltyText(r)}}">+{{$ctrl.penaltySeconds(r)}}s</span>
+            </div>
+            <div class="rc-actions">
+                <button type="button" class="bjr-btn small" ng-if="!r.disqualified"
+                    ng-repeat="s in $ctrl.PENALTY_STEPS" ng-click="$ctrl.staffAction($event, r, 'penalty', s)">
+                    {{$ctrl.penaltyTag(s)}}
+                </button>
+                <button type="button" class="bjr-btn small ghost" ng-if="r.penaltyMs > 0 && !r.disqualified"
+                    ng-click="$ctrl.staffAction($event, r, 'clearPenalties')">
+                    {{'beamjoy.window.main.tabs.races.raceControl.clear' | translate}}
+                </button>
+                <button type="button" class="bjr-btn small danger" ng-if="!r.disqualified" ng-click="$ctrl.disqualify($event, r)">
+                    {{'beamjoy.window.main.tabs.races.raceControl.disqualify' | translate}}
+                </button>
+                <button type="button" class="bjr-btn small" ng-if="r.disqualified"
+                    ng-click="$ctrl.staffAction($event, r, 'reinstate')">
+                    {{'beamjoy.window.main.tabs.races.raceControl.reinstate' | translate}}
+                </button>
+            </div>
+        </div>
+    </div>
 </section>
 
 <!-- FREE : pick a race -->
@@ -348,6 +432,16 @@
                 <div class="bjr-toggle-row" ng-if="$ctrl.startOptions.respawnStrategy !== 'norespawn'">
                     <span title="{{'beamjoy.window.config.tabs.races.resetPenaltyEnabled.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.resetPenaltyEnabled' | translate}}</span>
                     <bj-toggle ng-model="$ctrl.startOptions.resetPenaltyEnabled"></bj-toggle>
+                </div>
+                <div class="bjr-field" ng-if="$ctrl.startOptions.respawnStrategy !== 'norespawn' && $ctrl.startOptions.resetPenaltyEnabled">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.resetPenaltyMode.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.resetPenaltyMode' | translate}}</span>
+                    <div class="bjr-seg">
+                        <button type="button" ng-repeat="mode in $ctrl.RESET_PENALTY_MODES"
+                            ng-class="{on: $ctrl.startOptions.resetPenaltyMode === mode}"
+                            ng-click="$ctrl.startOptions.resetPenaltyMode = mode">
+                            {{('beamjoy.window.config.tabs.races.resetPenaltyModes.' + mode) | translate}}
+                        </button>
+                    </div>
                 </div>
                 <div class="bjr-field" ng-if="$ctrl.startOptions.respawnStrategy !== 'norespawn' && $ctrl.startOptions.resetPenaltyEnabled">
                     <span class="name" title="{{'beamjoy.window.config.tabs.races.resetPenaltySeconds.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.resetPenaltySeconds' | translate}}</span>

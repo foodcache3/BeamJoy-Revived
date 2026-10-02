@@ -27,7 +27,14 @@ angular.module("beamjoy").component("bjRaceInfoLive", {
             if (typeof gapMs === "number" && gapMs !== 0) return `+${f.gapS(gapMs)}`;
             return "";
         };
-        const total = (p) => (Array.isArray(p.lapTimes) ? p.lapTimes.reduce((a, b) => a + b, 0) : null);
+        // the race time : laps plus staff penalties
+        const total = (p) => (Array.isArray(p.lapTimes) ? p.lapTimes.reduce((a, b) => a + b, p.penaltyMs || 0) : null);
+        // a racer's staff time penalty in seconds, for the penalty box ("5", "0.5") ; null : none to show
+        const penText = (ms) => {
+            const s = Math.round(ms / 100) / 10;
+            return Number.isInteger(s) ? String(s) : s.toFixed(1);
+        };
+        const penOf = (p) => (p.penaltyMs > 0 && !p.disqualified ? penText(p.penaltyMs) : null);
 
         const rebuild = (data) => {
             this.active = !!data.active;
@@ -38,8 +45,10 @@ angular.module("beamjoy").component("bjRaceInfoLive", {
             const laps = data.totalLaps || 1;
             const sectors = data.sectorCount || 0;
             const all = data.participants || [];
-            // still racing / finished in race order first, retired racers last
-            const ordered = all.filter((p) => !p.dnf).concat(all.filter((p) => p.dnf));
+            // still racing / finished in race order first, retired racers, then disqualified ones
+            const ordered = all
+                .filter((p) => !p.dnf && !p.disqualified)
+                .concat(all.filter((p) => p.dnf && !p.disqualified), all.filter((p) => p.disqualified));
             const multi = ordered.length > 1;
 
             // race-wide bests (purple)
@@ -67,7 +76,8 @@ angular.module("beamjoy").component("bjRaceInfoLive", {
                     }
                 }
                 let lap;
-                if (p.dnf) lap = translate("beamjoy.raceInfo.out");
+                if (p.disqualified) lap = translate("beamjoy.raceInfo.dsq");
+                else if (p.dnf) lap = translate("beamjoy.raceInfo.out");
                 else if (p.finished) lap = translate("beamjoy.raceInfo.done");
                 else if (laps > 1) lap = `${p.currentLap}/${laps}`;
                 else if (sectors > 1) lap = `${p.currentSector}/${sectors}`;
@@ -87,19 +97,21 @@ angular.module("beamjoy").component("bjRaceInfoLive", {
                     lastCls = typeof t === "number" && t === fastestSector[s] ? "fast" : "";
                 }
                 return {
-                    pos: p.dnf ? "DNF" : String(i + 1),
-                    plateCls: p.dnf ? "out" : i === 0 ? "p1" : p.playerName === data.selfPlayerName ? "you" : "",
-                    rowCls: p.playerName === data.selfPlayerName ? "you" : p.dnf ? "out" : "",
+                    pos: p.disqualified ? "DSQ" : p.dnf ? "DNF" : String(i + 1),
+                    plateCls: p.disqualified ? "dsq" : p.dnf ? "out" : i === 0 ? "p1" : p.playerName === data.selfPlayerName ? "you" : "",
+                    rowCls: (p.playerName === data.selfPlayerName ? "you" : p.dnf || p.disqualified ? "out" : "") +
+                        (p.disqualified ? " dsq" : ""),
                     name: p.displayName || p.playerName,
+                    pen: penOf(p),
                     car: p.vehicleModel || "",
-                    finished: !!p.finished,
+                    finished: !!p.finished && !p.disqualified,
                     total: clock(total(p)),
                     strip,
                     lap,
                     last,
                     lastCls,
-                    ahead: i === 0 || p.dnf ? "" : gap(p.aheadGapMs, p.aheadLapsDiff),
-                    leader: i === 0 || p.dnf ? "" : gap(p.gapMs, p.lapsDiff),
+                    ahead: i === 0 || p.dnf || p.disqualified ? "" : gap(p.aheadGapMs, p.aheadLapsDiff),
+                    leader: i === 0 || p.dnf || p.disqualified ? "" : gap(p.gapMs, p.lapsDiff),
                     best: clock(p.bestLapMs),
                     bestCls: typeof p.bestLapMs === "number" && p.bestLapMs === fastestLap ? "fast" : "",
                 };

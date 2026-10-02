@@ -30,6 +30,7 @@ angular.module("beamjoy").component("bjMainSettings", {
             { value: "standard", label: "beamjoy.window.main.tabs.settings.sections.menu.raceHud.standard" },
             { value: "compact", label: "beamjoy.window.main.tabs.settings.sections.menu.raceHud.compact" },
             { value: "full", label: "beamjoy.window.main.tabs.settings.sections.menu.raceHud.full" },
+            { value: "off", label: "beamjoy.window.main.tabs.settings.sections.menu.raceHud.off" },
         ];
         this.raceHudLayout = "standard";
         try {

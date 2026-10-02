@@ -7,9 +7,22 @@ M.init = function (beamjoyStore) {
     parent = beamjoyStore;
 };
 
+// the groups always as a list : a server whose saved groups weren't one sent them as an object,
+// and stored as-is every permission check after it threw (findIndex is not a function), leaving
+// no BeamJoy UI at all. Only the numbered entries, in order, are the list
+const asList = (groups) => {
+    if (Array.isArray(groups)) return groups;
+    if (!groups || typeof groups !== "object") return [];
+    return Object.keys(groups)
+        .filter((k) => /^\d+$/.test(k))
+        .sort((a, b) => Number(a) - Number(b))
+        .map((k) => groups[k])
+        .filter((g) => g && typeof g.name === "string");
+};
+
 M.set = function (payload) {
-    M.data = payload.groups;
-    M.defaultGroups = payload.defaultGroups;
+    M.data = asList(payload.groups);
+    M.defaultGroups = Array.isArray(payload.defaultGroups) ? payload.defaultGroups : [];
     M.data.forEach((group) => {
         group.permissions = Array.isArray(group.permissions)
             ? group.permissions

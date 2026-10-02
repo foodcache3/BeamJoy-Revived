@@ -101,6 +101,44 @@
         font-size: 1.875em;
     }
 
+    /* a staff time penalty : a plain red box beside the time, "+10s" ; only when there is one */
+    #beamjoy-race-hud .pen {
+        flex-shrink: 0;
+        display: inline-block;
+        padding: 0.05em 0.35em;
+        border-radius: 3px;
+        background: #d63b3b;
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.78em;
+        font-style: normal;
+        line-height: 1.3;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+    /* disqualified : the black flag */
+    #beamjoy-race-hud .plate.dsq {
+        background: #050506;
+        box-shadow: inset 0 0 0 1px rgba(238, 240, 244, 0.55);
+        color: #eef0f4;
+    }
+    #beamjoy-race-hud .plate.dsq > span {
+        font-size: 0.68em;
+    }
+    #beamjoy-race-hud .dsq .nm,
+    #beamjoy-race-hud .dsq .who b {
+        text-decoration: line-through;
+        text-decoration-color: rgba(238, 240, 244, 0.45);
+    }
+    #beamjoy-race-hud .clockgrp {
+        display: flex;
+        align-items: baseline;
+        gap: 0.45em;
+    }
+    #beamjoy-race-hud .tower .fl {
+        gap: 0.3em;
+    }
+
     /* this lap's sectors */
     #beamjoy-race-hud .secs {
         display: flex;
@@ -523,7 +561,7 @@
     <svg class="flag" width="15" height="11" viewBox="0 0 15 11" aria-hidden="true"><g transform="skewX(-10) translate(2 0)"><rect x="0" y="0" width="13" height="11" fill="#ebebeb"></rect><rect x="0" y="0" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="6.5" y="0" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="3.25" y="3.67" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="9.75" y="3.67" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="0" y="7.34" width="3.25" height="3.66" fill="#2a2d33"></rect><rect x="6.5" y="7.34" width="3.25" height="3.66" fill="#2a2d33"></rect></g></svg>
 </script>
 
-<section id="beamjoy-race-hud" ng-if="$ctrl.active" ng-class="[$ctrl.layout, {focused: $ctrl.focused}]" aria-label="{{$ctrl.v.raceName}}">
+<section id="beamjoy-race-hud" ng-if="$ctrl.active && $ctrl.layout !== 'off'" ng-class="[$ctrl.layout, {focused: $ctrl.focused}]" aria-label="{{$ctrl.v.raceName}}">
 
     <!-- STANDARD -->
     <div ng-if="$ctrl.layout === 'standard'">
@@ -556,6 +594,7 @@
                     <span class="clock">
                         <span class="timer" role="timer">{{$ctrl.v.timer}}</span>
                         <span class="delta" ng-if="$ctrl.v.delta" ng-class="$ctrl.v.deltaCls">{{$ctrl.v.delta}}</span>
+                        <span class="pen" ng-if="$ctrl.v.pen">+{{$ctrl.v.pen}}s</span>
                     </span>
                 </div>
                 <div class="secs" ng-if="$ctrl.v.secs.length > 0" aria-hidden="true">
@@ -573,6 +612,7 @@
                         <span class="plate" ng-class="r.plateCls"><span>{{r.pos}}</span></span>
                         <span class="nm">{{r.name}}</span>
                         <span ng-if="r.fin" ng-include="'bjRaceHudFlag.html'"></span>
+                        <span class="pen" ng-if="r.pen">+{{r.pen}}s</span>
                         <span class="g">{{r.gap || ('beamjoy.raceHud.leader' | translate)}}</span>
                     </div>
                 </div>
@@ -592,7 +632,10 @@
             <span class="ov lap">{{$ctrl.v.progress}}<small>{{$ctrl.v.progressOf}}</small></span>
         </div>
         <div class="clockrow">
-            <span class="timer" role="timer">{{$ctrl.v.timer}}</span>
+            <span class="clockgrp">
+                <span class="timer" role="timer">{{$ctrl.v.timer}}</span>
+                <span class="pen" ng-if="$ctrl.v.pen">+{{$ctrl.v.pen}}s</span>
+            </span>
             <span class="delta" ng-if="$ctrl.v.delta" ng-class="$ctrl.v.deltaCls">{{$ctrl.v.delta}}</span>
         </div>
         <div class="secs" ng-if="$ctrl.v.secs.length > 0" aria-hidden="true">
@@ -628,7 +671,7 @@
             <li ng-repeat="r in $ctrl.v.full track by $index" ng-class="r.rowCls">
                 <span class="plate" ng-class="r.plateCls"><span>{{r.pos}}</span></span>
                 <span class="nm">{{r.name}}</span>
-                <span class="fl"><span ng-if="r.fin" ng-include="'bjRaceHudFlag.html'"></span></span>
+                <span class="fl"><span ng-if="r.fin" ng-include="'bjRaceHudFlag.html'"></span><span class="pen" ng-if="r.pen">+{{r.pen}}s</span></span>
                 <span class="tg" ng-class="r.gapCls">{{r.gap}}</span>
             </li>
         </ol>

@@ -433,8 +433,11 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJInfectedLeave", M.leave)
     beamjoy_communications_ui.addHandler("BJInfectedCancel", M.cancel)
     -- the leader starts now with whoever is ready (services/infectedGrid.lua)
+    -- the leader starts now with whoever is ready. The server counts the leader as ready, so they
+    -- ready up here first, through the same checks as the Ready button (a car, the right one) :
+    -- without it a leader with no car could start the race carless
     beamjoy_communications_ui.addHandler("BJInfectedStartNow", function()
-        if M.session then beamjoy_communications.send("infectedStartNow", M.session.id) end
+        if M.session and M.ready(true) then beamjoy_communications.send("infectedStartNow", M.session.id) end
     end)
     beamjoy_communications_ui.addHandler("BJInfectedForceInfected", M.forceInfected)
     beamjoy_communications_ui.addHandler("BJInfectedSpectate", M.spectateSession)
@@ -1563,6 +1566,7 @@ local function joinInfected(sessionId)
 end
 
 ---@param state boolean
+---@return boolean? sent true once sent, nil when a check refused it
 local function ready(state)
     if not M.session then return end
     local myVeh = beamjoy_vehicles.getCurrentOwn()
@@ -1570,10 +1574,12 @@ local function ready(state)
     -- random vehicles from both sides' presets : you're given one at the countdown
     local given = s.randomizeVehiclePool and s.infectedVehiclePool and s.survivorsVehiclePool
     if state == true and not given and (not myVeh or myVeh.veh.jbeam == beamjoy_vehicles.WALKING) then
-        return toast.warn(beamjoy_lang.translate("beamjoy.activities.needVehicleToReady"), nil, 4)
+        toast.warn(beamjoy_lang.translate("beamjoy.activities.needVehicleToReady"), nil, 4)
+        return
     end
     beamjoy_communications.send("infectedReady", M.session.id, state == true,
         myVeh and myVeh.veh.jbeam or nil)
+    return true
 end
 
 local function leave()

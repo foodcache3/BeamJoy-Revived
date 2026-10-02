@@ -23,17 +23,44 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
         const plus = (ms) => `+${f.gap(ms)}`;
         const plusS = (ms) => `+${f.gapS(ms)}`;
         const nameOf = (p) => p.displayName || p.playerName;
+        // a racer's staff time penalty in seconds, for the penalty box ("5", "0.5") ; null : none to show
+        const penText = (ms) => {
+            const s = Math.round(ms / 100) / 10;
+            return Number.isInteger(s) ? String(s) : s.toFixed(1);
+        };
+        const penOf = (p) => (p.penaltyMs > 0 && !p.disqualified ? penText(p.penaltyMs) : null);
 
-        // finished (by total time) first, then still racing in race order, then retired
+        // finished (by race time : laps plus staff penalties) first, then still racing in race
+        // order, then retired, then disqualified
         const classify = (participants) => {
             const withTotals = participants.map((p) => ({
                 ...p,
-                totalMs: p.finished && Array.isArray(p.lapTimes) ? p.lapTimes.reduce((a, b) => a + b, 0) : null,
+                totalMs: p.finished && !p.disqualified && Array.isArray(p.lapTimes)
+                    ? p.lapTimes.reduce((a, b) => a + b, p.penaltyMs || 0)
+                    : null,
             }));
             const done = withTotals.filter((p) => p.totalMs !== null).sort((a, b) => a.totalMs - b.totalMs);
-            const racing = withTotals.filter((p) => p.totalMs === null && !p.dnf);
-            const out = withTotals.filter((p) => p.totalMs === null && p.dnf);
-            return done.concat(racing, out);
+            const racing = withTotals.filter((p) => p.totalMs === null && !p.dnf && !p.disqualified);
+            const out = withTotals.filter((p) => p.totalMs === null && p.dnf && !p.disqualified);
+            const dsq = withTotals.filter((p) => p.disqualified);
+            return done.concat(racing, out, dsq);
+        };
+
+        // the selected driver's card : their penalty (the box), and their race time with it once
+        // finished, else when it applies
+        const selected = (sel, summary) => {
+            const pen = penOf(sel);
+            const lapsMs = Array.isArray(sel.lapTimes) ? sel.lapTimes.reduce((a, b) => a + b, 0) : 0;
+            const done = sel.totalMs !== null;
+            return {
+                name: nameOf(sel),
+                summary,
+                pen,
+                raceTime: pen && done ? clock(sel.totalMs) : "",
+                penNote: !pen ? "" : done
+                    ? fill("beamjoy.raceInfo.penaltyNote", { laps: clock(lapsMs) })
+                    : translate("beamjoy.raceInfo.penaltyPending"),
+            };
         };
 
         const render = () => {
@@ -66,13 +93,17 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
 
             const rows = order.map((p, i) => ({
                 playerName: p.playerName,
-                pos: p.totalMs !== null ? String(i + 1) : p.dnf ? "DNF" : String(i + 1),
-                plateCls: p.dnf ? "out" : i === 0 && p.totalMs !== null ? "p1" : "",
-                rowCls: (p.playerName === this.selectedPlayerName ? "sel" : "") + (p.dnf ? " out" : ""),
+                pos: p.disqualified ? "DSQ" : p.totalMs !== null ? String(i + 1) : p.dnf ? "DNF" : String(i + 1),
+                plateCls: p.disqualified ? "dsq" : p.dnf ? "out" : i === 0 && p.totalMs !== null ? "p1" : "",
+                rowCls: (p.playerName === this.selectedPlayerName ? "sel" : "") + (p.dnf || p.disqualified ? " out" : "") +
+                    (p.disqualified ? " dsq" : ""),
                 selected: p.playerName === this.selectedPlayerName,
                 name: nameOf(p),
+                pen: penOf(p),
                 car: p.vehicleModel || "",
-                total: p.totalMs !== null ? clock(p.totalMs) : translate(p.dnf ? "beamjoy.raceInfo.retired" : "beamjoy.raceInfo.racing"),
+                total: p.totalMs !== null
+                    ? clock(p.totalMs)
+                    : translate(p.disqualified ? "beamjoy.raceInfo.disqualified" : p.dnf ? "beamjoy.raceInfo.retired" : "beamjoy.raceInfo.racing"),
                 gap: p.totalMs !== null && winner && p !== winner ? plusS(p.totalMs - winner.totalMs) : "",
                 best: clock(p.bestLapMs),
                 bestCls: typeof p.bestLapMs === "number" && p.bestLapMs === fastestLap ? "fast" : "",
@@ -82,6 +113,7 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
                     pos: String(i + 1),
                     name: nameOf(p),
                     line: i === 0 ? clock(p.totalMs) : plusS(p.totalMs - winner.totalMs),
+                    pen: penOf(p),
                     cls: i === 0 ? "first" : "",
                     plateCls: i === 0 ? "p1" : "",
                 }))
@@ -149,7 +181,7 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
                         lap: bestIdx + 1,
                     });
                 } else if (sel.totalMs !== null) summary = clock(sel.totalMs);
-                else summary = translate(sel.dnf ? "beamjoy.raceInfo.retired" : "beamjoy.raceInfo.racing");
+                else summary = translate(sel.disqualified ? "beamjoy.raceInfo.disqualified" : sel.dnf ? "beamjoy.raceInfo.retired" : "beamjoy.raceInfo.racing");
             }
 
             const chips = [];
@@ -165,7 +197,9 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
                 chips,
                 podium,
                 rows,
-                sel: sel ? { name: nameOf(sel), summary } : null,
+                // anyone penalised : the Total column widens for the box
+                hasPen: rows.some((r) => r.pen),
+                sel: sel ? selected(sel, summary) : null,
                 laps,
                 ideal,
                 sectors,

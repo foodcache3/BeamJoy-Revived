@@ -75,6 +75,11 @@
 ---@field isNewPB boolean? set once at finishParticipant, from services_races.submitTime; not
 ---currently surfaced to the client (no popup wired up yet), kept for future use/debugging
 ---@field finishOrder integer? 1 for the first to finish this session, and so on
+---@field penaltyMs integer time penalties staff have given (raceStaffAction), added to the race
+---time once finished : the finishing order is by race time plus penalties
+---@field disqualified boolean? by staff : last in the standings, no leaderboard time
+---@field leaderboardKey string? the key a new PB was submitted under (trySubmitTime)
+---@field replacedEntry table? the leaderboard entry that PB replaced, put back on a disqualification
 ---@field discordResult table? what this run meant for the leaderboard, set by trySubmitTime
 ---@field isNewRecord boolean? same as isNewPB, true when this PB is now the race's overall best
 
@@ -94,7 +99,9 @@
 ---during an active attempt. Default false. Purely client-enforced (raceRunner.lua), same as
 ---Hunter's own version; nothing server-side tracks or times this beyond resolving the setting
 ---itself. Moot under "norespawn" (resets are already fully blocked there)
----@field resetPenaltySeconds integer seconds frozen per reset when resetPenaltyEnabled is on
+---@field resetPenaltySeconds integer seconds per reset when resetPenaltyEnabled is on
+---@field resetPenaltyMode "hold"|"time" "hold" : the car is frozen for resetPenaltySeconds (client
+---side) ; "time" : they're added to the racer's race time (raceResetPenalty), with any staff ones
 ---@field autoSpectateOnFinish boolean auto-switch a finisher to spectating another still-active
 ---participant. Default true
 ---@field disableNodegrabber boolean blocks BeamNG's node-grabber tool for active participants.
@@ -393,7 +400,8 @@ end
 -- per-gate tables never sent to clients : gateTimes holds every gate's crossing time, so on a
 -- track with hundreds of gates it was most of every session update, and it was only ever read to
 -- work out the gaps between racers, which the server now does itself (gapBetween below)
-local PAYLOAD_DROPPED_FIELDS = { gateTimes = true, bestLapGateTimes = true }
+local PAYLOAD_DROPPED_FIELDS = { gateTimes = true, bestLapGateTimes = true, leaderboardKey = true, replacedEntry = true,
+    lastResetPenaltyMs = true }
 
 --- the copy of a participant that goes out in session updates : shallow (nothing in a payload
 --- is modified after it's built), without the per-gate tables, plus a `displayName`
@@ -416,6 +424,13 @@ local function lapTimesTotal(p)
     return total
 end
 
+--- a finisher's race time : their laps plus any staff penalties
+---@param p BJRaceParticipant
+---@return integer
+local function raceTimeMs(p)
+    return lapTimesTotal(p) + (p.penaltyMs or 0)
+end
+
 --- the gap from `self` back to `other`, ms (positive : other is behind), or a whole-lap count once
 --- they're a genuine lap or more apart. Both nil when there's no meaningful gap (either retired,
 --- or one finished and the other still racing).
@@ -424,9 +439,12 @@ end
 ---@param totalGates integer progress steps per lap (totalSteps)
 ---@return integer? gapMs, integer? lapsDiff
 local function gapBetween(self, other, totalGates)
-    if self.dnf or other.dnf or self.finished ~= other.finished then return nil, nil end
+    if self.dnf or other.dnf or self.disqualified or other.disqualified or
+        self.finished ~= other.finished then
+        return nil, nil
+    end
     if self.finished then
-        return lapTimesTotal(other) - lapTimesTotal(self), nil
+        return raceTimeMs(other) - raceTimeMs(self), nil
     end
     local selfProgress = (self.currentLap - 1) * totalGates + self.currentGate
     local otherProgress = (other.currentLap - 1) * totalGates + other.currentGate
@@ -634,15 +652,23 @@ local function removeSession(session)
     pushOpenSessionsList()
 end
 
---- sorts participants for leaderboard display: not-DNF first, most laps, most gates, fastest
+--- sorts participants for leaderboard display: disqualified last, then not-DNF first ; finishers
+--- by race time with penalties (a penalty can drop someone behind a later finisher), still-racing
+--- racers by most laps, most gates, fastest
 ---@param session BJRaceSession
 ---@return BJRaceParticipant[]
 local function computeLeaderboard(session)
     local list = {}
     session.participants:forEach(function(p) list[#list + 1] = p end)
     table.sort(list, function(a, b)
+        if (a.disqualified == true) ~= (b.disqualified == true) then return not a.disqualified end
         if a.dnf ~= b.dnf then return not a.dnf end
         if a.finished ~= b.finished then return a.finished end
+        if a.finished then
+            local aTime, bTime = raceTimeMs(a), raceTimeMs(b)
+            if aTime ~= bTime then return aTime < bTime end
+            return (a.finishOrder or 0) < (b.finishOrder or 0)
+        end
         if a.currentLap ~= b.currentLap then return a.currentLap > b.currentLap end
         if a.currentGate ~= b.currentGate then return a.currentGate > b.currentGate end
         local aTime = a.gateTimes[a.currentGate] or math.huge
@@ -820,6 +846,7 @@ local function buildSettings(race, overrides)
         dnfTimeout = math.max(3, tonumber(overrides.dnfTimeout) or defaults.dnfTimeout or 30),
         resetPenaltyEnabled = resetPenaltyEnabled,
         resetPenaltySeconds = math.max(1, tonumber(overrides.resetPenaltySeconds) or defaults.resetPenaltySeconds or 5),
+        resetPenaltyMode = (overrides.resetPenaltyMode or defaults.resetPenaltyMode) == "time" and "time" or "hold",
         autoSpectateOnFinish = autoSpectateOnFinish,
         disableNodegrabber = disableNodegrabber,
         disableCameras = disableCameras,
@@ -889,6 +916,7 @@ local function addParticipant(session, playerID, playerName)
         bestSectorMs = {},
         finished = false,
         dnf = false,
+        penaltyMs = 0,
         lastProgressTime = GetCurrentTime(),
     }
 end
@@ -1009,13 +1037,13 @@ local function postToDiscord(session)
     local results = {}
     session.participants:forEach(function(p)
         if p.playerID < 0 then return end -- racedebug ghosts
-        local total = 0
-        for _, t in ipairs(p.lapTimes) do total = total + t end
         local r = p.discordResult or { counted = false }
         r.playerName = services_identity.getIdentityKey(p.playerID) or p.playerName
         r.vehicle = p.vehicleModel
-        r.dnf = not p.finished
-        r.totalMs = p.finished and total or nil
+        r.dnf = not p.finished or p.disqualified == true
+        r.disqualified = p.disqualified == true
+        r.penaltyMs = (p.penaltyMs or 0) > 0 and p.penaltyMs or nil
+        r.totalMs = p.finished and raceTimeMs(p) or nil
         r.bestLapMs = #p.lapTimes > 0 and math.min(table.unpack(p.lapTimes)) or nil
         r.order = p.finishOrder or math.huge
         if r.counted then
@@ -1031,7 +1059,10 @@ local function postToDiscord(session)
         return services_discord.onRaceFinish(info, results[1])
     end
     table.sort(results, function(a, b)
+        if a.disqualified ~= b.disqualified then return not a.disqualified end
         if a.dnf ~= b.dnf then return not a.dnf end
+        -- by race time with penalties, like the standings (a multi-lap race's totals)
+        if a.totalMs and b.totalMs and a.totalMs ~= b.totalMs then return a.totalMs < b.totalMs end
         return a.order < b.order
     end)
     services_discord.onRaceStandings(info, results)
@@ -1061,8 +1092,12 @@ local function trySubmitTime(session, participant, timeMs)
     -- begin with, regardless of how it ends. Slow-motion/pausing isn't in this list: it's no
     -- longer a toggle at all, always forced off unconditionally (see raceRunner.lua's
     -- onBJRequestRestrictions/onUpdate), so there's nothing to check here for it.
+    -- a disqualified run never counts
+    if participant.disqualified then return end
     local s = session.settings
-    if not (s.disableNodegrabber and s.disableCameras and s.disableGravityChange) then
+    -- the node grabber isn't one of them any more (per request) : a race can allow it and still
+    -- count, only free cameras and gravity changes keep a time off the leaderboard
+    if not (s.disableCameras and s.disableGravityChange) then
         return
     end
     -- same reasoning, for the vehicle restriction's own per-start choice. A race restricted to a
@@ -1086,6 +1121,11 @@ local function trySubmitTime(session, participant, timeMs)
     local previousMs = previous and previous.time
     participant.isNewPB, participant.isNewRecord = services_races.submitTime(
         session.raceId, key, participant.vehicleModel or "", timeMs)
+    if participant.isNewPB then
+        -- kept to put back if staff disqualify this run (raceStaffAction)
+        participant.leaderboardKey = key
+        participant.replacedEntry = previous and table.clone(previous) or nil
+    end
     participant.discordResult = {
         counted = true,
         isNewPB = participant.isNewPB,
@@ -1720,6 +1760,115 @@ local function raceDNF(ctxt, sessionId)
     end
 end
 
+local STAFF_PENALTY_MAX_SEC = 600
+local STAFF_PENALTY_TOTAL_MAX_MS = 3600 * 1000
+
+--- a penalty in seconds for messages : whole seconds as "5", tenths as "0.5" / "10.5"
+---@param ms integer
+---@return string
+local function penaltySecondsText(ms)
+    local tenths = math.floor(ms / 100 + 0.5)
+    if tenths % 10 == 0 then return tostring(math.floor(tenths / 10)) end
+    return string.format("%.1f", tenths / 10)
+end
+
+--- race control for staff watching a race (raceSpectate) : a time penalty on a racer, clearing
+--- their penalties, disqualifying them, or reinstating them. Only while the race is running, so
+--- the results (and the Discord post, at the end) are final once everyone's done.
+--- A penalty is added to the racer's race time once they finish : the finishing order is by race
+--- time plus penalties. A disqualified racer still racing is stopped (out, like retiring) ; one
+--- who already finished keeps their laps but drops to the bottom, and their leaderboard time is
+--- withdrawn. Reinstating clears the disqualification and gives a finisher their leaderboard time
+--- back ; a racer stopped by it stays out.
+---@param ctxt BJSContext
+---@param sessionId string
+---@param targetID integer the racer's playerID
+---@param action "penalty"|"clearPenalties"|"disqualify"|"reinstate"
+---@param seconds number? "penalty" : 0.1 to STAFF_PENALTY_MAX_SEC, to the tenth (the half-second button)
+local function raceStaffAction(ctxt, sessionId, targetID, action, seconds)
+    if not ctxt.sender or not services_permissions.isStaff(ctxt.sender.playerName) then return end
+    local session = M.sessions[sessionId]
+    if not session or session.state ~= "RACE" or M.spectators[ctxt.senderID] ~= sessionId then return end
+    local p = session.participants[tonumber(targetID) or -1]
+    if not p then return end
+
+    local target = services_players.players:find(function(pl) return pl.playerID == p.playerID end)
+    local function tell(key, vars)
+        communications_tx.sendToPlayer(p.playerID, "toast", "warning",
+            services_lang.get(key, target and target.lang):var(vars or {}))
+    end
+    local staffName = ctxt.sender.playerName
+    local targetName = resolveDisplayName(p.playerID, p.playerName)
+
+    if action == "penalty" then
+        -- tenths of a second : the half-second penalty, and nothing finer than the race clock shows
+        local ms = math.floor((tonumber(seconds) or 0) * 10 + 0.5) * 100
+        if ms < 100 or ms > STAFF_PENALTY_MAX_SEC * 1000 or p.disqualified then return end
+        p.penaltyMs = math.min(STAFF_PENALTY_TOTAL_MAX_MS, (p.penaltyMs or 0) + ms)
+        tell("race.staff.penalty", { seconds = penaltySecondsText(ms), total = penaltySecondsText(p.penaltyMs), name = staffName })
+        LogInfo(string.format("raceGrid: %s gave %s a %ss penalty (session %s)", staffName, targetName,
+            penaltySecondsText(ms), session.id))
+    elseif action == "clearPenalties" then
+        if (p.penaltyMs or 0) == 0 then return end
+        p.penaltyMs = 0
+        tell("race.staff.penaltiesCleared", { name = staffName })
+        LogInfo(string.format("raceGrid: %s cleared %s's penalties (session %s)", staffName, targetName, session.id))
+    elseif action == "disqualify" then
+        if p.disqualified then return end
+        p.disqualified = true
+        if not p.finished and not p.dnf then
+            p.dnf = true
+        elseif p.leaderboardKey then
+            services_races.restoreEntry(session.raceId, p.leaderboardKey, p.replacedEntry)
+            p.isNewPB, p.isNewRecord = false, false
+            p.leaderboardKey, p.replacedEntry = nil, nil
+            if p.discordResult then p.discordResult.counted = false end
+        end
+        tell("race.staff.disqualified", { name = staffName })
+        LogInfo(string.format("raceGrid: %s disqualified %s (session %s)", staffName, targetName, session.id))
+    elseif action == "reinstate" then
+        if not p.disqualified then return end
+        p.disqualified = false
+        if p.finished and p.bestLapMs then
+            trySubmitTime(session, p, p.bestLapMs)
+        end
+        tell("race.staff.reinstated", { name = staffName })
+        LogInfo(string.format("raceGrid: %s reinstated %s (session %s)", staffName, targetName, session.id))
+    else
+        return
+    end
+
+    -- a disqualification can be what ends the race (the last one still racing)
+    checkSessionComplete(session)
+    if session.state ~= "FINISHED" then
+        pushSessionUpdate(session)
+    end
+end
+
+-- one reset, however many times the client reports it (a held key, the reset settling)
+local RESET_PENALTY_DEBOUNCE_MS = 1500
+
+--- a racer reset, in a race whose reset penalty adds time : resetPenaltySeconds go on their race
+--- time, with any staff penalties (the same red box, the same finishing order). Reported by the
+--- racer's own client, the way the "hold" version is enforced there too.
+---@param ctxt BJSContext
+---@param sessionId string
+local function raceResetPenalty(ctxt, sessionId)
+    if not ctxt.sender then return end
+    local session = M.sessions[sessionId]
+    if not session or session.state ~= "RACE" then return end
+    local s = session.settings
+    if not s.resetPenaltyEnabled or s.resetPenaltyMode ~= "time" or s.respawnStrategy == "norespawn" then return end
+    local p = session.participants[ctxt.senderID]
+    if not p or p.finished or p.dnf or p.disqualified then return end
+    local now = services_clockSync.nowMs()
+    if p.lastResetPenaltyMs and now - p.lastResetPenaltyMs < RESET_PENALTY_DEBOUNCE_MS then return end
+    p.lastResetPenaltyMs = now
+    p.penaltyMs = math.min(STAFF_PENALTY_TOTAL_MAX_MS,
+        (p.penaltyMs or 0) + math.floor((tonumber(s.resetPenaltySeconds) or 5) * 1000))
+    pushSessionUpdate(session, true)
+end
+
 --- chat-command front door for ready/leave/cancel/retire. All four act on "whichever session I'm
 --- currently in", resolved here rather than requiring the player to type a session UUID. No
 --- permission requirement, matching raceReady/raceLeave's own design (any participant may act on
@@ -1798,6 +1947,8 @@ local function onInit()
     communications_rx.addHandler("raceStopSpectate", M.raceStopSpectate)
     communications_rx.addHandler("raceStartNow", M.raceStartNow)
     communications_rx.addHandler("raceUpdateSettings", M.raceUpdateSettings)
+    communications_rx.addHandler("raceStaffAction", M.raceStaffAction)
+    communications_rx.addHandler("raceResetPenalty", M.raceResetPenalty)
 
     services_chatCommands.addCommand("race", "chat.command.race.desc", M.chatRace,
         { commandKey = "chat.command.race.command" })
@@ -1912,6 +2063,8 @@ M.raceGateCrossed = raceGateCrossed
 M.raceDNF = raceDNF
 M.raceSpectate = raceSpectate
 M.raceStopSpectate = raceStopSpectate
+M.raceStaffAction = raceStaffAction
+M.raceResetPenalty = raceResetPenalty
 M.raceStartNow = raceStartNow
 M.findSessionByParticipant = findSessionByParticipant
 M.summarize = summarize

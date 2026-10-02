@@ -57,8 +57,10 @@
 ---attempt. Default false, unlike dnfEnabled, since this is a new opt-in deterrent, not a
 ---previously-hardcoded-on behavior being formalized. Purely client-enforced (raceRunner.lua).
 ---Moot under "norespawn" (resets already fully blocked there).
----@field resetPenaltySeconds integer? seconds frozen per reset when resetPenaltyEnabled is on.
----Default 5.
+---@field resetPenaltySeconds integer? seconds per reset when resetPenaltyEnabled is on. Default 5.
+---@field resetPenaltyMode ("hold"|"time")? what a reset costs : "hold" freezes the car for
+---resetPenaltySeconds (the original behaviour, the default), "time" adds them to the racer's race
+---time instead (raceGrid.lua's raceResetPenalty)
 ---@field autoSpectateOnFinish boolean? auto-switch a finisher to spectating another still-active
 ---participant (matches the always-on DNF behavior) rather than leaving them free to keep driving
 ---their own car after their own attempt is over ; default true
@@ -459,6 +461,7 @@ local function sanitizeRace(race, existingRaces)
     race.defaults.dnfTimeout = math.max(3, tonumber(race.defaults.dnfTimeout) or 30)
     race.defaults.resetPenaltyEnabled = race.defaults.resetPenaltyEnabled == true
     race.defaults.resetPenaltySeconds = math.max(1, tonumber(race.defaults.resetPenaltySeconds) or 5)
+    race.defaults.resetPenaltyMode = race.defaults.resetPenaltyMode == "time" and "time" or "hold"
     race.defaults.autoSpectateOnFinish = race.defaults.autoSpectateOnFinish ~= false
     race.defaults.disableNodegrabber = race.defaults.disableNodegrabber ~= false
     race.defaults.disableCameras = race.defaults.disableCameras ~= false
@@ -1346,6 +1349,18 @@ local function submitTime(raceId, playerName, model, time)
     return true, time < previousBest
 end
 
+--- undoes a submitTime that set a new PB (a racer disqualified after finishing) : the entry it
+--- replaced goes back, or the player's entry goes when there was none before
+---@param raceId integer
+---@param playerName string the leaderboard key submitTime was given
+---@param previous table? the entry submitTime replaced
+local function restoreEntry(raceId, playerName, previous)
+    local race = M.getById(raceId)
+    if not race or not race.leaderboard then return end
+    race.leaderboard[playerName] = previous
+    saveData()
+end
+
 --- every entry, fastest first, ranked
 ---@param race table
 ---@return {playerName: string, time: integer, model: string, date: integer, rank: integer, fromRank: integer?}[]
@@ -1487,6 +1502,7 @@ M.onMapChanged = loadData
 
 M.getById = getById
 M.submitTime = submitTime
+M.restoreEntry = restoreEntry
 M.getLeaderboard = getLeaderboard
 M.onRaceLeaderboardRequest = onRaceLeaderboardRequest
 M.onRaceLeaderboardSummaryRequest = onRaceLeaderboardSummaryRequest

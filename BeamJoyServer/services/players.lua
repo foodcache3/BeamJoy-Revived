@@ -192,6 +192,9 @@ local function onInit()
     services_consoleCommands.register("unmute", "commands.bjunmute.args", "commands.bjunmute.desc", M.consoleUnmute)
     services_consoleCommands.register("group", "commands.bjgroup.args", "commands.bjgroup.desc", M
         .consoleGroup)
+    -- the chat command's name (/setgroup), which gets typed in the console too
+    services_consoleCommands.register("setgroup", "commands.bjgroup.args", "commands.bjsetgroup.desc", M
+        .consoleGroup)
 
     services_chatCommands.addCommand("kick", "chat.command.kick.desc", M.chatKick,
         { commandKey = "chat.command.kick.command", permissions = { BJ_PERMISSIONS.Kick } })
@@ -1140,7 +1143,13 @@ local function consoleGroup(args, printUsage)
             out .. GetConsoleColor(CONSOLE_COLORS.STYLES.RESET))
         return
     end
-    M.setGroup(InitContext(), target.playerName, services_groups.data[groupIndex].name)
+    local groupName = services_groups.data[groupIndex].name
+    M.setGroup(InitContext(), target.playerName, groupName)
+    -- said so : a change used to print nothing at all, which read as the command doing nothing
+    local out = "\n" .. services_lang.get("commands.bjgroup.set")
+        :var({ playerName = target.playerName, group = groupName })
+    print(GetConsoleColor(CONSOLE_COLORS.FOREGROUNDS.LIGHT_GREEN) ..
+        out .. GetConsoleColor(CONSOLE_COLORS.STYLES.RESET))
 end
 
 ---@param ctxt BJSContext

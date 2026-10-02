@@ -1401,6 +1401,7 @@ local function joinDerby(sessionId)
 end
 
 ---@param state boolean
+---@return boolean? sent true once sent, nil when a check refused it
 local function ready(state)
     if not M.session then return end
     local myVeh = beamjoy_vehicles.getCurrentOwn()
@@ -1409,14 +1410,17 @@ local function ready(state)
     -- random vehicles from a preset : you're given one at the countdown, nothing to pick
     if state == true and not (s.vehiclePool and s.randomizeVehiclePool) then
         if not hasCar then
-            return toast.warn(beamjoy_lang.translate("beamjoy.activities.needVehicleToReady"), nil, 4)
+            toast.warn(beamjoy_lang.translate("beamjoy.activities.needVehicleToReady"), nil, 4)
+            return
         end
         if s.vehiclePool and not vehicleMatchesPool(myVeh.veh, s.vehiclePool) then
             toast.warn(beamjoy_lang.translate("beamjoy.derby.pickPreset"):var({ label = s.vehicleLabel or "" }), nil, 5)
-            return extensions.ui_vehicleSelector_general.openFromPause("pause.vehicleSelector")
+            extensions.ui_vehicleSelector_general.openFromPause("pause.vehicleSelector")
+            return
         end
     end
     beamjoy_communications.send("derbyReady", M.session.id, state == true, hasCar and myVeh.veh.jbeam or nil)
+    return true
 end
 
 local function leave()
@@ -1444,8 +1448,11 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJDerbyReady", M.ready)
     beamjoy_communications_ui.addHandler("BJDerbyLeave", M.leave)
     beamjoy_communications_ui.addHandler("BJDerbyCancel", M.cancel)
+    -- the leader starts now with whoever is ready. The server counts the leader as ready, so they
+    -- ready up here first, through the same checks as the Ready button (a car, the right one) :
+    -- without it a leader with no car could start the race carless
     beamjoy_communications_ui.addHandler("BJDerbyStartNow", function()
-        if M.session then beamjoy_communications.send("derbyStartNow", M.session.id) end
+        if M.session and M.ready(true) then beamjoy_communications.send("derbyStartNow", M.session.id) end
     end)
     beamjoy_communications_ui.addHandler("BJDerbyForfeit", M.forfeit)
     beamjoy_communications_ui.addHandler("BJDerbySpectate", function(sessionId)

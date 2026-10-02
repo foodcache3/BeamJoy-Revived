@@ -391,8 +391,11 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJHunterLeave", M.leave)
     beamjoy_communications_ui.addHandler("BJHunterCancel", M.cancel)
     -- the leader starts now with whoever is ready (services/hunterGrid.lua)
+    -- the leader starts now with whoever is ready. The server counts the leader as ready, so they
+    -- ready up here first, through the same checks as the Ready button (a car, the right one) :
+    -- without it a leader with no car could start the race carless
     beamjoy_communications_ui.addHandler("BJHunterStartNow", function()
-        if M.session then beamjoy_communications.send("hunterStartNow", M.session.id) end
+        if M.session and M.ready(true) then beamjoy_communications.send("hunterStartNow", M.session.id) end
     end)
     beamjoy_communications_ui.addHandler("BJHunterForceFugitive", M.forceFugitive)
     beamjoy_communications_ui.addHandler("BJHunterSpectate", M.spectateSession)
@@ -1745,6 +1748,7 @@ local function joinHunt(sessionId)
 end
 
 ---@param state boolean?
+---@return boolean? sent true once sent, nil when a check refused it
 local function ready(state)
     if not M.session then return LogError("beamjoy_hunterRunner: not in a hunter session") end
     local becomingReady = state ~= false
@@ -1759,13 +1763,15 @@ local function ready(state)
         local s = M.session.settings
         local given = s.randomizeVehiclePool and s.huntedVehiclePool and s.huntersVehiclePool
         if not hasCar and not given then
-            return toast.warn(beamjoy_lang.translate("beamjoy.activities.needVehicleToReady"), nil, 4)
+            toast.warn(beamjoy_lang.translate("beamjoy.activities.needVehicleToReady"), nil, 4)
+            return
         end
         if hasCar then
             model = beamjoy_vehicles.getCurrentConfigDisplayLabel(veh.veh)
         end
     end
     beamjoy_communications.send("hunterReady", M.session.id, becomingReady, model)
+    return true
 end
 
 local function leave()

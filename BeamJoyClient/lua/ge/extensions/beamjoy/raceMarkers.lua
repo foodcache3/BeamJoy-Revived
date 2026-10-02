@@ -342,6 +342,23 @@ end
 -- live-session branch, so an unchanged signature can skip the whole rebuild. Returns nil for the
 -- editor/test-builder branches (their own refresh calls already only fire on a real edit, so
 -- always redraw there rather than risk a stale signature masking one).
+--- whose checkpoints are shown : your own while you're racing, otherwise the racer you're
+--- watching (a spectator, or a racer whose own run is over), so a watcher sees that racer's next
+--- gate and the same limited number of gates they do, not the whole track
+---@param session BJRaceSession
+---@return BJRaceParticipant?
+local function markerParticipant(session)
+    local selfName = MPConfig.getNickname()
+    local own = table.find(session.participants, function(p) return p.playerName == selfName end)
+    if own and not own.finished and not own.dnf then return own end
+    local watched = beamjoy_raceRunner.spectatingPlayerName
+    if watched then
+        local p = table.find(session.participants, function(p) return p.playerName == watched end)
+        if p then return p end
+    end
+    return own
+end
+
 ---@return string?
 local function computeRenderSignature()
     if raceEditor.race then return nil end
@@ -353,15 +370,12 @@ local function computeRenderSignature()
     local race = table.find(beamjoy_races.data, function(r) return r.id == session.raceId end)
     if not race then return "none" end
 
-    local selfName = MPConfig.getNickname()
-    local participant = table.find(session.participants, function(p) return p.playerName == selfName end)
+    local participant = markerParticipant(session)
     if not participant then
-        -- Pure spectate (or watching a session you're not a participant of): the live-session
-        -- branch never highlights a "next gate" or limits visibility without a real participant of
-        -- your own, so the drawn gates are identical regardless of anyone else's progress.
+        -- watching nobody in particular : every gate, whatever anyone's progress
         return string.format("spectate:%s:%s", session.id, session.state)
     end
-    return string.format("%s:%s:%s:%s:%s:%s", session.id, session.state,
+    return string.format("%s:%s:%s:%s:%s:%s:%s", session.id, session.state, participant.playerName,
         tostring(participant.lastCrossedGate), tostring(participant.currentGate),
         tostring(participant.finished), tostring(participant.dnf))
 end
@@ -401,17 +415,15 @@ local function render()
             hasContent = true
         end
 
-        -- a pure non-participant spectate (raceSpectate, no session/self-participant of your own)
-        -- still wants to see the gates being raced through, just without a "self" to highlight the
-        -- next gate for
+        -- watching (a spectator, or after your own run) : the gates of the racer you're watching
+        -- (markerParticipant), or every gate when you're watching nobody in particular
         local session = beamjoy_raceRunner.session or beamjoy_raceRunner.spectatingSession
         if session then
             ---@type BJRace?
             local race = table.find(beamjoy_races.data, function(r) return r.id == session.raceId end)
             if race then
-                local selfName = MPConfig.getNickname()
                 ---@type BJRaceParticipant?
-                local participant = table.find(session.participants, function(p) return p.playerName == selfName end)
+                local participant = markerParticipant(session)
                 -- The set of gates that would actually complete the next crossing. More than one
                 -- entry for a branching race (parallel alternates sharing the last-crossed gate as
                 -- a parent), always exactly one for a non-branching race (identical to the old
