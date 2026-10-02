@@ -1454,35 +1454,6 @@ local function onRaceLeaderboardSummaryRequest(ctxt)
     communications_tx.sendToPlayer(ctxt.senderID, "raceLeaderboardSummary", list)
 end
 
--- TEMPORARY debug tooling, for testing leaderboard formatting/pagination (top-100 cap, pinned
--- self-row, rank coloring) without needing 100 real players/attempts. Remove once no longer needed.
----@param args string[]
----@param printUsage fun()
-local function consoleDebugLeaderboard(args, printUsage)
-    local raceId = tonumber(args[1])
-    local count = tonumber(args[2])
-    local baseMs = tonumber(args[3])
-    if not raceId or not count or not baseMs then return printUsage() end
-    local race = M.getById(raceId)
-    if not race then
-        print("[BJ races] racedebugleaderboard: race not found: " .. tostring(raceId))
-        return
-    end
-    race.leaderboard = race.leaderboard or {}
-    for i = 1, count do
-        local name = string.format("DebugPlayer%03d", i)
-        race.leaderboard[name] = {
-            -- spread around baseMs (+/- 5s) so ranks/times actually look varied, floored at 1ms
-            time = math.max(1, math.floor(baseMs + math.random(-5000, 5000))),
-            model = "Pickup - Sport",
-            date = GetCurrentTime() - math.random(0, 60 * 60 * 24 * 30),
-        }
-    end
-    saveData()
-    print(string.format("[BJ races] racedebugleaderboard: injected %d fake entries into race %d (~%dms)",
-        count, raceId, baseMs))
-end
-
 local function onInit()
     communications_rx.addHandler("raceSave", M.raceSave)
     communications_rx.addHandler("raceDelete", M.raceDelete)
@@ -1490,10 +1461,6 @@ local function onInit()
     communications_rx.addHandler("raceLeaderboardSummaryRequest", M.onRaceLeaderboardSummaryRequest)
     communications_rx.addHandler("raceLegacyImportPreview", M.raceLegacyImportPreview)
     communications_rx.addHandler("raceLegacyImportConfirm", M.raceLegacyImportConfirm)
-
-    services_consoleCommands.register("racedebugleaderboard", "<raceId> <count> <timeMs>",
-        "inject <count> fake leaderboard entries around <timeMs> for <raceId> (debug)",
-        consoleDebugLeaderboard)
 
     seedBundledRaces()
     applyBundledCourseUpdates()

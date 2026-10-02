@@ -31,6 +31,10 @@ local M = {
         observer = false,
         gravitySync = false,
         gravity = DEFAULT_GRAVITY,
+        weatherSync = false,
+        ---@type table<string, any>? the synced weather (WEATHER_FIELDS, the panel's own units) ;
+        ---nil = the map's own weather
+        weather = nil,
         ---@type integer? GetCurrentTimeMillis() domain anchor this client derived from the
         ---server's own epochAgoMs duration (see currentToD's own doc comment) ; nil until the
         ---first environment cache/change arrives
@@ -39,8 +43,92 @@ local M = {
 
     speedProcess = false,
     ToDProcess = false,
+
+    -- seconds other clients fade into an admin's weather change (the engine lerps clouds and fog)
+    WEATHER_LERP_SECONDS = 3,
+    -- an admin dragging a weather slider : the change is sent once it settles this long
+    WEATHER_SEND_QUIET_MS = 300,
+    ---@type table? weather changes not sent yet
+    pendingWeather = nil,
+    ---@type integer?
+    pendingWeatherAt = nil,
 }
 AddPreloadedDependencies(M)
+
+-- WEATHER SYNC ---------------------------------------------------------------------------------
+-- What the game's own weather panel (pause menu > Environment > Time and weather) can change,
+-- in core_environment.setState / getState's units (fogDensity x1000). Rain isn't in the panel.
+local WEATHER_FIELDS = { "windSpeed", "groundWind", "cloudCover", "cloudWindDirection", "fogDensity",
+    "fogAtmosphereHeight" }
+local WEATHER_VECTORS = { groundWind = { "x", "y", "z" }, cloudWindDirection = { "x", "y" } }
+
+---@param key string
+---@param value any number, or a vec3 / Point2F / {x, y, z}
+---@return any a plain, sendable value ; nil when unusable
+local function plainWeatherValue(key, value)
+    local axes = WEATHER_VECTORS[key]
+    if axes then
+        if value == nil then return nil end
+        local out = {}
+        for _, axis in ipairs(axes) do
+            local ok, v = pcall(function() return value[axis] end)
+            v = ok and tonumber(v) or nil
+            if not v then return nil end
+            out[axis] = v
+        end
+        return out
+    end
+    return tonumber(value)
+end
+
+---@param a any
+---@param b any
+---@return boolean
+local function weatherValueDiffers(a, b)
+    if a == nil or b == nil then return a ~= b end
+    if type(a) == "table" or type(b) == "table" then
+        if type(a) ~= "table" or type(b) ~= "table" then return true end
+        for axis, v in pairs(a) do
+            if math.abs(v - (tonumber(b[axis]) or 0)) > 1e-4 then return true end
+        end
+        return false
+    end
+    return math.abs(a - b) > 1e-4 * math.max(1, math.abs(a))
+end
+
+---@return table the engine's current weather, plain values
+local function currentWeather()
+    local state = extensions.core_environment and extensions.core_environment.getState() or {}
+    local out = {}
+    for _, key in ipairs(WEATHER_FIELDS) do
+        out[key] = plainWeatherValue(key, state[key])
+    end
+    return out
+end
+
+---@return boolean
+local function canSetEnv()
+    return beamjoy_permissions.hasAnyPermission(nil, BJ_PERMISSIONS.SetEnvironment)
+end
+
+--- Bring the engine to the synced weather : only the fields that differ, faded in over lerpSeconds
+--- (0 = at once). Never during a replay (it plays its own recorded environment).
+---@param lerpSeconds number
+---@param fields table<string, true>? only these fields (default : every synced one)
+local function applyWeather(lerpSeconds, fields)
+    if not M.data.weatherSync or type(M.data.weather) ~= "table" then return end
+    if extensions.core_replay and extensions.core_replay.getState() == "playback" then return end
+    local setState = M.baseFunctions.core_environment and M.baseFunctions.core_environment.setState
+    if not setState then return end
+    local current = currentWeather()
+    local state = {}
+    for key, value in pairs(M.data.weather) do
+        if (not fields or fields[key]) and weatherValueDiffers(value, current[key]) then
+            state[key] = value
+        end
+    end
+    if next(state) then setState(state, lerpSeconds) end
+end
 
 ---@return boolean whether the synced clock is advancing right now - must match the server's own
 ---isToDPlaying exactly, simPause included: the server stops advancing (and collapses) while the
@@ -108,6 +196,7 @@ local function sendEnv(data)
         day = M.data.day,
         gravitySync = M.data.gravitySync,
         gravity = M.data.gravity,
+        weatherSync = M.data.weatherSync,
     }, data)
     beamjoy_communications.send("setEnv", payload)
 end
@@ -256,6 +345,28 @@ local function interceptEnvState(state, lerpSeconds)
     end
     if M.data.gravitySync then
         newData.gravity = state.gravity
+    end
+
+    -- weather : an admin's change in the panel (a value different from what the engine shows now,
+    -- so the panel's whole-state pass-throughs don't count) is synced, once the slider settles ;
+    -- anyone else's is dropped, the engine keeps the synced weather
+    if M.data.weatherSync then
+        local current
+        for _, key in ipairs(WEATHER_FIELDS) do
+            if state[key] ~= nil then
+                current = current or currentWeather()
+                local value = plainWeatherValue(key, state[key])
+                if value ~= nil and weatherValueDiffers(value, current[key]) then
+                    if canSetEnv() then
+                        M.pendingWeather = M.pendingWeather or {}
+                        M.pendingWeather[key] = value
+                        M.pendingWeatherAt = GetCurrentTimeMillis()
+                    else
+                        state[key] = nil
+                    end
+                end
+            end
+        end
     end
 
     if table.length(newData) > 0 and
@@ -492,10 +603,24 @@ local function updateGravity(resetGravity)
     end
 end
 
+--- an admin's weather change, sent once the panel's slider settles
+local function flushPendingWeather()
+    if not M.pendingWeather or GetCurrentTimeMillis() - M.pendingWeatherAt < M.WEATHER_SEND_QUIET_MS then
+        return
+    end
+    local patch = M.pendingWeather
+    M.pendingWeather, M.pendingWeatherAt = nil, nil
+    if not M.data.weatherSync then return end
+    -- optimistic : the server's echo then matches and isn't re-applied here
+    M.data.weather = table.assign(table.clone(M.data.weather or {}), patch)
+    sendEnv({ weather = patch })
+end
+
 local function onUpdate()
     updateSimSpeed()
     updateToD()
     updateGravity()
+    flushPendingWeather()
 end
 
 local function onSlowUpdate()
@@ -512,6 +637,7 @@ local function onWorldReadyState(state)
     -- one so syncNative rewrites everything (the date included) into the new one
     invalidateApplied()
     resyncLerpUntilMs = nil
+    if state == 2 then applyWeather(0) end
 end
 
 local function onBeforeRadialOpened()
@@ -534,6 +660,8 @@ end
 
 local function onReplayStateChanged()
     beamjoy_restrictions.update()
+    -- a replay plays back its own recorded weather : the synced one comes back after it
+    applyWeather(1)
 end
 
 local function onServerLeave()
@@ -565,6 +693,18 @@ local function retrieveCache(caches)
         local timeSyncDisabled = changes.timeSync == false
         local resetGravity = M.data.gravity ~= DEFAULT_GRAVITY and
             changes.gravitySync == false
+        -- the weather fields that really changed (the cache always carries a fresh table) : an
+        -- admin's own echo matches what they already applied and changes nothing
+        local oldWeather = M.data.weatherSync and M.data.weather or {}
+        local weatherFields = {}
+        local incomingWeather = caches.environment.weather
+        if caches.environment.weatherSync and type(incomingWeather) == "table" then
+            for key, value in pairs(incomingWeather) do
+                if weatherValueDiffers(value, oldWeather[key]) then weatherFields[key] = true end
+            end
+        end
+        -- the payload leaves weather out entirely when it's nil (the map's own weather)
+        if caches.environment.weather == nil then M.data.weather = nil end
         -- Real, confirmed bug: the once-a-minute safety-net broadcast always carries a fresh
         -- ToD-at-a-NEW-epoch value, which reads as numerically "changed" even though it predicts
         -- the same current position. Treating every re-anchor as a real change fired the big,
@@ -589,6 +729,11 @@ local function retrieveCache(caches)
         updateToD(forceToD, timeSyncDisabled, wasPlaying)
         M.ToDProcess = false
         updateGravity(resetGravity)
+        if next(weatherFields) then
+            -- someone else's change fades in ; the first sync after joining lands at once
+            local inWorld = beamjoy_main and beamjoy_main.client_ready
+            applyWeather(inWorld and M.WEATHER_LERP_SECONDS or 0, weatherFields)
+        end
         local requestState = M.baseFunctions.core_environment.requestState
             or extensions.core_environment.requestState
         requestState()
@@ -603,6 +748,7 @@ local function sendEnvToUI()
     beamjoy_communications_ui.send("BJEnvironment", {
         timeSync = M.data.timeSync,
         gravitySync = M.data.gravitySync,
+        weatherSync = M.data.weatherSync,
         nightScale = M.data.nightScale,
         -- read-only inputs for the config panel's full-cycle readout and slider range (dayLength
         -- comes from the vanilla environment panel, dayScale has no UI of its own)
@@ -615,11 +761,12 @@ local function sendEnvToUI()
     })
 end
 
----@param newData {timeSync: boolean, gravitySync: boolean, nightScale: number?}
+---@param newData {timeSync: boolean, gravitySync: boolean, weatherSync: boolean, nightScale: number?}
 local function setEnv(newData)
     local payload = {
         timeSync = newData.timeSync,
         gravitySync = newData.gravitySync,
+        weatherSync = newData.weatherSync == true,
     }
     if tonumber(newData.nightScale) then
         -- server clamps too ; this just keeps the optimistic value sane
@@ -638,6 +785,10 @@ local function setEnv(newData)
     if not M.data.gravity and newData.gravitySync then
         -- retrieve gravity from game
         payload.gravity = extensions.core_environment.getGravity()
+    end
+    if not M.data.weatherSync and newData.weatherSync then
+        -- the admin's current weather becomes everyone's
+        payload.weather = currentWeather()
     end
     sendEnv(payload)
 end

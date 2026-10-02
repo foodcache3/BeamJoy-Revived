@@ -5,6 +5,7 @@ angular.module("beamjoy").component("bjConfigGeneralEnvironment", {
         this.data = {
             timeSync: false,
             gravitySync: false,
+            weatherSync: false,
             nightScale: 2,
         };
         this.default = {};
@@ -84,6 +85,7 @@ angular.module("beamjoy").component("bjConfigGeneralEnvironment", {
             this.default = {
                 timeSync: payload.timeSync,
                 gravitySync: payload.gravitySync,
+                weatherSync: payload.weatherSync === true,
                 nightScale: Math.round(nightScale * 10) / 10,
             };
             if (!this.dirty) {
@@ -117,6 +119,7 @@ angular.module("beamjoy").component("bjConfigGeneralEnvironment", {
                 {
                     timeSync: this.data.timeSync,
                     gravitySync: this.data.gravitySync,
+                    weatherSync: this.data.weatherSync,
                     nightScale: this.data.nightScale,
                 },
             ]);

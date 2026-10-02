@@ -25,6 +25,13 @@ local M = {
         observers = {},
         gravitySync = false,
         gravity = DEFAULT_GRAVITY,
+        --- weather sync : what an admin sets in the game's own weather panel (clouds, fog, wind)
+        --- is applied on every client. Only the fields the panel sends, in its own units (see
+        --- the client's WEATHER_FIELDS) ; nil until an admin turns sync on or changes something,
+        --- the map's own weather until then (identical for everyone anyway)
+        weatherSync = false,
+        ---@type table<string, any>?
+        weather = nil,
         ---@type number milliseconds on this session's own monotonic realtimeClock (see onInit)
         ---this ToD was last collapsed to its true current value ; see collapseToD's own doc
         ---comment. Not meaningful cross-session, re-anchored to "now" on every onInit
@@ -204,6 +211,9 @@ local function onMapChanged(oldMapName, newMapName)
     -- the elapsed window ran under the OLD map's solar data ; from here on the new map's applies
     -- (or the fallback split, until its first client reports it)
     collapseToD(observerFor(oldMapName))
+    -- weather values are tuned to a map's own sky and fog : the new map starts from its own
+    -- weather (the same on every client) until an admin changes it
+    M.data.weather = nil
     dao_environment.save(M.data)
     broadcastEnv()
 end
@@ -279,7 +289,45 @@ end
 local SETTABLE_FIELDS = {
     timeSync = true, ToD = true, dayNightCycle = true, dayLength = true, dayScale = true,
     nightScale = true, year = true, month = true, day = true, gravitySync = true, gravity = true,
+    weatherSync = true, weather = true,
 }
+
+-- the weather fields a setEnv payload may carry (the game's own weather panel), with sane bounds :
+-- numbers, or {x, y[, z]} vectors
+local WEATHER_NUMBERS = {
+    windSpeed = { 0, 100 },
+    cloudCover = { 0, 10 },
+    fogDensity = { 0, 1000 }, -- the panel's units (the engine's fog density x1000)
+    fogAtmosphereHeight = { 0, 100000 },
+}
+local WEATHER_VECTORS = {
+    groundWind = { "x", "y", "z" },
+    cloudWindDirection = { "x", "y" },
+}
+
+---@param weather any
+---@return table? only the known fields, cleaned ; nil when nothing valid
+local function cleanWeather(weather)
+    if type(weather) ~= "table" then return nil end
+    local clean = {}
+    for key, bounds in pairs(WEATHER_NUMBERS) do
+        local value = tonumber(weather[key])
+        if value and value == value then clean[key] = math.clamp(value, bounds[1], bounds[2]) end
+    end
+    for key, axes in pairs(WEATHER_VECTORS) do
+        local vec = weather[key]
+        if type(vec) == "table" then
+            local out = {}
+            for _, axis in ipairs(axes) do
+                local value = tonumber(vec[axis])
+                if not value or value ~= value then out = nil break end
+                out[axis] = math.clamp(value, -1000, 1000)
+            end
+            if out then clean[key] = out end
+        end
+    end
+    return next(clean) and clean or nil
+end
 
 ---@param ctxt BJSContext
 ---@param payload {timeSync: boolean, ToD: number, dayNightCycle: boolean, dayLength: integer, dayScale: number, nightScale: number, year: integer?, month: integer?, day: integer?, gravitySync: boolean, gravity: number}
@@ -315,10 +363,24 @@ local function changeEnv(ctxt, payload)
     if clean.year ~= nil or clean.month ~= nil or clean.day ~= nil then
         clean.year, clean.month, clean.day = validDate(clean.year, clean.month, clean.day)
     end
+    -- weather is a partial : the fields sent replace those, the rest stay
+    local weatherChanged = false
+    if clean.weather ~= nil then
+        local patchWeather = cleanWeather(clean.weather)
+        clean.weather = nil
+        if patchWeather then
+            local merged = table.assign(table.clone(M.data.weather or {}), patchWeather)
+            if not table.compare(merged, M.data.weather or {}, true) then
+                clean.weather = merged
+                weatherChanged = true
+            end
+        end
+    end
 
     collapseToD() -- account for the elapsed window under the OLD settings before anything changes
     local newData = table.assign(table.clone(M.data), clean)
-    if not table.compare(M.data, newData) then
+    -- (a shallow compare : the weather table is checked above)
+    if weatherChanged or not table.compare(M.data, newData) then
         table.assign(M.data, newData)
         if not M.data.gravitySync and M.data.gravity ~= DEFAULT_GRAVITY then
             M.data.gravity = DEFAULT_GRAVITY

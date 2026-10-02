@@ -762,6 +762,8 @@
     "beamjoy.window.config.tabs.general.environment.openSettings": "Open environment settings",
     "beamjoy.window.config.tabs.general.environment.timeSync": "Sync time of day",
     "beamjoy.window.config.tabs.general.environment.gravitySync": "Sync gravity",
+    "beamjoy.window.config.tabs.general.environment.weatherSync": "Sync weather",
+    "beamjoy.window.config.tabs.general.environment.weatherSync.tooltip": "Everyone sees the same clouds, fog and wind. Turning it on shares your current weather ; after that, change it in the game's own Time and weather panel (Open environment settings).",
     "beamjoy.window.config.tabs.general.environment.nightSpeed": "Night speed",
     "beamjoy.window.config.tabs.general.environment.nightSpeed.tooltip": "How fast night (real sunset to sunrise) passes compared to day (2x = night goes by twice as fast). Only applies while time of day is synced.",
     "beamjoy.window.config.tabs.general.environment.nightSpeed.limited": "Limited by the day length (the game allows 5 minutes to 24 hours per cycle):",

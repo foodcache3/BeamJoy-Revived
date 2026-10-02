@@ -8,8 +8,15 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2573, server build 2399.
+Version 1.11.0 : client build 2574, server build 2400.
 
+- **Weather sync.** Config > General > Environment has a new "Sync weather" toggle. Turning it on
+  shares the admin's current clouds, fog and wind with everyone ; after that, what an admin sets in
+  the game's own Time and weather panel is applied on every client, fading in over a few seconds.
+  Anyone else's changes there are undone. Changing map goes back to that map's own weather. Rain
+  isn't included : the game's panel has no rain control. *(client + server)*
+- Removed the temporary `racedebugleaderboard` server console command (fake leaderboard entries
+  for testing). *(server only)*
 - **Races and derby arenas on the Big Map.** The map's BeamJoy section now has a "Races" group and
   a "Derby arenas" group, with a pin for every race and every playable arena on the map, each at
   its own first start position. Set route drives you there, and quick travel puts your car on that
