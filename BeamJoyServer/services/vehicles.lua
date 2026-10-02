@@ -125,7 +125,9 @@ local function onVehicleEdited(playerID, vehID, vehDataStr)
         -- a car and gets put in the nearest vehicle"): picking a car while on the unicycle
         -- REPLACES the unicycle, which BeamMP sends as an edit of that vehicle, not a spawn. The
         -- unicycle is never in the list, so every such edit was rejected. It's a new vehicle as far
-        -- as the cap goes : counted and added like a spawn
+        -- as the cap goes : counted and added like a spawn. (Not the whole story : BeamMP-Server
+        -- itself destroys any edit of a unicycle into something else, whatever this returns, so
+        -- the client's vehicleSelector.lua spawns a new car instead of replacing a unicycle)
         local player = services_players.players[playerName]
         local groupIndex = services_groups.getGroupIndex(player.group)
         local group = groupIndex and services_groups.data[groupIndex]

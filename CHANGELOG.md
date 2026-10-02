@@ -8,13 +8,28 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2557, server build 2391.
+Version 1.11.0 : client build 2560, server build 2391.
+
+- **Joining an activity clears your GPS route.** A route you set yourself (the big map, a
+  station or other point) is cleared when you join a race, hunt, infected or derby lobby, take
+  a delivery job or convoy, or start a bus line. Routes the activity sets itself are kept.
+  *(client only)*
+
+- **Fixed: sliders ran off a small menu.** A slider's track has no fixed width any more, so
+  Settings (Dust and particles, freecam FOV and speed) and every other slider shrink with the
+  window. *(client only)*
+- **Fixed: the freecam FOV and speed sliders showed their value twice.** Also the traffic
+  settings' amount, per-player, parked and model weight sliders. *(client only)*
+
+- **Fixed: picking a car while walking put you in the nearest vehicle.** Replacing the unicycle
+  turns it into the car, which BeamMP's server always deletes (an edit of a unicycle into
+  anything else), so the car vanished and the game moved you to another one. While walking the
+  car is now spawned where you stand and you get in it, which puts the unicycle away like
+  getting into any car. *(client only)*
 
 - **Removed the unicycle desync workaround.** The fix is in BeamMP itself now (BeamMP/BeamMP#974,
   on its development branch), so BeamJoy no longer clears a destroyed remote vehicle's position
   mailbox. *(client only)*
-- **Fixed: the Dust and particles slider ran off a small menu.** It spans the row now, like the
-  freecam sliders. *(client only)*
 - **Fixed: the gizmo stayed on screen after saving an arena.** Saving a derby, hunter or infected
   arena with a point selected keeps that point selected (gizmo and all) ; a reload that drops
   the selection hides the gizmo too. *(client only)*

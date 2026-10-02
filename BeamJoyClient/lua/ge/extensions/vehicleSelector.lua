@@ -92,6 +92,33 @@ local function spawnNewVehicle(model, opt)
     end
 end
 
+--- Picking a car while walking. A replace re-spawns the unicycle's own object as the car, which
+--- BeamMP sends as an edit of the unicycle, and BeamMP-Server destroys any edit that turns a
+--- player's unicycle into something else (TServer.cpp, the 'Oc' case: the car vanished and the game
+--- put the player in the nearest vehicle, whatever BeamJoy's own onVehicleEdited answered). So the
+--- car is spawned new where the walker stands, and the game's own get-in flow retires the unicycle:
+--- entering the car has gameplay_walk deactivate it, which BeamMP deletes and syncs
+--- (beammp/multiplayer.lua's onVehicleActiveChanged).
+---@param unicycle userdata the player's own unicycle
+local function spawnInsteadOfUnicycle(model, opt, unicycle)
+    local uniId = unicycle:getID()
+    opt = type(opt) == "table" and table.clone(opt) or {}
+    opt.pos = vec3(unicycle:getPosition())
+    local camDir = core_camera.getQuat() * vec3(0, 1, 0)
+    camDir.z = 0
+    if camDir:length() > 1e-4 then opt.rot = quatFromDir(camDir:normalized()) end
+    opt.visibilityPoint = nil
+    local veh, vehs = M.baseFunctions.core_vehicles.spawnNewVehicle(model, opt)
+    -- a unicycle gameplay_walk doesn't track (one picked in the selector rather than walked out
+    -- on) isn't deactivated by the switch : removed here. A tracked one is left to BeamMP, whose
+    -- own deletion doesn't check the object still exists
+    if veh and gameplay_walk and gameplay_walk.onSerialize().unicycleId ~= uniId then
+        local leftover = getObjectByID(uniId)
+        if leftover then leftover:delete() end
+    end
+    return veh, vehs
+end
+
 local function replaceVehicle(model, opt, otherVeh)
     if model == beamjoy_vehicles.WALKING then
         return M.baseFunctions.core_vehicles.replaceVehicle(model, opt, otherVeh)
@@ -113,6 +140,10 @@ local function replaceVehicle(model, opt, otherVeh)
     -- "second simultaneous vehicle" concern the way "spawn"/"clone" are.
     extensions.hook("onBJRequestCanSpawnVehicle", req, model, config, "replace")
     if req.state and not capReached(replaceAdds()) then
+        local own = beamjoy_vehicles.getCurrentOwn()
+        if not otherVeh and own and own.jbeam == beamjoy_vehicles.WALKING and own.veh then
+            return spawnInsteadOfUnicycle(model, opt, own.veh)
+        end
         return M.baseFunctions.core_vehicles.replaceVehicle(model, opt, otherVeh)
     end
 end

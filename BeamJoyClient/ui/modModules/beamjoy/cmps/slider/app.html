@@ -8,6 +8,7 @@
            whole time, never actually stretching/shrinking with anything */
         display: block;
         width: 100%;
+        min-width: 0;
     }
     bj-slider .slider-row {
         display: flex;
@@ -15,8 +16,13 @@
         gap: 0.5em;
         width: 100%;
     }
+    /* no width of its own : a range input's built-in width (~130px) is also its smallest, so a
+       table or flex row holding a slider could never get narrower than that plus the value and the
+       # button, and ran off a small window instead. It takes whatever space the row leaves now */
     bj-slider input[type="range"] {
-        flex-grow: 1;
+        flex: 1 1 0;
+        width: 0;
+        min-width: 0;
         appearance: none;
         border: none;
     }
@@ -54,6 +60,7 @@
     }
     bj-slider input[type="number"] {
         flex-grow: 1;
+        min-width: 0;
         text-align: center;
     }
     bj-slider .mode-toggle-btn {

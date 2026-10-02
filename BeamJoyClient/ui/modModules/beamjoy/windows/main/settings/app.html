@@ -87,7 +87,6 @@
                 {{ "beamjoy.window.main.tabs.settings.sections.vehicle.particles" | translate }}
             </span>
         </td>
-        <!-- both columns, like the freecam sliders : in one, the slider ran off a small window -->
         <td colspan="2">
             <div class="w-100">
                 <bj-slider
@@ -469,7 +468,7 @@
             </span>
         </td>
         <td colspan="2">
-            <div class="d-flex align-center w-100">
+            <div class="d-flex align-center gap-1 w-100">
                 <button
                     class="btn warning"
                     title="{{ 'beamjoy.common.reset' | translate}}"
@@ -477,9 +476,8 @@
                 >
                     <icon name="reset" class="small"></icon>
                 </button>
-                <div class="flex-grow-1">
+                <div class="flex-grow-1" style="min-width: 0">
                     <div class="d-flex gap-1 align-center">
-                        <span>{{$ctrl.settings.freecam.fov}}°</span>
                         <bj-slider
                             min="10"
                             max="120"
@@ -498,7 +496,7 @@
             </span>
         </td>
         <td colspan="2">
-            <div class="d-flex align-center w-100">
+            <div class="d-flex align-center gap-1 w-100">
                 <button
                     class="btn warning"
                     title="{{ 'beamjoy.common.reset' | translate}}"
@@ -506,9 +504,8 @@
                 >
                     <icon name="reset" class="small"></icon>
                 </button>
-                <div class="flex-grow-1">
+                <div class="flex-grow-1" style="min-width: 0">
                     <div class="d-flex gap-1 align-center">
-                        <span>{{$ctrl.settings.freecam.speed}}</span>
                         <bj-slider
                             min="2"
                             max="100"

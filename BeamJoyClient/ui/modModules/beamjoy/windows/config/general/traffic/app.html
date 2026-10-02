@@ -13,7 +13,6 @@
         </td>
         <td>
             <div class="d-flex gap-1 align-center">
-                <span>{{$ctrl.data.amount}}</span>
                 <bj-slider
                     ng-model="$ctrl.data.amount"
                     min="5"
@@ -28,7 +27,6 @@
         </td>
         <td>
             <div class="d-flex gap-1 align-center">
-                <span>{{$ctrl.data.maxPerPlayer}}</span>
                 <bj-slider
                     ng-model="$ctrl.data.maxPerPlayer"
                     min="1"
@@ -86,7 +84,6 @@
                         >
                             {{"beamjoy.window.config.tabs.general.traffic.rarity.common"|translate}}
                         </button>
-                        <span>{{$ctrl.data.weights[model]}}%</span>
                         <bj-slider
                             ng-model="$ctrl.data.weights[model]"
                             min="0"
@@ -164,7 +161,6 @@
         </td>
         <td>
             <div class="d-flex gap-1 align-center">
-                <span>{{$ctrl.data.parkedAmount}}</span>
                 <bj-slider
                     ng-model="$ctrl.data.parkedAmount"
                     min="0"
@@ -179,7 +175,6 @@
         </td>
         <td>
             <div class="d-flex gap-1 align-center">
-                <span>{{$ctrl.data.parkedMaxPerPlayer}}</span>
                 <bj-slider
                     ng-model="$ctrl.data.parkedMaxPerPlayer"
                     min="1"
