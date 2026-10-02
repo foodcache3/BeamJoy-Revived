@@ -128,6 +128,8 @@ end
 local function onGetRawPoiListForLevel(levelIdentifier, elements)
     table.clear(M.itemById)
     if M.editorActive or not stationsAllowed() then return end
+    -- Settings > Visual : hidden, prompt included
+    if beamjoy_markerSettings and beamjoy_markerSettings.hideStations then return end
 
     local refuelPoints, garages = allRefuelPoints(), allGarages()
     local rot = quat(0, 0, 0, 1)

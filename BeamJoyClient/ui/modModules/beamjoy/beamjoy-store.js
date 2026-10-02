@@ -73,6 +73,11 @@ angular
             this.BJRaceSettings = (payload) => {
                 this.raceSettings = payload;
             };
+            // a race / derby marker's "Open" in the world (lua beamjoy/races.lua, derby.lua) : kept
+            // here until the Races / Derby section is mounted and has its list to open it in
+            this.BJOpenActivityStart = (payload) => {
+                this.pendingActivityStart = payload || null;
+            };
 
             this.BJNametagsState = (data) => {
                 this.settings.assign({ nametags: data });

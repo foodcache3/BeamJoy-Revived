@@ -262,6 +262,7 @@ angular
         document.body.prepend(picker);
 
         $rootScope.$on("BJUnload", () => {
-            document.querySelector("beamjoy-color-picker").remove();
+            // can arrive twice : remove whatever is still there
+            document.querySelectorAll("beamjoy-color-picker").forEach((el) => el.remove());
         });
     });

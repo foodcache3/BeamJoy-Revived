@@ -33,7 +33,7 @@ local M = {
         "beamjoy_players", "beamjoy_nametags", "beamjoy_contextMenu", "beamjoy_traffic",
         "beamjoy_activity_manager", "beamjoy_ui_activityEditor", "beamjoy_environment",
         "beamjoy_recoveryPolicy", "beamjoy_uiNav",
-        "beamjoy_broadcast", "beamjoy_maps", "beamjoy_mapVote", "beamjoy_kickVote", "beamjoy_automaticLights", "beamjoy_particles", "beamjoy_pursuit",
+        "beamjoy_broadcast", "beamjoy_maps", "beamjoy_mapVote", "beamjoy_kickVote", "beamjoy_automaticLights", "beamjoy_particles", "beamjoy_markerSettings", "beamjoy_pursuit",
         "beamjoy_vehiclePresets", "beamjoy_races", "beamjoy_raceRunner", "beamjoy_raceMarkers",
         "beamjoy_hunter", "beamjoy_hunterRunner", "beamjoy_hunterMarkers",
         "beamjoy_infected", "beamjoy_infectedRunner",
@@ -41,7 +41,7 @@ local M = {
         "beamjoy_freeroamData", "beamjoy_stations",
         "beamjoy_busLines", "beamjoy_busRun",
         "beamjoy_deliveryPoints", "beamjoy_delivery", "beamjoy_deliveryPool",
-        "beamjoy_crews", "beamjoy_notices", "beamjoy_mainNav" },
+        "beamjoy_crews", "beamjoy_notices", "beamjoy_mainNav", "beamjoy_vehicleInteractions" },
 
     world_ready = false,
     client_ready = false,
@@ -101,6 +101,17 @@ M.onServerLeave = function()
         beamjoy_communications_ui.send("BJUnload")
     end
     extensions.unload("beamjoy_main")
+end
+
+-- Real bug: current BeamMP's leaveServer (MPCoreNetwork.lua) fires `onBeamMPServerLeave`, and
+-- nothing fires `onServerLeave` any more, so none of BeamJoy's leave handlers ran. Disconnecting
+-- hid it (BeamMP then reloads all of Lua, BeamJoy with it), but "Exit level" from the pause menu
+-- (onClientEndMission -> leaveServer(false)) doesn't reload : BeamJoy stayed loaded at the main
+-- menu, its UI still on screen and the game functions it replaces still replaced. Relayed here to
+-- every handler ; on a BeamMP that still fires onServerLeave, whichever comes second finds BeamJoy
+-- already unloaded (M.onServerLeave above unloads it)
+M.onBeamMPServerLeave = function()
+    extensions.hook("onServerLeave")
 end
 
 return M

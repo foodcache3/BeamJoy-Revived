@@ -102,21 +102,25 @@ local function onInit()
     end)
 end
 
---- `InitPreloadedDependencies` forces these natives into "manual" unload mode (so they survive
---- in-session map changes without this extension losing access to them), but nothing ever
---- reverted that. They stayed loaded forever, past leaving the server entirely, since
---- `setExtensionUnloadMode(ext, "manual")` only suppresses *automatic* unload, it doesn't stop an
---- explicit one. Symptom seen in-game : after returning to the main menu, the console floods with
---- `core/vehicle/manager.lua:360: attempt to index global 'spawn' (a nil value)` every frame:
---- `spawn` (not preloaded/kept alive by anything here) unloads normally on leaving the level, but
---- `core_vehicle_manager` apparently doesn't (most likely kept alive transitively through the
---- vehicle-related natives below staying loaded), so it keeps ticking and referencing something
---- that's gone. Explicitly unloading these on our own teardown returns them to BeamNG's normal
---- leave-the-level lifecycle instead of leaving them stuck alive indefinitely.
+--- the game's own startup extensions (lua/ge/main.lua startupExtensions) : loaded once for the
+--- whole game, in "manual" unload mode from the start
+local NATIVE_STARTUP = { core_vehicles = true }
+
+--- `InitPreloadedDependencies` puts these natives in "manual" unload mode, so they survive
+--- in-session map changes. On our own teardown the ones the game loads per level go back to its
+--- default ("auto"), and the game's normal level lifecycle takes over again.
+---
+--- Real bug: this used to UNLOAD them all. core_vehicles is one of the game's startup extensions,
+--- never meant to be unloaded : once BeamJoy unloaded on "Exit level" (no Lua reload there),
+--- everything depending on it went with it (the vehicle selector, the pause menu's providers,
+--- ui_gridSelector...), freeroam_vehicleSwitchNotification errored on the missing global, and the
+--- main menu logged unresolved dependencies on every extension load until a restart. The unload
+--- was a guess at the "core/vehicle/manager.lua:360 'spawn' nil" console flood, whose real cause
+--- was beamjoy_inputs leaving its wrappers in place (restoreResetInputs)
 local function onExtensionUnloaded()
     table.forEach(M.preloadedDependencies, function(dep)
-        if extensions.isExtensionLoaded(dep) then
-            extensions.unload(dep)
+        if not NATIVE_STARTUP[dep] then
+            setExtensionUnloadMode(dep, "auto")
         end
     end)
 end
@@ -1169,6 +1173,8 @@ M.soloGhostVisualReversed = false
 ---vehicle's ghost state, so this can't just be re-derived from it in general)
 ---@return number
 local function computeDisplayAlpha(vid, isGhosted)
+    -- Settings > Visual > Disable ghost transparency : everything solid, only the look changes
+    if beamjoy_markerSettings and beamjoy_markerSettings.opaqueGhosts then return 1 end
     -- CollisionsMode == "disabled" ghosts literally every vehicle, permanently, for as long as
     -- it's set. The translucency visual exists to flag a TEMPORARY, situational ghost (respawn
     -- protection, a safe zone, a race countdown), which stops meaning anything once it's just the
@@ -1198,8 +1204,16 @@ local function setSoloGhostVisualReversed(state)
     -- re-applies to every currently-tracked vehicle at once, immediately, rather than waiting for
     -- each one's own ghost flag to happen to change next. A bystander's car that was never
     -- ghosted at all still needs to flip to translucent (or back) the instant reversal toggles
+    M.reapplyDisplayAlpha()
+end
+
+--- every tracked vehicle's transparency, recomputed now (the solo race reversal, or Settings >
+--- Visual's ghost transparency toggle)
+local function reapplyDisplayAlpha()
     M.vehicles:forEach(function(mpVeh)
-        mpVeh.veh:setMeshAlpha(computeDisplayAlpha(mpVeh.vid, mpVeh.veh.ghost == "1"), "")
+        if mpVeh.veh then
+            mpVeh.veh:setMeshAlpha(computeDisplayAlpha(mpVeh.vid, mpVeh.veh.ghost == "1"), "")
+        end
     end)
 end
 
@@ -1595,6 +1609,7 @@ M.setGhostReason = setGhostReason
 M.applyRespawnProtection = applyRespawnProtection
 M.computeDisplayAlpha = computeDisplayAlpha
 M.setSoloGhostVisualReversed = setSoloGhostVisualReversed
+M.reapplyDisplayAlpha = reapplyDisplayAlpha
 M.getAttachedTrailers = getAttachedTrailers
 M.getFullConfig = getFullConfig
 M.isPolice = isPolice

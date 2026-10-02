@@ -1187,6 +1187,27 @@ end
 --- to re-call it just to keep it visible. Never runs for anyone but the fugitive: session.route is
 --- already stripped server-side for every other participant/spectator, so there's nothing here to
 --- guide toward on any other client.
+-- the GPS colors, line and floating arrows : the fugitive's route to their next waypoint is blue,
+-- the hunters' route to a revealed fugitive red
+local HUNTED_GPS_COLORS = { decals = { 0, 0.4, 1 }, arrows = { 0, 0.48, 0.77 } }
+local HUNTER_GPS_COLORS = { decals = { 1, 0.12, 0.08 }, arrows = { 0.85, 0.1, 0.06 } }
+
+--- core_groundMarkers.setPath in the given colors, whatever color set the GPS was on : the game
+--- takes the line color per route, but the floating arrows only from its active color set
+--- (core/groundMarkers.lua reads colorSets[colorSet] inside setPath), so a set of our own is
+--- switched in for this one call and the previous one put back
+---@param pos vec3
+---@param colors {decals: number[], arrows: number[]}
+local function setColoredGps(pos, colors)
+    local gm = extensions.core_groundMarkers
+    gm.colorSets.bjHunt = colors
+    local previous = gm.colorSet
+    gm.colorSet = "bjHunt"
+    local ok, err = pcall(gm.setPath, pos, { color = colors.decals })
+    gm.colorSet = previous
+    if not ok then LogError("beamjoy_hunterRunner: GPS failed: " .. tostring(err)) end
+end
+
 local function updateGpsGuidance()
     local participant = M.session and getSelfParticipant() or nil
     local active = M.session and M.session.state == "HUNT" and participant and
@@ -1199,29 +1220,12 @@ local function updateGpsGuidance()
     if waypoint then
         if M.lastGpsWaypointIndex ~= nextIndex then
             M.lastGpsWaypointIndex = nextIndex
-            extensions.core_groundMarkers.setPath(vec3(waypoint.pos.x, waypoint.pos.y, waypoint.pos.z))
+            setColoredGps(vec3(waypoint.pos.x, waypoint.pos.y, waypoint.pos.z), HUNTED_GPS_COLORS)
         end
     elseif M.lastGpsWaypointIndex ~= nil then
         M.lastGpsWaypointIndex = nil
         extensions.core_groundMarkers.setPath(nil)
     end
-end
-
--- the hunters' route to a revealed fugitive is red, line and floating arrows
-local REVEAL_GPS_COLORS = { decals = { 1, 0.12, 0.08 }, arrows = { 0.85, 0.1, 0.06 } }
-
---- core_groundMarkers.setPath in red : the game takes the line color per route, but the floating
---- arrows only from its active color set (core/groundMarkers.lua reads colorSets[colorSet] inside
---- setPath), so a set of our own is switched in for this one call and the stock one put back
----@param pos vec3
-local function setRevealGps(pos)
-    local gm = extensions.core_groundMarkers
-    gm.colorSets.bjHunterReveal = REVEAL_GPS_COLORS
-    local previous = gm.colorSet
-    gm.colorSet = "bjHunterReveal"
-    local ok, err = pcall(gm.setPath, pos)
-    gm.colorSet = previous
-    if not ok then LogError("beamjoy_hunterRunner: reveal GPS failed: " .. tostring(err)) end
 end
 
 --- Hunter-only: routes native GPS (core_groundMarkers) straight to the fugitive's own live
@@ -1242,7 +1246,7 @@ local function updateHunterGpsGuidance()
         local pos = mpVeh and mpVeh.veh and beamjoy_vehicles.getVehiclePositionRotation(mpVeh.veh)
         if pos then
             M.hunterGpsActive = true
-            setRevealGps(pos)
+            setColoredGps(pos, HUNTER_GPS_COLORS)
             return
         end
     end

@@ -6,6 +6,10 @@ local M = {
 
     ---@type table<integer, string> index vid, value label
     fugitives = {},
+    --- the pursuits this player started (fugitive remoteVID -> true) : called off if they join an
+    --- activity
+    ---@type table<integer, true>
+    started = {},
     --- is current vehicle own and police
     isPolice = false,
     arrest = {
@@ -44,11 +48,16 @@ local function isParked(v)
     return false
 end
 
--- Tick to find a fugitive to start a pursuit<br/>
--- Can only be an owned traffic vehicle otherwise the pursuit<br/>
--- behavior is dumb (drive into walls and vehicles) :/
-local function tick()
-    if beamjoy_traffic.data.enabled then
+---@return boolean in a race, hunt, infected or derby (lobby or game), a delivery or a bus line
+local function inActivity()
+    return navigation ~= nil and navigation.inActivity ~= nil and navigation.inActivity() == true
+end
+
+-- Tick to find a fugitive to start a pursuit : traffic near this player's own police car, this
+-- client's own or another player's (the owner's client drives it, fleeing from this police car)
+local function pursuitTick()
+    -- never in an activity : a race, a hunt, a lobby... are no place for traffic pursuits
+    if beamjoy_traffic.data.enabled and not inActivity() then
         LogDebug("Pursuit tick")
         local mpVeh = beamjoy_vehicles.getCurrent()
         if mpVeh and M.isPolice then
@@ -64,23 +73,32 @@ local function tick()
                 end) then
                 ---@type BJVehicle?
                 local target = beamjoy_vehicles.vehicles:filter(function(v)
-                    if not v.isAi then return false end
+                    if not v.isAi or not v.veh then return false end
                     if isParked(v) then return false end -- see isParked's own comment
-                    if not v.isLocal and
-                        mpVeh.vid ~= beamjoy_players.players[v.ownerName].currentVehicle then
-                        -- owner is not close => pursuit behavior would be dumb
-                        return false
-                    end
+                    -- Real bug: another player's traffic used to be kept only when this police
+                    -- car's vid equalled the owner's currentVehicle, two ids from two different
+                    -- games that essentially never match (and it errored when the owner wasn't in
+                    -- the player list, which stopped the tick for good). It was standing in for
+                    -- the real problem, fixed in startPursuit : the fleeing car was never told whom
+                    -- to flee from, so it fled from its owner's own car
                     local vPos = beamjoy_vehicles.getVehiclePositionRotation(v.veh)
                     local minDist = beamjoy_traffic.getMinMaxDistFromPlayer(tonumber(v.veh.speed) or 0)
                     return pos:distance(vPos) < minDist
                 end):random()
                 if target then
+                    M.started[target.remoteVID] = true
                     beamjoy_communications.send("pursuitStart", target.remoteVID, mpVeh.vid)
                 end
             end
         end
     end
+end
+
+-- Real bug: the next tick was only scheduled at the end of the tick, so a single error in it
+-- stopped pursuits for the rest of the session
+local function tick()
+    local ok, err = pcall(pursuitTick)
+    if not ok then LogError("beamjoy_pursuit: tick failed: " .. tostring(err)) end
     async.delayTask(tick, math.random(M.interval.min, M.interval.max))
 end
 
@@ -130,7 +148,21 @@ local resetArrestation = function()
     M.arrest.lastPos = nil
 end
 
+--- joining an activity calls off the pursuits this player started (the fugitives escape)
+local function callOffPursuits()
+    for remoteVID in pairs(M.started) do
+        beamjoy_communications.send("pursuitStop", remoteVID, 0)
+    end
+    table.clear(M.started)
+    resetArrestation()
+end
+
 local function onServerTick()
+    if inActivity() then
+        if next(M.started) then callOffPursuits() end
+        if M.arrest.target then resetArrestation() end
+        return
+    end
     if not M.isPolice or table.length(M.fugitives) == 0 then return end
     local veh = beamjoy_vehicles.getCurrent()
     if not veh then return end
@@ -241,17 +273,22 @@ local function startPursuit(fugitiveRemoteVID, policeRemoteVID)
             -- show fugitive on minimap
             v.veh.uiState = 1
             if v.isLocal then
+                -- Real bug: the target was sent to the police car itself instead of the fleeing
+                -- one. Without a target, the game's flee AI picks this client's active vehicle
+                -- (vehicle/ai.lua updatePlayerData) : another player's traffic fled from its
+                -- owner's own car, not from the police. The police car's id here is this game's
+                -- id for it (its copy, when it's another player's)
+                local policeVeh = beamjoy_vehicles.vehicles:find(function(v2)
+                    return v2.remoteVID == policeRemoteVID
+                end)
                 v.veh:queueLuaCommand([[
                     ai.setMode("flee");
                     ai.driveInLane("off");
                     ai.setSpeedMode("off");
                 ]])
-                beamjoy_vehicles.vehicles:find(function(v2)
-                    return v2.remoteVID == policeRemoteVID
-                end, function(policeVeh)
-                    policeVeh.veh:queueLuaCommand("ai.setTargetObjectID(" ..
-                        tostring(policeVeh.vid) .. ")")
-                end)
+                if policeVeh then
+                    v.veh:queueLuaCommand("ai.setTargetObjectID(" .. tostring(policeVeh.vid) .. ")")
+                end
             end
             if M.isPolice then
                 local current = beamjoy_vehicles.getCurrent()
@@ -280,6 +317,7 @@ end
 ---@param remoteVID integer
 ---@param caught boolean
 local function stopPursuit(remoteVID, caught)
+    M.started[remoteVID] = nil
     beamjoy_vehicles.vehicles:find(function(v)
         return v.remoteVID == remoteVID
     end, function(v) ---@param v BJVehicle

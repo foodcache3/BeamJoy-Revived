@@ -216,6 +216,8 @@
     "crew.defaultName": "{name}'s crew",
     "crew.full": "That crew is full",
     "crew.joined": "{name} joined your crew",
+    "vehicleInteractions.locked": "{1} has locked their vehicles",
+    "vehicleInteractions.moving": "That vehicle is moving",
     "crew.nowLeader": "You lead your crew now",
     "crew.requested": "{name} asked to join your crew. Answer in the Crew tab",
     "crew.requestSent": "Asked to join {crew}. Its leader has to accept",

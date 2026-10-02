@@ -68,6 +68,7 @@ end
 
 M.onInit = onInit
 M.onExtensionUnloaded = onExtensionUnloaded
+M.onPreExit = onExtensionUnloaded
 M.onReplayStateChanged = onReplayStateChanged
 
 M.isOn = isOn

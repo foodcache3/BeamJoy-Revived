@@ -63,9 +63,24 @@ angular.module("beamjoy").component("bjMainRaces", {
         // passive races aren't listed here: there's no ambient/drive-up discovery built yet, so
         // there'd be nothing meaningful for a "Start" button on one to actually do
         this.races = [];
-        $rootScope.$on("BJEditorRaceList", (_, races) => {
+        // a race marker's "Open race" in the world (lua beamjoy/races.lua) : that race's start form
+        const openPendingStart = () => {
+            const pending = beamjoyStore.pendingActivityStart;
+            if (!pending || pending.kind !== "race") return;
+            const race = this.races.find((r) => r.id === pending.id);
+            if (!race) return;
+            beamjoyStore.pendingActivityStart = null;
+            if (this.startingId !== race.id) this.openStart({ stopPropagation: () => {} }, race);
+        };
+        // Real bug: this listener was never removed, so every earlier copy of this component (the
+        // section is rebuilt on each open, the side panel and the full window each have one) kept
+        // receiving the list. The oldest leftover got it first and used up a marker's "Open race"
+        // request, leaving the copy on screen with nothing : it worked the first time only
+        $scope.$on("$destroy", $rootScope.$on("BJEditorRaceList", (_, races) => {
             this.races = (races || []).filter((r) => r.mode === "grid");
-        });
+            openPendingStart();
+        }));
+        $scope.$on("$destroy", $rootScope.$on("BJOpenActivityStart", openPendingStart));
         this.sessions = [];
         $rootScope.$on("BJRaceOpenSessions", (_, sessions) => {
             this.sessions = sessions || [];

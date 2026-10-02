@@ -23,6 +23,7 @@ angular.module("beamjoy").component("bjMainDerby", {
             // the modes each arena can host : sumo needs its zone
             this.arenas.forEach((a) => (a.modes = MODES.filter((m) => m !== "sumo" || a.hasZone)));
             this.playable = this.arenas.filter((a) => a.enabled);
+            openPendingStart();
             if (this.startingId !== null && !this.playable.some((a) => a.id === this.startingId)) {
                 this.startOptions = null;
                 this.startingId = null;
@@ -252,8 +253,22 @@ angular.module("beamjoy").component("bjMainDerby", {
             beamjoyStore.send("BJDerbyOpenSessionsRequest");
             beamjoyStore.send("BJDerbyCountdownRequest");
         };
+        // an arena marker's "Open derby" in the world (lua beamjoy/derby.lua) : that arena's start
+        // form, unless a game is already on there (its card shows Join instead)
+        // (the arena list handler above calls it too : always later, on an event)
+        const openPendingStart = () => {
+            const pending = beamjoyStore.pendingActivityStart;
+            if (!pending || pending.kind !== "derby") return;
+            const arena = (this.playable || []).find((a) => a.id === pending.id);
+            if (!arena) return;
+            beamjoyStore.pendingActivityStart = null;
+            if (!this.sessionOn(arena) && this.startingId !== arena.id) {
+                this.openStart({ stopPropagation: () => {} }, arena);
+            }
+        };
+        const offOpenStart = $rootScope.$on("BJOpenActivityStart", openPendingStart);
         $scope.$on("$destroy", () => {
-            [offArenas, offSessions, offStatus, offCountdown, offAutoOpen, offPresets].forEach((off) => off());
+            [offArenas, offSessions, offStatus, offCountdown, offAutoOpen, offPresets, offOpenStart].forEach((off) => off());
         });
     },
 });

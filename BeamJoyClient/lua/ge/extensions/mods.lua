@@ -173,10 +173,15 @@ local function initHooks()
         -- every one of those calls too once AllowClientMods was permanently forced off (1.8.8),
         -- silently breaking real disconnect cleanup instead of just blocking a player's own manual
         -- mod-manager action.
+        -- Real bug: this used to stop the deletion with error(). Closing the game (Alt+F4, the
+        -- window's X) never leaves the server first, so this was still in place when BeamMP's own
+        -- exit cleanup (MPModManager.onExit -> cleanUpSessionMods) deleted the session's mods, and
+        -- that error became a FATAL LUA ERROR during shutdown, which crashed the game. Not deleting
+        -- is enough to keep a server mod ; and on exit everything is put back first (onPreExit)
         if isServerMod(modName) then
             uiHelpers.applyLoading(false)
             uiHelpers.toastError(beamjoy_lang.translate("beamjoy.toast.mods.cannotDisableMandatory"))
-            return error() -- stop deletion process
+            return
         end
         disableMods({ modName }, true)
     end
@@ -269,6 +274,10 @@ end
 
 M.onInit = onInit
 M.onServerLeave = onUnload
+-- closing the game skips leaving the server : the game's own functions go back before BeamMP's exit
+-- cleanup deletes the session's mods through them
+M.onPreExit = onUnload
+M.onExtensionUnloaded = onUnload
 M.onModActivated = onModActivated
 M.onModDeactivated = onModDeactivated
 

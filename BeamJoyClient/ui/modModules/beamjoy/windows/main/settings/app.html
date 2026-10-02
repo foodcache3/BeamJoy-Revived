@@ -83,6 +83,27 @@
     </tr>
     <tr>
         <td>
+            <span title="{{ 'beamjoy.window.main.tabs.settings.sections.vehicle.lockVehicles.tooltip' | translate }}">
+                {{ "beamjoy.window.main.tabs.settings.sections.vehicle.lockVehicles" | translate }}
+            </span>
+        </td>
+        <td>
+            <div class="d-flex align-center w-fitcontent">
+                <bj-toggle ng-model="$ctrl.settings.vehicle.lockVehicles"></bj-toggle>
+            </div>
+        </td>
+    </tr>
+
+    <tr>
+        <td colspan="3" class="settings-category d-flex align-center gap-2">
+            <span>
+                <icon name="eye" class="light"></icon>
+            </span>
+            <h3>{{ "beamjoy.window.main.tabs.settings.sections.visual.title" | translate }}</h3>
+        </td>
+    </tr>
+    <tr>
+        <td>
             <span title="{{ 'beamjoy.window.main.tabs.settings.sections.vehicle.particles.tooltip' | translate }}">
                 {{ "beamjoy.window.main.tabs.settings.sections.vehicle.particles" | translate }}
             </span>
@@ -95,6 +116,42 @@
                     step="5"
                     ng-model="$ctrl.settings.vehicle.particleAmount"
                 ></bj-slider>
+            </div>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <span title="{{ 'beamjoy.window.main.tabs.settings.sections.markers.hideActivities.tooltip' | translate }}">
+                {{ "beamjoy.window.main.tabs.settings.sections.markers.hideActivities" | translate }}
+            </span>
+        </td>
+        <td>
+            <div class="d-flex align-center w-fitcontent">
+                <bj-toggle ng-model="$ctrl.settings.markers.hideActivities"></bj-toggle>
+            </div>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <span title="{{ 'beamjoy.window.main.tabs.settings.sections.markers.hideStations.tooltip' | translate }}">
+                {{ "beamjoy.window.main.tabs.settings.sections.markers.hideStations" | translate }}
+            </span>
+        </td>
+        <td>
+            <div class="d-flex align-center w-fitcontent">
+                <bj-toggle ng-model="$ctrl.settings.markers.hideStations"></bj-toggle>
+            </div>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <span title="{{ 'beamjoy.window.main.tabs.settings.sections.visual.opaqueGhosts.tooltip' | translate }}">
+                {{ "beamjoy.window.main.tabs.settings.sections.visual.opaqueGhosts" | translate }}
+            </span>
+        </td>
+        <td>
+            <div class="d-flex align-center w-fitcontent">
+                <bj-toggle ng-model="$ctrl.settings.visual.opaqueGhosts"></bj-toggle>
             </div>
         </td>
     </tr>

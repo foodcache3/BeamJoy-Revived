@@ -44,6 +44,7 @@ local function sendToUI()
         vehicle = {
             automaticLights = localStorage.get(localStorage.GLOBAL_VALUES.AUTOMATIC_LIGHTS) == true,
             particleAmount = M.amount,
+            lockVehicles = localStorage.get(localStorage.GLOBAL_VALUES.LOCK_VEHICLES) == true,
         },
     })
 end

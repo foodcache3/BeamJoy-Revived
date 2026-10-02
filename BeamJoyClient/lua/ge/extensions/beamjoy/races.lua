@@ -4,6 +4,12 @@ local M = {
     ---@type BJRace[] races for the current map
     data = {},
 
+    -- the race start marker (world and Big Map) : the game's own time-trial mission icon
+    MARKER_ICON = "mission_timeTrials_triangle",
+    --- the races behind this client's start markers, by marker id
+    ---@type table<string, BJRace>
+    raceByMarkerId = {},
+
     --- quick console-driven race builder, ahead of the real in-world editor. Call these from
     --- BeamNG's Lua console while positioned/facing where you want each gate/start, e.g.
     --- `beamjoy_races.testAddGate()`, then `beamjoy_races.testAddStart()`, then
@@ -141,12 +147,131 @@ local function pushListToUI()
     end):values())
 end
 
+--- a race the Activities tab lets you start (grid races ; passive ones aren't listed there) :
+--- its grid slot 1, the solo start too
+---@param r BJRace
+---@return {pos: table, dir: table}?
+local function startOf(r)
+    if not r.id or r.mode ~= "grid" or type(r.startPositions) ~= "table" then return nil end
+    local start = r.startPositions[1]
+    return start and start.pos and start or nil
+end
+
+---@param r BJRace
+---@return string
+local function describe(r)
+    return string.var(beamjoy_lang.translate("beamjoy.bigmap.raceDescription"),
+        { #(r.gates or {}), #r.startPositions })
+end
+
+local function refreshPOIs()
+    if bigmap and bigmap.updatePOIs then
+        bigmap.updatePOIs()
+    elseif extensions.gameplay_rawPois then
+        extensions.gameplay_rawPois.clear()
+    end
+end
+
+--- no start markers in the world while in an activity (a race lobby included), or with
+--- Settings > Visual's activity markers hidden
+---@return boolean
+local function markersSuppressed()
+    if beamjoy_markerSettings and beamjoy_markerSettings.hideActivities then return true end
+    return navigation ~= nil and navigation.inActivity ~= nil and navigation.inActivity() == true
+end
+
+--- native hook, fired by gameplay_rawPois : a mission marker at each race's start, with a drive-up
+--- prompt (onActivityAcceptGatherData)
+---@param level string
+---@param elements table[]
+local function onGetRawPoiListForLevel(level, elements)
+    table.clear(M.raceByMarkerId)
+    if markersSuppressed() then return end
+    for _, r in ipairs(M.data or {}) do
+        local start = startOf(r)
+        if start then
+            local id = "bjRaceStart_" .. tostring(r.id)
+            M.raceByMarkerId[id] = r
+            elements[#elements + 1] = {
+                id = id,
+                -- date : the game sorts overlapping mission markers by data.date (see stations.lua)
+                data = { type = "bjRaceStart", id = id, date = 0 },
+                markerInfo = {
+                    missionMarker = { pos = vec3(start.pos.x, start.pos.y, start.pos.z),
+                        rot = quat(0, 0, 0, 1), icon = M.MARKER_ICON },
+                },
+            }
+        end
+    end
+end
+
+--- the Activities tab on that race, its start form open
+---@param raceId integer
+local function openStart(raceId)
+    beamjoy_communications_ui.send("BJOpenActivityStart", { kind = "race", id = raceId })
+    beamjoy_mainNav.focusOn("play", "races")
+end
+
+--- the "Open race" button on the drive-up prompt
+---@param elemData table[]
+---@param activityData table[]
+local function onActivityAcceptGatherData(elemData, activityData)
+    if markersSuppressed() then return end
+    for _, elem in ipairs(elemData) do
+        local r = elem.type == "bjRaceStart" and M.raceByMarkerId[elem.id]
+        if r then
+            activityData[#activityData + 1] = {
+                icon = M.MARKER_ICON,
+                heading = r.name,
+                preheadings = { beamjoy_lang.translate("beamjoy.bigmap.races"), describe(r) },
+                buttonLabel = beamjoy_lang.translate("beamjoy.markers.openRace"),
+                buttonSoundClass = "bng_hover_generic",
+                sorting = { type = elem.type, id = elem.id },
+                buttonFun = function() openStart(r.id) end,
+            }
+        end
+    end
+end
+
+-- markers come and go as the player joins and leaves activities
+local lastSuppressed
+local function onSlowUpdate()
+    local suppressed = markersSuppressed()
+    if lastSuppressed ~= nil and suppressed ~= lastSuppressed then refreshPOIs() end
+    lastSuppressed = suppressed
+end
+
+--- a Big Map pin per race in the BeamJoy section's "Races" group, at the race's own grid slot 1
+--- (the solo start too) ; quick travel puts the car there, facing the way the race starts
+---@param POIS table<string, table>
+local function onBJRequestBigmapPOIs(POIS)
+    for _, r in ipairs(M.data or {}) do
+        local start = startOf(r)
+        if start then
+            local pos = vec3(start.pos.x, start.pos.y, start.pos.z)
+            POIS["bjRace_" .. tostring(r.id)] = {
+                name = r.name,
+                description = describe(r),
+                icon = "raceFlag",
+                mapIcon = M.MARKER_ICON,
+                groupType = "other",
+                customGroupTags = { "bjRaces" },
+                pos = pos,
+                canQuickTravel = true,
+                quickTravelPos = pos,
+                quickTravelRot = start.dir,
+            }
+        end
+    end
+end
+
 ---@param caches table
 local function retrieveCache(caches)
     if caches.races then
         M.data = caches.races
         extensions.hook("onBJRacesChanged")
         pushListToUI()
+        refreshPOIs()
     end
 end
 
@@ -254,6 +379,11 @@ end
 M.onInit = onInit
 
 M.retrieveCache = retrieveCache
+M.onBJRequestBigmapPOIs = onBJRequestBigmapPOIs
+M.onGetRawPoiListForLevel = onGetRawPoiListForLevel
+M.onActivityAcceptGatherData = onActivityAcceptGatherData
+M.onSlowUpdate = onSlowUpdate
+M.openStart = openStart
 M.pushListToUI = pushListToUI
 M.save = save
 M.delete = delete

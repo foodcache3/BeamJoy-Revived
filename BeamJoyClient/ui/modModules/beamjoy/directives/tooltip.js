@@ -122,6 +122,7 @@ angular
         observer.observe(document.body, { childList: true, subtree: true });
 
         $rootScope.$on("BJUnload", () => {
-            document.querySelector("beamjoy-tooltip").remove();
+            // can arrive twice : remove whatever is still there
+            document.querySelectorAll("beamjoy-tooltip").forEach((el) => el.remove());
         });
     });

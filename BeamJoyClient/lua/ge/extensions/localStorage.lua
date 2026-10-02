@@ -10,10 +10,29 @@ local M = {
             key = "beamjoy.vehicle.automatic_lights",
             default = false,
         },
-        -- Settings > Vehicle > Dust and particles, 0-100 % (beamjoy/particles.lua)
+        -- Settings > Visual > Dust and particles, 0-100 % (beamjoy/particles.lua)
         PARTICLE_AMOUNT = {
             key = "beamjoy.vehicle.particle_amount",
             default = 100,
+        },
+        -- Settings > Vehicle > Lock my vehicles (beamjoy/vehicleInteractions.lua)
+        LOCK_VEHICLES = {
+            key = "beamjoy.vehicle.lock_vehicles",
+            default = false,
+        },
+        -- Settings > Visual (beamjoy/markerSettings.lua)
+        HIDE_ACTIVITY_MARKERS = {
+            key = "beamjoy.markers.hide_activities",
+            default = false,
+        },
+        HIDE_STATION_MARKERS = {
+            key = "beamjoy.markers.hide_stations",
+            default = false,
+        },
+        -- Settings > Visual > Disable ghost transparency (beamjoy/markerSettings.lua)
+        OPAQUE_GHOSTS = {
+            key = "beamjoy.visual.opaque_ghosts",
+            default = false,
         },
 
         NAMETAGS_COLOR_PLAYER_TEXT = {

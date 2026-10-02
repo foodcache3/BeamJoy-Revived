@@ -1144,6 +1144,7 @@ end
 
 M.onInit = onInit
 M.onExtensionUnloaded = onExtensionUnloaded
+M.onPreExit = onExtensionUnloaded
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
 M.onBJVehicleModChanged = onBJVehicleModChanged

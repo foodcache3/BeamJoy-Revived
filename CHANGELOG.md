@@ -8,7 +8,66 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2572, server build 2398.
+Version 1.11.0 : client build 2573, server build 2399.
+
+- **Races and derby arenas on the Big Map.** The map's BeamJoy section now has a "Races" group and
+  a "Derby arenas" group, with a pin for every race and every playable arena on the map, each at
+  its own first start position. Set route drives you there, and quick travel puts your car on that
+  start, facing the way it starts. Each one also gets a marker on the ground, with a drive-up
+  prompt that opens it in Activities with its start form ready ("Open race" / "Open derby" ; an
+  arena with a game on shows Join). The markers hide while you're in an activity. Only grid
+  races are shown : passive ones can't be started from Activities. *(client only)*
+- **Settings > Visual : hide activity markers, hide station and garage markers.** Two new toggles,
+  saved on your PC. The first hides the bus line and delivery depot markers, the second the energy
+  station and garage markers ; their drive-up prompts go with them (no start line, job board,
+  refuel or repair from the marker while hidden). Their Big Map pins stay. The new Visual
+  section also takes the dust and particles slider, moved from Vehicle, and a third toggle,
+  "Disable ghost transparency" : ghost vehicles stay solid instead of see-through (they're still
+  ghosts). The activity markers toggle covers the race and derby markers too. *(client only)*
+- **Smoother race / activity starts : one map-marker rebuild instead of several.** Joining or
+  leaving an activity made stations, deliveries, bus lines, races and derby each rebuild the map's
+  points of interest, 3 to 6 times in the same frame plus once more a moment later, each one
+  making the game rebuild every world marker (3-10 ms and ~500 KB of garbage each time). Those
+  requests are now gathered into a single rebuild (within ~300 ms, or right away when the Big Map
+  opens). *(client only)*
+- **Traffic pursuits : none during activities, and other players' traffic flees from you.** The
+  pursuit tick no longer starts a pursuit while you're in a race, hunt, infected or derby (lobby or
+  game), a delivery or a bus line, and joining one calls off the pursuits you started. Fixed :
+  traffic spawned by another player was never picked (the check compared ids from two different
+  games), and a fleeing car was never told whom to flee from, so it fled from its owner's own car
+  instead of the police. *(client only)*
+- **Fixed: BeamJoy's UI staying on screen after "Exit level".** Current BeamMP announces leaving a
+  server as `onBeamMPServerLeave` and no longer as `onServerLeave`, which is what all of BeamJoy's
+  leave handling listened for, so none of it ran. A disconnect hid it (BeamMP reloads all of Lua
+  then), but exiting the level doesn't : BeamJoy kept running at the main menu with its UI up.
+  BeamJoy now listens for the new name. *(client only)*
+- **Fixed: the game's vehicle selector and pause menu breaking after "Exit level".** Once BeamJoy
+  really unloaded on exit (above), it took the game's own `core_vehicles` down with it : an older
+  fix unloaded every native it had kept loaded, startup extensions included. The vehicle
+  selector, the pause menu's providers and the grid selector went with it, and the main menu
+  logged unresolved dependencies on every load until a restart. Those natives now just go back
+  to the game's normal lifecycle. Also fixed three UI errors from the unload message arriving
+  twice. *(client only)*
+- **Fixed: the game crashing when closed while on a server (Alt+F4, the window's X).** Closing
+  the game skips leaving the server, so BeamJoy's guard against deleting a server's mods was still
+  in place when BeamMP's own exit cleanup deleted them, and the guard stopped it with a Lua error,
+  fatal during shutdown. The guard no longer throws, and every game function BeamJoy replaces is now
+  put back as the game starts closing too, not only on leaving the server. *(client only)*
+- **Fixed: the console flood after leaving a server or exiting the level.** BeamJoy reached the
+  game's `spawn` module through the extension system, which turned it into an extension ; when
+  extensions were unloaded on leaving, the game deleted its own `spawn`, and its vehicle manager then
+  threw "attempt to index global 'spawn'" every frame, which also stopped every other per-frame
+  update after it. `spawn` and `commands` are now used directly, and BeamJoy now puts the game's own
+  reset functions back when it unloads (Ctrl+R, recover to road, drop at camera and vehicle
+  placement went on calling BeamJoy code after leaving). *(client only)*
+- **Use other players' cars : doors, hood, trunk, and every button.** Clicking one of the game's
+  interactive triggers on another player's car (a door handle, the hood or trunk, a light switch,
+  the horn...) now works : the click goes to the car's owner, whose game presses it on their car,
+  and everyone sees the result. A held button stays held as long as you hold it. Only on a car
+  that's nearly stopped, and not on traffic. Settings > Vehicle > "Lock my vehicles" stops everyone
+  but your crew from using yours ; it's off by default. *(server and client)*
+- **Hunter GPS colors.** The fugitive's route to their next waypoint is always blue, the hunters'
+  route to a revealed fugitive always red, whatever color the GPS was on before. *(client only)*
 
 - **Flip upright and Last road respawns.** Two more respawn options for races (start options and
   the race editor) : every reset or recover during the race, whatever was pressed (a rewind, a

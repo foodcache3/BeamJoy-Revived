@@ -4,6 +4,17 @@ const M = {
             automaticLights: true,
             // 0-100 %, see lua beamjoy/particles.lua
             particleAmount: 100,
+            // nobody but your crew can use your cars' buttons, see lua beamjoy/vehicleInteractions.lua
+            lockVehicles: false,
+        },
+        // in-world markers and their prompts, see lua beamjoy/markerSettings.lua
+        markers: {
+            hideActivities: false,
+            hideStations: false,
+        },
+        // ghosted vehicles drawn solid, see lua beamjoy/markerSettings.lua
+        visual: {
+            opaqueGhosts: false,
         },
         nametags: {
             hideNameTags: false,

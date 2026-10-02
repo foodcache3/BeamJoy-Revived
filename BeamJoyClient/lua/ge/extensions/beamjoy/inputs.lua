@@ -31,6 +31,8 @@ local M = {
     },
 
     baseFunctions = {},
+    --- the game modules whose functions are replaced, as they were when replaced (put back on leave)
+    targets = {},
     init = false,
 
     isNodegrabberRenderActive = false,
@@ -128,21 +130,43 @@ local function onUpdate()
     end
 end
 
+--- the game modules whose reset functions are replaced. `spawn` and `commands` are not extensions
+--- but plain globals the game's main.lua requires (`spawn = require("spawn")`, `commands =
+--- require("server/commands")`), so they're read from _G, never through `extensions` : reading
+--- `extensions.spawn` makes the extension system load the already-required spawn module AS an
+--- extension, and unloading extensions later (leaving the server, exiting the level) then runs
+--- `_G.spawn = nil`. The game's own core_vehicle_manager calls spawn.clearCache() every frame, so
+--- from then on it threw "attempt to index global 'spawn'" every frame (the console flood) and
+--- stopped every other extension's per-frame update after it. `extensions.commands` failed to load
+--- instead ("extension unavailable: commands") and only worked through a fallback to the global
+---@return table<string, table?>
+local function nativeTargets()
+    return {
+        core_vehicle_manager = extensions.isExtensionLoaded("core_vehicle_manager") and
+            extensions.core_vehicle_manager or nil,
+        commands = rawget(_G, "commands"),
+        spawn = rawget(_G, "spawn"),
+    }
+end
+
 local function overrideResetInputs()
+    local targets = nativeTargets()
+    M.targets = targets
+    local vehicleManager, commands, spawn = targets.core_vehicle_manager, targets.commands, targets.spawn
     M.baseFunctions = {
         resetGameplay = resetGameplay,
         extensions = {
             core_vehicle_manager = {
-                reloadVehicle = extensions.core_vehicle_manager.reloadVehicle,
-                reloadAllVehicles = extensions.core_vehicle_manager.reloadAllVehicles,
+                reloadVehicle = vehicleManager.reloadVehicle,
+                reloadAllVehicles = vehicleManager.reloadAllVehicles,
             },
             commands = {
-                dropPlayerAtCamera = extensions.commands.dropPlayerAtCamera,
-                dropPlayerAtCameraNoReset = extensions.commands.dropPlayerAtCameraNoReset,
+                dropPlayerAtCamera = commands.dropPlayerAtCamera,
+                dropPlayerAtCameraNoReset = commands.dropPlayerAtCameraNoReset,
             },
             spawn = {
-                teleportToLastRoad = extensions.spawn.teleportToLastRoad,
-                safeTeleport = extensions.spawn.safeTeleport,
+                teleportToLastRoad = spawn.teleportToLastRoad,
+                safeTeleport = spawn.safeTeleport,
             },
         },
     }
@@ -159,19 +183,19 @@ local function overrideResetInputs()
         end
     end
 
-    extensions.core_vehicle_manager.reloadVehicle = function(localPlayerID)
+    vehicleManager.reloadVehicle = function(localPlayerID)
         override(M.RESET.RELOAD)
     end
-    extensions.core_vehicle_manager.reloadAllVehicles = function()
+    vehicleManager.reloadAllVehicles = function()
         M.onReset(M.RESET.RELOAD_ALL)
     end
-    extensions.commands.dropPlayerAtCamera = function(localPID)
+    commands.dropPlayerAtCamera = function(localPID)
         override(M.RESET.DROP_AT_CAMERA)
     end
-    extensions.commands.dropPlayerAtCameraNoReset = function(localPID)
+    commands.dropPlayerAtCameraNoReset = function(localPID)
         override(M.RESET.DROP_AT_CAMERA_NO_RESET)
     end
-    extensions.spawn.teleportToLastRoad = function(veh, options)
+    spawn.teleportToLastRoad = function(veh, options)
         override(M.RESET.RECOVER_LAST_ROAD)
     end
 
@@ -184,7 +208,7 @@ local function overrideResetInputs()
     -- passes straight through completely unmodified below, since safeTeleport is used constantly
     -- for entirely unrelated, legitimate purposes (native vehicle spawning, traffic, this mod's
     -- own beamjoy_vehicles.setVehiclePositionRotation) that must never be affected by this.
-    extensions.spawn.safeTeleport = function(veh, pos, rot, checkOnlyStatics_, visibilityPoint_,
+    spawn.safeTeleport = function(veh, pos, rot, checkOnlyStatics_, visibilityPoint_,
             removeTraffic_, centeredPosition, resetVehicle, player, unlimitedSafeSpawnRange)
         local matchesShape = type(resetVehicle) == "boolean" and checkOnlyStatics_ == nil and
             visibilityPoint_ == nil and removeTraffic_ == nil and centeredPosition == nil and
@@ -222,18 +246,31 @@ end
 local function onBJClientReady()
     if M.init then return end
     async.task(function()
-        return table.every({ "core_vehicle_manager", "commands", "spawn" },
-            function(obj) return extensions[obj] ~= nil end)
+        local targets = nativeTargets()
+        return targets.core_vehicle_manager ~= nil and targets.commands ~= nil and targets.spawn ~= nil
     end, function()
+        if M.init then return end
         overrideResetInputs()
         M.init = true
     end)
 end
 
-local function onServerLeave()
-    -- Do not rollback since setting any method in extensions.spawn breaks the game engine
-    --RollBackNGFunctionsWrappers(M.baseFunctions.extensions)
-    resetGameplay = M.baseFunctions.resetGameplay
+--- puts the game's own reset functions back : after leaving, BeamJoy is unloaded and its
+--- replacements would call into modules that are gone (Ctrl+R, recover to road, drop at camera,
+--- and spawn.safeTeleport, which the game uses for every vehicle it places)
+local function restoreResetInputs()
+    if not M.init then return end
+    M.init = false
+    for name, fns in pairs(M.baseFunctions.extensions or {}) do
+        local target = M.targets[name]
+        if target then
+            for fnName, fn in pairs(fns) do target[fnName] = fn end
+        end
+    end
+    if M.baseFunctions.resetGameplay then
+        ---@diagnostic disable-next-line: lowercase-global
+        resetGameplay = M.baseFunctions.resetGameplay
+    end
 end
 
 ---@param vid integer
@@ -371,7 +408,9 @@ M.onExtensionLoaded = onExtensionLoaded
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onUpdate = onUpdate
 M.onBJClientReady = onBJClientReady
-M.onServerLeave = onServerLeave
+M.onServerLeave = restoreResetInputs
+M.onExtensionUnloaded = restoreResetInputs
+M.onPreExit = restoreResetInputs
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
 M.onReset = onReset
 M.onStopRecovering = onStopRecovering

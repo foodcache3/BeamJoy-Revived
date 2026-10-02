@@ -644,6 +644,7 @@ end
 
 M.onInit = onInit
 M.onExtensionUnloaded = onExtensionUnloaded
+M.onPreExit = onExtensionUnloaded
 M.onTogglePause = onTogglePause
 M.onUpdate = onUpdate
 M.onSlowUpdate = onSlowUpdate

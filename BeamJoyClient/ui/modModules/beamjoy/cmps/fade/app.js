@@ -52,6 +52,7 @@ angular.module("beamjoy").run(function ($rootScope, $timeout) {
     process();
 
     $rootScope.$on("BJUnload", () => {
-        document.querySelector("beamjoy-fade").remove();
+        // can arrive twice : remove whatever is still there
+        document.querySelectorAll("beamjoy-fade").forEach((el) => el.remove());
     });
 });

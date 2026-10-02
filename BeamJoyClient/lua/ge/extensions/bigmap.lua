@@ -36,6 +36,15 @@ local M = {
     POIs = {},
 
     menuOpened = false,
+
+    -- updatePOIs() only asks for a rebuild : it happens once things are quiet for this long...
+    REBUILD_QUIET_MS = 300,
+    -- ...or at the latest this long after the first request
+    REBUILD_MAX_WAIT_MS = 1000,
+    ---@type integer? when the pending rebuild was first asked for
+    rebuildRequestedAt = nil,
+    ---@type integer? the latest request
+    rebuildLastRequestAt = nil,
 }
 
 --- resolve a lang key (or return the string unchanged if it isn't one / lang isn't up yet)
@@ -179,13 +188,35 @@ local function enablePlaymodeMarkersInMultiplayer()
     end
 end
 
---- rebuild M.POIs from every extension that implements onBJRequestBigmapPOIs. Call after the
---- underlying data changes ; getRawPOIs reads M.POIs live on the next Big Map open / POI refresh.
-local function updatePOIs()
+--- rebuild M.POIs from every extension that implements onBJRequestBigmapPOIs, and have the game
+--- rebuild its POI list (world markers included) from it
+local function flushPOIs()
+    M.rebuildRequestedAt, M.rebuildLastRequestAt = nil, nil
     table.clear(M.POIs)
     extensions.hook("onBJRequestBigmapPOIs", M.POIs)
     if extensions.gameplay_rawPois then
         extensions.gameplay_rawPois.clear() -- force the provider to rebuild with our new set
+    end
+end
+
+--- Call after the underlying data changes. Coalesced : one activity change used to rebuild 3 to 6
+--- times in the same frame (stations, delivery, bus lines, races, derby each refreshing) and once
+--- more ~200 ms later (races / derby polling the activity state), and each rebuild reran every
+--- provider and made gameplay_markerInteraction rebuild every world marker (3-10 ms and ~500 KB of
+--- garbage each). Now one rebuild, once the requests settle (onUpdate), or right away when the Big
+--- Map opens.
+local function updatePOIs()
+    local now = GetCurrentTimeMillis()
+    M.rebuildRequestedAt = M.rebuildRequestedAt or now
+    M.rebuildLastRequestAt = now
+end
+
+local function onUpdate()
+    if not M.rebuildRequestedAt then return end
+    local now = GetCurrentTimeMillis()
+    if now - M.rebuildLastRequestAt >= M.REBUILD_QUIET_MS or
+        now - M.rebuildRequestedAt >= M.REBUILD_MAX_WAIT_MS then
+        flushPOIs()
     end
 end
 
@@ -240,6 +271,8 @@ end
 local CUSTOM_GROUPS = {
     bjBusLines = { label = "beamjoy.buslines.edit.lines", icon = "bus" },
     bjDeliveryDepots = { label = "beamjoy.delivery.depots", icon = "deliveryTruck" },
+    bjRaces = { label = "beamjoy.bigmap.races", icon = "raceFlag" },
+    bjDerbyArenas = { label = "beamjoy.bigmap.derbyArenas", icon = "carCrash" },
 }
 
 ---@return table[]?
@@ -341,7 +374,7 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJReady", function()
         enablePlaymodeMarkersInMultiplayer() -- re-assert after a reconnect
         installBigMapGroupsWrap()
-        M.updatePOIs()
+        flushPOIs() -- right away : the first set of markers for this session
     end)
 end
 
@@ -361,6 +394,8 @@ end
 M.onBigmapBuildGroupData = function(groupData)
     groupData.bjBusLines = { label = tr("beamjoy.buslines.edit.lines"), icon = "bus" }
     groupData.bjDeliveryDepots = { label = tr("beamjoy.delivery.depots"), icon = "deliveryTruck" }
+    groupData.bjRaces = { label = tr("beamjoy.bigmap.races"), icon = "raceFlag" }
+    groupData.bjDerbyArenas = { label = tr("beamjoy.bigmap.derbyArenas"), icon = "carCrash" }
 end
 
 --- vueBigMap's freeroam-mode side menu only lists `type_garage` when a career is active (see its
@@ -388,8 +423,11 @@ end
 
 M.onInit = onInit
 M.onExtensionUnloaded = onExtensionUnloaded
+M.onPreExit = onExtensionUnloaded
 M.onBeforeBigMapActivated = function()
     installBigMapGroupsWrap() -- see its own comment - freeroam_vueBigMap may only just now exist
+    -- the map shows what's current, not what's still waiting on updatePOIs' coalescing
+    if M.rebuildRequestedAt then flushPOIs() end
     M.menuOpened = true
 end
 M.onDeactivateBigMapCallback = function()
@@ -398,6 +436,8 @@ end
 
 M.getRawPOIs = getRawPOIs
 M.updatePOIs = updatePOIs
+M.flushPOIs = flushPOIs
+M.onUpdate = onUpdate
 
 return M
 
@@ -433,7 +473,8 @@ M.onBJRequestBigmapPOIs = function(POIS)
     }
 end
 
-Then call `bigmap.updatePOIs()` whenever the source data changes. POIs get a real Big Map marker,
+Then call `bigmap.updatePOIs()` whenever the source data changes (the rebuild is coalesced, within
+~300 ms ; `bigmap.flushPOIs()` rebuilds right away). POIs get a real Big Map marker,
 a list card, a working "Set route", and (if canQuickTravel) quick travel - all handled by the
 native `freeroam_vueBigMap` / `freeroam_bigMapMode` from the shape above. They do NOT get an
 in-world 3D marker (draw that yourself if you want one).

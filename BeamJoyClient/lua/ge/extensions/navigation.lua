@@ -49,5 +49,7 @@ end
 
 M.onUpdate = onUpdate
 M.onSlowUpdate = onSlowUpdate
+-- also used by beamjoy_pursuit : no pursuits while in an activity
+M.inActivity = inActivity
 
 return M

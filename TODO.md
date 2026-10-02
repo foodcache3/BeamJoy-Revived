@@ -407,37 +407,40 @@ Reference source for native API research, if picking any of these up:
 - "Add every available activity to the Big Map with its own start position" - user asked to skip
   this for now; open question of what to do about duplicate start positions if it's picked back up.
 
-## Opening other players' car doors
+## Vehicle interactions: late-join latch state
+
+**Status:** open follow-up to the built vehicle interactions (doors, hood, buttons on other
+players' cars, client build 2573). BeamMP doesn't resend latch state to late joiners or when a car
+streams in, so a door left open shows closed to them. BJ could track open latches per vehicle and
+replay them on join/spawn.
+
+## Freeroam: player-vs-player police pursuits
 
 **Status:** planned, not started. User asked to add this to the plan rather than build it now.
 
-BeamMP already syncs a car's own door/hood/trunk latches to everyone (`controllerSyncVE` forwards
-`advancedCouplerControl.toggleGroup`, and `couplerVE` sends group states via `Ot` packets on every
-latch change). But it deliberately no-ops door controller functions on remote ("R") copies to
-prevent ghost control, so nobody can open someone else's door; its own comment in
-`controllerSyncVE.replaceFunctions` notes this would need a way to send the request back to the
-owner. BJ's server relay is that path.
+Sandbox's `beamjoy/pursuit.lua` only makes a random traffic car flee from a police player (its own
+timer, no offenses). BeamJoy 2.0.9 had real player-vs-player chases, built on the game's own police
+system: `BJI/managers/PursuitManager.lua` in `X:\beam\essentials\beamjoy-2.0.9\BJI.zip`, server side
+in `X:\beam\essentials\beamjoy-2.0.8\Server\BeamJoyCore` (`rx/ScenarioRx.lua` PursuitData /
+PursuitReward, `managers/PlayerManager.lua` onPursuitReward). Reference only, don't port it 1:1.
 
-Agreed design:
-- Requester (in walking mode, i.e. the `unicycle` model, see `vehicles.lua`) near another player's
-  car: query that remote car's VE for its `controller.getControllersByType("advancedCouplerControl")`
-  list (controller name, `soundNode` node id as the latch position, current group state), compute
-  world positions in GE, pick the latch nearest the walker, and show a "Press [key] to open/close
-  door" prompt (keyboard + controller binding).
-- Client sends a BJ request (server vehicle id + controller name) through `beamjoy_communications`.
-  The server validates (requester close enough, owner allows it, car nearly stopped) and forwards to
-  the owning player.
-- Owner's client calls `controller.getControllerSafe(name).toggleGroup()` on its own car; BeamMP's
-  existing sync then shows the result to everyone, requester included. Expect one round trip of
-  latency.
-- Permissions: per-player "lock my doors" setting, default unlocked; crew members always allowed.
-  Only allowed when the target car is nearly stopped.
-- Readable door names (front-left door, tailgate, hood...) need mapping from controller names like
-  `doorFLCoupler`; fall back to a generic label for unknown names.
+How theirs worked:
+- Every vehicle registered with `gameplay_traffic`, with a role : the player's own police car
+  (`veh.isPatrol`) "police", other players' cars "standard", traffic AI and ghosts "empty". The
+  game's police logic (`gameplay_police`) then notices offenses and starts pursuits by itself.
+- The game's pursuit events (start / arrest / evade / reset) relayed through the server to the
+  police and fugitive clients. No start against AI, police cars, an idle car (owner not in it),
+  ghosts, during a server activity, or with no police car on the server.
+- Police : "suspect fleeing" message and sound, GPS to the nearest target, auto lightbar, several
+  targets at once. Fugitive : message and sound, resets blocked while chased.
+- Arrest : fugitive frozen 5 s, ticket/arrest message with the offenses, then "drive away".
+- Rewards : reputation (ArrestReward for police within 10 m, EvadeReward for the fugitive).
+- Reset on server activity start, going ghost, disconnect, vehicle deleted.
 
-Known BeamMP gaps (not ours to fix, but relevant): latch state isn't resent to late joiners or when a
-car streams in, and only latched/unlatched is synced, not the door's swing angle. BJ could cover the
-late-join case by tracking open latches per vehicle and replaying them on join/spawn.
+Open questions before building:
+- Sandbox has no reputation : count arrests/escapes, a leaderboard, or no reward.
+- How it sits with the existing traffic pursuit tick (both on, or one replaces the other).
+- Off during every activity, like the traffic pursuit tick (`navigation.inActivity`).
 
 ## Races: rejoin grace period after a disconnect
 
