@@ -668,6 +668,17 @@
                     <bj-slider ng-model="$ctrl.race.defaults.dnfTimeout" min="3" max="60" hard-max="600" step="1"></bj-slider>
                 </td>
             </tr>
+            <tr>
+                <td
+                    class="text-right"
+                    title="{{'beamjoy.window.config.tabs.races.rejoinGrace.tooltip' | translate}}"
+                >
+                    {{'beamjoy.window.config.tabs.races.rejoinGrace' | translate}}
+                </td>
+                <td>
+                    <bj-slider ng-model="$ctrl.race.defaults.rejoinGraceMinutes" min="0" max="60" hard-max="120" step="1"></bj-slider>
+                </td>
+            </tr>
             <tr ng-if="$ctrl.race.defaults.respawnStrategy !== 'norespawn'">
                 <td
                     class="text-right"

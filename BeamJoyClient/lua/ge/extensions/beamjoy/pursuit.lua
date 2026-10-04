@@ -6,9 +6,13 @@ local M = {
 
     ---@type table<integer, string> index vid, value label
     fugitives = {},
-    --- the pursuits this player started (fugitive remoteVID -> true) : called off if they join an
+    --- the fugitives' full vehicle ids (beamjoy_vehicles.serverKey), index vid : still known when
+    --- the car itself is already gone
+    ---@type table<integer, string>
+    fugitiveKeys = {},
+    --- the pursuits this player started (fugitive key -> true) : called off if they join an
     --- activity
-    ---@type table<integer, true>
+    ---@type table<string, true>
     started = {},
     --- is current vehicle own and police
     isPolice = false,
@@ -57,7 +61,9 @@ end
 -- client's own or another player's (the owner's client drives it, fleeing from this police car)
 local function pursuitTick()
     -- never in an activity : a race, a hunt, a lobby... are no place for traffic pursuits
-    if beamjoy_traffic.data.enabled and not inActivity() then
+    -- and not while this police player chases a player (beamjoy_playerPursuit)
+    local chasingPlayer = beamjoy_playerPursuit ~= nil and beamjoy_playerPursuit.isChasing()
+    if beamjoy_traffic.data.enabled and not inActivity() and not chasingPlayer then
         LogDebug("Pursuit tick")
         local mpVeh = beamjoy_vehicles.getCurrent()
         if mpVeh and M.isPolice then
@@ -85,9 +91,17 @@ local function pursuitTick()
                     local minDist = beamjoy_traffic.getMinMaxDistFromPlayer(tonumber(v.veh.speed) or 0)
                     return pos:distance(vPos) < minDist
                 end):random()
-                if target then
-                    M.started[target.remoteVID] = true
-                    beamjoy_communications.send("pursuitStart", target.remoteVID, mpVeh.vid)
+                -- Real bug (direct report: arresting another player's traffic car left it there) :
+                -- cars were named by remoteVID, the car's id in its owner's game. Every game loads
+                -- the same map and hands out nearly the same ids, so another player's traffic car
+                -- often shares its number with a car of this game or of the owner's, and the start
+                -- or the stop landed on whichever came first. The full BeamMP id is the same on
+                -- every game and names one car only
+                local targetKey = target and beamjoy_vehicles.serverKey(target)
+                local policeKey = beamjoy_vehicles.serverKey(mpVeh)
+                if targetKey and policeKey then
+                    M.started[targetKey] = true
+                    beamjoy_communications.send("pursuitStart", targetKey, policeKey)
                 end
             end
         end
@@ -131,15 +145,16 @@ end
 
 ---@param vid integer
 local function onBJTrafficVehicleDeleted(vid)
-    if M.fugitives[vid] then
-        beamjoy_communications.send("pursuitStop", vid, 2)
+    if M.fugitives[vid] and M.fugitiveKeys[vid] then
+        beamjoy_communications.send("pursuitStop", M.fugitiveKeys[vid], 2)
     end
 end
 
 ---@param veh NGVehicle
 local function onBJTrafficVehicleResetted(veh)
-    if M.fugitives[veh:getID()] then
-        beamjoy_communications.send("pursuitStop", veh:getID(), 0)
+    local vid = veh:getID()
+    if M.fugitives[vid] and M.fugitiveKeys[vid] then
+        beamjoy_communications.send("pursuitStop", M.fugitiveKeys[vid], 0)
     end
 end
 local resetArrestation = function()
@@ -150,8 +165,8 @@ end
 
 --- joining an activity calls off the pursuits this player started (the fugitives escape)
 local function callOffPursuits()
-    for remoteVID in pairs(M.started) do
-        beamjoy_communications.send("pursuitStop", remoteVID, 0)
+    for key in pairs(M.started) do
+        beamjoy_communications.send("pursuitStop", key, 0)
     end
     table.clear(M.started)
     resetArrestation()
@@ -211,7 +226,8 @@ local function onServerTick()
             end
             if M.arrest.duration <= 0 then
                 -- arrestation succeed
-                beamjoy_communications.send("pursuitStop", M.arrest.target.remoteVID, 1)
+                local key = M.fugitiveKeys[M.arrest.target.vid] or beamjoy_vehicles.serverKey(M.arrest.target)
+                if key then beamjoy_communications.send("pursuitStop", key, 1) end
             elseif math.round(M.arrest.duration) > 0 then
                 beamjoy_communications_ui.uiBroadcast("beamjoy.pursuit.arrestIn",
                     { time = math.round(M.arrest.duration) }, nil, 1.2)
@@ -224,11 +240,9 @@ end
 local function retrieveCache(caches)
     if caches.pursuitFugitives then
         local previousFugitivesLength = table.length(M.fugitives)
-        local newVIDs = table.map(caches.pursuitFugitives, function(remoteVID)
-            ---@param v BJVehicle
-            local mpVeh = beamjoy_vehicles.vehicles:find(function(v)
-                return v.remoteVID == remoteVID
-            end)
+        local newVIDs = table.map(caches.pursuitFugitives, function(key)
+            local mpVeh = beamjoy_vehicles.getByServerKey(key)
+            if mpVeh then M.fugitiveKeys[mpVeh.vid] = tostring(key) end
             return mpVeh and mpVeh.vid or nil
         end)
         -- remove obsolete fugitives
@@ -237,6 +251,9 @@ local function retrieveCache(caches)
                 M.fugitives[vid] = nil
             end
         end)
+        for vid in pairs(M.fugitiveKeys) do
+            if not table.includes(newVIDs, vid) then M.fugitiveKeys[vid] = nil end
+        end
         -- add new labels
         table.forEach(newVIDs, function(vid)
             if not M.fugitives[vid] then
@@ -261,94 +278,101 @@ local function retrieveCache(caches)
     end
 end
 
----@param fugitiveRemoteVID integer
----@param policeRemoteVID integer
-local function startPursuit(fugitiveRemoteVID, policeRemoteVID)
-    beamjoy_vehicles.vehicles:find(function(v)
-        return v.remoteVID == fugitiveRemoteVID
-    end, function(v) ---@param v BJVehicle
-        async.task(function()
-            return M.fugitives[v.vid] ~= nil
-        end, function()
-            -- show fugitive on minimap
-            v.veh.uiState = 1
-            if v.isLocal then
-                -- Real bug: the target was sent to the police car itself instead of the fleeing
-                -- one. Without a target, the game's flee AI picks this client's active vehicle
-                -- (vehicle/ai.lua updatePlayerData) : another player's traffic fled from its
-                -- owner's own car, not from the police. The police car's id here is this game's
-                -- id for it (its copy, when it's another player's)
-                local policeVeh = beamjoy_vehicles.vehicles:find(function(v2)
-                    return v2.remoteVID == policeRemoteVID
-                end)
-                v.veh:queueLuaCommand([[
-                    ai.setMode("flee");
-                    ai.driveInLane("off");
-                    ai.setSpeedMode("off");
-                ]])
-                if policeVeh then
-                    v.veh:queueLuaCommand("ai.setTargetObjectID(" .. tostring(policeVeh.vid) .. ")")
+---@param fugitiveKey string full vehicle id, see beamjoy_vehicles.serverKey
+---@param policeKey string
+local function startPursuit(fugitiveKey, policeKey)
+    local v = beamjoy_vehicles.getByServerKey(fugitiveKey)
+    if not v then return end
+    M.fugitiveKeys[v.vid] = tostring(fugitiveKey)
+    async.task(function()
+        return M.fugitives[v.vid] ~= nil
+    end, function()
+        -- show fugitive on minimap
+        v.veh.uiState = 1
+        if v.isLocal then
+            -- Real bug: the target was sent to the police car itself instead of the fleeing
+            -- one. Without a target, the game's flee AI picks this client's active vehicle
+            -- (vehicle/ai.lua updatePlayerData) : another player's traffic fled from its
+            -- owner's own car, not from the police. The police car's id here is this game's
+            -- id for it (its copy, when it's another player's)
+            local policeVeh = beamjoy_vehicles.getByServerKey(policeKey)
+            v.veh:queueLuaCommand([[
+                ai.setMode("flee");
+                ai.driveInLane("off");
+                ai.setSpeedMode("off");
+            ]])
+            if policeVeh then
+                v.veh:queueLuaCommand("ai.setTargetObjectID(" .. tostring(policeVeh.vid) .. ")")
+            end
+        end
+        if M.isPolice then
+            local current = beamjoy_vehicles.getCurrent()
+            if not current then return end
+            local pos = beamjoy_vehicles.getVehiclePositionRotation(current.veh)
+            local fPos = beamjoy_vehicles.getVehiclePositionRotation(v.veh)
+            local _, maxDist = beamjoy_traffic.getMinMaxDistFromPlayer(tonumber(v.veh.speed) or 0)
+            if pos:distance(fPos) < maxDist then
+                if extensions.gameplay_traffic.showMessages then
+                    ui_message(string.var("{1} {2}", {
+                        translateLanguage('ui.traffic.suspectFlee',
+                            'A suspect is fleeing from you! Vehicle:'),
+                        M.fugitives[v.vid],
+                    }), 5, 'traffic', 'traffic')
+                end
+                if localStorage.get(localStorage.GLOBAL_VALUES.AUTOMATIC_LIGHTS) then
+                    -- auto enable siren and lights
+                    current.veh:queueLuaCommand('electrics.set_lightbar_signal(2)')
                 end
             end
-            if M.isPolice then
-                local current = beamjoy_vehicles.getCurrent()
-                if not current then return end
-                local pos = beamjoy_vehicles.getVehiclePositionRotation(current.veh)
-                local fPos = beamjoy_vehicles.getVehiclePositionRotation(v.veh)
-                local _, maxDist = beamjoy_traffic.getMinMaxDistFromPlayer(tonumber(v.veh.speed) or 0)
-                if pos:distance(fPos) < maxDist then
-                    if extensions.gameplay_traffic.showMessages then
-                        ui_message(string.var("{1} {2}", {
-                            translateLanguage('ui.traffic.suspectFlee',
-                                'A suspect is fleeing from you! Vehicle:'),
-                            M.fugitives[v.vid],
-                        }), 5, 'traffic', 'traffic')
-                    end
-                    if localStorage.get(localStorage.GLOBAL_VALUES.AUTOMATIC_LIGHTS) then
-                        -- auto enable siren and lights
-                        current.veh:queueLuaCommand('electrics.set_lightbar_signal(2)')
-                    end
-                end
-            end
-        end)
+        end
     end)
 end
 
----@param remoteVID integer
+---@param key string full vehicle id, see beamjoy_vehicles.serverKey
 ---@param caught boolean
-local function stopPursuit(remoteVID, caught)
-    M.started[remoteVID] = nil
-    beamjoy_vehicles.vehicles:find(function(v)
-        return v.remoteVID == remoteVID
-    end, function(v) ---@param v BJVehicle
-        -- hide fugitive on minimap
-        v.veh.uiState = 0
-        if v.isLocal then
-            if caught then
-                local vid = v.vid
-                async.delayTask(function()
-                    beamjoy_traffic.markForRespawn(vid)
-                end, 5000)
-            end
-            v.veh:queueLuaCommand([[
-                ai.setMode("stop")
-                ai.setTargetObjectID(-1)
-                ai.driveInLane("on")
-                ai.setSpeedMode("legal")
-            ]])
+local function stopPursuit(key, caught)
+    M.started[tostring(key)] = nil
+    local v = beamjoy_vehicles.getByServerKey(key)
+    if not v then return end
+    -- Real bug (direct report: after an arrest the fugitive tag stayed over the car, and was
+    -- still there when it respawned) : the pursuit's end only ever cleared the fugitive through
+    -- the separate fugitive-list cache that follows this message. That's the list's own job,
+    -- but the tag must not depend on it : the pursuit is over the moment this arrives
+    M.fugitives[v.vid] = nil
+    -- hide fugitive on minimap
+    v.veh.uiState = 0
+    if v.isLocal then
+        if caught then
+            local vid = v.vid
+            async.delayTask(function()
+                beamjoy_traffic.markForRespawn(vid)
+            end, 5000)
         end
-        if M.isPolice then
-            if extensions.gameplay_traffic.showMessages then
-                ui_message(caught and 'ui.traffic.suspectArrest' or
-                    'ui.traffic.suspectEvade', 5, 'traffic', 'traffic')
-            end
-            if M.arrest.target and M.arrest.target.vid == v.vid then
-                resetArrestation()
-                beamjoy_communications_ui.uiBroadcast('ui.traffic.suspectArrest',
-                    nil, nil, 3)
+        v.veh:queueLuaCommand([[
+            ai.setMode("stop")
+            ai.setTargetObjectID(-1)
+            ai.driveInLane("on")
+            ai.setSpeedMode("legal")
+        ]])
+    end
+    if M.isPolice then
+        if table.length(M.fugitives) == 0 then
+            local current = beamjoy_vehicles.getCurrent()
+            if current then
+                -- stop siren and lights
+                current.veh:queueLuaCommand('electrics.set_lightbar_signal(0)')
             end
         end
-    end)
+        if extensions.gameplay_traffic.showMessages then
+            ui_message(caught and 'ui.traffic.suspectArrest' or
+                'ui.traffic.suspectEvade', 5, 'traffic', 'traffic')
+        end
+        if M.arrest.target and M.arrest.target.vid == v.vid then
+            resetArrestation()
+            beamjoy_communications_ui.uiBroadcast('ui.traffic.suspectArrest',
+                nil, nil, 3)
+        end
+    end
 end
 
 M.onInit = onInit

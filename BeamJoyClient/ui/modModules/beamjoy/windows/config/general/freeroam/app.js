@@ -11,6 +11,7 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
             StrictBusStops: false,
             PreserveFuelOnReset: false,
             EmergencyRefuelCooldown: 300,
+            PlayerPursuits: true,
         };
         // preserved verbatim on save : not editable from this accordion, but setConfig replaces
         // the whole Freeroam table at once, so it has to be sent back along with everything else
@@ -33,6 +34,7 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
                 StrictBusStops: this.data.StrictBusStops,
                 PreserveFuelOnReset: this.data.PreserveFuelOnReset,
                 EmergencyRefuelCooldown: this.data.EmergencyRefuelCooldown,
+                PlayerPursuits: this.data.PlayerPursuits,
             }),
             (current) => {
                 if (!this.init) return;
@@ -43,7 +45,8 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
                     current.RespawnGhostDistance === this.default.RespawnGhostDistance &&
                     current.StrictBusStops === this.default.StrictBusStops &&
                     current.PreserveFuelOnReset === this.default.PreserveFuelOnReset &&
-                    current.EmergencyRefuelCooldown === this.default.EmergencyRefuelCooldown
+                    current.EmergencyRefuelCooldown === this.default.EmergencyRefuelCooldown &&
+                    current.PlayerPursuits === this.default.PlayerPursuits
                 )
                     return;
                 beamjoyStore.send("BJDirectSend", [
@@ -66,6 +69,7 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
                         PreserveFuelOnReset: current.PreserveFuelOnReset,
                         // same string-vs-number coercion note as RespawnGhostTimeout/Distance above
                         EmergencyRefuelCooldown: Number(current.EmergencyRefuelCooldown),
+                        PlayerPursuits: current.PlayerPursuits,
                     },
                 ]);
             },
@@ -85,6 +89,7 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
                 StrictBusStops: freeroam.StrictBusStops === true,
                 PreserveFuelOnReset: freeroam.PreserveFuelOnReset === true,
                 EmergencyRefuelCooldown: freeroam.EmergencyRefuelCooldown ?? 300,
+                PlayerPursuits: freeroam.PlayerPursuits !== false,
             };
             this.default = angular.copy(this.data);
             this.init = true;

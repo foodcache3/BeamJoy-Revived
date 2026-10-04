@@ -93,6 +93,18 @@
             </div>
         </td>
     </tr>
+    <tr>
+        <td>
+            <span title="{{ 'beamjoy.window.main.tabs.settings.sections.vehicle.allowChases.tooltip' | translate }}">
+                {{ "beamjoy.window.main.tabs.settings.sections.vehicle.allowChases" | translate }}
+            </span>
+        </td>
+        <td>
+            <div class="d-flex align-center w-fitcontent">
+                <bj-toggle ng-model="$ctrl.settings.pursuit.allowChases"></bj-toggle>
+            </div>
+        </td>
+    </tr>
 
     <tr>
         <td colspan="3" class="settings-category d-flex align-center gap-2">

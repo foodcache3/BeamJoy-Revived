@@ -58,6 +58,10 @@
     <dd>{{$ctrl.standing('packages')}}</dd>
     <dt>{{'beamjoy.delivery.kindLong.vehicles' | translate}}</dt>
     <dd>{{$ctrl.standing('vehicles')}}</dd>
+    <dt>{{'beamjoy.window.main.you.arrests' | translate}}</dt>
+    <dd>{{$ctrl.pursuit.arrests || 0}}</dd>
+    <dt>{{'beamjoy.window.main.you.escapes' | translate}}</dt>
+    <dd>{{$ctrl.pursuit.escapes || 0}}</dd>
 </dl>
 
 <div class="shortcuts">

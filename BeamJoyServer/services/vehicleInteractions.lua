@@ -12,6 +12,12 @@
 --- vehicleTriggerRequest(serverVID, triggerId, actionNumber, value, ownServerVID) -> the owner gets
 --- vehicleTrigger(serverVID, triggerId, actionNumber, value, requesterName), or the requester a
 --- toast when it's refused (a press only, never its release).
+---
+--- Latch state for late joiners : BeamMP sends a door opening or closing as it happens, never the
+--- state itself, so a player who joins (or whose game spawns the car later) sees every door closed.
+--- Each owner reports their cars' open / broken latches (vehicleLatches(serverVID, latches)) ;
+--- this keeps them and hands them out in the join cache (vehicleLatches) and to everyone on change,
+--- and each client applies them to a car when it appears.
 
 local M = {
     -- between the requester's own vehicle and the car, by BeamMP's copy of their positions :
@@ -28,6 +34,13 @@ local M = {
     --- playerID -> { second, count }
     ---@type table<integer, {second: integer, count: integer}>
     rate = {},
+    --- serverVID ("<playerID>-<vehicleID>") -> { advanced coupler group name -> state }, only the
+    --- groups that aren't latched (a car spawns with every one latched)
+    ---@type table<string, table<string, string>>
+    latches = {},
+    -- the latch states a client may report, and how many groups (a bus has a lot of doors)
+    LATCH_STATES = { detached = true, broken = true },
+    MAX_LATCH_GROUPS = 64,
 }
 
 ---@param serverVID any "<playerID>-<vehicleID>"
@@ -123,18 +136,73 @@ local function vehicleTriggerRequest(ctxt, serverVID, triggerId, actionNumber, v
         ctxt.sender.playerName)
 end
 
+---@param serverVID string
+---@param latches table<string, string>?
+local function setLatches(serverVID, latches)
+    M.latches[serverVID] = latches
+    communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "vehicleLatches", serverVID, latches or {})
+end
+
+--- an owner's report of one of their cars' unlatched groups (doors, hood, trunk...)
+---@param ctxt BJSContext
+---@param serverVID string
+---@param latches table<string, string>
+local function vehicleLatches(ctxt, serverVID, latches)
+    if not ctxt.sender then return end
+    local ownerID = parseServerVID(serverVID)
+    if ownerID ~= ctxt.senderID or type(latches) ~= "table" then return end
+    serverVID = tostring(serverVID)
+    local clean, count = {}, 0
+    for name, state in pairs(latches) do
+        if type(name) == "string" and #name <= 64 and M.LATCH_STATES[state] then
+            count = count + 1
+            if count > M.MAX_LATCH_GROUPS then break end
+            clean[name] = state
+        end
+    end
+    setLatches(serverVID, next(clean) and clean or nil)
+end
+
 ---@param playerID integer
 local function onPlayerDisconnect(playerID)
     M.rate[playerID] = nil
+    local prefix = tostring(playerID) .. "-"
+    for serverVID in pairs(M.latches) do
+        if serverVID:sub(1, #prefix) == prefix then setLatches(serverVID, nil) end
+    end
+end
+
+---@param playerID integer
+---@param vehID integer
+local function onVehicleDeleted(playerID, vehID)
+    local serverVID = string.format("%d-%d", playerID, vehID)
+    if M.latches[serverVID] then setLatches(serverVID, nil) end
+end
+
+--- a reset (or an edit, which respawns the car) latches every door again on every copy
+---@param playerID integer
+---@param vehID integer
+local function onVehicleReset(playerID, vehID)
+    onVehicleDeleted(playerID, vehID)
+end
+
+---@param caches table
+local function onBJRequestCache(caches)
+    caches.vehicleLatches = M.latches
 end
 
 local function onInit()
     communications_rx.addHandler("vehicleLocked", vehicleLocked)
     communications_rx.addHandler("vehicleTriggerRequest", vehicleTriggerRequest)
+    communications_rx.addHandler("vehicleLatches", vehicleLatches)
 end
 
 M.onInit = onInit
 M.onPlayerDisconnect = onPlayerDisconnect
+M.onVehicleDeleted = onVehicleDeleted
+M.onVehicleReset = onVehicleReset
+M.onBJRequestCache = onBJRequestCache
+M.vehicleLatches = vehicleLatches
 M.vehicleLocked = vehicleLocked
 M.vehicleTriggerRequest = vehicleTriggerRequest
 

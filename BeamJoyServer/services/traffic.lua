@@ -4,7 +4,8 @@ local M = {
     ---@type tablelib<integer, integer> index playerID, value amount of parked vehicles handled
     parkedBalancer = Table(),
 
-    ---@type integer[] vids
+    --- the fugitives' full BeamMP vehicle ids ("<ownerID>-<vehicleID>", the same on every client)
+    ---@type string[]
     pursuitFugitives = {},
 }
 
@@ -174,8 +175,8 @@ local function rxSettings(ctxt, settings)
 end
 
 ---@param ctxt BJSContext
----@param fugitiveVID integer
----@param policeVID integer
+---@param fugitiveVID string full vehicle id
+---@param policeVID string full vehicle id
 local function startPursuit(ctxt, fugitiveVID, policeVID)
     local conf = getConf()
     if not conf.enabled then return end
@@ -193,7 +194,7 @@ local function startPursuit(ctxt, fugitiveVID, policeVID)
 end
 
 ---@param ctxt BJSContext
----@param vid integer
+---@param vid string full vehicle id
 ---@param state 0|1|2 0: escaped, 1: caught, 2: removed
 local function stopPursuit(ctxt, vid, state)
     local conf = getConf()

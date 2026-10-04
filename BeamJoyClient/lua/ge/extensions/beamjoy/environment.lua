@@ -472,6 +472,40 @@ local function reportObserver()
     })
 end
 
+--- Stands in for simTimeAuthority.togglePause (the J key and the UI's pause button) : on a server
+--- the pause is everyone's, so the press asks the server, whose reply pauses every client
+--- (updateSimSpeed). A replay's own play/pause stays local, as in the game.
+---
+--- Real annoyance: this used to be an onTogglePause hook that sent the request and then threw an
+--- error on purpose, the only way to stop the game's own local pause from a hook (their return
+--- values are ignored). It worked, but logged a "FATAL LUA ERROR" with a stack trace on every
+--- press, which read as a real crash in every BeamNG.log.
+---@param playPauseSound boolean?
+local function togglePause(playPauseSound)
+    if extensions.core_replay and extensions.core_replay.state.state == "playback" then
+        return M.originalTogglePause(playPauseSound)
+    end
+    -- the game's own listeners still hear about the press (the crash camera turns itself off)
+    extensions.hook("onTogglePause")
+    beamjoy_communications.send("simPause", not M.data.simPause)
+end
+
+local function installTogglePause()
+    if not simTimeAuthority or not simTimeAuthority.togglePause or
+        simTimeAuthority.togglePause == togglePause then
+        return
+    end
+    M.originalTogglePause = simTimeAuthority.togglePause
+    simTimeAuthority.togglePause = togglePause
+end
+
+local function uninstallTogglePause()
+    if simTimeAuthority and simTimeAuthority.togglePause == togglePause and M.originalTogglePause then
+        simTimeAuthority.togglePause = M.originalTogglePause
+    end
+    M.originalTogglePause = nil
+end
+
 local function onInit()
     InitPreloadedDependencies(M)
     beamjoy_communications.addHandler("sendCache", M.retrieveCache)
@@ -498,17 +532,12 @@ local function onInit()
         end
         extensions.core_environment.setTimeOfDay = interceptSetTimeOfDay
     end
+    installTogglePause()
 end
 
 local function onExtensionUnloaded()
     RollBackNGFunctionsWrappers(M.baseFunctions)
-end
-
-local function onTogglePause()
-    if extensions.core_replay.state.state ~= "playback" then
-        beamjoy_communications.send("simPause", not simTimeAuthority.getPause())
-        error("BeamJoy needs to prevent game from toggling pause (this error is not a real one)")
-    end
+    uninstallTogglePause()
 end
 
 local function updateSimSpeed()
@@ -796,7 +825,6 @@ end
 M.onInit = onInit
 M.onExtensionUnloaded = onExtensionUnloaded
 M.onPreExit = onExtensionUnloaded
-M.onTogglePause = onTogglePause
 M.onUpdate = onUpdate
 M.onSlowUpdate = onSlowUpdate
 M.onBJClientReady = onBJClientReady

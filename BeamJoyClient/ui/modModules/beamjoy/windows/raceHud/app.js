@@ -149,6 +149,7 @@ angular.module("beamjoy").component("bjRaceHud", {
                 let gap = "";
                 if (row.disqualified) gap = translate("beamjoy.raceHud.dsq");
                 else if (row.dnf) gap = translate("beamjoy.raceHud.out");
+                else if (row.disconnected) gap = translate("beamjoy.raceHud.disconnected");
                 else if (lead) gap = row.finished ? clock(row.totalMs) : "";
                 else gap = leaderGap(row);
                 return {
@@ -161,7 +162,7 @@ angular.module("beamjoy").component("bjRaceHud", {
                     pen: penOf(row),
                     fin: !!row.finished,
                     gap,
-                    gapCls: row.dnf || row.disqualified ? "soft" : "",
+                    gapCls: row.dnf || row.disqualified || row.disconnected ? "soft" : "",
                 };
             };
             v.full = standings.map(rowOf);

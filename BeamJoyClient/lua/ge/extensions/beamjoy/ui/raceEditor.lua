@@ -633,6 +633,7 @@ local function backfillRaceDefaults(race)
     race.defaults.laps = race.defaults.laps or 3
     if race.defaults.dnfEnabled == nil then race.defaults.dnfEnabled = true end
     race.defaults.dnfTimeout = race.defaults.dnfTimeout or 30
+    race.defaults.rejoinGraceMinutes = race.defaults.rejoinGraceMinutes or 10
     if race.defaults.resetPenaltyEnabled == nil then race.defaults.resetPenaltyEnabled = false end
     race.defaults.resetPenaltySeconds = race.defaults.resetPenaltySeconds or 5
     if race.defaults.resetPenaltyMode ~= "time" then race.defaults.resetPenaltyMode = "hold" end
@@ -707,6 +708,7 @@ local function onOpen(raceId)
                 laps = 3,
                 dnfEnabled = true,
                 dnfTimeout = 30,
+                rejoinGraceMinutes = 10,
                 resetPenaltyEnabled = false,
                 resetPenaltySeconds = 5,
                 resetPenaltyMode = "hold",

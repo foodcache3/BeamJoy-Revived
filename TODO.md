@@ -26,26 +26,20 @@ still need to exist as real synced entities other players can see (defeating mos
 whether they'd need to be a purely local-client illusion until "activated," and how that
 interacts with the existing per-player balancer.
 
-## Weather syncing
+## Weather sync: follow-ups
 
-**Status:** planned, not started. User asked to add this to the plan rather than build it now.
+**Status:** open follow-ups to the built weather sync (client 2574 / server 2400 : "Sync weather"
+toggle, an admin's clouds / fog / wind from the game's own Time and weather panel applied on every
+client).
 
-`environment.lua` currently syncs time-of-day (`timeSync`) and gravity (`gravitySync`) between
-players, each with its own toggle + wrapped native setter (`core_environment.setTimeOfDay`/
-`setState`), plus a periodic re-apply in `onUpdate`/`updateToD`/`updateGravity` to keep drift-prone
-native state pinned to the shared `M.data`. Weather (cloud cover, fog, precipitation, wind, etc. —
-all present on native's own `core_environment.getState()`/`setState()`, see `res.cloudCover`,
-`res.fogDensity`, `res.numOfDrops`, `res.windSpeed`, `res.groundWind` in the engine's
-`core/environment.lua`) has no BJS sync at all today: whatever a player's own client happens to
-have set locally (or the level default) is what they see, independent of everyone else.
-
-A real implementation would follow the same shape already established for ToD/gravity: a
-`weatherSync` toggle + a synced weather-data table in both client and server `environment.lua`,
-hooked into the existing `interceptEnvState` wrap (which already receives the full native
-`state` object on every native environment-panel change, weather fields included) and into
-`onUpdate`'s periodic re-apply loop. Needs a design pass on which weather fields are worth syncing
-(cloud cover / fog / precipitation probably yes; things like cloud wind direction or altitude
-probably not worth the bandwidth) before touching code.
+- **Rain.** The game's panel has no rain control, so `numOfDrops` (core_environment's
+  `setPrecipitation`) isn't synced. Would need a BJS control (config panel slider). Only maps with
+  a `Precipitation` object can rain: West Coast USA, East Coast USA, Italy, Jungle Rock Island,
+  Small Island, Industrial, Driver Training (not Utah, Johnson Valley, Gridmap...).
+- **Automatic weather** (the server shifting between weather states on a timer, lerped on every
+  client). The user chose static weather for now. The game's own weather presets
+  (`art/weather/defaults.json`) also set the time of day, so a dynamic mode would send the weather
+  fields only, never preset names.
 
 ## Moon jump / date rollover at midnight
 
@@ -66,28 +60,6 @@ a full cycle, and compare `year/month/day/time`. Then: if the engine advances th
 BJS's synced date should follow it (currently written only on change, so it doesn't fight it);
 if not, implement rollover in `envClock.advance` (count midnights crossed since the epoch,
 advance the synced date; the per-date segment cache already supports a date that moves).
-
-## Sim pause: replace the deliberate-error block with a function wrap
-
-**Status:** planned, not started. User asked to add this to the plan rather than build it now.
-
-Pressing J logs a `*** FATAL LUA ERROR ... BeamJoy needs to prevent game from toggling pause (this
-error is not a real one)` with a full stack trace every time. It's intentional and harmless (inherited
-from the original mod): native `simTimeAuthority.togglePause` (`lua/ge/simTimeAuthority.lua:229`)
-runs the `onTogglePause` hook and then pauses locally, with no supported veto (hook return values
-are ignored), so client `environment.lua`'s `onTogglePause` sends `simPause` to the server and then
-throws to abort the local pause. The server's `sendCache` reply then applies the pause for everyone.
-Works, but the log noise looks like a real crash to anyone reading a BeamNG.log.
-
-Cleaner: wrap `simTimeAuthority.togglePause` itself in `onInit` (store the original in
-`M.baseFunctions` so `RollBackNGFunctionsWrappers` restores it on unload, same as the
-`core_environment` wraps). The wrapper calls the original during replay playback (local pause stays
-local there, matching the current `core_replay.state.state ~= "playback"` check) and otherwise just
-sends `simPause`, no error. The J binding executes `simTimeAuthority.togglePause(true)` as a string
-at press time (visible in the traceback), so a replaced function is picked up. Then remove the
-throwing `onTogglePause`. Worth checking whether anything else (radial menu, UI pause button) calls
-`simTimeAuthority.pause` directly instead of `togglePause`. `updateSimSpeed`'s per-frame re-sync
-already reverts those, but they'd bypass the server request.
 
 ## Freeroam / Bus lines — later phases
 
@@ -305,10 +277,9 @@ Phase 0-2 (energy stations, garages, bus lines) are shipped — see CHANGELOG. S
     (`main/players-list`, `player-line` takes `full`), full window Home = Now / Players / You
     (`windows/main/you`), Leaderboards tab (`windows/main/leaderboards`), Change nickname
     (login prompt `{change: true}` ; `communications/ui.lua` only runs proceedAfterLogin once).
-  - **Still open from parts 2/3:** a Crew tab needs the Crews feature itself (see Phase 3
-    follow-ups), not just UI. Staff Cancel on any lobby, the staff Everyone's vehicles block,
-    Change settings in the race lobby and the Bus lines restyle are DONE (client 2522 / server
-    2365), untested in-game.
+  - **Parts 2/3 follow-ups - DONE (client 2522 / server 2365):** the Crew tab (with the Crews
+    feature), staff Cancel on any lobby, the staff Everyone's vehicles block, Change settings in
+    the race lobby and the Bus lines restyle.
   - **Part 4 - DONE (client 2514), untested in-game:** `beamjoy/mainNav.lua` owns the Focus
     notification control (order: delivery notification, then main window ; delivery exposes
     notificationFocusable / notificationFocused / setNotificationFocus), `uiNav.acquire(owner,
@@ -345,22 +316,6 @@ Phase 0-2 (energy stations, garages, bus lines) are shipped — see CHANGELOG. S
     within 45°, nearly stopped) and `precisionParking.lua` grades for a parking factor
     (perfect 1.15 / good 1.10 / ok 1.05 / bad 1.0). A job's max players = its drop-off's spot
     count. West Coast USA facilities reference real parking spots in `*.sites.json`.
-  - **Crews - BUILT (client 2522 / server 2365), untested in-game:** `services/crews.lua`
-    (in memory, by player name, pullIn / pullSize / sameCrew called by the grids and
-    deliveries), `beamjoy/crews.lua`, `windows/main/crew` (service `beamjoyCrew`), crew invites
-    in `beamjoy/notices.lua`. Not done: crew markers (none exist yet, so nothing to hide during
-    hunts / infected rounds). Original spec below.
-    Spec: a persistent party (max 4 to start) with its own Crew tab next to Activities on the
-    main HUD. Join once and you're pulled into the leader's lobbies (deliveries, races, hunts,
-    infected) automatically when free; busy members skip that one. Not in a crew: the tab lists
-    every crew to ask to join or join. A job smaller than the crew can't be started with the crew.
-    In Hunter/Infected, roles stay random across everyone, and crew markers must be hidden during
-    rounds so crewmates can't track a fugitive or spot an infected crewmate.
-  - **Crew invites**: extend Phase 3's convoy invites to crews (player context menu, Crew tab
-    search), with its own frontend design pass.
-- **Phase 4 — derby.** A full 4th competitive gamemode (`services/derby.lua` +
-  `services/derbyGrid.lua` + `derbyRunner.lua` + HUD/countdown/results, arena browse-list editor).
-  Bigger than phases 1-3 combined.
 - **Phase 5 — polish.** Quick-travel + GPS-to-nearest wiring, per-type legacy BJI import (most of
   this is already done for stations/garages/bus lines — this would be the remaining activity
   types).
@@ -395,85 +350,9 @@ Reference source for native API research, if picking any of these up:
   "pristine at the end" check. The same comfort score would work for passengers. Not yet confirmed
   how easily vehicle g-force data can be read from the game side.
 
-## Bus lines — open follow-ups (not yet built)
+## Freeroam: police chases between players: follow-ups
 
-- **Stationary-hold requirement.** The stop-hold check is purely radius-based today (no velocity
-  check) - a bus could satisfy a wide-radius stop's hold while still rolling through it. Open
-  question whether this is actually wanted before implementing.
-- **`BusStopHoldDuration` has no config UI.** `busRun.lua` already reads
-  `Freeroam.BusStopHoldDuration` (default 3s) but nothing writes it yet - fixed at 3s for every
-  server until a config row is added.
-- A bundled example bus line for a map or two.
-- "Add every available activity to the Big Map with its own start position" - user asked to skip
-  this for now; open question of what to do about duplicate start positions if it's picked back up.
-
-## Vehicle interactions: late-join latch state
-
-**Status:** open follow-up to the built vehicle interactions (doors, hood, buttons on other
-players' cars, client build 2573). BeamMP doesn't resend latch state to late joiners or when a car
-streams in, so a door left open shows closed to them. BJ could track open latches per vehicle and
-replay them on join/spawn.
-
-## Freeroam: player-vs-player police pursuits
-
-**Status:** planned, not started. User asked to add this to the plan rather than build it now.
-
-Sandbox's `beamjoy/pursuit.lua` only makes a random traffic car flee from a police player (its own
-timer, no offenses). BeamJoy 2.0.9 had real player-vs-player chases, built on the game's own police
-system: `BJI/managers/PursuitManager.lua` in `X:\beam\essentials\beamjoy-2.0.9\BJI.zip`, server side
-in `X:\beam\essentials\beamjoy-2.0.8\Server\BeamJoyCore` (`rx/ScenarioRx.lua` PursuitData /
-PursuitReward, `managers/PlayerManager.lua` onPursuitReward). Reference only, don't port it 1:1.
-
-How theirs worked:
-- Every vehicle registered with `gameplay_traffic`, with a role : the player's own police car
-  (`veh.isPatrol`) "police", other players' cars "standard", traffic AI and ghosts "empty". The
-  game's police logic (`gameplay_police`) then notices offenses and starts pursuits by itself.
-- The game's pursuit events (start / arrest / evade / reset) relayed through the server to the
-  police and fugitive clients. No start against AI, police cars, an idle car (owner not in it),
-  ghosts, during a server activity, or with no police car on the server.
-- Police : "suspect fleeing" message and sound, GPS to the nearest target, auto lightbar, several
-  targets at once. Fugitive : message and sound, resets blocked while chased.
-- Arrest : fugitive frozen 5 s, ticket/arrest message with the offenses, then "drive away".
-- Rewards : reputation (ArrestReward for police within 10 m, EvadeReward for the fugitive).
-- Reset on server activity start, going ghost, disconnect, vehicle deleted.
-
-Open questions before building:
-- Sandbox has no reputation : count arrests/escapes, a leaderboard, or no reward.
-- How it sits with the existing traffic pursuit tick (both on, or one replaces the other).
-- Off during every activity, like the traffic pursuit tick (`navigation.inActivity`).
-
-## Races: rejoin grace period after a disconnect
-
-**Status:** planned, not started. User asked to add this to the plan rather than build it now.
-
-Today a racer who disconnects mid-race is marked DNF on the spot (`raceGrid.lua`
-`onPlayerDisconnect`, RACE branch) and can never get back in. Fine for a 5-minute sprint, fatal for
-endurance racing: a reported test case was a 40-lap race on a 37-mile lap (time to beat 31 hours),
-where a game crash, launcher hiccup or short internet drop after 20 hours of driving throws the whole
-race away. Over that long with several players, at least one disconnect is close to guaranteed.
-
-Agreed design:
-- On disconnect during RACE: mark the participant "disconnected" (with the time) instead of DNF and
-  keep their entry. Their race clock keeps running (it's the shared clock from the green light,
-  `session.goAtMs`), so time lost while away is the penalty. After the grace period runs out, DNF
-  them exactly as today.
-- Grace period: a per-race setting (e.g. 10 minutes default), alongside the other race settings.
-- Reconnect gets a NEW playerID, so match by BeamMP player name and re-key the participant entry
-  (`session.participants` is keyed by playerID) to the new ID, then push the session.
-- The race must not end while anyone is still inside their grace period (`checkSessionComplete`).
-- Client resume path in `raceRunner.lua` (a RACE-state session arriving while not in one): the
-  player's car was deleted by BeamMP on disconnect, so spawn it at their last crossed gate
-  (`lastCrossedGate`, same target the "lastcheckpoint" respawn strategy uses), enforcing the race's
-  vehicle restriction; reset `M.lastLy`; resume timing on the shared clock. Must wait for a fresh
-  `beamjoy_clockSync` estimate first, or the local fallback clock would restart the timer at zero.
-
-Other systems that need a "disconnected" state: HUD standings row and race info panels (plus locale
-strings), crews' "busy" status and lobby invites, spectators watching someone who drops,
-Discord race results ("disconnected" vs "retired"), backmarker ghosting.
-
-Open decisions: grace length/default; whether a rejoined racer's time can set a personal best or
-server record. Server restarts are out of scope: sessions are memory-only and the shared clock
-resets with the server, so hosts should disable scheduled restarts during an endurance race.
-
-Best done after the race update-size rework (server-side gaps, ID-list standings, history only at
-the finish), so the resume path is built against the final payload format.
+Built in client 2578 / server 2402 (`beamjoy/playerPursuit.lua`, `services/playerPursuit.lua`).
+Not built yet:
+- A GPS route to the nearest fugitive for the police player (old BeamJoy had one).
+- A police / fugitive leaderboard (the counts are already saved in `player.data.pursuit`).

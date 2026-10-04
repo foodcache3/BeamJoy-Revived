@@ -1,5 +1,5 @@
 // Full window > Home > "You" column : the car you're in (with the low fuel button), your delivery
-// standings, and personal shortcuts (nametags, start a vote, change nickname, welcome screen).
+// standings, your police chase counts, and personal shortcuts (nametags, start a vote, change nickname, welcome screen).
 angular.module("beamjoy").component("bjMainYou", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/you/app.html",
     controller: function ($rootScope, $scope, $filter, $interval, beamjoyStore) {
@@ -46,6 +46,10 @@ angular.module("beamjoy").component("bjMainYou", {
                 .replace("{total}", (lb.mine.total || 0).toLocaleString());
         };
 
+        // arrests made in a police car, escapes from police players (lua beamjoy/playerPursuit.lua)
+        this.pursuit = {};
+        on("BJPursuitStats", (_, data) => (this.pursuit = data || {}));
+
         this.nametags = !beamjoyStore.settings.data.nametags.hideNameTags;
         on("BJNametagsState", (_, data) => (this.nametags = !(data && data.hideNameTags)));
         this.toggleNametags = () => {
@@ -68,6 +72,7 @@ angular.module("beamjoy").component("bjMainYou", {
         this.$onInit = () => {
             beamjoyStore.send("BJDeliveryLeaderboardRequest");
             beamjoyStore.send("BJRequestIntroPanelData");
+            beamjoyStore.send("BJRequestPursuitStats");
         };
     },
 });

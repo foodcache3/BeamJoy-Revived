@@ -1522,6 +1522,30 @@ local function isConfigShareable(model, configKey)
     return config ~= nil and config.infoFilename ~= nil
 end
 
+--- BeamMP's full id for a vehicle, "<ownerID>-<vehicleID>", the same on every player's game.
+--- Neither remoteVID (the car's id in its owner's game : two games loading the same map hand out
+--- nearly the same ids, so another player's car often shares its number with one of yours) nor
+--- serverVID (only the vehicle part, each player numbers their own cars from 0) says which car it is
+--- on its own.
+---@param mpVeh BJVehicle?
+---@return string?
+local function serverKey(mpVeh)
+    if not mpVeh or mpVeh.ownerID == nil or mpVeh.serverVID == nil then return nil end
+    local vid = tostring(mpVeh.serverVID)
+    if vid:find("-", 1, true) then return vid end
+    return string.format("%s-%s", tostring(mpVeh.ownerID), vid)
+end
+
+---@param key string?
+---@return BJVehicle?
+local function getByServerKey(key)
+    if key == nil then return nil end
+    key = tostring(key)
+    for _, v in pairs(M.vehicles) do
+        if serverKey(v) == key then return v end
+    end
+end
+
 ---@param mpVeh BJVehicle
 ---@return boolean
 local function isPolice(mpVeh)
@@ -1613,6 +1637,8 @@ M.reapplyDisplayAlpha = reapplyDisplayAlpha
 M.getAttachedTrailers = getAttachedTrailers
 M.getFullConfig = getFullConfig
 M.isPolice = isPolice
+M.serverKey = serverKey
+M.getByServerKey = getByServerKey
 M.getAllPaints = getAllPaints
 M.paint = paint
 

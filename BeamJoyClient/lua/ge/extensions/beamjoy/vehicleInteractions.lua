@@ -10,6 +10,13 @@
 --- sent, so a held button (the horn) is held as long as it is here.
 ---
 --- Settings > Vehicle > "Lock my vehicles" : nobody but your crew can use your cars' buttons.
+---
+--- Latch state for late joiners : BeamMP sends a door opening or closing as it happens, never the
+--- state itself, so a car that appears on this client later (joining, the car spawning in) showed
+--- every door closed. This client reports its own cars' unlatched groups (doors, hood, trunk...)
+--- to the server when they change (services/vehicleInteractions.lua keeps them), and applies the
+--- stored ones to another player's car when it appears here, through BeamMP's own couplerVE (it
+--- knows how to move a latch on a remote copy). Live changes stay BeamMP's own sync.
 
 local M = {
     -- m/s : the owner's own check, BeamMP's copy of the speed on the server lags behind
@@ -26,6 +33,23 @@ local M = {
     pressed = {},
     ---@type function? the game's own onActionEvent, while ours stands in
     originalOnActionEvent = nil,
+
+    -- how often this client checks its own cars' latches
+    LATCH_POLL_MS = 2000,
+    -- a car that just appeared settles (and latches its doors) before the stored state is applied
+    LATCH_APPLY_DELAY_MS = 2000,
+    -- how long a car that just appeared waits for its state (the join cache may come after it)
+    LATCH_APPLY_WAIT_MS = 10000,
+    --- serverVID -> { group -> state } : everyone's cars, as the server keeps them
+    ---@type table<string, table<string, string>>
+    latches = {},
+    --- this client's own cars : vid -> what was last reported (a stable string of it)
+    ---@type table<integer, string>
+    reportedLatches = {},
+    --- other players' cars that just appeared : vid -> { at, untilMs }
+    ---@type table<integer, {at: integer, untilMs: integer}>
+    pendingLatches = {},
+    lastLatchPoll = 0,
 }
 
 ---@return table?
@@ -179,10 +203,124 @@ local function sendLocked()
     beamjoy_communications.send("vehicleLocked", M.locked)
 end
 
+-- LATCH STATE ------------------------------------------------------------------------------------
+
+---@param latches table<string, string>?
+---@return string a stable form to compare reports with
+local function latchSignature(latches)
+    local keys = {}
+    for name, state in pairs(latches or {}) do keys[#keys + 1] = name .. "=" .. state end
+    table.sort(keys)
+    return table.concat(keys, ";")
+end
+
+--- the vehicle side of a poll : its unlatched groups, back to onLatchReport. A group still moving
+--- (autoCoupling, a door swinging shut) skips the whole report until it settles
+local LATCH_QUERY = [[
+local out, moving = {}, false
+for _, c in pairs(controller.getControllersByType("advancedCouplerControl") or {}) do
+    local ok, state = pcall(c.getGroupState)
+    if ok then
+        if state == "autoCoupling" then moving = true
+        elseif state == "detached" or state == "broken" then out[c.name] = state end
+    end
+end
+if not moving then
+    obj:queueGameEngineLua("if beamjoy_vehicleInteractions then beamjoy_vehicleInteractions.onLatchReport("
+        .. obj:getId() .. ", " .. serialize(out) .. ") end")
+end
+]]
+
+--- this client's own cars (not traffic, not someone walking)
+local function pollOwnLatches()
+    for vid, mpVeh in pairs(beamjoy_vehicles.vehicles) do
+        if mpVeh.isLocal and not mpVeh.isAi and mpVeh.veh and mpVeh.jbeam ~= beamjoy_vehicles.WALKING then
+            mpVeh.veh:queueLuaCommand(LATCH_QUERY)
+        end
+    end
+end
+
+---@param vid integer
+---@param latches table<string, string>
+local function onLatchReport(vid, latches)
+    local mpVeh = beamjoy_vehicles.vehicles[vid]
+    local key = mpVeh and mpVeh.isLocal and serverKey(mpVeh)
+    if not key then return end
+    local signature = latchSignature(latches)
+    -- a car never reported yet with everything latched : nothing anyone needs to know
+    if M.reportedLatches[vid] == nil and signature == "" then
+        M.reportedLatches[vid] = signature
+        return
+    end
+    if M.reportedLatches[vid] == signature then return end
+    M.reportedLatches[vid] = signature
+    beamjoy_communications.send("vehicleLatches", key, latches)
+end
+
+--- move another player's car's latches to the stored state (BeamMP's couplerVE does it on a remote
+--- copy, and skips the groups already in that state)
+---@param mpVeh BJVehicle
+---@param latches table<string, string>
+local function applyLatches(mpVeh, latches)
+    local list = {}
+    for name, state in pairs(latches) do list[#list + 1] = { name = name, state = state } end
+    if #list == 0 or not mpVeh.veh then return end
+    mpVeh.veh:queueLuaCommand(string.format(
+        "if couplerVE and couplerVE.toggleCouplerState then couplerVE.toggleCouplerState(%q) end",
+        jsonEncode(list)))
+end
+
+local function applyPendingLatches(now)
+    for vid, pending in pairs(M.pendingLatches) do
+        local mpVeh = beamjoy_vehicles.vehicles[vid]
+        if not mpVeh then
+            M.pendingLatches[vid] = nil
+        elseif now >= pending.at then
+            local latches = M.latches[serverKey(mpVeh) or ""]
+            if latches then
+                M.pendingLatches[vid] = nil
+                applyLatches(mpVeh, latches)
+            elseif now >= pending.untilMs then
+                M.pendingLatches[vid] = nil -- nothing open on it
+            end
+        end
+    end
+end
+
+---@param vid integer
+local function onBJVehicleInstantiated(vid)
+    local mpVeh = remoteCar(vid)
+    if mpVeh then
+        local now = GetCurrentTimeMillis()
+        M.pendingLatches[vid] = { at = now + M.LATCH_APPLY_DELAY_MS, untilMs = now + M.LATCH_APPLY_WAIT_MS }
+    else
+        M.reportedLatches[vid] = nil -- an own car (re)spawned : every latch closed again
+    end
+end
+
+---@param caches table
+local function retrieveCache(caches)
+    if type(caches.vehicleLatches) == "table" then
+        M.latches = caches.vehicleLatches
+    end
+end
+
+---@param serverVID string
+---@param latches table<string, string>
+local function onVehicleLatches(serverVID, latches)
+    serverVID = tostring(serverVID)
+    M.latches[serverVID] = (type(latches) == "table" and next(latches)) and latches or nil
+end
+
 local function onSlowUpdate()
     -- the game reloads its extensions now and then (a Lua reload) : stand in again
     install()
     local now = GetCurrentTimeMillis()
+    if now - M.lastLatchPoll >= M.LATCH_POLL_MS then
+        M.lastLatchPoll = now
+        pollOwnLatches()
+    end
+    applyPendingLatches(now)
     for key, p in pairs(M.pressed) do
         if now >= p["until"] then
             M.pressed[key] = nil
@@ -195,6 +333,8 @@ local function onInit()
     M.locked = localStorage.get(localStorage.GLOBAL_VALUES.LOCK_VEHICLES) == true
     install()
     beamjoy_communications.addHandler("vehicleTrigger", onVehicleTrigger)
+    beamjoy_communications.addHandler("vehicleLatches", onVehicleLatches)
+    beamjoy_communications.addHandler("sendCache", retrieveCache)
     beamjoy_communications_ui.addHandler("BJUserSettings", function(newSettings)
         local locked = type(newSettings) == "table" and type(newSettings.vehicle) == "table" and
             newSettings.vehicle.lockVehicles
@@ -211,6 +351,8 @@ end
 
 M.onInit = onInit
 M.onBJClientReady = sendLocked
+M.onBJVehicleInstantiated = onBJVehicleInstantiated
+M.onLatchReport = onLatchReport
 M.onSlowUpdate = onSlowUpdate
 M.onExtensionUnloaded = onExtensionUnloaded
 M.onPreExit = onExtensionUnloaded

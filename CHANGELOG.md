@@ -8,8 +8,60 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2574, server build 2400.
+Version 1.11.0 : client build 2579, server build 2403.
 
+- **Security fix: moderators received the Discord webhook URLs.** Whenever the whitelist was
+  switched on or off, or a name was added to or removed from it, every player with the Whitelist
+  permission (moderators by default) was sent the full server settings, including the Discord
+  webhook URLs. Anyone holding a webhook URL can post to that Discord channel. Each of them now only
+  gets the settings their own permissions allow, so the webhook URLs only go to players with
+  SetConfig (admins by default). If moderators you don't fully trust were on the server while the
+  whitelist changed, regenerate the webhooks in Discord and paste the new URLs into Config.
+  *(server only)*
+- **Arresting another player's traffic car now ends the chase.** Traffic chases named the fleeing
+  car by its id in its owner's game, but every game loads the same map and hands out nearly the
+  same ids, so another player's traffic car often shared its number with a different car. The
+  arrest could reach the wrong car, and the real fugitive kept going instead of stopping and
+  respawning. Chases now use BeamMP's full vehicle id (player + vehicle), the same on every
+  game. *(client)*
+- **Police chases between players.** A player driving their own police car in freeroam can now
+  chase other players, using the game's own police rules : break the law near them (speeding,
+  running a red light, reckless driving, wrong way, hitting the police car) and the chase starts.
+  The police get "{name} is fleeing from you" and their lights come on (with automatic lights) ;
+  the fugitive hears that police are after them, gets a red nametag for everyone, and can't reset
+  or move their car while chased (flip upright only). Stopping close to the fugitive for 5 s is an
+  arrest (the fugitive is frozen 5 s and shown the ticket or arrest with the offenses) ; losing
+  sight of them long enough is an escape. Several police players can chase the same car, and it
+  escapes once all of them lost it. Arrests made and police escapes are counted per player and
+  shown under Home > You. It works with no traffic running. Not for ghosts, police cars, a car
+  its owner isn't in, or anyone in an activity ; players can opt out with Settings > Vehicle >
+  "Police can chase me", and the host can turn it off in Config > Freeroam. The existing traffic
+  chases stay, but no new one starts while a police player is chasing a player. *(client + server)*
+- **Races : rejoin after a disconnect.** A racer who drops out mid-race (a crash, a launcher hiccup,
+  a short internet drop) no longer loses the race on the spot. They keep their place for the race's
+  new "Rejoin time" (start options and the race editor, default 10 minutes, 0 = retired at once as
+  before) ; the race clock keeps running for them, so time away is the penalty, and the race doesn't
+  end while they may still come back. Rejoining the server puts them back in : a car that may race
+  (the race's required one, the one they're in, else the model they raced with), at the last gate
+  they crossed, timed on the race's shared clock. Others see them as "Away" in the standings and
+  "Disconnected" in race control. Matched by player name, so a guest (a new random name every
+  connection) can't rejoin. *(client + server)*
+- **Open doors show for players who join later.** BeamMP sends a door opening or closing as it
+  happens, never the state, so a late joiner (or anyone whose game spawned the car later) saw
+  every door closed. Each owner now reports their cars' open or broken latches (doors, hood,
+  trunk...) ; the server keeps them and they're applied to the car when it appears, through
+  BeamMP's own latch sync. Live changes stay BeamMP's. *(client + server)*
+- **No more fake "FATAL LUA ERROR" when pausing.** Pausing (J, or the UI's pause button) on a
+  server used to throw a deliberate error to stop the game's own local pause, logging a fatal
+  error with a stack trace on every press. BeamJoy now stands in for the game's pause toggle and
+  just asks the server, which pauses everyone as before. A replay's own play/pause is untouched.
+  *(client only)*
+- **Fixed: the fugitive tag staying on a car after its arrest** (and still showing once it
+  respawned). The end of a pursuit only cleared the tag through the fugitive-list update that
+  follows it ; it's now cleared the moment the pursuit stops, and the siren turns off then too.
+  Also fixed the cause that could make that update go missing : one module failing while handling
+  a server message stopped every other module's handler for it (a dozen share the same cache
+  message). Each now runs on its own, and a failure is logged. *(client only)*
 - **Weather sync.** Config > General > Environment has a new "Sync weather" toggle. Turning it on
   shares the admin's current clouds, fog and wind with everyone ; after that, what an admin sets in
   the game's own Time and weather panel is applied on every client, fading in over a few seconds.

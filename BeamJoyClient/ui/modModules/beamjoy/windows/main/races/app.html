@@ -429,6 +429,10 @@
                     <span class="name" title="{{'beamjoy.window.config.tabs.races.dnfTimeout.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.dnfTimeout' | translate}}</span>
                     <bj-slider ng-model="$ctrl.startOptions.dnfTimeout" min="3" max="60" hard-max="600" step="1"></bj-slider>
                 </div>
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.rejoinGrace.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.rejoinGrace' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.rejoinGraceMinutes" min="0" max="60" hard-max="120" step="1"></bj-slider>
+                </div>
                 <div class="bjr-toggle-row" ng-if="$ctrl.startOptions.respawnStrategy !== 'norespawn'">
                     <span title="{{'beamjoy.window.config.tabs.races.resetPenaltyEnabled.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.resetPenaltyEnabled' | translate}}</span>
                     <bj-toggle ng-model="$ctrl.startOptions.resetPenaltyEnabled"></bj-toggle>

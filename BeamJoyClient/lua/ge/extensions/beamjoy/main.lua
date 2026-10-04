@@ -33,7 +33,7 @@ local M = {
         "beamjoy_players", "beamjoy_nametags", "beamjoy_contextMenu", "beamjoy_traffic",
         "beamjoy_activity_manager", "beamjoy_ui_activityEditor", "beamjoy_environment",
         "beamjoy_recoveryPolicy", "beamjoy_uiNav",
-        "beamjoy_broadcast", "beamjoy_maps", "beamjoy_mapVote", "beamjoy_kickVote", "beamjoy_automaticLights", "beamjoy_particles", "beamjoy_markerSettings", "beamjoy_pursuit",
+        "beamjoy_broadcast", "beamjoy_maps", "beamjoy_mapVote", "beamjoy_kickVote", "beamjoy_automaticLights", "beamjoy_particles", "beamjoy_markerSettings", "beamjoy_pursuit", "beamjoy_playerPursuit",
         "beamjoy_vehiclePresets", "beamjoy_races", "beamjoy_raceRunner", "beamjoy_raceMarkers",
         "beamjoy_hunter", "beamjoy_hunterRunner", "beamjoy_hunterMarkers",
         "beamjoy_infected", "beamjoy_infectedRunner",

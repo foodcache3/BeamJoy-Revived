@@ -310,6 +310,7 @@ angular.module("beamjoy").component("bjMainRaces", {
                 gridTimeout: d.gridTimeout ?? 180,
                 dnfEnabled: d.dnfEnabled !== false,
                 dnfTimeout: d.dnfTimeout || 30,
+                rejoinGraceMinutes: d.rejoinGraceMinutes ?? 10,
                 resetPenaltyEnabled: d.resetPenaltyEnabled === true,
                 resetPenaltySeconds: d.resetPenaltySeconds || 5,
                 resetPenaltyMode: d.resetPenaltyMode === "time" ? "time" : "hold",
@@ -607,6 +608,7 @@ angular.module("beamjoy").component("bjMainRaces", {
             translate(
                 r.disqualified ? "beamjoy.window.main.tabs.races.raceControl.disqualified"
                     : r.dnf ? "beamjoy.window.main.tabs.races.raceControl.retired"
+                    : r.disconnected ? "beamjoy.window.main.tabs.races.raceControl.disconnected"
                     : r.finished ? "beamjoy.window.main.tabs.races.raceControl.finished"
                     : "beamjoy.window.main.tabs.races.raceControl.racing"
             );

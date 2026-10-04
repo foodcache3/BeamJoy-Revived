@@ -52,6 +52,8 @@
 ---@field countdown integer seconds
 ---@field dnfEnabled boolean? stall-based DNF under "norespawn" ; default true
 ---@field dnfTimeout integer? seconds of no progress before a DNF triggers
+---@field rejoinGraceMinutes integer? minutes a racer who disconnects mid-race has to come back
+---before being retired (0 = at once). Default 10
 ---@field resetPenaltyEnabled boolean? matching Hunter's own crash-reset penalty: freezes a
 ---participant's vehicle for resetPenaltySeconds each time they reset/recover during an active
 ---attempt. Default false, unlike dnfEnabled, since this is a new opt-in deterrent, not a
@@ -463,6 +465,7 @@ local function sanitizeRace(race, existingRaces)
     race.defaults.countdown = tonumber(race.defaults.countdown) or 10
     race.defaults.dnfEnabled = race.defaults.dnfEnabled ~= false
     race.defaults.dnfTimeout = math.max(3, tonumber(race.defaults.dnfTimeout) or 30)
+    race.defaults.rejoinGraceMinutes = math.clamp(math.floor(tonumber(race.defaults.rejoinGraceMinutes) or 10), 0, 120)
     race.defaults.resetPenaltyEnabled = race.defaults.resetPenaltyEnabled == true
     race.defaults.resetPenaltySeconds = math.max(1, tonumber(race.defaults.resetPenaltySeconds) or 5)
     race.defaults.resetPenaltyMode = race.defaults.resetPenaltyMode == "time" and "time" or "hold"

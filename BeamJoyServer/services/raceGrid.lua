@@ -82,6 +82,12 @@
 ---@field replacedEntry table? the leaderboard entry that PB replaced, put back on a disqualification
 ---@field discordResult table? what this run meant for the leaderboard, set by trySubmitTime
 ---@field isNewRecord boolean? same as isNewPB, true when this PB is now the race's overall best
+---@field disconnected boolean? left the server mid-race and may still come back (see
+---onPlayerDisconnect / raceRejoin) : the race clock keeps running for them, the race doesn't end
+---while they're away, and they're retired once settings.rejoinGraceMinutes run out
+---@field rejoinSecondsLeft integer? while disconnected : how long they had left when the last
+---update went out (rejoinBy is the server's own deadline)
+---@field rejoinBy integer? GetCurrentTime() deadline, while disconnected
 
 ---@class BJRaceSessionSettings host-configurable at start time, seeded from BJRaceDefaults
 ---@field laps integer?
@@ -94,6 +100,8 @@
 ---@field countdown integer seconds
 ---@field dnfEnabled boolean stall-based DNF under "norespawn". Default true
 ---@field dnfTimeout integer seconds of no progress before a DNF triggers
+---@field rejoinGraceMinutes integer how long a racer who disconnects mid-race has to come back
+---before being retired (0 = retired at once, the old behavior). Default 10
 ---@field resetPenaltyEnabled boolean matching Hunter's own crash-reset penalty. Freezes and
 ---camera-locks (external view) a participant for resetPenaltySeconds each time they reset/recover
 ---during an active attempt. Default false. Purely client-enforced (raceRunner.lua), same as
@@ -197,6 +205,9 @@ local M = {
     ---@type tablelib<integer, string> playerID -> sessionId
     spectators = Table(),
 }
+
+-- forward-declared : onPlayerDisconnect schedules the grace period's end with it
+local rejoinTaskKey
 
 -- how early (ms, on the shared clock) a gate crossing may arrive while the server itself is still
 -- in COUNTDOWN : a synced client starts on its own at goAtMs, but the server only notices on its
@@ -412,6 +423,10 @@ local function payloadParticipant(p)
     for k, v in pairs(p) do
         if not PAYLOAD_DROPPED_FIELDS[k] then c[k] = v end
     end
+    if p.disconnected and p.rejoinBy then
+        c.rejoinSecondsLeft = math.max(0, p.rejoinBy - GetCurrentTime())
+    end
+    c.rejoinBy = nil
     c.displayName = resolveDisplayName(p.playerID, p.playerName)
     return c
 end
@@ -844,6 +859,8 @@ local function buildSettings(race, overrides)
         -- is just the toggle/duration for it)
         dnfEnabled = dnfEnabled,
         dnfTimeout = math.max(3, tonumber(overrides.dnfTimeout) or defaults.dnfTimeout or 30),
+        rejoinGraceMinutes = math.clamp(math.floor(tonumber(overrides.rejoinGraceMinutes) or
+            defaults.rejoinGraceMinutes or 10), 0, 120),
         resetPenaltyEnabled = resetPenaltyEnabled,
         resetPenaltySeconds = math.max(1, tonumber(overrides.resetPenaltySeconds) or defaults.resetPenaltySeconds or 5),
         resetPenaltyMode = (overrides.resetPenaltyMode or defaults.resetPenaltyMode) == "time" and "time" or "hold",
@@ -1069,6 +1086,7 @@ local function postToDiscord(session)
 end
 
 local function checkSessionComplete(session)
+    -- a disconnected racer is neither finished nor out : the race waits for their grace period
     if session.participants:every(function(p) return p.finished or p.dnf end) then
         session.state = "FINISHED"
         pcall(postToDiscord, session)
@@ -1936,6 +1954,7 @@ local function onInit()
     communications_rx.addHandler("raceStart", M.raceStart)
     communications_rx.addHandler("raceJoin", M.raceJoin)
     communications_rx.addHandler("raceLeave", M.raceLeave)
+    communications_rx.addHandler("raceRejoin", M.raceRejoin)
     communications_rx.addHandler("raceCancel", M.raceCancel)
     communications_rx.addHandler("raceReady", M.raceReady)
     communications_rx.addHandler("raceSetGridSlot", M.raceSetGridSlot)
@@ -2012,6 +2031,64 @@ end
 --- inlined rather than routed through raceLeave/raceDNF: those need ctxt.sender resolved via
 --- services_players.players, which other extensions' own onPlayerDisconnect handlers may have
 --- already cleared by the time this one runs (extensions.hook has no ordering guarantee)
+---@param sessionId string
+---@param playerName string
+---@return string
+function rejoinTaskKey(sessionId, playerName)
+    return "BJRaceGrid-" .. sessionId .. "-rejoin-" .. playerName
+end
+
+--- a disconnected racer's grace period ran out : retired, as a disconnect used to do at once
+---@param sessionId string
+---@param playerName string
+local function expireRejoin(sessionId, playerName)
+    local session = M.sessions[sessionId]
+    if not session or session.state ~= "RACE" then return end
+    local participant = session.participants:find(function(p)
+        return p.disconnected and p.playerName == playerName
+    end)
+    if not participant then return end
+    participant.disconnected, participant.rejoinBy, participant.rejoinSecondsLeft = nil, nil, nil
+    participant.dnf = true
+    if participant.bestLapMs then
+        trySubmitTime(session, participant, participant.bestLapMs)
+    end
+    checkSessionComplete(session)
+    if session.state ~= "FINISHED" then
+        pushSessionUpdate(session)
+    end
+end
+
+--- a player whose BeamJoy just finished loading : if they dropped out of a race still running and
+--- are inside its grace period, they're put back in under their new player ID (BeamMP gives a
+--- returning player a new one, the name stays). Their client then picks the race back up
+--- (raceRunner.lua's resume path) from the last gate they crossed.
+---@param ctxt BJSContext
+local function raceRejoin(ctxt)
+    if not ctxt.sender then return end
+    local playerName = ctxt.sender.playerName
+    M.sessions:forEach(function(session)
+        if session.state ~= "RACE" or session.participants[ctxt.senderID] then return end
+        local oldID, participant
+        for id, p in pairs(session.participants) do
+            if p.disconnected and p.playerName == playerName then
+                oldID, participant = id, p
+                break
+            end
+        end
+        if not participant then return end
+        utils_async.removeTask(rejoinTaskKey(session.id, playerName))
+        session.participants[oldID] = nil
+        participant.playerID = ctxt.senderID
+        participant.disconnected, participant.rejoinBy, participant.rejoinSecondsLeft = nil, nil, nil
+        participant.lastProgressTime = GetCurrentTime()
+        session.participants[ctxt.senderID] = participant
+        if session.starterID == oldID then session.starterID = ctxt.senderID end
+        LogInfo(string.format("[BJ races] %s rejoined race session %s", playerName, session.id))
+        pushSessionUpdate(session)
+    end)
+end
+
 local function onPlayerDisconnect(playerID)
     M.spectators[playerID] = nil
     M.sessions:forEach(function(session)
@@ -2030,6 +2107,20 @@ local function onPlayerDisconnect(playerID)
             pushOpenSessionsList()
         elseif session.state == "RACE" then
             local participant = session.participants[playerID]
+            if participant.finished or participant.dnf then return end
+            -- a crash, a launcher hiccup or a short drop shouldn't throw away hours of an
+            -- endurance race : the racer keeps their place for a while, the race clock running on
+            -- for them (time lost away is the penalty), and gets back in where they were
+            local graceSec = (session.settings.rejoinGraceMinutes or 0) * 60
+            if graceSec > 0 then
+                participant.disconnected = true
+                participant.rejoinBy = GetCurrentTime() + graceSec
+                participant.rejoinSecondsLeft = graceSec
+                local sessionId, playerName = session.id, participant.playerName
+                utils_async.delayTask(function() M.expireRejoin(sessionId, playerName) end, graceSec,
+                    rejoinTaskKey(sessionId, playerName))
+                return pushSessionUpdate(session)
+            end
             participant.dnf = true
             if participant.bestLapMs then
                 trySubmitTime(session, participant, participant.bestLapMs)
@@ -2048,6 +2139,8 @@ end
 
 M.onInit = onInit
 M.onPlayerDisconnect = onPlayerDisconnect
+M.raceRejoin = raceRejoin
+M.expireRejoin = expireRejoin
 
 M.raceStart = raceStart
 M.raceJoin = raceJoin

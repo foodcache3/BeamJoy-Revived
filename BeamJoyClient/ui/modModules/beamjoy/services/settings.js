@@ -16,6 +16,10 @@ const M = {
         visual: {
             opaqueGhosts: false,
         },
+        // police players can chase you, see lua beamjoy/playerPursuit.lua
+        pursuit: {
+            allowChases: true,
+        },
         nametags: {
             hideNameTags: false,
             nameTagFadeEnabled: true,

@@ -13,7 +13,7 @@
 ---@field DiscordChatHookLang string?
 ---@field Broadcasts {enabled: boolean, delay: integer, messages: table<string, string>[]}
 ---@field Whitelist table?
----@field Freeroam {TeleportDelay: integer, CollisionsMode: "forced"|"disabled"|"ghosts", RespawnGhostTimeoutEnabled: boolean, RespawnGhostTimeout: integer, RespawnGhostDistance: integer, RefuelDuration: integer, RepairDuration: integer, PreserveEnergyOnRefuel: boolean, StrictBusStops: boolean, PreserveFuelOnReset: boolean, EmergencyRefuelCooldown: integer}
+---@field Freeroam {TeleportDelay: integer, CollisionsMode: "forced"|"disabled"|"ghosts", RespawnGhostTimeoutEnabled: boolean, RespawnGhostTimeout: integer, RespawnGhostDistance: integer, RefuelDuration: integer, RepairDuration: integer, PreserveEnergyOnRefuel: boolean, StrictBusStops: boolean, PreserveFuelOnReset: boolean, EmergencyRefuelCooldown: integer, PlayerPursuits: boolean}
 ---CollisionsMode : "forced" = collisions always on, ghosting never happens ; "disabled" = every
 ---player vehicle permanently ghosted (free-for-all, no vehicle-vehicle collision at all) ;
 ---"ghosts" (default) = respawn protection: a vehicle briefly ghosts on spawn/reset, only
@@ -145,6 +145,8 @@ local M = {
             -- Free "emergency refuel" HUD button, only while actually empty : cooldown before it
             -- can be used again on the same vehicle instance. Seconds, clamped [0, 3600] client-side.
             EmergencyRefuelCooldown = 300,
+            -- a police player's game may start chases on other players' cars (services/playerPursuit.lua)
+            PlayerPursuits = true,
         },
         Deliveries = {
             MinRouteDistance = 500,
@@ -258,8 +260,7 @@ end
 
 ---@param caches table
 ---@param targetID integer?
----@param forced true?
-local function onBJRequestCache(caches, targetID, forced)
+local function onBJRequestCache(caches, targetID)
     caches.config = {
         AllowClientMods = M.data.AllowClientMods,
         ModelBlacklist = M.data.ModelBlacklist,
@@ -278,8 +279,8 @@ local function onBJRequestCache(caches, targetID, forced)
         ForceHud = M.data.ForceHud,
         ShowHudAtStart = M.data.ShowHudAtStart,
     }
-    if forced or (targetID and services_permissions.hasAllPermissions(targetID,
-            BJ_PERMISSIONS.SetConfig)) then
+    if targetID and services_permissions.hasAllPermissions(targetID,
+            BJ_PERMISSIONS.SetConfig) then
         table.assign(caches.config, {
             DefaultGroup = M.data.DefaultGroup,
             DiscordChatHookLang = M.data.DiscordChatHookLang,
@@ -290,8 +291,8 @@ local function onBJRequestCache(caches, targetID, forced)
             Voting = M.data.Voting,
         })
     end
-    if forced or (targetID and services_permissions.hasAllPermissions(targetID,
-            BJ_PERMISSIONS.Whitelist)) then
+    if targetID and services_permissions.hasAllPermissions(targetID,
+            BJ_PERMISSIONS.Whitelist) then
         table.assign(caches.config, {
             Whitelist = M.data.Whitelist
         })
@@ -396,6 +397,7 @@ local function sanitizeConfigValue(key, value)
         if value.StrictBusStops == nil then value.StrictBusStops = M.data.Freeroam.StrictBusStops end
         if value.PreserveFuelOnReset == nil then value.PreserveFuelOnReset = M.data.Freeroam.PreserveFuelOnReset end
         if value.EmergencyRefuelCooldown == nil then value.EmergencyRefuelCooldown = M.data.Freeroam.EmergencyRefuelCooldown end
+        if value.PlayerPursuits == nil then value.PlayerPursuits = M.data.Freeroam.PlayerPursuits ~= false end
         if type(value.TeleportDelay) ~= "number" then
             return nil, "TeleportDelay must be a number"
         elseif value.CollisionsMode ~= "forced" and value.CollisionsMode ~= "disabled" and
@@ -420,6 +422,8 @@ local function sanitizeConfigValue(key, value)
         elseif type(value.EmergencyRefuelCooldown) ~= "number" or value.EmergencyRefuelCooldown < 0
             or value.EmergencyRefuelCooldown > 3600 then
             return nil, "EmergencyRefuelCooldown must be a number between 0 and 3600"
+        elseif type(value.PlayerPursuits) ~= "boolean" then
+            return nil, "PlayerPursuits must be a boolean"
         end
     elseif key == "Deliveries" then
         if type(value) ~= "table" then return nil, "Value must be a table" end
@@ -499,6 +503,20 @@ local function set(ctxt, key, value)
     return string.format("%s configuration set to %s", key, tostring(value))
 end
 
+--- Security fix : the whitelist toggles used to build one cache with every privileged field and
+--- send it to all Whitelist holders, so moderators (Whitelist, but not SetConfig) received the
+--- SetConfig-only fields too, the Discord webhook URLs among them. Each holder now gets a cache built
+--- for their own permissions.
+local function sendWhitelistCaches()
+    services_players.players:forEach(function(p)
+        if services_permissions.hasAllPermissions(p.playerID, BJ_PERMISSIONS.Whitelist) then
+            local caches = {}
+            M.onBJRequestCache(caches, p.playerID)
+            communications_tx.sendToPlayer(p.playerID, "sendCache", caches)
+        end
+    end)
+end
+
 ---@param ctxt BJSContext
 ---@param newState boolean?
 local function toggleWhitelist(ctxt, newState)
@@ -514,10 +532,7 @@ local function toggleWhitelist(ctxt, newState)
     M.data.Whitelist.Enabled = newState
     saveData()
 
-    local caches = {}
-    M.onBJRequestCache(caches, nil, true)
-    communications_tx.sendByPermissions({ BJ_PERMISSIONS.Whitelist },
-        "sendCache", caches)
+    sendWhitelistCaches()
 end
 
 ---@param ctxt BJSContext
@@ -538,10 +553,7 @@ local function toggleWhitelistPlayerName(ctxt, playerName)
     end
     saveData()
 
-    local caches = {}
-    M.onBJRequestCache(caches, nil, true)
-    communications_tx.sendByPermissions({ BJ_PERMISSIONS.Whitelist },
-        "sendCache", caches)
+    sendWhitelistCaches()
 end
 
 local function stopServer()

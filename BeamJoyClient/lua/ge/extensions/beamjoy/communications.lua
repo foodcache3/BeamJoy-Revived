@@ -48,6 +48,20 @@ local function removeHandler(id)
     M.oneUseHandlers[id] = nil
 end
 
+--- Real bug: one handler erroring stopped every handler after it for that message. "sendCache"
+--- alone has a dozen (each module takes its own part), run in no set order, so one module's error
+--- randomly left others with stale state - a pursuit's fugitive tag outliving the pursuit, for one.
+--- Each handler now runs on its own ; an error is logged and the rest still run.
+---@param key string
+---@param handlerFn function
+---@param data table
+local function runHandler(key, handlerFn, data)
+    local ok, err = xpcall(function() handlerFn(table.unpack(data, 1, 20)) end, debug.traceback)
+    if not ok then
+        LogError(string.format("beamjoy_communications: a handler for %s failed: %s", key, tostring(err)))
+    end
+end
+
 local function dispatch(key, ...)
     local data = { ... }
     local countHandlers = 0
@@ -55,15 +69,15 @@ local function dispatch(key, ...)
         return h.key == key
     end):forEach(function(h)
         countHandlers = countHandlers + 1
-        h.handlerFn(table.unpack(data, 1, 20))
+        runHandler(key, h.handlerFn, data)
     end)
     M.oneUseHandlers:filter(function(h)
         return h.key == key
     end):forEach(function(h, id)
         countHandlers = countHandlers + 1
-        h.handlerFn(table.unpack(data, 1, 20))
         M.oneUseHandlers[id] = nil
         async.removeTask("bj-comm-handler-timeout-" .. id)
+        runHandler(key, h.handlerFn, data)
     end)
     if not table.includes(M.RX_LOG_EVENTS_BLACKLIST, key) then
         LogDebug(string.format("Event %s received (%d handlers, %d args)",

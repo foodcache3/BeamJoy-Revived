@@ -345,7 +345,8 @@ local function onVehicleDestroyed(vid)
     -- also exempt, same as every other race restriction in this file.
     if M.myVehicleVid == vid then
         M.myVehicleVid = nil
-        if M.session and M.session.state == "RACE" and M.session.settings.respawnStrategy ~= "all" then
+        if M.session and M.session.state == "RACE" and M.session.settings.respawnStrategy ~= "all" and
+            not M.resumePending then
             local participant = getSelfParticipant()
             if participant and not participant.finished and not participant.dnf then
                 beamjoy_communications.send("raceDNF", M.session.id)
@@ -394,6 +395,8 @@ local function onBJVehicleInstantiated(vid)
     end
 
     if not M.session or M.session.state ~= "RACE" then return end
+    -- rejoining a race : the car is being set up (finishResume tracks the one it ends with)
+    if M.resumePending then return end
     local mpVeh = beamjoy_vehicles.getVehicle(vid, true)
     if not mpVeh or not mpVeh.isLocal then return end
     if M.myVehicleVid == nil then
@@ -1131,7 +1134,8 @@ local function pushHud()
         -- shows magnitudes (which side is which comes from the position), so no sign juggling.
         local function opponent(row, gapMs, lapsDiff)
             return { playerName = row.playerName, displayName = row.displayName,
-                finished = row.finished, dnf = row.dnf, gapMs = gapMs, lapsDiff = lapsDiff,
+                finished = row.finished, dnf = row.dnf, disconnected = row.disconnected,
+                gapMs = gapMs, lapsDiff = lapsDiff,
                 penaltyMs = row.penaltyMs, disqualified = row.disqualified }
         end
         for i, row in ipairs(leaderboard) do
@@ -1780,6 +1784,13 @@ local function onSessionUpdate(session)
         end
     end
 
+    -- a race already running, for a racer this client wasn't tracking : they dropped out
+    -- (disconnect) and the server put them back (raceGrid.lua raceRejoin). Not a green light :
+    -- the clock started long ago and they carry on from the last gate they crossed
+    local resuming = session.state == "RACE" and not wasInSession and
+        not participant.finished and not participant.dnf
+    if resuming then M.startResume() end
+
     if session.state == "COUNTDOWN" and not wasCountdown then
         -- Every participant's vehicle gets (re)positioned onto the grid within the same instant
         -- this transition fires (see the teleport block below), and a mismatched/randomized pick
@@ -1879,7 +1890,7 @@ local function onSessionUpdate(session)
             .. tostring(session.settings.countdown) .. "s")
     end
 
-    if session.state == "RACE" and not wasRacing then
+    if session.state == "RACE" and not wasRacing and not resuming then
         M.raceStartLocalMs = beamjoy_clockSync.localMs()
         M.raceUsesSharedClock = session.goAtMs ~= nil and beamjoy_clockSync.isSynced()
         M.frameElapsedMs = nil
@@ -2460,6 +2471,7 @@ local function onUpdate()
     end
 
     if not M.session or M.session.state ~= "RACE" then return end
+    if M.resumePending then return end
     local participant = getSelfParticipant()
     if not participant or participant.finished or participant.dnf then return end
     local race = getRace()
@@ -2561,7 +2573,7 @@ end
 --- definition "hasn't moved in multiple *seconds*" ; sampling 4x/second instead of ~60x/second
 --- changes nothing about when it actually triggers, just how often this runs.
 local function checkDnfStall()
-    if not M.session or M.session.state ~= "RACE" then return end
+    if not M.session or M.session.state ~= "RACE" or M.resumePending then return end
     if not M.session.settings.dnfEnabled then return end
     local participant = getSelfParticipant()
     if not participant or participant.finished or participant.dnf then return end
@@ -2622,6 +2634,135 @@ local function lastCheckpointTarget(participant, race)
     -- currentGate for any non-branching race, where the two always match.
     local gate = participant.lastCrossedGate
     return (gate and gate > 0) and race.gates[gate] or participant.startPosition
+end
+
+-- REJOINING A RACE ------------------------------------------------------------------------------
+-- A racer who disconnected mid-race and came back inside the race's grace period
+-- (settings.rejoinGraceMinutes, see raceGrid.lua) : BeamMP deleted their car when they left, so
+-- they get one that may race (the race's restricted car, the one they're in, else the model they
+-- raced with) at the last gate they crossed, and carry on on the race's shared clock (time away is
+-- their penalty). Waits for the shared clock first : timing from this client's own clock would
+-- restart their race time at zero.
+
+local RESUME_CLOCK_WAIT_MS = 15000
+local RESUME_CAR_WAIT_MS = 10000
+
+--- the car is there : put it at the last checkpoint and hand the race back
+---@param sessionId string
+local function placeResumedCar(sessionId)
+    M.resumePending = nil
+    local session = M.session
+    local participant = session and getSelfParticipant()
+    if not session or session.id ~= sessionId or session.state ~= "RACE" or not participant or
+        participant.finished or participant.dnf then
+        return
+    end
+    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    if not myVeh then
+        toast.warn("Couldn't get you a car to race in. Spawn one, the race goes on", nil, 8)
+        return
+    end
+    M.myVehicleVid = myVeh.vid
+    local race = getRace()
+    local target = race and lastCheckpointTarget(participant, race)
+    if target then
+        ignoreNextReset[myVeh.vid] = true
+        beamjoy_vehicles.setVehiclePositionRotation(myVeh.veh,
+            vec3(target.pos.x, target.pos.y, target.pos.z),
+            vec3(target.dir.x, target.dir.y, target.dir.z),
+            vec3(0, 0, 1), { cling = false })
+    end
+    -- a few seconds ghosted on arrival : someone may be driving through that checkpoint. A solo
+    -- race keeps its whole-race ghost (see the RACE transition in onSessionUpdate)
+    beamjoy_vehicles.setGhostReason(myVeh.vid, "race", true)
+    if #session.participants > 1 then
+        async.delayTask(function()
+            beamjoy_vehicles.setGhostReason(myVeh.vid, "race", false, true)
+        end, 3000, "BJRaceResumeGhost")
+    end
+    if session.settings.disableCollisions then
+        beamjoy_vehicles.setGhostReason(myVeh.vid, "noCollisionRace", true)
+    end
+    M.lastLy = {}
+    M.lastProgressPos = nil
+    M.lastProgressCheckMs = GetCurrentTimeMillis()
+    M.lastDnfWarningSecond = nil
+    camera.blockCameras(table.unpack(raceBlockedCameras()))
+    extensions.hook("onBJScenarioChanged")
+    extensions.hook("onBJRaceMarkersRefresh")
+    toast.warn("Back in the race : carry on from your last checkpoint", nil, 6)
+    pushHud()
+end
+
+--- the clock is synced (or the wait ran out) : time the race from it, then a car
+---@param sessionId string
+local function finishResume(sessionId)
+    local session = M.session
+    local participant = session and getSelfParticipant()
+    if not session or session.id ~= sessionId or session.state ~= "RACE" or not participant or
+        participant.finished or participant.dnf then
+        M.resumePending = nil
+        return
+    end
+    M.raceUsesSharedClock = session.goAtMs ~= nil and beamjoy_clockSync.isSynced()
+    -- unsynced : the server's own race time when this update was built stands in
+    M.raceStartLocalMs = beamjoy_clockSync.localMs() - (tonumber(session.raceElapsedMs) or 0)
+    M.frameElapsedMs, M.prevFrameElapsedMs = nil, nil
+
+    local restriction = activeVehicleRestriction()
+    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    local spawned = false
+    if restriction and not (myVeh and vehicleMatchesRestriction(myVeh.veh, restriction)) then
+        if restriction.mode == "single" then
+            spawned = forceRequiredVehicle(restriction)
+        else
+            spawned = forceRandomPoolVehicle(restriction.pool or {})
+        end
+        if not spawned then
+            toast.warn("This race's vehicle isn't installed on your game", nil, 8)
+        end
+    elseif not myVeh and participant.vehicleModel and modelAvailableLocally(participant.vehicleModel) then
+        local newVeh = core_vehicles.spawnNewVehicle(participant.vehicleModel,
+            { pos = camera.getPositionRotation(false) })
+        if newVeh then
+            be:enterVehicle(0, newVeh)
+            if camera.getCamera() == camera.CAMERAS.FREE then camera.toggleFreeCam() end
+            spawned = true
+        end
+    end
+
+    -- a new car registers asynchronously : give it a moment, then wait for it
+    local readyAt = GetCurrentTimeMillis() + (spawned and 1500 or 0)
+    local deadline = GetCurrentTimeMillis() + RESUME_CAR_WAIT_MS
+    async.task(function()
+        local now = GetCurrentTimeMillis()
+        return now >= deadline or (now >= readyAt and beamjoy_vehicles.getCurrentOwn() ~= nil)
+    end, function()
+        placeResumedCar(sessionId)
+    end, "BJRaceResumeCar")
+end
+
+local function startResume()
+    if M.resumePending or not M.session then return end
+    local sessionId = M.session.id
+    M.resumePending = true
+    -- whatever car shows up while this sets up is a first sighting, never a swap (see
+    -- onBJVehicleInstantiated / onVehicleDestroyed, both waiting on resumePending)
+    M.myVehicleVid = nil
+    M.lastLy = {}
+    toast.warn("Rejoining your race...", nil, 4)
+    local deadline = GetCurrentTimeMillis() + RESUME_CLOCK_WAIT_MS
+    async.task(function()
+        return beamjoy_clockSync.isSynced() or GetCurrentTimeMillis() >= deadline
+    end, function()
+        finishResume(sessionId)
+    end, "BJRaceResumeClock")
+end
+
+--- BeamJoy loaded on this client : back into a race this player dropped out of, if any (the
+--- server matches them by name, see raceGrid.lua raceRejoin)
+local function onBJClientReady()
+    beamjoy_communications.send("raceRejoin")
 end
 
 --- the "flipupright" / "lastroad" respawn options : the one recovery every reset becomes. Both
@@ -3002,6 +3143,8 @@ end
 
 M.onInit = onInit
 M.onUpdate = onUpdate
+M.onBJClientReady = onBJClientReady
+M.startResume = startResume
 M.onSlowUpdate = onSlowUpdate
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onBJRequestCanSpawnVehicle = onBJRequestCanSpawnVehicle

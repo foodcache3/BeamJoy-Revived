@@ -187,6 +187,11 @@ local function drawNametag(mpVeh, orig)
         if isOut then
             textColor, bgColor = derbyTextColor, derbyBgColor
         end
+        -- a player chased by police players : the traffic fugitive's colors, name kept
+        if beamjoy_playerPursuit and beamjoy_playerPursuit.isFugitiveVid(mpVeh.vid) then
+            textColor = BJColor()
+            bgColor = BJColor(1)
+        end
     end
 
     local dist = math.round(orig:distance(mpVeh.position) or 0)
