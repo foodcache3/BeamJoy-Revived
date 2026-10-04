@@ -544,13 +544,18 @@ local function onPursuitAction(id, action, pursuit)
         if not canChase(v) then return stopNativePursuit(id) end
         if isMyTarget(key) then return end
         M.pending[key] = id
-        beamjoy_communications.send("playerPursuitEvent", "start", key, { offenses = offenses })
+        -- the server checks the police car is this player's own, and its distance to the fugitive
+        beamjoy_communications.send("playerPursuitEvent", "start", key, {
+            offenses = offenses,
+            police = keyOf(beamjoy_vehicles.getCurrentOwn()),
+        })
     elseif not isMyTarget(key) then
         return
     elseif action == "arrest" then
         beamjoy_communications.send("playerPursuitEvent", "arrest", key, {
             ticket = pursuit ~= nil and pursuit.mode == 1,
             offenses = offenses,
+            police = keyOf(beamjoy_vehicles.getCurrentOwn()),
         })
     elseif action == "evade" then
         beamjoy_communications.send("playerPursuitEvent", "evade", key)

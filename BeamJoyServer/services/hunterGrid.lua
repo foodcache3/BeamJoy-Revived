@@ -934,6 +934,9 @@ local function unreadyOnVehicleChange(playerID)
     pushSessionUpdate(session)
 end
 
+--- metres past a checkpoint's radius the server's copy of the hunted car's position may be
+local CHECKPOINT_POSITION_MARGIN = 60
+
 ---@param ctxt BJSContext
 ---@param sessionId string
 ---@param routeIndex integer 1-based position within this round's own route the fugitive claims to
@@ -960,6 +963,13 @@ local function hunterCheckpointReached(ctxt, sessionId, routeIndex, pos)
     local waypoint = session.arenaSnapshot.waypoints[session.route[routeIndex]]
     if not waypoint or type(pos) ~= "table" then return end
     if pointDistance(pos, waypoint.pos) > waypoint.radius then return end
+    -- Hardening : the position above is the client's own word. The server's copy of where the
+    -- hunted car is must agree (with room for the lag)
+    local serverDistance = services_vehicles.distanceToPoint(ctxt.senderID, waypoint.pos)
+    if serverDistance and serverDistance > (tonumber(waypoint.radius) or 0) + CHECKPOINT_POSITION_MARGIN then
+        return LogWarn(string.format("hunterCheckpointReached : %s reported a checkpoint from %dm away, ignored",
+            ctxt.sender.playerName, math.floor(serverDistance)))
+    end
 
     participant.waypointsReached = expected
     if expected >= #session.route then

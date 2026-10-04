@@ -155,11 +155,22 @@ local function popupConfirm(text, callback)
     })
 end
 
+--- Hardening : the game's toasts and messages run their text through Angular's template
+--- interpolation (an unknown text goes through $translate.instant), so a "{{" coming from a player's
+--- name or a crew name would be evaluated as an expression. A zero-width space between the two
+--- braces keeps it plain text
+---@param s any
+---@return any
+local function noTemplate(s)
+    if type(s) ~= "string" then return s end
+    return (s:gsub("{{", "{\226\128\139{"))
+end
+
 ---@param text string? nil to remove category message
 ---@param category? string
 ---@param duration? number
 local function message(text, category, duration)
-    text = text or ""
+    text = noTemplate(text or "")
     category = category or ""
     guihooks.trigger('Message', { ttl = duration or 1, msg = text, category = category })
 end
@@ -180,8 +191,8 @@ local function toast(toastType, text, timeoutMs, title)
         "toastrMsg",
         {
             type = toastType,
-            title = title,
-            msg = text,
+            title = noTemplate(title),
+            msg = noTemplate(text),
             config = {
                 timeOut = timeoutMs
             }

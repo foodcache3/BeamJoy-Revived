@@ -138,7 +138,7 @@ local function onPlayerReady(ctxt, playerLang)
         ctxt.sender.ready = true
 
         communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
-            ctxt.sender.playerName, services_players.players[ctxt.sender.playerName])
+            ctxt.sender.playerName, M.publicView(services_players.players[ctxt.sender.playerName]))
         services_chat.sendEvent("beamjoy.chat.event.playerJoined", { playerName = ctxt.sender.playerName })
         services_chat.sendWelcomeMessage(ctxt.sender.playerName)
     end
@@ -220,6 +220,20 @@ local function onInit()
         { commandKey = "chat.command.tp.command", permissions = { BJ_PERMISSIONS.TeleportTo } })
 end
 
+--- a player's record as other players may receive it : the same record, without the IP address
+--- and BeamMP ID. Security fix : several messages sent the raw record to every player, so anyone
+--- could read every other player's IP address. Every message that carries a whole player record
+--- goes through this
+---@param p BJSPlayer?
+---@return table?
+local function publicView(p)
+    if not p then return nil end
+    local player = table.assign({}, p)
+    player.ip = nil
+    player.beammpID = nil
+    return player
+end
+
 local function onBJRequestCache(caches, targetID)
     local target = M.players:find(function(p) return p.playerID == targetID end)
     if target then
@@ -230,10 +244,7 @@ local function onBJRequestCache(caches, targetID)
             :map(function(p)
                 if senderGroup.staff or p.playerID == targetID then
                     ---@type table
-                    local player = table.assign({}, p)
-                    -- REMOVE SENSITIVE DATA FROM CACHE
-                    player.beammpID = nil
-                    player.ip = nil
+                    local player = publicView(p)
                     -- see services/identity.lua's own doc comment: a pure display convenience
                     -- (nametags/roster), never used for anything identity-critical. Already a
                     -- real field on `p` itself (set at login, alongside identityNickname) so it
@@ -287,9 +298,11 @@ local function savePlayer(playerData)
     end
     if M.players[playerData.playerName] then
         communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
-            playerData.playerName, M.players[playerData.playerName])
+            playerData.playerName, publicView(M.players[playerData.playerName]))
     elseif not playerData.guest then
-        communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updateDBPlayer",
+        -- the saved record (IP included) is for the player database window only, like
+        -- requestDatabase : it went to every player
+        communications_tx.sendByPermissions({ BJ_PERMISSIONS.DatabasePlayers }, "updateDBPlayer",
             playerData.playerName, playerData)
     end
 end
@@ -656,10 +669,13 @@ local function setGroup(ctxt, playerName, groupName)
     local connected = M.players[playerName]
     local target = connected or dao_players.get(playerName)
     if not target then return end
+    if type(groupName) ~= "string" then return end
     local finalGroupIndex = services_groups.getGroupIndex(groupName)
     if not finalGroupIndex then return end
-    if ctxt.origin == "player" and ctxt.group then
-        local targetGroupIndex = services_groups.getGroupIndex(target.group)
+    -- Hardening : a player whose group couldn't be found used to skip this check entirely
+    if ctxt.origin == "player" then
+        if not ctxt.group or not ctxt.sender then return end
+        local targetGroupIndex = services_groups.getGroupIndex(target.group or "") or 0
         if ctxt.groupIndex <= finalGroupIndex or
             ctxt.groupIndex <= targetGroupIndex or
             not services_permissions.isStaff(ctxt.sender.playerName) or
@@ -686,10 +702,13 @@ end
 ---@param value any?
 local function setData(ctxt, playerName, key, value)
     local target = M.players[playerName] or dao_players.get(playerName)
-    if not target then return end
-    if ctxt.origin == "player" and ctxt.group then
+    if not target or type(key) ~= "string" then return end
+    target.data = type(target.data) == "table" and target.data or {}
+    -- Hardening : a player whose group couldn't be found used to skip this check entirely
+    if ctxt.origin == "player" then
+        if not ctxt.group or not ctxt.sender then return end
         if ctxt.group.name ~= "owner" then
-            local targetGroupIndex = services_groups.getGroupIndex(target.group)
+            local targetGroupIndex = services_groups.getGroupIndex(target.group or "") or 0
             if ctxt.groupIndex <= targetGroupIndex or
                 not services_permissions.isStaff(ctxt.sender.playerName) or
                 not services_permissions.hasAllPermissions(ctxt.senderID,
@@ -1174,6 +1193,7 @@ M.onInit = onInit
 M.onBJRequestCache = onBJRequestCache
 
 M.savePlayer = savePlayer
+M.publicView = publicView
 M.getAllPlayers = getAllPlayers
 M.getConnectedByName = getConnectedByName
 M.sendCacheUpdate = sendCacheUpdate

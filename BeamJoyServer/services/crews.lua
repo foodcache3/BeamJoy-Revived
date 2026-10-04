@@ -261,7 +261,8 @@ end
 ---@param name string?
 local function crewCreate(ctxt, name)
     if not ctxt.sender or crewOfName(ctxt.sender.playerName) then return end
-    name = type(name) == "string" and name:trim() or ""
+    -- no control characters or braces (the game's toasts read "{{" as a template expression)
+    name = type(name) == "string" and name:gsub("[%c{}]", ""):trim() or ""
     if #name == 0 then
         name = services_lang.get("crew.defaultName", ctxt.sender.lang)
             :var({ name = ctxt.sender.displayName or ctxt.sender.playerName })

@@ -75,7 +75,7 @@
     "beamjoy.window.login.placeholder": "Nickname",
     "beamjoy.window.login.skip": "Continue as guest",
     "beamjoy.window.login.continue": "Continue",
-    "beamjoy.window.login.error.invalidNickname": "That nickname isn't valid (2-24 characters)",
+    "beamjoy.window.login.error.invalidNickname": "That nickname isn't valid (2-24 characters, no { or })",
     "beamjoy.window.login.error.nicknameTaken": "Someone else is currently using that nickname",
     "beamjoy.window.login.error.unknown": "Something went wrong, try again",
 

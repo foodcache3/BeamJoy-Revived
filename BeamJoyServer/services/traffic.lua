@@ -174,12 +174,36 @@ local function rxSettings(ctxt, settings)
     updateBalancer()
 end
 
+--- at most this many traffic cars chased at once on the server
+local MAX_FUGITIVES = 30
+
+---@param key any full vehicle id "ownerID-vehicleID"
+---@return BJSPlayer? owner, table? vehicle
+local function vehicleByKey(key)
+    local ownerID, vehID = tostring(key or ""):match("^(%d+)%-(%d+)$")
+    ownerID, vehID = tonumber(ownerID), tonumber(vehID)
+    if not ownerID then return nil, nil end
+    local owner = services_players.players:find(function(p) return p.playerID == ownerID end)
+    return owner, owner and owner.vehicles[vehID] or nil
+end
+
+--- Security fix : any player could name any car here, and the owner's game then handed that car
+--- to the flee AI, a player's own car included. The fugitive must be a traffic car (or one of the
+--- sender's own : traffic whose model isn't named "traffic" is only known as such by its owner's
+--- game, and the owner's game never hands a car that isn't traffic to the AI), and the police car
+--- the sender's own
 ---@param ctxt BJSContext
 ---@param fugitiveVID string full vehicle id
 ---@param policeVID string full vehicle id
 local function startPursuit(ctxt, fugitiveVID, policeVID)
     local conf = getConf()
-    if not conf.enabled then return end
+    if not conf.enabled or not ctxt.sender then return end
+    if type(fugitiveVID) ~= "string" or type(policeVID) ~= "string" then return end
+    local fugitiveOwner, fugitive = vehicleByKey(fugitiveVID)
+    local policeOwner, police = vehicleByKey(policeVID)
+    if not fugitive or not (fugitive.isAi or fugitiveOwner.playerID == ctxt.senderID) then return end
+    if not police or police.isAi or not policeOwner or policeOwner.playerID ~= ctxt.senderID then return end
+    if #M.pursuitFugitives >= MAX_FUGITIVES then return end
 
     if not table.includes(M.pursuitFugitives, fugitiveVID) then
         table.insert(M.pursuitFugitives, fugitiveVID)
@@ -199,6 +223,7 @@ end
 local function stopPursuit(ctxt, vid, state)
     local conf = getConf()
     if not conf.enabled then return end
+    if type(vid) ~= "string" or (state ~= 0 and state ~= 1 and state ~= 2) then return end
 
     if table.includes(M.pursuitFugitives, vid) then
         M.pursuitFugitives = table.filter(M.pursuitFugitives, function(v)

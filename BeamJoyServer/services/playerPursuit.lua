@@ -15,14 +15,28 @@
 ---
 --- Stats (arrests made as police, escapes as a fugitive) are kept in the player's saved data,
 --- player.data.pursuit.
+---
+--- Security fix : the police side was trusted outright, so anyone could start a chase on any player
+--- and arrest them at once (a 5 s freeze, and an arrest counted). Each start and arrest now names
+--- the sender's police car, which must be theirs and a police car, and the server checks what it
+--- can see itself : the distance between the cars (BeamMP's positions), the fugitive's speed at the
+--- arrest, and how long that police player has been in the chase.
 
 local M = {
     --- seconds a car can't be chased again after a chase on it ended (an arrest, an escape, a
     --- refusal), so the game's offense check doesn't restart one the moment a fugitive drives off
     COOLDOWN = 30,
     MAX_OFFENSES = 12,
+    --- metres between the police car and the fugitive for a chase to start (the game's police only
+    --- notice offenses well inside this)
+    START_RANGE = 300,
+    --- the game arrests within 20 m, both cars under 2.5 m/s, after 5 s : these leave room for the
+    --- position lag
+    ARREST_RANGE = 35,
+    ARREST_SPEED = 5,
+    ARREST_MIN_SECONDS = 4,
 
-    ---@type table<string, {fugitiveID: integer, police: table<integer, true>, startedAt: integer, offenses: string[]}> index fugitive serverVID
+    ---@type table<string, {fugitiveID: integer, police: table<integer, {car: integer, since: integer}>, startedAt: integer, offenses: string[]}> index fugitive serverVID
     chases = {},
     ---@type table<integer, true> players whose own game says they can't be chased right now
     unavailable = {},
@@ -41,6 +55,90 @@ end
 ---@return BJSPlayer?
 local function playerByID(playerID)
     return services_players.players:find(function(p) return p.playerID == playerID end)
+end
+
+---@param serverVID any
+---@return integer? ownerID, integer? vehicleID
+local function parseKey(serverVID)
+    local ownerID, vehID = tostring(serverVID or ""):match("^(%d+)%-(%d+)$")
+    return tonumber(ownerID), tonumber(vehID)
+end
+
+local POLICE_MARKERS = { "police", "polizei", "polizia", "gendarmerie" }
+
+---@param s any
+---@return boolean
+local function hasPoliceMarker(s)
+    if type(s) ~= "string" then return false end
+    s = s:lower()
+    for _, marker in ipairs(POLICE_MARKERS) do
+        if s:find(marker, 1, true) then return true end
+    end
+    return false
+end
+
+--- the same test as the client's beamjoy_vehicles.isPolice (its model, or a part slot or part
+--- named after the police), on the config the server was sent
+---@param parts any
+---@param depth integer
+---@return boolean
+local function partsArePolice(parts, depth)
+    if type(parts) ~= "table" or depth > 6 then return false end
+    for slot, part in pairs(parts) do
+        if hasPoliceMarker(part) then return true end
+        if hasPoliceMarker(slot) and ((type(part) == "string" and #part > 0) or type(part) == "table") then
+            return true
+        end
+        if type(part) == "table" and partsArePolice(part, depth + 1) then return true end
+    end
+    return false
+end
+
+---@param v table? a server vehicle record (services_players.players[...].vehicles[...])
+---@return boolean
+local function isPoliceVehicle(v)
+    return v ~= nil and (hasPoliceMarker(v.jbeam) or partsArePolice(v.parts, 0))
+end
+
+--- the sender's police car, from the key their game sent : theirs, a police car, not traffic
+---@param ctxt BJSContext
+---@param key any
+---@return integer? vehicleID
+local function senderPoliceCar(ctxt, key)
+    local ownerID, vehID = parseKey(key)
+    if ownerID ~= ctxt.senderID or not vehID then return nil end
+    local v = ctxt.sender.vehicles[vehID]
+    if not v or v.isAi or not isPoliceVehicle(v) then return nil end
+    return vehID
+end
+
+--- BeamMP's own position and velocity for a vehicle, or nil when it can't tell
+---@param ownerID integer
+---@param vehID integer
+---@return {pos: number[], vel: number[]?}?
+local function rawPosition(ownerID, vehID)
+    if not MP.GetPositionRaw then return nil end
+    local ok, raw, err = pcall(MP.GetPositionRaw, ownerID, vehID)
+    if not ok or err or type(raw) ~= "table" or type(raw.pos) ~= "table" then return nil end
+    return raw
+end
+
+---@param a {pos: number[]}
+---@param b {pos: number[]}
+---@return number
+local function distance(a, b)
+    local dx = (tonumber(a.pos[1]) or 0) - (tonumber(b.pos[1]) or 0)
+    local dy = (tonumber(a.pos[2]) or 0) - (tonumber(b.pos[2]) or 0)
+    local dz = (tonumber(a.pos[3]) or 0) - (tonumber(b.pos[3]) or 0)
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+end
+
+---@param raw {vel: number[]?}
+---@return number
+local function speed(raw)
+    local v = type(raw.vel) == "table" and raw.vel or {}
+    local x, y, z = tonumber(v[1]) or 0, tonumber(v[2]) or 0, tonumber(v[3]) or 0
+    return math.sqrt(x * x + y * y + z * z)
 end
 
 ---@return boolean
@@ -151,8 +249,18 @@ local function playerPursuitEvent(ctxt, event, serverVID, data)
     if event == "start" then
         local now = GetCurrentTime()
         local owner = playerByID(ownerID)
+        local _, fugitiveVehID = parseKey(serverVID)
+        local policeCar = senderPoliceCar(ctxt, data.police)
         local refused = not enabled() or not owner or M.unavailable[ownerID] or
-            (M.cooldowns[serverVID] and M.cooldowns[serverVID] > now)
+            (M.cooldowns[serverVID] and M.cooldowns[serverVID] > now) or
+            not policeCar or not owner.vehicles[fugitiveVehID] or owner.vehicles[fugitiveVehID].isAi
+        if not refused then
+            local fugitivePos = rawPosition(ownerID, fugitiveVehID)
+            local policePos = rawPosition(ctxt.senderID, policeCar)
+            if fugitivePos and policePos and distance(fugitivePos, policePos) > M.START_RANGE then
+                refused = true
+            end
+        end
         -- a fugitive can't be police in someone else's chase at the same time
         if not refused then
             for _, c in pairs(M.chases) do
@@ -167,12 +275,13 @@ local function playerPursuitEvent(ctxt, event, serverVID, data)
         end
         local c = M.chases[serverVID]
         if c then
-            c.police[ctxt.senderID] = true
+            local joined = c.police[ctxt.senderID]
+            c.police[ctxt.senderID] = { car = policeCar, since = joined and joined.since or now }
             notify(ctxt.senderID, "joined", serverVID, { fugitiveID = ownerID })
         else
             c = {
                 fugitiveID = ownerID,
-                police = { [ctxt.senderID] = true },
+                police = { [ctxt.senderID] = { car = policeCar, since = now } },
                 startedAt = now,
                 offenses = cleanOffenses(data.offenses),
             }
@@ -187,7 +296,30 @@ local function playerPursuitEvent(ctxt, event, serverVID, data)
         push()
     elseif event == "arrest" then
         local c = M.chases[serverVID]
-        if not c or not c.police[ctxt.senderID] then return end
+        local entry = c and c.police[ctxt.senderID]
+        if not entry then return end
+        local policeCar = senderPoliceCar(ctxt, data.police)
+        local _, fugitiveVehID = parseKey(serverVID)
+        local refused = policeCar ~= entry.car or GetCurrentTime() - entry.since < M.ARREST_MIN_SECONDS
+        if not refused then
+            local fugitivePos = rawPosition(ownerID, fugitiveVehID)
+            local policePos = rawPosition(ctxt.senderID, policeCar)
+            if fugitivePos and policePos and (distance(fugitivePos, policePos) > M.ARREST_RANGE or
+                    speed(fugitivePos) > M.ARREST_SPEED) then
+                refused = true
+            end
+        end
+        if refused then
+            LogWarn(string.format("playerPursuit : arrest of %s by %s refused", serverVID,
+                ctxt.sender.playerName))
+            -- removePolice only tells this police player when others stay on the chase
+            local others = false
+            for id in pairs(c.police) do
+                if id ~= ctxt.senderID then others = true end
+            end
+            if not others then notify(ctxt.senderID, "over", serverVID) end
+            return removePolice(serverVID, ctxt.senderID, false)
+        end
         addStat(ctxt.senderID, "arrests")
         endChase(serverVID, "arrest", {
             policeID = ctxt.senderID,

@@ -761,6 +761,9 @@ local function unreadyOnVehicleChange(playerID)
     pushSessionUpdate(session)
 end
 
+--- metres between the two cars' centres for a reported tag (a touch, plus the position lag)
+local TAG_MAX_DISTANCE = 30
+
 ---@param ctxt BJSContext
 ---@param sessionId string
 ---@param targetPlayerID integer the survivor claimed to have just been touched
@@ -772,6 +775,13 @@ local function infectedTag(ctxt, sessionId, targetPlayerID)
     if not sender or sender.role ~= "infected" then return end
     local target = session.participants[targetPlayerID]
     if not target or target.role ~= "survivor" then return end
+    -- Hardening : a tag is reported by the infected player's own game. Their cars must be close
+    -- (BeamMP's positions, with room for the lag)
+    local apart = services_vehicles.distanceBetweenPlayers(ctxt.senderID, targetPlayerID)
+    if apart and apart > TAG_MAX_DISTANCE then
+        return LogWarn(string.format("infectedTag : %s tagged a player %dm away, ignored",
+            ctxt.sender.playerName, math.floor(apart)))
+    end
 
     target.role = "infected"
     target.infectedAt = GetCurrentTime()

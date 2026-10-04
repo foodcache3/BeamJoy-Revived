@@ -9,9 +9,20 @@ local function onInit()
     end
 end
 
+--- Hardening : a player name becomes a file name here, and staff actions pass names straight from
+--- the client. Anything that could leave the players folder is refused
+---@param playerName any
+---@return boolean
+local function isSafeName(playerName)
+    return type(playerName) == "string" and #playerName > 0 and #playerName <= 64 and
+        not playerName:find("[/\\:%c]") and not playerName:find("..", 1, true) and
+        playerName ~= "."
+end
+
 ---@param playerName string
 ---@return BJSPlayerSaved?
 local function get(playerName)
+    if not isSafeName(playerName) then return nil end
     return dao_main.get(M.path .. "/" .. playerName .. ".json")
 end
 
@@ -30,6 +41,9 @@ end
 ---@param playerName string
 ---@param data BJSPlayerSaved
 local function save(playerName, data)
+    if not isSafeName(playerName) then
+        return LogError(string.format("dao_players.save : refused the name %s", tostring(playerName)))
+    end
     return dao_main.save(M.path .. "/" .. playerName .. ".json", data)
 end
 

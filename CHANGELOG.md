@@ -8,8 +8,38 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2579, server build 2403.
+Version 1.11.0 : client build 2580, server build 2404.
 
+- **Security fixes from a review of what the server accepts from players.** *(client + server)*
+  - **Players' IP addresses no longer go to everyone.** Several messages (on joining, spawning or
+    switching car, a group change, every save) sent each player's full record to every player,
+    IP address and BeamMP ID included. They now leave both out, and an offline player's saved
+    record only goes to staff with the DatabasePlayers permission.
+  - **No one can take over another player's car through traffic chases.** The server accepted a
+    traffic chase on any car, and the owner's game then handed that car to the flee AI, a
+    player's own car included. A chase now needs a traffic car and the sender's own police car,
+    the owner's game only ever gives its own traffic to the AI, and at most 30 cars are chased
+    at once.
+  - **/login locks after 5 wrong passwords** for 5 minutes, counted per player name and per IP
+    address. Wrong passwords are logged.
+  - **Doors, horn and the other controls on another player's car only work from close by.** The
+    distance check was skipped when the request didn't name the requester's own vehicle.
+  - **Police chases between players are checked by the server.** A start or an arrest must come
+    from the sender's own police car, the server checks the distance between the two cars, an
+    arrest needs the fugitive nearly stopped and the police player in the chase for a few
+    seconds. Before, anyone could start a chase on any player and arrest them at once.
+- **Hardening.** *(client + server)*
+  - The server drops messages from a player it doesn't know, and a message's parts must all come
+    from the same player.
+  - Changing a player's group or data is refused when the sender's own group can't be found
+    (it used to skip the check).
+  - Player names can't reach outside the players folder when used as file names.
+  - The game's toasts and messages no longer read "{{" in a text as a template expression, and
+    nicknames and crew names can't contain braces.
+  - Activity results are checked against the server's own view : a race gate must be crossed
+    near that gate, a reported race time can't be more than 5 s under the server's own clock, an
+    infected tag needs the two cars close, and a hunter checkpoint needs the car at it. Where
+    the server can't read positions, those checks are skipped.
 - **Security fix: moderators received the Discord webhook URLs.** Whenever the whitelist was
   switched on or off, or a name was added to or removed from it, every player with the Whitelist
   permission (moderators by default) was sent the full server settings, including the Discord

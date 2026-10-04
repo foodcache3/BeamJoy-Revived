@@ -124,8 +124,13 @@ local function vehicleTriggerRequest(ctxt, serverVID, triggerId, actionNumber, v
                 return refuse(ctxt, "vehicleInteractions.moving")
             end
         end
+        -- Security fix : the range check only ran when the request named the requester's own
+        -- vehicle, so leaving it out reached any car on the map. It must name one of theirs, and
+        -- when the server can read positions both must be known and within range
         local ownOwner, ownVid = parseServerVID(ownServerVID)
-        local own = ownOwner == ctxt.senderID and rawPosition(ctxt.senderID, ownVid) or nil
+        if ownOwner ~= ctxt.senderID or not ownVid then return end
+        local own = rawPosition(ctxt.senderID, ownVid)
+        if MP.GetPositionRaw and not (car and own) then return end
         if car and own then
             local dx, dy, dz = car.pos[1] - own.pos[1], car.pos[2] - own.pos[2], car.pos[3] - own.pos[3]
             if math.sqrt(dx * dx + dy * dy + dz * dz) > M.RANGE then return end

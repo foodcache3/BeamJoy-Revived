@@ -289,7 +289,9 @@ local function startPursuit(fugitiveKey, policeKey)
     end, function()
         -- show fugitive on minimap
         v.veh.uiState = 1
-        if v.isLocal then
+        -- only ever this game's own traffic : the server checks it too, but a player's own car must
+        -- never be handed to the flee AI, whatever arrives
+        if v.isLocal and v.isAi then
             -- Real bug: the target was sent to the police car itself instead of the fleeing
             -- one. Without a target, the game's flee AI picks this client's active vehicle
             -- (vehicle/ai.lua updatePlayerData) : another player's traffic fled from its
@@ -341,7 +343,7 @@ local function stopPursuit(key, caught)
     M.fugitives[v.vid] = nil
     -- hide fugitive on minimap
     v.veh.uiState = 0
-    if v.isLocal then
+    if v.isLocal and v.isAi then
         if caught then
             local vid = v.vid
             async.delayTask(function()

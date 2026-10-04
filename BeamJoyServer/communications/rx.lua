@@ -40,11 +40,22 @@ end
 
 local function finalizeCommunication(id)
     local comm = M.pending[id]
+    M.pending[id] = nil
+    utils_async.removeTask(getTimeoutKey(id))
     local strData = table.join(comm.data)
-    ---@type table
-    ---@diagnostic disable-next-line
-    local parsedData = #strData > 0 and utils_json.parse(strData) or {}
+    local parsedOk, parsedData = true, {}
+    if #strData > 0 then parsedOk, parsedData = pcall(utils_json.parse, strData) end
+    if not parsedOk or type(parsedData) ~= "table" then
+        return LogWarn(string.format("Event %s from player %d : invalid data", tostring(comm.key), comm.senderID))
+    end
     local ctxt = InitContext(comm.senderID)
+    -- Hardening : many handlers check permissions as `ctxt.sender and not hasAllPermissions(...)`,
+    -- which lets everything through when the sender isn't a known player. A player's messages
+    -- only ever arrive once they're registered (on connecting), so anything else is dropped here,
+    -- for every handler at once
+    if not ctxt.sender then
+        return LogWarn(string.format("Event %s from unknown player %d dropped", tostring(comm.key), comm.senderID))
+    end
 
     if IsDebug() then
         LogDebug(string.format("Event %s received from %s (ID %d, %d parts data)", comm.key,
@@ -53,8 +64,6 @@ local function finalizeCommunication(id)
         dump(parsedData)
     end
     local ok, err = pcall(dispatch, comm.key, ctxt, table.unpack(parsedData, 1, 20))
-    M.pending[id] = nil
-    utils_async.removeTask(getTimeoutKey(id))
     if not ok then
         err = type(err) == "table" and err or { key = "error.generic" }
         -- TODO send error and toast
@@ -75,8 +84,11 @@ function _BJSRxEvent(senderID, dataStr)
     end
 
     if M.pending[data.id] then
+        -- a message's parts must all come from one player : anyone else reusing its id is ignored
+        if M.pending[data.id].senderID ~= senderID or M.pending[data.id].key then
+            return LogWarn(string.format("Event id reused by player %d, ignored", senderID))
+        end
         table.assign(M.pending[data.id], {
-            senderID = senderID,
             key = data.key,
             parts = data.parts,
         })
@@ -115,6 +127,9 @@ function _BJSRxData(senderID, dataStr)
     end
 
     if M.pending[data.id] then
+        if M.pending[data.id].senderID ~= senderID then
+            return LogWarn(string.format("Event part from player %d for another player's event, ignored", senderID))
+        end
         table.assign(M.pending[data.id].data, { [data.part] = data.data })
     else
         M.pending[data.id] = {

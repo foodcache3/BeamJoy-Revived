@@ -27,6 +27,12 @@ local M = {
 
     NICKNAME_MIN = 2,
     NICKNAME_MAX = 24,
+
+    --- /login : wrong passwords allowed before a lock, and how long the lock lasts (seconds)
+    LOGIN_MAX_FAILS = 5,
+    LOGIN_LOCK_SECONDS = 300,
+    ---@type table<string, {fails: integer, lockedUntil: integer?}> index "name:<player>" and "ip:<address>"
+    loginFails = {},
 }
 
 ---@param nickname any
@@ -38,6 +44,8 @@ local function sanitizeNickname(nickname)
     -- reject control characters only ; otherwise deliberately permissive (this is just a display
     -- string used as a leaderboard key, not an identifier anything else parses)
     if nickname:find("%c") then return nil end
+    -- no braces : shown in the game's toasts, which read "{{" as a template expression
+    if nickname:find("[{}]") then return nil end
     return nickname
 end
 
@@ -110,11 +118,56 @@ local function getOwnerGroupName()
     return group and group.name or nil
 end
 
+-- Security fix : /login took any number of guesses, so a script could keep trying the owner
+-- password through chat. Wrong passwords are now counted per player name and per IP address
+-- (rejoining under another name doesn't reset it), and lock /login for a while.
+
+---@param ctxt BJSContext
+---@return string[]
+local function loginKeys(ctxt)
+    local keys = { "name:" .. ctxt.sender.playerName }
+    if type(ctxt.sender.ip) == "string" and #ctxt.sender.ip > 0 then
+        keys[#keys + 1] = "ip:" .. ctxt.sender.ip
+    end
+    return keys
+end
+
+---@param keys string[]
+---@param now integer
+---@return boolean
+local function loginLocked(keys, now)
+    for _, key in ipairs(keys) do
+        local f = M.loginFails[key]
+        if f and f.lockedUntil and f.lockedUntil > now then return true end
+    end
+    return false
+end
+
+---@param keys string[]
+---@param now integer
+local function loginFailed(keys, now)
+    for _, key in ipairs(keys) do
+        local f = M.loginFails[key]
+        -- a lock that ran out starts a new count
+        if not f or (f.lockedUntil and f.lockedUntil <= now) then f = { fails = 0 } end
+        f.fails = f.fails + 1
+        if f.fails >= M.LOGIN_MAX_FAILS then f.lockedUntil = now + M.LOGIN_LOCK_SECONDS end
+        M.loginFails[key] = f
+    end
+end
+
 ---@param ctxt BJSContext
 ---@param args string[] "<password...>"
 ---@param command BJChatCommand
 local function chatLogin(ctxt, args, command)
     if #args < 1 then return chatUsage(ctxt, command) end
+    local now = GetCurrentTime()
+    local keys = loginKeys(ctxt)
+    if loginLocked(keys, now) then
+        return services_chat.directSend(ctxt.senderID,
+            services_lang.get("chat.command.login.tooManyAttempts", ctxt.sender.lang),
+            services_chat.COLORS.ERROR)
+    end
     local auth = dao_staffAuth.get() or {}
     if not auth.staffHash and not auth.ownerHash then
         return services_chat.directSend(ctxt.senderID,
@@ -132,10 +185,13 @@ local function chatLogin(ctxt, args, command)
         groupName = getStaffGroupName()
     end
     if not groupName then
+        loginFailed(keys, now)
+        LogWarn(string.format("/login : wrong password from %s", ctxt.sender.playerName))
         return services_chat.directSend(ctxt.senderID,
             services_lang.get("chat.command.login.wrongPassword", ctxt.sender.lang),
             services_chat.COLORS.ERROR)
     end
+    for _, key in ipairs(keys) do M.loginFails[key] = nil end
     -- InitContext() with no senderID => origin "cmd" => setGroup's own permission gate (which
     -- would otherwise require the CALLER to already have SetGroup) never triggers, same trick
     -- services_players.consoleGroup already relies on for the identical reason

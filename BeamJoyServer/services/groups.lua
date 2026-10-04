@@ -168,7 +168,7 @@ local function demoteGroupPlayers(removedGroups)
             if connected then
                 connected.group = p.group
                 communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
-                    playerName, connected)
+                    playerName, services_players.publicView(connected))
             end
             services_players.savePlayer(p)
         end

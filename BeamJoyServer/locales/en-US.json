@@ -178,6 +178,7 @@
     "chat.command.login.desc": "Grants staff or owner if the password matches (set via server console)",
     "chat.command.login.notConfigured": "No password has been set for this yet",
     "chat.command.login.wrongPassword": "Incorrect password",
+    "chat.command.login.tooManyAttempts": "Too many incorrect passwords. Try again in a few minutes",
     "chat.command.login.success": "Access granted : you're now in group {group}",
     "chat.command.map.command": "/map <map_name>",
     "chat.command.map.desc": "Switches the current map",

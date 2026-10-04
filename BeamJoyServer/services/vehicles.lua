@@ -46,7 +46,7 @@ local function addVehicle(player, group, vehID, vehData, jbeam)
     }
 
     communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
-        player.playerName, player)
+        player.playerName, services_players.publicView(player))
     return true
 end
 
@@ -116,7 +116,7 @@ local function onVehicleEdited(playerID, vehID, vehDataStr)
         services_players.players[playerName].vehicles[vehID] = nil
         if was then
             communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
-                playerName, services_players.players[playerName])
+                playerName, services_players.publicView(services_players.players[playerName]))
         end
         return
     end
@@ -142,7 +142,7 @@ local function onVehicleEdited(playerID, vehID, vehDataStr)
     veh.isAi = isAi(jbeam)
 
     communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
-        playerName, services_players.players[playerName])
+        playerName, services_players.publicView(services_players.players[playerName]))
 
     -- per direct report: "ready" is a snapshot commitment ("the vehicle I'm about to race is
     -- locked in as-is"), so any real config/tuning change (BeamMP fires this same event for both,
@@ -172,7 +172,7 @@ local function onVehicleDeleted(playerID, vehID)
     if services_players.players[playerName].vehicles[vehID] then
         services_players.players[playerName].vehicles[vehID] = nil
         communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
-            playerName, services_players.players[playerName])
+            playerName, services_players.publicView(services_players.players[playerName]))
     end
 end
 
@@ -182,7 +182,7 @@ local function updateCurrentVehicle(ctxt, vid)
     if ctxt.sender then
         ctxt.sender.currentVehicle = vid
         communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
-            ctxt.sender.playerName, ctxt.sender)
+            ctxt.sender.playerName, services_players.publicView(ctxt.sender))
     end
 end
 
@@ -250,6 +250,74 @@ local function launchVehicle(ctxt, vid)
     communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "launchVehicle", vid)
 end
 
+-- POSITIONS, for checks that shouldn't trust what a client says (activity results). BeamMP's own
+-- copy of each vehicle's position, a few updates behind at most
+
+---@param point any {x, y, z} or {1, 2, 3}
+---@return number?, number?, number?
+local function coords(point)
+    if type(point) ~= "table" then return nil end
+    local x, y, z = tonumber(point.x or point[1]), tonumber(point.y or point[2]), tonumber(point.z or point[3])
+    if not x or not y or not z then return nil end
+    return x, y, z
+end
+
+--- the positions of a player's vehicles (traffic left out) : nil when this server can't read
+--- positions at all, then the callers skip their check rather than block everyone
+---@param playerID integer
+---@return {pos: number[], vel: number[]?}[]?
+local function playerPositions(playerID)
+    if not MP.GetPositionRaw then return nil end
+    local res = {}
+    local player = services_players.players:find(function(p) return p.playerID == playerID end)
+    if not player then return res end
+    for vehID, v in pairs(player.vehicles) do
+        if not v.isAi then
+            local ok, raw, err = pcall(MP.GetPositionRaw, playerID, vehID)
+            if ok and not err and type(raw) == "table" and coords(raw.pos) then
+                res[#res + 1] = raw
+            end
+        end
+    end
+    return res
+end
+
+--- the distance from the nearest of a player's vehicles to a point : nil when the server can't
+--- read positions, math.huge when the player has no vehicle it knows the position of
+---@param playerID integer
+---@param point any {x, y, z} or {1, 2, 3}
+---@return number?
+local function distanceToPoint(playerID, point)
+    local positions = playerPositions(playerID)
+    local px, py, pz = coords(point)
+    if not positions or not px then return nil end
+    local best = math.huge
+    for _, raw in ipairs(positions) do
+        local x, y, z = coords(raw.pos)
+        best = math.min(best, math.sqrt((x - px) ^ 2 + (y - py) ^ 2 + (z - pz) ^ 2))
+    end
+    return best
+end
+
+--- the shortest distance between any vehicle of one player and any of another : same nil /
+--- math.huge rules as distanceToPoint
+---@param playerA integer
+---@param playerB integer
+---@return number?
+local function distanceBetweenPlayers(playerA, playerB)
+    local a, b = playerPositions(playerA), playerPositions(playerB)
+    if not a or not b then return nil end
+    local best = math.huge
+    for _, ra in ipairs(a) do
+        local ax, ay, az = coords(ra.pos)
+        for _, rb in ipairs(b) do
+            local bx, by, bz = coords(rb.pos)
+            best = math.min(best, math.sqrt((ax - bx) ^ 2 + (ay - by) ^ 2 + (az - bz) ^ 2))
+        end
+    end
+    return best
+end
+
 ---@param ctxt BJSContext
 ---@param vid integer the sender's own vid for their own vehicle, also the cross-client-stable
 ---remoteVID every other client's own copy of this vehicle carries (see the client-side
@@ -281,6 +349,9 @@ M.onVehiclePaintChanged = onVehiclePaintChanged
 M.onVehicleDeleted = onVehicleDeleted
 
 M.updateCurrentVehicle = updateCurrentVehicle
+M.playerPositions = playerPositions
+M.distanceToPoint = distanceToPoint
+M.distanceBetweenPlayers = distanceBetweenPlayers
 M.deletePlayerVehicles = deletePlayerVehicles
 M.deleteVehicle = deleteVehicle
 M.explodeVehicle = explodeVehicle

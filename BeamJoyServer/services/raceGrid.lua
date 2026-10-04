@@ -1584,6 +1584,13 @@ local function unreadyOnVehicleChange(playerID)
     pushSessionUpdate(session)
 end
 
+--- metres past a gate's half-width a reported crossing may be from (BeamMP's positions lag a little
+--- behind, more at speed)
+local GATE_POSITION_MARGIN = 100
+--- how far under the server's own measure a reported race time may be (the message's trip, the
+--- clock sync's error)
+local REPORT_LAG_MAX_MS = 5000
+
 ---@param ctxt BJSContext
 ---@param sessionId string
 ---@param gateIndex integer
@@ -1603,6 +1610,26 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
 
     local gate = race.gates[gateIndex]
     if not gate then return end
+
+    -- Hardening : the crossing and its time come from the racer's own game. The server checks
+    -- what it can see itself : the racer's car is near that gate (BeamMP's positions, with room
+    -- for the lag at speed), and the time isn't well under what its own clock measured since the
+    -- green light (a report can only arrive after the crossing)
+    elapsedMs = tonumber(elapsedMs)
+    if not elapsedMs or elapsedMs < 0 then return end
+    local gateDistance = services_vehicles.distanceToPoint(ctxt.senderID, gate.pos)
+    if gateDistance and gateDistance > (tonumber(gate.width) or 20) / 2 + GATE_POSITION_MARGIN then
+        return LogWarn(string.format("raceGateCrossed : %s reported gate %d from %dm away, ignored",
+            ctxt.sender.playerName, gateIndex, math.floor(gateDistance)))
+    end
+    if session.goAtMs then
+        local serverElapsedMs = services_clockSync.nowMs() - session.goAtMs
+        if elapsedMs < serverElapsedMs - REPORT_LAG_MAX_MS then
+            LogWarn(string.format("raceGateCrossed : %s reported %dms, the server measured %dms",
+                ctxt.sender.playerName, elapsedMs, serverElapsedMs))
+            elapsedMs = serverElapsedMs - REPORT_LAG_MAX_MS
+        end
+    end
 
     if race.branchingEnabled then
         -- real, confirmed bug fixed here (live-tested report: "my reset point was stuck before
