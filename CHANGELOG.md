@@ -8,8 +8,14 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2596, server build 2417.
+Version 1.11.0 : client build 2597, server build 2417.
 
+- **Fixed: rejoining an open-choice race didn't give you your car back.** The car was re-spawned
+  from the name the race keeps for its leaderboard ("Cherrier FCV (2020) - Ardente - ..."), which
+  no installed model is called, so nothing came ; and a bare model would have had default parts.
+  Your exact car (model, parts, tuning, paint) is now saved on your PC at the green light, and
+  rejoining that race puts you back in it, in place of whatever car you're in. Restricted races
+  are unchanged (their required car). *(client only)*
 - **Fixed: installing a development build on Windows broke BeamJoy for every player** (no BeamJoy
   window, no chat). The updater builds BJ.zip from the branch's BeamJoyClient folder, and Windows
   PowerShell's zip call stored every file with "\" in its path, so the game found no mod script

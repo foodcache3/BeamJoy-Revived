@@ -1573,6 +1573,67 @@ local function updateGridCountdown()
     end
 end
 
+-- Real bug (direct report: "rejoining a race doesn't put you back in the same car, it fails when
+-- it's open choice") : the car was re-spawned from participant.vehicleModel, which holds the car's
+-- display name ("Cherrier FCV (2020) - Ardente - ..."), never a model the game knows, so nothing
+-- came ; and a bare model would have had its default parts anyway. The exact car (model, parts,
+-- tuning, paint) is saved to a file at the green light (BeamMP reloads BeamJoy on reconnecting,
+-- so memory doesn't survive), and rejoining that same race brings it back
+local REJOIN_CAR_FILE = "/settings/beamjoy_raceRejoinCar.json"
+
+---@param sessionId string
+local function saveRejoinCar(sessionId)
+    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    local full = myVeh and beamjoy_vehicles.getFullConfig(myVeh.veh)
+    if not full then return end
+    local ok, err = pcall(jsonWriteFile, REJOIN_CAR_FILE, {
+        sessionId = sessionId,
+        config = { model = full.model, parts = full.parts, vars = full.vars, paints = full.paints },
+    }, true)
+    if not ok then LogError("beamjoy_raceRunner: couldn't save the race car: " .. tostring(err)) end
+end
+
+---@param sessionId string
+---@return {model: string, parts: table, vars: table, paints: table}? the car saved for that race
+local function loadRejoinCar(sessionId)
+    local ok, saved = pcall(jsonReadFile, REJOIN_CAR_FILE)
+    if not ok or type(saved) ~= "table" or saved.sessionId ~= sessionId or type(saved.config) ~= "table" or
+        type(saved.config.model) ~= "string" then
+        return nil
+    end
+    return saved.config
+end
+
+--- spawns the saved car in place of this player's current one, and gets them in it
+---@param config {model: string, parts: table, vars: table, paints: table}
+---@return boolean
+local function spawnRejoinCar(config)
+    if not modelAvailableLocally(config.model) then return false end
+    local pos
+    local currVeh = beamjoy_vehicles.getCurrent()
+    if currVeh and camera.getCamera() ~= camera.CAMERAS.FREE then
+        pos = beamjoy_vehicles.getVehiclePositionRotation(currVeh.veh)
+    else
+        pos = camera.getPositionRotation(false)
+    end
+    if beamjoy_vehicles.getCurrentOwn() then beamjoy_vehicles.deleteCurrentOwnVehicle() end
+    -- format 2 : a single vehicle's config, as forceRequiredVehicle / restoreSavedVehicle spawn
+    local newVeh = core_vehicles.spawnNewVehicle(config.model, {
+        pos = pos,
+        config = {
+            format = 2,
+            model = config.model,
+            parts = type(config.parts) == "table" and config.parts or {},
+            vars = type(config.vars) == "table" and config.vars or {},
+            paints = type(config.paints) == "table" and config.paints or {},
+        },
+    })
+    if not newVeh then return false end
+    be:enterVehicle(0, newVeh)
+    if camera.getCamera() == camera.CAMERAS.FREE then camera.toggleFreeCam() end
+    return true
+end
+
 ---@param session BJRaceSession
 local function onSessionUpdate(session)
     adoptSession(session, M.session)
@@ -1923,6 +1984,8 @@ local function onSessionUpdate(session)
         -- was already spawned back at GRID/ready-up, well before RACE begins. There's no fresh
         -- instantiate event for it to catch on its own at this exact transition
         M.myVehicleVid = myVeh and myVeh.vid or nil
+        -- the car they race with, should they drop out and rejoin (see REJOIN_CAR_FILE)
+        saveRejoinCar(session.id)
         if myVeh and #session.participants > 1 then
             beamjoy_vehicles.setGhostReason(myVeh.vid, "race", false, false, false)
             local forceTaskName = "ghostRaceStartForce-" .. myVeh.vid
@@ -2647,6 +2710,7 @@ end
 local RESUME_CLOCK_WAIT_MS = 15000
 local RESUME_CAR_WAIT_MS = 10000
 
+
 --- the car is there : put it at the last checkpoint and hand the race back
 ---@param sessionId string
 local function placeResumedCar(sessionId)
@@ -2721,13 +2785,14 @@ local function finishResume(sessionId)
         if not spawned then
             toast.warn("This race's vehicle isn't installed on your game", nil, 8)
         end
-    elseif not myVeh and participant.vehicleModel and modelAvailableLocally(participant.vehicleModel) then
-        local newVeh = core_vehicles.spawnNewVehicle(participant.vehicleModel,
-            { pos = camera.getPositionRotation(false) })
-        if newVeh then
-            be:enterVehicle(0, newVeh)
-            if camera.getCamera() == camera.CAMERAS.FREE then camera.toggleFreeCam() end
-            spawned = true
+    elseif not restriction then
+        -- open choice : the very car they raced with (see REJOIN_CAR_FILE)
+        local saved = loadRejoinCar(sessionId)
+        if saved then
+            spawned = spawnRejoinCar(saved)
+            if not spawned then
+                toast.warn("The car you raced with isn't installed on your game", nil, 8)
+            end
         end
     end
 
