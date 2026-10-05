@@ -8,8 +8,14 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2595, server build 2412.
+Version 1.11.0 : client build 2595, server build 2413.
 
+- **Updates can come from the development branch, for testing.** "/bjupdate channel development"
+  (console : "bj update channel development") switches a server to it, "channel release" switches
+  back, and "channel" alone shows which is in use (saved in BeamJoyData/update/state.json). On the
+  development channel, a new commit on the branch is a new build : the server downloads that
+  exact commit and builds BJ.zip from its BeamJoyClient folder (on Linux this also needs zip).
+  *(server only)*
 - **BeamJoy can update itself from GitHub.** The server looks for a new release a minute after it
   starts and every 6 hours ; when there is one, the console says so and each owner online (or
   joining) is told once. An owner types /bjupdate in chat, or anyone at the server console types
