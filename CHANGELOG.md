@@ -8,8 +8,10 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2596, server build 2415.
+Version 1.11.0 : client build 2596, server build 2416.
 
+- **Updater channel messages name the console command first** ("Type bj update check (/bjupdate
+  check in chat) to look for one"). *(server only)*
 - **Owners get an on-screen notification about BeamJoy updates each time they join** (direct
   request) : a notification and a chat line when a newer version is out, or when one was installed
   and the server still needs a restart. Also when a player becomes owner (/login). It used to be a
