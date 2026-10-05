@@ -23,14 +23,13 @@ angular.module("beamjoy").component("bjConfigGeneral", {
         this.default = {};
         this.data = {
             ForceHud: true,
-            ShowHudAtStart: true,
         };
 
         // every key here is a plain top-level boolean going straight through setConfig, same
         // watch-and-send shape repeated per key rather than 3 near-identical $watch blocks
         // (the race-editor-specific settings have their own identical pattern in their own
         // accordion component below, sharing this same BJSendConfigData broadcast)
-        ["ForceHud", "ShowHudAtStart"].forEach((key) => {
+        ["ForceHud"].forEach((key) => {
             $scope.$watch(
                 () => this.data[key],
                 () => {

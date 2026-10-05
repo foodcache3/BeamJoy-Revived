@@ -6102,6 +6102,7 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
             "resetPenaltyEnabled": false,
             "resetPenaltySeconds": 5,

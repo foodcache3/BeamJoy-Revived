@@ -9,16 +9,6 @@
             <bj-toggle ng-model="$ctrl.data.ForceHud"></bj-toggle>
         </td>
     </tr>
-    <tr ng-if="!$ctrl.data.ForceHud">
-        <td class="text-right">
-            <span title="{{'beamjoy.window.config.tabs.general.showHudAtStart.tooltip'|translate}}">
-                {{"beamjoy.window.config.tabs.general.showHudAtStart"|translate}}
-            </span>
-        </td>
-        <td>
-            <bj-toggle ng-model="$ctrl.data.ShowHudAtStart"></bj-toggle>
-        </td>
-    </tr>
 </table>
 <bj-accordion id="config-race-editor" ng-hide="!$ctrl.display.raceEditor">
     <accordion-title>

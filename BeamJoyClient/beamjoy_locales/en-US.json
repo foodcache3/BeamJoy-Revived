@@ -612,8 +612,8 @@
     "beamjoy.window.main.tabs.settings.sections.vehicle.particles.tooltip": "How much dust, gravel, mud, sparks and tyre smoke vehicles throw up. Lower it if big groups of cars slow your game down. Only affects your game.",
     "beamjoy.window.main.tabs.settings.sections.vehicle.lockVehicles": "Lock my vehicles",
     "beamjoy.window.main.tabs.settings.sections.vehicle.lockVehicles.tooltip": "Other players can open your doors and use your car's buttons, like you can theirs. Turn this on to stop everyone but your crew.",
-    "beamjoy.window.main.tabs.settings.sections.vehicle.allowChases": "Police can chase me",
-    "beamjoy.window.main.tabs.settings.sections.vehicle.allowChases.tooltip": "In freeroam, a player driving a police car can chase you when you break the law near them: speeding, running red lights, reckless driving. Turn this off and police players leave you alone.",
+    "beamjoy.window.main.tabs.settings.sections.vehicle.allowChases": "Police chases",
+    "beamjoy.window.main.tabs.settings.sections.vehicle.allowChases.tooltip": "Take part in police chases in freeroam: players in police cars can chase you when you break the law near them, and from your own police car you can chase traffic and other players. Turn this off to stay out of every chase.",
     "beamjoy.window.main.tabs.settings.sections.vehicle.automaticLights": "Automatic lights",
     "beamjoy.window.main.tabs.settings.sections.vehicle.automaticLights.tooltip": "Toggle headlights automatically based on the time of day",
     "beamjoy.window.main.tabs.settings.sections.visual.title": "Visual",
@@ -667,8 +667,6 @@
     "beamjoy.window.config.tabs.general.title": "General",
     "beamjoy.window.config.tabs.general.forceHud": "Force-enable BeamJoy HUD",
     "beamjoy.window.config.tabs.general.forceHud.tooltip": "Everyone gets the always-open, uncloseable window staff already get.",
-    "beamjoy.window.config.tabs.general.showHudAtStart": "Show HUD at start",
-    "beamjoy.window.config.tabs.general.showHudAtStart.tooltip": "Opens automatically on connect, but players can still close it.",
     "beamjoy.window.config.tabs.general.raceEditor.title": "Race Editor",
     "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction": "Restrict editing to authors",
     "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction.tooltip": "Only staff and a race's own creator may edit or delete it.",
@@ -1642,11 +1640,15 @@
 
     // PURSUIT
     "beamjoy.pursuit.arrestIn": "Arrest in {time}",
+    "beamjoy.pursuit.suspectEscaping": "The suspect gets away in {time}",
     "beamjoy.pursuit.fugitiveTag": "FUGITIVE",
     "beamjoy.pursuit.player.chasedBy": "{playerName} is chasing you",
     "beamjoy.pursuit.player.fleeing": "{playerName} is fleeing from you",
     "beamjoy.pursuit.player.over": "The chase was called off",
     "beamjoy.pursuit.player.calledOff": "The chase on {playerName} was called off",
+    "beamjoy.pursuit.player.losing": "{playerName} gets away in {time}",
+    "beamjoy.pursuit.player.escaping": "You get away from the police in {time}",
+    "beamjoy.pursuit.player.spotted": "The police spotted you again",
 
     // FREEROAM STATIONS & GARAGES
     "beamjoy.stations.markerStation": "Fuel Station",

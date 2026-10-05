@@ -44,10 +44,8 @@
 ---races the current player can actually manage (staff sees everything regardless) ; purely a
 ---client-side display filter, doesn't change who can manage what: that's RaceAuthorshipRestriction
 ---@field ForceHud boolean forces the main BeamJoy window open and non-closable for every player,
----the same treatment staff already always get ; default on
----@field ShowHudAtStart boolean opens the main BeamJoy window automatically on connect (still
----player-closable afterward, unlike ForceHud) ; moot while ForceHud is on, matters when it's off ;
----default on
+---the same treatment staff already always get ; default on. (A "ShowHudAtStart" setting, open at
+---start but closable, was removed : see sanitizeOnStart)
 ---@field Deliveries {MinRouteDistance: integer, MaxRouteDistance: integer, ReferenceSpeed: integer, OffersPerDepot: integer, OfferRotation: integer, HoldDuration: integer, LobbyDuration: integer}
 ---Phase 3 deliveries (services/deliveries.lua). MinRouteDistance/MaxRouteDistance : metres of road
 ---a job's route may span. ReferenceSpeed : km/h the target time assumes (route length / speed).
@@ -160,7 +158,6 @@ local M = {
         RaceAuthorshipRestriction = false,
         RaceEditorShowOnlyEditable = false,
         ForceHud = true,
-        ShowHudAtStart = true,
         Voting = {
             MapVoteThresholdPercent = 51,
             MapVoteTimeout = 30,
@@ -200,6 +197,15 @@ end
 
 local function sanitizeOnStart()
     local updated = false
+    -- "Show HUD at start" was removed (direct request : it didn't open the window at start, and is
+    -- of no use now) : a save made before still carries it. The BeamJoy window now opens at start
+    -- only when it's forced, so a server that had forcing off is switched to it, once (the
+    -- setting goes with it, so this never runs again)
+    if M.data.ShowHudAtStart ~= nil then
+        if M.data.ForceHud == false then M.data.ForceHud = true end
+        M.data.ShowHudAtStart = nil
+        updated = true
+    end
     -- discord hook lang
     if not services_lang.langs[M.data.DiscordChatHookLang] then
         M.data.DiscordChatHookLang = services_lang.defaultLang
@@ -277,7 +283,6 @@ local function onBJRequestCache(caches, targetID)
         RaceAuthorshipRestriction = M.data.RaceAuthorshipRestriction,
         RaceEditorShowOnlyEditable = M.data.RaceEditorShowOnlyEditable,
         ForceHud = M.data.ForceHud,
-        ShowHudAtStart = M.data.ShowHudAtStart,
     }
     if targetID and services_permissions.hasAllPermissions(targetID,
             BJ_PERMISSIONS.SetConfig) then
@@ -307,7 +312,7 @@ local function sanitizeConfigValue(key, value)
         return nil, "AllowClientMods has been disabled and can no longer be changed"
     elseif key == "AllowWalking" or
         key == "RaceAuthorshipRestriction" or key == "RaceEditorShowOnlyEditable" or
-        key == "ForceHud" or key == "ShowHudAtStart" then
+        key == "ForceHud" then
         if type(value) ~= "boolean" then return nil, "Value must be a boolean" end
     elseif key == "DefaultGroup" then
         if type(value) ~= "string" then

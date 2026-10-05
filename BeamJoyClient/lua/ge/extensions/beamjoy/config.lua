@@ -57,7 +57,6 @@ local function sendConfigToUI()
         RaceAuthorshipRestriction = M.data.RaceAuthorshipRestriction,
         RaceEditorShowOnlyEditable = M.data.RaceEditorShowOnlyEditable,
         ForceHud = M.data.ForceHud,
-        ShowHudAtStart = M.data.ShowHudAtStart,
         -- real root cause of "toggling Freeroam/Voting settings visually reverts itself": both
         -- accordions' own $on("BJSendConfigData", ...) handlers fall back to `data.Freeroam || {}`
         -- / `data.Voting || {}` whenever their own key is missing from this payload, silently

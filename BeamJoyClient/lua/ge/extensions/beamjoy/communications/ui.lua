@@ -338,12 +338,9 @@ end
 
 local function initWindows()
     local forced = isMainForced()
-    -- host-configurable, default on (services_config.data.ShowHudAtStart): opens the main window
-    -- automatically on connect even when it isn't forced-non-closable. Moot when isMainForced()
-    -- is already true (that already implies visible from the start); matters when it's off, so a
-    -- host can choose "starts open, but players may still close it" as a middle ground between
-    -- always-forced and the original "closed until manually opened" default.
-    if forced or beamjoy_config.data.ShowHudAtStart == true then
+    -- forced (staff, or the host's ForceHud, default on) : open from the start. The separate "Show
+    -- HUD at start" setting was removed
+    if forced then
         M.windowStates.main = true
     end
     M.send("BJUpdateWindowSettings", {

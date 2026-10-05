@@ -52,6 +52,13 @@ local M = {
     pendingWeather = nil,
     ---@type integer?
     pendingWeatherAt = nil,
+    ---@type integer? GetCurrentTimeMillis() until which a weather fade of ours (or an admin's own
+    ---panel change) may still be running : checkWeatherDrift leaves the engine alone until then
+    weatherLerpUntilMs = nil,
+    -- checkWeatherDrift's corrections in a row that didn't stick (a value the engine won't take),
+    -- reset whenever the synced weather changes
+    weatherFixAttempts = 0,
+    WEATHER_FIX_MAX_ATTEMPTS = 3,
 }
 AddPreloadedDependencies(M)
 
@@ -127,7 +134,43 @@ local function applyWeather(lerpSeconds, fields)
             state[key] = value
         end
     end
-    if next(state) then setState(state, lerpSeconds) end
+    if next(state) then
+        setState(state, lerpSeconds)
+        if (tonumber(lerpSeconds) or 0) > 0 then
+            M.weatherLerpUntilMs = GetCurrentTimeMillis() + lerpSeconds * 1000 + 500
+        end
+    end
+end
+
+--- Real bug (direct report: a player who joined later had the map's own clouds and fog instead of
+--- the synced ones, while the wind matched). The engine fades clouds, fog density and fog height in
+--- (setState's lerp) and drops that fade the moment anything sets the time of day on its own
+--- (native setTimeOfDay clears it), which this file's own time sync does on a join, at every
+--- day/night switch and every drift correction ; wind is set at once, so it always landed. The
+--- level's own start (core_environment.onClientPostStartMission re-applies the map's weather) can
+--- also land after the synced one. Low-frequency safety net, like checkNativeDrift : once no fade
+--- of ours (or an admin's own panel change) is running, any synced field the engine doesn't show is
+--- set again, at once. Gives up after a few corrections that don't stick, until the weather changes.
+local function checkWeatherDrift()
+    if not M.data.weatherSync or type(M.data.weather) ~= "table" then return end
+    if not (beamjoy_main and beamjoy_main.world_ready) then return end
+    if M.pendingWeather or (M.weatherLerpUntilMs and GetCurrentTimeMillis() < M.weatherLerpUntilMs) then
+        return
+    end
+    if extensions.core_replay and extensions.core_replay.getState() == "playback" then return end
+    local current = currentWeather()
+    local fields = {}
+    for key, value in pairs(M.data.weather) do
+        -- nil : the level has no object for it (no cloud layer...), nothing to correct
+        if current[key] ~= nil and weatherValueDiffers(value, current[key]) then fields[key] = true end
+    end
+    if not next(fields) then
+        M.weatherFixAttempts = 0
+        return
+    end
+    if M.weatherFixAttempts >= M.WEATHER_FIX_MAX_ATTEMPTS then return end
+    M.weatherFixAttempts = M.weatherFixAttempts + 1
+    applyWeather(0, fields)
 end
 
 ---@return boolean whether the synced clock is advancing right now - must match the server's own
@@ -361,6 +404,7 @@ local function interceptEnvState(state, lerpSeconds)
                         M.pendingWeather = M.pendingWeather or {}
                         M.pendingWeather[key] = value
                         M.pendingWeatherAt = GetCurrentTimeMillis()
+                        M.weatherLerpUntilMs = GetCurrentTimeMillis() + (tonumber(lerpSeconds) or 0) * 1000 + 500
                     else
                         state[key] = nil
                     end
@@ -642,6 +686,7 @@ local function flushPendingWeather()
     if not M.data.weatherSync then return end
     -- optimistic : the server's echo then matches and isn't re-applied here
     M.data.weather = table.assign(table.clone(M.data.weather or {}), patch)
+    M.weatherFixAttempts = 0
     sendEnv({ weather = patch })
 end
 
@@ -654,6 +699,7 @@ end
 
 local function onSlowUpdate()
     checkNativeDrift()
+    checkWeatherDrift()
 end
 
 local function onBJClientReady()
@@ -666,6 +712,8 @@ local function onWorldReadyState(state)
     -- one so syncNative rewrites everything (the date included) into the new one
     invalidateApplied()
     resyncLerpUntilMs = nil
+    M.weatherLerpUntilMs = nil
+    M.weatherFixAttempts = 0
     if state == 2 then applyWeather(0) end
 end
 
@@ -759,6 +807,7 @@ local function retrieveCache(caches)
         M.ToDProcess = false
         updateGravity(resetGravity)
         if next(weatherFields) then
+            M.weatherFixAttempts = 0
             -- someone else's change fades in ; the first sync after joining lands at once
             local inWorld = beamjoy_main and beamjoy_main.client_ready
             applyWeather(inWorld and M.WEATHER_LERP_SECONDS or 0, weatherFields)

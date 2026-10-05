@@ -378,8 +378,6 @@
     "beamjoy.window.config.editor.pointList.teleportToHere": "自分の車両をここにテレポート",
     "beamjoy.window.config.tabs.general.forceHud": "BeamJoy HUDを強制表示",
     "beamjoy.window.config.tabs.general.forceHud.tooltip": "スタッフが既に持っている常時表示・閉じられないウィンドウが全員に付与されます。",
-    "beamjoy.window.config.tabs.general.showHudAtStart": "開始時にHUDを表示",
-    "beamjoy.window.config.tabs.general.showHudAtStart.tooltip": "接続時に自動で開きますが、プレイヤーは閉じることができます。",
     "beamjoy.window.config.tabs.general.raceEditor.title": "レースエディタ",
     "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction": "編集を作者のみに制限",
     "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction.tooltip": "スタッフとレースの作成者本人のみが編集・削除できます。",

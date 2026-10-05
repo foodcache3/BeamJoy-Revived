@@ -34,7 +34,7 @@ local M = {
             key = "beamjoy.visual.opaque_ghosts",
             default = false,
         },
-        -- Settings > Vehicle > Police can chase me (beamjoy/playerPursuit.lua)
+        -- Settings > Vehicle > Police chases (beamjoy/playerPursuit.lua, beamjoy/pursuit.lua)
         ALLOW_POLICE_CHASES = {
             key = "beamjoy.pursuit.allow_chases",
             default = true,

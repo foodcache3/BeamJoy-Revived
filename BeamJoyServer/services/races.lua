@@ -1102,9 +1102,17 @@ end
 --- told by its gate positions, since its distance may since have been recalculated.
 --- Only the course changes. The race's id, name, leaderboard, default settings and vehicle rule
 --- stay as they are on that server.
+--- An entry with `force` (direct request) is a one-time overwrite instead : the whole race as
+--- BeamJoy ships it (course, default settings, vehicle rule, author), whether or not it was edited
+--- on that server ; only its id and name stay. Its leaderboard is cleared (direct request : times
+--- set on the old course don't compare), as editing a race does. A race deleted on a server stays
+--- deleted.
 local BUNDLED_COURSE_UPDATES = {
     -- one gate removed
     { map = "west_coast_usa", name = "Street Course 2", revision = 2, previous = { gates = 19, distance = 2472 } },
+    -- one-time overwrite of both directions
+    { map = "west_coast_usa", name = "Street Course 2", revision = 3, force = true },
+    { map = "west_coast_usa", name = "Street Course 2 Reverse", revision = 1, force = true },
 }
 local COURSE_FIELDS = { "mode", "gates", "startPositions", "distance", "loopable", "branchingEnabled",
     "oneWayGates", "sectorCount", "manualSectors" }
@@ -1146,17 +1154,27 @@ local function applyBundledCourseUpdates()
                 local live = table.find(list, function(r)
                     return type(r.name) == "string" and r.name:lower() == update.name:lower()
                 end)
+                local candidate
                 if not live then
                     -- deleted on purpose, or never seeded here : nothing to fix
+                elseif update.force then
+                    candidate = table.deepcopy(bundled)
+                    candidate.id, candidate.name, candidate.leaderboard = live.id, live.name, {}
                 elseif sameGates(live, bundled) then
                     -- already the fixed course (a fresh install seeds it directly)
                 elseif courseMatches(live, update.previous) then
-                    local candidate = table.deepcopy(live)
+                    candidate = table.deepcopy(live)
                     for _, field in ipairs(COURSE_FIELDS) do
                         -- table.deepcopy turns a non-table into an empty table
                         local v = bundled[field]
                         candidate[field] = type(v) == "table" and table.deepcopy(v) or v
                     end
+                else
+                    LogInfo(string.format(
+                        "bundled course update: %s / %s left alone, it was edited on this server",
+                        update.map, update.name))
+                end
+                if candidate then
                     local err = sanitizeRace(candidate, list)
                     if err then
                         failed = true
@@ -1167,13 +1185,10 @@ local function applyBundledCourseUpdates()
                             if r == live then list[i] = candidate end
                         end
                         dao_activity.save(update.map, M.ACTIVITY_TYPE, list)
-                        LogInfo(string.format("bundled course update: %s / %s updated to revision %d",
-                            update.map, update.name, update.revision))
+                        LogInfo(string.format("bundled course update: %s / %s %s to revision %d",
+                            update.map, update.name, update.force and "overwritten" or "updated",
+                            update.revision))
                     end
-                else
-                    LogInfo(string.format(
-                        "bundled course update: %s / %s left alone, it was edited on this server",
-                        update.map, update.name))
                 end
             end
             if not failed then dao_bundled.markSeeded(update.map, M.ACTIVITY_TYPE, key) end

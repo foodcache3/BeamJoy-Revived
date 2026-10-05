@@ -378,8 +378,6 @@
     "beamjoy.window.config.editor.pointList.teleportToHere": "내 차량을 이곳으로 텔레포트",
     "beamjoy.window.config.tabs.general.forceHud": "BeamJoy HUD 강제 표시",
     "beamjoy.window.config.tabs.general.forceHud.tooltip": "스태프가 이미 가지고 있는 항상 열려있고 닫을 수 없는 창을 모두가 받게 됩니다.",
-    "beamjoy.window.config.tabs.general.showHudAtStart": "시작 시 HUD 표시",
-    "beamjoy.window.config.tabs.general.showHudAtStart.tooltip": "접속 시 자동으로 열리지만, 플레이어는 여전히 닫을 수 있습니다.",
     "beamjoy.window.config.tabs.general.raceEditor.title": "레이스 에디터",
     "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction": "작성자만 편집 가능하도록 제한",
     "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction.tooltip": "스태프와 레이스의 작성자 본인만 편집하거나 삭제할 수 있습니다.",

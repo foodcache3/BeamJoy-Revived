@@ -377,8 +377,6 @@
     "beamjoy.window.config.editor.pointList.teleportToHere": "Телепортировать мой транспорт сюда",
     "beamjoy.window.config.tabs.general.forceHud": "Принудительно включить HUD BeamJoy",
     "beamjoy.window.config.tabs.general.forceHud.tooltip": "Все получают то же всегда открытое, незакрываемое окно, что и администрация.",
-    "beamjoy.window.config.tabs.general.showHudAtStart": "Показывать HUD при запуске",
-    "beamjoy.window.config.tabs.general.showHudAtStart.tooltip": "Открывается автоматически при подключении, но игроки всё равно могут его закрыть.",
     "beamjoy.window.config.tabs.general.raceEditor.title": "Редактор гонок",
     "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction": "Ограничить редактирование авторами",
     "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction.tooltip": "Редактировать или удалять гонку могут только администрация и её создатель.",

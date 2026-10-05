@@ -377,8 +377,6 @@
     "beamjoy.window.config.editor.pointList.teleportToHere": "將我的車輛傳送到這裡",
     "beamjoy.window.config.tabs.general.forceHud": "強制啟用 BeamJoy HUD",
     "beamjoy.window.config.tabs.general.forceHud.tooltip": "所有人都會獲得工作人員原本就有的、一直開啟且無法關閉的視窗。",
-    "beamjoy.window.config.tabs.general.showHudAtStart": "啟動時顯示 HUD",
-    "beamjoy.window.config.tabs.general.showHudAtStart.tooltip": "連線時會自動開啟，但玩家仍可自行關閉。",
     "beamjoy.window.config.tabs.general.raceEditor.title": "賽道編輯器",
     "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction": "僅限作者編輯",
     "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction.tooltip": "只有工作人員和賽事的建立者才能編輯或刪除該賽事。",

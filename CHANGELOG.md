@@ -8,8 +8,114 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2580, server build 2404.
+Version 1.11.0 : client build 2595, server build 2411.
 
+- **Street Course 2 and Street Course 2 Reverse (West Coast USA) replaced on every server,
+  once.** On its next start, each server replaces both races with the versions BeamJoy ships now
+  (course, start positions, default settings, vehicle rule), even if they were edited there ;
+  their leaderboards are cleared, since times set on the old course don't compare. A server that
+  deleted either race doesn't get it back. *(server only)*
+- **Player chases : a player speeding past the police is noticed, hiding close by is no escape,
+  and both sides see the escape coming.** *(client + server)*
+  - The game's police only noticed a car after it stayed close for a while (half a second at 15 m,
+    10 seconds at 50 m), so a car flying past never started a chase. A player car in plain view of
+    the police car (within about 100 m, nothing in between) is now noticed within a second.
+  - The game counted a car it couldn't see as infinitely far, so a fugitive hiding behind a fence
+    15 m from the police escaped after 45 s. The escape timer now starts over while the police car
+    is within 40 m, and doesn't run within 80 m, seen or not.
+  - While a fugitive is getting away, the police player sees "<player> gets away in N", and the
+    fugitive sees "You get away from the police in N" (once every police car in the chase is losing
+    them) and "The police spotted you again" when the countdown stops. Traffic chases show the
+    police player "The suspect gets away in N" too.
+- **Fixed: traffic piling up around players, and cars appearing on another player's screen,
+  driving a few metres and vanishing, over and over.** Each player's game drives its own share of
+  the traffic ("max per player"), but placed those cars around any player at random, while the
+  game's own traffic system respawns them around its own camera only. A car placed near the other
+  player was soon pulled back to its owner, and the cars piled up wherever both shares met. Each
+  player's traffic now spawns and respawns around that player (the car they're in or watching,
+  else the camera), still never within sight distance of any player, and BeamJoy no longer moves a
+  car that's right in front of another player. Also fixed: with two or more players, most spawn
+  points were wrongly refused (only one player's distances were known to the check). *(client only)*
+- **Traffic chase arrests : a wrong speed reading can't block them, and the game logs what it
+  measures.** The fugitive's speed is now the lower of the one its game reports and how far it
+  actually moved in the last second (the 8 m distance limit still applies). Near a fugitive, the
+  police player's game writes the measured gap and speed to its log every 2 s
+  ("beamjoy_pursuit: arrest check"), and an error in the arrest check is logged instead of failing
+  silently. *(client only)*
+- **Removed "Show HUD at start" (Config > General).** It didn't open the window at start and is
+  of no use now that "Force-enable BeamJoy HUD" is on by default. A server whose saved config had
+  forcing off is switched to it once, on its first start with this version ; turning it off again
+  afterwards sticks. *(client + server)*
+- **Fixed: traffic fugitives escaping as soon as they were about 175 m away.** BeamJoy's traffic
+  respawn moved a fugitive like any car out of every player's range (about 150 m from a police car
+  that had slowed down), which ended the chase as an escape on the spot. Fugitives are left out of
+  it ; they get away by the escape rule (250 m from the police for 20 s). *(client only)*
+- **Fixed: the fugitive tag staying after an arrest.** An older fugitive list could reach the police
+  player after the chase's end (the server queues messages to everyone and to one player
+  separately) and tag the car again, and an arrest that didn't reach the server left the chase
+  running until the police drove away. The tag now goes the moment the arrest is made, a chase that
+  just ended isn't tagged again by a late list (a new chase on that car still is), and an arrest
+  the server hasn't confirmed is sent again every 3 s. *(client + server)*
+- **Fixed: traffic chases stopped starting.** A start the server refused got no answer, while the
+  police player's game kept counting it as their running chase and so started no other ; the server
+  now answers a refusal (and logs why), and a start it never listed is forgotten after 10 s. Turning
+  off chases between players (Config > Freeroam) also made every player count as out of all chases,
+  so their traffic chases were refused too ; only their own "Police chases" setting and being in an
+  activity count now. A chase tick that finds no suspect writes why in the game's log (traffic cars
+  in range, out of sight, too far by road). *(client + server)*
+- **Fixed: a rammed traffic fugitive "exchanged insurance" instead of fleeing.** The car kept its
+  normal traffic behaviour during a chase, so a collision made it pull over, follow you, or stop to
+  exchange insurance information, each switching it off the flee. That behaviour is now held off
+  while the car is a fugitive, and given back (with the crash forgotten) when the chase ends.
+  *(client only)*
+- **Fixed: arresting a traffic fugitive barely ever worked.** It needed the fugitive within 5 m,
+  under 2 m/s, never more than 1 m from where the countdown began, for 5 seconds in a row, any miss
+  starting it over ; another player's traffic car jitters on your screen with each network
+  correction (most of all while the cars touch), so the countdown kept restarting. Now closer to
+  the game's own police : the fugitive within 8 m and under 3 m/s builds the arrest up over 5
+  seconds, a jolt only takes some time back, and the arrest is dropped once it's more than 15 m
+  away. A fugitive whose speed isn't reported is measured from its moves. *(client only)*
+- **Fixed: two traffic fugitives starting at once.** The server now allows one traffic chase per
+  police player at a time, whatever their game sends, and the chase tick of a reloaded copy of the
+  pursuit module no longer runs next to the live one. When a police player leaves, their chase ends
+  as an escape, and a fugitive whose car is deleted (its owner left) leaves the list instead of
+  staying tagged. *(client + server)*
+- **Traffic chases : one at a time, and fugitives can now get away.** A police player starts a new
+  traffic chase only once their previous one is over (the fugitive tag could end up on two cars : a
+  new chase started whenever the previous fugitive was out of reach, while it stayed a fugitive). A
+  fugitive more than 250 m from the police player who chased it, for 20 seconds, gets away. Before,
+  a chase only ended when the fugitive's owner happened to respawn or remove the car. *(client only)*
+- **Fixed: a fleeing traffic fugitive respawned elsewhere and kept its tag.** Besides BeamJoy's
+  own respawn (which already ended the chase), the game's own traffic system moves cars that are
+  out of sight, without telling anyone, and resets them to normal driving : the car kept its
+  fugitive tag, stopped fleeing and couldn't be arrested. The owner's game now holds its fugitives
+  out of the game's own respawn until the chase ends, and ends a chase as an escape if its car
+  moves further than it could have driven. An escaped fugitive now drives on as normal traffic
+  instead of stopping in the road. *(client only)*
+- **Traffic chases pick a suspect you can actually catch.** The suspect used to be any traffic car
+  within a straight-line distance, picked at random, so it could be on an overpass, a parallel road
+  or behind buildings. It's now the nearest traffic car the police car can see that's also close
+  by road (no route more than about 1.6 times the straight distance plus 60 m). When no car fits,
+  no chase starts that time. *(client only)*
+- **Fixed: traffic chases still picking parked cars.** The parked-car check only knew the police
+  player's own parked traffic, so another player's parked cars could still become fugitives. A
+  traffic chase now only starts on a car actually driving (over 3 m/s), the owner's game drops a
+  chase on one of its parked cars straight away, and a fugitive dropped that way loses its minimap
+  marker. *(client only)*
+- **"Police can chase me" is now "Police chases", and covers every chase.** Turned off (Settings >
+  Vehicle), a player stays out of police chases on both sides : police players can't chase them,
+  and from their own police car they don't chase other players or traffic. Turning it off
+  mid-chase calls off the chases they started or joined (the fugitives get away). The server
+  refuses chases started by a player who has it off, traffic chases included. The setting keeps its
+  saved value. *(client + server)*
+- **Fixed: synced clouds and fog not reaching players who join later.** With weather sync on, a
+  player joining after an admin changed the weather got the map's own cloud cover, fog density and
+  fog height (the wind was right). The game fades those three in and drops the fade whenever the
+  time of day is set, which the time sync does on a join, and the level's own start also re-applies
+  the map's weather. Each game now checks a few times a second and sets any synced weather it
+  isn't showing, once no fade is running (never while an admin is moving a weather slider). The
+  same keeps an admin's change from stopping halfway on other players' screens at a day/night
+  switch. *(client only)*
 - **Security fixes from a review of what the server accepts from players.** *(client + server)*
   - **Players' IP addresses no longer go to everyone.** Several messages (on joining, spawning or
     switching car, a group change, every save) sent each player's full record to every player,

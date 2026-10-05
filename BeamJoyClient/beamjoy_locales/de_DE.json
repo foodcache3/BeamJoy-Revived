@@ -378,8 +378,6 @@
   "beamjoy.window.config.editor.pointList.teleportToHere": "Mein Fahrzeug hierher teleportieren",
   "beamjoy.window.config.tabs.general.forceHud": "BeamJoy-HUD erzwingen",
   "beamjoy.window.config.tabs.general.forceHud.tooltip": "Alle erhalten das immer geöffnete, nicht schließbare Fenster, das Staff bereits hat.",
-  "beamjoy.window.config.tabs.general.showHudAtStart": "HUD beim Start anzeigen",
-  "beamjoy.window.config.tabs.general.showHudAtStart.tooltip": "Öffnet sich automatisch beim Verbinden, Spieler können es aber weiterhin schließen.",
   "beamjoy.window.config.tabs.general.raceEditor.title": "Rennen-Editor",
   "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction": "Bearbeitung auf Ersteller beschränken",
   "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction.tooltip": "Nur Staff und der jeweilige Ersteller eines Rennens dürfen es bearbeiten oder löschen.",

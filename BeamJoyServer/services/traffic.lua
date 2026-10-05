@@ -7,6 +7,10 @@ local M = {
     --- the fugitives' full BeamMP vehicle ids ("<ownerID>-<vehicleID>", the same on every client)
     ---@type string[]
     pursuitFugitives = {},
+    --- who started each chase, index fugitive id, value police playerID : one chase per police
+    --- player at a time
+    ---@type table<string, integer>
+    pursuitPolice = {},
 }
 
 ---@return table
@@ -116,6 +120,21 @@ local function onPlayerDisconnect(playerID)
     M.playerBalancer[playerID] = nil
     M.parkedBalancer[playerID] = nil
     updateBalancer()
+    -- the chases a leaving police player started end, their fugitives get away
+    local ended = {}
+    for key, policeID in pairs(M.pursuitPolice) do
+        if policeID == playerID then ended[#ended + 1] = key end
+    end
+    for _, key in ipairs(ended) do M.stopPursuit({}, key, 0) end
+end
+
+--- a fugitive car that's gone (its owner left, or removed it) leaves the list : its owner's game
+--- can't say so once the player has left
+---@param playerID integer
+---@param vehID integer
+local function onVehicleDeleted(playerID, vehID)
+    local key = string.format("%d-%d", playerID, vehID)
+    if table.includes(M.pursuitFugitives, key) then M.stopPursuit({}, key, 2) end
 end
 
 --- Sends traffic rubberband to a player (avoid multiple players teleporting vehicles to a same spot)
@@ -199,14 +218,34 @@ local function startPursuit(ctxt, fugitiveVID, policeVID)
     local conf = getConf()
     if not conf.enabled or not ctxt.sender then return end
     if type(fugitiveVID) ~= "string" or type(policeVID) ~= "string" then return end
+    -- a refusal is answered (the police player's game forgets that start at once, instead of
+    -- waiting for it) and logged with its reason
+    local function refuse(reason)
+        LogWarn(string.format("traffic chase on %s by %s refused : %s", fugitiveVID, ctxt.sender.playerName, reason))
+        communications_tx.sendToPlayer(ctxt.senderID, "pursuitRefused", fugitiveVID)
+    end
     local fugitiveOwner, fugitive = vehicleByKey(fugitiveVID)
     local policeOwner, police = vehicleByKey(policeVID)
-    if not fugitive or not (fugitive.isAi or fugitiveOwner.playerID == ctxt.senderID) then return end
-    if not police or police.isAi or not policeOwner or policeOwner.playerID ~= ctxt.senderID then return end
-    if #M.pursuitFugitives >= MAX_FUGITIVES then return end
+    if not fugitive or not (fugitive.isAi or fugitiveOwner.playerID == ctxt.senderID) then
+        return refuse("not a traffic car")
+    end
+    if not police or police.isAi or not policeOwner or policeOwner.playerID ~= ctxt.senderID then
+        return refuse("the police car isn't the sender's own")
+    end
+    if #M.pursuitFugitives >= MAX_FUGITIVES then return refuse("too many chases running") end
+    -- a player who turned "Police chases" off (or is in an activity) chases nothing
+    if services_playerPursuit and not services_playerPursuit.isAvailable(ctxt.senderID) then
+        return refuse("Police chases off, or in an activity")
+    end
+    -- Real bug (direct report: the fugitive tag landed on two cars at once) : one chase per police
+    -- player at a time, whatever their game sends (a second tick loop, an older client)
+    for key, policeID in pairs(M.pursuitPolice) do
+        if policeID == ctxt.senderID and key ~= fugitiveVID then return refuse("already chasing " .. key) end
+    end
 
     if not table.includes(M.pursuitFugitives, fugitiveVID) then
         table.insert(M.pursuitFugitives, fugitiveVID)
+        M.pursuitPolice[fugitiveVID] = ctxt.senderID
         communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "pursuitStart", fugitiveVID, policeVID)
         services_players.players
             :forEach(function(p)
@@ -224,8 +263,13 @@ local function stopPursuit(ctxt, vid, state)
     local conf = getConf()
     if not conf.enabled then return end
     if type(vid) ~= "string" or (state ~= 0 and state ~= 1 and state ~= 2) then return end
+    if not table.includes(M.pursuitFugitives, vid) then
+        -- already over (a repeated arrest, or the other side ended it first) : nothing to do
+        return LogInfo(string.format("traffic chase stop for %s ignored : not running", vid))
+    end
 
     if table.includes(M.pursuitFugitives, vid) then
+        M.pursuitPolice[vid] = nil
         M.pursuitFugitives = table.filter(M.pursuitFugitives, function(v)
             return v ~= vid
         end)
@@ -244,6 +288,7 @@ end
 M.onInit = onInit
 M.onBJRequestCache = onBJRequestCache
 M.onPlayerDisconnect = onPlayerDisconnect
+M.onVehicleDeleted = onVehicleDeleted
 M.onSlowUpdate = onSlowUpdate
 
 M.rxSettings = rxSettings

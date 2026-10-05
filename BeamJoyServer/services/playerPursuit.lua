@@ -7,9 +7,11 @@
 --- game (the freeze on arrest, the messages, no resets while chased), counts the stats, and ends a
 --- chase when one side leaves.
 ---
---- Who can be chased : each player's own game reports it (playerPursuitAvailable), since only it
---- knows whether its player is in an activity, and it holds the player's "Police can chase me"
---- setting. The fugitive's game also withdraws from a chase that slipped through anyway.
+--- Who takes part : each player's own game reports it (playerPursuitAvailable), since only it
+--- knows whether its player is in an activity, and it holds the player's "Police chases" setting.
+--- It covers both sides : a player who's out is neither chased nor chasing (traffic chases
+--- included, see services/traffic.lua). The fugitive's game also withdraws from a chase that
+--- slipped through anyway.
 ---
 --- Several police players can chase the same car : it escapes once every one of them lost it.
 ---
@@ -236,7 +238,7 @@ local function removePolice(serverVID, policeID, escaped)
 end
 
 ---@param ctxt BJSContext
----@param event "start"|"arrest"|"evade"|"reset"
+---@param event "start"|"arrest"|"evade"|"evading"|"reset"
 ---@param serverVID string
 ---@param data table?
 local function playerPursuitEvent(ctxt, event, serverVID, data)
@@ -251,7 +253,7 @@ local function playerPursuitEvent(ctxt, event, serverVID, data)
         local owner = playerByID(ownerID)
         local _, fugitiveVehID = parseKey(serverVID)
         local policeCar = senderPoliceCar(ctxt, data.police)
-        local refused = not enabled() or not owner or M.unavailable[ownerID] or
+        local refused = not enabled() or not owner or M.unavailable[ownerID] or M.unavailable[ctxt.senderID] or
             (M.cooldowns[serverVID] and M.cooldowns[serverVID] > now) or
             not policeCar or not owner.vehicles[fugitiveVehID] or owner.vehicles[fugitiveVehID].isAi
         if not refused then
@@ -329,6 +331,24 @@ local function playerPursuitEvent(ctxt, event, serverVID, data)
         })
     elseif event == "evade" then
         removePolice(serverVID, ctxt.senderID, true)
+    elseif event == "evading" then
+        -- a police player's escape countdown on this car (seconds left, none when it sees it) : the
+        -- fugitive is told the longest one while every police car in the chase is losing it, and
+        -- nothing (back in sight) otherwise
+        local c = M.chases[serverVID]
+        local entry = c and c.police[ctxt.senderID]
+        if not entry then return end
+        local left = tonumber(data.left)
+        entry.evadeLeft = left and math.max(1, math.min(300, math.floor(left))) or nil
+        local time
+        for _, p in pairs(c.police) do
+            if not p.evadeLeft then
+                time = nil
+                break
+            end
+            time = math.max(time or 0, p.evadeLeft)
+        end
+        notify(c.fugitiveID, "escaping", serverVID, { time = time })
     elseif event == "reset" then
         removePolice(serverVID, ctxt.senderID, false)
     end
@@ -355,7 +375,12 @@ local function playerPursuitAvailable(ctxt, available)
     M.unavailable[ctxt.senderID] = unavailable
     if unavailable then
         for serverVID, c in pairs(M.chases) do
-            if c.fugitiveID == ctxt.senderID then endChase(serverVID, "over") end
+            if c.fugitiveID == ctxt.senderID then
+                endChase(serverVID, "over")
+            elseif c.police[ctxt.senderID] then
+                -- out as police too
+                removePolice(serverVID, ctxt.senderID, false)
+            end
         end
     end
     push()
@@ -419,5 +444,9 @@ M.onBJRequestCache = onBJRequestCache
 M.playerPursuitEvent = playerPursuitEvent
 M.playerPursuitWithdraw = playerPursuitWithdraw
 M.playerPursuitAvailable = playerPursuitAvailable
+--- the player takes part in police chases right now (services/traffic.lua checks it too)
+---@param playerID integer
+---@return boolean
+M.isAvailable = function(playerID) return not M.unavailable[playerID] end
 
 return M

@@ -237,6 +237,27 @@ local function getPlayersPositions()
     end)
 end
 
+--- Real bug (direct report: more traffic near a player than "max per player", and cars spawning on
+--- the other player's screen, driving 20 m and vanishing, again and again). Each player's game
+--- drives its own share of the traffic, but placed it around any player at random, while the
+--- game's own traffic system (which drives those cars) respawns them around its own camera only.
+--- So a car placed near the other player was soon respawned back near its owner, and the cars
+--- piled up wherever both shares met. Each player's traffic now stays around that player : the
+--- vehicle they're in or watching, else the camera (the same point the game's traffic follows)
+---@return {pos: vec3, dir: vec3, speed: number}
+local function getOwnFocus()
+    local veh = be:getPlayerVehicle(0)
+    if veh then
+        local vel = veh.getVelocity and veh:getVelocity()
+        return {
+            pos = vec3(be:getObjectOOBBCenterXYZ(veh:getID())),
+            dir = veh:getDirectionVector(),
+            speed = vel and vel:length() or 0,
+        }
+    end
+    return { pos = core_camera.getPosition(), dir = core_camera.getForward(), speed = 0 }
+end
+
 ---@param speed number meter/sec
 ---@return integer minDist, integer maxDist
 local function getMinMaxDistFromPlayer(speed)
@@ -263,28 +284,22 @@ local function getNewRandomSpawn(job)
     local mapNodes = map.getMap().nodes
     if table.length(mapNodes) == 0 then return end
 
+    -- every player's band (only the chosen origin used to get one : the check below then failed
+    -- on the others' missing values)
     local playerPositions = getPlayersPositions()
+    playerPositions:forEach(function(p)
+        p.minDistance, p.maxDistance = M.getMinMaxDistFromPlayer(p.speed)
+    end)
 
     local valid = false
     local origin, spawnData, onRoute
     local tries, threshold = 0, 10
     repeat
         tries = tries + 1
-        if playerPositions:length() == 0 then
-            local min, max = M.getMinMaxDistFromPlayer(0)
-            origin = {
-                pos = table.random(mapNodes).pos,
-                dir = vec3(0, 1, 0),
-                speed = 0,
-                minDistance = min,
-                maxDistance = max,
-                pathRandomization = M.getPathRandomization(0),
-            }
-        else
-            origin = playerPositions:random()
-            origin.minDistance, origin.maxDistance = M.getMinMaxDistFromPlayer(origin.speed)
-            origin.pathRandomization = M.getPathRandomization(origin.speed)
-        end
+        -- around this player only (see getOwnFocus)
+        origin = getOwnFocus()
+        origin.minDistance, origin.maxDistance = M.getMinMaxDistFromPlayer(origin.speed)
+        origin.pathRandomization = M.getPathRandomization(origin.speed)
         -- findSafeSpawnPoint (native's own gameplay_traffic.lua live spawn maintenance uses this,
         -- not the raw radial search) tries a route ahead of origin.dir along the road graph first,
         -- only falling back to "anywhere nearby" radial search if no such route point validates.
@@ -304,22 +319,12 @@ local function getNewRandomSpawn(job)
                 origin.minDistance, origin.maxDistance, targetDist,
                 { pathRandomization = origin.pathRandomization, minDrivability = .1 })
         if onRoute then
-            local playersDistances = playerPositions:map(function(pData)
-                return {
-                    distance = vec3(spawnData.pos):distance(pData.pos),
-                    minDistance = pData.minDistance,
-                    maxDistance = pData.maxDistance,
-                }
+            -- within this player's band (the search's own), and not in plain view of anyone : clear
+            -- of every player's minimum distance
+            local spawnPos = vec3(spawnData.pos)
+            valid = playerPositions:every(function(pData)
+                return spawnPos:distance(pData.pos) > pData.minDistance
             end)
-            if playerPositions:length() == 0 or
-                (playersDistances:every(function(pData)
-                        return pData.distance > pData.minDistance
-                    end) and
-                    playersDistances:any(function(pData)
-                        return pData.distance < pData.maxDistance
-                    end)) then
-                valid = true
-            end
         end
         if not valid and job then job.sleep(.01) end
     until valid or tries >= threshold
@@ -1091,7 +1096,9 @@ local function onRubberbandTick()
     pruneAndTopUpParkedNearBusStops()
     core_jobsystem.create(function(job)
         local playerPositions = getPlayersPositions()
-        if playerPositions:length() > 0 then
+        local own = getOwnFocus()
+        local _, ownMaxDist = M.getMinMaxDistFromPlayer(own.speed)
+        do
             local selfAis = M.vehs:filter(function(vid) return not M.parkedVehs:includes(vid) end)
                 :map(function(vid) return beamjoy_vehicles.vehicles[vid] end)
             -- Previously rubberbanded only a single (and, due to a dead distance-tracking bug,
@@ -1102,10 +1109,21 @@ local function onRubberbandTick()
             -- Rubberbanding every out-of-range vehicle in one pass fixes the throughput, not just
             -- the spawn direction bias fixed by getPathRandomization above.
             local targetsToRubberband = selfAis:filter(function(v)
+                -- Real bug (direct report: "suspects escape instantly once about 175 m away") : a
+                -- fugitive got respawned like any car out of every player's range (150 m to 400 m
+                -- by speed : about 150 m from a police car that has slowed down), and that ended
+                -- its chase as an escape at once. A fugitive is left alone ; whether it got away
+                -- is beamjoy_pursuit's escape rule's call (250 m from the police for 20 s)
+                if beamjoy_pursuit and beamjoy_pursuit.fugitives and beamjoy_pursuit.fugitives[v.vid] then
+                    return false
+                end
+                -- out of this player's range (see getOwnFocus), and not right in front of another
+                -- player, where it would vanish before their eyes
                 local pos = vec3(be:getObjectOOBBCenterXYZ(v.vid))
+                if pos:distance(own.pos) < ownMaxDist then return false end
                 return playerPositions:every(function(data)
-                    local _, maxDist = M.getMinMaxDistFromPlayer(data.speed)
-                    return pos:distance(data.pos) >= maxDist
+                    local minDist = M.getMinMaxDistFromPlayer(data.speed)
+                    return pos:distance(data.pos) >= minDist
                 end)
             end)
             targetsToRubberband:forEach(function(v)

@@ -5,7 +5,9 @@
 --- police logic (gameplay_police) does the rest, exactly as it does for traffic in singleplayer :
 --- it notices offenses (speeding, red lights, reckless driving, hitting the police car...), starts
 --- the chase, and decides the arrest (both stopped close together for 5 s) or the escape (out of
---- sight long enough). Each of those (its onPursuitAction hook) is relayed to the server.
+--- sight long enough). Each of those (its onPursuitAction hook) is relayed to the server. Two of its
+--- rules are corrected for player cars (see assistPolice), and how close a fugitive is to getting
+--- away is shown to both sides (see reportEscapes).
 ---
 --- The game's police logic only runs while its traffic system is on, and that needs at least one
 --- AI car this game spawned itself. With no traffic here, this module keeps it going on its own :
@@ -21,15 +23,20 @@
 --- shouldn't be in (an activity, the setting turned off, out of that car).
 ---
 --- Who can be chased : not ghosts, not police cars, not traffic, not a car its owner isn't in,
---- and not a player who turned off Settings > Vehicle > "Police can chase me" or is in an
---- activity (each player's own game tells the server, playerPursuitAvailable).
+--- and not a player who turned off Settings > Vehicle > "Police chases" or is in an activity
+--- (each player's own game tells the server, playerPursuitAvailable).
+---
+--- "Police chases" covers every chase, on both sides : turned off, this player isn't chased by
+--- police players, doesn't chase players from their police car (this file's police side stops),
+--- and doesn't chase traffic either (beamjoy_pursuit reads policeChasesOn).
 
 local M = {
     --- seconds before a car can be chased again after a chase on it ended here
     COOLDOWN = 30,
     ARREST_FREEZE = 5,
 
-    --- Settings > Vehicle > "Police can chase me" (saved on this PC)
+    --- Settings > Vehicle > "Police chases" (saved on this PC) : off, this player takes no part in
+    --- any police chase, as police or as the fugitive, players or traffic
     allowChases = true,
 
     ---@type {chases: {vid: string, fugitiveID: integer, police: integer[]}[], unavailable: integer[]}
@@ -60,6 +67,11 @@ local M = {
     ---@type string?
     chased = nil,
     frozenUntil = nil,
+    --- fugitive side : the "you get away in" countdown is showing
+    escapingShown = false,
+    --- police side : the escape countdown last sent to the server, index serverVID
+    ---@type table<string, integer?>
+    reportedEscape = {},
 
     ready = false,
     ---@type boolean?
@@ -158,10 +170,15 @@ end
 
 -- WHO CAN BE CHASED ---------------------------------------------------------------------------------
 
---- this player, as a fugitive
+--- this player takes part in police chases (as police or fugitive) right now. The server reads it
+--- for both sides, traffic chases included.
+--- Real bug (direct report: the pursuit tick stopped starting chases) : this used to include
+--- enabled(), the server's switch for chases between players, so turning those off made every
+--- player "unavailable" and the server refused their traffic chases too. That switch is checked
+--- on its own where it applies (here : ownPoliceCar, stillChaseable ; the server : playerPursuitEvent)
 ---@return boolean
 local function selfAvailable()
-    return enabled() and M.allowChases and not inActivity()
+    return M.allowChases and not inActivity()
 end
 
 local function sendAvailability()
@@ -204,7 +221,7 @@ end
 --- police side : this player is in their own police car, in freeroam
 ---@return BJVehicle?
 local function ownPoliceCar()
-    if not enabled() or inActivity() or M.chased then return nil end
+    if not enabled() or not M.allowChases or inActivity() or M.chased then return nil end
     local current = beamjoy_vehicles.getCurrentOwn()
     if not current or not current.veh or isGhost(current) or not isPoliceCar(current) then return nil end
     return current
@@ -287,6 +304,7 @@ local function dropTarget(serverVID, silent)
     M.myTargets[serverVID] = nil
     M.pending[serverVID] = nil
     M.cooldowns[serverVID] = GetCurrentTimeMillis() + M.COOLDOWN * 1000
+    M.reportedEscape[serverVID] = nil
     local v = vehicleByServerVID(serverVID)
     vid = vid or (v and v.vid)
     if vid then stopNativePursuit(vid) end
@@ -403,10 +421,84 @@ local function drive(dtReal, dtSim)
     end
 end
 
+-- Two corrections to the game's police logic, for player cars (direct reports) :
+--  - "a player passing at high speed may not trigger a chase" : the game builds its "sight" of a car
+--    at 120 / (distance squared) per second, half a second at 15 m but 10 s at 50 m, and notices
+--    offenses only once it's halfway. A player car the police car can see (within 100 m of its
+--    look-ahead point, nothing in between, the game's own test) is now seen in a quarter of a second
+--    up close, one second at 100 m.
+--  - "I hid behind a fence 15 m from the police, nobody moved, and it said I escaped" : the game
+--    counts a car it can't see as infinitely far, so its 45 s escape timer ran. Within 40 m of the
+--    police car (seen or not) the timer starts over ; within 80 m (the game's own escape distance
+--    for a hidden car) it doesn't run.
+local SIGHT_NEAR, SIGHT_MIN_RATE, SIGHT_MAX_RATE = 50, 1, 4
+local ESCAPE_RESET_DISTANCE, ESCAPE_HOLD_DISTANCE = 40, 80
+
+--- police side, every frame
+---@param dtSim number
+local function assistPolice(dtSim)
+    if not M.active or not dtSim or dtSim <= 0 then return end
+    local t = traffic()
+    local police = ownPoliceCar()
+    if not t or not police then return end
+    local data = t.getTrafficData()
+    local pv = data[police.vid]
+    local targets = pv and pv.role and pv.role.validTargets
+    if not targets or not pv.pos then return end
+    for vid in pairs(M.managed) do
+        local tv = data[vid]
+        local pursuit = tv and tv.pursuit
+        if pursuit and tv.pos and tv.roleName ~= "empty" and tv.roleName ~= "police" then
+            local target = targets[vid]
+            if target and target.visible and target.dist then
+                local rate = math.clamp(SIGHT_NEAR / math.max(math.sqrt(target.dist), 1),
+                    SIGHT_MIN_RATE, SIGHT_MAX_RATE)
+                pursuit.sightValue = math.min(1, (pursuit.sightValue or 0) + rate * dtSim * .5)
+            end
+            if (pursuit.mode or 0) >= 1 and pursuit.timers then
+                local dist = pv.pos:distance(tv.pos)
+                if dist <= ESCAPE_RESET_DISTANCE then
+                    pursuit.timers.evade = 0
+                elseif dist <= ESCAPE_HOLD_DISTANCE then
+                    -- the game adds dtSim this frame (before or after this) : held where it is
+                    pursuit.timers.evade = math.max(0, (pursuit.timers.evade or 0) - dtSim)
+                end
+            end
+        end
+    end
+end
+
+--- police side, every second : a fugitive getting away (the game's escape timer running) shows a
+--- countdown here, and the server relays it to the fugitive (direct report: it was hard to tell
+--- when the suspect was escaping, from both sides)
+local function reportEscapes()
+    if not M.active or not next(M.myTargets) then return end
+    local t = traffic()
+    if not t or not gameplay_police then return end
+    local data = t.getTrafficData()
+    local vars = gameplay_police.getPursuitVars() or {}
+    local evadeTime = tonumber(vars.evadeTime) or 45
+    for serverVID, vid in pairs(M.myTargets) do
+        local tv = data[vid]
+        local evade = tv and tv.pursuit and tv.pursuit.timers and tonumber(tv.pursuit.timers.evade) or 0
+        local left = evade > 0 and math.max(1, math.ceil(evadeTime - evade)) or nil
+        if left then
+            local v = beamjoy_vehicles.vehicles[vid]
+            beamjoy_communications_ui.uiBroadcast("beamjoy.pursuit.player.losing",
+                { playerName = v and v.ownerName or "?", time = left }, nil, 1.2)
+        end
+        if left ~= M.reportedEscape[serverVID] then
+            M.reportedEscape[serverVID] = left
+            beamjoy_communications.send("playerPursuitEvent", "evading", serverVID, { left = left })
+        end
+    end
+end
+
 -- FUGITIVE SIDE -------------------------------------------------------------------------------------
 
 local function releaseChased()
     M.chased = nil
+    M.escapingShown = false
     beamjoy_recoveryPolicy.release("playerPursuit")
     if beamjoy_restrictions then beamjoy_restrictions.update() end
 end
@@ -421,7 +513,7 @@ end
 ---@param serverVID string
 ---@return boolean
 local function stillChaseable(serverVID)
-    if not selfAvailable() then return false end
+    if not enabled() or not selfAvailable() then return false end
     local current = beamjoy_vehicles.getCurrentOwn()
     return current ~= nil and keyOf(current) == serverVID and not isGhost(current)
 end
@@ -485,6 +577,18 @@ local function onNotice(kind, serverVID, data)
             if M.chased == serverVID then
                 releaseChased()
                 trafficMessage(beamjoy_lang.translate("beamjoy.pursuit.player.over"))
+            end
+        elseif kind == "escaping" then
+            -- every police car in the chase is losing this car : the longest of their countdowns
+            if M.chased ~= serverVID then return end
+            local time = tonumber(data.time)
+            if time then
+                M.escapingShown = true
+                beamjoy_communications_ui.uiBroadcast("beamjoy.pursuit.player.escaping",
+                    { time = math.floor(time) }, nil, 1.5)
+            elseif M.escapingShown then
+                M.escapingShown = false
+                trafficMessage(beamjoy_lang.translate("beamjoy.pursuit.player.spotted"), 3)
             end
         end
         return
@@ -620,12 +724,16 @@ local function onSlowUpdate()
     if M.chased and not stillChaseable(M.chased) then withdraw(M.chased) end
     local ok, err = pcall(updateRoles)
     if not ok then LogError("beamjoy_playerPursuit: role update failed: " .. tostring(err)) end
+    ok, err = pcall(reportEscapes)
+    if not ok then LogError("beamjoy_playerPursuit: escape report failed: " .. tostring(err)) end
 end
 
 ---@param dtReal number
 ---@param dtSim number
 local function onUpdate(dtReal, dtSim)
     drive(dtReal, dtSim)
+    local ok, err = pcall(assistPolice, dtSim)
+    if not ok then LogError("beamjoy_playerPursuit: police assist failed: " .. tostring(err)) end
 end
 
 ---@param restrictions tablelib<integer, string>
@@ -652,6 +760,12 @@ local function onExtensionUnloaded()
     setPoliceVars(false)
     uninstallGetState()
     beamjoy_recoveryPolicy.release("playerPursuit")
+end
+
+--- Settings > Vehicle > "Police chases" is on : beamjoy_pursuit doesn't chase traffic when it's off
+---@return boolean
+local function policeChasesOn()
+    return M.allowChases == true
 end
 
 --- this police player chases at least one player
@@ -682,5 +796,6 @@ M.onPreExit = onExtensionUnloaded
 M.retrieveCache = retrieveCache
 M.isChasing = isChasing
 M.isFugitiveVid = isFugitiveVid
+M.policeChasesOn = policeChasesOn
 
 return M

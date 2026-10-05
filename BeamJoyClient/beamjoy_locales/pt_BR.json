@@ -377,8 +377,6 @@
     "beamjoy.window.config.editor.pointList.teleportToHere": "Teleportar meu veículo para cá",
     "beamjoy.window.config.tabs.general.forceHud": "Forçar ativação do HUD do BeamJoy",
     "beamjoy.window.config.tabs.general.forceHud.tooltip": "Todos recebem a janela sempre aberta e não fechável que a equipe já tem.",
-    "beamjoy.window.config.tabs.general.showHudAtStart": "Mostrar HUD ao iniciar",
-    "beamjoy.window.config.tabs.general.showHudAtStart.tooltip": "Abre automaticamente ao conectar, mas os jogadores ainda podem fechá-lo.",
     "beamjoy.window.config.tabs.general.raceEditor.title": "Editor de Corridas",
     "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction": "Restringir edição aos autores",
     "beamjoy.window.config.tabs.general.raceEditor.authorshipRestriction.tooltip": "Somente a equipe e o próprio criador de uma corrida podem editá-la ou excluí-la.",
