@@ -183,9 +183,13 @@ local function state()
         local ok, data = false, nil
         if type(raw) == "string" and #raw > 0 then ok, data = pcall(utils_json.parse, raw) end
         data = ok and type(data) == "table" and data or {}
+        local function digits(s) return type(s) == "string" and s:match("^%d+$") and s or nil end
         M.state = {
             channel = M.CHANNELS[data.channel] and data.channel or "release",
             sha = type(data.sha) == "string" and data.sha:match("^%x+$") and data.sha or nil,
+            -- the server / client builds the updater installed last (development builds)
+            serverBuild = digits(data.serverBuild),
+            clientBuild = digits(data.clientBuild),
         }
     end
     return M.state
@@ -279,7 +283,14 @@ end
 ---@return string
 local function currentLabel()
     local build = buildIn()
-    return build and string.format("%s build %s", versionIn(), build) or versionIn()
+    if not build then return versionIn() end
+    -- the client build is known when the updater installed this very server build (deployed by
+    -- hand since, BJ.zip may be another one : left out)
+    local s = state()
+    if s.clientBuild and s.serverBuild == build then
+        return string.format("%s build %s/%s", versionIn(), build, s.clientBuild)
+    end
+    return string.format("%s build %s", versionIn(), build)
 end
 
 ---@param v string
@@ -445,23 +456,28 @@ local function check(requester, onNewer)
         end
         if channel ~= "development" then return report() end
 
-        -- a development build is named by its version and build number (direct request : the
-        -- commit meant nothing), read from that exact commit's files ; the commit stays the name
-        -- when they can't be read
-        local raw = string.format("https://raw.githubusercontent.com/%s/%s/BeamJoyServer/", M.REPO, found.sha)
-        local function get(name, out)
-            return "curl -s -L --fail --max-time 30 -o " .. out .. " " .. q(raw .. name)
+        -- a development build is named by its version and its server / client build numbers
+        -- (direct requests : the commit meant nothing, and a client-only change kept the same
+        -- server build), read from that exact commit's files ; the commit stays the name when they
+        -- can't be read
+        local raw = string.format("https://raw.githubusercontent.com/%s/%s/", M.REPO, found.sha)
+        local function get(path, out)
+            return "curl -s -L --fail --max-time 30 -o " .. out .. " " .. q(raw .. path)
         end
+        local CLIENT_BUILD = "BeamJoyClient/lua/ge/extensions/beamjoy/buildversion"
         runJob({
             "if exist version.txt del /q version.txt",
             "if exist build.txt del /q build.txt",
-            get("version", "version.txt"),
-            get("buildversion", "build.txt"),
+            "if exist clientbuild.txt del /q clientbuild.txt",
+            get("BeamJoyServer/version", "version.txt"),
+            get("BeamJoyServer/buildversion", "build.txt"),
+            get(CLIENT_BUILD, "clientbuild.txt"),
             "echo ok> job.done",
         }, {
-            "rm -f version.txt build.txt",
-            get("version", "version.txt"),
-            get("buildversion", "build.txt"),
+            "rm -f version.txt build.txt clientbuild.txt",
+            get("BeamJoyServer/version", "version.txt"),
+            get("BeamJoyServer/buildversion", "build.txt"),
+            get(CLIENT_BUILD, "clientbuild.txt"),
             "echo ok > job.done",
         }, M.CHECK_TIMEOUT, function()
             local function read(name, pattern)
@@ -471,9 +487,11 @@ local function check(requester, onNewer)
                 return type(text) == "string" and text:match(pattern) or nil
             end
             local version = read("version.txt", "^%s*(%d+%.%d+%.%d+)%s*$")
-            local build = read("build.txt", "^%s*(%d+)%s*$")
-            if version and build then
-                found.label = string.format("%s build %s (development)", version, build)
+            found.serverBuild = read("build.txt", "^%s*(%d+)%s*$")
+            found.clientBuild = read("clientbuild.txt", "^%s*(%d+)%s*$")
+            if version and found.serverBuild then
+                found.label = string.format("%s build %s (development)", version,
+                    found.clientBuild and (found.serverBuild .. "/" .. found.clientBuild) or found.serverBuild)
             end
             report()
         end)
@@ -621,6 +639,7 @@ local function download(requester, found)
         M.installed = found.label
         -- a development build is told apart by its commit ; a release clears it
         state().sha = found.sha
+        state().serverBuild, state().clientBuild = found.serverBuild, found.clientBuild
         saveState()
         local vars = { version = found.label, backup = info }
         local key = "update.installed"

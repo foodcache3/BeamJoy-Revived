@@ -8,8 +8,12 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2597, server build 2417.
+Version 1.11.0 : client build 2597, server build 2418.
 
+- **Development builds are named by both build numbers** (direct request) : "BeamJoy 1.11.0 build
+  2418/2597 (development)" (server/client), so a client-only change no longer looks like the same
+  build. "This server runs" shows both too once the updater has installed a development build
+  (just the server's after a deployment by hand, when BJ.zip may be another one). *(server only)*
 - **Fixed: rejoining an open-choice race didn't give you your car back.** The car was re-spawned
   from the name the race keeps for its leaderboard ("Cherrier FCV (2020) - Ardente - ..."), which
   no installed model is called, so nothing came ; and a bare model would have had default parts.
