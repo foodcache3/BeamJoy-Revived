@@ -49,7 +49,7 @@ local M = {
         "services_busLines", "services_busRuns",
         "services_deliveryPoints", "services_deliveries", "services_lobbyInvites", "services_crews",
         "services_vehicleInteractions", "services_playerPursuit",
-        "services_identity", "services_discord",
+        "services_identity", "services_discord", "services_updater",
         "communications_rx", "communications_tx" },
 }
 

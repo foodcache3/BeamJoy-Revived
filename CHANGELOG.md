@@ -8,8 +8,19 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2595, server build 2411.
+Version 1.11.0 : client build 2595, server build 2412.
 
+- **BeamJoy can update itself from GitHub.** The server looks for a new release a minute after it
+  starts and every 6 hours ; when there is one, the console says so and each owner online (or
+  joining) is told once. An owner types /bjupdate in chat, or anyone at the server console types
+  "bj update", to install it ("check" after either only looks). The server downloads the
+  release's BeamJoy-Revived-<version>.zip in the background, unpacks it the way the mod analyzer
+  does (PowerShell on Windows, unzip on Linux), and replaces BeamJoyServer, BeamJoyServerHooks and
+  Client/BJ.zip, keeping the previous ones in BeamJoyData/update/backup-<version>-<time> ; if any
+  file can't be moved, everything goes back as it was. BeamJoyData is never touched. Restart the
+  server afterwards ; players get the new version when they join. The chat command is for the
+  owner group only, whatever the permission settings. If curl (or PowerShell / unzip) isn't
+  found, whoever asked is told which, and how to get it. *(server only)*
 - **Street Course 2 and Street Course 2 Reverse (West Coast USA) replaced on every server,
   once.** On its next start, each server replaces both races with the versions BeamJoy ships now
   (course, start positions, default settings, vehicle rule), even if they were edited there ;
