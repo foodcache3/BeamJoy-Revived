@@ -39,9 +39,12 @@ local M = {
     ---@type {startedAt: integer, timeout: integer, onDone: fun(status: string)}? the running background job
     job = nil,
     nextCheckAt = 0,
-    --- owners already told about a version : playerName -> its label
-    ---@type table<string, string>
+    --- owners told since they joined : playerID -> what they were told about (a version's label, or
+    --- "restart:" .. the installed one's). Forgotten when they leave, so every join tells them again
+    ---@type table<integer, string>
     told = {},
+    --- how long the in-game notification stays (ms)
+    NOTIFY_TOAST_MS = 15000,
     --- a version installed while running (its label) : the server needs a restart
     ---@type string?
     installed = nil,
@@ -167,7 +170,10 @@ local function state()
         local file = io.open(paths().work .. "/state.json", "r")
         local raw = file and file:read("*a")
         if file then file:close() end
-        local ok, data = pcall(utils_json.parse, raw)
+        -- no file yet (never switched channel nor installed) : the defaults, without handing the
+        -- JSON reader nothing (it logs a warning for that)
+        local ok, data = false, nil
+        if type(raw) == "string" and #raw > 0 then ok, data = pcall(utils_json.parse, raw) end
         data = ok and type(data) == "table" and data or {}
         M.state = {
             channel = M.CHANNELS[data.channel] and data.channel or "release",
@@ -388,7 +394,8 @@ local function check(requester, onNewer)
             local file = io.open(paths().work .. "/latest.json", "r")
             local raw = file and file:read("*a")
             if file then file:close() end
-            local ok, data = pcall(utils_json.parse, raw)
+            local ok, data = false, nil
+            if type(raw) == "string" and #raw > 0 then ok, data = pcall(utils_json.parse, raw) end
             if ok and type(data) == "table" then
                 found = channel == "development" and readBuild(data) or readRelease(data)
             end
@@ -557,9 +564,13 @@ local function download(requester, found)
         local key = dev and "update.installedBuild" or "update.installed"
         reply(requester, key, vars)
         if requester ~= CONSOLE then reply(CONSOLE, key, vars) end
-        -- every owner online hears it, not only the one who asked
+        -- every owner online hears it, not only the one who asked (and isn't reminded to restart on
+        -- top of it : owners joining later are, see tellOwners)
         services_players.players:forEach(function(p)
-            if p.group == "owner" and p.playerID ~= requester then reply(p.playerID, key, vars) end
+            if p.group == "owner" then
+                M.told[p.playerID] = "restart:" .. found.label
+                if p.playerID ~= requester then reply(p.playerID, key, vars) end
+            end
         end)
     end)
 end
@@ -637,15 +648,39 @@ end
 
 -- HOOKS -------------------------------------------------------------------------------------------------
 
---- owners online (and joining) hear about a newer version once each
+--- an owner hears it in game : a notification on screen (direct request) and the same in chat
+---@param p BJSPlayer
+---@param key string
+---@param vars table
+local function notifyOwner(p, key, vars)
+    reply(p.playerID, key, vars)
+    communications_tx.sendToPlayer(p.playerID, "toast", "info",
+        services_lang.get(key, p.lang):var(vars), M.NOTIFY_TOAST_MS,
+        services_lang.get("update.toastTitle", p.lang))
+end
+
+--- every owner, each time they join (or become owner), hears about a newer version, or about an
+--- installed one waiting for a restart
 local function tellOwners()
-    if not M.latest or not M.latest.newer or M.installed then return end
+    local key, vars, subject
+    if M.installed then
+        key, vars, subject = "update.restartNeeded", { version = M.installed }, "restart:" .. M.installed
+    elseif M.latest and M.latest.newer then
+        key, vars, subject = "update.available", { version = M.latest.label, current = versionIn() }, M.latest.label
+    else
+        return
+    end
     services_players.players:forEach(function(p)
-        if p.group == "owner" and p.ready and M.told[p.playerName] ~= M.latest.label then
-            M.told[p.playerName] = M.latest.label
-            reply(p.playerID, "update.available", { version = M.latest.label, current = versionIn() })
+        if p.group == "owner" and p.ready and M.told[p.playerID] ~= subject then
+            M.told[p.playerID] = subject
+            notifyOwner(p, key, vars)
         end
     end)
+end
+
+---@param playerID integer
+local function onPlayerDisconnect(playerID)
+    M.told[playerID] = nil
 end
 
 local function onSlowUpdate()
@@ -670,6 +705,7 @@ end
 
 M.onInit = onInit
 M.onSlowUpdate = onSlowUpdate
+M.onPlayerDisconnect = onPlayerDisconnect
 
 M.isNewer = isNewer
 M.command = command

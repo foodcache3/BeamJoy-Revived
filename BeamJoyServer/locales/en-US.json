@@ -191,6 +191,7 @@
     "update.upToDateBuild": "This server has the latest BeamJoy {version}",
     "update.available": "BeamJoy {version} is available (this server runs {current}). Type /bjupdate to install it",
     "update.availableConsole": "BeamJoy {version} is available (this server runs {current}). Type \"bj update\" to install it",
+    "update.toastTitle": "BeamJoy update",
     "update.checkFailed": "Couldn't reach GitHub to look for a BeamJoy release. Check the server's internet connection and try again later",
     "update.noPackage": "BeamJoy {version} is out, but its release has no BeamJoy-Revived-{version}.zip to install. Download it from GitHub and install it by hand",
     "update.downloading": "Downloading BeamJoy {version}...",

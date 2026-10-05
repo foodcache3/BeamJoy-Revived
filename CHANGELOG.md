@@ -8,8 +8,15 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2596, server build 2414.
+Version 1.11.0 : client build 2596, server build 2415.
 
+- **Owners get an on-screen notification about BeamJoy updates each time they join** (direct
+  request) : a notification and a chat line when a newer version is out, or when one was installed
+  and the server still needs a restart. Also when a player becomes owner (/login). It used to be a
+  chat line only, once per server start. *(server only)*
+- **Fixed: "Tried to parse empty or not string value" in the server log a minute after start.** The
+  updater's first automatic check read its saved settings (BeamJoyData/update/state.json) before
+  that file existed. A missing file now just means the defaults. *(server only)*
 - **Fixed: open doors (hood, trunk...) not showing for players who join later.** The stored state
   arrives once the joining player's BeamJoy is ready, but the cars already on the map appear well
   before that, and each one only waited 10 s for it, so on a normal join none got it. When the
