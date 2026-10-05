@@ -8,8 +8,15 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2597, server build 2418.
+Version 1.11.0 : client build 2597, server build 2419.
 
+- **Fixed: the server log filled with hundreds of "removed from plugin hot reload monitor"
+  warnings after an update** (direct request). BeamMP watches every file under Resources/Server
+  and warns about each one deleted, and the updater downloaded and unpacked there (then cleared
+  the previous download). Its downloads, unpacking and backups now live in a BeamJoyUpdate folder
+  next to the server's executable instead ; only state.json stays in BeamJoyData/update. A
+  leftover BeamJoyData/update/extract folder (and pkg.zip, BJ.zip, job.*) from older updates can
+  be deleted by hand while the server is stopped. *(server only)*
 - **Development builds are named by both build numbers** (direct request) : "BeamJoy 1.11.0 build
   2418/2597 (development)" (server/client), so a client-only change no longer looks like the same
   build. "This server runs" shows both too once the updater has installed a development build

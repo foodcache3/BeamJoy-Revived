@@ -15,8 +15,8 @@
 --- a second (onSlowUpdate). A missing tool is reported to whoever asked, with how to get it.
 ---
 --- Installing replaces Resources/Server/BeamJoyServer, Resources/Server/BeamJoyServerHooks and
---- Resources/Client/BJ.zip (the previous ones are moved to BeamJoyData/update/backup-...; if any
---- can't be moved, everything goes back). BeamJoyData (races, players, settings...) is never
+--- Resources/Client/BJ.zip (the previous ones are moved to BeamJoyUpdate/backup-... in the server's
+--- folder ; if any can't be moved, everything goes back). BeamJoyData (races, players, settings...) is never
 --- touched. The new version runs once the server restarts ; players get the new BJ.zip when they
 --- join after that. Downloads only ever come from this project's own repository.
 
@@ -80,11 +80,17 @@ local function parent(path)
     return path:match("^(.*)/[^/]+$") or path
 end
 
----@return {work: string, server: string, hooks: string, clientZip: string}
+--- `work` (downloads, unpacking, backups) sits in the server's own folder, outside Resources/Server :
+--- BeamMP's plugin hot reload watches every file in there and logs a warning for each one deleted,
+--- and an update unpacks (then clears) a few hundred
+---@return {data: string, work: string, server: string, hooks: string, clientZip: string}
 local function paths()
     local serverRoot = parent(BJSPluginPath)
+    -- the folder holding Resources (nil when the paths are relative to it)
+    local root = parent(serverRoot):match("^(.*)/[^/]+$")
     return {
-        work = serverRoot .. "/BeamJoyData/update",
+        data = serverRoot .. "/BeamJoyData/update",
+        work = (root and root .. "/" or "") .. "BeamJoyUpdate",
         server = BJSPluginPath,
         hooks = serverRoot .. "/BeamJoyServerHooks",
         clientZip = parent(serverRoot) .. "/Client/BJ.zip",
@@ -175,7 +181,7 @@ end
 ---@return {channel: "release"|"development", sha: string?}
 local function state()
     if not M.state then
-        local file = io.open(paths().work .. "/state.json", "r")
+        local file = io.open(paths().data .. "/state.json", "r")
         local raw = file and file:read("*a")
         if file then file:close() end
         -- no file yet (never switched channel nor installed) : the defaults, without handing the
@@ -197,9 +203,9 @@ end
 
 local function saveState()
     local p = paths()
-    if not FS.Exists(p.work) then FS.CreateDirectory(p.work) end
-    local file = io.open(p.work .. "/state.json", "w")
-    if not file then return LogError("BeamJoy update : couldn't save " .. p.work .. "/state.json") end
+    if not FS.Exists(p.data) then FS.CreateDirectory(p.data) end
+    local file = io.open(p.data .. "/state.json", "w")
+    if not file then return LogError("BeamJoy update : couldn't save " .. p.data .. "/state.json") end
     file:write(utils_json.stringify(state()))
     file:close()
 end
