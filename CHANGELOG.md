@@ -8,8 +8,17 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2596, server build 2416.
+Version 1.11.0 : client build 2596, server build 2417.
 
+- **Fixed: installing a development build on Windows broke BeamJoy for every player** (no BeamJoy
+  window, no chat). The updater builds BJ.zip from the branch's BeamJoyClient folder, and Windows
+  PowerShell's zip call stored every file with "\" in its path, so the game found no mod script
+  in it. Files are now added one by one with "/" paths. Releases weren't affected (their BJ.zip
+  comes ready-made). *(server only)*
+- **Updater messages name versions with their build number** (direct request) : a development
+  build reads "BeamJoy 1.11.0 build 2416 (development)" instead of its commit (read from that
+  commit's own version files ; the commit is still used if they can't be read), and "this server
+  runs 1.11.0 build 2415". *(server only)*
 - **Updater channel messages name the console command first** ("Type bj update check (/bjupdate
   check in chat) to look for one"). *(server only)*
 - **Owners get an on-screen notification about BeamJoy updates each time they join** (direct

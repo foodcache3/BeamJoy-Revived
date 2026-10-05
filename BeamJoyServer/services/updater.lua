@@ -122,11 +122,19 @@ local PS_SUFFIX = ' } catch { exit 1 }"'
 local WINDOWS_UNZIP = PS_PREFIX ..
     "[IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $PWD 'pkg.zip'), (Join-Path $PWD 'extract'))" ..
     PS_SUFFIX
---- extract/<the branch's folder>/BeamJoyClient -> BJ.zip (its contents at the zip's root)
+--- extract/<the branch's folder>/BeamJoyClient -> BJ.zip (its contents at the zip's root). Each file
+--- is added by hand with a "/" path : Windows PowerShell's ZipFile.CreateFromDirectory writes "\"
+--- ones (real bug : the game found no mod script in such a BJ.zip, so BeamJoy never loaded)
 local WINDOWS_BUILD_CLIENT = PS_PREFIX ..
+    "Add-Type -AssemblyName System.IO.Compression; " ..
     "$root = Get-ChildItem extract -Directory | Select-Object -First 1; " ..
+    "$src = (Join-Path $root.FullName 'BeamJoyClient'); " ..
     "if (Test-Path BJ.zip) { Remove-Item BJ.zip }; " ..
-    "[IO.Compression.ZipFile]::CreateFromDirectory((Join-Path $root.FullName 'BeamJoyClient'), (Join-Path $PWD 'BJ.zip'))" ..
+    "$zip = [IO.Compression.ZipFile]::Open((Join-Path $PWD 'BJ.zip'), 'Create'); " ..
+    "try { Get-ChildItem -LiteralPath $src -Recurse -File | ForEach-Object { " ..
+    "$name = $_.FullName.Substring($src.Length + 1).Replace('\\', '/'); " ..
+    "[void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $_.FullName, $name) } } " ..
+    "finally { $zip.Dispose() }" ..
     PS_SUFFIX
 
 ---@param name string
@@ -258,6 +266,22 @@ local function versionIn(serverPath)
     return v
 end
 
+---@return string? this server's build number
+local function buildIn()
+    local file = io.open(BJSPluginPath .. "/buildversion", "r")
+    if not file then return nil end
+    local b = file:read("*a"):match("%d+")
+    file:close()
+    return b
+end
+
+--- what this server runs, as messages show it : "1.11.0 build 2415"
+---@return string
+local function currentLabel()
+    local build = buildIn()
+    return build and string.format("%s build %s", versionIn(), build) or versionIn()
+end
+
 ---@param v string
 ---@return integer[]?
 local function parseVersion(v)
@@ -352,6 +376,7 @@ local function readBuild(data)
     if not sha then return nil end
     return {
         channel = "development",
+        -- until its version files are read (see check) : the commit
         label = "development build " .. sha:sub(1, 7),
         sha = sha,
         -- that exact commit, so what's installed is what was checked
@@ -403,18 +428,55 @@ local function check(requester, onNewer)
         if not found then
             return reply(requester, "update.checkFailed", nil, true)
         end
-        M.latest = found
-        local current = versionIn()
-        if found.newer then
-            if onNewer then return onNewer(found) end
-            -- an automatic check : the console hears it (owners online, see tellOwners)
-            local key = type(requester) == "number" and "update.available" or "update.availableConsole"
-            reply(requester or CONSOLE, key, { version = found.label, current = current })
-        elseif channel == "development" then
-            reply(requester, "update.upToDateBuild", { version = found.label })
-        else
-            reply(requester, "update.upToDate", { current = current })
+
+        local function report()
+            M.latest = found
+            local current = currentLabel()
+            if found.newer then
+                if onNewer then return onNewer(found) end
+                -- an automatic check : the console hears it (owners online, see tellOwners)
+                local key = type(requester) == "number" and "update.available" or "update.availableConsole"
+                reply(requester or CONSOLE, key, { version = found.label, current = current })
+            elseif channel == "development" then
+                reply(requester, "update.upToDateBuild", { version = found.label })
+            else
+                reply(requester, "update.upToDate", { current = current })
+            end
         end
+        if channel ~= "development" then return report() end
+
+        -- a development build is named by its version and build number (direct request : the
+        -- commit meant nothing), read from that exact commit's files ; the commit stays the name
+        -- when they can't be read
+        local raw = string.format("https://raw.githubusercontent.com/%s/%s/BeamJoyServer/", M.REPO, found.sha)
+        local function get(name, out)
+            return "curl -s -L --fail --max-time 30 -o " .. out .. " " .. q(raw .. name)
+        end
+        runJob({
+            "if exist version.txt del /q version.txt",
+            "if exist build.txt del /q build.txt",
+            get("version", "version.txt"),
+            get("buildversion", "build.txt"),
+            "echo ok> job.done",
+        }, {
+            "rm -f version.txt build.txt",
+            get("version", "version.txt"),
+            get("buildversion", "build.txt"),
+            "echo ok > job.done",
+        }, M.CHECK_TIMEOUT, function()
+            local function read(name, pattern)
+                local file = io.open(paths().work .. "/" .. name, "r")
+                local text = file and file:read("*a")
+                if file then file:close() end
+                return type(text) == "string" and text:match(pattern) or nil
+            end
+            local version = read("version.txt", "^%s*(%d+%.%d+%.%d+)%s*$")
+            local build = read("build.txt", "^%s*(%d+)%s*$")
+            if version and build then
+                found.label = string.format("%s build %s (development)", version, build)
+            end
+            report()
+        end)
     end)
 end
 
@@ -560,8 +622,8 @@ local function download(requester, found)
         -- a development build is told apart by its commit ; a release clears it
         state().sha = found.sha
         saveState()
-        local vars = { version = found.label, backup = info, number = versionIn() }
-        local key = dev and "update.installedBuild" or "update.installed"
+        local vars = { version = found.label, backup = info }
+        local key = "update.installed"
         reply(requester, key, vars)
         if requester ~= CONSOLE then reply(CONSOLE, key, vars) end
         -- every owner online hears it, not only the one who asked (and isn't reminded to restart on
@@ -666,7 +728,7 @@ local function tellOwners()
     if M.installed then
         key, vars, subject = "update.restartNeeded", { version = M.installed }, "restart:" .. M.installed
     elseif M.latest and M.latest.newer then
-        key, vars, subject = "update.available", { version = M.latest.label, current = versionIn() }, M.latest.label
+        key, vars, subject = "update.available", { version = M.latest.label, current = currentLabel() }, M.latest.label
     else
         return
     end
