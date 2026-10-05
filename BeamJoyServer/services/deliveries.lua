@@ -642,6 +642,14 @@ end
 
 --- the server's own copy of a vehicle's position, or nil when BeamMP can't tell us (in which case
 --- the check is skipped rather than blocking a legitimate player)
+--- MP.GetPositionRaw's second value is its error : an empty string when there's none (real bug :
+--- reading any value there as an error threw every position away)
+---@param err any
+---@return boolean
+local function positionError(err)
+    return err ~= nil and err ~= ""
+end
+
 ---@param playerID integer
 ---@param serverVid any
 ---@return {x: number, y: number, z: number}?
@@ -651,7 +659,7 @@ local function vehiclePosition(playerID, serverVid)
     serverVid = tonumber(tostring(serverVid or ""):match("(%d+)$"))
     if not serverVid or not MP.GetPositionRaw then return nil end
     local ok, raw, err = pcall(MP.GetPositionRaw, playerID, serverVid)
-    if not ok or err or type(raw) ~= "table" or type(raw.pos) ~= "table" then return nil end
+    if not ok or positionError(err) or type(raw) ~= "table" or type(raw.pos) ~= "table" then return nil end
     return { x = raw.pos[1], y = raw.pos[2], z = raw.pos[3] }
 end
 

@@ -114,6 +114,14 @@ local function senderPoliceCar(ctxt, key)
     return vehID
 end
 
+--- MP.GetPositionRaw's second value is its error : an empty string when there's none (real bug :
+--- reading any value there as an error threw every position away)
+---@param err any
+---@return boolean
+local function positionError(err)
+    return err ~= nil and err ~= ""
+end
+
 --- BeamMP's own position and velocity for a vehicle, or nil when it can't tell
 ---@param ownerID integer
 ---@param vehID integer
@@ -121,7 +129,7 @@ end
 local function rawPosition(ownerID, vehID)
     if not MP.GetPositionRaw then return nil end
     local ok, raw, err = pcall(MP.GetPositionRaw, ownerID, vehID)
-    if not ok or err or type(raw) ~= "table" or type(raw.pos) ~= "table" then return nil end
+    if not ok or positionError(err) or type(raw) ~= "table" or type(raw.pos) ~= "table" then return nil end
     return raw
 end
 

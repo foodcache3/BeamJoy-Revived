@@ -49,6 +49,9 @@ local M = {
     --- other players' cars that just appeared : vid -> { at, untilMs }
     ---@type table<integer, {at: integer, untilMs: integer}>
     pendingLatches = {},
+    --- other players' cars the stored state was applied to (since they appeared) : vid -> true
+    ---@type table<integer, true>
+    appliedLatches = {},
     lastLatchPoll = 0,
 }
 
@@ -279,6 +282,7 @@ local function applyPendingLatches(now)
             local latches = M.latches[serverKey(mpVeh) or ""]
             if latches then
                 M.pendingLatches[vid] = nil
+                M.appliedLatches[vid] = true
                 applyLatches(mpVeh, latches)
             elseif now >= pending.untilMs then
                 M.pendingLatches[vid] = nil -- nothing open on it
@@ -292,6 +296,7 @@ local function onBJVehicleInstantiated(vid)
     local mpVeh = remoteCar(vid)
     if mpVeh then
         local now = GetCurrentTimeMillis()
+        M.appliedLatches[vid] = nil -- a (re)spawned copy has every latch closed again
         M.pendingLatches[vid] = { at = now + M.LATCH_APPLY_DELAY_MS, untilMs = now + M.LATCH_APPLY_WAIT_MS }
     else
         M.reportedLatches[vid] = nil -- an own car (re)spawned : every latch closed again
@@ -300,8 +305,21 @@ end
 
 ---@param caches table
 local function retrieveCache(caches)
-    if type(caches.vehicleLatches) == "table" then
-        M.latches = caches.vehicleLatches
+    if type(caches.vehicleLatches) ~= "table" then return end
+    M.latches = caches.vehicleLatches
+    -- Real bug (direct report: doors not synced for late joiners) : the stored state comes with the
+    -- join cache, once this player's BeamJoy is ready, while the cars already on the map appear
+    -- well before that ; each car only waited 10 s for it, so on a normal join none got it. Every
+    -- other player's car here that hasn't had its state yet gets it now
+    local now = GetCurrentTimeMillis()
+    for vid, mpVeh in pairs(beamjoy_vehicles.vehicles) do
+        if not M.appliedLatches[vid] and remoteCar(vid) and M.latches[serverKey(mpVeh) or ""] then
+            local pending = M.pendingLatches[vid]
+            M.pendingLatches[vid] = {
+                at = pending and math.max(pending.at, now) or now,
+                untilMs = now + M.LATCH_APPLY_WAIT_MS,
+            }
+        end
     end
 end
 

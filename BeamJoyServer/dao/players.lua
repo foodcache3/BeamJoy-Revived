@@ -10,13 +10,14 @@ local function onInit()
 end
 
 --- Hardening : a player name becomes a file name here, and staff actions pass names straight from
---- the client. Anything that could leave the players folder is refused
+--- the client. Anything that could leave the players folder is refused : a path separator, a drive
+--- colon, or a name that is "." or ".." itself (".." inside a name, as in "John..Doe", can't leave
+--- the folder without a separator, so it's allowed)
 ---@param playerName any
 ---@return boolean
 local function isSafeName(playerName)
     return type(playerName) == "string" and #playerName > 0 and #playerName <= 64 and
-        not playerName:find("[/\\:%c]") and not playerName:find("..", 1, true) and
-        playerName ~= "."
+        not playerName:find("[/\\:%c]") and playerName ~= "." and playerName ~= ".."
 end
 
 ---@param playerName string

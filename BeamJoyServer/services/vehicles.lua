@@ -262,6 +262,15 @@ local function coords(point)
     return x, y, z
 end
 
+--- MP.GetPositionRaw's second value is its error : an empty string when there's none (real bug :
+--- reading any value there as an error threw every position away, and every check below then
+--- refused races' gates, hunters' checkpoints and infected tags)
+---@param err any
+---@return boolean
+local function positionError(err)
+    return err ~= nil and err ~= ""
+end
+
 --- the positions of a player's vehicles (traffic left out) : nil when this server can't read
 --- positions at all, then the callers skip their check rather than block everyone
 ---@param playerID integer
@@ -274,7 +283,7 @@ local function playerPositions(playerID)
     for vehID, v in pairs(player.vehicles) do
         if not v.isAi then
             local ok, raw, err = pcall(MP.GetPositionRaw, playerID, vehID)
-            if ok and not err and type(raw) == "table" and coords(raw.pos) then
+            if ok and not positionError(err) and type(raw) == "table" and coords(raw.pos) then
                 res[#res + 1] = raw
             end
         end
@@ -282,8 +291,9 @@ local function playerPositions(playerID)
     return res
 end
 
---- the distance from the nearest of a player's vehicles to a point : nil when the server can't
---- read positions, math.huge when the player has no vehicle it knows the position of
+--- the distance from the nearest of a player's vehicles to a point : nil when it isn't known (the
+--- server can't read positions, or knows none of that player's cars yet), so the check is skipped
+--- rather than refusing a real racer
 ---@param playerID integer
 ---@param point any {x, y, z} or {1, 2, 3}
 ---@return number?
@@ -296,11 +306,12 @@ local function distanceToPoint(playerID, point)
         local x, y, z = coords(raw.pos)
         best = math.min(best, math.sqrt((x - px) ^ 2 + (y - py) ^ 2 + (z - pz) ^ 2))
     end
+    if best == math.huge then return nil end
     return best
 end
 
---- the shortest distance between any vehicle of one player and any of another : same nil /
---- math.huge rules as distanceToPoint
+--- the shortest distance between any vehicle of one player and any of another : nil when it
+--- isn't known, as distanceToPoint
 ---@param playerA integer
 ---@param playerB integer
 ---@return number?
@@ -315,6 +326,7 @@ local function distanceBetweenPlayers(playerA, playerB)
             best = math.min(best, math.sqrt((ax - bx) ^ 2 + (ay - by) ^ 2 + (az - bz) ^ 2))
         end
     end
+    if best == math.huge then return nil end
     return best
 end
 

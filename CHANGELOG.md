@@ -8,8 +8,25 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2595, server build 2413.
+Version 1.11.0 : client build 2596, server build 2414.
 
+- **Fixed: open doors (hood, trunk...) not showing for players who join later.** The stored state
+  arrives once the joining player's BeamJoy is ready, but the cars already on the map appear well
+  before that, and each one only waited 10 s for it, so on a normal join none got it. When the
+  state arrives, every other player's car that hasn't had it yet gets it now. *(client only)*
+- **Fixed: race gates never counting, and other checks that use car positions (since server build
+  2404).** The server-side checks added then (the racer's car near the gate, the hunted car near the
+  checkpoint, an infected player near who they tag, a vehicle interaction within range, a police
+  car near the fugitive) read BeamMP's "no error" answer (an empty text) as an error, so the
+  server never knew where any car was. Gates, hunter checkpoints and infected tags were all
+  refused, vehicle interactions on other players' cars were blocked, and the chase and delivery
+  distance checks never ran. Positions are read properly now, and a car whose position isn't known
+  yet is let through rather than refused. Convoy cohesion (deliveries) is measured for the first
+  time. *(server only)*
+- **Vehicle interactions back to how they were before server build 2404** (direct request) : the
+  added "must name your own car, within range" check is removed. *(server only)*
+- **Fixed: a player whose name contains ".." (e.g. "John..Doe") never had their data saved** (since
+  server build 2404). Only a name that is "." or ".." itself is refused now. *(server only)*
 - **Updates can come from the development branch, for testing.** "/bjupdate channel development"
   (console : "bj update channel development") switches a server to it, "channel release" switches
   back, and "channel" alone shows which is in use (saved in BeamJoyData/update/state.json). On the
