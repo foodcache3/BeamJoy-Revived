@@ -627,7 +627,9 @@ end
 ---@param POIS table<string, table>
 local function onBJRequestBigmapPOIs(POIS)
     -- one pin per STATION regardless of pumps (Big Map is a zoomed-out overview - individual pumps
-    -- a few metres apart would just clutter it), always at the station's own reference pos
+    -- a few metres apart would just clutter it), always at the station's own reference pos. Quick
+    -- travel (direct request) lands there too ; the game's safe teleport moves the car off
+    -- anything in the way
     local data = beamjoy_freeroamData.data
     for _, s in ipairs(data.stations or {}) do
         if s.id then
@@ -635,6 +637,8 @@ local function onBJRequestBigmapPOIs(POIS)
                 name = (s.name and #s.name > 0) and s.name or "beamjoy.stations.markerStation",
                 icon = "fuelPump", mapIcon = "poi_fuel_round", groupType = "gasStation",
                 pos = vec3(s.pos.x, s.pos.y, s.pos.z),
+                canQuickTravel = true,
+                quickTravelPos = vec3(s.pos.x, s.pos.y, s.pos.z),
             }
         end
     end
@@ -644,6 +648,8 @@ local function onBJRequestBigmapPOIs(POIS)
                 name = (g.name and #g.name > 0) and g.name or "beamjoy.stations.markerGarage",
                 icon = "garage01", mapIcon = "poi_garage_2_round", groupType = "garage",
                 pos = vec3(g.pos.x, g.pos.y, g.pos.z),
+                canQuickTravel = true,
+                quickTravelPos = vec3(g.pos.x, g.pos.y, g.pos.z),
             }
         end
     end

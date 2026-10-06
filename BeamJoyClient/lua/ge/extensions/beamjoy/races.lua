@@ -241,8 +241,29 @@ local function onSlowUpdate()
     lastSuppressed = suppressed
 end
 
+--- the race's route for the Big Map preview : the start, the checkpoints in order (a branching
+--- race's first alternate at each step), and back to the first checkpoint for a lap race
+---@param r BJRace
+---@param start table
+---@return vec3[]?
+local function previewPoints(r, start)
+    local byStep, maxStep = {}, 0
+    for i, g in ipairs(r.gates or {}) do
+        local step = tonumber(g.step) or i
+        if g.pos and not byStep[step] then byStep[step] = vec3(g.pos.x, g.pos.y, g.pos.z) end
+        if step > maxStep then maxStep = step end
+    end
+    local points = { vec3(start.pos.x, start.pos.y, start.pos.z) }
+    for step = 1, maxStep do
+        if byStep[step] then points[#points + 1] = byStep[step] end
+    end
+    if r.loopable and byStep[1] then points[#points + 1] = byStep[1] end
+    return #points >= 2 and points or nil
+end
+
 --- a Big Map pin per race in the BeamJoy section's "Races" group, at the race's own grid slot 1
---- (the solo start too) ; quick travel puts the car there, facing the way the race starts
+--- (the solo start too) ; quick travel puts the car there, facing the way the race starts. Its
+--- route shows on the map while it's hovered or selected
 ---@param POIS table<string, table>
 local function onBJRequestBigmapPOIs(POIS)
     for _, r in ipairs(M.data or {}) do
@@ -260,6 +281,7 @@ local function onBJRequestBigmapPOIs(POIS)
                 canQuickTravel = true,
                 quickTravelPos = pos,
                 quickTravelRot = start.dir,
+                previewPoints = previewPoints(r, start),
             }
         end
     end

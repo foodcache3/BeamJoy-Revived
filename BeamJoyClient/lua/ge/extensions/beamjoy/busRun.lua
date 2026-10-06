@@ -509,6 +509,13 @@ local function onBJRequestBigmapPOIs(POIS)
     for _, line in ipairs(allLines()) do
         local s1 = line.stops and line.stops[1]
         if line.id and s1 then
+            -- the line's route on the map while it's hovered or selected : every stop in order,
+            -- back to the first for a loop
+            local points = {}
+            for _, stop in ipairs(line.stops) do
+                if stop.pos then points[#points + 1] = vec3(stop.pos.x, stop.pos.y, stop.pos.z) end
+            end
+            if line.loopable == true and points[1] then points[#points + 1] = points[1] end
             POIS[lineKey(line)] = {
                 name = (type(line.name) == "string" and #line.name > 0) and line.name
                     or "beamjoy.buslines.markerLine",
@@ -528,6 +535,7 @@ local function onBJRequestBigmapPOIs(POIS)
                 canQuickTravel = true,
                 quickTravelPos = vec3(s1.pos.x, s1.pos.y, s1.pos.z),
                 quickTravelRot = s1.dir,
+                previewPoints = #points >= 2 and points or nil,
             }
         end
     end

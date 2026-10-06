@@ -8,7 +8,18 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2600, server build 2422.
+Version 1.11.0 : client build 2601, server build 2422.
+
+- **Race and bus line routes on the map** (direct request, as BeamJoy 2.0.9 had). Hovering or
+  selecting a race's pin on the Big Map draws its route : from the start through every checkpoint
+  in order (a branching race's main line), back to the first one for a lap race. A bus line's
+  goes through its stops, back to the first for a loop. The line follows the roads like the
+  game's own mission previews, and goes straight wherever the road would be a big detour
+  (off-road checkpoints, rally stages, tracks off the road network) or the points are under 50 m
+  apart. Worked out the first time a pin is looked at. *(client only)*
+- **Quick travel to garages and gas stations** (direct request) : every BeamJoy garage and gas
+  station, and the map's own gas stations (the game only gives its garages one). It lands on the
+  station's middle ; the game moves the car off anything in the way. *(client only)*
 
 - **Fixed: rejoining a race often did nothing** (direct report : no message, nothing happened,
   same guest name). BeamMP reuses a freed player ID, so a racer coming back usually gets the one

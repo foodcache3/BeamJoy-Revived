@@ -45,6 +45,21 @@ local M = {
     rebuildRequestedAt = nil,
     ---@type integer? the latest request
     rebuildLastRequestAt = nil,
+
+    -- ROUTE PREVIEW (a POI's `previewPoints`, drawn when it's hovered or selected) : between two
+    -- points closer than this, a straight line (no road search)
+    ROUTE_MIN_ROAD_DIST = 50,
+    -- the road route between two points is used unless it's longer than the straight line times
+    -- this, plus ROUTE_DETOUR_SLACK metres (off-road checkpoints, rally stages, tracks off the
+    -- road network : the nearest road would be a silly detour)
+    ROUTE_MAX_DETOUR = 1.6,
+    ROUTE_DETOUR_SLACK = 100,
+    ---@type table<string, table[]> POI id -> built path ({pos} points), until the POIs rebuild
+    routeCache = {},
+    ---@type string? the selected POI whose route is shown
+    routeSelectedId = nil,
+    --- a route of ours is on the map right now
+    routeShown = false,
 }
 
 --- resolve a lang key (or return the string unchanged if it isn't one / lang isn't up yet)
@@ -85,6 +100,14 @@ local function getRawPOIs(levelIdentifier)
         if t ~= "mission"
             and not (dropStations and (t == "gasStation" or t == "bjEnergyStation" or t == "bjGarage"))
             and not (dropBus and t == "bjBusLineStart") then
+            -- quick travel to the map's own gas stations too (direct request) : the game only gives
+            -- its garages one. Lands on the station's middle ; the game's safe teleport moves the
+            -- car off anything in the way
+            local bm = t == "gasStation" and p.markerInfo and p.markerInfo.bigmapMarker
+            if bm and bm.pos and not bm.quickTravelPosRotFunction then
+                local qtPos = vec3(bm.pos)
+                bm.quickTravelPosRotFunction = function() return qtPos, quat(0, 0, 0, 1) end
+            end
             out[#out + 1] = p
         end
     end
@@ -193,6 +216,7 @@ end
 local function flushPOIs()
     M.rebuildRequestedAt, M.rebuildLastRequestAt = nil, nil
     table.clear(M.POIs)
+    table.clear(M.routeCache)
     extensions.hook("onBJRequestBigmapPOIs", M.POIs)
     if extensions.gameplay_rawPois then
         extensions.gameplay_rawPois.clear() -- force the provider to rebuild with our new set
@@ -357,6 +381,117 @@ local function installBigMapGroupsWrap()
     vbm.getGroups = getGroups
 end
 
+-- ROUTE PREVIEW ---------------------------------------------------------------------------------
+-- Direct request ("show a race's route on the map like BeamJoy 2.0.9 did") : a race's or bus
+-- line's whole route, drawn on the Big Map when its pin is hovered or selected. The game only does
+-- this itself for real missions (freeroam_bigMapMode's showMissionWorldPreview asks the mission
+-- for getWorldPreviewRoute), and BJS POIs can't be missions (see this file's header : FATAL). It
+-- draws whatever freeroam_bigMapMode.setRoutePreview is given, though, so : selecting one of ours
+-- (the onPoiSelectedFromBigmap hook) shows its route, and hovering one in the list does too
+-- (poiHovered, wrapped : the game clears the preview when a hover ends, ours is put back).
+
+--- the road route through `points`, a straight line wherever the road would be a detour
+---@param points vec3[]
+---@return table[] path {pos: vec3}[] as gameplay/route builds them (what setRoutePreview takes)
+local function buildPreviewPath(points)
+    local path = {}
+    local function add(pos)
+        local last = path[#path]
+        if not last or last.pos:squaredDistance(pos) > 1 then path[#path + 1] = { pos = vec3(pos) } end
+    end
+    for i = 1, #points - 1 do
+        local a, b = points[i], points[i + 1]
+        local straight = a:distance(b)
+        local segment
+        if straight >= M.ROUTE_MIN_ROAD_DIST then
+            local ok, roadPath = pcall(function()
+                local route = require('/lua/ge/extensions/gameplay/route/route')()
+                route:setupPathMulti({ a, b })
+                return route.path
+            end)
+            if ok and type(roadPath) == "table" and #roadPath >= 2 then
+                local length = 0
+                for j = 2, #roadPath do length = length + roadPath[j - 1].pos:distance(roadPath[j].pos) end
+                if length <= straight * M.ROUTE_MAX_DETOUR + M.ROUTE_DETOUR_SLACK then segment = roadPath end
+            end
+        end
+        if segment then
+            for _, wp in ipairs(segment) do add(wp.pos) end
+        else
+            add(a)
+            add(b)
+        end
+    end
+    return path
+end
+
+--- shows a POI's route, if it has one
+---@param poiId string?
+---@return boolean shown
+local function showRoutePreview(poiId)
+    local el = poiId and M.POIs[poiId]
+    local bmm = extensions.freeroam_bigMapMode
+    if not el or type(el.previewPoints) ~= "table" or #el.previewPoints < 2 or not bmm or
+        not bmm.setRoutePreview then
+        return false
+    end
+    if not M.routeCache[poiId] then
+        local ok, path = pcall(buildPreviewPath, el.previewPoints)
+        if not ok then
+            LogError("beamjoy bigmap: building a route preview failed: " .. tostring(path))
+            path = {}
+        end
+        M.routeCache[poiId] = path
+    end
+    if #M.routeCache[poiId] < 2 then return false end
+    bmm.setRoutePreview(M.routeCache[poiId])
+    M.routeShown = true
+    return true
+end
+
+local function clearOurRoutePreview()
+    local bmm = extensions.freeroam_bigMapMode
+    if M.routeShown and bmm and bmm.clearRoutePreview then bmm.clearRoutePreview() end
+    M.routeShown = false
+end
+
+--- a pin selected on the Big Map (nil : deselected)
+---@param poiId string?
+M.onPoiSelectedFromBigmap = function(poiId)
+    if showRoutePreview(poiId) then
+        M.routeSelectedId = poiId
+    else
+        -- something without a route of ours : don't leave the last one up
+        M.routeSelectedId = nil
+        clearOurRoutePreview()
+    end
+end
+
+--- freeroam_bigMapMode.poiHovered, wrapped : the list's hover shows that pin's route too, and the
+--- selected one's comes back when the hover ends (the game clears it, it only knows missions)
+local function poiHovered(poiIdInCluster, hovered, ...)
+    local res = M.baseFunctions.freeroam_bigMapMode.poiHovered(poiIdInCluster, hovered, ...)
+    if hovered then
+        showRoutePreview(poiIdInCluster)
+    elseif M.routeSelectedId then
+        showRoutePreview(M.routeSelectedId)
+    else
+        M.routeShown = false -- the game cleared it
+    end
+    return res
+end
+
+--- same install-whenever-it-exists approach as installBigMapGroupsWrap
+local function installRoutePreviewWrap()
+    if not extensions.freeroam_bigMapMode then
+        pcall(extensions.load, "freeroam_bigMapMode")
+    end
+    local bmm = extensions.freeroam_bigMapMode
+    if not bmm or not bmm.poiHovered or bmm.poiHovered == poiHovered then return end
+    M.baseFunctions.freeroam_bigMapMode = { poiHovered = bmm.poiHovered }
+    bmm.poiHovered = poiHovered
+end
+
 local function onInit()
     M.baseFunctions = {
         gameplay_rawPois = {
@@ -369,11 +504,13 @@ local function onInit()
     extensions.gameplay_rawPois.getRawPoiListByLevel = getRawPOIs
     extensions.gameplay_missions_missionManager.getCurrentTaskdataTypeOrNil = getCurrentTaskdataTypeOrNil
     installBigMapGroupsWrap()
+    installRoutePreviewWrap()
     enablePlaymodeMarkersInMultiplayer()
 
     beamjoy_communications_ui.addHandler("BJReady", function()
         enablePlaymodeMarkersInMultiplayer() -- re-assert after a reconnect
         installBigMapGroupsWrap()
+        installRoutePreviewWrap()
         flushPOIs() -- right away : the first set of markers for this session
     end)
 end
@@ -426,12 +563,15 @@ M.onExtensionUnloaded = onExtensionUnloaded
 M.onPreExit = onExtensionUnloaded
 M.onBeforeBigMapActivated = function()
     installBigMapGroupsWrap() -- see its own comment - freeroam_vueBigMap may only just now exist
+    installRoutePreviewWrap()
     -- the map shows what's current, not what's still waiting on updatePOIs' coalescing
     if M.rebuildRequestedAt then flushPOIs() end
     M.menuOpened = true
 end
 M.onDeactivateBigMapCallback = function()
     M.menuOpened = false
+    clearOurRoutePreview()
+    M.routeSelectedId = nil
 end
 
 M.getRawPOIs = getRawPOIs
@@ -470,6 +610,9 @@ M.onBJRequestBigmapPOIs = function(POIS)
         canQuickTravel = false,               -- optional
         quickTravelPos = vec3(...),           -- required if canQuickTravel
         quickTravelRot = vec3(0, 1, 0),       -- optional facing dir for the quick-travel spawn
+        previewPoints = { vec3(...), ... },   -- optional : a route (start, checkpoints...) drawn
+                                              -- on the map, along the roads, while the pin is
+                                              -- hovered or selected
     }
 end
 
