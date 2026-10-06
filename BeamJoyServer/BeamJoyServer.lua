@@ -18,6 +18,13 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 Contact : https://github.com/my-name-is-samael
 ]]
 
+-- BeamMP's plugin hot reload runs this file again, then onInit, when it changes on disk (an update
+-- swapping it in does) : that would load everything a second time over the running server. The
+-- running one is kept as it is ; the new files wait for a restart
+if BJSRunning then
+    return
+end
+
 require("utils/log")
 require("utils/lua")
 require("utils/string")
@@ -196,6 +203,10 @@ local function loadHooks()
 end
 
 function _G.onInit() ---@diagnostic disable-line
+    if BJSRunning then
+        LogInfo("BeamJoyServer files changed on disk : restart the server to run them")
+        return
+    end
     LogInfo(string.format("Loading BeamJoyServer (v%s, build %d)", M.VERSION, M.BUILD))
     drawArt()
     if not CheckServerVersion(3, 9) then
@@ -208,6 +219,7 @@ function _G.onInit() ---@diagnostic disable-line
     end
     loadExtensions()
     loadHooks()
+    BJSRunning = true
     checkHooksPlugin()
     LogInfo(string.format("BeamJoyServer loaded (v%s, build %d)", M.VERSION, M.BUILD))
 end

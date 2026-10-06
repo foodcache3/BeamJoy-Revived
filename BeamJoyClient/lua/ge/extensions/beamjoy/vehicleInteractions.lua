@@ -46,6 +46,9 @@ local M = {
     --- this client's own cars : vid -> what was last reported (a stable string of it)
     ---@type table<integer, string>
     reportedLatches = {},
+    --- this client's own cars : vid -> what the last poll found (a stable string of it)
+    ---@type table<integer, string>
+    polledLatches = {},
     --- other players' cars that just appeared : vid -> { at, untilMs }
     ---@type table<integer, {at: integer, untilMs: integer}>
     pendingLatches = {},
@@ -217,21 +220,23 @@ local function latchSignature(latches)
     return table.concat(keys, ";")
 end
 
---- the vehicle side of a poll : its unlatched groups, back to onLatchReport. A group still moving
---- (autoCoupling, a door swinging shut) skips the whole report until it settles
+--- the vehicle side of a poll : its unlatched groups, back to onLatchReport. Real bug (direct
+--- report: door sync for late joiners worked once, then never) : an open door is only "detached"
+--- for a moment. Once it swings away from the frame the game arms its latch again
+--- (advancedCouplerControl's auto latch), and it stays "autoCoupling" for as long as it's open. That
+--- state used to count as "still moving" and skip the whole report, so an open door was only
+--- reported when a poll happened to land in that first moment. Anything not latched is open now
+--- ("broken" kept apart) ; a door swinging shut is caught by onLatchReport's two-poll rule instead
 local LATCH_QUERY = [[
-local out, moving = {}, false
+local out = {}
 for _, c in pairs(controller.getControllersByType("advancedCouplerControl") or {}) do
     local ok, state = pcall(c.getGroupState)
-    if ok then
-        if state == "autoCoupling" then moving = true
-        elseif state == "detached" or state == "broken" then out[c.name] = state end
+    if ok and type(state) == "string" and state ~= "attached" and state ~= "desyncedAttached" then
+        out[c.name] = state == "broken" and "broken" or "detached"
     end
 end
-if not moving then
-    obj:queueGameEngineLua("if beamjoy_vehicleInteractions then beamjoy_vehicleInteractions.onLatchReport("
-        .. obj:getId() .. ", " .. serialize(out) .. ") end")
-end
+obj:queueGameEngineLua("if beamjoy_vehicleInteractions then beamjoy_vehicleInteractions.onLatchReport("
+    .. obj:getId() .. ", " .. serialize(out) .. ") end")
 ]]
 
 --- this client's own cars (not traffic, not someone walking)
@@ -250,6 +255,11 @@ local function onLatchReport(vid, latches)
     local key = mpVeh and mpVeh.isLocal and serverKey(mpVeh)
     if not key then return end
     local signature = latchSignature(latches)
+    -- only a state seen on two polls in a row : a door swinging shut, or a car latching its doors
+    -- as it spawns, is open for a moment in between
+    local previous = M.polledLatches[vid]
+    M.polledLatches[vid] = signature
+    if previous ~= signature then return end
     -- a car never reported yet with everything latched : nothing anyone needs to know
     if M.reportedLatches[vid] == nil and signature == "" then
         M.reportedLatches[vid] = signature
@@ -300,6 +310,7 @@ local function onBJVehicleInstantiated(vid)
         M.pendingLatches[vid] = { at = now + M.LATCH_APPLY_DELAY_MS, untilMs = now + M.LATCH_APPLY_WAIT_MS }
     else
         M.reportedLatches[vid] = nil -- an own car (re)spawned : every latch closed again
+        M.polledLatches[vid] = nil
     end
 end
 

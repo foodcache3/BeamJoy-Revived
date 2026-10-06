@@ -1054,7 +1054,10 @@ local function postToDiscord(session)
     local results = {}
     session.participants:forEach(function(p)
         if p.playerID < 0 then return end -- racedebug ghosts
-        local r = p.discordResult or { counted = false }
+        -- a copy : Real bug (direct report) : filled in place, the participant's own discordResult
+        -- took order = math.huge for anyone who didn't finish, went out with the session's last
+        -- update as "inf" (not JSON), and no client could read that update
+        local r = table.clone(p.discordResult or { counted = false })
         r.playerName = services_identity.getIdentityKey(p.playerID) or p.playerName
         r.vehicle = p.vehicleModel
         r.dnf = not p.finished or p.disqualified == true

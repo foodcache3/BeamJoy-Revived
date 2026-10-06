@@ -142,7 +142,11 @@ function json.stringify(obj, key, pretty, level)
     -- every value and joined strings by repeated concatenation (slower the bigger the output), which
     -- made big payloads (race session updates) cost tens of ms each. Same output, byte for byte.
     local t = type(obj)
-    if t == "boolean" or t == "number" then
+    if t == "number" and (obj ~= obj or obj == math.huge or obj == -math.huge) then
+        -- JSON has no infinity or NaN : written as-is ("inf"), it made the whole message unreadable
+        -- to the client (a race's last update, direct report)
+        s[#s + 1] = "null"
+    elseif t == "boolean" or t == "number" then
         s[#s + 1] = tostring(obj)
     elseif t == "string" then
         s[#s + 1] = "\"" .. obj:escape() .. "\""

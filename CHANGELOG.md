@@ -8,8 +8,43 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2597, server build 2419.
+Version 1.11.0 : client build 2600, server build 2421.
 
+- **Quick travel to every BeamJoy activity on the map** (direct request). Races and derby arenas
+  had it already ; bus lines now have it too (to the line's first stop, facing the way it was
+  placed), and so do delivery depots (into the depot's zone, where the job board opens). Same
+  button as the game's own, in each pin's card. *(client only)*
+- **Fixed: rejoining a race left you in your car but not at your checkpoint, with no checkpoints**
+  (direct report). The server puts a returning racer back in as soon as BeamJoy loads, but the
+  races themselves only arrive with the rest of the server's data, after the nickname prompt. The
+  car was set up with no race to read : no checkpoint to put it at, no gates to draw, no vehicle
+  restriction to check, and nothing tried again once the races came. Rejoining now waits for the
+  race (however long the prompt stays up), then puts you at your last checkpoint. *(client only)*
+- **Fixed: the last update of a race where someone didn't finish never reached anyone.** Building
+  the Discord results wrote an "infinite" sort key into each non-finisher's own result, which went
+  out with the race's final update as "inf" : not valid JSON, so no game could read that update
+  ("unable to decode JSON" in the log). The results are now built on a copy, and the server's
+  JSON writer turns any infinite or NaN number into null instead of breaking the message.
+  *(server only)*
+- **Fixed: open doors only reached late joiners now and then** (direct report: worked once, then
+  never). An open car door is "unlatched" for a moment only : once it swings away from the frame
+  the game arms its latch again, and it stays "latching" for as long as it's open. Each owner's
+  game skipped its report while any door was in that state, so an open door was only reported
+  when its 2 s check happened to land in that first moment. Anything not latched now counts as
+  open, and a state is only reported once two checks in a row agree (a door swinging shut, or a
+  car latching its doors as it spawns, is open for a moment in between). *(client only, every
+  player)*
+- **The updater stays in BeamJoyData/update after all** (direct request : some hosts may not
+  allow files outside Resources ; build 2419 had moved it next to the server's executable). The
+  log flood is handled instead : the "installed" message now waits until the download is cleared
+  and BeamMP's hot reload (which looks every 3 s) has logged its warnings about it, so it comes
+  last. A check no longer deletes its job.done file (one warning each time) but empties it.
+  *(server only)*
+- **Fixed: an update could start BeamJoy a second time inside the running server.** BeamMP's hot
+  reload runs BeamJoyServer.lua again, then its onInit, when that file changes on disk, which an
+  update does : every module's start-up ran again over the running ones. The running server now
+  ignores it ("BeamJoyServer files changed on disk : restart the server to run them") ; the new
+  version runs after the restart as before. Only protects from the next update on. *(server only)*
 - **Fixed: the server log filled with hundreds of "removed from plugin hot reload monitor"
   warnings after an update** (direct request). BeamMP watches every file under Resources/Server
   and warns about each one deleted, and the updater downloaded and unpacked there (then cleared

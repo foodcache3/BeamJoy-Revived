@@ -279,6 +279,9 @@ local function onBJRequestBigmapPOIs(POIS)
             groupType = "other",
             customGroupTags = { "bjDeliveryDepots" },
             pos = v3(depot.pos),
+            -- quick travel (direct request) : into the depot's zone, where the job board opens
+            canQuickTravel = true,
+            quickTravelPos = v3(depot.pos),
         }
     end
 end

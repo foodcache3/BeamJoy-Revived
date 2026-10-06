@@ -2817,8 +2817,15 @@ local function startResume()
     M.lastLy = {}
     toast.warn("Rejoining your race...", nil, 4)
     local deadline = GetCurrentTimeMillis() + RESUME_CLOCK_WAIT_MS
+    -- Real bug (direct report: back in the race's car but not at the checkpoint, no checkpoints,
+    -- the race HUD up) : the server puts a returning racer back in as soon as BeamJoy loads, but
+    -- the races themselves only come with the full cache, after the nickname prompt. The car was
+    -- set up with no race to read : no checkpoint to put it at, no gates to draw, no restriction
+    -- to apply, and nothing tried again once the races came. The race is waited for, as long as
+    -- this session lasts (the prompt can stay up a while)
     async.task(function()
-        return beamjoy_clockSync.isSynced() or GetCurrentTimeMillis() >= deadline
+        if not M.session or M.session.id ~= sessionId then return true end
+        return getRace() ~= nil and (beamjoy_clockSync.isSynced() or GetCurrentTimeMillis() >= deadline)
     end, function()
         finishResume(sessionId)
     end, "BJRaceResumeClock")

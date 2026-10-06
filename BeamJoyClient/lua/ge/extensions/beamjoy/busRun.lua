@@ -524,6 +524,10 @@ local function onBJRequestBigmapPOIs(POIS)
                 -- + onBigmapBuildCustomGroupStructures), instead of ONLY sitting in "Other".
                 customGroupTags = { "bjBusLines" },
                 pos = vec3(s1.pos.x, s1.pos.y, s1.pos.z),
+                -- quick travel (direct request) : at the first stop, facing the way it was placed
+                canQuickTravel = true,
+                quickTravelPos = vec3(s1.pos.x, s1.pos.y, s1.pos.z),
+                quickTravelRot = s1.dir,
             }
         end
     end

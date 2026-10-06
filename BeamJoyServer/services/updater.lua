@@ -15,8 +15,8 @@
 --- a second (onSlowUpdate). A missing tool is reported to whoever asked, with how to get it.
 ---
 --- Installing replaces Resources/Server/BeamJoyServer, Resources/Server/BeamJoyServerHooks and
---- Resources/Client/BJ.zip (the previous ones are moved to BeamJoyUpdate/backup-... in the server's
---- folder ; if any can't be moved, everything goes back). BeamJoyData (races, players, settings...) is never
+--- Resources/Client/BJ.zip (the previous ones are moved to BeamJoyData/update/backup-...; if any
+--- can't be moved, everything goes back). BeamJoyData (races, players, settings...) is never
 --- touched. The new version runs once the server restarts ; players get the new BJ.zip when they
 --- join after that. Downloads only ever come from this project's own repository.
 
@@ -33,10 +33,12 @@ local M = {
     --- seconds a background job may take
     CHECK_TIMEOUT = 60,
     INSTALL_TIMEOUT = 600,
+    --- seconds to wait after an install's clearing : BeamMP's plugin hot reload looks every 3 s
+    HOT_RELOAD_SETTLE = 8,
 
     ---@type BJUpdate? the latest version found, once checked
     latest = nil,
-    ---@type {startedAt: integer, timeout: integer, onDone: fun(status: string)}? the running background job
+    ---@type {startedAt: integer?, timeout: integer?, waitUntil: integer?, onDone: fun(status: string)}? the running background job (or pause)
     job = nil,
     nextCheckAt = 0,
     --- owners told since they joined : playerID -> what they were told about (a version's label, or
@@ -80,17 +82,11 @@ local function parent(path)
     return path:match("^(.*)/[^/]+$") or path
 end
 
---- `work` (downloads, unpacking, backups) sits in the server's own folder, outside Resources/Server :
---- BeamMP's plugin hot reload watches every file in there and logs a warning for each one deleted,
---- and an update unpacks (then clears) a few hundred
----@return {data: string, work: string, server: string, hooks: string, clientZip: string}
+---@return {work: string, server: string, hooks: string, clientZip: string}
 local function paths()
     local serverRoot = parent(BJSPluginPath)
-    -- the folder holding Resources (nil when the paths are relative to it)
-    local root = parent(serverRoot):match("^(.*)/[^/]+$")
     return {
-        data = serverRoot .. "/BeamJoyData/update",
-        work = (root and root .. "/" or "") .. "BeamJoyUpdate",
+        work = serverRoot .. "/BeamJoyData/update",
         server = BJSPluginPath,
         hooks = serverRoot .. "/BeamJoyServerHooks",
         clientZip = parent(serverRoot) .. "/Client/BJ.zip",
@@ -181,7 +177,7 @@ end
 ---@return {channel: "release"|"development", sha: string?}
 local function state()
     if not M.state then
-        local file = io.open(paths().data .. "/state.json", "r")
+        local file = io.open(paths().work .. "/state.json", "r")
         local raw = file and file:read("*a")
         if file then file:close() end
         -- no file yet (never switched channel nor installed) : the defaults, without handing the
@@ -203,9 +199,9 @@ end
 
 local function saveState()
     local p = paths()
-    if not FS.Exists(p.data) then FS.CreateDirectory(p.data) end
-    local file = io.open(p.data .. "/state.json", "w")
-    if not file then return LogError("BeamJoy update : couldn't save " .. p.data .. "/state.json") end
+    if not FS.Exists(p.work) then FS.CreateDirectory(p.work) end
+    local file = io.open(p.work .. "/state.json", "w")
+    if not file then return LogError("BeamJoy update : couldn't save " .. p.work .. "/state.json") end
     file:write(utils_json.stringify(state()))
     file:close()
 end
@@ -329,8 +325,10 @@ end
 local function runJob(windowsLines, shLines, timeout, onDone)
     local p = paths()
     if not FS.Exists(p.work) then FS.CreateDirectory(p.work) end
-    local donePath = p.work .. "/job.done"
-    if FS.Exists(donePath) then FS.Remove(donePath) end
+    -- emptied rather than deleted : BeamMP's plugin hot reload watches every file under
+    -- Resources/Server and logs a warning for each one that disappears
+    local done = io.open(p.work .. "/job.done", "w")
+    if done then done:close() end
     local scriptPath = p.work .. (isWindows() and "/job.bat" or "/job.sh")
     local file = io.open(scriptPath, "w")
     if not file then
@@ -351,6 +349,15 @@ end
 local function pollJob()
     local job = M.job
     if not job then return end
+    if job.waitUntil then
+        -- a pause, not a script (see afterHotReload)
+        if GetCurrentTime() >= job.waitUntil then
+            M.job = nil
+            local ok, err = pcall(job.onDone, "ok")
+            if not ok then LogError("BeamJoy update failed : " .. tostring(err)) end
+        end
+        return
+    end
     local file = io.open(paths().work .. "/job.done", "r")
     local status = file and file:read("*a"):match("%a+")
     if file then file:close() end
@@ -360,6 +367,26 @@ local function pollJob()
         local ok, err = pcall(job.onDone, status)
         if not ok then LogError("BeamJoy update failed : " .. tostring(err)) end
     end
+end
+
+--- clears the download (pkg.zip, extract/, BJ.zip), then waits for BeamMP's plugin hot reload to be
+--- done with it before `onDone` : it watches every file under Resources/Server, unpacked ones
+--- included, logs a warning for each one deleted (a few hundred here) and only looks every few
+--- seconds, so a message sent right away was buried under them (direct report)
+---@param onDone fun()
+local function afterHotReload(onDone)
+    runJob({
+        "if exist extract rmdir /s /q extract",
+        "if exist pkg.zip del /q pkg.zip",
+        "if exist BJ.zip del /q BJ.zip",
+        "echo ok> job.done",
+    }, {
+        "rm -rf extract pkg.zip BJ.zip",
+        "echo ok > job.done",
+    }, M.CHECK_TIMEOUT, function()
+        -- even if the clearing failed : what's left is only cleared by the next update
+        M.job = { waitUntil = GetCurrentTime() + M.HOT_RELOAD_SETTLE, onDone = onDone }
+    end)
 end
 
 -- CHECK ------------------------------------------------------------------------------------------------
@@ -642,22 +669,24 @@ local function download(requester, found)
         if not ok then
             return reply(requester, "update.installFailed", { version = found.label, reason = info }, true)
         end
-        M.installed = found.label
         -- a development build is told apart by its commit ; a release clears it
         state().sha = found.sha
         state().serverBuild, state().clientBuild = found.serverBuild, found.clientBuild
         saveState()
-        local vars = { version = found.label, backup = info }
-        local key = "update.installed"
-        reply(requester, key, vars)
-        if requester ~= CONSOLE then reply(CONSOLE, key, vars) end
-        -- every owner online hears it, not only the one who asked (and isn't reminded to restart on
-        -- top of it : owners joining later are, see tellOwners)
-        services_players.players:forEach(function(p)
-            if p.group == "owner" then
-                M.told[p.playerID] = "restart:" .. found.label
-                if p.playerID ~= requester then reply(p.playerID, key, vars) end
-            end
+        afterHotReload(function()
+            M.installed = found.label
+            local vars = { version = found.label, backup = info }
+            local key = "update.installed"
+            reply(requester, key, vars)
+            if requester ~= CONSOLE then reply(CONSOLE, key, vars) end
+            -- every owner online hears it, not only the one who asked (and isn't reminded to restart
+            -- on top of it : owners joining later are, see tellOwners)
+            services_players.players:forEach(function(p)
+                if p.group == "owner" then
+                    M.told[p.playerID] = "restart:" .. found.label
+                    if p.playerID ~= requester then reply(p.playerID, key, vars) end
+                end
+            end)
         end)
     end)
 end
