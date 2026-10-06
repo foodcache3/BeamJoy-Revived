@@ -88,6 +88,9 @@
 ---@field rejoinSecondsLeft integer? while disconnected : how long they had left when the last
 ---update went out (rejoinBy is the server's own deadline)
 ---@field rejoinBy integer? GetCurrentTime() deadline, while disconnected
+---@field guest boolean? joined on a BeamMP guest account (kept up to date while connected)
+---@field nickname string? their BeamJoy nickname (services/identity.lua), kept up to date while
+---connected : a guest who comes back on a new guest name is recognised by it
 
 ---@class BJRaceSessionSettings host-configurable at start time, seeded from BJRaceDefaults
 ---@field laps integer?
@@ -408,6 +411,28 @@ local function resolveDisplayName(playerID, fallbackName)
     return services_identity.getIdentityKey(playerID) or fallbackName
 end
 
+--- copies who a connected participant is (guest account, nickname) onto them, for when they've
+--- disconnected and the player record is gone
+---@param p BJRaceParticipant
+local function snapshotIdentity(p)
+    if p.disconnected then return end
+    local player = services_players.players[p.playerName]
+    if not player then return end
+    p.guest = player.guest == true
+    p.nickname = player.identityNickname
+end
+
+--- participants who disconnected mid-race wait under keys like these instead of their player ID.
+--- Real bug (direct report) : BeamMP reuses a freed player ID, so a racer coming back often gets
+--- the same one ; the rejoin saw "already in this race" (their own waiting entry) and did
+--- nothing. Kept under that ID, anyone else who joined meanwhile with it would also have been
+--- taken for that racer. Below -1 (communications_tx.ALL_PLAYERS) and the debug ghost's -1000
+local lastAwayKey = -1000000
+local function nextAwayKey()
+    lastAwayKey = lastAwayKey - 1
+    return lastAwayKey
+end
+
 -- per-gate tables never sent to clients : gateTimes holds every gate's crossing time, so on a
 -- track with hundreds of gates it was most of every session update, and it was only ever read to
 -- work out the gaps between racers, which the server now does itself (gapBetween below)
@@ -427,7 +452,7 @@ local function payloadParticipant(p)
         c.rejoinSecondsLeft = math.max(0, p.rejoinBy - GetCurrentTime())
     end
     c.rejoinBy = nil
-    c.displayName = resolveDisplayName(p.playerID, p.playerName)
+    c.displayName = resolveDisplayName(p.playerID, p.nickname or p.playerName)
     return c
 end
 
@@ -617,6 +642,7 @@ end
 ---@param session BJRaceSession
 ---@param slim boolean? see buildSessionPayload
 local function pushSessionUpdate(session, slim)
+    session.participants:forEach(snapshotIdentity)
     local payload = buildSessionPayload(session, slim)
     -- encoded once per audience, not once per player (see communications_tx.sendToPlayers)
     communications_tx.sendToPlayers(session.participants:keys(), "raceSessionUpdate", payload)
@@ -1135,7 +1161,8 @@ local function trySubmitTime(session, participant, timeMs)
     -- playerName as before otherwise. Only the leaderboard's own key changes here - this session's
     -- OWN bookkeeping (participant.playerName itself, used everywhere else in this file) is
     -- untouched.
-    local key = services_identity.getIdentityKey(participant.playerID) or participant.playerName
+    local key = services_identity.getIdentityKey(participant.playerID) or participant.nickname or
+        participant.playerName
     local previous = race and race.leaderboard and race.leaderboard[key]
     local previousMs = previous and previous.time
     participant.isNewPB, participant.isNewRecord = services_races.submitTime(
@@ -2089,34 +2116,54 @@ local function expireRejoin(sessionId, playerName)
     end
 end
 
---- a player whose BeamJoy just finished loading : if they dropped out of a race still running and
---- are inside its grace period, they're put back in under their new player ID (BeamMP gives a
---- returning player a new one, the name stays). Their client then picks the race back up
---- (raceRunner.lua's resume path) from the last gate they crossed.
+--- is this player the racer who left as `p` ? Same BeamMP name, or, for a guest (BeamMP hands out
+--- a new random guest name whenever the launcher restarts), the same BeamJoy nickname. Nicknames
+--- aren't password-protected : someone typing a disconnected guest's nickname could take their
+--- place, the same trust the leaderboard already gives nicknames
+---@param p BJRaceParticipant
+---@param sender table services_players player
+local function isReturningRacer(p, sender)
+    if p.playerName == sender.playerName then return true end
+    return p.guest == true and sender.guest == true and p.nickname ~= nil and
+        sender.identityNickname == p.nickname
+end
+
+--- a player whose BeamJoy just finished loading, or who just picked their nickname : if they
+--- dropped out of a race still running and are inside its grace period, they're put back in under
+--- their current player ID. Their client then picks the race back up (raceRunner.lua's resume
+--- path) from the last gate they crossed.
 ---@param ctxt BJSContext
 local function raceRejoin(ctxt)
     if not ctxt.sender then return end
-    local playerName = ctxt.sender.playerName
     M.sessions:forEach(function(session)
         if session.state ~= "RACE" or session.participants[ctxt.senderID] then return end
-        local oldID, participant
-        for id, p in pairs(session.participants) do
-            if p.disconnected and p.playerName == playerName then
-                oldID, participant = id, p
+        local awayKey, participant
+        for key, p in pairs(session.participants) do
+            if p.disconnected and isReturningRacer(p, ctxt.sender) then
+                awayKey, participant = key, p
                 break
             end
         end
         if not participant then return end
-        utils_async.removeTask(rejoinTaskKey(session.id, playerName))
-        session.participants[oldID] = nil
+        utils_async.removeTask(rejoinTaskKey(session.id, participant.playerName))
+        session.participants[awayKey] = nil
+        local oldName = participant.playerName
         participant.playerID = ctxt.senderID
+        participant.playerName = ctxt.sender.playerName
         participant.disconnected, participant.rejoinBy, participant.rejoinSecondsLeft = nil, nil, nil
         participant.lastProgressTime = GetCurrentTime()
         session.participants[ctxt.senderID] = participant
-        if session.starterID == oldID then session.starterID = ctxt.senderID end
-        LogInfo(string.format("[BJ races] %s rejoined race session %s", playerName, session.id))
+        if session.starterID == awayKey then session.starterID = ctxt.senderID end
+        LogInfo(string.format("[BJ races] %s rejoined race session %s%s", ctxt.sender.playerName,
+            session.id, oldName ~= ctxt.sender.playerName and (" (left as " .. oldName .. ")") or ""))
         pushSessionUpdate(session)
     end)
+end
+
+--- a guest who came back on a new guest name is only recognisable once they pick their nickname
+---@param ctxt BJSContext
+local function onBJIdentityChanged(ctxt)
+    raceRejoin(ctxt)
 end
 
 local function onPlayerDisconnect(playerID)
@@ -2143,6 +2190,12 @@ local function onPlayerDisconnect(playerID)
             -- for them (time lost away is the penalty), and gets back in where they were
             local graceSec = (session.settings.rejoinGraceMinutes or 0) * 60
             if graceSec > 0 then
+                snapshotIdentity(participant)
+                local awayKey = nextAwayKey()
+                session.participants[playerID] = nil
+                session.participants[awayKey] = participant
+                participant.playerID = awayKey
+                if session.starterID == playerID then session.starterID = awayKey end
                 participant.disconnected = true
                 participant.rejoinBy = GetCurrentTime() + graceSec
                 participant.rejoinSecondsLeft = graceSec
@@ -2170,6 +2223,7 @@ end
 M.onInit = onInit
 M.onPlayerDisconnect = onPlayerDisconnect
 M.raceRejoin = raceRejoin
+M.onBJIdentityChanged = onBJIdentityChanged
 M.expireRejoin = expireRejoin
 
 M.raceStart = raceStart

@@ -8,8 +8,20 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2600, server build 2421.
+Version 1.11.0 : client build 2600, server build 2422.
 
+- **Fixed: rejoining a race often did nothing** (direct report : no message, nothing happened,
+  same guest name). BeamMP reuses a freed player ID, so a racer coming back usually gets the one
+  they left with, and the server took their own waiting race entry, still filed under that ID, for
+  "already in this race". A racer who disconnects now waits under a placeholder no player can
+  have, which also stops anyone else who joins meanwhile with that ID from being taken for them.
+  *(server only)*
+- **Guests can rejoin a race after restarting the launcher** (direct request). BeamMP hands a
+  guest a new random name whenever the launcher starts, so they weren't recognised. A returning
+  guest now also matches a waiting guest racer with the same BeamJoy nickname, as soon as they
+  enter it. Nicknames aren't password-protected : typing a waiting guest's nickname takes their
+  place, the same trust the race leaderboard already gives nicknames. A waiting racer's row
+  shows their nickname too. *(server only)*
 - **Quick travel to every BeamJoy activity on the map** (direct request). Races and derby arenas
   had it already ; bus lines now have it too (to the line's first stop, facing the way it was
   placed), and so do delivery depots (into the depot's zone, where the job board opens). Same

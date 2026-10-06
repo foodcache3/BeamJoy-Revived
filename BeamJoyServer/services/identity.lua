@@ -77,6 +77,8 @@ local function login(ctxt, nickname)
     -- shows the chosen nickname instead of the raw connection name), not just the sender's own
     services_players.sendCacheUpdate()
     communications_tx.sendToPlayer(ctxt.senderID, "identityLoginResult", true, clean)
+    -- e.g. a guest back on a new guest name, recognised by their nickname (raceGrid.lua raceRejoin)
+    extensions.hook("onBJIdentityChanged", ctxt)
 end
 
 --- The identity key everything leaderboard-related should key entries by instead of the raw,
