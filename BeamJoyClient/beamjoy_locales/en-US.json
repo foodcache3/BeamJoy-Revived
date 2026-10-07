@@ -1573,6 +1573,8 @@
     "beamjoy.window.config.tabs.races.showGateNametags.tooltip": "Shows the floating \"Gate N\" text label above each gate while racing.",
     "beamjoy.window.config.tabs.races.limitVisibleGates": "Limit visible gates",
     "beamjoy.window.config.tabs.races.limitVisibleGates.tooltip": "Only show the next few upcoming gates while racing. Useful for long or dense tracks.",
+    "beamjoy.window.config.tabs.races.waypointBeams": "Waypoint beams",
+    "beamjoy.window.config.tabs.races.waypointBeams.tooltip": "Shows a tall white beam, like the GPS destination's, over the next gate while racing. It disappears once you're within 50 m of the gate.",
     "beamjoy.window.config.tabs.races.addGate": "Add gate at my position",
     "beamjoy.window.config.tabs.races.reverseGates.tooltip": "Reverses the gate order and flips each gate to face the other way. Start positions aren't moved, so check they still make sense for the new direction.",
     "beamjoy.window.config.tabs.races.addStart": "Add start position at my position",

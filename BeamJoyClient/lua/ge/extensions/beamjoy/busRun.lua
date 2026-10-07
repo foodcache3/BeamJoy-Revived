@@ -587,12 +587,9 @@ local function setTarget()
         extensions.core_groundMarkers.setPath(pos)
     end
     shape.reset()
-    -- a flat ground disc (a very short, wide cylinder), not a floating glowing sphere - per
-    -- direct request for "that clean vanilla look" closer to how native GPS/POI ring markers
-    -- read. shape.lua has no dedicated ring/annulus primitive, so this is the simplest available
-    -- approximation ; a filled disc, not a hollow ring outline.
+    -- the stop's circle, in the derby sumo zone's style (shape.addRing)
     local radius = math.max(1, tonumber(stop.radius) or 3)
-    shape.addCylinder(pos - vec3(0, 0, .05), pos + vec3(0, 0, .05), radius, BJColor(1, .85, 0, .35))
+    shape.addRing(pos, radius, BJColor(1, .85, 0))
 end
 
 -- BUS DISPLAYS -------------------------------------------------------------------------

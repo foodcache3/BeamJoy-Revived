@@ -426,7 +426,7 @@ local function pushHud()
     })
 end
 
---- GPS + a flat disc on the drop-off zone (same look as bus stops)
+--- GPS + a ring round the drop-off zone (same look as bus stops)
 local function drawTarget()
     local j = M.job
     shape.reset()
@@ -436,7 +436,7 @@ local function drawTarget()
     if not j then return end
     local pos = v3(j.to.pos)
     local radius = math.max(1, tonumber(j.to.radius) or 8)
-    shape.addCylinder(pos - vec3(0, 0, .05), pos + vec3(0, 0, .05), radius, BJColor(1, .45, 0, .35))
+    shape.addRing(pos, radius, BJColor(1, .45, 0))
 end
 
 --- the first start slot with no vehicle parked on it (any slot if all are taken : the spawn is

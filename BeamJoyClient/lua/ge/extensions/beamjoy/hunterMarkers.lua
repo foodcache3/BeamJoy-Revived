@@ -1,5 +1,7 @@
---- In-world live waypoint marker for the fugitive during an active Hunter round: a single tall
---- column beacon at their own current target waypoint, visible from a distance to guide them there.
+--- In-world live waypoint marker for the fugitive during an active Hunter round, at their own
+--- current target waypoint : a ring round its reach radius (the derby sumo zone's look) and the
+--- game's GPS-style beam, visible from a distance and gone within 50 m where the ring takes over.
+--- The same waypoint is drawn on the minimap (onDrawOnMinimap).
 --- Mirrors raceMarkers.lua's own render-on-change pattern (shape.reset() + rebuild the whole buffer
 --- whenever the underlying data changes, not per-frame draw calls) exactly.
 ---
@@ -11,63 +13,64 @@
 --- server-side (see hunterGrid.lua's withHuntedPrivateFields), so hunters/spectators simply have
 --- nothing here to ever draw; this module doesn't need its own extra privacy check on top of that.
 
-local COLUMN_COLOR, SPHERE_COLOR, TEXT_COLOR, TEXT_BG_COLOR
-
--- tall enough to be visible well over most terrain/foliage from a distance, matching BJI's own
--- "big column" convention per direct request
-local COLUMN_HEIGHT = 60
-local COLUMN_RADIUS = .6
+local RING_COLOR
 
 local M = {
     dependencies = { "shape", "beamjoy_hunterRunner" },
 
     visible = false,
+    ---@type vec3? the waypoint drawn now, for the minimap
+    target = nil,
 }
 
 local function onInit()
     -- BJColor() is only ever called from inside functions elsewhere in this codebase (never at
     -- file-top-level), since it's a "game util" global not guaranteed initialized yet while
     -- extensions are still being loaded, same reasoning raceMarkers.lua's own onInit gives
-    COLUMN_COLOR = BJColor(1, .8, 0, .5)
-    SPHERE_COLOR = BJColor(1, .8, 0, .85)
-    TEXT_COLOR = BJColor(1, 1, 1, .9)
-    TEXT_BG_COLOR = BJColor(0, 0, 0, .4)
+    RING_COLOR = BJColor(1, .8, 0)
 end
 
 local function render()
     shape.reset()
-    local hasContent = false
+    M.target = nil
 
     local session = beamjoy_hunterRunner.session
     if session and session.state == "HUNT" and session.route then
         local selfName = MPConfig.getNickname()
         local participant = table.find(session.participants, function(p) return p.playerName == selfName end)
         if participant and participant.role == "hunted" and not participant.eliminated then
-            local nextIndex = participant.waypointsReached + 1
-            local waypoint = session.route[nextIndex]
+            local waypoint = session.route[participant.waypointsReached + 1]
             if waypoint then
                 local pos = vec3(waypoint.pos.x, waypoint.pos.y, waypoint.pos.z)
-                local top = pos + vec3(0, 0, COLUMN_HEIGHT)
-                shape.addCylinder(pos, top, COLUMN_RADIUS, COLUMN_COLOR)
-                shape.addSphere(top, 2, SPHERE_COLOR)
-                shape.addText(string.format("Waypoint %d/%d", nextIndex, #session.route),
-                    top + vec3(0, 0, 3), TEXT_COLOR, TEXT_BG_COLOR)
-                hasContent = true
+                shape.addRing(pos, math.max(1, tonumber(waypoint.radius) or 5), RING_COLOR)
+                shape.addBeam(pos)
+                M.target = pos
             end
         end
     end
 
-    M.visible = hasContent
+    M.visible = M.target ~= nil
 end
 
 local function hide()
     shape.reset()
     M.visible = false
+    M.target = nil
+end
+
+local MINIMAP_FILL, MINIMAP_STROKE
+--- the fugitive's next waypoint on the game's minimap (a pointer on its edge when off the map)
+local function onDrawOnMinimap()
+    if not M.target or not ui_apps_minimap_utils then return end
+    MINIMAP_FILL = MINIMAP_FILL or color(255, 204, 0, 255)
+    MINIMAP_STROKE = MINIMAP_STROKE or color(255, 255, 255, 192)
+    ui_apps_minimap_utils.simpleCircleWithEdgePointer(M.target, MINIMAP_FILL, MINIMAP_STROKE)
 end
 
 M.onInit = onInit
 M.render = render
 M.hide = hide
+M.onDrawOnMinimap = onDrawOnMinimap
 
 -- refresh hook, fired by beamjoy_hunterRunner on every session update: see the note at the top of
 -- this file for why this rebuilds on change, not per frame

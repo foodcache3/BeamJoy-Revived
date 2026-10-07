@@ -113,6 +113,8 @@
 ---the whole layout before committing to start ; default true
 ---@field visibleGateCount integer? how many upcoming gates stay visible when limitVisibleGates is
 ---on, [1,5] ; default 2
+---@field waypointBeams boolean? the game's GPS-style beam (a tall white column, gone within 50 m)
+---over the gate(s) to drive through next, once COUNTDOWN/RACE begins ; default true
 ---@field allowTuning boolean? only meaningful while a vehicle restriction is actually active
 ---("single"/"pool"/"raceDefined" resolving to either; meaningless for "free", which has nothing
 ---to restrict tuning against in the first place). When true (default), a participant may freely
@@ -479,6 +481,7 @@ local function sanitizeRace(race, existingRaces)
     race.defaults.showGateNametags = race.defaults.showGateNametags == true
     race.defaults.limitVisibleGates = race.defaults.limitVisibleGates ~= false
     race.defaults.visibleGateCount = math.max(1, math.min(math.floor(tonumber(race.defaults.visibleGateCount) or 2), 5))
+    race.defaults.waypointBeams = race.defaults.waypointBeams ~= false
     race.defaults.allowTuning = race.defaults.allowTuning ~= false
     race.defaults.randomizeVehiclePool = race.defaults.randomizeVehiclePool == true
     if race.defaults.laps ~= nil then

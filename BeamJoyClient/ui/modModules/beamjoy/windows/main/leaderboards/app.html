@@ -411,10 +411,10 @@
     bj-main-leaderboards .ch-track > b.gold { background: #f2c45a; }
 
     /* drag : the strip's time leads, a red-light start reads red */
-    /* Pos, Driver, Car share the left ; the four times sit together on the right in even columns,
-       Runs last (they used to be squeezed between the driver and car, which took all the room) */
+    /* Pos and Driver (capped, so a wide window doesn't push the car to the middle), the car right
+       after it taking the rest, then the four times together on the right, Runs last */
     bj-main-leaderboards .dlb-grid.drag {
-        grid-template-columns: 3em minmax(0, 1fr) minmax(0, 1.1fr) 5.6em 5.6em 5.6em 7.2em 3.8em;
+        grid-template-columns: 3em minmax(0, 13em) minmax(0, 1fr) 6em 6em 6em 7.5em 4em;
         column-gap: 1em;
     }
     bj-main-leaderboards .ch-red {

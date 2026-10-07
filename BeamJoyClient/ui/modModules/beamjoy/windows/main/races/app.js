@@ -331,6 +331,7 @@ angular.module("beamjoy").component("bjMainRaces", {
                 showGateNametags: d.showGateNametags === true,
                 limitVisibleGates: d.limitVisibleGates !== false,
                 visibleGateCount: d.visibleGateCount || 2,
+                waypointBeams: d.waypointBeams !== false,
                 // only meaningful while vehicleRestrictionMode above isn't "free"; see
                 // BJRaceDefaults.allowTuning's own doc for what this actually gates
                 allowTuning: d.allowTuning !== false,

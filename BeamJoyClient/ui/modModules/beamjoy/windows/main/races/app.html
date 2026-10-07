@@ -492,6 +492,10 @@
                 <div class="bjr-field" ng-if="$ctrl.startOptions.limitVisibleGates">
                     <bj-slider ng-model="$ctrl.startOptions.visibleGateCount" min="1" max="5" hard-max="5" step="1"></bj-slider>
                 </div>
+                <div class="bjr-toggle-row">
+                    <span title="{{'beamjoy.window.config.tabs.races.waypointBeams.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.waypointBeams' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.waypointBeams"></bj-toggle>
+                </div>
 
                 <h4>{{'beamjoy.window.main.tabs.races.sections.timers' | translate}}</h4>
                 <div class="bjr-field">

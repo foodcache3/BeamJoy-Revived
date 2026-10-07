@@ -935,6 +935,15 @@
                             </div>
                         </td>
                     </tr>
+                    <tr>
+                        <td
+                            class="text-right"
+                            title="{{'beamjoy.window.config.tabs.races.waypointBeams.tooltip' | translate}}"
+                        >
+                            {{'beamjoy.window.config.tabs.races.waypointBeams' | translate}}
+                        </td>
+                        <td><bj-toggle ng-model="$ctrl.race.defaults.waypointBeams"></bj-toggle></td>
+                    </tr>
                     <tr ng-if="$ctrl.race.branchingEnabled">
                         <td class="text-right"></td>
                         <td class="opacity-70 small">

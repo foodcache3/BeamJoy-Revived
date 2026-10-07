@@ -188,7 +188,28 @@ local shapes = {
     triangles = Table(),
     ---@type tablelib<integer, {text: string, pos: vec3, textColor: BJColor, bgColor: BJColor, shadow: boolean}> index 1-N
     texts = Table(),
+    ---@type tablelib<integer, {pos: vec3}> index 1-N
+    beams = Table(),
 }
+
+-- the game's own GPS destination column (gameplay/markerInteraction.lua's drawDistanceColumn) :
+-- white, 1 km tall, wider and more opaque with distance. Gone within BEAM_HIDE_DISTANCE, where the
+-- marker it points at is in plain view anyway, fading out over the last BEAM_FADE metres
+local BEAM_HIDE_DISTANCE = 50
+local BEAM_FADE = 15
+local beamTop = vec3(0, 0, 1000)
+local beamColor = ColorF(1, 1, 1, 1)
+
+---@param pos vec3
+---@param camPos vec3
+local function Beam(pos, camPos)
+    local dist = camPos:distance(pos)
+    if dist <= BEAM_HIDE_DISTANCE then return end
+    beamColor.alpha = math.max(.1, math.min((dist - BEAM_HIDE_DISTANCE) / 200, .6)) *
+        math.min((dist - BEAM_HIDE_DISTANCE) / BEAM_FADE, 1)
+    debugDrawer:drawCylinder(pos, pos + beamTop, math.max(dist / 400, .1), beamColor)
+end
+M.Beam = Beam
 
 local function reset()
     for _, arr in pairs(shapes) do
@@ -222,6 +243,11 @@ local function onUpdate()
     shapes.texts:forEach(function(el)
         M.Text(el.text, el.pos, el.textColor, el.bgColor, el.shadow)
     end)
+
+    if #shapes.beams > 0 then
+        local beamCamPos = core_camera.getPosition()
+        shapes.beams:forEach(function(el) Beam(el.pos, beamCamPos) end)
+    end
 end
 
 ---@param centerPos vec3
@@ -342,8 +368,50 @@ local function addText(text, pos, textColor, bgColor, shadow)
     shapes.texts:insert({ text = text, pos = pos, textColor = textColor, bgColor = bgColor, shadow = shadow })
 end
 
+--- a GPS-style beam standing on pos (see Beam above), redrawn every frame for its distance fade
+---@param pos vec3
+local function addBeam(pos)
+    shapes.beams:insert({ pos = vec3(pos) })
+end
+
+local RING_RAIL_HEIGHTS = { .5, 3 }
+local RING_WALL_HEIGHT = 4
+local RING_WALL_DEPTH = 1
+
+--- a waypoint circle in the derby sumo zone's style : a see-through wall round the circle plus two
+--- solid rails along its edge (the wall alone fades into the map's fog). The wall is one open panel
+--- per segment, not a cylinder : the game's cylinder has end caps, a lid at this height
+---@param pos vec3 the circle's centre, on the ground
+---@param radius number
+---@param tint BJColor only its rgb is used : the wall and rails get their own opacities
+local function addRing(pos, radius, tint)
+    pos = vec3(pos)
+    local wall = BJColor(tint.r, tint.g, tint.b, .2)
+    local rail = BJColor(tint.r, tint.g, tint.b, .9)
+    local segments = radius < 15 and 32 or 48
+    local railWidth = radius < 5 and .2 or .3
+    local edge = {}
+    for i = 0, segments do
+        local a = 2 * math.pi * i / segments
+        edge[i] = vec3(pos.x + math.cos(a) * radius, pos.y + math.sin(a) * radius, pos.z)
+    end
+    local bottom, top = vec3(0, 0, -RING_WALL_DEPTH), vec3(0, 0, RING_WALL_HEIGHT)
+    for i = 1, segments do
+        local a, b = edge[i - 1], edge[i]
+        addQuad(a + bottom, b + bottom, b + top, a + top, wall)
+    end
+    for _, h in ipairs(RING_RAIL_HEIGHTS) do
+        local up = vec3(0, 0, h)
+        for i = 1, segments do
+            addLine(edge[i - 1] + up, railWidth, edge[i] + up, railWidth, rail)
+        end
+    end
+end
+
 M.reset = reset
 M.onUpdate = onUpdate
+M.addBeam = addBeam
+M.addRing = addRing
 
 M.addSphere = addSphere
 M.addLine = addLine

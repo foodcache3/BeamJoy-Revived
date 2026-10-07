@@ -23,7 +23,12 @@ local M = {
     dependencies = { "shape", "beamjoy_races", "beamjoy_raceRunner" },
 
     visible = false,
+    ---@type {left: vec3, right: vec3, color: integer, next: boolean}[] the live race's drawn gates,
+    ---for the minimap (onDrawOnMinimap)
+    minimapGates = {},
 }
+
+local MINIMAP_NEXT, MINIMAP_GATE, MINIMAP_START, MINIMAP_STROKE
 
 local function onInit()
     GATE_COLOR = BJColor(1, .8, 0, .35)
@@ -35,6 +40,18 @@ local function onInit()
     TEXT_BG_COLOR = BJColor(0, 0, 0, .4)
     PATH_COLOR = BJColor(1, 1, 1, .35)
     HANDLE_COLOR = BJColor(0, 1, 1, .9)
+    MINIMAP_NEXT = color(0, 255, 0, 255)
+    MINIMAP_GATE = color(255, 204, 0, 255)
+    MINIMAP_START = color(0, 153, 255, 255)
+    MINIMAP_STROKE = color(255, 255, 255, 192)
+end
+
+---@param gate BJRaceGate
+---@return vec3 left, vec3 right the gate's two posts, on the ground
+local function gateEnds(gate)
+    local pos = vec3(gate.pos.x, gate.pos.y, gate.pos.z)
+    local right = vec3(gate.dir.x, gate.dir.y, gate.dir.z):normalized():cross(vec3(0, 0, 1)) * (gate.width / 2)
+    return pos - right, pos + right
 end
 
 --- straight-line path connecting the gates in crossing order. A simple polyline (via shape.lua's
@@ -390,6 +407,7 @@ local function render()
     lastRenderSignature = signature
 
     shape.reset()
+    M.minimapGates = {}
     local hasContent = false
 
     if raceEditor.race then
@@ -464,12 +482,25 @@ local function render()
                     end
                 end
 
+                -- the game's GPS-style beam over the gate(s) to drive through next, once the race is
+                -- on (shape.addBeam : gone within 50 m, where the gate itself is in plain view)
+                local beams = settings.waypointBeams ~= false and
+                    (session.state == "COUNTDOWN" or session.state == "RACE")
                 table.forEach(race.gates, function(g, i)
                     if visible and not visible[i] then return end
                     local role = gateRole(race, i)
+                    local isNext = nextGateSet and nextGateSet[i] == true
                     local baseColor = role and START_COLOR or GATE_COLOR
-                    drawGate(g, i, (nextGateSet and nextGateSet[i]) and GATE_NEXT_COLOR or baseColor, false, role,
+                    drawGate(g, i, isNext and GATE_NEXT_COLOR or baseColor, false, role,
                         showLabel, sectorNumberForGate(race, i), true)
+                    if isNext and beams then shape.addBeam(vec3(g.pos.x, g.pos.y, g.pos.z)) end
+                    local left, right = gateEnds(g)
+                    table.insert(M.minimapGates, {
+                        left = left,
+                        right = right,
+                        color = isNext and MINIMAP_NEXT or role and MINIMAP_START or MINIMAP_GATE,
+                        next = isNext,
+                    })
                 end)
                 -- both the connecting path and start positions only matter during GRID (picking a
                 -- slot / waiting to ready up). By COUNTDOWN everyone's already been teleported to
@@ -490,12 +521,26 @@ end
 local function hide()
     shape.reset()
     M.visible = false
+    M.minimapGates = {}
     lastRenderSignature = nil
+end
+
+--- the live race's gates on the game's minimap, as short lines across the road. The gate(s) to
+--- drive through next sit on top and get a pointer on the map's edge when off it
+local function onDrawOnMinimap()
+    if #M.minimapGates == 0 or not ui_apps_minimap_utils then return end
+    for _, g in ipairs(M.minimapGates) do
+        if not g.next then ui_apps_minimap_utils.simpleLine(g.left, g.right, g.color, MINIMAP_STROKE) end
+    end
+    for _, g in ipairs(M.minimapGates) do
+        if g.next then ui_apps_minimap_utils.simpleLineWithEdgePointer(g.left, g.right, g.color, MINIMAP_STROKE) end
+    end
 end
 
 M.onInit = onInit
 M.render = render
 M.hide = hide
+M.onDrawOnMinimap = onDrawOnMinimap
 
 -- refresh hook, fired by beamjoy_races (test builder mutations) and beamjoy_raceRunner (session
 -- updates). See the note at the top of this file for why this rebuilds on change, not per frame

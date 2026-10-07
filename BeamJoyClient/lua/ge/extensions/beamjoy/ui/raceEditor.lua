@@ -646,6 +646,7 @@ local function backfillRaceDefaults(race)
     if race.defaults.showGateNametags == nil then race.defaults.showGateNametags = false end
     if race.defaults.limitVisibleGates == nil then race.defaults.limitVisibleGates = true end
     race.defaults.visibleGateCount = race.defaults.visibleGateCount or 2
+    if race.defaults.waypointBeams == nil then race.defaults.waypointBeams = true end
     if race.defaults.allowTuning == nil then race.defaults.allowTuning = true end
     if race.defaults.randomizeVehiclePool == nil then race.defaults.randomizeVehiclePool = false end
     -- mirrors services/races.lua's own RESPAWN_STRATEGIES values (no shared constant across the
@@ -721,6 +722,7 @@ local function onOpen(raceId)
                 showGateNametags = false,
                 limitVisibleGates = true,
                 visibleGateCount = 2,
+                waypointBeams = true,
                 allowTuning = true,
                 randomizeVehiclePool = false,
             },

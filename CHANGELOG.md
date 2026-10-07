@@ -8,7 +8,25 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2612, server build 2426.
+Version 1.11.0 : client build 2614, server build 2427.
+
+- **Waypoint circles look like the derby sumo zone** (direct request) : bus stops, delivery
+  drop-offs and the fugitive's Hunter waypoint now get a see-through wall round the circle with two
+  solid rails along its edge, instead of a flat disc on the ground. *(client only)*
+- **Race gates and the fugitive's waypoints show on the minimap** (direct request). The gates you
+  can see in the world are drawn as short lines across the road (green for the next one, blue for
+  the start / finish, yellow for the rest), and the next gate or waypoint gets a pointer on the
+  map's edge while it's off the map. *(client only)*
+- **A GPS-style beam over the next race gate and the fugitive's next waypoint** (direct request) :
+  the same tall white column the game puts on a GPS destination, gone once you're within 50 m,
+  where the gate or the waypoint's ring is in plain view. The Hunter waypoint lost its
+  "Waypoint N/M" label and yellow column for it. *(client only)*
+- **New per-race option : Waypoint beams** (direct request), in the race editor's Display section
+  and the race's start options ; on by default. *(client + server)*
+
+- **The Drag board's car column sits right after the driver** (direct report : the columns still
+  looked odd). The driver and car shared the spare width, so on a wide window the car floated in
+  the middle ; the driver column is now capped and the car takes the rest. *(client only)*
 
 - **Fixed : the whole UI stopped updating highlights while the drag overlay was on screen**
   (direct report : the Leaderboards' Drag tab didn't highlight when pressed). The game's log had
