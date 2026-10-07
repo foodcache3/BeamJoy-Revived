@@ -205,7 +205,7 @@
     "update.packageFailed": "BeamJoy {version} was downloaded but BJ.zip couldn't be built from it. Nothing was changed",
     "update.timeout": "The BeamJoy {version} download took too long and was given up. Nothing was changed",
     "update.installFailed": "BeamJoy {version} couldn't be installed ({reason}). Nothing was changed",
-    "update.installed": "BeamJoy {version} is installed. Restart the server to start using it : players get the new version when they join after that. The previous version was saved in {backup}",
+    "update.installed": "BeamJoy {version} is installed. Restart the server to start using it. Players should clear their cache before rejoining. The previous version was saved in {backup}",
     "update.restartNeeded": "BeamJoy {version} is already installed : restart the server to start using it",
     "update.channel.current": "BeamJoy updates come from {channel}. Change it with bj update channel release|development (/bjupdate channel ... in chat)",
     "update.channel.set": "BeamJoy updates now come from {channel}. Type bj update check (/bjupdate check in chat) to look for one",

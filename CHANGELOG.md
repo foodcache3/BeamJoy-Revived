@@ -8,7 +8,45 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2608, server build 2425.
+Version 1.11.0 : client build 2612, server build 2426.
+
+- **Fixed : the whole UI stopped updating highlights while the drag overlay was on screen**
+  (direct report : the Leaderboards' Drag tab didn't highlight when pressed). The game's log had
+  the UI's "10 $digest() iterations reached" error over 40,000 times : the drag overlay's
+  side value, the leaderboards' leader / your-place cards and the timeslip's cards were shown or
+  hidden by a check that hands back a new object every time, which the UI reads as a change every
+  time, so it never finished an update, and every highlight (tabs, colours) depends on finishing.
+  Every show / hide check in the drag overlay, the timeslip and the Leaderboards now comes out as
+  plain true / false.
+- **Fixed : the Leaderboards tab didn't fit in the full window and had a scrollbar** (direct
+  report). It guessed its height from the screen's ; it now fills exactly the window's body, its
+  lists scrolling inside. *(client only)*
+
+- **The leaderboards' Top / Around you switch only shows when the two differ** (direct report :
+  with one entry, clicking them did nothing). While a board holds no more drivers than the few
+  shown around you, both views are the same rows ; the switch appears once there are more. Drift
+  and drag boards, the derby board and the delivery boards. *(client only)*
+
+- **The Leaderboards' Drag board is laid out properly** (direct report : its columns were spaced
+  oddly). The driver and car took all the room, squeezing the times between them with the car
+  right against the trap speed and the run count far off at the edge. Now : position, driver and
+  car on the left, the four times together on the right in even columns, runs last.
+  *(client only)*
+
+- **Fixed : the timeslip's "Against your old best" bars never drew** (direct report), and its
+  gained / lost times and best card stayed uncoloured. The lists it shows were built anew every
+  time the window looked at them, which the UI reads as a change every time : it gave up updating
+  after 10 rounds, before applying any of the colours. They're now built once per timeslip. The
+  Leaderboards' Drift medal ticks had the same problem and get the same fix.
+- The timeslip's best card shows its whole line ("This run was 0.135 slower") instead of cutting
+  it short. *(client only)*
+
+- **Fixed : the updater said "installed, restart the server" before the install was done.** It
+  waited a fixed 8 seconds for BeamMP's plugin hot reload to work through the changed files,
+  which takes longer. It now watches the server log and says it once the hot reload's lines have
+  stopped for 6 seconds (3 minutes at most ; 45 seconds when the log can't be read).
+- The "installed" message now says players should clear their cache before rejoining, instead of
+  that they get the new version when they join. *(server only)*
 
 - **Readying up with a controller is two presses** (direct request : it took scrolling down to the
   button). While you're waiting in a race, hunter, infected or derby lobby, the Focus control

@@ -293,18 +293,18 @@
         <span class="dh-plate"><span class="dh-num">{{$ctrl.laneLetter()}}</span></span>
     </header>
 
-    <div class="dh-opp dh-line" ng-if="$ctrl.opp()">
+    <div class="dh-opp dh-line" ng-if="!!($ctrl.opp())">
         <i></i>
-        <span>{{'beamjoy.drag.against' | translate}} <b>{{$ctrl.opp().name}}</b><span ng-if="$ctrl.opp().laneName">, {{$ctrl.opp().laneName}}</span></span>
+        <span>{{'beamjoy.drag.against' | translate}} <b>{{$ctrl.opp().name}}</b><span ng-if="!!($ctrl.opp().laneName)">, {{$ctrl.opp().laneName}}</span></span>
         <span class="dh-st" ng-class="$ctrl.oppStatus().cls">{{$ctrl.oppStatus().text}}</span>
     </div>
 
     <div class="dh-hero dh-line">
         <div style="flex: 1 1 auto; min-width: 0">
             <div class="dh-state" ng-class="$ctrl.stateClass()">{{$ctrl.stateText()}}</div>
-            <div class="dh-big dh-num" ng-class="$ctrl.big().cls">{{$ctrl.big().value}}<span class="dh-unit" ng-if="$ctrl.big().unit">{{$ctrl.big().unit}}</span></div>
+            <div class="dh-big dh-num" ng-class="$ctrl.big().cls">{{$ctrl.big().value}}<span class="dh-unit" ng-if="!!($ctrl.big().unit)">{{$ctrl.big().unit}}</span></div>
         </div>
-        <div class="dh-side" ng-if="$ctrl.side()">
+        <div class="dh-side" ng-if="!!($ctrl.side())">
             {{$ctrl.side().label}}
             <b>{{$ctrl.side().value}}</b>
         </div>
@@ -322,7 +322,7 @@
     </div>
 
     <!-- before and during the run : the strip's record and your place -->
-    <div class="dh-cards dh-line" ng-if="$ctrl.h.state !== 'finished' && $ctrl.board()">
+    <div class="dh-cards dh-line" ng-if="!!($ctrl.h.state !== 'finished' && $ctrl.board())">
         <div class="dh-card">
             {{'beamjoy.drag.record' | translate}}
             <b class="dh-num rec">{{$ctrl.recordTime()}}</b>
@@ -338,7 +338,7 @@
     <!-- after the run -->
     <div class="dh-end dh-line" ng-if="$ctrl.h.state === 'finished'">
         <div>
-            <div class="dh-outcome" ng-if="$ctrl.outcome()">{{$ctrl.outcome()}}</div>
+            <div class="dh-outcome" ng-if="!!($ctrl.outcome())">{{$ctrl.outcome()}}</div>
             <div class="dh-result" ng-class="$ctrl.resultLine().cls">{{$ctrl.resultLine().text}}</div>
         </div>
         <button type="button" class="dh-btn" ng-click="$ctrl.openTimeslip()">{{'beamjoy.drag.openTimeslip' | translate}}</button>

@@ -448,6 +448,14 @@ angular.module("beamjoy").component("bjMainLeaderboards", {
         };
         this.chb = () => this.ch().board || { rows: [], around: [], players: 0 };
 
+        // the Top / Around you switch, only when the two differ : while the board holds no more
+        // drivers than the few around you, both show the same rows (direct report : with one entry,
+        // clicking them did nothing)
+        const aroundUseful = (lb) => !!(lb && lb.mine && Array.isArray(lb.around) && lb.players > lb.around.length);
+        this.nearUseful = () => aroundUseful(this.lb());
+        this.dNearUseful = () => aroundUseful(this.dlb());
+        this.cNearUseful = () => aroundUseful(this.chb());
+
         // values
         const MEDALS = ["bronze", "silver", "gold"];
         const score = (n) => Math.round(n || 0).toLocaleString();
@@ -483,19 +491,29 @@ angular.module("beamjoy").component("bjMainLeaderboards", {
         };
 
         // drift : each score's bar runs up to a bit past gold, with the spot's targets marked on it
+        // built once per spot and board : the ticks go through ng-repeat, and a list built fresh on
+        // each look reads as a change every time, so the digest never settled (the timeslip's bug)
+        let targetsCache = {};
         this.targets = () => {
             const spot = this.spot();
+            const board = this.ch().board;
+            if (targetsCache.list && targetsCache.spot === spot && targetsCache.board === board) return targetsCache.list;
             const t = (spot && spot.targets) || {};
             const top = Math.max(t.gold || 0, ...(this.chb().rows.map((r) => r.score || 0))) * 1.08 || 1;
-            return MEDALS.filter((m) => typeof t[m] === "number").map((m) => ({
+            const list = MEDALS.filter((m) => typeof t[m] === "number").map((m) => ({
                 medal: m, at: Math.min(100, (t[m] / top) * 100), score: score(t[m]),
             })).concat([{ top }]);
+            targetsCache = { spot, board, list, ticks: list.filter((x) => x.medal) };
+            return list;
         };
         const barTop = () => {
             const list = this.targets();
             return list[list.length - 1].top;
         };
-        this.ticks = () => this.targets().filter((x) => x.medal);
+        this.ticks = () => {
+            this.targets();
+            return targetsCache.ticks;
+        };
 
         const toChallengeRow = (r) => {
             const drift = this.section === "drift";

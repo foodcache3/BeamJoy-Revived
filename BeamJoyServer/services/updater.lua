@@ -33,12 +33,19 @@ local M = {
     --- seconds a background job may take
     CHECK_TIMEOUT = 60,
     INSTALL_TIMEOUT = 600,
-    --- seconds to wait after an install's clearing : BeamMP's plugin hot reload looks every 3 s
+    --- after an install, BeamMP's plugin hot reload works through every changed file under
+    --- Resources/Server (a few hundred) and logs them : "installed" waits until the server log has
+    --- had no such line for HOT_RELOAD_QUIET seconds (at least HOT_RELOAD_SETTLE in all, at most
+    --- HOT_RELOAD_MAX). Real bug : a fixed 8 s wait said "installed, restart" while it was still going
     HOT_RELOAD_SETTLE = 8,
+    HOT_RELOAD_QUIET = 6,
+    HOT_RELOAD_MAX = 180,
+    --- the same, when the server log can't be read : a longer fixed wait
+    HOT_RELOAD_NO_LOG = 45,
 
     ---@type BJUpdate? the latest version found, once checked
     latest = nil,
-    ---@type {startedAt: integer?, timeout: integer?, waitUntil: integer?, onDone: fun(status: string)}? the running background job (or pause)
+    ---@type {startedAt: integer?, timeout: integer?, settle: table?, onDone: fun(status: string)}? the running background job (or the wait for the hot reload)
     job = nil,
     nextCheckAt = 0,
     --- owners told since they joined : playerID -> what they were told about (a version's label, or
@@ -346,12 +353,54 @@ local function runJob(windowsLines, shLines, timeout, onDone)
     end
 end
 
+--- BeamMP's own log (Server.log, in the server's folder : the one holding Resources)
+---@return string[]
+local function serverLogCandidates()
+    return { parent(parent(parent(BJSPluginPath))) .. "/Server.log", "Server.log" }
+end
+
+--- a hot reload line : BeamMP's own wording, or any line naming a file of ours under Resources/Server
+--- (whatever BeamMP's wording is in the version running)
+---@param text string
+---@return boolean
+local function isHotReloadText(text)
+    local lower = text:lower()
+    return lower:find("hot%s*%-?%s*reload") ~= nil or
+        text:find("BeamJoyServer[/\\]") ~= nil or text:find("BeamJoyServerHooks[/\\]") ~= nil or
+        text:find("BeamJoyData[/\\]") ~= nil
+end
+
+--- one look at the server log for the wait after an install
+---@param settle {log: string?, pos: integer?, startedAt: integer, quietSince: integer}
+---@return boolean done
+local function hotReloadSettled(settle)
+    local now = GetCurrentTime()
+    local elapsed = now - settle.startedAt
+    if elapsed >= M.HOT_RELOAD_MAX then return true end
+    local file = settle.log and io.open(settle.log, "rb")
+    if not file then
+        return elapsed >= M.HOT_RELOAD_NO_LOG
+    end
+    local size = file:seek("end")
+    if size < settle.pos then settle.pos = 0 end -- a new log file
+    if size > settle.pos then
+        file:seek("set", settle.pos)
+        -- the log can be big : at most the last 1 MB since the last look
+        if size - settle.pos > 1048576 then file:seek("set", size - 1048576) end
+        local text = file:read("*a") or ""
+        settle.pos = size
+        if isHotReloadText(text) then settle.quietSince = now end
+    end
+    file:close()
+    return elapsed >= M.HOT_RELOAD_SETTLE and now - settle.quietSince >= M.HOT_RELOAD_QUIET
+end
+
 local function pollJob()
     local job = M.job
     if not job then return end
-    if job.waitUntil then
-        -- a pause, not a script (see afterHotReload)
-        if GetCurrentTime() >= job.waitUntil then
+    if job.settle then
+        -- waiting for the hot reload, not a script (see afterHotReload)
+        if hotReloadSettled(job.settle) then
             M.job = nil
             local ok, err = pcall(job.onDone, "ok")
             if not ok then LogError("BeamJoy update failed : " .. tostring(err)) end
@@ -372,7 +421,8 @@ end
 --- clears the download (pkg.zip, extract/, BJ.zip), then waits for BeamMP's plugin hot reload to be
 --- done with it before `onDone` : it watches every file under Resources/Server, unpacked ones
 --- included, logs a warning for each one deleted (a few hundred here) and only looks every few
---- seconds, so a message sent right away was buried under them (direct report)
+--- seconds, so a message sent right away was buried under them (direct report). Done means its
+--- lines in the server log have stopped (hotReloadSettled) : a fixed wait was too short
 ---@param onDone fun()
 local function afterHotReload(onDone)
     runJob({
@@ -384,8 +434,19 @@ local function afterHotReload(onDone)
         "rm -rf extract pkg.zip BJ.zip",
         "echo ok > job.done",
     }, M.CHECK_TIMEOUT, function()
-        -- even if the clearing failed : what's left is only cleared by the next update
-        M.job = { waitUntil = GetCurrentTime() + M.HOT_RELOAD_SETTLE, onDone = onDone }
+        -- even if the clearing failed : what's left is only cleared by the next update.
+        -- From here, only what the log gets next counts
+        local now = GetCurrentTime()
+        local settle = { startedAt = now, quietSince = now, pos = 0 }
+        for _, candidate in ipairs(serverLogCandidates()) do
+            local file = io.open(candidate, "rb")
+            if file then
+                settle.log, settle.pos = candidate, file:seek("end")
+                file:close()
+                break
+            end
+        end
+        M.job = { settle = settle, onDone = onDone }
     end)
 end
 

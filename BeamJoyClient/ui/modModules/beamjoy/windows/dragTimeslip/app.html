@@ -182,9 +182,7 @@
         font-size: 1.12em;
         font-weight: 600;
         color: #ebebeb;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        overflow-wrap: anywhere;
     }
     #beamjoy-drag-slip .ts-big {
         flex-shrink: 0;
@@ -350,7 +348,7 @@
         <div style="display: flex; flex-direction: column; gap: 0.9em; min-width: 0">
             <h2>{{'beamjoy.drag.slip.onServer' | translate}}</h2>
             <div class="ts-cards">
-                <div class="ts-card" ng-if="$ctrl.bestCard()" ng-class="$ctrl.bestCard().cls">
+                <div class="ts-card" ng-if="!!($ctrl.bestCard())" ng-class="$ctrl.bestCard().cls">
                     <div class="who">
                         {{$ctrl.bestCard().title}}
                         <b>{{$ctrl.bestCard().line}}</b>
@@ -358,7 +356,7 @@
                     </div>
                     <span class="ts-big" ng-class="$ctrl.bestCard().cls === 'good' ? 'good' : ''" ng-style="$ctrl.bestCard().cls === 'me' ? {color: '#ffbca0'} : {}">{{$ctrl.bestCard().value}}</span>
                 </div>
-                <div class="ts-card rec" ng-if="$ctrl.recordCard()">
+                <div class="ts-card rec" ng-if="!!($ctrl.recordCard())">
                     <div class="who">
                         {{'beamjoy.drag.record' | translate}}
                         <b>{{$ctrl.recordCard().name}}</b>
@@ -374,13 +372,13 @@
                         <h3>{{'beamjoy.drag.slip.vsOldBest' | translate}}</h3>
                         <span class="ts-muted" style="font-size: 0.75em">{{'beamjoy.drag.slip.atEachMark' | translate}}</span>
                     </div>
-                    <p class="ts-muted" style="margin: 0" ng-if="$ctrl.splits().length === 0">{{'beamjoy.drag.slip.noOldBest' | translate}}</p>
+                    <p class="ts-muted" style="margin: 0" ng-if="!!($ctrl.splits().length === 0)">{{'beamjoy.drag.slip.noOldBest' | translate}}</p>
                     <div class="ts-split" ng-repeat="s in $ctrl.splits() track by s.key">
                         <span style="color: #a7aebf">{{s.label}}</span>
                         <span class="ts-track"><span class="mid"></span><span class="bar" ng-class="s.cls" ng-style="{left: s.left, width: s.width}"></span></span>
                         <span style="text-align: right" ng-class="s.cls">{{s.text}}</span>
                     </div>
-                    <div class="ts-axis" ng-if="$ctrl.splits().length > 0"><span>{{'beamjoy.drag.slip.gained' | translate}}</span><span>{{'beamjoy.drag.slip.lost' | translate}}</span></div>
+                    <div class="ts-axis" ng-if="!!($ctrl.splits().length > 0)"><span>{{'beamjoy.drag.slip.gained' | translate}}</span><span>{{'beamjoy.drag.slip.lost' | translate}}</span></div>
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 0.4em; min-width: 0">
@@ -388,7 +386,7 @@
                         <h3>{{'beamjoy.drag.slip.stripBoard' | translate}}</h3>
                         <span class="ts-muted" style="font-size: 0.75em">{{$ctrl.driversText()}}</span>
                     </div>
-                    <p class="ts-muted" style="margin: 0" ng-if="$ctrl.boardRows().length === 0">{{'beamjoy.leaderboard.drag.empty' | translate}}</p>
+                    <p class="ts-muted" style="margin: 0" ng-if="!!($ctrl.boardRows().length === 0)">{{'beamjoy.leaderboard.drag.empty' | translate}}</p>
                     <div class="ts-lb" ng-repeat="b in $ctrl.boardRows() track by b.key" ng-class="{you: b.you}">
                         <span class="ts-plate" ng-class="{rec: b.rec, you: b.you && !b.rec}"><span>{{b.rank}}</span></span>
                         <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><b style="font-weight: 600">{{b.name}}</b> <span style="color: #a7aebf">{{b.car}}</span></span>

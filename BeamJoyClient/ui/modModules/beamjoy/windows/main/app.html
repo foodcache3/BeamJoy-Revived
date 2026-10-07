@@ -342,6 +342,13 @@
         overflow-y: auto;
         padding: 1.4em 1.5em;
     }
+    /* a tab that scrolls its own lists (Leaderboards) : exactly the body's height, no scrollbar of
+       the body's own (it used to guess the height from the screen's, and came out too tall) */
+    .bjr-full .full-body.fill {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
     .bjr-full .full-home {
         display: grid;
         grid-template-columns: minmax(16em, 22em) minmax(0, 1fr) minmax(13em, 17em);
@@ -946,7 +953,7 @@
                 </button>
             </div>
         </header>
-        <div class="full-body">
+        <div class="full-body" ng-class="{fill: $ctrl.fullTab === 'leaderboards'}">
             <div class="full-home" ng-if="$ctrl.fullTab === 'home'">
                 <section aria-labelledby="bjr-home-now">
                     <h2 class="bjr-h2" id="bjr-home-now">{{'beamjoy.window.main.now.title' | translate}}</h2>

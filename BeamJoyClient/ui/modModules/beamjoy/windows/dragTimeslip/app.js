@@ -8,13 +8,19 @@ angular.module("beamjoy").component("bjDragTimeslip", {
         const f = beamjoyDragFormat;
         this.open = false;
         this.s = null;
+        // every list an ng-repeat goes through is built once per slip : built fresh on each look,
+        // its new objects read as a change every time, the digest never settled and was abandoned
+        // after 10 rounds, and with it every ng-class (real bug : the gained / lost bars never drew,
+        // the times and the best card stayed uncoloured)
         let cache = null;
+        let memo = {};
 
         $rootScope.$on("BJDragTimeslip", (_, data) => {
             $scope.$applyAsync(() => {
                 this.open = !!(data && data.open && data.slip);
                 this.s = (data && data.slip) || this.s;
                 cache = null;
+                memo = {};
                 beamjoyDelivery.setNavOwner("dragTimeslip", this.open);
             });
         });
@@ -149,7 +155,8 @@ angular.module("beamjoy").component("bjDragTimeslip", {
         };
 
         // where this run gained or lost against your old best, mark by mark
-        this.splits = () => {
+        this.splits = () => memo.splits || (memo.splits = buildSplits());
+        const buildSplits = () => {
             const old = this.s && this.s.best && this.s.best.splits;
             const mine = me() && me().values;
             if (!old || !mine) return [];
@@ -169,7 +176,8 @@ angular.module("beamjoy").component("bjDragTimeslip", {
         };
 
         // the strip's board : the top four, and your row if you're further down
-        this.boardRows = () => {
+        this.boardRows = () => memo.boardRows || (memo.boardRows = buildBoardRows());
+        const buildBoardRows = () => {
             const b = board();
             if (!b || !b.rows) return [];
             const rows = b.rows.slice(0, 4);
