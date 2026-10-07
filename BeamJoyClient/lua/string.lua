@@ -46,7 +46,7 @@ string.rstripchars = function(str, chars)
     if type(chars) ~= "string" then return str, 0 end
     local count = 0
     for i = #str, 1, -1 do
-        if chars:find(str:sub(i, i)) then
+        if chars:find(str:sub(i, i), 1, true) then -- plain : a "." or "%" isn't a pattern here
             str = str:sub(1, i - 1)
             count = count + 1
         else

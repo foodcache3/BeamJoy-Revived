@@ -5,6 +5,7 @@
 ---@field validate fun(ctxt: BJSContext, args: string[]): boolean
 ---@field callback fun(ctxt: BJSContext, args: string[], command: BJChatCommand)
 ---@field permissions string[]
+---@field hidden boolean? an alias : works, but /help doesn't list it
 
 local M = {
     prefix = "/",
@@ -19,6 +20,7 @@ local function help(ctxt)
     table.insert(lines, services_lang.get("chat.command.help.title", ctxt.sender.lang))
     table.values(M.commands):sort(function(a, b) return a.command < b.command end)
         :filter(function(cmd) ---@param cmd BJChatCommand
+            if cmd.hidden then return false end
             return #cmd.permissions == 0 or
                 services_permissions.hasAllPermissions(ctxt.senderID, table.unpack(cmd.permissions))
         end)
@@ -72,7 +74,7 @@ end
 ---@param command string
 ---@param descKey string
 ---@param callback fun(ctxt: BJSContext, args: string[], command: BJChatCommand)
----@param options {commandKey: string?, permissions: string[]?, validate: (fun(ctxt: BJSContext, args: string[]): boolean)?}?
+---@param options {commandKey: string?, permissions: string[]?, validate: (fun(ctxt: BJSContext, args: string[]): boolean)?, hidden: boolean?}?
 local function addCommand(command, descKey, callback, options)
     options = options or {}
 
@@ -88,6 +90,7 @@ local function addCommand(command, descKey, callback, options)
         validate = options.validate or TrueFn,
         callback = callback,
         permissions = options.permissions or {},
+        hidden = options.hidden == true,
     }
 end
 

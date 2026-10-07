@@ -156,7 +156,8 @@ end
 ---@param success boolean
 ---@param reason string nickname on success, an error key on failure
 local function onLoginResult(success, reason)
-    M.send("BJLoginResult", { success = success, reason = not success and reason or nil })
+    M.send("BJLoginResult", { success = success, reason = not success and reason or nil,
+        nickname = success and reason or nil })
     if success and M.loginPending then
         M.loginPending = false
         async.removeTask("BJLoginTimeout")

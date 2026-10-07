@@ -49,20 +49,17 @@ local function sanitizeNickname(nickname)
     return nickname
 end
 
+--- sets the sender's nickname (the login prompt, the "Change nickname" button, /nickname)
 ---@param ctxt BJSContext
----@param nickname string
-local function login(ctxt, nickname)
-    if not ctxt.sender then return end
+---@param nickname any
+---@return boolean ok, string result the nickname, or why not : "invalidNickname" / "nicknameTaken"
+local function setNickname(ctxt, nickname)
     local clean = sanitizeNickname(nickname)
-    if not clean then
-        return communications_tx.sendToPlayer(ctxt.senderID, "identityLoginResult", false, "invalidNickname")
-    end
+    if not clean then return false, "invalidNickname" end
     local collision = services_players.players:any(function(p)
         return p.playerID ~= ctxt.senderID and p.identityNickname == clean
     end)
-    if collision then
-        return communications_tx.sendToPlayer(ctxt.senderID, "identityLoginResult", false, "nicknameTaken")
-    end
+    if collision then return false, "nicknameTaken" end
     ctxt.sender.identityNickname = clean
     -- Real bug: a few places (vehicles.lua's own onVehicleSpawn, services_players.savePlayer)
     -- broadcast the raw live player object directly via "updatePlayer" instead of going through
@@ -76,9 +73,22 @@ local function login(ctxt, nickname)
     -- refreshes every connected client's view of THIS player (their nametag/roster entry now
     -- shows the chosen nickname instead of the raw connection name), not just the sender's own
     services_players.sendCacheUpdate()
+    -- also when it came from chat : the client remembers it for the next login prompt, and a
+    -- login prompt still up is answered
     communications_tx.sendToPlayer(ctxt.senderID, "identityLoginResult", true, clean)
     -- e.g. a guest back on a new guest name, recognised by their nickname (raceGrid.lua raceRejoin)
     extensions.hook("onBJIdentityChanged", ctxt)
+    return true, clean
+end
+
+---@param ctxt BJSContext
+---@param nickname string
+local function login(ctxt, nickname)
+    if not ctxt.sender then return end
+    local ok, result = setNickname(ctxt, nickname)
+    if not ok then
+        communications_tx.sendToPlayer(ctxt.senderID, "identityLoginResult", false, result)
+    end
 end
 
 --- The identity key everything leaderboard-related should key entries by instead of the raw,
@@ -202,6 +212,26 @@ local function chatLogin(ctxt, args, command)
         services_lang.get("chat.command.login.success", ctxt.sender.lang):var({ group = groupName }))
 end
 
+--- /nickname <name> (or /nick) : direct request, the same change as the window's "Change nickname"
+---@param ctxt BJSContext
+---@param args string[] "<nickname...>"
+---@param command BJChatCommand
+local function chatNickname(ctxt, args, command)
+    if #args < 1 then return chatUsage(ctxt, command) end
+    local ok, result = setNickname(ctxt, table.join(args, " "))
+    if ok then
+        -- string.var substitutes with gsub, where a "%" in the nickname would be read as a capture
+        return services_chat.directSend(ctxt.senderID,
+            services_lang.get("chat.command.nickname.success", ctxt.sender.lang)
+            :var({ nickname = (result:gsub("%%", "%%%%")) }))
+    end
+    services_chat.directSend(ctxt.senderID,
+        services_lang.get(result == "nicknameTaken" and "chat.command.nickname.taken" or
+            "chat.command.nickname.invalid", ctxt.sender.lang)
+        :var({ min = M.NICKNAME_MIN, max = M.NICKNAME_MAX }),
+        services_chat.COLORS.ERROR)
+end
+
 ---@param args string[]
 ---@param printUsage fun()
 ---@param hashField "staffHash"|"ownerHash"
@@ -243,11 +273,18 @@ local function onInit()
     -- commands registered with no permission gate
     services_chatCommands.addCommand("login", "chat.command.login.desc", M.chatLogin,
         { commandKey = "chat.command.login.command" })
+    -- anyone, like the login prompt itself
+    services_chatCommands.addCommand("nickname", "chat.command.nickname.desc", M.chatNickname,
+        { commandKey = "chat.command.nickname.command" })
+    services_chatCommands.addCommand("nick", "chat.command.nickname.desc", M.chatNickname,
+        { commandKey = "chat.command.nickname.command", hidden = true })
 end
 
 M.onInit = onInit
 
 M.login = login
+M.setNickname = setNickname
+M.chatNickname = chatNickname
 M.getIdentityKey = getIdentityKey
 
 M.chatLogin = chatLogin

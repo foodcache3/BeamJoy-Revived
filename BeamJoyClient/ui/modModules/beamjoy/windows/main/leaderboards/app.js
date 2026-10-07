@@ -1,7 +1,8 @@
 // Full window > Leaderboards : Races (every race with its record and your place, the picked one's
 // board through bj-race-leaderboard), Deliveries (packages / vehicles, ranked by points, jobs,
-// success rate, distance or, for packages, fewest resets) or Derby (one board, ranked by wins, win
-// rate, wrecks, damage or games : the side list shows every ranking's leader and your place).
+// success rate, distance or, for packages, fewest resets), Derby (one board, ranked by wins, win
+// rate, wrecks, damage or games : the side list shows every ranking's leader and your place), or
+// the game's own Drift spots (best score) and Drag strips (best time) of this map.
 angular.module("beamjoy").component("bjMainLeaderboards", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/leaderboards/app.html",
     controller: function ($rootScope, $scope, $filter, $interval, beamjoyStore, beamjoyDelivery, beamjoyLeaderboardFormat) {
@@ -14,6 +15,7 @@ angular.module("beamjoy").component("bjMainLeaderboards", {
         this.setSection = (section) => {
             this.section = section;
             if (section === "derby") requestDerby();
+            if (section === "drift" || section === "drag") requestSpots(section);
         };
 
         // RACES ------------------------------------------------------------------------------
@@ -66,6 +68,7 @@ angular.module("beamjoy").component("bjMainLeaderboards", {
             request();
             beamjoyStore.send("BJRaceLeaderboardSummaryRequest");
             if (this.section === "derby") requestDerby();
+            if (this.isChallenge()) requestSpots(this.section);
         }, 15000);
         on("BJDeliveryResults", () => request());
 
@@ -371,6 +374,220 @@ angular.module("beamjoy").component("bjMainLeaderboards", {
                 deathsPer: f.fill("beamjoy.leaderboard.derby.stat.perGame", { n: perGame(me.deaths || 0, me) }),
                 damage: compact(me.damage),
                 damagePer: f.fill("beamjoy.leaderboard.derby.stat.perGame", { n: compact((me.damage || 0) / Math.max(1, me.games || 0)) }),
+            };
+        };
+
+        // DRIFT AND DRAG ---------------------------------------------------------------------
+        // the game's own drift spots and drag strips (beamjoy/freeroamChallenges.lua) : this
+        // map's spots / strips come from the game, the boards from the server
+        const newChallenge = () => ({
+            enabled: true, imperial: false, spots: null, summary: {}, spotId: null, board: null, near: false,
+        });
+        this.CH = { drift: newChallenge(), drag: newChallenge() };
+        this.isChallenge = () => this.section === "drift" || this.section === "drag";
+        this.ch = () => this.CH[this.section];
+        const requestSpots = (kind) => beamjoyStore.send("BJChallengeSpotsRequest", [kind]);
+        const requestBoard = (kind) => {
+            const s = this.CH[kind];
+            if (s.spotId) beamjoyStore.send("BJChallengeBoardRequest", [kind, s.spotId]);
+        };
+        on("BJChallengeSpots", (_, d) => {
+            const s = d && this.CH[d.kind];
+            if (!s) return;
+            s.enabled = !!d.enabled;
+            s.imperial = !!d.imperial;
+            s.spots = Array.isArray(d.spots) ? d.spots : [];
+            // opened from a drag timeslip's "Open leaderboard" : that strip
+            const wanted = $rootScope.bjChallengeSpot;
+            if (wanted && d.kind === "drag" && s.spots.some((x) => x.id === wanted)) {
+                $rootScope.bjChallengeSpot = null;
+                if (s.spotId !== wanted) {
+                    s.spotId = wanted;
+                    s.board = null;
+                    s.near = false;
+                }
+            }
+            if (!s.spots.some((x) => x.id === s.spotId)) {
+                s.spotId = s.spots.length > 0 ? s.spots[0].id : null;
+                s.board = null;
+                s.near = false;
+            }
+            requestBoard(d.kind);
+        });
+        on("BJChallengeSummary", (_, d) => {
+            const s = d && this.CH[d.kind];
+            if (!s) return;
+            const map = {};
+            (Array.isArray(d.spots) ? d.spots : []).forEach((x) => (map[x.spot] = x));
+            s.summary = map;
+        });
+        on("BJChallengeBoard", (_, d) => {
+            const s = d && this.CH[d.kind];
+            // an older spot's answer : not what's shown
+            if (!s || d.spot !== s.spotId) return;
+            if (!Array.isArray(d.rows)) d.rows = [];
+            if (!Array.isArray(d.around)) d.around = [];
+            s.board = d;
+        });
+        // a run of this player's was just saved : its board and the list moved
+        on("BJChallengeChanged", (_, d) => {
+            if (d && this.CH[d.kind]) requestSpots(d.kind);
+        });
+        this.enableChallenge = () => beamjoyStore.send("BJChallengeEnable", [this.section]);
+        this.pickSpot = (spot) => {
+            const s = this.ch();
+            if (s.spotId === spot.id) return;
+            s.spotId = spot.id;
+            s.board = null;
+            s.near = false;
+            requestBoard(this.section);
+        };
+        this.spot = () => {
+            const s = this.ch();
+            return (s.spots || []).find((x) => x.id === s.spotId) || null;
+        };
+        this.chb = () => this.ch().board || { rows: [], around: [], players: 0 };
+
+        // values
+        const MEDALS = ["bronze", "silver", "gold"];
+        const score = (n) => Math.round(n || 0).toLocaleString();
+        const secs = (n) => (typeof n === "number" ? n.toFixed(3) : "-");
+        this.speed = (ms) => {
+            if (typeof ms !== "number") return "-";
+            return this.ch().imperial ? `${(ms * 2.23694).toFixed(1)} mph` : `${(ms * 3.6).toFixed(1)} km/h`;
+        };
+        this.cValue = (r, kind) => {
+            if (!r) return "";
+            return (kind || this.section) === "drift" ? score(r.score) : secs(r.et);
+        };
+        this.cUnit = () => translate(`beamjoy.leaderboard.${this.section}.unit`);
+        // the best target a drift score reached
+        const medal = (sc, targets) => {
+            let got = null;
+            MEDALS.forEach((m) => {
+                if (targets && typeof targets[m] === "number" && sc >= targets[m]) got = m;
+            });
+            return got;
+        };
+
+        // the side list
+        this.spotLine = (spot) => {
+            const x = this.ch().summary[spot.id];
+            if (!x || !x.leader) return translate(`beamjoy.leaderboard.${this.section}.noRuns`);
+            const v = this.cValue(x.leader);
+            return this.section === "drift" ? `${v}, ${x.leader.name}` : `${v} s, ${x.leader.name}`;
+        };
+        this.spotRank = (spot) => {
+            const x = this.ch().summary[spot.id];
+            return x && x.myRank ? x.myRank : null;
+        };
+
+        // drift : each score's bar runs up to a bit past gold, with the spot's targets marked on it
+        this.targets = () => {
+            const spot = this.spot();
+            const t = (spot && spot.targets) || {};
+            const top = Math.max(t.gold || 0, ...(this.chb().rows.map((r) => r.score || 0))) * 1.08 || 1;
+            return MEDALS.filter((m) => typeof t[m] === "number").map((m) => ({
+                medal: m, at: Math.min(100, (t[m] / top) * 100), score: score(t[m]),
+            })).concat([{ top }]);
+        };
+        const barTop = () => {
+            const list = this.targets();
+            return list[list.length - 1].top;
+        };
+        this.ticks = () => this.targets().filter((x) => x.medal);
+
+        const toChallengeRow = (r) => {
+            const drift = this.section === "drift";
+            const spot = this.spot();
+            const m = drift ? medal(r.score || 0, spot && spot.targets) : null;
+            return {
+                key: `c${r.rank}`,
+                rank: r.rank,
+                name: r.name,
+                you: !!r.you,
+                value: this.cValue(r),
+                medal: m,
+                pct: drift ? Math.min(100, ((r.score || 0) / barTop()) * 100) : 0,
+                reaction: secs(r.reaction),
+                redLight: typeof r.reaction === "number" && r.reaction < 0,
+                sixty: secs(r.sixty),
+                trap: this.speed(r.trap),
+                vehicle: r.vehicle || "-",
+                runs: (r.runs || 1).toLocaleString(),
+                when: f.ago(r.date),
+            };
+        };
+        let cRowsCache = { board: null, near: null, rows: [] };
+        this.cRows = () => {
+            const s = this.ch();
+            if (cRowsCache.board === s.board && cRowsCache.near === s.near) return cRowsCache.rows;
+            const lb = this.chb();
+            const rows = [];
+            if (s.near && lb.mine && lb.around.length > 0) {
+                const first = lb.around[0];
+                const last = lb.around[lb.around.length - 1];
+                if (first.rank > 1 && lb.rows[0]) rows.push(toChallengeRow(lb.rows[0]));
+                if (first.rank > 2) rows.push(cut("above", first.rank - 2, "beamjoy.leaderboard.more"));
+                lb.around.forEach((r) => rows.push(toChallengeRow(r)));
+                if (last.rank < lb.players) rows.push(cut("below", lb.players - last.rank, "beamjoy.leaderboard.more"));
+            } else {
+                lb.rows.forEach((r) => rows.push(toChallengeRow(r)));
+                if (lb.players > lb.rows.length) {
+                    rows.push(cut("rest", lb.players - lb.rows.length, "beamjoy.leaderboard.moreNotShown"));
+                }
+            }
+            cRowsCache = { board: s.board, near: s.near, rows };
+            return rows;
+        };
+        this.cMineRow = () => (this.chb().mine ? toChallengeRow(this.chb().mine) : null);
+        this.cPinMine = () => !!this.chb().mine && !this.cRows().some((r) => r.you);
+        this.cTopText = () => f.fill("beamjoy.leaderboard.topN", { n: this.chb().size || 50 });
+        this.cDriversText = () => f.fill("beamjoy.leaderboard.drivers", { n: this.chb().players });
+        this.rankedByText = () => {
+            const spot = this.spot();
+            return f.fill("beamjoy.leaderboard.drag.rankedBy", {
+                timer: (spot && spot.timer) || translate("beamjoy.leaderboard.drag.defaultTimer"),
+            });
+        };
+
+        this.cLeader = () => {
+            const top = this.chb().rows[0];
+            if (!top) return null;
+            return {
+                name: top.name,
+                value: this.cValue(top),
+                line: [top.vehicle, f.ago(top.date)].filter((x) => x).join(", "),
+            };
+        };
+        this.cMine = () => {
+            const lb = this.chb();
+            const me = lb.mine;
+            if (!me) return null;
+            const drift = this.section === "drift";
+            let behind = translate("beamjoy.leaderboard.delivery.leadBoard");
+            if (me.rank > 1) {
+                const above = lb.around.concat(lb.rows).find((r) => r.rank === me.rank - 1);
+                behind = above ? f.fill(`beamjoy.leaderboard.${this.section}.behind`, {
+                    n: drift ? score((above.score || 0) - (me.score || 0)) : secs((me.et || 0) - (above.et || 0)),
+                    rank: me.rank - 1,
+                }) : "";
+            }
+            const spot = this.spot();
+            const m = drift ? medal(me.score || 0, spot && spot.targets) : null;
+            return {
+                rank: me.rank,
+                value: this.cValue(me),
+                behind,
+                medal: m,
+                medalText: translate(`beamjoy.leaderboard.drift.medal.${m || "none"}`),
+                runs: (me.runs || 1).toLocaleString(),
+                vehicle: me.vehicle || "-",
+                when: f.ago(me.date),
+                reaction: secs(me.reaction),
+                redLight: typeof me.reaction === "number" && me.reaction < 0,
+                sixty: secs(me.sixty),
+                trap: this.speed(me.trap),
             };
         };
 

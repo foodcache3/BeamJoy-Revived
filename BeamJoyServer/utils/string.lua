@@ -39,7 +39,8 @@ string.rstripchars = string.rstripchars or function(str, chars)
     if type(str) ~= "string" then return "", 0 end
     if type(chars) ~= "string" then return str, 0 end
     local count = 0
-    while chars:find(str:sub(-1, -1)) do
+    -- plain find, and stop when empty : see stripchars
+    while #str > 0 and chars:find(str:sub(-1, -1), 1, true) do
         str = str:sub(1, -2)
         count = count + 1
     end
@@ -97,11 +98,15 @@ string.stripchars = string.stripchars or function(str, chars)
     if type(str) ~= "string" then return "", 0 end
     if type(chars) ~= "string" then return str, 0 end
     local count = 0
-    while chars:find(str:sub(1, 1)) do
+    -- Real bug (found testing /nickname) : each character was looked up as a PATTERN, and an
+    -- empty string was always "found". A text of only spaces looped forever (the whole server
+    -- hung : trim() runs on what players send, e.g. a nickname), one ending in "%" or holding "("
+    -- or "[" threw, and "." matched anything, so trim() ate leading/trailing dots
+    while #str > 0 and chars:find(str:sub(1, 1), 1, true) do
         str = str:sub(2, #str)
         count = count + 1
     end
-    while chars:find(str:sub(-1, -1)) do
+    while #str > 0 and chars:find(str:sub(-1, -1), 1, true) do
         str = str:sub(1, -2)
         count = count + 1
     end

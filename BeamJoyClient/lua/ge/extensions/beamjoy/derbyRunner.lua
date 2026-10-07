@@ -127,6 +127,16 @@ local function flushSpawnQueue()
     pcall(function() MPVehicleGE.applyQueuedEvents() end)
 end
 
+--- puts the player's own spawn-queue setting back : the queue is only forced for the countdown
+--- (direct request). Called once the countdown is over (onSlowUpdate), when the derby ends for
+--- this player, and when BeamJoy unloads (leaving the server mid-countdown)
+local function restoreSpawnQueue()
+    if not M.spawnQueueForced then return end
+    M.spawnQueueForced = false
+    settings.setValue("enableSpawnQueue", M.previousSpawnQueueSetting == true)
+    M.previousSpawnQueueSetting = nil
+end
+
 ---@return boolean
 local function isGameLocked()
     return M.session ~= nil and (M.session.state == "COUNTDOWN" or M.session.state == "GAME")
@@ -506,11 +516,7 @@ local function clearGameState()
     M.feed = {}
     resetDetection()
     async.removeTask("BJDerbySpectateSwitch")
-    if M.spawnQueueForced then
-        M.spawnQueueForced = false
-        settings.setValue("enableSpawnQueue", M.previousSpawnQueueSetting)
-        M.previousSpawnQueueSetting = nil
-    end
+    restoreSpawnQueue()
     unlockScenario()
     beamjoy_communications_ui.send("BJDerbyCountdown", { active = false })
     camera.stopForcedCameras()
@@ -1385,7 +1391,10 @@ local function onSlowUpdate()
         local v = beamjoy_vehicles.getVehicle(M.myVehicleVid, true)
         if v and v.veh.shut ~= "1" then beamjoy_vehicles.setEngine(M.myVehicleVid, false) end
     end
-    if M.spawnQueueForced then flushSpawnQueue() end
+    if M.spawnQueueForced then
+        flushSpawnQueue()
+        if not (M.session and M.session.state == "COUNTDOWN") then restoreSpawnQueue() end
+    end
 end
 
 -- ACTIONS -----------------------------------------------------------------------------------------
@@ -1475,6 +1484,9 @@ end
 M.onInit = onInit
 M.onUpdate = onUpdate
 M.onSlowUpdate = onSlowUpdate
+M.onServerLeave = restoreSpawnQueue
+M.onExtensionUnloaded = restoreSpawnQueue
+M.onPreExit = restoreSpawnQueue
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onBJRequestCurrentVehicleReset = onBJRequestCurrentVehicleReset
 M.onBJRequestCanSpawnVehicle = onBJRequestCanSpawnVehicle

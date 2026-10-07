@@ -71,6 +71,22 @@ local function tr(s)
     return s
 end
 
+--- Big Map pins go out under "bjPin:<their id>". Real bug (direct report, FATAL on quick travel
+--- to a garage or bus line) : the activities' in-world markers (onGetRawPoiListForLevel : garages,
+--- gas stations, bus lines, delivery depots) are POIs in the same list, under the very same ids as
+--- their pins, but with no bigmapMarker. freeroam_bigMapMode.teleportToPoi walks the whole list and
+--- reads bigmapMarker on every entry with the id it was given, so it hit the marker and crashed.
+local PIN_PREFIX = "bjPin:"
+
+--- the M.POIs entry behind a pin id the Big Map hands back (prefixed), or a plain id
+---@param pinId any
+---@return table?
+local function poiOfPin(pinId)
+    if type(pinId) ~= "string" then return nil end
+    if pinId:sub(1, #PIN_PREFIX) == PIN_PREFIX then pinId = pinId:sub(#PIN_PREFIX + 1) end
+    return M.POIs[pinId]
+end
+
 --- our replacement for `gameplay_rawPois.getRawPoiListByLevel`. Delegates to the real one for
 --- everything the game already knows about (this is what fires `onGetRawPoiListForLevel`, so
 --- vanilla facilities/spawns/native contributors all come through live and fresh), then appends
@@ -134,7 +150,7 @@ local function getRawPOIs(levelIdentifier)
                 qtFn = function() return qtPos, qtRot end
             end
             out[#out + 1] = {
-                id = id,
+                id = PIN_PREFIX .. id,
                 -- must NOT be "mission" : that routes into freeroam_vueBigMap.processMissionPoi,
                 -- which assumes a real registered mission exists. A known facility type lands in
                 -- its own group ; anything else falls into "type_other" - unavoidably, in ADDITION
@@ -311,7 +327,8 @@ local function getGroups()
             if group.key == "type_other" and type(group.elementIds) == "table" then
                 local keptIds = {}
                 for _, id in ipairs(group.elementIds) do
-                    local tags = M.POIs[id] and M.POIs[id].customGroupTags
+                    local poi = poiOfPin(id)
+                    local tags = poi and poi.customGroupTags
                     local claimed = false
                     if type(tags) == "table" then
                         for _, tag in ipairs(tags) do
@@ -429,7 +446,7 @@ end
 ---@param poiId string?
 ---@return boolean shown
 local function showRoutePreview(poiId)
-    local el = poiId and M.POIs[poiId]
+    local el = poiOfPin(poiId)
     local bmm = extensions.freeroam_bigMapMode
     if not el or type(el.previewPoints) ~= "table" or #el.previewPoints < 2 or not bmm or
         not bmm.setRoutePreview then

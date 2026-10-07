@@ -1,0 +1,401 @@
+<style>
+    #beamjoy-drag-slip {
+        position: fixed;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 6;
+        width: min(60em, 94vw);
+        max-height: 92vh;
+        overflow-y: auto;
+        box-sizing: border-box;
+        background: #15171c;
+        border-radius: 0.5em;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 1.5em 3.5em rgba(0, 0, 0, 0.5);
+        color: #ebebeb;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+    }
+    #beamjoy-drag-slip .ts-head {
+        display: flex;
+        align-items: center;
+        gap: 0.75em;
+        padding: 0.9em 1.15em 0.8em;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    #beamjoy-drag-slip h1 {
+        margin: 0;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 700;
+        font-size: 1.45em;
+        line-height: 1.2;
+    }
+    #beamjoy-drag-slip .ts-sub {
+        margin-top: 0.1em;
+        font-size: 0.8em;
+        color: #a7aebf;
+    }
+    #beamjoy-drag-slip .ts-btn {
+        min-height: 2.75em;
+        padding: 0 1.1em;
+        border: 0;
+        border-radius: 0.25em;
+        background: #282b33;
+        color: #ebebeb;
+        font: inherit;
+        font-size: 0.88em;
+        cursor: pointer;
+    }
+    #beamjoy-drag-slip .ts-btn:hover {
+        background: #363a45;
+    }
+    #beamjoy-drag-slip .ts-btn.icon {
+        width: 2.75em;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    #beamjoy-drag-slip button:focus-visible {
+        outline: 2px solid #ffbca0;
+        outline-offset: 2px;
+    }
+    #beamjoy-drag-slip .ts-body {
+        display: grid;
+        grid-template-columns: 26em minmax(0, 1fr);
+        gap: 1.6em;
+        padding: 1.4em 1.4em 1.6em;
+    }
+
+    /* the printed slip */
+    #beamjoy-drag-slip .ts-paper-wrap {
+        filter: drop-shadow(0 0.35em 0.8em rgba(0, 0, 0, 0.45));
+        align-self: start;
+    }
+    #beamjoy-drag-slip .ts-paper {
+        padding: 1.3em 1.5em 2.1em;
+        background: #e9ece6;
+        color: #24262b;
+        font-family: "Overpass Mono", "Noto Sans Mono", monospace;
+        font-size: 0.85em;
+        line-height: 1.6;
+        -webkit-mask: linear-gradient(#000, #000) top / 100% calc(100% - 0.6em) no-repeat,
+            conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / 0.85em 0.6em repeat-x;
+    }
+    #beamjoy-drag-slip .ts-c {
+        text-align: center;
+    }
+    #beamjoy-drag-slip .ts-dim {
+        color: #4d5058;
+    }
+    #beamjoy-drag-slip .ts-rule {
+        margin: 0.6em 0 0.5em;
+        border-top: 1px dashed #8b8f97;
+    }
+    #beamjoy-drag-slip .ts-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 7em 7em;
+        font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-drag-slip .ts-grid.solo {
+        grid-template-columns: minmax(0, 1fr) 7em;
+    }
+    #beamjoy-drag-slip .ts-grid > span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #beamjoy-drag-slip .ts-r {
+        text-align: right;
+    }
+    #beamjoy-drag-slip .ts-b {
+        font-weight: 700;
+    }
+    #beamjoy-drag-slip .ts-cell {
+        position: relative;
+        overflow: visible !important;
+    }
+    #beamjoy-drag-slip .ts-stamp {
+        position: absolute;
+        right: 4.2em;
+        top: -0.3em;
+        padding: 0 0.45em;
+        border: 2px solid #c8322c;
+        border-radius: 3px;
+        color: #c8322c;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        transform: rotate(-9deg);
+        opacity: 0.88;
+        pointer-events: none;
+    }
+
+    /* on this server */
+    #beamjoy-drag-slip h2 {
+        margin: 0;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 700;
+        font-size: 1.1em;
+    }
+    #beamjoy-drag-slip h3 {
+        margin: 0;
+        font-size: 0.88em;
+        font-weight: 600;
+    }
+    #beamjoy-drag-slip .ts-cards {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 0.6em;
+    }
+    #beamjoy-drag-slip .ts-card {
+        display: flex;
+        align-items: center;
+        gap: 0.75em;
+        min-width: 0;
+        padding: 0.75em 0.9em;
+        background: rgba(255, 255, 255, 0.04);
+        box-shadow: inset 3px 0 0 rgba(255, 255, 255, 0.14);
+        border-radius: 0 0.4em 0.4em 0;
+    }
+    #beamjoy-drag-slip .ts-card.good {
+        background: rgba(115, 235, 157, 0.08);
+        box-shadow: inset 3px 0 0 #73eb9d;
+    }
+    #beamjoy-drag-slip .ts-card.me {
+        background: rgba(255, 102, 0, 0.1);
+        box-shadow: inset 3px 0 0 #ff6600;
+    }
+    #beamjoy-drag-slip .ts-card.rec {
+        background: rgba(186, 104, 248, 0.08);
+        box-shadow: inset 3px 0 0 #ba68f8;
+    }
+    #beamjoy-drag-slip .ts-card .who {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: 0.78em;
+        color: #a7aebf;
+    }
+    #beamjoy-drag-slip .ts-card .who b {
+        display: block;
+        font-size: 1.12em;
+        font-weight: 600;
+        color: #ebebeb;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #beamjoy-drag-slip .ts-big {
+        flex-shrink: 0;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 800;
+        font-size: 2em;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-drag-slip .good {
+        color: #73eb9d;
+    }
+    #beamjoy-drag-slip .slow {
+        color: #ff9b73;
+    }
+    #beamjoy-drag-slip .rec {
+        color: #ba68f8;
+    }
+    #beamjoy-drag-slip .ts-cols {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 1.5em;
+    }
+    #beamjoy-drag-slip .ts-split {
+        display: grid;
+        grid-template-columns: 4.6em minmax(0, 1fr) 4em;
+        align-items: center;
+        gap: 0.6em;
+        font-size: 0.82em;
+        font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-drag-slip .ts-track {
+        position: relative;
+        height: 0.6em;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 1px;
+    }
+    #beamjoy-drag-slip .ts-track .mid {
+        position: absolute;
+        left: 50%;
+        top: -0.2em;
+        bottom: -0.2em;
+        width: 1px;
+        background: rgba(255, 255, 255, 0.25);
+    }
+    #beamjoy-drag-slip .ts-track .bar {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        transform: skewX(-10deg);
+    }
+    #beamjoy-drag-slip .ts-track .bar.good {
+        background: #73eb9d;
+    }
+    #beamjoy-drag-slip .ts-track .bar.slow {
+        background: #ff9b73;
+    }
+    #beamjoy-drag-slip .ts-axis {
+        display: flex;
+        justify-content: space-between;
+        padding: 0 4.6em 0 5.2em;
+        font-size: 0.7em;
+        color: #979dad;
+    }
+    #beamjoy-drag-slip .ts-lb {
+        display: grid;
+        grid-template-columns: 2.2em minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 0.6em;
+        padding: 0.4em 0.6em;
+        border-radius: 0 0.25em 0.25em 0;
+        font-size: 0.82em;
+        font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-drag-slip .ts-lb.you {
+        background: rgba(255, 102, 0, 0.1);
+        box-shadow: inset 3px 0 0 #ff6600;
+    }
+    #beamjoy-drag-slip .ts-plate {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2em;
+        height: 1.35em;
+        transform: skewX(-10deg);
+        background: #363a45;
+        border-radius: 2px;
+    }
+    #beamjoy-drag-slip .ts-plate.rec {
+        background: #7b3fb0;
+    }
+    #beamjoy-drag-slip .ts-plate.you {
+        background: #c24b00;
+    }
+    #beamjoy-drag-slip .ts-plate span {
+        transform: skewX(10deg);
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 800;
+        font-size: 0.85em;
+        color: #fff;
+    }
+    #beamjoy-drag-slip .ts-t {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 700;
+    }
+    #beamjoy-drag-slip .ts-muted {
+        font-size: 0.82em;
+        color: #a7aebf;
+        line-height: 1.5;
+    }
+</style>
+
+<section id="beamjoy-drag-slip" ng-if="$ctrl.open && $ctrl.s" role="dialog" aria-label="{{'beamjoy.drag.slip.title' | translate}}">
+    <header class="ts-head">
+        <div style="flex: 1 1 auto; min-width: 0">
+            <h1>{{'beamjoy.drag.slip.title' | translate}}</h1>
+            <div class="ts-sub">{{$ctrl.s.strip}}</div>
+        </div>
+        <button type="button" class="ts-btn" ng-click="$ctrl.openLeaderboard()">{{'beamjoy.drag.slip.openLeaderboard' | translate}}</button>
+        <button type="button" class="ts-btn icon" ng-click="$ctrl.close()" aria-label="{{'beamjoy.drag.slip.close' | translate}}">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"></path></svg>
+        </button>
+    </header>
+
+    <div class="ts-body">
+        <!-- the printed slip -->
+        <div class="ts-paper-wrap">
+            <div class="ts-paper">
+                <div class="ts-c ts-b" style="font-size: 1.12em; letter-spacing: 0.04em">{{$ctrl.s.strip | uppercase}}</div>
+                <div class="ts-c ts-dim" style="font-size: 0.86em">{{$ctrl.s.date | uppercase}}</div>
+                <div class="ts-dim" style="display: flex; justify-content: space-between; font-size: 0.86em; margin-top: 0.4em">
+                    <span>{{$ctrl.treeText()}}</span><span>{{$ctrl.conditions()}}</span>
+                </div>
+                <div class="ts-rule"></div>
+
+                <div class="ts-grid ts-b" ng-class="{solo: $ctrl.columns().length < 2}">
+                    <span></span>
+                    <span class="ts-r" ng-repeat="l in $ctrl.columns() track by $index">{{$ctrl.laneHead(l)}}</span>
+                </div>
+                <div class="ts-grid" ng-class="{solo: $ctrl.columns().length < 2}">
+                    <span class="ts-dim">DRIVER</span>
+                    <span class="ts-r" ng-repeat="l in $ctrl.columns() track by $index">{{l.name || ('beamjoy.drag.slip.you' | translate)}}</span>
+                </div>
+                <div class="ts-grid" ng-class="{solo: $ctrl.columns().length < 2}" style="margin-bottom: 0.4em">
+                    <span class="ts-dim">CAR</span>
+                    <span class="ts-r" ng-repeat="l in $ctrl.columns() track by $index">{{l.car || '—'}}</span>
+                </div>
+                <div class="ts-grid" ng-class="{solo: $ctrl.columns().length < 2, 'ts-b': r.bold}" ng-repeat="r in $ctrl.rows() track by r.key">
+                    <span class="ts-dim">{{r.label}}</span>
+                    <span class="ts-r ts-cell" ng-repeat="c in r.cells track by $index">{{c.text}}<span class="ts-stamp" ng-if="c.win">WIN</span></span>
+                </div>
+
+                <div class="ts-rule"></div>
+                <div class="ts-b">{{$ctrl.footLine()}}</div>
+                <div class="ts-dim" style="font-size: 0.86em">{{$ctrl.noteLine()}}</div>
+            </div>
+        </div>
+
+        <!-- what the run means on this server -->
+        <div style="display: flex; flex-direction: column; gap: 0.9em; min-width: 0">
+            <h2>{{'beamjoy.drag.slip.onServer' | translate}}</h2>
+            <div class="ts-cards">
+                <div class="ts-card" ng-if="$ctrl.bestCard()" ng-class="$ctrl.bestCard().cls">
+                    <div class="who">
+                        {{$ctrl.bestCard().title}}
+                        <b>{{$ctrl.bestCard().line}}</b>
+                        {{$ctrl.bestCard().sub}}
+                    </div>
+                    <span class="ts-big" ng-class="$ctrl.bestCard().cls === 'good' ? 'good' : ''" ng-style="$ctrl.bestCard().cls === 'me' ? {color: '#ffbca0'} : {}">{{$ctrl.bestCard().value}}</span>
+                </div>
+                <div class="ts-card rec" ng-if="$ctrl.recordCard()">
+                    <div class="who">
+                        {{'beamjoy.drag.record' | translate}}
+                        <b>{{$ctrl.recordCard().name}}</b>
+                        {{$ctrl.recordCard().line}}
+                    </div>
+                    <span class="ts-big rec">{{$ctrl.recordCard().value}}</span>
+                </div>
+            </div>
+
+            <div class="ts-cols">
+                <div style="display: flex; flex-direction: column; gap: 0.5em; min-width: 0">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline">
+                        <h3>{{'beamjoy.drag.slip.vsOldBest' | translate}}</h3>
+                        <span class="ts-muted" style="font-size: 0.75em">{{'beamjoy.drag.slip.atEachMark' | translate}}</span>
+                    </div>
+                    <p class="ts-muted" style="margin: 0" ng-if="$ctrl.splits().length === 0">{{'beamjoy.drag.slip.noOldBest' | translate}}</p>
+                    <div class="ts-split" ng-repeat="s in $ctrl.splits() track by s.key">
+                        <span style="color: #a7aebf">{{s.label}}</span>
+                        <span class="ts-track"><span class="mid"></span><span class="bar" ng-class="s.cls" ng-style="{left: s.left, width: s.width}"></span></span>
+                        <span style="text-align: right" ng-class="s.cls">{{s.text}}</span>
+                    </div>
+                    <div class="ts-axis" ng-if="$ctrl.splits().length > 0"><span>{{'beamjoy.drag.slip.gained' | translate}}</span><span>{{'beamjoy.drag.slip.lost' | translate}}</span></div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 0.4em; min-width: 0">
+                    <div style="display: flex; justify-content: space-between; align-items: baseline">
+                        <h3>{{'beamjoy.drag.slip.stripBoard' | translate}}</h3>
+                        <span class="ts-muted" style="font-size: 0.75em">{{$ctrl.driversText()}}</span>
+                    </div>
+                    <p class="ts-muted" style="margin: 0" ng-if="$ctrl.boardRows().length === 0">{{'beamjoy.leaderboard.drag.empty' | translate}}</p>
+                    <div class="ts-lb" ng-repeat="b in $ctrl.boardRows() track by b.key" ng-class="{you: b.you}">
+                        <span class="ts-plate" ng-class="{rec: b.rec, you: b.you && !b.rec}"><span>{{b.rank}}</span></span>
+                        <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap"><b style="font-weight: 600">{{b.name}}</b> <span style="color: #a7aebf">{{b.car}}</span></span>
+                        <span class="ts-t" ng-class="{rec: b.rec}">{{b.time}}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>

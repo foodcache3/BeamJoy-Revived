@@ -8,7 +8,68 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2601, server build 2422.
+Version 1.11.0 : client build 2606, server build 2425.
+
+- **The spawn queue is only forced during the countdown** (direct request) of a race, hunt,
+  infected or derby round, when every grid car is (re)spawned at once. It used to stay forced for
+  the whole round. Once the countdown is over, anything still queued is applied and the player's
+  own spawn-queue setting is put back.
+- **Fixed : leaving the server or quitting the game during a round left the spawn queue turned on**
+  in the player's game settings. It's now put back then too. *(client only)*
+
+- **BeamJoy's own drag strip display** (direct request). The game's drag apps (tree, live times,
+  timeslip) live in screen-layout slots BeamMP's layout doesn't have, so none of them ever showed
+  on a server. Two new panels instead :
+  - **Drag overlay**, top right, while you're in a lane : the strip, your lane and tree, your best
+    (or the clock and your speed once you launch), every mark of the strip filling in as you pass
+    it with your gap to your own best there, the next mark lit, and the strip's record and your
+    place. At the end : who won, your new best or place, and "Open timeslip".
+  - **Timeslip**, printed like the tower's : both lanes, every mark, dial-in and its difference,
+    who won and by how much, the tree, temperature and gravity. Beside it : your best before and
+    after, the strip's record, where you gained or lost against your old best at each mark, and
+    the top of the strip's leaderboard. "Open leaderboard" goes to that strip's board.
+  - **Racing someone** : the game runs each car's drag on its own, with its own tree. Two players
+    lined up in opposite lanes of the same strip are now paired by the server, which passes each
+    the other's run as it happens : the overlay shows who's ahead, the timeslip both lanes. The
+    winner is the lower reaction + time (who would have crossed first had both trees dropped
+    together).
+  - A strip's best run now keeps every mark (for the mark-by-mark gaps) ; strips are read with
+    whatever marks they time, not only the 1/4 mile set. *(server and client)*
+- **Fixed : a drag strip's name showed as its file id** in the Leaderboards' Drag section (e.g.
+  "alderStrip" for "Alder Main Strip") : plain names went through the game's translations and fell
+  back to the id. *(client only)*
+
+- **Drift and drag leaderboards** (direct request). The game's own drift spots and drag strips now
+  count on the server : every finished drift spot (its score) and drag run (its time) is sent to
+  the server, which keeps each player's best per spot / strip, per map. The Leaderboards window
+  has two new sections. Drift lists the map's drift spots with their record and your place, and
+  a spot's board opens on the spot's own photo, with each score's bar marked at the spot's
+  bronze, silver and gold targets. Drag lists the map's strips, ranked by the strip's own timer
+  (the 1/4 mile unless it times something else), with reaction time (red for a red-light start),
+  60 ft and trap speed (in the game's units). A new best or a server record gets a toast. Both
+  only run in the game while its "drift in freeroam" / "drag racing in freeroam" settings are on :
+  each section says so and turns it on in one click. Guests need a nickname to be on the boards,
+  like the derby board. Scores come from each player's own game ; the server only checks they're
+  possible numbers. *(server and client)*
+
+- **Fixed: quick travel to a garage, bus line, gas station or delivery depot crashed the game's
+  Lua** (direct report : FATAL "attempt to index field 'bigmapMarker'"). Those activities' in-world
+  markers sit in the game's POI list under the same ids as their Big Map pins, but with no map
+  part ; the game's quick travel goes through every entry with the pin's id and read the marker's
+  missing map part. The pins now have ids of their own. Races and derby arenas never shared theirs.
+  *(client only)*
+
+- **/nickname (or /nick) changes your nickname from chat** (direct request). Same change as the
+  window's "Change nickname" : nametag, player list and race leaderboards, the same 2 to 24
+  characters, and not one someone on the server already uses. The login prompt remembers the new
+  one for next time. /nick works but isn't listed twice in /help (chat commands can now be
+  hidden aliases). *(server and client)*
+- **Fixed: some text sent to the server could freeze it or be cut short.** The server's
+  trimming of player text (nicknames among others) looked each character up as a search pattern :
+  text made only of spaces looped forever and hung the whole server, text ending in "%" or
+  holding "(" or "[" threw an error (the login prompt then never answered), and dots at either end
+  were cut off as if they were spaces. Found while testing /nickname. *(server, and the same
+  pattern fixed in the client's copy)*
 
 - **Race and bus line routes on the map** (direct request, as BeamJoy 2.0.9 had). Hovering or
   selecting a race's pin on the Big Map draws its route : from the start through every checkpoint

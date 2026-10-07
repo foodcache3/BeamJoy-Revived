@@ -51,7 +51,7 @@ local M = {
         "services_clockSync", "services_vehiclePresets", "services_races", "services_raceGrid",
         "services_hunter", "services_hunterGrid",
         "services_infected", "services_infectedGrid",
-        "services_derby", "services_derbyGrid",
+        "services_derby", "services_derbyGrid", "services_freeroamChallenges",
         "services_freeroamData",
         "services_busLines", "services_busRuns",
         "services_deliveryPoints", "services_deliveries", "services_lobbyInvites", "services_crews",

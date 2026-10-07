@@ -123,7 +123,7 @@ local M = {
     resetRelockUntilMs = nil,
 
     ---@type boolean whether THIS client has forced BeamMP's native spawn-queue setting on for the
-    ---current round (only ever done once per round, at the COUNTDOWN transition below) - same fix
+    ---current round's countdown (set at the COUNTDOWN transition below, cleared once it's over) - same fix
     ---as hunterRunner.lua's own identical one, ported here once confirmed working via a real
     ---captured BeamNG.log (queued participant spawn applied ~1s after being queued, no manual
     ---click needed)
@@ -147,6 +147,16 @@ end
 --- own identical one, ported here once confirmed working via a real captured BeamNG.log.
 local function flushSpawnQueue()
     pcall(function() MPVehicleGE.applyQueuedEvents() end)
+end
+
+--- puts the player's own spawn-queue setting back : the queue is only forced for the countdown
+--- (direct request). Called once the countdown is over (onSlowUpdate), when the round ends for
+--- this player (clearGameState), and when BeamJoy unloads (leaving the server mid-countdown)
+local function restoreSpawnQueue()
+    if not M.spawnQueueForced then return end
+    M.spawnQueueForced = false
+    settings.setValue("enableSpawnQueue", M.previousSpawnQueueSetting == true)
+    M.previousSpawnQueueSetting = nil
 end
 
 --- true from COUNTDOWN through GAME: the frozen/locked window scenario-integrity restrictions apply
@@ -613,11 +623,7 @@ local function clearGameState()
     if myVeh then
         beamjoy_vehicles.setGhostReason(myVeh.vid, "infected", false)
     end
-    if M.spawnQueueForced then
-        M.spawnQueueForced = false
-        settings.setValue("enableSpawnQueue", M.previousSpawnQueueSetting)
-        M.previousSpawnQueueSetting = nil
-    end
+    restoreSpawnQueue()
     releaseScenarioLock()
     camera.stopForcedCameras()
     camera.unblockCameras()
@@ -900,12 +906,11 @@ local function onSessionUpdate(session)
         -- Every participant's vehicle gets (re)positioned/spawned within the same instant this
         -- transition fires, for several players at once, all broadcast to every other client
         -- together - exactly the kind of simultaneous-spawn burst BeamMP's own native spawn queue
-        -- (enableSpawnQueue) exists to smooth out. Forced on for the round, restored once it's
-        -- genuinely over (both teardown paths below). flushSpawnQueue (called every onSlowUpdate
-        -- tick below for the rest of the round, plus once immediately here) auto-applies the queue
-        -- on the player's behalf, so no manual click of the native "spawn queue" button is ever
-        -- needed. Same fix as hunterRunner.lua's own identical one, ported here once confirmed
-        -- working via a real captured BeamNG.log.
+        -- (enableSpawnQueue) exists to smooth out. Forced on for the countdown only, restored
+        -- once it's over (onSlowUpdate below) or the round ends early (clearGameState).
+        -- flushSpawnQueue (called every onSlowUpdate tick while it's forced, plus once immediately
+        -- here) auto-applies the queue on the player's behalf, so no manual click of the native
+        -- "spawn queue" button is ever needed.
         if not M.spawnQueueForced then
             M.spawnQueueForced = true
             M.previousSpawnQueueSetting = settings.getValue("enableSpawnQueue") == true
@@ -1552,6 +1557,7 @@ local function onSlowUpdate()
     end
     if M.spawnQueueForced then
         flushSpawnQueue()
+        if not (M.session and M.session.state == "COUNTDOWN") then restoreSpawnQueue() end
     end
 end
 
@@ -1601,6 +1607,9 @@ end
 M.onInit = onInit
 M.onUpdate = onUpdate
 M.onSlowUpdate = onSlowUpdate
+M.onServerLeave = restoreSpawnQueue
+M.onExtensionUnloaded = restoreSpawnQueue
+M.onPreExit = restoreSpawnQueue
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onBJRequestCurrentVehicleReset = onBJRequestCurrentVehicleReset
 M.onBJRequestCanSpawnVehicle = onBJRequestCanSpawnVehicle

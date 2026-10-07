@@ -2163,6 +2163,11 @@ end
 --- a guest who came back on a new guest name is only recognisable once they pick their nickname
 ---@param ctxt BJSContext
 local function onBJIdentityChanged(ctxt)
+    -- a racer who changed their nickname : remembered right away, in case they disconnect next
+    M.sessions:forEach(function(session)
+        local p = session.participants[ctxt.senderID]
+        if p then snapshotIdentity(p) end
+    end)
     raceRejoin(ctxt)
 end
 

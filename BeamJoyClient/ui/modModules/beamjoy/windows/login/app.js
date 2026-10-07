@@ -38,6 +38,8 @@ angular.module("beamjoy").component("bjLogin", {
         $rootScope.$on("BJLoginResult", (_, data) => {
             this.submitting = false;
             if (data && data.success) {
+                // the server's own copy : a /nickname from chat changes it without this prompt
+                if (typeof data.nickname === "string") this.nickname = data.nickname;
                 try {
                     localStorage.setItem(STORAGE_KEY, this.nickname.trim());
                 } catch (e) {

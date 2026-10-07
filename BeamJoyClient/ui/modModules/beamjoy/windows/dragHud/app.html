@@ -1,0 +1,350 @@
+<style>
+    #beamjoy-drag-hud {
+        position: fixed;
+        top: 2vh;
+        right: 1vw;
+        z-index: 4;
+        width: 19em;
+        background: rgba(21, 23, 28, 0.96);
+        border-radius: 0.4em;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 0.5em 1.5em rgba(0, 0, 0, 0.35);
+        overflow: hidden;
+        color: #ebebeb;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        font-size: 0.95em;
+    }
+    #beamjoy-drag-hud .dh-num {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-drag-hud .dh-head {
+        display: flex;
+        align-items: center;
+        gap: 0.6em;
+        padding: 0.75em 0.9em 0.6em;
+    }
+    #beamjoy-drag-hud .dh-strip {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 700;
+        font-size: 1.05em;
+        line-height: 1.2;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #beamjoy-drag-hud .dh-sub {
+        margin-top: 0.1em;
+        font-size: 0.78em;
+        color: #a7aebf;
+    }
+    #beamjoy-drag-hud .dh-plate {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.9em;
+        height: 1.4em;
+        transform: skewX(-10deg);
+        background: #c24b00;
+        border-radius: 2px;
+    }
+    #beamjoy-drag-hud .dh-plate span {
+        transform: skewX(10deg);
+        font-size: 0.85em;
+        color: #fff;
+    }
+    #beamjoy-drag-hud .dh-line {
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    #beamjoy-drag-hud .dh-opp {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.45em 0.9em;
+        font-size: 0.78em;
+        color: #a7aebf;
+    }
+    #beamjoy-drag-hud .dh-opp b {
+        color: #ebebeb;
+        font-weight: 600;
+    }
+    #beamjoy-drag-hud .dh-opp i {
+        width: 0.45em;
+        height: 0.45em;
+        transform: skewX(-10deg);
+        background: #6b7180;
+        border-radius: 1px;
+    }
+    #beamjoy-drag-hud .dh-opp .dh-st {
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    #beamjoy-drag-hud .dh-hero {
+        display: flex;
+        align-items: flex-end;
+        gap: 0.75em;
+        padding: 0.75em 0.9em;
+    }
+    #beamjoy-drag-hud .dh-state {
+        font-size: 0.78em;
+        font-weight: 600;
+        color: #a7aebf;
+    }
+    #beamjoy-drag-hud .dh-state.staged,
+    #beamjoy-drag-hud .dh-state.tree {
+        color: #ffc768;
+    }
+    #beamjoy-drag-hud .dh-state.running {
+        color: #ff8a3d;
+    }
+    #beamjoy-drag-hud .dh-state.good {
+        color: #73eb9d;
+    }
+    #beamjoy-drag-hud .dh-state.dq {
+        color: #ff6b6b;
+    }
+    #beamjoy-drag-hud .dh-big {
+        margin-top: 0.15em;
+        font-size: 2.9em;
+        line-height: 1;
+    }
+    #beamjoy-drag-hud .dh-big.muted {
+        color: #a7aebf;
+    }
+    #beamjoy-drag-hud .dh-big.good {
+        color: #73eb9d;
+    }
+    #beamjoy-drag-hud .dh-big.bad {
+        color: #ff6b6b;
+    }
+    #beamjoy-drag-hud .dh-unit {
+        margin-left: 0.25em;
+        font-family: "Noto Sans", sans-serif;
+        font-style: normal;
+        font-weight: 400;
+        font-size: 0.28em;
+        color: #a7aebf;
+    }
+    #beamjoy-drag-hud .dh-side {
+        margin-left: auto;
+        text-align: right;
+        font-size: 0.78em;
+        color: #a7aebf;
+        line-height: 1.5;
+    }
+    #beamjoy-drag-hud .dh-side b {
+        display: block;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 700;
+        font-size: 1.25em;
+        color: #ebebeb;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    #beamjoy-drag-hud .dh-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto 4.4em;
+        align-items: baseline;
+        column-gap: 0.5em;
+    }
+    #beamjoy-drag-hud .dh-cols {
+        padding: 0.3em 0.9em 0.45em;
+        font-size: 0.7em;
+        color: #979dad;
+    }
+    #beamjoy-drag-hud .dh-row {
+        padding: 0.28em 0.9em 0.28em 0.7em;
+        border-left: 0.2em solid transparent;
+        font-variant-numeric: tabular-nums;
+    }
+    #beamjoy-drag-hud .dh-row.next {
+        border-left-color: #ff6600;
+        background: rgba(255, 102, 0, 0.08);
+    }
+    #beamjoy-drag-hud .dh-row .lbl {
+        font-size: 0.85em;
+        color: #a7aebf;
+    }
+    #beamjoy-drag-hud .dh-row.set .lbl,
+    #beamjoy-drag-hud .dh-row.next .lbl {
+        color: #ebebeb;
+    }
+    #beamjoy-drag-hud .dh-row.main .lbl {
+        font-weight: 600;
+    }
+    #beamjoy-drag-hud .dh-row .val {
+        text-align: right;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 700;
+        font-size: 0.92em;
+        color: #5c616b;
+    }
+    #beamjoy-drag-hud .dh-row.set .val {
+        color: #ebebeb;
+    }
+    #beamjoy-drag-hud .dh-row.main .val {
+        font-size: 1.1em;
+    }
+    #beamjoy-drag-hud .dh-row.main.set .val {
+        color: #73eb9d;
+    }
+    #beamjoy-drag-hud .dh-row .val small {
+        margin-left: 0.2em;
+        font-family: "Noto Sans", sans-serif;
+        font-style: normal;
+        font-weight: 400;
+        font-size: 0.72em;
+        color: #a7aebf;
+    }
+    #beamjoy-drag-hud .dh-row .dl {
+        text-align: right;
+        font-size: 0.78em;
+    }
+    #beamjoy-drag-hud .good {
+        color: #73eb9d;
+    }
+    #beamjoy-drag-hud .slow {
+        color: #ff9b73;
+    }
+    #beamjoy-drag-hud .rec {
+        color: #ba68f8;
+    }
+    #beamjoy-drag-hud .dh-cards {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1px;
+        margin-top: 0.4em;
+        background: rgba(255, 255, 255, 0.07);
+    }
+    #beamjoy-drag-hud .dh-card {
+        padding: 0.55em 0.9em;
+        background: #15171c;
+        font-size: 0.75em;
+        color: #a7aebf;
+        min-width: 0;
+    }
+    #beamjoy-drag-hud .dh-card b {
+        display: block;
+        font-size: 1.45em;
+        line-height: 1.3;
+    }
+    #beamjoy-drag-hud .dh-card span {
+        display: block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #beamjoy-drag-hud .dh-end {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6em;
+        margin-top: 0.4em;
+        padding: 0.75em 0.9em 0.9em;
+    }
+    #beamjoy-drag-hud .dh-outcome {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 700;
+        font-size: 1.02em;
+    }
+    #beamjoy-drag-hud .dh-result {
+        margin-top: 0.15em;
+        font-size: 0.78em;
+        line-height: 1.45;
+        color: #a7aebf;
+    }
+    #beamjoy-drag-hud .dh-btn {
+        min-height: 2.75em;
+        border: 0;
+        border-radius: 0.25em;
+        background: #ff6600;
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        font-size: 0.9em;
+        cursor: pointer;
+    }
+    #beamjoy-drag-hud .dh-btn:hover {
+        background: #ff7a22;
+    }
+    #beamjoy-drag-hud .dh-btn:focus-visible {
+        outline: 2px solid #ffbca0;
+        outline-offset: 2px;
+    }
+    #beamjoy-drag-hud .dh-hint {
+        font-size: 0.7em;
+        color: #979dad;
+        text-align: center;
+    }
+</style>
+
+<section id="beamjoy-drag-hud" ng-if="$ctrl.h.active" aria-live="polite">
+    <header class="dh-head">
+        <div style="flex: 1 1 auto; min-width: 0">
+            <div class="dh-strip">{{$ctrl.h.strip}}</div>
+            <div class="dh-sub">{{$ctrl.laneLine()}}</div>
+        </div>
+        <span class="dh-plate"><span class="dh-num">{{$ctrl.laneLetter()}}</span></span>
+    </header>
+
+    <div class="dh-opp dh-line" ng-if="$ctrl.opp()">
+        <i></i>
+        <span>{{'beamjoy.drag.against' | translate}} <b>{{$ctrl.opp().name}}</b><span ng-if="$ctrl.opp().laneName">, {{$ctrl.opp().laneName}}</span></span>
+        <span class="dh-st" ng-class="$ctrl.oppStatus().cls">{{$ctrl.oppStatus().text}}</span>
+    </div>
+
+    <div class="dh-hero dh-line">
+        <div style="flex: 1 1 auto; min-width: 0">
+            <div class="dh-state" ng-class="$ctrl.stateClass()">{{$ctrl.stateText()}}</div>
+            <div class="dh-big dh-num" ng-class="$ctrl.big().cls">{{$ctrl.big().value}}<span class="dh-unit" ng-if="$ctrl.big().unit">{{$ctrl.big().unit}}</span></div>
+        </div>
+        <div class="dh-side" ng-if="$ctrl.side()">
+            {{$ctrl.side().label}}
+            <b>{{$ctrl.side().value}}</b>
+        </div>
+    </div>
+
+    <div class="dh-grid dh-cols dh-line">
+        <span>{{'beamjoy.drag.col.mark' | translate}}</span>
+        <span style="text-align: right">{{'beamjoy.drag.col.time' | translate}}</span>
+        <span style="text-align: right">{{'beamjoy.drag.col.vsBest' | translate}}</span>
+    </div>
+    <div class="dh-grid dh-row" ng-repeat="r in $ctrl.rows() track by r.key" ng-class="{set: r.set, next: r.next, main: r.main}">
+        <span class="lbl">{{r.label}}</span>
+        <span class="val">{{r.value}}<small ng-if="r.unit">{{r.unit}}</small></span>
+        <span class="dl" ng-class="r.deltaCls">{{r.delta}}</span>
+    </div>
+
+    <!-- before and during the run : the strip's record and your place -->
+    <div class="dh-cards dh-line" ng-if="$ctrl.h.state !== 'finished' && $ctrl.board()">
+        <div class="dh-card">
+            {{'beamjoy.drag.record' | translate}}
+            <b class="dh-num rec">{{$ctrl.recordTime()}}</b>
+            <span>{{$ctrl.recordName()}}</span>
+        </div>
+        <div class="dh-card">
+            {{'beamjoy.drag.yourPlace' | translate}}
+            <b class="dh-num" style="color: #ffbca0">{{$ctrl.rankText()}}</b>
+            <span>{{$ctrl.playersText()}}</span>
+        </div>
+    </div>
+
+    <!-- after the run -->
+    <div class="dh-end dh-line" ng-if="$ctrl.h.state === 'finished'">
+        <div>
+            <div class="dh-outcome" ng-if="$ctrl.outcome()">{{$ctrl.outcome()}}</div>
+            <div class="dh-result" ng-class="$ctrl.resultLine().cls">{{$ctrl.resultLine().text}}</div>
+        </div>
+        <button type="button" class="dh-btn" ng-click="$ctrl.openTimeslip()">{{'beamjoy.drag.openTimeslip' | translate}}</button>
+        <div class="dh-hint">{{'beamjoy.drag.leaveHint' | translate}}</div>
+    </div>
+    <div class="dh-end dh-line" ng-if="$ctrl.h.state === 'dq'">
+        <div class="dh-hint" style="text-align: left">{{'beamjoy.drag.dqHint' | translate}}</div>
+    </div>
+</section>

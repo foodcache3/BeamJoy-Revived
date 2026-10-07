@@ -267,6 +267,154 @@
     bj-main-leaderboards .drb-bar.me i {
         background: #ff6600;
     }
+    /* five sections share the side column's width */
+    bj-main-leaderboards .lb-side > .lbx-seg {
+        display: flex;
+    }
+    bj-main-leaderboards .lb-side > .lbx-seg button {
+        flex: 1 1 auto;
+        padding: 0 0.5em;
+    }
+
+    /* drift and drag : the game setting that's off, offered right where it matters */
+    bj-main-leaderboards .ch-off {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.6em;
+        padding: 0.75em;
+        background: rgba(255, 199, 104, 0.08);
+        box-shadow: inset 3px 0 0 #ffc768;
+        border-radius: 0 0.4em 0.4em 0;
+    }
+    bj-main-leaderboards .ch-off p {
+        margin: 0;
+        font-size: 0.82em;
+        line-height: 1.5;
+        color: #d9dde6;
+    }
+    bj-main-leaderboards .ch-off button {
+        min-height: 2em;
+        padding: 0 0.9em;
+        border: 0;
+        border-radius: 0.25em;
+        background: #ff6600;
+        color: #fff;
+        font: inherit;
+        font-size: 0.85em;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    bj-main-leaderboards .ch-off button:hover {
+        background: #ff7a22;
+    }
+    bj-main-leaderboards button:focus-visible {
+        outline: 2px solid #ffbca0;
+        outline-offset: 1px;
+    }
+
+    /* drift : the spot's own photo heads its board */
+    bj-main-leaderboards .ch-hero {
+        position: relative;
+        flex-shrink: 0;
+        height: 8.5em;
+        margin-bottom: 0.9em;
+        border-radius: 0.4em;
+        overflow: hidden;
+        background: #282b33;
+    }
+    bj-main-leaderboards .ch-hero img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    bj-main-leaderboards .ch-hero::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to top, rgba(21, 23, 28, 0.92), rgba(21, 23, 28, 0) 65%);
+    }
+    bj-main-leaderboards .ch-hero .lbx-bar {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1;
+        padding: 0 0.9em 0.75em;
+    }
+    bj-main-leaderboards .ch-hero .lbx-title {
+        font-size: 1.9em;
+        text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+    }
+
+    /* the spot's targets, in the game's own medal order */
+    bj-main-leaderboards .ch-medal {
+        display: inline-block;
+        width: 0.6em;
+        height: 0.6em;
+        margin-right: 0.35em;
+        transform: skewX(-10deg);
+        border-radius: 1px;
+        background: #4a4f5c;
+    }
+    bj-main-leaderboards .ch-medal.bronze { background: #c9895f; }
+    bj-main-leaderboards .ch-medal.silver { background: #c3c9d4; }
+    bj-main-leaderboards .ch-medal.gold { background: #f2c45a; }
+    bj-main-leaderboards .ch-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.9em;
+        padding: 0 0.75em 0.5em;
+        font-size: 0.75em;
+        color: #a7aebf;
+        font-variant-numeric: tabular-nums;
+    }
+    bj-main-leaderboards .dlb-grid.drift {
+        grid-template-columns: 3em minmax(0, 1.2fr) minmax(9em, 1.4fr) minmax(0, 1fr) 3.4em 6em;
+    }
+    bj-main-leaderboards .ch-score {
+        display: grid;
+        grid-template-columns: 4.6em minmax(0, 1fr);
+        align-items: center;
+        column-gap: 0.6em;
+    }
+    bj-main-leaderboards .ch-track {
+        position: relative;
+        height: 0.5em;
+        transform: skewX(-10deg);
+        background: rgba(255, 255, 255, 0.07);
+        border-radius: 1px;
+    }
+    bj-main-leaderboards .ch-track > i {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        background: #6b7180;
+    }
+    bj-main-leaderboards .ch-track.bronze > i { background: #9a6a4f; }
+    bj-main-leaderboards .ch-track.silver > i { background: #8f96a3; }
+    bj-main-leaderboards .ch-track.gold > i { background: #c99d3c; }
+    bj-main-leaderboards .ch-track.me > i { background: #ff6600; }
+    bj-main-leaderboards .ch-track > b {
+        position: absolute;
+        top: -0.2em;
+        bottom: -0.2em;
+        width: 2px;
+        margin-left: -1px;
+    }
+    bj-main-leaderboards .ch-track > b.bronze { background: #c9895f; }
+    bj-main-leaderboards .ch-track > b.silver { background: #c3c9d4; }
+    bj-main-leaderboards .ch-track > b.gold { background: #f2c45a; }
+
+    /* drag : the strip's time leads, a red-light start reads red */
+    bj-main-leaderboards .dlb-grid.drag {
+        grid-template-columns: 3em minmax(0, 1.3fr) 5.2em 4.4em 4.4em 6.4em minmax(0, 1fr) 3.4em;
+    }
+    bj-main-leaderboards .ch-red {
+        color: #ff6b6b;
+    }
     bj-main-leaderboards .drb-note {
         margin: 0.25em 0.75em 0;
         font-size: 0.78em;
@@ -285,6 +433,12 @@
         </button>
         <button type="button" ng-class="{on: $ctrl.section === 'derby'}" aria-pressed="{{$ctrl.section === 'derby'}}" ng-click="$ctrl.setSection('derby')">
             {{'beamjoy.leaderboard.derby' | translate}}
+        </button>
+        <button type="button" ng-class="{on: $ctrl.section === 'drift'}" aria-pressed="{{$ctrl.section === 'drift'}}" ng-click="$ctrl.setSection('drift')">
+            {{'beamjoy.leaderboard.drift' | translate}}
+        </button>
+        <button type="button" ng-class="{on: $ctrl.section === 'drag'}" aria-pressed="{{$ctrl.section === 'drag'}}" ng-click="$ctrl.setSection('drag')">
+            {{'beamjoy.leaderboard.drag' | translate}}
         </button>
     </div>
 
@@ -339,6 +493,25 @@
         </button>
     </div>
     <p class="drb-note" ng-if="$ctrl.section === 'derby'">{{'beamjoy.leaderboard.derby.creditNote' | translate}}</p>
+    <!-- DRIFT / DRAG : this map's spots or strips, their record and your place -->
+    <div class="ch-off" ng-if="$ctrl.isChallenge() && !$ctrl.ch().enabled">
+        <p>{{('beamjoy.leaderboard.' + $ctrl.section + '.off') | translate}}</p>
+        <button type="button" ng-click="$ctrl.enableChallenge()">{{('beamjoy.leaderboard.' + $ctrl.section + '.turnOn') | translate}}</button>
+    </div>
+    <p class="bjr-muted" ng-if="$ctrl.isChallenge() && $ctrl.ch().spots && $ctrl.ch().spots.length === 0">
+        {{('beamjoy.leaderboard.' + $ctrl.section + '.noneOnMap') | translate}}
+    </p>
+    <div class="lb-colhead" ng-if="$ctrl.isChallenge() && $ctrl.ch().spots.length > 0">
+        <span>{{('beamjoy.leaderboard.' + $ctrl.section + '.listHead') | translate}}</span><span>{{'beamjoy.leaderboard.you' | translate}}</span>
+    </div>
+    <div class="lbx-scroll" ng-if="$ctrl.isChallenge() && $ctrl.ch().spots.length > 0">
+        <button type="button" class="lb-pick" ng-repeat="spot in $ctrl.ch().spots track by spot.id"
+            ng-class="{on: $ctrl.ch().spotId === spot.id}" aria-pressed="{{$ctrl.ch().spotId === spot.id}}" ng-click="$ctrl.pickSpot(spot)">
+            <span style="min-width: 0"><b>{{spot.name}}</b><small>{{$ctrl.spotLine(spot)}}</small></span>
+            <span class="lbx-plate" ng-if="$ctrl.spotRank(spot)" ng-class="$ctrl.spotRank(spot) === 1 ? 'rec' : 'me'"><span>{{$ctrl.spotRank(spot)}}</span></span>
+            <span class="none" ng-if="!$ctrl.spotRank(spot)">-</span>
+        </button>
+    </div>
 </aside>
 
 <!-- RACES : the picked race's board -->
@@ -591,5 +764,162 @@
             <span class="drb-bar me"><i ng-style="{width: $ctrl.dMineRow().dealtPct + '%'}"></i></span>
         </span>
         <span class="lbx-r">{{$ctrl.dMineRow().damage}}</span>
+    </div>
+</main>
+
+<!-- DRIFT / DRAG : the picked spot's or strip's board -->
+<main class="lb-main" ng-if="$ctrl.isChallenge() && $ctrl.spot()">
+    <!-- drift : the spot's photo, its name over it -->
+    <div class="ch-hero" ng-if="$ctrl.section === 'drift' && $ctrl.spot().preview">
+        <img ng-src="{{$ctrl.spot().preview}}" alt="">
+        <div class="lbx-bar">
+            <h2 class="lbx-title">{{$ctrl.spot().name}}</h2>
+            <div class="lbx-chips"><span class="lbx-chip" ng-if="$ctrl.ch().board">{{$ctrl.cDriversText()}}</span></div>
+        </div>
+    </div>
+    <div class="lbx-bar" ng-if="$ctrl.section === 'drag' || !$ctrl.spot().preview">
+        <div style="display: flex; flex-direction: column; gap: 0.4em; min-width: 0">
+            <h2 class="lbx-title" style="font-size: 1.6em">{{$ctrl.spot().name}}</h2>
+            <div class="lbx-chips">
+                <span class="lbx-chip" ng-if="$ctrl.section === 'drag'">{{$ctrl.rankedByText()}}</span>
+                <span class="lbx-chip" ng-if="$ctrl.ch().board">{{$ctrl.cDriversText()}}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="lbx-bar" style="padding-bottom: 0.6em" ng-if="$ctrl.chb().mine">
+        <span></span>
+        <div class="lbx-seg" role="group">
+            <button type="button" ng-class="{on: !$ctrl.ch().near}" aria-pressed="{{!$ctrl.ch().near}}" ng-click="$ctrl.ch().near = false">{{$ctrl.cTopText()}}</button>
+            <button type="button" ng-class="{on: $ctrl.ch().near}" aria-pressed="{{$ctrl.ch().near}}" ng-click="$ctrl.ch().near = true">{{'beamjoy.leaderboard.aroundYou' | translate}}</button>
+        </div>
+    </div>
+
+    <p class="lbx-muted" ng-if="!$ctrl.ch().board" style="margin: 0; font-size: 0.88em">
+        {{'beamjoy.window.main.tabs.races.leaderboard.loading' | translate}}
+    </p>
+    <div class="lbx-empty" ng-if="$ctrl.ch().board && $ctrl.chb().rows.length === 0">
+        <p>{{('beamjoy.leaderboard.' + $ctrl.section + '.empty') | translate}}</p>
+    </div>
+
+    <div class="lbx-cards" ng-if="$ctrl.cLeader()">
+        <div class="lbx-card rec">
+            <span class="lbx-plate big rec"><span>1</span></span>
+            <div class="who">
+                <span class="lbl">{{'beamjoy.leaderboard.delivery.leader' | translate}}</span>
+                <b>{{$ctrl.cLeader().name}}</b>
+                <small>{{$ctrl.cLeader().line}}</small>
+            </div>
+            <span class="lbx-big" style="color: #ba68f8">{{$ctrl.cLeader().value}}<small>{{$ctrl.cUnit()}}</small></span>
+        </div>
+        <div class="lbx-card me" ng-if="$ctrl.cMine()">
+            <span class="lbx-plate big" ng-class="$ctrl.cMine().rank === 1 ? 'rec' : 'me'"><span>{{$ctrl.cMine().rank}}</span></span>
+            <div class="who">
+                <span class="lbl">{{'beamjoy.leaderboard.you' | translate}}</span>
+                <b>{{$ctrl.chb().mine.name}}</b>
+                <small>{{$ctrl.cMine().behind}}</small>
+            </div>
+            <span class="lbx-big" style="color: #ffbca0">{{$ctrl.cMine().value}}<small>{{$ctrl.cUnit()}}</small></span>
+        </div>
+        <div class="lbx-card" ng-if="!$ctrl.cMine()">
+            <span class="lbx-plate big"><span>-</span></span>
+            <div class="who">
+                <span class="lbl">{{'beamjoy.leaderboard.you' | translate}}</span>
+                <small style="white-space: normal">{{('beamjoy.leaderboard.' + $ctrl.section + '.none') | translate}}</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="dlb-stats" ng-if="$ctrl.cMine() && $ctrl.section === 'drift'">
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.drift.stat.medal' | translate}}</span>
+            <b><i class="ch-medal" ng-class="$ctrl.cMine().medal"></i>{{$ctrl.cMine().medalText}}</b>
+        </div>
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.challenge.stat.runs' | translate}}</span>
+            <b>{{$ctrl.cMine().runs}}</b>
+        </div>
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.challenge.stat.vehicle' | translate}}</span>
+            <b>{{$ctrl.cMine().vehicle}}</b>
+        </div>
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.challenge.stat.set' | translate}}</span>
+            <b>{{$ctrl.cMine().when}}</b>
+        </div>
+    </div>
+    <div class="dlb-stats" ng-if="$ctrl.cMine() && $ctrl.section === 'drag'">
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.drag.stat.reaction' | translate}}</span>
+            <b ng-class="{'ch-red': $ctrl.cMine().redLight}">{{$ctrl.cMine().reaction}} <small>s</small></b>
+        </div>
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.drag.stat.sixty' | translate}}</span>
+            <b>{{$ctrl.cMine().sixty}} <small>s</small></b>
+        </div>
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.drag.stat.trap' | translate}}</span>
+            <b>{{$ctrl.cMine().trap}}</b>
+        </div>
+        <div class="dlb-stat">
+            <span>{{'beamjoy.leaderboard.challenge.stat.vehicle' | translate}}</span>
+            <b>{{$ctrl.cMine().vehicle}}</b>
+        </div>
+    </div>
+
+    <!-- drift : the spot's targets, as marked on every score bar -->
+    <div class="ch-legend" ng-if="$ctrl.section === 'drift' && $ctrl.chb().rows.length > 0 && $ctrl.ticks().length > 0">
+        <span ng-repeat="t in $ctrl.ticks() track by t.medal"><i class="ch-medal" ng-class="t.medal"></i>{{('beamjoy.leaderboard.drift.medal.' + t.medal) | translate}} {{t.score}}</span>
+    </div>
+
+    <div class="dlb-grid lbx-head {{$ctrl.section}}" ng-if="$ctrl.chb().rows.length > 0">
+        <span style="text-align: center">{{'beamjoy.leaderboard.col.pos' | translate}}</span>
+        <span>{{'beamjoy.leaderboard.col.driver' | translate}}</span>
+        <span ng-if="$ctrl.section === 'drift'">{{'beamjoy.leaderboard.drift.col.score' | translate}}</span>
+        <span class="lbx-r" ng-if="$ctrl.section === 'drag'">{{'beamjoy.leaderboard.drag.col.et' | translate}}</span>
+        <span class="lbx-r" ng-if="$ctrl.section === 'drag'">{{'beamjoy.leaderboard.drag.col.reaction' | translate}}</span>
+        <span class="lbx-r" ng-if="$ctrl.section === 'drag'">{{'beamjoy.leaderboard.drag.col.sixty' | translate}}</span>
+        <span class="lbx-r" ng-if="$ctrl.section === 'drag'">{{'beamjoy.leaderboard.drag.col.trap' | translate}}</span>
+        <span>{{'beamjoy.leaderboard.challenge.col.vehicle' | translate}}</span>
+        <span class="lbx-r">{{'beamjoy.leaderboard.challenge.col.runs' | translate}}</span>
+        <span class="lbx-r" ng-if="$ctrl.section === 'drift'">{{'beamjoy.leaderboard.challenge.col.set' | translate}}</span>
+    </div>
+    <div class="lbx-scroll" ng-if="$ctrl.chb().rows.length > 0">
+        <div ng-repeat="r in $ctrl.cRows() track by r.key">
+            <span class="lbx-cut" ng-if="r.cut">{{r.text}}</span>
+            <div class="dlb-grid lbx-row {{$ctrl.section}}" ng-if="!r.cut" ng-class="{me: r.you}">
+                <span class="lbx-pos"><span class="lbx-plate" ng-class="{rec: r.rank === 1, me: r.rank !== 1 && r.you}"><span>{{r.rank}}</span></span></span>
+                <span class="lbx-name">{{r.name}}</span>
+                <span class="ch-score" ng-if="$ctrl.section === 'drift'">
+                    <span class="lbx-r" ng-class="{'lbx-fast': r.rank === 1}" style="font-weight: 600">{{r.value}}</span>
+                    <span class="ch-track" ng-class="r.you ? 'me' : r.medal">
+                        <i ng-style="{width: r.pct + '%'}"></i>
+                        <b ng-repeat="t in $ctrl.ticks() track by t.medal" ng-class="t.medal" ng-style="{left: t.at + '%'}"></b>
+                    </span>
+                </span>
+                <span class="lbx-r" ng-if="$ctrl.section === 'drag'" ng-class="{'lbx-fast': r.rank === 1}" style="font-weight: 600">{{r.value}}</span>
+                <span class="lbx-r" ng-if="$ctrl.section === 'drag'" ng-class="{'ch-red': r.redLight, 'lbx-muted': !r.redLight}">{{r.reaction}}</span>
+                <span class="lbx-r lbx-muted" ng-if="$ctrl.section === 'drag'">{{r.sixty}}</span>
+                <span class="lbx-r" ng-if="$ctrl.section === 'drag'">{{r.trap}}</span>
+                <span class="lbx-dim">{{r.vehicle}}</span>
+                <span class="lbx-r lbx-muted">{{r.runs}}</span>
+                <span class="lbx-when" ng-if="$ctrl.section === 'drift'">{{r.when}}</span>
+            </div>
+        </div>
+    </div>
+    <div class="dlb-grid lbx-row me lbx-pinned {{$ctrl.section}}" ng-if="$ctrl.cPinMine()">
+        <span class="lbx-pos"><span class="lbx-plate me"><span>{{$ctrl.cMineRow().rank}}</span></span></span>
+        <span class="lbx-name">{{$ctrl.cMineRow().name}}</span>
+        <span class="ch-score" ng-if="$ctrl.section === 'drift'">
+            <span class="lbx-r" style="font-weight: 600">{{$ctrl.cMineRow().value}}</span>
+            <span class="ch-track me"><i ng-style="{width: $ctrl.cMineRow().pct + '%'}"></i></span>
+        </span>
+        <span class="lbx-r" ng-if="$ctrl.section === 'drag'" style="font-weight: 600">{{$ctrl.cMineRow().value}}</span>
+        <span class="lbx-r" ng-if="$ctrl.section === 'drag'" ng-class="{'ch-red': $ctrl.cMineRow().redLight}">{{$ctrl.cMineRow().reaction}}</span>
+        <span class="lbx-r lbx-muted" ng-if="$ctrl.section === 'drag'">{{$ctrl.cMineRow().sixty}}</span>
+        <span class="lbx-r" ng-if="$ctrl.section === 'drag'">{{$ctrl.cMineRow().trap}}</span>
+        <span class="lbx-dim">{{$ctrl.cMineRow().vehicle}}</span>
+        <span class="lbx-r lbx-muted">{{$ctrl.cMineRow().runs}}</span>
+        <span class="lbx-when" ng-if="$ctrl.section === 'drift'">{{$ctrl.cMineRow().when}}</span>
     </div>
 </main>

@@ -7,7 +7,7 @@
 //
 // IMPORTANT: bump UI_BUILD to match Client/BJ/lua/ge/extensions/beamjoy/buildversion at every
 // release, or every player looks permanently out of date. See CLAUDE.md's Versioning section.
-const UI_BUILD = 2601;
+const UI_BUILD = 2606;
 
 angular.module("beamjoy").component("bjVersionCheck", {
     templateUrl: "/ui/modModules/beamjoy/windows/versionCheck/app.html",
