@@ -784,6 +784,32 @@ local function vehicleMatchesRestriction(veh, restriction)
     return true
 end
 
+--- the vehicle restriction a race sets itself (its "raceDefined" one), nil for a free race : for
+--- its freeroam runs (beamjoy_raceFreeroam), which have no session settings to read it from
+---@param race BJRace
+---@return table?
+local function raceVehicleRestriction(race)
+    if not race or race.vehicleRestrictionMode == "free" or not race.vehicleRestrictionMode then return nil end
+    local allowTuning = not race.defaults or race.defaults.allowTuning ~= false
+    if race.vehicleRestrictionMode == "single" then
+        if not race.vehicleRestrictionModel then return nil end
+        return {
+            mode = "single",
+            model = race.vehicleRestrictionModel,
+            parts = race.vehicleRestrictionParts,
+            vars = race.vehicleRestrictionVars,
+            paints = race.vehicleRestrictionPaints,
+            label = race.vehicleRestrictionLabel,
+            allowTuning = allowTuning,
+        }
+    end
+    local preset = beamjoy_vehiclePresets.getById(race.vehicleRestrictionPoolPresetId)
+    if not preset or not table.isArray(preset.entries) or #preset.entries == 0 then return nil end
+    return { mode = "pool", pool = preset.entries, label = preset.name, allowTuning = allowTuning }
+end
+M.raceVehicleRestriction = raceVehicleRestriction
+M.vehicleMatchesRestriction = vehicleMatchesRestriction
+
 --- real enforcement (not just the ready()-time UX nag) for a vehicle-restricted race, routed
 --- through the same generic spawn-authorization hook every OTHER spawn policy in this codebase
 --- already uses (vehicles.lua's own cap/blacklist checks, group permissions). See

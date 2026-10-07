@@ -108,4 +108,20 @@ M.onBJFreeroamDataChanged = onBJFreeroamDataChanged
 M.onBJBusLinesChanged = onBJBusLinesChanged
 M.onBJDeliveryPointsChanged = onBJDeliveryPointsChanged
 
+--- same forwarding pattern, for driftZones.lua's own extensions.hook("onBJDriftZonesChanged")
+--- (only freeroamEditor.lua defines this)
+M.onBJDriftZonesChanged = function()
+    if M.activeEditor and M.activeEditor.onBJDriftZonesChanged then
+        M.activeEditor.onBJDriftZonesChanged()
+    end
+end
+
+--- same forwarding pattern, for dragStrips.lua's own extensions.hook("onBJDragStripsChanged")
+--- (only freeroamEditor.lua defines this)
+M.onBJDragStripsChanged = function()
+    if M.activeEditor and M.activeEditor.onBJDragStripsChanged then
+        M.activeEditor.onBJDragStripsChanged()
+    end
+end
+
 return M

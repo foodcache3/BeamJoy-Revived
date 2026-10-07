@@ -36,6 +36,12 @@ local M = {
     activeGateIndex = nil,
     ---@type integer?
     activeStartIndex = nil,
+    ---@type integer? the selected prop (race.props, see beamjoy_props)
+    activePropIndex = nil,
+    ---@type "a"|"b"|nil which end of the selected line the gizmo holds
+    activePropPart = nil,
+    --- bumped on every change to the props, so their preview (beamjoy_props) only rebuilds then
+    propsRevision = 0,
     dirty = false,
     -- editor-session preference, not saved to the race itself. When on, dragging a gate/start
     -- with the gizmo re-snaps it to the ground the moment the drag ends, replacing the old
@@ -233,6 +239,13 @@ end
 local function pushActive()
     beamjoy_communications_ui.send("BJEditorRaceActiveGate", M.activeGateIndex)
     beamjoy_communications_ui.send("BJEditorRaceActiveStart", M.activeStartIndex)
+    beamjoy_communications_ui.send("BJEditorRaceActiveProp", { index = M.activePropIndex, part = M.activePropPart })
+end
+
+--- the props' preview and the markers catch up with a change to the props
+local function propsChanged()
+    M.propsRevision = M.propsRevision + 1
+    extensions.hook("onBJRaceMarkersRefresh")
 end
 
 --- ground-height query for snapping, routed through M.snapMethod (see its own comment above for
@@ -664,6 +677,8 @@ local function backfillRaceDefaults(race)
     if race.vehicleRestrictionMode == nil then race.vehicleRestrictionMode = "free" end
     if race.branchingEnabled == nil then race.branchingEnabled = false end
     if race.oneWayGates == nil then race.oneWayGates = false end
+    if race.freeroam == nil then race.freeroam = false end
+    if type(race.props) ~= "table" or not table.isArray(race.props) then race.props = {} end
     table.forEach(race.gates, function(g, i)
         if type(g.step) ~= "number" then g.step = i end
         if not table.isArray(g.parents) then g.parents = { i - 1 } end
@@ -689,6 +704,7 @@ local function onOpen(raceId)
             name = "",
             mode = "grid",
             loopable = false,
+            freeroam = false,
             distance = 0,
             sectorCount = 3,
             manualSectors = false,
@@ -697,6 +713,7 @@ local function onOpen(raceId)
             vehicleRestrictionMode = "free",
             gates = {},
             startPositions = {},
+            props = {},
             defaults = {
                 respawnStrategy = "lastcheckpoint",
                 joinable = false,
@@ -730,10 +747,12 @@ local function onOpen(raceId)
     end
     M.activeGateIndex = nil
     M.activeStartIndex = nil
+    M.activePropIndex, M.activePropPart = nil, nil
     M.dirty = false
-    extensions.hook("onBJRaceMarkersRefresh")
+    propsChanged()
     pushUpdate()
     pushActive()
+    beamjoy_communications_ui.send("BJEditorPropCatalog", beamjoy_props.catalogForUI())
     M.savedRace = table.clone(M.race) -- after pushUpdate, so .distance is already computed
     beamjoy_communications_ui.send("BJEditorDirty", M.dirty)
     beamjoy_communications_ui.send("BJEditorRaceSnapToGround", M.snapToGroundEnabled)
@@ -831,6 +850,7 @@ local function onSelectGate(index)
     draggingHandle = nil
     M.activeGateIndex = (index and M.race.gates[index]) and index or nil
     M.activeStartIndex = nil
+    M.activePropIndex, M.activePropPart = nil, nil
     updateGizmo("gate", M.activeGateIndex)
     pushActive()
     pushUpdate() -- picks up anything a throttled scale-drag push may have missed
@@ -842,6 +862,7 @@ local function onSelectStart(index)
     draggingHandle = nil
     M.activeStartIndex = (index and M.race.startPositions[index]) and index or nil
     M.activeGateIndex = nil
+    M.activePropIndex, M.activePropPart = nil, nil
     updateGizmo("start", M.activeStartIndex)
     pushActive()
     extensions.hook("onBJRaceMarkersRefresh")
@@ -923,13 +944,34 @@ local function onWorldClick(clickType, data)
     -- menu/sidebar selection wins that conflict rather than this raycast fighting it. A hit on any
     -- other gate/start still switches selection to it, world-click included, even while something
     -- else is currently active.
+    -- props : a single one round its base, a line by either end (selecting that end)
+    local bestPart
+    table.forEach(M.race.props or {}, function(p, i)
+        if p.kind == "line" then
+            for _, part in ipairs({ "a", "b" }) do
+                local t = p[part] and rayHitsSphere(p[part], 1.2)
+                if t and t < bestT then
+                    bestT, bestKind, bestIndex, bestPart = t, "prop", i, part
+                end
+            end
+        elseif p.pos then
+            local t = rayHitsSphere(p.pos, 1.5)
+            if t and t < bestT then
+                bestT, bestKind, bestIndex, bestPart = t, "prop", i, nil
+            end
+        end
+    end)
+
     if bestKind == "gate" and bestIndex == M.activeGateIndex then return end
     if bestKind == "start" and bestIndex == M.activeStartIndex then return end
+    if bestKind == "prop" and bestIndex == M.activePropIndex and bestPart == M.activePropPart then return end
 
     if bestKind == "gate" then
         onSelectGate(bestIndex)
     elseif bestKind == "start" then
         onSelectStart(bestIndex)
+    elseif bestKind == "prop" then
+        M.onSelectProp(bestIndex, bestPart)
     end
 end
 
@@ -956,6 +998,7 @@ local function onCreateGate()
     })
     M.activeGateIndex = #M.race.gates
     M.activeStartIndex = nil
+    M.activePropIndex, M.activePropPart = nil, nil
     updateGizmo("gate", M.activeGateIndex)
     markDirty()
     pushUpdate()
@@ -973,6 +1016,7 @@ local function onCreateStart()
     })
     M.activeStartIndex = #M.race.startPositions
     M.activeGateIndex = nil
+    M.activePropIndex, M.activePropPart = nil, nil
     updateGizmo("start", M.activeStartIndex)
     markDirty()
     pushUpdate()
@@ -1246,9 +1290,10 @@ local function onSaveAsNew(name)
         M.race = copy
         M.activeGateIndex = nil
         M.activeStartIndex = nil
+        M.activePropIndex, M.activePropPart = nil, nil
         M.dirty = false
         gizmo.hide()
-        extensions.hook("onBJRaceMarkersRefresh")
+        propsChanged()
         pushUpdate()
         pushActive()
         M.savedRace = table.clone(M.race)
@@ -1285,6 +1330,7 @@ local function onImportCode(race)
         name = type(race.name) == "string" and race.name or "",
         mode = type(race.mode) == "string" and race.mode or "grid",
         loopable = race.loopable == true,
+        freeroam = race.freeroam == true,
         distance = 0, -- recomputed by pushUpdate below from the real imported gate positions
         sectorCount = race.sectorCount,
         manualSectors = race.manualSectors,
@@ -1293,17 +1339,329 @@ local function onImportCode(race)
         vehicleRestrictionMode = nil, -- never travels in a code (an author-local capture/preset ref)
         gates = race.gates,
         startPositions = race.startPositions,
+        props = race.props,
         defaults = race.defaults,
     }
     backfillRaceDefaults(M.race)
 
     M.activeGateIndex = nil
     M.activeStartIndex = nil
+    M.activePropIndex, M.activePropPart = nil, nil
     updateGizmo("gate", nil) -- hides the gizmo ; nothing from the old selection still applies
     markDirty()
-    extensions.hook("onBJRaceMarkersRefresh")
+    propsChanged()
     pushUpdate()
     pushActive()
+end
+
+-- PROPS ----------------------------------------------------------------------------------------
+-- race.props (see beamjoy_props for the entries and how they're spawned). Placed a few metres
+-- ahead of you, facing your way (turned by the catalog's yaw so a barrier's long side follows it),
+-- then moved with the gizmo : a single prop as a whole (rotation in every axis), a line by either
+-- of its two ends (translation only : a line's props face along it, turned by its own yaw)
+
+-- how far ahead of you a new prop (or a new line's first end) is placed, and a new line's length
+local PROP_PLACE_AHEAD = 6
+local PROP_LINE_LENGTH = 20
+
+---@param v vec3|table
+---@return table
+local function xyz(v) return { x = v.x, y = v.y, z = v.z } end
+
+---@param v table? {x, y, z}
+---@return vec3?
+local function toVec(v) return v and vec3(v.x, v.y, v.z) or nil end
+
+---@param dir vec3?
+---@return vec3 dir made horizontal (straight ahead on the y axis if there's nothing left)
+local function flatDir(dir)
+    local flat = dir and vec3(dir.x, dir.y, 0) or vec3(0, 1, 0)
+    if flat:length() < 1e-4 then return vec3(0, 1, 0) end
+    return flat:normalized()
+end
+
+---@param h number
+---@return number
+local function round3(h) return math.floor(h * 1000 + .5) / 1000 end
+
+--- a line's ground heights, one per prop (beamjoy_props.linePlacements), measured here so a
+--- running race never has to : the editor's preview isn't in the static collision (see
+--- beamjoy_props), so the probes can't land on the line's own props
+---@param line table
+local function updateLineHeights(line)
+    if line.followGround == false then
+        line.heights = nil
+        return
+    end
+    local straight = beamjoy_props.linePlacements({ a = line.a, b = line.b, count = line.count, followGround = false })
+    line.heights = table.map(straight, function(p) return round3(groundHeightAt(p.pos)) end)
+end
+
+---@param extra integer
+---@return boolean room for that many more props
+local function propBudget(extra)
+    if beamjoy_props.total(M.race.props) + extra <= beamjoy_props.MAX_PROPS then return true end
+    toast.warn(string.format("A race can hold up to %d props", beamjoy_props.MAX_PROPS), nil, 4)
+    return false
+end
+
+local updatePropGizmo
+---@param index integer?
+---@param part "a"|"b"|nil a line's end (its first by default)
+function M.onSelectProp(index, part)
+    if not M.race then return end
+    draggingHandle = nil
+    local prop = index and M.race.props[index]
+    M.activePropIndex = prop and index or nil
+    M.activePropPart = prop and prop.kind == "line" and (part == "b" and "b" or "a") or nil
+    M.activeGateIndex, M.activeStartIndex = nil, nil
+    updatePropGizmo()
+    pushActive()
+    propsChanged()
+end
+
+updatePropGizmo = function()
+    gizmo.hide()
+    local prop = M.race and M.activePropIndex and M.race.props[M.activePropIndex]
+    if not prop then return end
+    local up = vec3(0, 0, 1)
+    if prop.kind == "line" then
+        local part = M.activePropPart == "b" and "b" or "a"
+        local other = part == "a" and "b" or "a"
+        local pos = toVec(prop[part])
+        gizmo.show({
+            pos = pos,
+            dir = flatDir(toVec(prop[other]) - pos),
+            up = up,
+            scales = vec3(1, 1, 1),
+        }, function(updated) ---@param updated GizmoObject
+            if not parent or parent.activeEditor ~= M then return end
+            -- an end only moves : the line's props face along it whatever the gizmo was turned to
+            prop[part] = xyz(updated.pos)
+            prop.heights = nil -- straight while dragging, measured again once dropped
+            markDirty()
+            propsChanged()
+        end, function()
+            if M.snapToGroundEnabled then
+                prop[part].z = groundHeightAt(toVec(prop[part]))
+            end
+            updateLineHeights(prop)
+            pushUpdate()
+            updatePropGizmo()
+            propsChanged()
+        end)
+    else
+        gizmo.show({
+            pos = toVec(prop.pos),
+            dir = toVec(prop.dir),
+            up = toVec(prop.up) or up,
+            scales = vec3(1, 1, 1),
+        }, function(updated) ---@param updated GizmoObject
+            if not parent or parent.activeEditor ~= M then return end
+            prop.pos = xyz(updated.pos)
+            prop.dir = xyz(updated.dir)
+            prop.up = xyz(updated.up)
+            markDirty()
+            propsChanged()
+        end, function()
+            if M.snapToGroundEnabled and gizmo.tool ~= "rotate" then
+                prop.pos.z = groundHeightAt(toVec(prop.pos))
+            end
+            pushUpdate()
+            updatePropGizmo()
+            propsChanged()
+        end)
+    end
+end
+
+---@return vec3? at where a new prop goes, vec3? facing your flat facing
+local function propPlacement()
+    local pos, dir = currentPositionDirection()
+    if not pos then return nil end
+    local facing = flatDir(dir)
+    local at = pos + facing * PROP_PLACE_AHEAD
+    at = vec3(at.x, at.y, M.snapToGroundEnabled and groundHeightAt(at) or pos.z)
+    return at, facing
+end
+
+---@param prop table
+local function addProp(prop)
+    table.insert(M.race.props, prop)
+    M.activePropIndex = #M.race.props
+    M.activePropPart = prop.kind == "line" and "b" or nil
+    M.activeGateIndex, M.activeStartIndex = nil, nil
+    updatePropGizmo()
+    markDirty()
+    pushUpdate()
+    pushActive()
+    propsChanged()
+end
+
+---@param catalogId string
+local function onCreateProp(catalogId)
+    local cat = beamjoy_props.getCatalogEntry(catalogId)
+    if not M.race or not cat or not propBudget(1) then return end
+    local at, facing = propPlacement()
+    if not at then return end
+    addProp({
+        kind = "static",
+        shape = cat.shape,
+        pos = xyz(at),
+        dir = xyz(beamjoy_props.turn(facing, cat.yaw)),
+        up = { x = 0, y = 0, z = 1 },
+        scale = 1,
+    })
+end
+
+---@param catalogId string
+local function onCreatePropLine(catalogId)
+    local cat = beamjoy_props.getCatalogEntry(catalogId)
+    if not M.race or not cat or not propBudget(2) then return end
+    local a, facing = propPlacement()
+    if not a then return end
+    local b = a + facing * PROP_LINE_LENGTH
+    b = vec3(b.x, b.y, M.snapToGroundEnabled and groundHeightAt(b) or a.z)
+    local room = beamjoy_props.MAX_PROPS - beamjoy_props.total(M.race.props)
+    local line = {
+        kind = "line",
+        shape = cat.shape,
+        a = xyz(a),
+        b = xyz(b),
+        count = math.max(2, math.min(math.floor(PROP_LINE_LENGTH / cat.length + .5) + 1, room)),
+        yaw = cat.yaw,
+        scale = 1,
+        followGround = true,
+    }
+    updateLineHeights(line)
+    addProp(line)
+end
+
+---@param index integer
+---@param partial table scale / count / yaw / followGround
+local function onSetProp(index, partial)
+    local prop = M.race and M.race.props[index]
+    if not prop or type(partial) ~= "table" then return end
+    if partial.scale ~= nil then
+        prop.scale = math.max(.1, math.min(tonumber(partial.scale) or 1, 10))
+    end
+    if prop.kind == "line" then
+        if partial.count ~= nil then
+            local others = beamjoy_props.total(M.race.props) - beamjoy_props.weight(prop)
+            prop.count = math.max(1, math.min(math.floor(tonumber(partial.count) or prop.count),
+                beamjoy_props.MAX_PROPS - others))
+        end
+        if partial.yaw ~= nil then
+            prop.yaw = ((tonumber(partial.yaw) or 0) + 180) % 360 - 180
+        end
+        if partial.followGround ~= nil then prop.followGround = partial.followGround == true end
+        if partial.count ~= nil or partial.followGround ~= nil then updateLineHeights(prop) end
+    end
+    markDirty()
+    pushUpdate()
+    propsChanged()
+end
+
+---@param index integer
+local function onDeleteProp(index)
+    if not M.race or not M.race.props[index] then return end
+    table.remove(M.race.props, index)
+    M.activePropIndex, M.activePropPart = nil, nil
+    gizmo.hide()
+    markDirty()
+    pushUpdate()
+    pushActive()
+    propsChanged()
+end
+
+--- a copy beside the original : a single prop one of its own lengths to its right, a line 4 m to
+--- the right of its direction
+---@param index integer
+local function onDuplicateProp(index)
+    local prop = M.race and M.race.props[index]
+    if not prop or not propBudget(beamjoy_props.weight(prop)) then return end
+    local copy = table.clone(prop)
+    if prop.kind == "line" then
+        local a, b = toVec(prop.a), toVec(prop.b)
+        local offset = flatDir(b - a):cross(vec3(0, 0, 1)) * 4
+        local na, nb = a + offset, b + offset
+        if M.snapToGroundEnabled then
+            na = vec3(na.x, na.y, groundHeightAt(na))
+            nb = vec3(nb.x, nb.y, groundHeightAt(nb))
+        end
+        copy.a, copy.b = xyz(na), xyz(nb)
+        updateLineHeights(copy)
+    else
+        local cat = beamjoy_props.catalogForShape(prop.shape)
+        local dir = flatDir(toVec(prop.dir))
+        local pos = toVec(prop.pos) + dir:cross(vec3(0, 0, 1)) * ((cat and cat.length or 2) * (prop.scale or 1))
+        if M.snapToGroundEnabled then pos = vec3(pos.x, pos.y, groundHeightAt(pos)) end
+        copy.pos = xyz(pos)
+    end
+    addProp(copy)
+end
+
+--- a line becomes its props, one by one, each where it was
+---@param index integer
+local function onSplitPropLine(index)
+    local line = M.race and M.race.props[index]
+    if not line or line.kind ~= "line" then return end
+    local singles = table.map(beamjoy_props.linePlacements(line), function(p)
+        return {
+            kind = "static",
+            shape = line.shape,
+            pos = xyz(p.pos),
+            dir = xyz(p.dir),
+            up = xyz(p.up),
+            scale = line.scale or 1,
+        }
+    end)
+    table.remove(M.race.props, index)
+    for i, single in ipairs(singles) do
+        table.insert(M.race.props, index + i - 1, single)
+    end
+    M.activePropIndex = #singles > 0 and index or nil
+    M.activePropPart = nil
+    updatePropGizmo()
+    markDirty()
+    pushUpdate()
+    pushActive()
+    propsChanged()
+end
+
+--- your car a few metres short of the prop (a line's first end), facing it
+---@param index integer
+local function onTeleportToProp(index)
+    local prop = M.race and M.race.props[index]
+    local current = beamjoy_vehicles.getCurrentOwn()
+    if not prop or not current then return end
+    local target, facing
+    if prop.kind == "line" then
+        target = toVec(prop.a)
+        facing = flatDir(toVec(prop.b) - target)
+    else
+        local cat = beamjoy_props.catalogForShape(prop.shape)
+        target = toVec(prop.pos)
+        facing = beamjoy_props.turn(flatDir(toVec(prop.dir)), -(cat and cat.yaw or 0))
+    end
+    beamjoy_vehicles.setVehiclePositionRotation(current.veh, target - facing * (PROP_PLACE_AHEAD + 2), facing,
+        vec3(0, 0, 1))
+end
+
+--- a single prop moves to where a new one would go (ahead of you, facing your way)
+---@param index integer
+local function onSetPropToVehicle(index)
+    local prop = M.race and M.race.props[index]
+    if not prop or prop.kind == "line" then return end
+    local at, facing = propPlacement()
+    if not at then return end
+    local cat = beamjoy_props.catalogForShape(prop.shape)
+    prop.pos = xyz(at)
+    prop.dir = xyz(beamjoy_props.turn(facing, cat and cat.yaw or 0))
+    prop.up = { x = 0, y = 0, z = 1 }
+    updatePropGizmo()
+    markDirty()
+    pushUpdate()
+    propsChanged()
 end
 
 ---@param activityEditor BJActivityEditorCommon
@@ -1334,6 +1692,15 @@ local function onInit(activityEditor)
     beamjoy_communications_ui.addHandler("BJEditorRaceSave", onSave)
     beamjoy_communications_ui.addHandler("BJEditorRaceSaveAsNew", onSaveAsNew)
     beamjoy_communications_ui.addHandler("BJEditorRaceImportCode", onImportCode)
+    beamjoy_communications_ui.addHandler("BJEditorRaceCreateProp", onCreateProp)
+    beamjoy_communications_ui.addHandler("BJEditorRaceCreatePropLine", onCreatePropLine)
+    beamjoy_communications_ui.addHandler("BJEditorRaceSelectProp", function(index, part) M.onSelectProp(index, part) end)
+    beamjoy_communications_ui.addHandler("BJEditorRaceSetProp", onSetProp)
+    beamjoy_communications_ui.addHandler("BJEditorRaceDeleteProp", onDeleteProp)
+    beamjoy_communications_ui.addHandler("BJEditorRaceDuplicateProp", onDuplicateProp)
+    beamjoy_communications_ui.addHandler("BJEditorRaceSplitPropLine", onSplitPropLine)
+    beamjoy_communications_ui.addHandler("BJEditorRaceTeleportToProp", onTeleportToProp)
+    beamjoy_communications_ui.addHandler("BJEditorRaceSetPropToVehicle", onSetPropToVehicle)
 end
 
 local function onClose()
@@ -1346,8 +1713,9 @@ local function onClose()
         M.id = nil
         M.activeGateIndex = nil
         M.activeStartIndex = nil
+        M.activePropIndex, M.activePropPart = nil, nil
         M.dirty = false
-        extensions.hook("onBJRaceMarkersRefresh")
+        propsChanged()
     end
 end
 

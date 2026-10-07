@@ -14,7 +14,7 @@ angular.module("beamjoy").component("bjConfigFreeroam", {
     controller: function ($rootScope, $scope, $filter, beamjoyStore, beamjoyNavGuard, beamjoyConfirm) {
         const translate = $filter("translate");
 
-        this.SECTIONS = ["stations", "buslines", "deliveries"];
+        this.SECTIONS = ["stations", "buslines", "deliveries", "dragstrips", "driftzones"];
         this.activeSection = "stations";
         // switching sections while one is dirty would strand the unsaved edits (each section is a
         // separate Lua editor). The inactive tab is disabled until you Save or Discard.
@@ -49,6 +49,22 @@ angular.module("beamjoy").component("bjConfigFreeroam", {
             snapMethod: "BJEditorDeliveriesSnapMethod",
             setSnapToGround: "BJEditorDeliveriesSetSnapToGround",
             setSnapMethod: "BJEditorDeliveriesSetSnapMethod",
+        };
+
+        // "Drag strips" section: same, for <bj-config-drag-strips>
+        this.dragSnapEvents = {
+            snapToGround: "BJEditorDragStripsSnapToGround",
+            snapMethod: "BJEditorDragStripsSnapMethod",
+            setSnapToGround: "BJEditorDragStripsSetSnapToGround",
+            setSnapMethod: "BJEditorDragStripsSetSnapMethod",
+        };
+
+        // "Drift zones" section: same, for <bj-config-drift-zones>
+        this.driftSnapEvents = {
+            snapToGround: "BJEditorDriftZonesSnapToGround",
+            snapMethod: "BJEditorDriftZonesSnapMethod",
+            setSnapToGround: "BJEditorDriftZonesSetSnapToGround",
+            setSnapMethod: "BJEditorDriftZonesSetSnapMethod",
         };
 
         this.$onInit = () => {
@@ -406,5 +422,205 @@ angular.module("beamjoy").component("bjConfigDeliveries", {
         };
 
         this.depotCount = () => this.points.filter((p) => this.isDepot(p)).length;
+    },
+});
+
+// Nested: the Drag strips editor sidebar. A strip list ; the active strip expands to its length,
+// tree, lane width and lanes. All state is pushed from ui/dragStripEditor.lua ; every row action is
+// a BJEditorDragStrips* send with 1-based indices. The strips run in beamjoy/dragStrips.lua.
+angular.module("beamjoy").component("bjConfigDragStrips", {
+    templateUrl: "/ui/modModules/beamjoy/windows/config/freeroam/dragStrips/app.html",
+    controller: function ($rootScope, $scope, $timeout, beamjoyStore) {
+        // kept in sync with services/dragStrips.lua
+        this.LENGTHS = ["1_4", "1_8", "1000"];
+        this.TREES = ["sportsman", "pro"];
+        this.MAX_LANES = 4;
+
+        this.strips = [];
+        this.activeStrip = null; // 1-based, or null
+        this.activeLane = null; // 1-based, or null
+        // the lane widths last seen, to spot a slider move (see the watch below)
+        let widths = "";
+
+        $rootScope.$on("BJEditorDragStripsListUpdate", (_, strips) => {
+            // an empty Lua table arrives as {} : not an array
+            this.strips = Array.isArray(strips) ? strips : [];
+            this.strips.forEach((s) => {
+                if (!Array.isArray(s.lanes)) s.lanes = [];
+            });
+            widths = this.strips.map((s) => s.laneWidth).join(",");
+        });
+        $rootScope.$on("BJEditorDragStripsActiveUpdate", (_, active) => {
+            active = active || {};
+            this.activeStrip = active.strip || null;
+            this.activeLane = active.lane || null;
+            if (this.activeStrip && this.activeLane) {
+                $timeout(() => {
+                    const el = document.getElementById(`drag-lane-row-${this.activeStrip}-${this.activeLane}`);
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                });
+            }
+        });
+
+        this.$onInit = () => {
+            beamjoyStore.send("BJEditorDragStripsRequestState");
+        };
+
+        const send = (event, args) => beamjoyStore.send(event, args);
+
+        this.lengthLabel = (len) => `beamjoy.dragStrips.length.${len || "1_4"}`;
+
+        // the lane width slider (bj-slider has no change callback) : whichever strip's width moved
+        $scope.$watch(
+            () => this.strips.map((s) => s.laneWidth).join(","),
+            (now) => {
+                if (now === widths) return;
+                const before = widths.split(",");
+                widths = now;
+                this.strips.forEach((s, i) => {
+                    if (String(s.laneWidth) !== before[i]) send("BJEditorDragStripsSetStrip", [i + 1, { laneWidth: Number(s.laneWidth) }]);
+                });
+            }
+        );
+
+        this.selectStrip = (event, si) => {
+            event.stopPropagation();
+            send("BJEditorDragStripsSelectStrip", [si]);
+        };
+        this.addStrip = (event) => {
+            event.stopPropagation();
+            send("BJEditorDragStripsAddStrip", []);
+        };
+        this.deleteStrip = (event, si) => {
+            event.stopPropagation();
+            send("BJEditorDragStripsDeleteStrip", [si]);
+        };
+        this.setStrip = (si, partial) => send("BJEditorDragStripsSetStrip", [si, partial]);
+        this.selectLane = (event, si, li) => {
+            event.stopPropagation();
+            send("BJEditorDragStripsSelectLane", [si, li]);
+        };
+        this.addLane = (event, si) => {
+            event.stopPropagation();
+            send("BJEditorDragStripsAddLane", [si]);
+        };
+        this.deleteLane = (event, si, li) => {
+            event.stopPropagation();
+            send("BJEditorDragStripsDeleteLane", [si, li]);
+        };
+        this.setLaneToVehicle = (event, si, li) => {
+            event.stopPropagation();
+            send("BJEditorDragStripsSetLaneToVehicle", [si, li]);
+        };
+        this.teleportToLane = (event, si, li) => {
+            event.stopPropagation();
+            send("BJEditorDragStripsTeleportToLane", [si, li]);
+        };
+    },
+});
+
+// Nested: the Drift zones editor sidebar. A zone list ; the active zone expands to its corridor
+// width and its route (the start, points along the way, the finish). All state is pushed from
+// ui/driftZoneEditor.lua ; every row action is a BJEditorDriftZones* send with 1-based indices. The
+// zones run in beamjoy/driftZones.lua.
+angular.module("beamjoy").component("bjConfigDriftZones", {
+    templateUrl: "/ui/modModules/beamjoy/windows/config/freeroam/driftZones/app.html",
+    controller: function ($rootScope, $scope, $timeout, $filter, beamjoyStore) {
+        const translate = $filter("translate");
+        // kept in sync with services/driftZones.lua
+        this.MAX_POINTS = 40;
+
+        this.zones = [];
+        this.activeZone = null; // 1-based, or null
+        this.activePoint = null; // 1-based, or null
+        // the widths last seen, to spot a slider move (bj-slider has no change callback)
+        let widths = "";
+
+        $rootScope.$on("BJEditorDriftZonesListUpdate", (_, zones) => {
+            // an empty Lua table arrives as {} : not an array
+            this.zones = Array.isArray(zones) ? zones : [];
+            this.zones.forEach((z) => {
+                if (!Array.isArray(z.points)) z.points = [];
+            });
+            widths = this.zones.map((z) => z.width).join(",");
+        });
+        $rootScope.$on("BJEditorDriftZonesActiveUpdate", (_, active) => {
+            active = active || {};
+            this.activeZone = active.zone || null;
+            this.activePoint = active.point || null;
+            if (this.activeZone && this.activePoint) {
+                $timeout(() => {
+                    const el = document.getElementById(`drift-point-row-${this.activeZone}-${this.activePoint}`);
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                });
+            }
+        });
+        $scope.$watch(
+            () => this.zones.map((z) => z.width).join(","),
+            (now) => {
+                if (now === widths) return;
+                const before = widths.split(",");
+                widths = now;
+                this.zones.forEach((z, i) => {
+                    if (String(z.width) !== before[i]) send("BJEditorDriftZonesSetZone", [i + 1, { width: Number(z.width) }]);
+                });
+            }
+        );
+
+        this.$onInit = () => {
+            beamjoyStore.send("BJEditorDriftZonesRequestState");
+        };
+
+        const send = (event, args) => beamjoyStore.send(event, args);
+
+        this.pointLabel = (zone, i) => {
+            if (i === 1) return translate("beamjoy.driftZones.start");
+            if (i === zone.points.length) return translate("beamjoy.driftZones.finish");
+            return `${translate("beamjoy.driftZones.point")} ${i - 1}`;
+        };
+        // the route's length, start to finish ("320 m")
+        this.lengthText = (zone) => {
+            let m = 0;
+            for (let i = 1; i < zone.points.length; i++) {
+                const a = zone.points[i - 1];
+                const b = zone.points[i];
+                m += Math.hypot(b.x - a.x, b.y - a.y);
+            }
+            return `${Math.round(m)} m`;
+        };
+
+        this.selectZone = (event, zi) => {
+            event.stopPropagation();
+            send("BJEditorDriftZonesSelectZone", [zi]);
+        };
+        this.addZone = (event) => {
+            event.stopPropagation();
+            send("BJEditorDriftZonesAddZone", []);
+        };
+        this.deleteZone = (event, zi) => {
+            event.stopPropagation();
+            send("BJEditorDriftZonesDeleteZone", [zi]);
+        };
+        this.setZone = (zi, partial) => send("BJEditorDriftZonesSetZone", [zi, partial]);
+        this.selectPoint = (event, zi, pi) => {
+            event.stopPropagation();
+            send("BJEditorDriftZonesSelectPoint", [zi, pi]);
+        };
+        this.addPoint = (event, zi) => {
+            event.stopPropagation();
+            send("BJEditorDriftZonesAddPoint", [zi]);
+        };
+        this.deletePoint = (event, zi, pi) => {
+            event.stopPropagation();
+            send("BJEditorDriftZonesDeletePoint", [zi, pi]);
+        };
+        this.setPointToVehicle = (event, zi, pi) => {
+            event.stopPropagation();
+            send("BJEditorDriftZonesSetPointToVehicle", [zi, pi]);
+        };
+        this.teleportToPoint = (event, zi, pi) => {
+            event.stopPropagation();
+            send("BJEditorDriftZonesTeleportToPoint", [zi, pi]);
+        };
     },
 });

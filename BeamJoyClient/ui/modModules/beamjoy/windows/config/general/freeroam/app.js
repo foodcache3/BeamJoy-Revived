@@ -12,6 +12,7 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
             PreserveFuelOnReset: false,
             EmergencyRefuelCooldown: 300,
             PlayerPursuits: true,
+            RaceRuns: true,
         };
         // preserved verbatim on save : not editable from this accordion, but setConfig replaces
         // the whole Freeroam table at once, so it has to be sent back along with everything else
@@ -35,6 +36,7 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
                 PreserveFuelOnReset: this.data.PreserveFuelOnReset,
                 EmergencyRefuelCooldown: this.data.EmergencyRefuelCooldown,
                 PlayerPursuits: this.data.PlayerPursuits,
+                RaceRuns: this.data.RaceRuns,
             }),
             (current) => {
                 if (!this.init) return;
@@ -46,7 +48,8 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
                     current.StrictBusStops === this.default.StrictBusStops &&
                     current.PreserveFuelOnReset === this.default.PreserveFuelOnReset &&
                     current.EmergencyRefuelCooldown === this.default.EmergencyRefuelCooldown &&
-                    current.PlayerPursuits === this.default.PlayerPursuits
+                    current.PlayerPursuits === this.default.PlayerPursuits &&
+                    current.RaceRuns === this.default.RaceRuns
                 )
                     return;
                 beamjoyStore.send("BJDirectSend", [
@@ -70,6 +73,7 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
                         // same string-vs-number coercion note as RespawnGhostTimeout/Distance above
                         EmergencyRefuelCooldown: Number(current.EmergencyRefuelCooldown),
                         PlayerPursuits: current.PlayerPursuits,
+                        RaceRuns: current.RaceRuns,
                     },
                 ]);
             },
@@ -90,6 +94,7 @@ angular.module("beamjoy").component("bjConfigGeneralFreeroam", {
                 PreserveFuelOnReset: freeroam.PreserveFuelOnReset === true,
                 EmergencyRefuelCooldown: freeroam.EmergencyRefuelCooldown ?? 300,
                 PlayerPursuits: freeroam.PlayerPursuits !== false,
+                RaceRuns: freeroam.RaceRuns !== false,
             };
             this.default = angular.copy(this.data);
             this.init = true;

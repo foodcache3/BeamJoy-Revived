@@ -3,7 +3,8 @@
 --- car is in a lane of one of the game's drag strips, and the timeslip (windows/dragTimeslip).
 ---
 --- The game runs the drag (gameplay/drag : tree, timers, disqualifications) for this car only ; this
---- reads its racer every frame and shows it. A run is compared mark by mark with this player's best
+--- reads its racer every frame and shows it. BeamJoy's own strips (beamjoy/dragStrips.lua) hand it
+--- a strip and a racer of the same shape, plus the tree's lights (they have no tree in the world). A run is compared mark by mark with this player's best
 --- on the strip (the server's leaderboard keeps every mark of it, services/freeroamChallenges.lua),
 --- and with whoever is lined up in the other lane : the server pairs the two and passes each side the
 --- other's run as it happens ("dragState" / "dragOpponent"). The game never lets the two trees drop
@@ -92,7 +93,7 @@ end
 local function markValue(racer, id, kind)
     local t = racer.timers and racer.timers[id]
     if not t or not t.isSet then return nil end
-    if kind == "reaction" and gameplay_drag_times and gameplay_drag_times.getReactionTimerValue then
+    if kind == "reaction" and not racer.bjStrip and gameplay_drag_times and gameplay_drag_times.getReactionTimerValue then
         local ok, rt = pcall(gameplay_drag_times.getReactionTimerValue, racer)
         if ok and tonumber(rt) then return tonumber(rt) end
     end
@@ -177,6 +178,7 @@ local function readRun(data, racer)
     run.speed = tonumber(racer.vehSpeed) or 0
     run.dial = racer.timers and racer.timers.dial and tonumber(racer.timers.dial.value) or nil
     run.mainId = mainMark and mainMark.id or nil
+    run.lights = racer.lights
     return run
 end
 
@@ -262,14 +264,25 @@ local function hudPayload()
         speed = run.speed,
         imperial = imperial(),
         slip = M.slip ~= nil,
+        -- the tree, on screen : BeamJoy's own strips only (the game's have one in the world)
+        lights = run.lights,
     }
+end
+
+---@param l table?
+---@return string
+local function lightsKey(l)
+    if not l then return "" end
+    return string.format("%s%s%d%s%s", l.prestage and 1 or 0, l.stage and 1 or 0, l.amber or 0,
+        l.green and 1 or 0, l.red and 1 or 0)
 end
 
 local function pushHud(force)
     local payload = hudPayload()
     local run = M.run
     local sig = run and table.concat({ payload.state, run.set, run.count, tostring(M.opponent and M.opponent.rev),
-        tostring(run.result ~= nil), tostring(M.board and M.board.rev), tostring(M.slip ~= nil) }, "|") or "off"
+        tostring(run.result ~= nil), tostring(M.board and M.board.rev), tostring(M.slip ~= nil),
+        lightsKey(run.lights) }, "|") or "off"
     if not force and sig == M.lastHudSig then return end
     M.lastHudSig = sig
     beamjoy_communications_ui.send("BJDragHud", payload)
@@ -356,6 +369,10 @@ local function onUpdate(dtReal)
     local data = core and core.getData and core.getData()
     local own = data and data.racers and beamjoy_vehicles and beamjoy_vehicles.getCurrentOwn()
     local racer = own and data.racers[own.vid]
+    if not racer and beamjoy_dragStrips then
+        -- not on one of the game's strips : one of BeamJoy's own, maybe
+        data, racer = beamjoy_dragStrips.current()
+    end
     if not racer then
         if M.run then leave() end
         return

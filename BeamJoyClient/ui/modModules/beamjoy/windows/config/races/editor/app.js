@@ -45,12 +45,14 @@ const raceShareStrip = (race) => {
         name: race.name,
         mode: race.mode,
         loopable: race.loopable,
+        freeroam: race.freeroam,
         sectorCount: race.sectorCount,
         manualSectors: race.manualSectors,
         branchingEnabled: race.branchingEnabled,
         oneWayGates: race.oneWayGates,
         gates: race.gates,
         startPositions: race.startPositions,
+        props: race.props,
         defaults: race.defaults,
     });
     (payload.gates || []).forEach((g) => {
@@ -138,6 +140,9 @@ const raceShareCopyToClipboard = async (text) => {
     document.body.removeChild(ta);
 };
 
+// the props' fields edited in the sidebar (everything else about a prop is set Lua-side)
+const PROP_FIELDS = ["scale", "count", "yaw", "followGround"];
+
 angular.module("beamjoy").component("bjConfigRacesEditor", {
     bindings: {
         raceId: "<",
@@ -166,7 +171,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         this.RESET_PENALTY_MODES = ["hold", "time"];
         // mirrors services/races.lua's PLACEMENT_MODES (grid slot assignment at countdown time)
         this.PLACEMENT_MODES = ["deterministic", "random", "manual"];
-        this.SECTIONS = ["info", "waypoints", "starts", "settings"];
+        this.SECTIONS = ["info", "waypoints", "starts", "props", "settings"];
         this.activeSection = "info";
 
         // registers/unregisters with the shared nav guard so switching config tabs or closing
@@ -250,6 +255,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             if (race) {
                 if (!Array.isArray(race.gates)) race.gates = [];
                 if (!Array.isArray(race.startPositions)) race.startPositions = [];
+                if (!Array.isArray(race.props)) race.props = [];
             }
             // Merge the echo into the existing race object instead of replacing `this.race`
             // wholesale (the original approach here, and separately the root cause of a real
@@ -264,7 +270,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             // the same "diff against an accurate baseline" mechanism the "every other update" fix
             // below already established for *sending* diffs, extended here to what's *displayed*.
             if (this.race && race && this.race.id === race.id && previous) {
-                ["name", "mode", "loopable", "sectorCount", "manualSectors", "branchingEnabled", "oneWayGates", "vehicleRestrictionMode", "vehicleRestrictionPoolPresetId"].forEach((k) => {
+                ["name", "mode", "loopable", "freeroam", "sectorCount", "manualSectors", "branchingEnabled", "oneWayGates", "vehicleRestrictionMode", "vehicleRestrictionPoolPresetId"].forEach((k) => {
                     if (angular.equals(this.race[k], previous[k])) this.race[k] = race[k];
                 });
                 if (angular.equals(this.race.defaults, previous.defaults)) {
@@ -305,6 +311,28 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
                 // gate moved via the gizmo) to take wholesale from the echo
                 this.race.author = race.author;
                 this.race.startPositions = race.startPositions;
+                // props : the fields edited here (PROP_FIELDS) merge like a gate's width/height,
+                // everything else (placement, kind, mesh) is Lua's, taken from the echo
+                if (
+                    this.race.props.length === race.props.length &&
+                    previous.props.length === race.props.length
+                ) {
+                    race.props.forEach((echoed, i) => {
+                        const local = this.race.props[i];
+                        const prev = previous.props[i];
+                        Object.keys(local).forEach((k) => {
+                            if (!PROP_FIELDS.includes(k) && !(k in echoed)) delete local[k];
+                        });
+                        Object.keys(echoed).forEach((k) => {
+                            if (!PROP_FIELDS.includes(k)) local[k] = echoed[k];
+                        });
+                        PROP_FIELDS.forEach((k) => {
+                            if (angular.equals(local[k], prev[k])) local[k] = echoed[k];
+                        });
+                    });
+                } else {
+                    this.race.props = race.props;
+                }
                 // never locally edited either, only ever set via the "single" mode capture action
                 // (BJEditorRaceCaptureVehicleRestriction), a Lua-side mutation with no local
                 // optimistic value to protect, same reasoning as above. "pool" mode's own
@@ -320,6 +348,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             }
             previous = race ? angular.copy(this.race) : null;
             rebuildParentOptions();
+            updatePropTotal();
         });
         $rootScope.$on("BJEditorRaceActiveGate", (_, idx) => {
             this.activeGate = idx ? idx - 1 : null;
@@ -339,6 +368,16 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         });
         $rootScope.$on("BJEditorRaceActiveStart", (_, idx) => {
             this.activeStart = idx ? idx - 1 : null;
+        });
+        $rootScope.$on("BJEditorRaceActiveProp", (_, active) => {
+            this.activeProp = active && active.index ? active.index - 1 : null;
+            this.activePropPart = (active && active.part) || null;
+            if (this.activeProp !== null) {
+                $timeout(() => {
+                    const el = document.getElementById(`race-prop-row-${this.activeProp}`);
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                });
+            }
         });
         $rootScope.$on("BJEditorDirty", (_, state) => {
             this.dirty = state === true;
@@ -365,7 +404,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             if (!race || !previous) return;
 
             const metaPartial = {};
-            ["name", "mode", "loopable", "sectorCount", "manualSectors", "branchingEnabled", "oneWayGates", "vehicleRestrictionMode", "vehicleRestrictionPoolPresetId"].forEach((k) => {
+            ["name", "mode", "loopable", "freeroam", "sectorCount", "manualSectors", "branchingEnabled", "oneWayGates", "vehicleRestrictionMode", "vehicleRestrictionPoolPresetId"].forEach((k) => {
                 if (!angular.equals(race[k], previous[k])) {
                     // same reasoning as gate width/height below : bj-slider's typable number-box
                     // can hand back a string in this CEF build, which silently breaks arithmetic
@@ -389,6 +428,21 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             if (Object.keys(metaPartial).length > 0) {
                 beamjoyStore.send("BJEditorRaceSetMeta", [metaPartial]);
             }
+
+            (race.props || []).forEach((prop, i) => {
+                const prevProp = previous.props && previous.props[i];
+                if (!prevProp) return;
+                const partial = {};
+                PROP_FIELDS.forEach((k) => {
+                    if (!angular.equals(prop[k], prevProp[k])) {
+                        // numbers coerced, same bj-slider string quirk as gate width/height below
+                        partial[k] = k === "followGround" ? prop[k] === true : Number(prop[k]);
+                    }
+                });
+                if (Object.keys(partial).length > 0) {
+                    beamjoyStore.send("BJEditorRaceSetProp", [i + 1, partial]);
+                }
+            });
 
             (race.gates || []).forEach((gate, i) => {
                 const prevGate = previous.gates && previous.gates[i];
@@ -633,6 +687,70 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
                 if (gates[i].sector || i === gates.length - 1) n++;
             }
             return n;
+        };
+
+        // PROPS : race.props, spawned and edited Lua-side (beamjoy_props, ui/raceEditor.lua). Only
+        // the PROP_FIELDS are edited here ; placement goes through the gizmo like gates
+        this.PROP_MAX = 200;
+        this.activeProp = null;
+        this.activePropPart = null;
+        this.propCatalog = [];
+        this.propCatalogOptions = [];
+        this.propPick = null;
+        $rootScope.$on("BJEditorPropCatalog", (_, catalog) => {
+            this.propCatalog = Array.isArray(catalog) ? catalog : [];
+            this.propCatalogOptions = this.propCatalog.map((c) => ({ value: c.id, label: c.label }));
+            if (!this.propPick && this.propCatalog.length > 0) this.propPick = this.propCatalog[0].id;
+        });
+        // the catalog's name for a prop's mesh, else the mesh's file name (one no longer offered)
+        this.propLabel = (prop) => {
+            const shape = String((prop && prop.shape) || "").toLowerCase();
+            const entry = this.propCatalog.find((c) => c.shape.toLowerCase() === shape);
+            return entry ? entry.label : shape.split("/").pop();
+        };
+        // a plain number (not a function the template calls), refreshed with each echo
+        this.propTotal = 0;
+        const updatePropTotal = () => {
+            this.propTotal = ((this.race && this.race.props) || []).reduce(
+                (n, p) => n + (p.kind === "line" ? Math.max(1, Number(p.count) || 1) : 1),
+                0
+            );
+        };
+        this.createProp = (event) => {
+            event.stopPropagation();
+            if (this.propPick) beamjoyStore.send("BJEditorRaceCreateProp", [this.propPick]);
+        };
+        this.createPropLine = (event) => {
+            event.stopPropagation();
+            if (this.propPick) beamjoyStore.send("BJEditorRaceCreatePropLine", [this.propPick]);
+        };
+        this.selectProp = (event, idx) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceSelectProp", [this.activeProp === idx ? null : idx + 1]);
+        };
+        this.selectPropEnd = (event, idx, part) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceSelectProp", [idx + 1, part]);
+        };
+        this.deleteProp = (event, idx) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceDeleteProp", [idx + 1]);
+        };
+        this.duplicateProp = (event, idx) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceDuplicateProp", [idx + 1]);
+        };
+        this.splitPropLine = (event, idx) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceSplitPropLine", [idx + 1]);
+        };
+        this.teleportToProp = (event, idx) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceTeleportToProp", [idx + 1]);
+        };
+        this.setPropToVehicle = (event, idx) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceSetPropToVehicle", [idx + 1]);
         };
 
         this.selectStart = (event, idx) => {

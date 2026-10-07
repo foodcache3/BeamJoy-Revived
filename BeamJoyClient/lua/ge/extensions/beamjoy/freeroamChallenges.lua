@@ -68,6 +68,11 @@ local function driftSpots()
             list[#list + 1] = { id = spot.id, name = name, preview = info.preview, targets = targets }
         end
     end
+    -- BeamJoy's own drift zones (beamjoy/driftZones.lua)
+    for _, z in ipairs(beamjoy_driftZones and beamjoy_driftZones.list() or {}) do
+        M.names[z.id] = z.name
+        list[#list + 1] = z
+    end
     table.sort(list, function(a, b) return a.name:lower() < b.name:lower() end)
     return list
 end
@@ -125,6 +130,11 @@ local function dragStrips()
             }
         end
     end
+    -- BeamJoy's own strips (beamjoy/dragStrips.lua)
+    for _, s in ipairs(beamjoy_dragStrips and beamjoy_dragStrips.list() or {}) do
+        M.names[s.id] = s.name
+        list[#list + 1] = s
+    end
     table.sort(list, function(a, b) return a.name:lower() < b.name:lower() end)
     return list
 end
@@ -169,13 +179,11 @@ local function onDriftSpotEnded()
     M.driftSpot = nil
 end
 
----@param vehId integer
-local function dragRaceEndLineReached(vehId)
-    local own = beamjoy_vehicles.getCurrentOwn()
-    if not own or own.vid ~= vehId then return end
-    local core = extensions.gameplay_drag_core
-    local data = core and core.getData and core.getData()
-    local racer = data and data.racers and data.racers[vehId]
+--- a finished drag run to the server : the game's own strips (dragRaceEndLineReached below) and
+--- BeamJoy's own (beamjoy/dragStrips.lua)
+---@param data table the strip's drag data
+---@param racer table
+local function submitDrag(data, racer)
     if not racer or racer.isDisqualified or racer.isDesqualified then return end
     local id = stripId(data)
     local main, trap = stripTimers(data)
@@ -187,7 +195,9 @@ local function dragRaceEndLineReached(vehId)
     local et = main and value(main.id)
     if not id or not et or et <= 0 then return end
     local reaction
-    if gameplay_drag_times and gameplay_drag_times.getReactionTimerValue then
+    if racer.bjStrip then
+        reaction = value("reactionTime")
+    elseif gameplay_drag_times and gameplay_drag_times.getReactionTimerValue then
         local ok, rt = pcall(gameplay_drag_times.getReactionTimerValue, racer)
         reaction = ok and tonumber(rt) or nil
     end
@@ -209,6 +219,16 @@ local function dragRaceEndLineReached(vehId)
         splits = splits,
         vehicle = ownCarLabel(),
     })
+end
+
+---@param vehId integer
+local function dragRaceEndLineReached(vehId)
+    local own = beamjoy_vehicles.getCurrentOwn()
+    if not own or own.vid ~= vehId then return end
+    local core = extensions.gameplay_drag_core
+    local data = core and core.getData and core.getData()
+    local racer = data and data.racers and data.racers[vehId]
+    if racer then submitDrag(data, racer) end
 end
 
 --- the server kept (or didn't keep) a result : say so when it's worth saying
@@ -260,6 +280,7 @@ M.onDriftSpotCompleted = onDriftSpotCompleted
 M.onDriftSpotFailed = onDriftSpotEnded
 M.onDriftSpotForcedEnd = onDriftSpotEnded
 M.dragRaceEndLineReached = dragRaceEndLineReached
+M.submitDrag = submitDrag
 M.pushSpots = pushSpots
 -- shared with beamjoy/dragRun.lua
 M.gameText = gameText

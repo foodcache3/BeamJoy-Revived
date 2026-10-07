@@ -12,7 +12,7 @@
 -- file-top-level), since it's a "game util" global not guaranteed initialized yet while
 -- extensions are still being loaded. Colors are built lazily here for the same reason.
 local GATE_COLOR, GATE_NEXT_COLOR, GATE_SELECTED_COLOR, START_COLOR, START_SELECTED_COLOR,
-TEXT_COLOR, TEXT_BG_COLOR, PATH_COLOR, HANDLE_COLOR
+TEXT_COLOR, TEXT_BG_COLOR, PATH_COLOR, HANDLE_COLOR, PROP_LINE_COLOR, PROP_ACTIVE_COLOR, PROP_INVISIBLE_COLOR
 
 -- shares the same cached module table `ui/activityEditor.lua` holds in its `editors` list (Lua's
 -- `require` caches by resolved path) rather than needing raceEditor registered as its own global
@@ -20,7 +20,7 @@ TEXT_COLOR, TEXT_BG_COLOR, PATH_COLOR, HANDLE_COLOR
 local raceEditor = require("ge/extensions/beamjoy/ui/raceEditor")
 
 local M = {
-    dependencies = { "shape", "beamjoy_races", "beamjoy_raceRunner" },
+    dependencies = { "shape", "beamjoy_races", "beamjoy_raceRunner", "beamjoy_props" },
 
     visible = false,
     ---@type {left: vec3, right: vec3, color: integer, next: boolean}[] the live race's drawn gates,
@@ -29,6 +29,11 @@ local M = {
 }
 
 local MINIMAP_NEXT, MINIMAP_GATE, MINIMAP_START, MINIMAP_STROKE
+
+-- where the draw* functions below draw : the shared default layer (cleared by every renderer
+-- before it draws), or the freeroam races' own layer (see drawFreeroam), which nothing else clears
+local draw
+local FREEROAM_LAYER = "raceFreeroam"
 
 local function onInit()
     GATE_COLOR = BJColor(1, .8, 0, .35)
@@ -40,10 +45,19 @@ local function onInit()
     TEXT_BG_COLOR = BJColor(0, 0, 0, .4)
     PATH_COLOR = BJColor(1, 1, 1, .35)
     HANDLE_COLOR = BJColor(0, 1, 1, .9)
+    PROP_LINE_COLOR = BJColor(1, .55, .1, .8)
+    PROP_ACTIVE_COLOR = BJColor(0, 1, 1, .9)
+    PROP_INVISIBLE_COLOR = BJColor(.4, .8, 1, .25)
     MINIMAP_NEXT = color(0, 255, 0, 255)
     MINIMAP_GATE = color(255, 204, 0, 255)
     MINIMAP_START = color(0, 153, 255, 255)
     MINIMAP_STROKE = color(255, 255, 255, 192)
+end
+
+--- Settings > Visual's activity markers hidden
+---@return boolean
+local function markersHidden()
+    return beamjoy_markerSettings ~= nil and beamjoy_markerSettings.hideActivities == true
 end
 
 ---@param gate BJRaceGate
@@ -61,7 +75,7 @@ end
 ---@param a BJRaceGate
 ---@param b BJRaceGate
 local function drawPathSegment(a, b)
-    shape.addLine(
+    draw.addLine(
         vec3(a.pos.x, a.pos.y, a.pos.z + a.height + 1),
         .15,
         vec3(b.pos.x, b.pos.y, b.pos.z + b.height + 1),
@@ -283,10 +297,10 @@ local function drawGate(gate, index, color, showDirection, role, showLabel, sect
         -- left/right edges only, per direct request (top/bottom dropped) - two upright posts read
         -- as "a gate to drive between" with even less clutter than a full outline.
         local EDGE_THICKNESS = .15
-        shape.addLine(bottomLeft, EDGE_THICKNESS, topLeft, EDGE_THICKNESS, color)
-        shape.addLine(bottomRight, EDGE_THICKNESS, topRight, EDGE_THICKNESS, color)
+        draw.addLine(bottomLeft, EDGE_THICKNESS, topLeft, EDGE_THICKNESS, color)
+        draw.addLine(bottomRight, EDGE_THICKNESS, topRight, EDGE_THICKNESS, color)
     else
-        shape.addQuad(bottomLeft, bottomRight, topRight, topLeft, color)
+        draw.addQuad(bottomLeft, bottomRight, topRight, topLeft, color)
     end
     if showDirection then
         -- shape.addArrow centers its arrow ON the given pos (base = pos - dir*radius,
@@ -299,7 +313,7 @@ local function drawGate(gate, index, color, showDirection, role, showLabel, sect
         -- names don't match the native call's actual behavior. Shifting +dir (not -dir) is what
         -- actually lands the pointed/head end on the gate center.
         local arrowRadius = 2
-        shape.addArrow(pos + up * (gate.height / 2) + dir * arrowRadius, dir, arrowRadius, color)
+        draw.addArrow(pos + up * (gate.height / 2) + dir * arrowRadius, dir, arrowRadius, color)
     end
     if showLabel ~= false then
         local roleLabel = role == "startfinish" and " (Start/Finish)"
@@ -307,7 +321,7 @@ local function drawGate(gate, index, color, showDirection, role, showLabel, sect
             or role == "finish" and " (Finish)"
             or ""
         local sectorLabel = sectorNumber and string.format(" (Sector %d)", sectorNumber) or ""
-        shape.addText(
+        draw.addText(
             string.format("Gate %d%s%s", index, roleLabel, sectorLabel),
             pos + up * (gate.height + .5), TEXT_COLOR, TEXT_BG_COLOR)
     end
@@ -332,9 +346,9 @@ local function drawGateHandles(gate)
     local topLeft = bottomLeft + up * gate.height
     local topRight = bottomRight + up * gate.height
 
-    shape.addLine(bottomLeft, .25, topLeft, .25, HANDLE_COLOR)
-    shape.addLine(bottomRight, .25, topRight, .25, HANDLE_COLOR)
-    shape.addLine(topLeft, .25, topRight, .25, HANDLE_COLOR)
+    draw.addLine(bottomLeft, .25, topLeft, .25, HANDLE_COLOR)
+    draw.addLine(bottomRight, .25, topRight, .25, HANDLE_COLOR)
+    draw.addLine(topLeft, .25, topRight, .25, HANDLE_COLOR)
 end
 
 ---@param startPosition {pos: {x:number,y:number,z:number}, dir: {x:number,y:number,z:number}}
@@ -343,9 +357,39 @@ end
 local function drawStart(startPosition, index, color)
     local pos = vec3(startPosition.pos.x, startPosition.pos.y, startPosition.pos.z)
     local dir = vec3(startPosition.dir.x, startPosition.dir.y, startPosition.dir.z):normalized()
-    shape.addSphere(pos, .5, color)
-    shape.addArrow(pos + vec3(0, 0, .5), dir, 2, color)
-    shape.addText(string.format("Start %d", index), pos + vec3(0, 0, 1.5), TEXT_COLOR, TEXT_BG_COLOR)
+    draw.addSphere(pos, .5, color)
+    draw.addArrow(pos + vec3(0, 0, .5), dir, 2, color)
+    draw.addText(string.format("Start %d", index), pos + vec3(0, 0, 1.5), TEXT_COLOR, TEXT_BG_COLOR)
+end
+
+--- the race editor's handles on its props (the meshes themselves are spawned by beamjoy_props) :
+--- a line's path and its two ends (the one the gizmo holds highlighted), the selected single prop,
+--- and every invisible mesh's panel, since nothing of those shows in the world
+---@param props table[]?
+local function drawPropOverlays(props)
+    if type(props) ~= "table" then return end
+    local lift = vec3(0, 0, .5)
+    for i, p in ipairs(props) do
+        local active = i == raceEditor.activePropIndex
+        if p.kind == "line" and p.a and p.b then
+            local a, b = vec3(p.a.x, p.a.y, p.a.z), vec3(p.b.x, p.b.y, p.b.z)
+            draw.addLine(a + lift, .1, b + lift, .1, active and PROP_ACTIVE_COLOR or PROP_LINE_COLOR)
+            for part, pos in pairs({ a = a, b = b }) do
+                local held = active and raceEditor.activePropPart == part
+                draw.addSphere(pos + lift, held and .7 or .45, held and PROP_ACTIVE_COLOR or PROP_LINE_COLOR)
+            end
+        elseif active and p.pos then
+            draw.addSphere(vec3(p.pos.x, p.pos.y, p.pos.z) + lift, .5, PROP_ACTIVE_COLOR)
+        end
+    end
+    for _, e in ipairs(beamjoy_props.expand(props)) do
+        local cat = beamjoy_props.catalogForShape(e.shape)
+        if cat and cat.invisible then
+            local half = e.scale / 2
+            local d, u = e.dir * half, e.up * half
+            draw.addQuad(e.pos - d - u, e.pos + d - u, e.pos + d + u, e.pos - d + u, PROP_INVISIBLE_COLOR)
+        end
+    end
 end
 
 -- Confirmed real GPU cost: onBJRaceMarkersRefresh fires on every session update, and the server
@@ -376,6 +420,62 @@ local function markerParticipant(session)
     return own
 end
 
+--- freeroam runs (beamjoy_raceFreeroam) : during a run, its next gate(s) (green, with the beam)
+--- and the one after ; otherwise every nearby freeroam race's start gate, named. Both on the
+--- minimap too
+---@param fr table beamjoy_raceFreeroam
+---@return boolean drew anything
+local function drawFreeroam(fr)
+    if fr.run then
+        local run, race = fr.run, fr.run.race
+        local next = {}
+        for _, i in ipairs(fr.candidates(run)) do next[i] = true end
+        -- the next gate(s) and, past them, one more step of the route
+        local visible = {}
+        for i in pairs(next) do visible[i] = true end
+        if race.branchingEnabled then
+            for i in pairs(next) do
+                for j in pairs(visibleGateSetBranching(race, i, 1)) do visible[j] = true end
+            end
+        else
+            for i in pairs(next) do
+                for j in pairs(visibleGateSet(i, #race.gates, race.loopable, 2) or {}) do visible[j] = true end
+            end
+        end
+        for i in pairs(visible) do
+            local g = race.gates[i]
+            local role = gateRole(race, i)
+            drawGate(g, i, next[i] and GATE_NEXT_COLOR or role and START_COLOR or GATE_COLOR, false, role, false,
+                nil, true)
+            if next[i] and race.defaults and race.defaults.waypointBeams ~= false then
+                draw.addBeam(vec3(g.pos.x, g.pos.y, g.pos.z))
+            end
+            local left, right = gateEnds(g)
+            table.insert(M.minimapGates, {
+                left = left,
+                right = right,
+                color = next[i] and MINIMAP_NEXT or role and MINIMAP_START or MINIMAP_GATE,
+                next = next[i] == true,
+            })
+        end
+        return true
+    end
+    if markersHidden() then return false end
+    local drew = false
+    for _, race in ipairs(fr.nearby) do
+        for i, g in ipairs(race.gates) do
+            if fr.isStartGate(race, i) then
+                drawGate(g, i, START_COLOR, false, nil, false, nil, true)
+                draw.addText(race.name, vec3(g.pos.x, g.pos.y, g.pos.z + g.height + .8), TEXT_COLOR, TEXT_BG_COLOR)
+                local left, right = gateEnds(g)
+                table.insert(M.minimapGates, { left = left, right = right, color = MINIMAP_START, next = false })
+                drew = true
+            end
+        end
+    end
+    return drew
+end
+
 ---@return string?
 local function computeRenderSignature()
     if raceEditor.race then return nil end
@@ -383,7 +483,16 @@ local function computeRenderSignature()
     if builder and (#builder.gates > 0 or #builder.startPositions > 0) then return nil end
 
     local session = beamjoy_raceRunner.session or beamjoy_raceRunner.spectatingSession
-    if not session then return "none" end
+    if not session then
+        -- freeroam runs (beamjoy_raceFreeroam) : the run's progress, else the start gates near you
+        local fr = beamjoy_raceFreeroam
+        if fr and fr.run then
+            return string.format("free:run:%s:%s:%s", fr.run.race.id, fr.run.last, fr.run.done)
+        elseif fr and #fr.nearby > 0 then
+            return "free:near:" .. table.concat(table.map(fr.nearby, function(r) return tostring(r.id) end), ",")
+        end
+        return "none"
+    end
     local race = table.find(beamjoy_races.data, function(r) return r.id == session.raceId end)
     if not race then return "none" end
 
@@ -407,6 +516,9 @@ local function render()
     lastRenderSignature = signature
 
     shape.reset()
+    local freeroamLayer = shape.layer(FREEROAM_LAYER)
+    freeroamLayer.reset()
+    draw = shape
     M.minimapGates = {}
     local hasContent = false
 
@@ -423,7 +535,8 @@ local function render()
         table.forEach(race.startPositions, function(s, i)
             drawStart(s, i, i == raceEditor.activeStartIndex and START_SELECTED_COLOR or START_COLOR)
         end)
-        hasContent = #race.gates > 0 or #race.startPositions > 0
+        drawPropOverlays(race.props)
+        hasContent = #race.gates > 0 or #race.startPositions > 0 or (type(race.props) == "table" and #race.props > 0)
     else
         local builder = beamjoy_races.testBuilder
         if builder and (#builder.gates > 0 or #builder.startPositions > 0) then
@@ -431,6 +544,13 @@ local function render()
             table.forEach(builder.gates, function(g, i) drawGate(g, i, GATE_COLOR, true) end)
             table.forEach(builder.startPositions, function(s, i) drawStart(s, i, START_COLOR) end)
             hasContent = true
+        end
+
+        local fr = beamjoy_raceFreeroam
+        if not beamjoy_raceRunner.session and not beamjoy_raceRunner.spectatingSession and fr then
+            draw = freeroamLayer
+            hasContent = drawFreeroam(fr) or hasContent
+            draw = shape
         end
 
         -- watching (a spectator, or after your own run) : the gates of the racer you're watching
@@ -493,7 +613,7 @@ local function render()
                     local baseColor = role and START_COLOR or GATE_COLOR
                     drawGate(g, i, isNext and GATE_NEXT_COLOR or baseColor, false, role,
                         showLabel, sectorNumberForGate(race, i), true)
-                    if isNext and beams then shape.addBeam(vec3(g.pos.x, g.pos.y, g.pos.z)) end
+                    if isNext and beams then draw.addBeam(vec3(g.pos.x, g.pos.y, g.pos.z)) end
                     local left, right = gateEnds(g)
                     table.insert(M.minimapGates, {
                         left = left,
@@ -520,6 +640,7 @@ end
 
 local function hide()
     shape.reset()
+    shape.layer(FREEROAM_LAYER).reset()
     M.visible = false
     M.minimapGates = {}
     lastRenderSignature = nil

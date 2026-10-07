@@ -69,12 +69,24 @@ angular.module("beamjoy").component("bjRaceLeaderboard", {
         this.rows = [];
         this.selfVisible = false;
 
-        this.$onInit = () => {
-            beamjoyStore.send("BJRaceLeaderboardRequest", [Number(this.raceId)]);
+        // "grid" : the race's grid races ; "freeroam" : its freeroam runs (a rolling start, its own
+        // board). The switch only shows for a race that has freeroam runs
+        this.board = "grid";
+        this.hasFreeroam = false;
+        const request = () => beamjoyStore.send("BJRaceLeaderboardRequest", [Number(this.raceId), this.board]);
+        this.$onInit = request;
+        this.setBoard = (board) => {
+            if (this.board === board) return;
+            this.board = board;
+            this.loaded = false;
+            this.near = false;
+            request();
         };
 
         const off = $rootScope.$on("BJRaceLeaderboard", (_, data) => {
             if (Number(data.raceId) !== Number(this.raceId)) return;
+            if ((data.board || "grid") !== this.board) return;
+            this.hasFreeroam = data.freeroam === true;
             this.entries = Array.isArray(data.entries) ? data.entries : [];
             this.around = Array.isArray(data.around) ? data.around : [];
             this.selfEntry = data.selfEntry || null;

@@ -160,6 +160,15 @@
 ---is attached to a "wrong-way" crossing in either state, since a wrong-way crossing while this is
 ---on simply never registers as anything, same as before this option existed.
 ---@field startPositions {pos: {x: number, y: number, z: number}, dir: {x: number, y: number, z: number}}[]
+---@field freeroam boolean? also run from freeroam : driving through its start gate starts a
+---one-lap run against the clock, no lobby (services/raceFreeroam.lua). Its times go on their own
+---board, `freeroamLeaderboard` (a rolling start isn't comparable with a grid's standing one)
+---@field freeroamLeaderboard table<string, {time: integer, model: string, date: integer}>? as
+---`leaderboard`, for the freeroam runs
+---@field props table[]? placed props, spawned by each client for the race's participants and
+---spectators from its grid until it ends : `{kind = "static", shape, pos, dir, up, scale}` or a line,
+---`{kind = "line", shape, a, b, count, yaw, scale, followGround, heights}` (see the client's
+---beamjoy_props). Up to MAX_PROPS, a line counting each of its props
 ---grid-slot placements for `grid` mode with multiple participants; index 1 is also used as the
 ---single spawn point for a solo/passive attempt. `dir` (not a quaternion) matches
 ---`BJRaceGate.dir`'s convention: simpler to write/read/round-trip than a quat, and consistent
@@ -390,6 +399,87 @@ end
 ---current map's) and needs the duplicate-name check to compare against THAT map's own races, not
 ---whatever happens to be loaded in memory right now
 ---@return string? error
+--- the most props a race may hold (a line counts each of its props), mirrors the client's
+--- beamjoy_props.MAX_PROPS
+local MAX_PROPS = 200
+
+---@param v any
+---@return {x: number, y: number, z: number}?
+local function sanePoint(v)
+    if type(v) ~= "table" then return nil end
+    local x, y, z = tonumber(v.x), tonumber(v.y), tonumber(v.z)
+    if not x or not y or not z or x ~= x or y ~= y or z ~= z or
+        math.abs(x) > 1e6 or math.abs(y) > 1e6 or math.abs(z) > 1e6 then
+        return nil
+    end
+    return { x = x, y = y, z = z }
+end
+
+--- a mesh from the game's own art only (clients skip one that isn't installed), never a path
+--- climbing out of it
+---@param shape any
+---@return boolean
+local function saneShape(shape)
+    return type(shape) == "string" and #shape <= 200 and not shape:find("..", 1, true) and
+        (shape:find("^/art/") or shape:find("^/assets/") or shape:find("^/levels/")) ~= nil and
+        (shape:lower():find("%.dae$") or shape:lower():find("%.cdae$")) ~= nil
+end
+
+--- race.props (see the client's beamjoy_props for what each entry is) : only the known fields of
+--- well-formed entries are kept, malformed ones are dropped
+---@param props any
+---@return table[]? props, string? err
+local function sanitizeProps(props)
+    if props == nil then return {} end
+    if type(props) ~= "table" then return nil, "Invalid prop data" end
+    local out, total = {}, 0
+    for _, p in ipairs(props) do
+        local entry
+        if type(p) == "table" and saneShape(p.shape) then
+            local scale = math.clamp(tonumber(p.scale) or 1, .1, 10)
+            if p.kind == "line" then
+                local a, b = sanePoint(p.a), sanePoint(p.b)
+                local count = math.floor(tonumber(p.count) or 0)
+                if a and b and count >= 1 then
+                    entry = {
+                        kind = "line",
+                        shape = p.shape,
+                        a = a,
+                        b = b,
+                        count = count,
+                        yaw = math.clamp(tonumber(p.yaw) or 0, -360, 360),
+                        scale = scale,
+                        followGround = p.followGround ~= false,
+                    }
+                    if entry.followGround and type(p.heights) == "table" and #p.heights == count and
+                        table.every(p.heights, function(h) return tonumber(h) ~= nil end) then
+                        entry.heights = table.map(p.heights, function(h) return tonumber(h) end)
+                    end
+                    total = total + count
+                end
+            else
+                local pos, dir, up = sanePoint(p.pos), sanePoint(p.dir), sanePoint(p.up)
+                if pos and dir then
+                    entry = {
+                        kind = "static",
+                        shape = p.shape,
+                        pos = pos,
+                        dir = dir,
+                        up = up or { x = 0, y = 0, z = 1 },
+                        scale = scale,
+                    }
+                    total = total + 1
+                end
+            end
+        end
+        if entry then table.insert(out, entry) end
+    end
+    if total > MAX_PROPS then
+        return nil, string.format("A race can hold up to %d props", MAX_PROPS)
+    end
+    return out
+end
+
 local function sanitizeRace(race, existingRaces)
     existingRaces = existingRaces or M.data
     -- 40, not the old 150: matches the editor's own new maxlength (see the plan file's note on
@@ -415,9 +505,14 @@ local function sanitizeRace(race, existingRaces)
         return "Invalid start position data"
     end
 
+    local props, propsErr = sanitizeProps(race.props)
+    if not props then return propsErr end
+    race.props = props
+
     race.sectorCount = math.max(1, math.min(math.floor(tonumber(race.sectorCount) or 3), #race.gates, 12))
     race.manualSectors = race.manualSectors == true
     race.oneWayGates = race.oneWayGates == true
+    race.freeroam = race.freeroam == true
     table.forEach(race.gates, function(g)
         g.sector = g.sector == true or nil
         -- mandatory-stop was removed outright (never actually implemented, see raceRunner.lua/
@@ -1207,9 +1302,10 @@ local function onBJRequestCache(caches)
         local trimmed = table.clone(r)
         -- leaderboardCount (a plain integer, not the actual per-player data) lets the editor warn
         -- before a save wipes it (see raceSave below) without syncing everyone's real times to
-        -- every client just to know that count
-        trimmed.leaderboardCount = table.length(r.leaderboard or {})
+        -- every client just to know that count. Both boards : a save wipes both
+        trimmed.leaderboardCount = table.length(r.leaderboard or {}) + table.length(r.freeroamLeaderboard or {})
         trimmed.leaderboard = nil
+        trimmed.freeroamLeaderboard = nil
         return trimmed
     end)
 end
@@ -1278,11 +1374,13 @@ local function raceSave(ctxt, race)
         -- dialog in windows/config/races/editor/app.js) whenever there was anything to lose, using
         -- the leaderboardCount onBJRequestCache computes for exactly that purpose
         race.leaderboard = {}
+        race.freeroamLeaderboard = {}
         race.leaderboardCount = nil -- derived/display-only, never actually persisted
         M.data[existingIndex] = race
     else
         race.author = ctxt.sender and ctxt.sender.playerName or "console"
         race.leaderboard = {}
+        race.freeroamLeaderboard = {}
         race.leaderboardCount = nil
         table.insert(M.data, race)
     end
@@ -1338,6 +1436,15 @@ local function getById(raceId)
     return table.find(M.data, function(r) return r.id == raceId end)
 end
 
+--- a race's two boards : "grid" (its grid races, `leaderboard`) and "freeroam" (its freeroam runs,
+--- `freeroamLeaderboard`)
+---@param board string?
+---@return "grid"|"freeroam" board, string field
+local function boardField(board)
+    if board == "freeroam" then return "freeroam", "freeroamLeaderboard" end
+    return "grid", "leaderboard"
+end
+
 --- System-triggered time submission (race finish), not the player-editing path: no permission
 --- check, not routed through raceSave/sanitizeRace. Updates `playerName`'s own personal best for
 --- this race if `time` beats it (or they have none yet) ; the overall "record" is just whoever
@@ -1346,18 +1453,21 @@ end
 ---@param playerName string
 ---@param model string
 ---@param time integer best lap time (ms)
+---@param board string? "grid" (default) or "freeroam"
 ---@return boolean isNewPB, boolean isNewRecord
-local function submitTime(raceId, playerName, model, time)
+local function submitTime(raceId, playerName, model, time, board)
     local race = M.getById(raceId)
     if not race then return false, false end
-    race.leaderboard = race.leaderboard or {}
+    local _, field = boardField(board)
+    race[field] = race[field] or {}
+    local entries = race[field]
 
     local previousBest = math.huge
-    for _, entry in pairs(race.leaderboard) do
+    for _, entry in pairs(entries) do
         if entry.time < previousBest then previousBest = entry.time end
     end
 
-    local existing = race.leaderboard[playerName]
+    local existing = entries[playerName]
     local isNewPB = not existing or time < existing.time
     if not isNewPB then return false, false end
 
@@ -1365,11 +1475,11 @@ local function submitTime(raceId, playerName, model, time)
     local fromRank
     if existing then
         fromRank = 1
-        for otherName, entry in pairs(race.leaderboard) do
+        for otherName, entry in pairs(entries) do
             if otherName ~= playerName and entry.time < existing.time then fromRank = fromRank + 1 end
         end
     end
-    race.leaderboard[playerName] = { time = time, model = model, date = GetCurrentTime(), fromRank = fromRank }
+    entries[playerName] = { time = time, model = model, date = GetCurrentTime(), fromRank = fromRank }
     saveData()
     return true, time < previousBest
 end
@@ -1388,10 +1498,12 @@ end
 
 --- every entry, fastest first, ranked
 ---@param race table
+---@param board string? "grid" (default) or "freeroam"
 ---@return {playerName: string, time: integer, model: string, date: integer, rank: integer, fromRank: integer?}[]
-local function sortedEntries(race)
+local function sortedEntries(race, board)
+    local _, field = boardField(board)
     local list = {}
-    for playerName, entry in pairs(race.leaderboard or {}) do
+    for playerName, entry in pairs(race[field] or {}) do
         table.insert(list, {
             playerName = playerName,
             time = entry.time,
@@ -1412,13 +1524,14 @@ end
 
 ---@param raceId integer
 ---@param limit integer? default 100
+---@param board string? "grid" (default) or "freeroam"
 ---@return {playerName: string, time: integer, model: string, date: integer, rank: integer}[]
-local function getLeaderboard(raceId, limit)
+local function getLeaderboard(raceId, limit, board)
     local race = M.getById(raceId)
-    if not race or not race.leaderboard then return {} end
+    if not race then return {} end
     limit = limit or 100
 
-    local list = sortedEntries(race)
+    local list = sortedEntries(race, board)
     while #list > limit do
         table.remove(list)
     end
@@ -1427,11 +1540,13 @@ end
 
 ---@param ctxt BJSContext
 ---@param raceId integer
-local function onRaceLeaderboardRequest(ctxt, raceId)
+---@param board string? "grid" (default) or "freeroam"
+local function onRaceLeaderboardRequest(ctxt, raceId, board)
     if not ctxt.sender then return end
     raceId = tonumber(raceId) or raceId
     local race = M.getById(raceId)
     if not race then return end
+    board = boardField(board)
 
     -- login workaround (services/identity.lua's own doc comment): entries got written under the
     -- sender's chosen nickname if they were logged in with one at submit time, so matching against
@@ -1439,7 +1554,7 @@ local function onRaceLeaderboardRequest(ctxt, raceId)
     -- their own PB - matching ctxt.sender.playerName alone would silently miss it for anyone
     -- logged in.
     local selfKey = services_identity.getIdentityKey(ctxt.senderID) or ctxt.sender.playerName
-    local all = sortedEntries(race)
+    local all = sortedEntries(race, board)
     -- own PB, with its real rank even outside the top 100
     local selfEntry = table.find(all, function(e) return e.playerName == selfKey end)
     -- five places either side of it (the "Around you" view), from the full list
@@ -1451,8 +1566,10 @@ local function onRaceLeaderboardRequest(ctxt, raceId)
     end
     local entries = {}
     for i = 1, math.min(#all, 100) do entries[i] = all[i] end
-    -- false, not nil : a nil here would end the argument list before `around`
-    communications_tx.sendToPlayer(ctxt.senderID, "raceLeaderboard", raceId, entries, selfEntry or false, around, #all)
+    -- false, not nil : a nil here would end the argument list before `around`. The board, and
+    -- whether the race has freeroam runs at all (the board switch only shows then)
+    communications_tx.sendToPlayer(ctxt.senderID, "raceLeaderboard", raceId, entries, selfEntry or false, around, #all,
+        board, race.freeroam == true)
 end
 
 --- every race's record and the sender's own place, for the big screen's race list
@@ -1493,6 +1610,7 @@ M.onBJRequestCache = onBJRequestCache
 M.onMapChanged = loadData
 
 M.getById = getById
+M.sortedEntries = sortedEntries
 M.submitTime = submitTime
 M.restoreEntry = restoreEntry
 M.getLeaderboard = getLeaderboard

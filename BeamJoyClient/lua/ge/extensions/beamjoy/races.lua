@@ -78,8 +78,9 @@ local function onLegacyImportDone(imported, skipped, failed)
 end
 
 ---@param raceId integer
-local function requestLeaderboard(raceId)
-    beamjoy_communications.send("raceLeaderboardRequest", raceId)
+---@param board string? "grid" (default) or "freeroam" (the race's freeroam runs)
+local function requestLeaderboard(raceId, board)
+    beamjoy_communications.send("raceLeaderboardRequest", raceId, board == "freeroam" and "freeroam" or "grid")
 end
 
 ---@param raceId integer
@@ -87,13 +88,17 @@ end
 ---@param selfEntry {playerName: string, time: integer, model: string, date: integer, rank: integer, fromRank: integer?}?
 ---@param around table[]? the entries five places either side of selfEntry
 ---@param players integer? everyone on the board
-local function onLeaderboardReceived(raceId, entries, selfEntry, around, players)
+---@param board string? which board : "grid" or "freeroam"
+---@param freeroam boolean? the race has freeroam runs (so both boards)
+local function onLeaderboardReceived(raceId, entries, selfEntry, around, players, board, freeroam)
     beamjoy_communications_ui.send("BJRaceLeaderboard", {
         raceId = raceId,
         entries = entries,
         selfEntry = type(selfEntry) == "table" and selfEntry or nil,
         around = around or {},
         players = players or (entries and #entries or 0),
+        board = board == "freeroam" and "freeroam" or "grid",
+        freeroam = freeroam == true,
     })
 end
 

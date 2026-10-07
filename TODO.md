@@ -359,8 +359,31 @@ Not built yet:
 
 ## Freeroam: passive zones (own drift zones, drag strips, passive races)
 
-**Status:** planned, not started (direct request : "add B to the todo", 2026-10-07). Chosen over
-feeding our own zones into the game's systems (see "Rejected" below).
+**Status:** step 1 built (client 2615 / server 2428) : races flagged "Run from freeroam" start when
+driven through, one lap, their own Freeroam board (`beamjoy/raceFreeroam.lua`,
+`services/raceFreeroam.lua`, the board switch in `windows/raceLeaderboard`). Step 2 built (client
+2616 / server 2429) : the server's own drag strips (`services/dragStrips.lua`, `beamjoy/dragStrips.lua`,
+`ui/dragStripEditor.lua`, Config > Freeroam > Drag strips), run through the existing drag overlay /
+timeslip / boards. Step 3 built (client 2617 / server 2430) : the server's own drift zones (`services/driftZones.lua`,
+`beamjoy/driftZones.lua`, `ui/driftZoneEditor.lua`, `windows/driftZoneHud`), scored by the game's
+own drift scorer (`gameplay_drift_scoring`, loaded if needed and reset at a zone's start, as its
+drift spots do) : **check in game** that it scores in BeamMP freeroam with the game's drift
+setting off.
+
+Still open for step 3 :
+- No score targets (bronze / silver / gold) on our zones, no Big Map pin.
+- The game's own drift messages ("Nice drift!") may show during a zone : they're its freeroam ones.
+
+Still open for step 2 :
+- No Big Map pin for a strip, and no dial-in (bracket racing) on ours.
+- Results are trusted from the player's game, as for the game's own strips (no server-side check
+  of the car's position at the marks). Chosen over feeding our own zones into the game's systems (see
+"Rejected" below).
+
+Still open for step 1 :
+- A race's props don't show during its freeroam runs (they'd appear out of nowhere as you start,
+  and be in everyone else's way) : to decide.
+- No Big Map pin of their own : a freeroam race shows through its grid start's pin.
 
 One BeamJoy framework for anything you drive into from freeroam with no lobby : a start you drive
 into, a route or checkpoints, a finish, and a result that goes to the server's leaderboards.
@@ -408,8 +431,12 @@ under `levels/<map>/driftSpots/` (`spot.driftSpot.json`, `race.race.json`, `boun
 
 ## Races: placed props (a framework, saved with the race)
 
-**Status:** planned, not started (direct request, 2026-10-07 : "a framework for placing props and
-saving them with races").
+**Status:** built for races (client 2615 / server 2428) : static props and the line tool in the race
+editor's Props tab, saved with the race, spawned by each client for its racers and spectators
+(`beamjoy/props.lua`, `services/races.lua`'s sanitizeProps). Not built : physics props (below),
+props for hunter / infected / derby arenas and the passive zones, preview pictures in the catalog,
+spacing in metres and curved lines. The catalog is `beamjoy_props.CATALOG` (a mesh's yaw, length
+and collision were read from the game's .dae files ; orientations still want a check in game).
 
 Authors place props (barriers, tire walls, cones, arches, banners, flags...) in the race editor ;
 they're saved as part of the race and appear for everyone while it runs. Built as a generic

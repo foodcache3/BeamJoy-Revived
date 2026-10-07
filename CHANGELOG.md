@@ -8,7 +8,54 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2614, server build 2427.
+Version 1.11.0 : client build 2617, server build 2430.
+
+- **The server's own drift zones** (passive zones, step 3, direct request). Config > Freeroam has a
+  Drift zones section : a zone is a start gate, a route of points and a finish gate, with a
+  corridor of a set width along it (a new zone starts at your car with its finish 60 m ahead ;
+  points go in at your car and move with the gizmo). In freeroam, driving through a zone's start
+  gate the way the route goes starts it : your drifting is scored by the game's own drift scorer
+  (its points, combos and tiers) until the finish gate, shown in a small panel top right, and the
+  score goes on the zone's Drift board beside the game's drift spots. Out of the corridor for two
+  seconds, a reset, a change of car, slowing time, changing gravity or ten minutes without
+  finishing ends a run with no score. The gates and corridor are painted in the world near you.
+  *(client + server)*
+
+- **The server's own drag strips** (passive zones, step 2, direct request). Config > Freeroam has a
+  Drag strips section : a strip's name, its distance (1/4 mile, 1/8 mile or 1000 ft), its tree
+  (sportsman or pro), its lane width and up to four lanes, each placed on its start line at your
+  car (a new one beside the last) and moved with the gizmo. In freeroam each lane runs like the
+  game's own : roll up to the line for the pre-stage and stage lights, hold still a second and the
+  tree comes down, on screen in the drag overlay (there's no tree in the world). Going before the
+  green is a red light ; after it, your reaction time, then every mark (60 ft, 330 ft, 1/8 mile,
+  1000 ft, 1/4 mile) and the speed traps timed from the line. Leaving the lane, stopping, a reset,
+  slowing time or changing gravity is out. The overlay, the pairing with whoever is in the other
+  lane, the timeslip and the Drag leaderboards are the same as on the game's strips ; the server's
+  strips are listed with them. Their lines (start, marks, finish, lane edges) are painted in the
+  world near you. They don't need the game's "Drag racing in freeroam" setting. *(client + server)*
+
+- **Props for races** (direct request : "a framework for placing props and saving them with
+  races"). The race editor has a Props tab : pick one of the game's own barriers, cones, signs,
+  flags, start lights or an invisible wall, then add it a few metres ahead of you, or add a line
+  of them. A single prop moves and turns with the gizmo, a line by either of its two ends, with
+  how many props it holds, one turn for all of them (for a model that doesn't sit along the line)
+  and whether they follow the ground. Duplicate, delete, "Split into props" for a line, click a
+  prop in the world to pick it. They're saved with the race (up to 200, a line counting each of
+  its props) and each player's game spawns them for the race's racers and spectators from the grid
+  until it ends, solid to cars ; nothing goes through BeamMP. The editor's preview isn't solid, so
+  ground snapping never lands on a prop. *(client + server)*
+- **Races can run from freeroam** (the first of the passive zones, direct request). A race set to
+  "Run from freeroam" (the editor's Info tab) starts when you drive through its start gate the way
+  it faces : no lobby, one lap against the clock, the race HUD showing your gate, time and the gap
+  to your best this session, the next gate with its beam and on the minimap. A lap race starts your
+  next run as you cross the line. A reset, a change of car, being moved, joining an activity, two
+  minutes without a gate, slowing time or pausing, changing gravity, the node grabber or the HUD's
+  Retire end a run without a time. Nearby start gates show in the world with the race's name.
+  Times go on the race's own Freeroam board (a rolling start, so not with its race times) : the
+  leaderboards have a Races / Freeroam runs switch for those races. The server follows each run
+  (start gate, every gate in order, the car near each one, the time against its own clock and the
+  race's length) before a time counts. Config > General > Freeroam > "Freeroam race runs" turns
+  them off. *(client + server)*
 
 - **Waypoint circles look like the derby sumo zone** (direct request) : bus stops, delivery
   drop-offs and the fugitive's Hunter waypoint now get a see-through wall round the circle with two

@@ -1,0 +1,79 @@
+<style>
+    /* the drag overlay's panel (windows/dragHud), smaller : the zone, the score, the combo */
+    #beamjoy-drift-zone-hud {
+        position: fixed;
+        top: 2vh;
+        right: 1vw;
+        z-index: 4;
+        width: 15em;
+        background: rgba(21, 23, 28, 0.96);
+        border-radius: 0.4em;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 0.5em 1.5em rgba(0, 0, 0, 0.35);
+        overflow: hidden;
+        color: #ebebeb;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        font-size: 0.95em;
+        padding: 0.7em 0.9em 0.75em;
+    }
+    #beamjoy-drift-zone-hud .dz-name {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #beamjoy-drift-zone-hud .dz-state {
+        font-size: 0.8em;
+        color: #979dad;
+        margin-top: 0.15em;
+    }
+    #beamjoy-drift-zone-hud .dz-state.warn {
+        color: #ffb300;
+    }
+    #beamjoy-drift-zone-hud .dz-state.failed {
+        color: #ff6b6b;
+    }
+    #beamjoy-drift-zone-hud .dz-state.done {
+        color: #73eb9d;
+    }
+    #beamjoy-drift-zone-hud .dz-score {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5em;
+        margin-top: 0.35em;
+    }
+    #beamjoy-drift-zone-hud .dz-num {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        font-size: 2em;
+        line-height: 1;
+    }
+    #beamjoy-drift-zone-hud .dz-combo {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-style: italic;
+        font-weight: 700;
+        color: #ffb300;
+    }
+    #beamjoy-drift-zone-hud .dz-unit {
+        font-size: 0.8em;
+        color: #979dad;
+    }
+</style>
+
+<section id="beamjoy-drift-zone-hud" ng-if="$ctrl.h.active" aria-live="polite">
+    <div class="dz-name">{{$ctrl.h.name}}</div>
+    <div
+        class="dz-state"
+        ng-class="{warn: $ctrl.h.state === 'running' && $ctrl.h.outFor !== undefined && $ctrl.h.outFor !== null, failed: $ctrl.h.state === 'failed', done: $ctrl.h.state === 'done'}"
+    >
+        {{$ctrl.stateText()}}
+    </div>
+    <div class="dz-score" ng-if="$ctrl.h.state !== 'failed'">
+        <span class="dz-num">{{$ctrl.points($ctrl.h.score)}}</span>
+        <span class="dz-unit">{{'beamjoy.driftZones.hud.points' | translate}}</span>
+        <span class="dz-combo" ng-if="$ctrl.h.state === 'running'">{{$ctrl.combo()}}</span>
+    </div>
+</section>

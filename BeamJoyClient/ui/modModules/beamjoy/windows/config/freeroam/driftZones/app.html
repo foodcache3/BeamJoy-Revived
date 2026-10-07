@@ -1,0 +1,136 @@
+<style>
+    bj-config-drift-zones .zone-row {
+        transition: background-color 0.2s ease-in-out;
+        border-radius: 0.3em;
+    }
+    bj-config-drift-zones .zone-row:hover {
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-config-drift-zones .zone-row.active,
+    bj-config-drift-zones .point-row.active {
+        background-color: rgba(0, 0, 0, 0.65);
+    }
+    bj-config-drift-zones .point-row {
+        transition: background-color 0.15s ease-in-out;
+    }
+    bj-config-drift-zones .point-row:hover {
+        background-color: rgba(0, 0, 0, 0.25);
+    }
+    /* capped, so the row keeps empty space to click on (same as the bus lines' name input) */
+    bj-config-drift-zones .name-input {
+        flex: 1 1 auto;
+        max-width: 55%;
+        min-width: 0;
+    }
+    bj-config-drift-zones .detail-wrap {
+        border-left: 2px solid rgba(255, 255, 255, 0.15);
+        margin-left: 0.4em;
+        padding-left: 0.5em;
+    }
+    bj-config-drift-zones .detail-wrap td {
+        padding: 0.2em 0.4em;
+    }
+</style>
+
+<div class="d-flex align-center gap-1 mb-1">
+    <h5 class="flex-grow-1">
+        {{'beamjoy.driftZones.edit.zones' | translate}} ({{$ctrl.zones.length}})
+    </h5>
+    <button
+        class="btn success"
+        ng-click="$ctrl.addZone($event)"
+        title="{{'beamjoy.driftZones.edit.addZone' | translate}}"
+    >
+        <icon name="add"></icon>
+    </button>
+</div>
+
+<div class="opacity-70 small mb-2" ng-if="$ctrl.zones.length === 0">
+    {{'beamjoy.driftZones.edit.empty' | translate}}
+</div>
+
+<div ng-repeat="zone in $ctrl.zones track by $index" ng-init="zoneIdx = $index + 1" class="mb-1">
+    <div
+        class="zone-row d-flex p-1 px-2 gap-1 cursor-pointer align-center"
+        ng-class="{active: $ctrl.activeZone === zoneIdx}"
+        ng-click="$ctrl.selectZone($event, zoneIdx)"
+    >
+        <input
+            type="text"
+            class="name-input"
+            maxlength="40"
+            ng-model="zone.name"
+            ng-click="$event.stopPropagation()"
+            ng-change="$ctrl.setZone(zoneIdx, {name: zone.name || ''})"
+            placeholder="{{'beamjoy.driftZones.zone' | translate}} {{zoneIdx}}"
+        />
+        <span class="flex-grow-1 opacity-70 small">{{$ctrl.lengthText(zone)}}</span>
+        <button
+            class="btn danger"
+            ng-click="$ctrl.deleteZone($event, zoneIdx)"
+            title="{{'beamjoy.common.delete' | translate}}"
+        >
+            <icon name="delete"></icon>
+        </button>
+    </div>
+
+    <div class="detail-wrap mt-1 mb-2" ng-if="$ctrl.activeZone === zoneIdx">
+        <table class="w-100">
+            <tr>
+                <td class="text-right" title="{{'beamjoy.driftZones.edit.width.tooltip' | translate}}">
+                    {{'beamjoy.driftZones.edit.width' | translate}}
+                </td>
+                <td>
+                    <bj-slider ng-model="zone.width" min="6" max="60" hard-max="60" step="1"></bj-slider>
+                </td>
+            </tr>
+        </table>
+
+        <div class="d-flex align-center gap-1 mt-1 mb-1">
+            <span class="flex-grow-1 opacity-70 small">
+                {{'beamjoy.driftZones.edit.route' | translate}} ({{zone.points.length}}/{{$ctrl.MAX_POINTS}})
+            </span>
+            <button
+                class="btn success"
+                ng-disabled="zone.points.length >= $ctrl.MAX_POINTS"
+                ng-click="$ctrl.addPoint($event, zoneIdx)"
+                title="{{'beamjoy.driftZones.edit.addPoint' | translate}}"
+            >
+                <icon name="add"></icon>
+            </button>
+        </div>
+        <div
+            ng-repeat="pt in zone.points track by $index"
+            ng-init="pointIdx = $index + 1"
+            id="drift-point-row-{{zoneIdx}}-{{pointIdx}}"
+            class="point-row d-flex p-1 gap-1 cursor-pointer align-center"
+            ng-class="{active: $ctrl.activeZone === zoneIdx && $ctrl.activePoint === pointIdx}"
+            ng-click="$ctrl.selectPoint($event, zoneIdx, pointIdx)"
+        >
+            <span class="flex-grow-1">{{$ctrl.pointLabel(zone, pointIdx)}}</span>
+            <button
+                class="btn info"
+                ng-click="$ctrl.setPointToVehicle($event, zoneIdx, pointIdx)"
+                title="{{'beamjoy.window.config.tabs.races.setToVehicle' | translate}}"
+            >
+                <icon name="car"></icon>
+            </button>
+            <button
+                class="btn info"
+                ng-click="$ctrl.teleportToPoint($event, zoneIdx, pointIdx)"
+                title="{{'beamjoy.window.config.editor.pointList.teleportToHere' | translate}}"
+            >
+                <icon name="teleportTo"></icon>
+            </button>
+            <button
+                class="btn danger"
+                ng-disabled="zone.points.length <= 2"
+                ng-click="$ctrl.deletePoint($event, zoneIdx, pointIdx)"
+                title="{{'beamjoy.common.delete' | translate}}"
+            >
+                <icon name="delete"></icon>
+            </button>
+        </div>
+        <div class="opacity-70 small mt-1">{{'beamjoy.driftZones.edit.hint' | translate}}</div>
+    </div>
+</div>

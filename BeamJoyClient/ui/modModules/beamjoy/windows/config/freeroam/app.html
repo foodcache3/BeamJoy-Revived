@@ -90,6 +90,14 @@
             ng-if="$ctrl.activeSection === 'deliveries'"
             events="$ctrl.deliverySnapEvents"
         ></bj-point-list-editor-toolbar>
+        <bj-point-list-editor-toolbar
+            ng-if="$ctrl.activeSection === 'dragstrips'"
+            events="$ctrl.dragSnapEvents"
+        ></bj-point-list-editor-toolbar>
+        <bj-point-list-editor-toolbar
+            ng-if="$ctrl.activeSection === 'driftzones'"
+            events="$ctrl.driftSnapEvents"
+        ></bj-point-list-editor-toolbar>
     </div>
 
     <div class="section-panel" ng-if="$ctrl.activeSection === 'stations'">
@@ -102,5 +110,13 @@
 
     <div class="section-panel" ng-if="$ctrl.activeSection === 'deliveries'">
         <bj-config-deliveries></bj-config-deliveries>
+    </div>
+
+    <div class="section-panel" ng-if="$ctrl.activeSection === 'dragstrips'">
+        <bj-config-drag-strips></bj-config-drag-strips>
+    </div>
+
+    <div class="section-panel" ng-if="$ctrl.activeSection === 'driftzones'">
+        <bj-config-drift-zones></bj-config-drift-zones>
     </div>
 </div>

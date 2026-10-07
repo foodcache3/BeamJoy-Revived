@@ -1,0 +1,175 @@
+<style>
+    bj-config-drag-strips .strip-row {
+        transition: background-color 0.2s ease-in-out;
+        border-radius: 0.3em;
+    }
+    bj-config-drag-strips .strip-row:hover {
+        background-color: rgba(0, 0, 0, 0.2);
+    }
+    bj-config-drag-strips .strip-row.active,
+    bj-config-drag-strips .lane-row.active {
+        background-color: rgba(0, 0, 0, 0.65);
+    }
+    bj-config-drag-strips .lane-row {
+        transition: background-color 0.15s ease-in-out;
+    }
+    bj-config-drag-strips .lane-row:hover {
+        background-color: rgba(0, 0, 0, 0.25);
+    }
+    /* capped, so the row keeps empty space to click on (same as the bus lines' name input) */
+    bj-config-drag-strips .name-input {
+        flex: 1 1 auto;
+        max-width: 55%;
+        min-width: 0;
+    }
+    bj-config-drag-strips .detail-wrap {
+        border-left: 2px solid rgba(255, 255, 255, 0.15);
+        margin-left: 0.4em;
+        padding-left: 0.5em;
+    }
+    bj-config-drag-strips .detail-wrap td {
+        padding: 0.2em 0.4em;
+    }
+</style>
+
+<div class="d-flex align-center gap-1 mb-1">
+    <h5 class="flex-grow-1">
+        {{'beamjoy.dragStrips.edit.strips' | translate}} ({{$ctrl.strips.length}})
+    </h5>
+    <button
+        class="btn success"
+        ng-click="$ctrl.addStrip($event)"
+        title="{{'beamjoy.dragStrips.edit.addStrip' | translate}}"
+    >
+        <icon name="add"></icon>
+    </button>
+</div>
+
+<div class="opacity-70 small mb-2" ng-if="$ctrl.strips.length === 0">
+    {{'beamjoy.dragStrips.edit.empty' | translate}}
+</div>
+
+<div ng-repeat="strip in $ctrl.strips track by $index" ng-init="stripIdx = $index + 1" class="mb-1">
+    <div
+        class="strip-row d-flex p-1 px-2 gap-1 cursor-pointer align-center"
+        ng-class="{active: $ctrl.activeStrip === stripIdx}"
+        ng-click="$ctrl.selectStrip($event, stripIdx)"
+    >
+        <input
+            type="text"
+            class="name-input"
+            maxlength="40"
+            ng-model="strip.name"
+            ng-click="$event.stopPropagation()"
+            ng-change="$ctrl.setStrip(stripIdx, {name: strip.name || ''})"
+            placeholder="{{'beamjoy.dragStrips.strip' | translate}} {{stripIdx}}"
+        />
+        <span class="flex-grow-1 opacity-70 small">
+            {{$ctrl.lengthLabel(strip.length) | translate}}, {{strip.lanes.length}}
+            {{(strip.lanes.length === 1 ? 'beamjoy.dragStrips.lane' : 'beamjoy.dragStrips.lanes') | translate}}
+        </span>
+        <button
+            class="btn danger"
+            ng-click="$ctrl.deleteStrip($event, stripIdx)"
+            title="{{'beamjoy.common.delete' | translate}}"
+        >
+            <icon name="delete"></icon>
+        </button>
+    </div>
+
+    <div class="detail-wrap mt-1 mb-2" ng-if="$ctrl.activeStrip === stripIdx">
+        <table class="w-100">
+            <tr>
+                <td class="text-right">{{'beamjoy.dragStrips.edit.length' | translate}}</td>
+                <td>
+                    <div class="d-flex gap-1 flex-wrap">
+                        <button
+                            ng-repeat="len in $ctrl.LENGTHS"
+                            class="btn info"
+                            ng-class="{success: strip.length === len}"
+                            ng-click="strip.length = len; $ctrl.setStrip(stripIdx, {length: len})"
+                        >
+                            {{$ctrl.lengthLabel(len) | translate}}
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.dragStrips.edit.tree.tooltip' | translate}}">
+                    {{'beamjoy.dragStrips.edit.tree' | translate}}
+                </td>
+                <td>
+                    <div class="d-flex gap-1 flex-wrap">
+                        <button
+                            ng-repeat="tree in $ctrl.TREES"
+                            class="btn info"
+                            ng-class="{success: strip.tree === tree}"
+                            ng-click="strip.tree = tree; $ctrl.setStrip(stripIdx, {tree: tree})"
+                        >
+                            {{('beamjoy.drag.tree.' + tree) | translate}}
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="text-right">{{'beamjoy.dragStrips.edit.laneWidth' | translate}}</td>
+                <td>
+                    <bj-slider
+                        ng-model="strip.laneWidth"
+                        min="2"
+                        max="8"
+                        hard-max="8"
+                        step="0.1"
+                    ></bj-slider>
+                </td>
+            </tr>
+        </table>
+
+        <div class="d-flex align-center gap-1 mt-1 mb-1">
+            <span class="flex-grow-1 opacity-70 small">
+                {{'beamjoy.dragStrips.lanes' | translate}} ({{strip.lanes.length}}/{{$ctrl.MAX_LANES}})
+            </span>
+            <button
+                class="btn success"
+                ng-disabled="strip.lanes.length >= $ctrl.MAX_LANES"
+                ng-click="$ctrl.addLane($event, stripIdx)"
+                title="{{'beamjoy.dragStrips.edit.addLane' | translate}}"
+            >
+                <icon name="add"></icon>
+            </button>
+        </div>
+        <div
+            ng-repeat="lane in strip.lanes track by $index"
+            ng-init="laneIdx = $index + 1"
+            id="drag-lane-row-{{stripIdx}}-{{laneIdx}}"
+            class="lane-row d-flex p-1 gap-1 cursor-pointer align-center"
+            ng-class="{active: $ctrl.activeStrip === stripIdx && $ctrl.activeLane === laneIdx}"
+            ng-click="$ctrl.selectLane($event, stripIdx, laneIdx)"
+        >
+            <span class="flex-grow-1">{{'beamjoy.dragStrips.lane' | translate}} {{laneIdx}}</span>
+            <button
+                class="btn info"
+                ng-click="$ctrl.setLaneToVehicle($event, stripIdx, laneIdx)"
+                title="{{'beamjoy.window.config.tabs.races.setToVehicle' | translate}}"
+            >
+                <icon name="car"></icon>
+            </button>
+            <button
+                class="btn info"
+                ng-click="$ctrl.teleportToLane($event, stripIdx, laneIdx)"
+                title="{{'beamjoy.window.config.editor.pointList.teleportToHere' | translate}}"
+            >
+                <icon name="teleportTo"></icon>
+            </button>
+            <button
+                class="btn danger"
+                ng-disabled="strip.lanes.length <= 1"
+                ng-click="$ctrl.deleteLane($event, stripIdx, laneIdx)"
+                title="{{'beamjoy.common.delete' | translate}}"
+            >
+                <icon name="delete"></icon>
+            </button>
+        </div>
+        <div class="opacity-70 small mt-1">{{'beamjoy.dragStrips.edit.hint' | translate}}</div>
+    </div>
+</div>

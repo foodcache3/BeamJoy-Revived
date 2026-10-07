@@ -6,6 +6,10 @@
 ---                   NOT its own activityEditor slot). Saves to `busLinesSave`.
 ---   - "deliveries": delivery points + their vehicle start slots, via `deliveryEditor.lua`.
 ---                   Saves to `deliveryPointsSave` (after measuring route lengths).
+---   - "dragstrips": BeamJoy's own drag strips and their lanes, via `dragStripEditor.lua`.
+---                   Saves to `dragStripsSave`.
+---   - "driftzones": BeamJoy's own drift zones (start, route, finish), via `driftZoneEditor.lua`.
+---                   Saves to `driftZonesSave`.
 ---
 --- Energy stations + garages moved OUT of the shared, flat `pointListEditor.lua` instance and into
 --- their own dedicated `stationsEditor.lua` sub-module (mirroring busLineEditor.lua's own split)
@@ -26,6 +30,8 @@
 local stationsEditor = require("ge/extensions/beamjoy/ui/stationsEditor")
 local busLineEditor = require("ge/extensions/beamjoy/ui/busLineEditor")
 local deliveryEditor = require("ge/extensions/beamjoy/ui/deliveryEditor")
+local dragStripEditor = require("ge/extensions/beamjoy/ui/dragStripEditor")
+local driftZoneEditor = require("ge/extensions/beamjoy/ui/driftZoneEditor")
 
 ---@class BJActivityEditorFreeroam: BJActivityEditor
 local M = {}
@@ -39,6 +45,8 @@ local SECTIONS = {
     stations = stationsEditor,
     buslines = busLineEditor,
     deliveries = deliveryEditor,
+    dragstrips = dragStripEditor,
+    driftzones = driftZoneEditor,
 }
 
 -- SECTION PLUMBING -----------------------------------------------------------------------
@@ -65,6 +73,8 @@ local function onOpen()
     stationsEditor.refresh()
     busLineEditor.refresh()
     deliveryEditor.refresh()
+    dragStripEditor.refresh()
+    driftZoneEditor.refresh()
     applySection()
 end
 
@@ -96,6 +106,20 @@ local function onDeliveryPointsChanged()
     if section == "deliveries" then deliveryEditor.standUp() end
 end
 
+--- fired via onBJDragStripsChanged (drag strips cache landed)
+local function onDragStripsChanged()
+    if not parent or parent.activeEditor ~= M then return end
+    dragStripEditor.refresh()
+    if section == "dragstrips" then dragStripEditor.standUp() end
+end
+
+--- fired via onBJDriftZonesChanged (drift zones cache landed)
+local function onDriftZonesChanged()
+    if not parent or parent.activeEditor ~= M then return end
+    driftZoneEditor.refresh()
+    if section == "driftzones" then driftZoneEditor.standUp() end
+end
+
 local function onSave()
     if not parent then return end
     SECTIONS[section].save()
@@ -116,6 +140,14 @@ local function onInit(activityEditor)
         return parent ~= nil and parent.activeEditor == M and section == "deliveries"
     end)
     deliveryEditor.onInit()
+    dragStripEditor.setActivePredicate(function()
+        return parent ~= nil and parent.activeEditor == M and section == "dragstrips"
+    end)
+    dragStripEditor.onInit()
+    driftZoneEditor.setActivePredicate(function()
+        return parent ~= nil and parent.activeEditor == M and section == "driftzones"
+    end)
+    driftZoneEditor.onInit()
 
     beamjoy_communications_ui.addHandler("BJEditorFreeroamOpen", onOpen)
     beamjoy_communications_ui.addHandler("BJEditorFreeroamClose", M.onClose)
@@ -129,6 +161,8 @@ local function onClose()
     stationsEditor.close()
     busLineEditor.close()
     deliveryEditor.close()
+    dragStripEditor.close()
+    driftZoneEditor.close()
     -- real, confirmed bug : none of the sub-editors clear the world labels/markers on close
     -- (switching SECTIONS did, via the next section's own renderAll), so leaving the Freeroam tab
     -- for another config tab left every point's name floating in the world. The running bus line /
@@ -151,5 +185,7 @@ M.onBJClick = onBJClick
 M.onBJFreeroamDataChanged = onDataChanged
 M.onBJBusLinesChanged = onBusLinesChanged
 M.onBJDeliveryPointsChanged = onDeliveryPointsChanged
+M.onBJDragStripsChanged = onDragStripsChanged
+M.onBJDriftZonesChanged = onDriftZonesChanged
 
 return M

@@ -174,24 +174,6 @@ M.Cylinder = Cylinder
 M.Triangle = Triangle
 M.Arrow = Arrow
 
--- draw buffer
-local shapes = {
-    ---@type tablelib<integer, {pos: vec3, radius: number, color: BJColor}> index 1-N
-    spheres = Table(),
-    ---@type tablelib<integer, {fromPos: vec3, toPos: vec3, fromWidth: number, toWidth: number, color: BJColor}> index 1-N
-    lines = Table(),
-    ---@type tablelib<integer, {bottomPos: vec3, topPos: vec3, radius: number, color: BJColor}> index 1-N
-    cylinders = Table(),
-    ---@type tablelib<integer, {pos: vec3, rot: vec3, radius: number, color: BJColor}> index 1-N
-    arrows = Table(),
-    ---@type tablelib<integer, {p1: vec3, p2: vec3, p3: vec3, color: BJColor}> index 1-N
-    triangles = Table(),
-    ---@type tablelib<integer, {text: string, pos: vec3, textColor: BJColor, bgColor: BJColor, shadow: boolean}> index 1-N
-    texts = Table(),
-    ---@type tablelib<integer, {pos: vec3}> index 1-N
-    beams = Table(),
-}
-
 -- the game's own GPS destination column (gameplay/markerInteraction.lua's drawDistanceColumn) :
 -- white, 1 km tall, wider and more opaque with distance. Gone within BEAM_HIDE_DISTANCE, where the
 -- marker it points at is in plain view anyway, fading out over the last BEAM_FADE metres
@@ -211,15 +193,210 @@ local function Beam(pos, camPos)
 end
 M.Beam = Beam
 
-local function reset()
-    for _, arr in pairs(shapes) do
-        arr:clear()
-    end
+-- DRAW BUFFERS : what's added is redrawn every frame until its layer is reset. The module's own
+-- add*/reset functions work on the default layer, which most renderers share (each clears it
+-- wholesale before drawing its own content) ; layer(name) gives one that only its owner resets,
+-- for drawing that stays up alongside them (the freeroam race start gates, beamjoy_raceMarkers)
+
+local function newBuffer()
+    return {
+        ---@type tablelib<integer, {pos: vec3, radius: number, color: BJColor}> index 1-N
+        spheres = Table(),
+        ---@type tablelib<integer, {fromPos: vec3, toPos: vec3, fromWidth: number, toWidth: number, color: BJColor}> index 1-N
+        lines = Table(),
+        ---@type tablelib<integer, {bottomPos: vec3, topPos: vec3, radius: number, color: BJColor}> index 1-N
+        cylinders = Table(),
+        ---@type tablelib<integer, {pos: vec3, rot: vec3, radius: number, color: BJColor}> index 1-N
+        arrows = Table(),
+        ---@type tablelib<integer, {p1: vec3, p2: vec3, p3: vec3, color: BJColor}> index 1-N
+        triangles = Table(),
+        ---@type tablelib<integer, {text: string, pos: vec3, textColor: BJColor, bgColor: BJColor, shadow: boolean}> index 1-N
+        texts = Table(),
+        ---@type tablelib<integer, {pos: vec3}> index 1-N
+        beams = Table(),
+    }
 end
 
-local function onUpdate()
-    local camPos, camRot = camera.getPositionRotation(true)
+---@type table[] every layer's buffer, the default one first
+local buffers = {}
 
+local RING_RAIL_HEIGHTS = { .5, 3 }
+local RING_WALL_HEIGHT = 4
+local RING_WALL_DEPTH = 1
+
+--- the drawing functions over one buffer
+---@param shapes table newBuffer()
+---@return table
+local function bufferApi(shapes)
+    local api = {}
+
+    function api.reset()
+        for _, arr in pairs(shapes) do
+            arr:clear()
+        end
+    end
+
+    ---@param centerPos vec3
+    ---@param radius number
+    ---@param color BJColor?
+    function api.addSphere(centerPos, radius, color)
+        shapes.spheres:insert({ pos = centerPos, radius = radius, color = color })
+    end
+
+    ---@param fromPos vec3
+    ---@param fromWidth number
+    ---@param toPos vec3
+    ---@param toWidth number
+    ---@param color BJColor?
+    function api.addLine(fromPos, fromWidth, toPos, toWidth, color)
+        shapes.lines:insert({ fromPos = fromPos, fromWidth = fromWidth, toPos = toPos, toWidth = toWidth, color = color })
+    end
+
+    ---@param bottomPos vec3
+    ---@param topPos vec3
+    ---@param radius number
+    ---@param color BJColor?
+    function api.addCylinder(bottomPos, topPos, radius, color)
+        shapes.cylinders:insert({ bottomPos = bottomPos, topPos = topPos, radius = radius, color = color })
+    end
+
+    ---@param pos vec3
+    ---@param rot vec3
+    ---@param radius number
+    ---@param color BJColor?
+    function api.addArrow(pos, rot, radius, color)
+        shapes.arrows:insert({ pos = pos, rot = rot, radius = radius, color = color })
+    end
+
+    ---@param p1 vec3
+    ---@param p2 vec3
+    ---@param p3 vec3
+    ---@param color BJColor?
+    function api.addTriangle(p1, p2, p3, color)
+        shapes.triangles:insert({ p1 = p1, p2 = p2, p3 = p3, color = color })
+    end
+
+    ---@param p1 vec3
+    ---@param p2 vec3
+    ---@param p3 vec3
+    ---@param p4 vec3
+    ---@param color BJColor?
+    function api.addQuad(p1, p2, p3, p4, color)
+        api.addTriangle(p1, p2, p3, color)
+        api.addTriangle(p1, p3, p4, color)
+    end
+
+    ---@param centerPos vec3
+    ---@param dir vec3
+    ---@param scales vec3 (x = width, y = height, z = length)
+    ---@param up vec3?
+    ---@param color BJColor?
+    function api.addCuboid(centerPos, dir, scales, up, color)
+        ---@param v vec3
+        ---@param r vec3
+        ---@param baseUp vec3?
+        ---@return vec3
+        local function _rotate(v, r, baseUp)
+            local needUp  = not baseUp
+            local finalUp = (baseUp or vec3(0, 0, 1)):normalized()
+            forward       = r:normalized()
+            right         = finalUp:cross(forward):normalized()
+            if needUp then
+                finalUp = forward:cross(right)
+            end
+
+            return vec3(
+                v.x * right.x + v.y * finalUp.x + v.z * forward.x,
+                v.x * right.y + v.y * finalUp.y + v.z * forward.y,
+                v.x * right.z + v.y * finalUp.z + v.z * forward.z
+            )
+        end
+
+        local baseVerts = {
+            { x = -0.5, y = -0.5, z = -0.5 },
+            { x = 0.5,  y = -0.5, z = -0.5 },
+            { x = 0.5,  y = 0.5,  z = -0.5 },
+            { x = -0.5, y = 0.5,  z = -0.5 },
+            { x = -0.5, y = -0.5, z = 0.5 },
+            { x = 0.5,  y = -0.5, z = 0.5 },
+            { x = 0.5,  y = 0.5,  z = 0.5 },
+            { x = -0.5, y = 0.5,  z = 0.5 },
+        }
+        local verts = {}
+        for i, v in ipairs(baseVerts) do
+            local scaled = vec3(
+                v.x * scales.x,
+                v.y * scales.y,
+                v.z * scales.z
+            )
+            local rotated = _rotate(scaled, dir, up)
+            verts[i] = {
+                x = rotated.x + centerPos.x,
+                y = rotated.y + centerPos.y,
+                z = rotated.z + centerPos.z,
+            }
+        end
+
+        api.addQuad(verts[1], verts[2], verts[3], verts[4], color)
+        api.addQuad(verts[5], verts[6], verts[7], verts[8], color)
+        api.addQuad(verts[1], verts[2], verts[6], verts[5], color)
+        api.addQuad(verts[3], verts[4], verts[8], verts[7], color)
+        api.addQuad(verts[2], verts[3], verts[7], verts[6], color)
+        api.addQuad(verts[1], verts[4], verts[8], verts[5], color)
+    end
+
+    ---@param text string
+    ---@param pos vec3
+    ---@param textColor BJColor?
+    ---@param bgColor BJColor?
+    ---@param shadow boolean?
+    function api.addText(text, pos, textColor, bgColor, shadow)
+        shapes.texts:insert({ text = text, pos = pos, textColor = textColor, bgColor = bgColor, shadow = shadow })
+    end
+
+    --- a GPS-style beam standing on pos (see Beam above), redrawn every frame for its distance fade
+    ---@param pos vec3
+    function api.addBeam(pos)
+        shapes.beams:insert({ pos = vec3(pos) })
+    end
+
+    --- a waypoint circle in the derby sumo zone's style : a see-through wall round the circle plus
+    --- two solid rails along its edge (the wall alone fades into the map's fog). The wall is one
+    --- open panel per segment, not a cylinder : the game's cylinder has end caps, a lid at this height
+    ---@param pos vec3 the circle's centre, on the ground
+    ---@param radius number
+    ---@param tint BJColor only its rgb is used : the wall and rails get their own opacities
+    function api.addRing(pos, radius, tint)
+        pos = vec3(pos)
+        local wall = BJColor(tint.r, tint.g, tint.b, .2)
+        local rail = BJColor(tint.r, tint.g, tint.b, .9)
+        local segments = radius < 15 and 32 or 48
+        local railWidth = radius < 5 and .2 or .3
+        local edge = {}
+        for i = 0, segments do
+            local a = 2 * math.pi * i / segments
+            edge[i] = vec3(pos.x + math.cos(a) * radius, pos.y + math.sin(a) * radius, pos.z)
+        end
+        local bottom, top = vec3(0, 0, -RING_WALL_DEPTH), vec3(0, 0, RING_WALL_HEIGHT)
+        for i = 1, segments do
+            local a, b = edge[i - 1], edge[i]
+            api.addQuad(a + bottom, b + bottom, b + top, a + top, wall)
+        end
+        for _, h in ipairs(RING_RAIL_HEIGHTS) do
+            local up = vec3(0, 0, h)
+            for i = 1, segments do
+                api.addLine(edge[i - 1] + up, railWidth, edge[i] + up, railWidth, rail)
+            end
+        end
+    end
+
+    return api
+end
+
+---@param shapes table
+---@param camPos vec3
+---@param camRot vec3
+local function drawBuffer(shapes, camPos, camRot)
     shapes.spheres:forEach(function(el)
         M.Sphere(el.pos, el.radius, el.color)
     end)
@@ -250,176 +427,33 @@ local function onUpdate()
     end
 end
 
----@param centerPos vec3
----@param radius number
----@param color BJColor?
-local function addSphere(centerPos, radius, color)
-    shapes.spheres:insert({ pos = centerPos, radius = radius, color = color })
-end
-
----@param fromPos vec3
----@param fromWidth number
----@param toPos vec3
----@param toWidth number
----@param color BJColor?
-local function addLine(fromPos, fromWidth, toPos, toWidth, color)
-    shapes.lines:insert({ fromPos = fromPos, fromWidth = fromWidth, toPos = toPos, toWidth = toWidth, color = color })
-end
-
----@param bottomPos vec3
----@param topPos vec3
----@param radius number
----@param color BJColor?
-local function addCylinder(bottomPos, topPos, radius, color)
-    shapes.cylinders:insert({ bottomPos = bottomPos, topPos = topPos, radius = radius, color = color })
-end
-
----@param pos vec3
----@param rot vec3
----@param radius number
----@param color BJColor?
-local function addArrow(pos, rot, radius, color)
-    shapes.arrows:insert({ pos = pos, rot = rot, radius = radius, color = color })
-end
-
----@param p1 vec3
----@param p2 vec3
----@param p3 vec3
----@param color BJColor?
-local function addTriangle(p1, p2, p3, color)
-    shapes.triangles:insert({ p1 = p1, p2 = p2, p3 = p3, color = color })
-end
-
----@param p1 vec3
----@param p2 vec3
----@param p3 vec3
----@param p4 vec3
----@param color BJColor?
-local function addQuad(p1, p2, p3, p4, color)
-    addTriangle(p1, p2, p3, color)
-    addTriangle(p1, p3, p4, color)
-end
-
----@param centerPos vec3
----@param dir vec3
----@param scales vec3 (x = width, y = height, z = length)
----@param up vec3?
----@param color BJColor?
-local function addCuboid(centerPos, dir, scales, up, color)
-    ---@param v vec3
-    ---@param r vec3
-    ---@param baseUp vec3?
-    ---@return vec3
-    local function _rotate(v, r, baseUp)
-        local needUp  = not baseUp
-        local finalUp = (baseUp or vec3(0, 0, 1)):normalized()
-        forward       = r:normalized()
-        right         = finalUp:cross(forward):normalized()
-        if needUp then
-            finalUp = forward:cross(right)
-        end
-
-        return vec3(
-            v.x * right.x + v.y * finalUp.x + v.z * forward.x,
-            v.x * right.y + v.y * finalUp.y + v.z * forward.y,
-            v.x * right.z + v.y * finalUp.z + v.z * forward.z
-        )
-    end
-
-    local baseVerts = {
-        { x = -0.5, y = -0.5, z = -0.5 },
-        { x = 0.5,  y = -0.5, z = -0.5 },
-        { x = 0.5,  y = 0.5,  z = -0.5 },
-        { x = -0.5, y = 0.5,  z = -0.5 },
-        { x = -0.5, y = -0.5, z = 0.5 },
-        { x = 0.5,  y = -0.5, z = 0.5 },
-        { x = 0.5,  y = 0.5,  z = 0.5 },
-        { x = -0.5, y = 0.5,  z = 0.5 },
-    }
-    local verts = {}
-    for i, v in ipairs(baseVerts) do
-        local scaled = vec3(
-            v.x * scales.x,
-            v.y * scales.y,
-            v.z * scales.z
-        )
-        local rotated = _rotate(scaled, dir, up)
-        verts[i] = {
-            x = rotated.x + centerPos.x,
-            y = rotated.y + centerPos.y,
-            z = rotated.z + centerPos.z,
-        }
-    end
-
-    M.addQuad(verts[1], verts[2], verts[3], verts[4], color)
-    M.addQuad(verts[5], verts[6], verts[7], verts[8], color)
-    M.addQuad(verts[1], verts[2], verts[6], verts[5], color)
-    M.addQuad(verts[3], verts[4], verts[8], verts[7], color)
-    M.addQuad(verts[2], verts[3], verts[7], verts[6], color)
-    M.addQuad(verts[1], verts[4], verts[8], verts[5], color)
-end
-
----@param text string
----@param pos vec3
----@param textColor BJColor?
----@param bgColor BJColor?
----@param shadow boolean?
-local function addText(text, pos, textColor, bgColor, shadow)
-    shapes.texts:insert({ text = text, pos = pos, textColor = textColor, bgColor = bgColor, shadow = shadow })
-end
-
---- a GPS-style beam standing on pos (see Beam above), redrawn every frame for its distance fade
----@param pos vec3
-local function addBeam(pos)
-    shapes.beams:insert({ pos = vec3(pos) })
-end
-
-local RING_RAIL_HEIGHTS = { .5, 3 }
-local RING_WALL_HEIGHT = 4
-local RING_WALL_DEPTH = 1
-
---- a waypoint circle in the derby sumo zone's style : a see-through wall round the circle plus two
---- solid rails along its edge (the wall alone fades into the map's fog). The wall is one open panel
---- per segment, not a cylinder : the game's cylinder has end caps, a lid at this height
----@param pos vec3 the circle's centre, on the ground
----@param radius number
----@param tint BJColor only its rgb is used : the wall and rails get their own opacities
-local function addRing(pos, radius, tint)
-    pos = vec3(pos)
-    local wall = BJColor(tint.r, tint.g, tint.b, .2)
-    local rail = BJColor(tint.r, tint.g, tint.b, .9)
-    local segments = radius < 15 and 32 or 48
-    local railWidth = radius < 5 and .2 or .3
-    local edge = {}
-    for i = 0, segments do
-        local a = 2 * math.pi * i / segments
-        edge[i] = vec3(pos.x + math.cos(a) * radius, pos.y + math.sin(a) * radius, pos.z)
-    end
-    local bottom, top = vec3(0, 0, -RING_WALL_DEPTH), vec3(0, 0, RING_WALL_HEIGHT)
-    for i = 1, segments do
-        local a, b = edge[i - 1], edge[i]
-        addQuad(a + bottom, b + bottom, b + top, a + top, wall)
-    end
-    for _, h in ipairs(RING_RAIL_HEIGHTS) do
-        local up = vec3(0, 0, h)
-        for i = 1, segments do
-            addLine(edge[i - 1] + up, railWidth, edge[i] + up, railWidth, rail)
-        end
+local function onUpdate()
+    local camPos, camRot = camera.getPositionRotation(true)
+    for _, shapes in ipairs(buffers) do
+        drawBuffer(shapes, camPos, camRot)
     end
 end
 
-M.reset = reset
+-- the default layer : this module's own add*/reset
+local defaultBuffer = newBuffer()
+table.insert(buffers, defaultBuffer)
+for k, fn in pairs(bufferApi(defaultBuffer)) do M[k] = fn end
+
+---@type table<string, table>
+local layers = {}
+
+--- a layer of its own (the same add*/reset functions), drawn along with the default one
+---@param name string
+---@return table
+function M.layer(name)
+    if not layers[name] then
+        local buffer = newBuffer()
+        table.insert(buffers, buffer)
+        layers[name] = bufferApi(buffer)
+    end
+    return layers[name]
+end
+
 M.onUpdate = onUpdate
-M.addBeam = addBeam
-M.addRing = addRing
-
-M.addSphere = addSphere
-M.addLine = addLine
-M.addCylinder = addCylinder
-M.addArrow = addArrow
-M.addTriangle = addTriangle
-M.addQuad = addQuad
-M.addCuboid = addCuboid
-M.addText = addText
 
 return M
