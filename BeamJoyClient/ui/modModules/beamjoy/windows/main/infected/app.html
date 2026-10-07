@@ -109,7 +109,7 @@
     <bj-lobby-invite ng-if="$ctrl.inviting" kind="infected" on-back="$ctrl.setInviting(false)"></bj-lobby-invite>
 
     <div class="controls" ng-if="!$ctrl.inviting" aria-label="{{'beamjoy.delivery.controls' | translate}}">
-        <button type="button" class="bjr-btn primary" data-pad-a ng-if="$ctrl.status.state === 'LOBBY'"
+        <button type="button" class="bjr-btn primary" data-pad-a data-pad-ready ng-if="$ctrl.status.state === 'LOBBY'"
             ng-click="$ctrl.setReady($event, !$ctrl.status.ready)">
             {{($ctrl.status.ready ? 'beamjoy.window.main.tabs.races.imNotReady' : 'beamjoy.window.main.tabs.races.imReady') | translate}}
         </button>

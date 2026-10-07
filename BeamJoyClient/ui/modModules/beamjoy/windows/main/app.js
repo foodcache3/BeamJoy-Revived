@@ -344,6 +344,22 @@ angular.module("beamjoy").component("bjMain", {
                 const list = focusables();
                 setPadEl(list.find((el) => el.hasAttribute("data-pad-a")) || list[0]);
             }, 60);
+        // a lobby's I'm ready showing up under the pad (the Focus control taking you to your
+        // lobby, joining one, its status arriving after the panel opened, back from the invite
+        // list) : the cursor goes to it (direct request : it took scrolling down to the button).
+        // Only when it appears, so moving off it afterwards sticks
+        const readyEl = () => {
+            if (!this.pad || this.padLevel === "rail") return null;
+            const c = container();
+            const el = c && c.querySelector("[data-pad-ready]");
+            return el && el.offsetParent !== null && !isDisabled(el) ? el : null;
+        };
+        $scope.$watch(readyEl, (el, prev) => {
+            if (!el || el === prev || el === padEl) return;
+            $timeout(() => {
+                if (readyEl() === el) setPadEl(el);
+            });
+        });
         // a bj-select dropdown under the cursor : step to the previous / next option
         const cycleSelect = (el, step) => {
             const host = el.closest("bj-select");

@@ -78,6 +78,8 @@ local M = {
     -- fugitive's own live, moving position), so this just tracks whether the path is currently
     -- pointed at them at all, to know when to clear it.
     hunterGpsActive = false,
+    ---@type integer? the fugitive's vehicle while it's kept off this client's minimap (updateRevealVisuals)
+    minimapHiddenVid = nil,
 
     ---@type boolean whether THIS client has forced BeamMP's native spawn-queue setting on for the
     ---current hunt's countdown (set at the COUNTDOWN transition below, cleared once it's over), so
@@ -176,13 +178,25 @@ end
 --- vehicle's self-nametag is already excluded by nametags.lua's own pre-existing "don't show your
 --- own tag while driving" check, and minimap uiState is only ever toggled off for a REMOTE copy,
 --- see updateRevealVisuals below)
+--- whether the fugitive is hidden right now : through the countdown always (real bug: their tag
+--- and minimap icon showed until the hunt itself started, giving their start point away, and
+--- `revealed` can still be left over from the previous round until the server resets it at the
+--- start), then during the hunt until a reveal trigger fires
+---@param session table
+---@param hunted table
+---@return boolean
+local function fugitiveHidden(session, hunted)
+    if session.state == "COUNTDOWN" then return true end
+    return session.state == "HUNT" and not hunted.revealed
+end
+
 ---@param mpVeh BJVehicle
 ---@return boolean
 local function isHiddenFugitiveVehicle(mpVeh)
     local session = M.session or M.spectatingSession
-    if not session or session.state ~= "HUNT" then return false end
+    if not session then return false end
     local hunted = getHunted(session)
-    if not hunted or hunted.revealed then return false end
+    if not hunted or not fugitiveHidden(session, hunted) then return false end
     return mpVeh.ownerName == hunted.playerName and not mpVeh.isLocal
 end
 
@@ -1173,14 +1187,25 @@ end
 --- Minimap visibility (native `veh.uiState`, the same primitive `pursuit.lua`'s own AI-fugitive
 --- reveal uses) for the current fugitive's vehicle, on every other client. Never touched on the
 --- fugitive's own client, who always sees themselves normally.
+--- The icon is put back as soon as the fugitive isn't hidden any more, including once the hunt is
+--- over (real bug: an unrevealed fugitive used to stay off the minimap after the hunt, in freeroam).
 local function updateRevealVisuals()
     local session = M.session or M.spectatingSession
-    if not session or session.state ~= "HUNT" then return end
-    local hunted = getHunted(session)
-    if not hunted then return end
-    local mpVeh = beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == hunted.playerName end)
-    if not mpVeh or mpVeh.isLocal then return end
-    mpVeh.veh.uiState = hunted.revealed and 1 or 0
+    local hunted = session and getHunted(session)
+    local hideVid
+    if hunted and fugitiveHidden(session, hunted) then
+        local mpVeh = beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == hunted.playerName end)
+        if mpVeh and not mpVeh.isLocal then hideVid = mpVeh.vid end
+    end
+    if M.minimapHiddenVid and M.minimapHiddenVid ~= hideVid then
+        local shown = beamjoy_vehicles.getVehicle(M.minimapHiddenVid, true)
+        if shown and shown.veh then shown.veh.uiState = 1 end
+    end
+    M.minimapHiddenVid = hideVid
+    if hideVid then
+        local hidden = beamjoy_vehicles.getVehicle(hideVid, true)
+        if hidden and hidden.veh then hidden.veh.uiState = 0 end
+    end
 end
 
 --- Fugitive-only: self-computes the three BJI-ported reveal triggers (proximity, near-final-

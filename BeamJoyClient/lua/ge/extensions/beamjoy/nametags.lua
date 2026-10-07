@@ -256,6 +256,23 @@ local function drawNametag(mpVeh, orig)
     end
 end
 
+--- a tag a game mode keeps hidden from this viewer, whichever way it would be drawn (the
+--- "draw all" loop or the Alt hover below : real bug, hovering used to show it anyway)
+---@param v BJVehicle
+---@return boolean
+local function isHiddenByMode(v)
+    -- Hunter mode: the currently-hunted fugitive's real nametag is suppressed for every OTHER
+    -- client through the countdown and until a reveal trigger fires (proximity /
+    -- near-final-waypoint / post-reset, see hunterRunner.lua's own isHiddenFugitiveVehicle). Never
+    -- hidden on the fugitive's own client, which already doesn't see its own tag while driving.
+    if beamjoy_hunterRunner.isHiddenFugitiveVehicle(v) then return true end
+    -- Infected mode, host-configurable (hideInfectedNametags, default off): an infected
+    -- participant's whole nametag is hidden from a SURVIVOR viewer specifically (see
+    -- infectedRunner.lua's own isHiddenInfectedVehicle for the exact scope) - staff/spectators/
+    -- other infected still see it normally.
+    return beamjoy_infectedRunner.isHiddenInfectedVehicle(v)
+end
+
 local ctxt, orig, veh, mpVeh, ray
 local drawn = {}
 local lastHoverVid, lastHoverCheckMs = nil, 0
@@ -322,19 +339,7 @@ local function onUpdate()
                 if include and replay.replayPlayers[v.ownerName] then
                     include = false
                 end
-                -- Hunter mode: the currently-hunted fugitive's real nametag is suppressed for every
-                -- OTHER client until a reveal trigger fires (proximity / near-final-waypoint /
-                -- post-reset, see hunterRunner.lua's own isHiddenFugitiveVehicle). Never hidden on
-                -- the fugitive's own client, which already doesn't see its own tag while driving
-                -- normally via the ctxt.mpVeh check just above.
-                if include and beamjoy_hunterRunner.isHiddenFugitiveVehicle(v) then
-                    include = false
-                end
-                -- Infected mode, host-configurable (hideInfectedNametags, default off): an
-                -- infected participant's whole nametag is hidden from a SURVIVOR viewer
-                -- specifically (see infectedRunner.lua's own isHiddenInfectedVehicle for the
-                -- exact scope) - staff/spectators/other infected still see it normally.
-                if include and beamjoy_infectedRunner.isHiddenInfectedVehicle(v) then
+                if include and isHiddenByMode(v) then
                     include = false
                 end
             end
@@ -399,7 +404,9 @@ local function onUpdate()
     end
     if lastHoverVid and not drawn[lastHoverVid] then
         mpVeh = beamjoy_vehicles.getVehicle(lastHoverVid)
-        if mpVeh then
+        if mpVeh and isHiddenByMode(mpVeh) then
+            lastHoverVid = nil
+        elseif mpVeh then
             drawn[lastHoverVid] = true
             drawNametag(mpVeh, orig)
         else

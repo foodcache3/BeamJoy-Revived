@@ -201,7 +201,7 @@
     <p class="note" ng-if="$ctrl.status.state === 'GRID' && $ctrl.status.joinable && !$ctrl.inviting">{{'beamjoy.window.main.tabs.races.lobbyNote' | translate}}</p>
 
     <div class="controls" ng-if="!$ctrl.inviting" aria-label="{{'beamjoy.delivery.controls' | translate}}">
-        <button type="button" class="bjr-btn primary" data-pad-a ng-if="$ctrl.status.state === 'GRID'"
+        <button type="button" class="bjr-btn primary" data-pad-a data-pad-ready ng-if="$ctrl.status.state === 'GRID'"
             ng-click="$ctrl.setReady($event, !$ctrl.status.ready)">
             {{($ctrl.status.ready ? 'beamjoy.window.main.tabs.races.imNotReady' : 'beamjoy.window.main.tabs.races.imReady') | translate}}
         </button>

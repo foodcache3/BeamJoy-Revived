@@ -356,3 +356,107 @@ Built in client 2578 / server 2402 (`beamjoy/playerPursuit.lua`, `services/playe
 Not built yet:
 - A GPS route to the nearest fugitive for the police player (old BeamJoy had one).
 - A police / fugitive leaderboard (the counts are already saved in `player.data.pursuit`).
+
+## Freeroam: passive zones (own drift zones, drag strips, passive races)
+
+**Status:** planned, not started (direct request : "add B to the todo", 2026-10-07). Chosen over
+feeding our own zones into the game's systems (see "Rejected" below).
+
+One BeamJoy framework for anything you drive into from freeroam with no lobby : a start you drive
+into, a route or checkpoints, a finish, and a result that goes to the server's leaderboards.
+Zones are made in BeamJoy editors, stored per map on the server like races, and run by BeamJoy's
+own code. The game's own (vanilla) drift spots and drag strips stay as they are, run by the game,
+and are listed beside ours : both feed the same Drift / Drag leaderboards
+(`services/freeroamChallenges.lua`, `beamjoy/freeroamChallenges.lua`).
+
+| Kind | Start | Scored by |
+|---|---|---|
+| Passive race / time trial | gate, rolling or standing | time through the checkpoints (lower wins) |
+| Drag strip | staged in a lane, tree | elapsed time at the strip's main mark (lower wins) |
+| Drift zone | gate, rolling | drift points (higher wins) |
+
+Order, most reuse first :
+1. **The framework + passive races.** A passive race can be an existing race flagged "run it from
+   freeroam" : the race editor already authors the start, gates and checkpoints. Only one run per
+   player at a time ; leaving the route / a reset / too long ends it. Results to a leaderboard per
+   race (the race leaderboards, or a passive board beside them : to decide).
+2. **Drag strips.** An editor placing the lanes (start line, direction, length) and the timed
+   marks. Timing is distance marks along the lane. The drag overlay and timeslip
+   (`beamjoy/dragRun.lua`, windows/dragHud, windows/dragTimeslip) already run from our side : they
+   need to read our own run instead of `gameplay_drag_core`'s. No physical tree on our strips :
+   on-screen tree lights instead. Two players in opposite lanes pair through the server as now.
+3. **Drift zones.** An editor placing the start gate, route and bounds. **Check first** whether
+   the game's drift scorer (`gameplay_drift_*`) keeps scoring outside its own spots in freeroam :
+   if so, score between our gates with it ; if not, scoring has to be our own.
+
+Notes :
+- Ours don't need the game's "Drift in freeroam" / "Drag racing in freeroam" settings ; vanilla
+  ones still do (the Leaderboards window already offers to turn them on).
+- Spot / strip ids must not collide with the game's (prefix ours, e.g. `bj:<map>/<id>`).
+- Big map : our zones as POIs with quick travel and the route preview, like races and bus lines.
+
+**Rejected : feeding our zones into the game's own systems** (wrapping
+`gameplay_drift_saveLoad.getDriftSpotsById` / `gameplay_drag_core.getDragDataForLevel` and writing
+their race / bounds files to a temp folder). It would have reused the game's scoring and markers,
+but : the painted lines, signs and tree lights are map objects ours wouldn't have ; it depends on
+internal formats BeamNG keeps changing (the drag code was just reworked, and now ships its own
+multiplayer drag lobbies, `gameplay/drag/mpDragHandlers.lua` / `dragBridge.lua`) ; and ours would
+also need the game's freeroam settings on. How the game finds its own : drift spots are folders
+under `levels/<map>/driftSpots/` (`spot.driftSpot.json`, `race.race.json`, `bounds.sites.json`,
+`info.json`), drag strips are `levels/<map>/dragstrips/*.dragSettings.json` pointing at a
+`*.strip.json`, both read once per map and cached.
+
+## Races: placed props (a framework, saved with the race)
+
+**Status:** planned, not started (direct request, 2026-10-07 : "a framework for placing props and
+saving them with races").
+
+Authors place props (barriers, tire walls, cones, arches, banners, flags...) in the race editor ;
+they're saved as part of the race and appear for everyone while it runs. Built as a generic
+framework (`beamjoy_props` client module + a `props` list any activity can carry) so hunter /
+infected / derby arenas and the passive zones above (a drag strip's tree, a drift zone's signs)
+can use it later. Nothing like it exists yet : race gates and markers are drawn shapes
+(`beamjoy_raceMarkers`), not objects.
+
+Two kinds of prop, very different in multiplayer :
+- **Static** (a mesh, `TSStatic` with a `.dae` from the game's art, or a game prefab through
+  `spawnPrefab`, ge_utils.lua) : spawned by each client itself from the race data, so nothing is
+  synced through BeamMP and they cost little. Solid to cars but never move. The main kind : walls,
+  tire stacks, arches, banners, flags, start / finish gantries.
+- **Physics** (the game's "Prop" vehicles : cones, barrels, signs, plastic barriers) : real vehicles.
+  In multiplayer each one is synced and owned by a player, counts toward vehicle limits, gets
+  knocked out of place and would need putting back between runs. **Investigate first** whether a
+  client-only, unsynced spawn is possible under BeamMP (BeamMP syncs vehicles spawned locally) ;
+  if not, physics props stay out, or are limited to a few owned by the race's host.
+
+Data, saved with the race (server activity JSON, like gates / startPositions) :
+`props = [{ kind = "static" | "physics", shape | model + config, pos, rot, scale }]`. Server-side :
+validate and cap the count (e.g. 200 static / 20 physics), shape paths only under the game's own
+art folders. Client-side : a prop whose shape or model isn't installed (a mod's) is skipped, and
+the editor says so.
+
+When they exist :
+- During the race session (grid to finished) for participants and spectators ; removed when it
+  ends, on leaving, on map change and when BeamJoy unloads (no leftovers in freeroam).
+- In the race editor while editing (a preview).
+- Later, passive races / zones : always there in freeroam ? To decide (they'd be in everyone's
+  way when nobody's racing).
+
+Editor (a Props section in the race editor, `ui/raceEditor.lua` + its Angular sidebar) :
+- A curated catalog (one file listing the shapes / prop models offered, with names and a preview),
+  not the game's 700 raw `.dae` files.
+- Place at your position / facing (the editor's existing convention), then the gizmo (already
+  used for gates) to move / rotate / scale ; snap to the ground ; duplicate ; delete ; a list of
+  the race's props to select from.
+- Collision matters : a wall in the wrong place blocks the route, so the editor shows the props
+  exactly as they'll be in the race.
+- **Line tool** (direct request) : place the two ends of a line, set how many props go on it,
+  and they're spread evenly from end to end (both ends included). One rotation for the whole line
+  turns every prop at once around its own vertical axis, for a model that isn't aligned the way
+  the line expects (a barrier sideways, a cone's sign facing the wrong way). Each prop faces along
+  the line by default and sits on the ground under its spot (a line over a hump or a dip follows
+  it). Saved as the line itself, not its props :
+  `{ kind = "line", shape | model, a, b, count, yaw, followGround }`, expanded when spawned, so
+  moving an end or changing the count respaces it ; "Split into props" turns it into single props
+  to adjust one by one. The count counts toward the race's prop cap. Maybe later : spacing in
+  metres instead of a count, and a curved line (a middle handle).

@@ -13,6 +13,8 @@
 --- the rail and panels. It lands on Happening now, or on your convoy (Activities > Jobs) while
 --- you're in one. B on the rail, or the control again, lets go, which closes the panel (and the
 --- rail too if it was hidden before).
+--- Waiting in a race / hunter / infected / derby lobby, the control goes to that lobby first,
+--- before notifications, with the cursor on I'm ready : readying up is the control, then A.
 ---
 --- Other features bring the main window up themselves : a depot prompt's "All depots" (focusOn),
 --- and arriving at your convoy's depot (autoFocus, which lets go again when you drive off, and
@@ -113,6 +115,21 @@ local function setHudFocus(hud)
     end
 end
 
+--- the lobby you're waiting in (a race grid, a hunter / infected / derby lobby) : its Activities
+--- section, or nil. Readying up is the one thing to do there, so the Focus control goes straight
+--- to it, the cursor on I'm ready (direct request : it took scrolling down to the button)
+---@return string? section
+local function lobbySection()
+    local function inState(runner, state)
+        return runner ~= nil and runner.session ~= nil and runner.session.state == state
+    end
+    if inState(beamjoy_raceRunner, "GRID") then return "races" end
+    if inState(beamjoy_hunterRunner, "LOBBY") then return "hunter" end
+    if inState(beamjoy_infectedRunner, "LOBBY") then return "infected" end
+    if inState(beamjoy_derbyRunner, "LOBBY") then return "derby" end
+    return nil
+end
+
 --- where focusing lands when nothing asked for a place
 ---@return string panel, string? section
 local function defaultTarget()
@@ -141,9 +158,15 @@ local function setFocused(focused, panel, section, cursor)
         beamjoy_communications_ui.requestOpenWindow("main")
         beamjoy_uiNav.acquire(M.OWNER, beamjoy_uiNav.TAB_ACTIONS)
         if not panel then
-            -- the Focus control : the panel opens, the cursor sits on its rail button
-            panel, section = defaultTarget()
-            cursor = "rail"
+            local lobby = lobbySection()
+            if lobby then
+                -- your lobby, the cursor inside it (on I'm ready, windows/main/app.js)
+                panel, section, cursor = "play", lobby, nil
+            else
+                -- the Focus control : the panel opens, the cursor sits on its rail button
+                panel, section = defaultTarget()
+                cursor = "rail"
+            end
         end
     else
         beamjoy_uiNav.release(M.OWNER)
@@ -232,6 +255,10 @@ local function onBJFocusNotification()
         end
     elseif notificationFocused() then
         setNotificationFocus(false)
+        setFocused(true)
+    elseif lobbySection() then
+        -- waiting in a lobby : the lobby before any notification (the next press goes on to it,
+        -- like any notification that turns up while the main window has the pad)
         setFocused(true)
     elseif notificationFocusable() then
         setNotificationFocus(true)

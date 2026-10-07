@@ -8,7 +8,21 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2606, server build 2425.
+Version 1.11.0 : client build 2608, server build 2425.
+
+- **Readying up with a controller is two presses** (direct request : it took scrolling down to the
+  button). While you're waiting in a race, hunter, infected or derby lobby, the Focus control
+  (RB + X by default) opens that lobby with the cursor on "I'm ready" : press A. It goes to the
+  lobby before any notification ; pressing it again moves on to the notification.
+- **The cursor goes to "I'm ready" whenever a lobby opens under the pad** : joining one, its
+  details arriving after the panel opened, coming back from the invite list. *(client only)*
+
+- **Fixed : the fugitive's nametag and minimap icon showed during Hunter's countdown**, giving
+  away where they start. They're now hidden from the countdown on, until a reveal.
+- **Fixed : holding Alt over a car showed its nametag even when a mode hides it** : the hidden
+  fugitive in Hunter, and infected players from survivors in Infected (when the host hides them).
+- **Fixed : a fugitive who was never revealed stayed off everyone's minimap after the hunt.**
+  *(client only)*
 
 - **The spawn queue is only forced during the countdown** (direct request) of a race, hunt,
   infected or derby round, when every grid car is (re)spawned at once. It used to stay forced for
