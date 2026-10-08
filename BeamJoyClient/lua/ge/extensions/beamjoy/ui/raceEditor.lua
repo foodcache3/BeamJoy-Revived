@@ -659,6 +659,7 @@ local function backfillRaceDefaults(race)
     if race.defaults.showGateNametags == nil then race.defaults.showGateNametags = false end
     if race.defaults.limitVisibleGates == nil then race.defaults.limitVisibleGates = true end
     race.defaults.visibleGateCount = race.defaults.visibleGateCount or 2
+    if race.defaults.showGates == nil then race.defaults.showGates = true end
     if race.defaults.waypointBeams == nil then race.defaults.waypointBeams = true end
     if race.defaults.allowTuning == nil then race.defaults.allowTuning = true end
     if race.defaults.randomizeVehiclePool == nil then race.defaults.randomizeVehiclePool = false end
@@ -739,6 +740,7 @@ local function onOpen(raceId)
                 showGateNametags = false,
                 limitVisibleGates = true,
                 visibleGateCount = 2,
+                showGates = true,
                 waypointBeams = true,
                 allowTuning = true,
                 randomizeVehiclePool = false,
@@ -1723,5 +1725,7 @@ M.onInit = onInit
 M.onClose = onClose
 M.onUpdate = onUpdate
 M.onBJClick = onWorldClick
+-- also measures the races the map importer builds (beamjoy/mapRaces.lua)
+M.computeRaceDistance = computeRaceDistance
 
 return M

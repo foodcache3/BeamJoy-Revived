@@ -49,14 +49,55 @@ angular.module("beamjoy").component("bjSlider", {
                 // the raw typed text untouched the whole time it's being edited.
                 roundModel();
                 updatePercent();
+                // the range input is a new element again (ng-if)
+                $timeout(syncRange);
             }
         };
 
+        // the orange fill up to the thumb : the thumb's centre travels from half its width (0.65em)
+        // to the track's end less that, so the fill ends there too, not at the plain percentage
+        // (it used to stop short of the thumb low down the range and run past it high up)
         const updatePercent = () => {
             const min = this.min ?? 0;
             const max = this.max ?? 100;
-            this.percent = Math.round(((this.ngModel - min) / (max - min)) * 100);
+            let percent = max > min ? ((this.ngModel - min) / (max - min)) * 100 : 0;
+            if (!Number.isFinite(percent)) percent = 0;
+            this.percent = Math.min(100, Math.max(0, percent));
+            const stop = `calc(0.65em + (100% - 1.3em) * ${(this.percent / 100).toFixed(4)})`;
+            this.trackBackground = `linear-gradient(to right, rgb(230, 92, 0) 0 ${stop}, transparent ${stop} 100%)`;
         };
+
+        // Real bug (direct report, "slider visuals always seem broken with their default values",
+        // in many menus) : the range input used ng-model plus interpolated min="{{}}" max="{{}}"
+        // step="{{}}". AngularJS writes the value and those attributes in no fixed order when the
+        // input is created, so the browser placed the thumb against whatever range it had at that
+        // moment (its own 0-100, or a min still missing) : a prop's size of 1 on 0.25-4 sat where 1
+        // of 0-4 would, ahead of its own orange fill. The input is driven by hand now : range
+        // first, value last, every time either changes.
+        const rangeInput = () => $element[0].querySelector("input[type=range]");
+        const syncRange = () => {
+            const el = rangeInput();
+            if (!el) return;
+            const min = this.min ?? 0;
+            const max = this.max ?? 100;
+            el.min = String(min);
+            el.max = String(max);
+            el.step = this.step > 0 ? String(this.step) : "1";
+            const value = typeof this.ngModel === "number" && !Number.isNaN(this.ngModel) ? this.ngModel : min;
+            if (parseFloat(el.value) !== value) el.value = String(value);
+        };
+        // a drag or click on the range input (the root element hears it : the input itself comes
+        // and goes with the mode toggle)
+        $element[0].addEventListener("input", (event) => {
+            const el = event.target;
+            if (!el || el.type !== "range") return;
+            const value = parseFloat(el.value);
+            if (Number.isNaN(value)) return;
+            $scope.$applyAsync(() => {
+                this.ngModel = value;
+            });
+        });
+        this.$postLink = () => $timeout(syncRange);
         // plain properties, computed here rather than inlined as `??` in the template: AngularJS's
         // own expression parser (not real JS) doesn't reliably support the nullish-coalescing
         // operator, so this lives in real JS instead of risking a silent template parse failure.
@@ -104,11 +145,16 @@ angular.module("beamjoy").component("bjSlider", {
                 }
                 roundModel();
                 updatePercent();
+                syncRange();
             }
         );
         $scope.$watch(
-            () => ({ min: this.min, max: this.max, hardMin: this.hardMin, hardMax: this.hardMax }),
-            updateNumberRange,
+            () => ({ min: this.min, max: this.max, hardMin: this.hardMin, hardMax: this.hardMax, step: this.step }),
+            () => {
+                updateNumberRange();
+                updatePercent();
+                syncRange();
+            },
             true
         );
         roundModel();

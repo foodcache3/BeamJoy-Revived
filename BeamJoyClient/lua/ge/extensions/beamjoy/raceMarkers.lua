@@ -442,11 +442,14 @@ local function drawFreeroam(fr)
                 for j in pairs(visibleGateSet(i, #race.gates, race.loopable, 2) or {}) do visible[j] = true end
             end
         end
+        local showGates = not race.defaults or race.defaults.showGates ~= false
         for i in pairs(visible) do
             local g = race.gates[i]
             local role = gateRole(race, i)
-            drawGate(g, i, next[i] and GATE_NEXT_COLOR or role and START_COLOR or GATE_COLOR, false, role, false,
-                nil, true)
+            if showGates then
+                drawGate(g, i, next[i] and GATE_NEXT_COLOR or role and START_COLOR or GATE_COLOR, false, role, false,
+                    nil, true)
+            end
             if next[i] and race.defaults and race.defaults.waypointBeams ~= false then
                 draw.addBeam(vec3(g.pos.x, g.pos.y, g.pos.z))
             end
@@ -604,15 +607,20 @@ local function render()
 
                 -- the game's GPS-style beam over the gate(s) to drive through next, once the race is
                 -- on (shape.addBeam : gone within 50 m, where the gate itself is in plain view)
-                local beams = settings.waypointBeams ~= false and
-                    (session.state == "COUNTDOWN" or session.state == "RACE")
+                local racing = session.state == "COUNTDOWN" or session.state == "RACE"
+                local beams = settings.waypointBeams ~= false and racing
+                -- the gates themselves, off once the race is on when the race says so (the beams
+                -- and the minimap still lead the way) ; the lobby always shows the layout
+                local gatesShown = settings.showGates ~= false or not racing
                 table.forEach(race.gates, function(g, i)
                     if visible and not visible[i] then return end
                     local role = gateRole(race, i)
                     local isNext = nextGateSet and nextGateSet[i] == true
                     local baseColor = role and START_COLOR or GATE_COLOR
-                    drawGate(g, i, isNext and GATE_NEXT_COLOR or baseColor, false, role,
-                        showLabel, sectorNumberForGate(race, i), true)
+                    if gatesShown then
+                        drawGate(g, i, isNext and GATE_NEXT_COLOR or baseColor, false, role,
+                            showLabel, sectorNumberForGate(race, i), true)
+                    end
                     if isNext and beams then draw.addBeam(vec3(g.pos.x, g.pos.y, g.pos.z)) end
                     local left, right = gateEnds(g)
                     table.insert(M.minimapGates, {

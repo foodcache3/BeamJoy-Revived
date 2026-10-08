@@ -56,6 +56,36 @@ angular.module("beamjoy").component("bjConfigRaces", {
             );
         };
 
+        // the races this map comes with (its time trials and quickraces), read and converted by
+        // beamjoy/mapRaces.lua : a checklist of them, the ticked ones are added as new races
+        this.mapScanning = false;
+        this.importMapRaces = (event) => {
+            event.stopPropagation();
+            this.mapScanning = true;
+            beamjoyStore.send("BJMapRacesScanRequest");
+        };
+        $rootScope.$on("BJMapRacesScan", (_, result) => {
+            this.mapScanning = false;
+            const rows = (result && Array.isArray(result.rows)) ? result.rows : [];
+            if (rows.length === 0) {
+                beamjoyConfirm.info(translate(result && result.error
+                    ? "beamjoy.mapRaces.failed" : "beamjoy.mapRaces.none"));
+                return;
+            }
+            if (!rows.some((r) => !r.disabled)) {
+                beamjoyConfirm.info(
+                    `${translate("beamjoy.mapRaces.noneImportable")}\n\n` +
+                        rows.map((r) => `${r.label} (${r.tag})`).join("\n")
+                );
+                return;
+            }
+            beamjoyConfirm.askChecklist(
+                translate("beamjoy.mapRaces.pick"),
+                rows,
+                (keys) => beamjoyStore.send("BJMapRacesImport", [keys])
+            );
+        });
+
         this.formatDistance = (meters) => {
             if (typeof meters !== "number" || meters <= 0) return "-";
             return meters >= 1000

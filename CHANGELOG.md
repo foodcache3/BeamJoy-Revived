@@ -8,7 +8,48 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2617, server build 2430.
+Version 1.11.0 : client build 2621, server build 2433.
+
+- **Lights and other electrics show right for players who join later** (direct request). BeamMP
+  only sends a car's electrics (headlights, signals, hazards, a police lightbar, a mod's own
+  features) and its drivetrain modes (diff locks, 4WD) when they change, so a player who joined
+  afterwards saw them at their defaults : a police car dark mid-chase, a derby wreck without its
+  hazards, every car's headlights off at night. When another player's car appears on your screen,
+  your game now asks its owner for them (through the server), and the owner's game has BeamMP send
+  that car's whole set again, once ; requests from several players for one car make one send.
+  Engine and ignition were already fine (BeamMP resends those every 10 s). *(client + server)*
+
+- **Fixed: sliders showing the wrong position** (direct report, many menus : a prop's Size of 1
+  sat well past its orange fill). The slider's range and value were applied in no set order when
+  it appeared, so the browser placed the handle against its own 0-100 range or a missing minimum.
+  The range is set first, then the value, every time either changes. The orange fill now also ends
+  at the handle's middle instead of drifting off it towards either end. *(client only)*
+- **Smaller hitches from race props** (direct report, measured in the log with the spike profiler) :
+  a race's props were all created in one frame (110 ms on West Coast) ; they now come in a few per
+  frame, then the game's collision catches up once. That collision rebuild is the game's own and
+  covers the whole map (about 135 ms on West Coast), once when a race's props appear and once when
+  they go. *(client only)*
+- **Fewer hitches from map markers.** Every cache update or race state change made the game rebuild
+  every marker on the map (13-16 ms each, 65 times in a 40 minute session) even when none of
+  BeamJoy's markers had changed. It now only rebuilds when they have. *(client only)*
+
+- **Per-race option to hide the gates** (direct request). Races have a "Gate markers" option next
+  to "Waypoint beams" (the race editor's Display options, and the start options) : off, the gates
+  themselves (frame, arrow, label) aren't drawn once the countdown starts, so the race is driven
+  from the waypoint beams and the minimap. The lobby still shows every gate so everyone can see the
+  layout, and the editor always does. A freeroam run of that race hides them too (the start gates
+  you drive through to begin one still show). *(client + server)*
+
+- **Import the races a map comes with** (direct request). Config > Races has an "Import map races"
+  button : it finds the current map's time trials and quick races (the game's own files, so a
+  modded map's races too) and lists them to pick from, each with its gates, grid slots, circuit or
+  point to point, and length. The ticked ones are added as new races, ready to adjust in the editor :
+  each checkpoint becomes a gate (sized from the checkpoint, facing along the route), a circuit
+  keeps the map's lap count, a branching route keeps its branches, and the map's start becomes grid
+  slot 1 with up to seven more behind it, two by two (left out where the ground isn't level with
+  the start). A track the map lets you drive backwards is listed reversed too, not ticked. Nothing
+  is overwritten : a race whose name is already used is skipped. The map's barriers and cones aren't
+  imported. *(client + server)*
 
 - **The server's own drift zones** (passive zones, step 3, direct request). Config > Freeroam has a
   Drift zones section : a zone is a start gate, a route of points and a finish gate, with a

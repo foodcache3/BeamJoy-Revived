@@ -17,6 +17,23 @@
 --- to the server when they change (services/vehicleInteractions.lua keeps them), and applies the
 --- stored ones to another player's car when it appears here, through BeamMP's own couplerVE (it
 --- knows how to move a latch on a remote copy). Live changes stay BeamMP's own sync.
+---
+--- Electrics for late joiners (direct request) : BeamMP sends a car's electrics.values (lights,
+--- signals, lightbar, a mod's own keys...) and its drivetrain modes only as they change. Its
+--- MPElectricsVE.check() keeps what it already sent (`lastElectrics`, `checkElectrics`) and
+--- MPPowertrainVE its `lastDevices`, never reset, so a car that appears here later shows them at
+--- their spawn defaults until its owner changes them again (a police lightbar off mid-chase, a derby
+--- wreck without its hazards, headlights off at night). Engine and ignition aren't affected :
+--- BeamMP resends those every 10 s on its own. So when another player's car appears here, this
+--- client asks its owner for them, once (after RESYNC_DELAY_MS : the car settles first) ; the server
+--- passes it on (services/vehicleInteractions.lua) ; the owner empties those records on that car,
+--- and BeamMP's next tick sends the whole set through its own packet, to everyone (BeamMP has no
+--- other way), so requests from several players for one car are merged into one send.
+--- MPElectricsGE.sendElectrics also drops a payload identical to the last one it sent, and the game's
+--- sandbox refuses debug.setupvalue in GE, so its record can't be cleared : it's wrapped instead,
+--- and only a resend that repeats that very payload gets a space after its opening brace (another
+--- string to that check, the same JSON to everyone receiving it). Everything stays BeamMP's own
+--- send and packet ; all of ours is in pcall, so it can never stop BeamMP's own sync.
 
 local M = {
     -- m/s : the owner's own check, BeamMP's copy of the speed on the server lags behind
@@ -56,6 +73,26 @@ local M = {
     ---@type table<integer, true>
     appliedLatches = {},
     lastLatchPoll = 0,
+
+    -- a car that just appeared here settles before its electrics are asked for
+    RESYNC_DELAY_MS = 2000,
+    -- requests waiting for a car's server id (it may not be known yet), at most this long
+    RESYNC_WAIT_MS = 15000,
+    -- the most cars one request names (the server caps it too)
+    RESYNC_MAX_PER_MESSAGE = 50,
+    -- own cars : requests arriving this close together make one resend
+    RESYNC_MERGE_MS = 500,
+    --- other players' cars to ask for : vid -> { at, untilMs }
+    ---@type table<integer, {at: integer, untilMs: integer}>
+    resyncWanted = {},
+    --- own cars to resend : vid -> when
+    ---@type table<integer, integer>
+    resyncDue = {},
+    --- own cars whose next electrics payload is a resend : vid -> until when
+    ---@type table<integer, integer>
+    resyncSending = {},
+    ---@type function? BeamMP's own MPElectricsGE.sendElectrics, while ours stands in
+    originalSendElectrics = nil,
 }
 
 ---@return table?
@@ -301,6 +338,128 @@ local function applyPendingLatches(now)
     end
 end
 
+-- ELECTRICS RESYNC ------------------------------------------------------------------------------
+
+--- the owner's side, VE : empty BeamMP's records of what it already sent for this car (the same
+--- tables kept, emptied : its check() keeps using them). Electrics : MPElectricsVE.check's
+--- `lastElectrics` and `checkElectrics`. Drivetrain modes : `lastDevices`, an upvalue of
+--- getPowerTrainData, itself one of MPPowertrainVE.check's
+local RESYNC_VE = [[
+pcall(function()
+  local function upvalue(f, wanted)
+    local i = 1
+    while type(f) == "function" do
+      local name, value = debug.getupvalue(f, i)
+      if not name then return nil end
+      if name == wanted then return value end
+      i = i + 1
+    end
+  end
+  local function clear(t) if type(t) == "table" then for k in pairs(t) do t[k] = nil end end end
+  local check = MPElectricsVE and MPElectricsVE.check
+  clear(upvalue(check, "lastElectrics"))
+  clear(upvalue(check, "checkElectrics"))
+  local pt = MPPowertrainVE and MPPowertrainVE.check
+  clear(upvalue(upvalue(pt, "getPowerTrainData"), "lastDevices"))
+end)
+]]
+
+--- what BeamMP's sendElectrics sent last (read only : reading an upvalue is allowed in GE), or nil
+---@return string?
+local function lastElectricsSent()
+    local f = M.originalSendElectrics
+    local i = 1
+    while type(f) == "function" do
+        local name, value = debug.getupvalue(f, i)
+        if not name then return nil end
+        if name == "lastElectrics" then return value end
+        i = i + 1
+    end
+end
+
+--- stands in for MPElectricsGE.sendElectrics (each own car's MPElectricsVE.check hands it its
+--- payload), then runs it
+---@param data string the JSON payload
+---@param gameVehicleID integer
+local function sendElectrics(data, gameVehicleID, ...)
+    -- ours in pcall : whatever happens here, BeamMP's own send below runs
+    pcall(function()
+        if not M.resyncSending[gameVehicleID] then return end
+        M.resyncSending[gameVehicleID] = nil
+        -- the very payload BeamMP sent last would be dropped as a repeat (two resends with nothing
+        -- changed in between) : a space after the opening brace, the same JSON
+        if type(data) == "string" and data == lastElectricsSent() then
+            data = (data:gsub("^{", "{ ", 1))
+        end
+    end)
+    return M.originalSendElectrics(data, gameVehicleID, ...)
+end
+
+local function installResync()
+    if MPElectricsGE and type(MPElectricsGE.sendElectrics) == "function" and
+        MPElectricsGE.sendElectrics ~= sendElectrics then
+        M.originalSendElectrics = MPElectricsGE.sendElectrics
+        MPElectricsGE.sendElectrics = sendElectrics
+    end
+end
+
+local function uninstallResync()
+    if MPElectricsGE and MPElectricsGE.sendElectrics == sendElectrics and M.originalSendElectrics then
+        MPElectricsGE.sendElectrics = M.originalSendElectrics
+    end
+    M.originalSendElectrics = nil
+end
+
+--- the joining side : ask the owners of the cars that are due, in one message
+---@param now integer
+local function requestResyncs(now)
+    local list = {}
+    for vid, wanted in pairs(M.resyncWanted) do
+        local mpVeh = beamjoy_vehicles.vehicles[vid]
+        local key = mpVeh and remoteCar(vid) and serverKey(mpVeh)
+        if not mpVeh or now >= wanted.untilMs then
+            M.resyncWanted[vid] = nil
+        elseif key and now >= wanted.at and #list < M.RESYNC_MAX_PER_MESSAGE then
+            M.resyncWanted[vid] = nil
+            list[#list + 1] = key
+        end
+    end
+    if #list > 0 then beamjoy_communications.send("vehicleResyncRequest", list) end
+end
+
+--- the owner's side : the server passing on requests for these cars of ours
+---@param serverVIDs string[]
+local function onVehicleResync(serverVIDs)
+    if type(serverVIDs) ~= "table" then return end
+    local wanted = {}
+    for _, key in pairs(serverVIDs) do wanted[tostring(key)] = true end
+    local now = GetCurrentTimeMillis()
+    for vid, mpVeh in pairs(beamjoy_vehicles.vehicles) do
+        if mpVeh.isLocal and not mpVeh.isAi and wanted[serverKey(mpVeh) or ""] and not M.resyncDue[vid] then
+            M.resyncDue[vid] = now + M.RESYNC_MERGE_MS
+        end
+    end
+end
+
+--- the owner's side : resend the cars that are due
+---@param now integer
+local function resendDue(now)
+    for vid, at in pairs(M.resyncDue) do
+        if now >= at then
+            M.resyncDue[vid] = nil
+            local mpVeh = beamjoy_vehicles.vehicles[vid]
+            if mpVeh and mpVeh.isLocal and mpVeh.veh then
+                M.resyncSending[vid] = now + 2000
+                mpVeh.veh:queueLuaCommand(RESYNC_VE)
+            end
+        end
+    end
+    -- a resend whose payload never came (nothing left to send) : back to ordinary payloads
+    for vid, untilMs in pairs(M.resyncSending) do
+        if now >= untilMs then M.resyncSending[vid] = nil end
+    end
+end
+
 ---@param vid integer
 local function onBJVehicleInstantiated(vid)
     local mpVeh = remoteCar(vid)
@@ -308,6 +467,8 @@ local function onBJVehicleInstantiated(vid)
         local now = GetCurrentTimeMillis()
         M.appliedLatches[vid] = nil -- a (re)spawned copy has every latch closed again
         M.pendingLatches[vid] = { at = now + M.LATCH_APPLY_DELAY_MS, untilMs = now + M.LATCH_APPLY_WAIT_MS }
+        -- this copy starts from its spawn defaults : ask its owner for the real electrics
+        M.resyncWanted[vid] = { at = now + M.RESYNC_DELAY_MS, untilMs = now + M.RESYNC_WAIT_MS }
     else
         M.reportedLatches[vid] = nil -- an own car (re)spawned : every latch closed again
         M.polledLatches[vid] = nil
@@ -344,7 +505,10 @@ end
 local function onSlowUpdate()
     -- the game reloads its extensions now and then (a Lua reload) : stand in again
     install()
+    pcall(installResync)
     local now = GetCurrentTimeMillis()
+    requestResyncs(now)
+    resendDue(now)
     if now - M.lastLatchPoll >= M.LATCH_POLL_MS then
         M.lastLatchPoll = now
         pollOwnLatches()
@@ -363,6 +527,7 @@ local function onInit()
     install()
     beamjoy_communications.addHandler("vehicleTrigger", onVehicleTrigger)
     beamjoy_communications.addHandler("vehicleLatches", onVehicleLatches)
+    beamjoy_communications.addHandler("vehicleResync", onVehicleResync)
     beamjoy_communications.addHandler("sendCache", retrieveCache)
     beamjoy_communications_ui.addHandler("BJUserSettings", function(newSettings)
         local locked = type(newSettings) == "table" and type(newSettings.vehicle) == "table" and
@@ -376,12 +541,14 @@ end
 
 local function onExtensionUnloaded()
     uninstall()
+    pcall(uninstallResync)
 end
 
 M.onInit = onInit
 M.onBJClientReady = sendLocked
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
 M.onLatchReport = onLatchReport
+M.onVehicleResync = onVehicleResync
 M.onSlowUpdate = onSlowUpdate
 M.onExtensionUnloaded = onExtensionUnloaded
 M.onPreExit = onExtensionUnloaded

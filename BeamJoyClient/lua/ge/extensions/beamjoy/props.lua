@@ -51,8 +51,12 @@ local M = {
         { id = "invisibleWall", shape = "/assets/meshes/props/misc/invisible_wall_1m.dae", yaw = 0, length = 1, zOffset = .5, invisible = true },
     },
 
-    ---@type table<string, {signature: string?, objects: table[], entries: table[], collision: boolean}>
+    ---@type table<string, {signature: string?, objects: table[], entries: table[], collision: boolean, pending: table<integer, true>}>
     sets = {},
+
+    -- ms of a frame spent creating props : a race's whole set at once froze the game for a frame
+    -- (110 ms measured, 2026-10-08), so they come in a few per frame (at least one a frame)
+    SPAWN_BUDGET_MS = 3,
 }
 
 local GROUP_NAME = "BJPropsGroup"
@@ -190,6 +194,15 @@ local function scheduleCollisionReload()
     collisionReloadAt = GetCurrentTimeMillis() + COLLISION_RELOAD_DELAY_MS
 end
 
+--- props still to be created, in any set
+---@return boolean
+local function anyPending()
+    for _, set in pairs(M.sets) do
+        if next(set.pending) then return true end
+    end
+    return false
+end
+
 local function group()
     local g = scenetree.findObject(GROUP_NAME)
     if not g then
@@ -260,7 +273,7 @@ function M.show(key, props, opts)
     opts = opts or {}
     local set = M.sets[key]
     if set and opts.signature and set.signature == opts.signature then return end
-    set = set or { objects = {}, entries = {}, collision = false }
+    set = set or { objects = {}, entries = {}, collision = false, pending = {} }
     M.sets[key] = set
     local collision = opts.collision ~= false
 
@@ -274,15 +287,17 @@ function M.show(key, props, opts)
                 changed = true
             end
         else
+            -- created in onUpdate, a few a frame
             deleteObject(obj)
-            set.objects[i] = spawn(p)
+            set.objects[i] = nil
+            set.pending[i] = true
             changed = true
         end
         set.entries[i] = p
     end
     for i = #set.entries, #wanted + 1, -1 do
         deleteObject(set.objects[i])
-        set.objects[i], set.entries[i] = nil, nil
+        set.objects[i], set.entries[i], set.pending[i] = nil, nil, nil
         changed = true
     end
 
@@ -306,8 +321,33 @@ local function hideAll()
     for key in pairs(table.clone(M.sets)) do M.hide(key) end
 end
 
---- the static collision catches up with the props shown (debounced, see scheduleCollisionReload)
+--- creates waiting props within the frame's budget ; true when some are still waiting
+---@return boolean
+local function spawnPending()
+    local started = os.clock()
+    local spawned = 0
+    for _, set in pairs(M.sets) do
+        for i in pairs(set.pending) do
+            if spawned > 0 and (os.clock() - started) * 1000 >= M.SPAWN_BUDGET_MS then return true end
+            set.pending[i] = nil
+            local p = set.entries[i]
+            if p and not set.objects[i] then set.objects[i] = spawn(p) end
+            spawned = spawned + 1
+        end
+    end
+    return false
+end
+
+--- props come in a few per frame ; then the static collision catches up with them (debounced, see
+--- scheduleCollisionReload : it waits for the last prop)
 local function onUpdate()
+    if anyPending() then
+        if spawnPending() then
+            if collisionReloadAt then scheduleCollisionReload() end
+            return
+        end
+        if collisionReloadAt then scheduleCollisionReload() end
+    end
     if collisionReloadAt and GetCurrentTimeMillis() >= collisionReloadAt then
         collisionReloadAt = nil
         be:reloadCollision()
@@ -336,6 +376,7 @@ end
 
 local function cleanup()
     hideAll()
+    M.sets = {}
     if collisionReloadAt then
         collisionReloadAt = nil
         if be then be:reloadCollision() end

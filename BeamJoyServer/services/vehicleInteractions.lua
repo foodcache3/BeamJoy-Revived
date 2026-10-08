@@ -18,6 +18,11 @@
 --- Each owner reports their cars' open / broken latches (vehicleLatches(serverVID, latches)) ;
 --- this keeps them and hands them out in the join cache (vehicleLatches) and to everyone on change,
 --- and each client applies them to a car when it appears.
+---
+--- Electrics for late joiners : BeamMP only sends a car's electrics as they change. A client that
+--- sees another player's car appear asks for them (vehicleResyncRequest(serverVIDs)) ; this passes
+--- each car on to its owner (vehicleResync(serverVIDs)), whose game makes BeamMP send them all again.
+--- Nothing is kept here.
 
 local M = {
     -- between the requester's own vehicle and the car, by BeamMP's copy of their positions :
@@ -41,6 +46,14 @@ local M = {
     -- the latch states a client may report, and how many groups (a bus has a lot of doors)
     LATCH_STATES = { detached = true, broken = true },
     MAX_LATCH_GROUPS = 64,
+
+    -- the most cars one resync request may name, and requests a player may make in a second (a
+    -- joining player's game asks for every car on the server, in a few batched messages)
+    MAX_RESYNC_CARS = 50,
+    MAX_RESYNC_PER_SECOND = 5,
+    --- playerID -> { second, count }
+    ---@type table<integer, {second: integer, count: integer}>
+    resyncRate = {},
 }
 
 ---@param serverVID any "<playerID>-<vehicleID>"
@@ -163,9 +176,44 @@ local function vehicleLatches(ctxt, serverVID, latches)
     setLatches(serverVID, next(clean) and clean or nil)
 end
 
+--- a client asking for other players' cars' electrics (they just appeared on its screen) : each
+--- car's owner is asked to resend them
+---@param ctxt BJSContext
+---@param serverVIDs string[]
+local function vehicleResyncRequest(ctxt, serverVIDs)
+    if not ctxt.sender or type(serverVIDs) ~= "table" then return end
+    local now = GetCurrentTime()
+    local r = M.resyncRate[ctxt.senderID]
+    if not r or r.second ~= now then
+        r = { second = now, count = 0 }
+        M.resyncRate[ctxt.senderID] = r
+    end
+    r.count = r.count + 1
+    if r.count > M.MAX_RESYNC_PER_SECOND then return end
+
+    ---@type table<integer, string[]>
+    local byOwner = {}
+    local count = 0
+    for _, serverVID in pairs(serverVIDs) do
+        count = count + 1
+        if count > M.MAX_RESYNC_CARS then break end
+        local ownerID = parseServerVID(serverVID)
+        -- another player's car, of a player who's here
+        if ownerID and ownerID ~= ctxt.senderID and
+            services_players.players:find(function(p) return p.playerID == ownerID end) then
+            byOwner[ownerID] = byOwner[ownerID] or {}
+            table.insert(byOwner[ownerID], string.format("%d-%d", parseServerVID(serverVID)))
+        end
+    end
+    for ownerID, list in pairs(byOwner) do
+        communications_tx.sendToPlayer(ownerID, "vehicleResync", list)
+    end
+end
+
 ---@param playerID integer
 local function onPlayerDisconnect(playerID)
     M.rate[playerID] = nil
+    M.resyncRate[playerID] = nil
     local prefix = tostring(playerID) .. "-"
     for serverVID in pairs(M.latches) do
         if serverVID:sub(1, #prefix) == prefix then setLatches(serverVID, nil) end
@@ -195,6 +243,7 @@ local function onInit()
     communications_rx.addHandler("vehicleLocked", vehicleLocked)
     communications_rx.addHandler("vehicleTriggerRequest", vehicleTriggerRequest)
     communications_rx.addHandler("vehicleLatches", vehicleLatches)
+    communications_rx.addHandler("vehicleResyncRequest", vehicleResyncRequest)
 end
 
 M.onInit = onInit
@@ -203,6 +252,7 @@ M.onVehicleDeleted = onVehicleDeleted
 M.onVehicleReset = onVehicleReset
 M.onBJRequestCache = onBJRequestCache
 M.vehicleLatches = vehicleLatches
+M.vehicleResyncRequest = vehicleResyncRequest
 M.vehicleLocked = vehicleLocked
 M.vehicleTriggerRequest = vehicleTriggerRequest
 

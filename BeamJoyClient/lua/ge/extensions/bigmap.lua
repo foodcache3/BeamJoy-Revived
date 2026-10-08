@@ -227,13 +227,73 @@ local function enablePlaymodeMarkersInMultiplayer()
     end
 end
 
+--- a stable text form of a value, to compare marker sets : table keys sorted, numbers rounded,
+--- vec3 / quat by their components, functions by kind only
+---@param v any
+---@param depth integer
+---@return string
+local function stableKey(v, depth)
+    local t = type(v)
+    if t == "number" then return string.format("%.3f", v) end
+    if t == "string" or t == "boolean" or t == "nil" then return tostring(v) end
+    if t == "function" then return "fn" end
+    if t == "cdata" or t == "userdata" then
+        local ok, s = pcall(function() return string.format("(%.3f,%.3f,%.3f", v.x, v.y, v.z) end)
+        if not ok then return t end
+        local okW, w = pcall(function() return v.w end)
+        return s .. ((okW and type(w) == "number") and string.format(",%.3f)", w) or ")")
+    end
+    if t == "table" then
+        if depth > 6 then return "{}" end
+        local keys = {}
+        for k in pairs(v) do keys[#keys + 1] = k end
+        table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+        local out = {}
+        for i, k in ipairs(keys) do out[i] = tostring(k) .. "=" .. stableKey(v[k], depth + 1) end
+        return "{" .. table.concat(out, ",") .. "}"
+    end
+    return t
+end
+
+--- everything of ours that ends up in the game's POI list : the Big Map pins (`pois`), every
+--- beamjoy_* extension's in-world markers (onGetRawPoiListForLevel, run here into a scratch list)
+--- and what getRawPOIs drops during a round. nil when a provider fails (then : rebuild)
+---@param pois table<string, table>
+---@return string?
+local function poiSignature(pois)
+    local level = getCurrentLevelIdentifier and getCurrentLevelIdentifier() or ""
+    local raw = {}
+    for _, name in ipairs(extensions.getLoadedExtensionsNames and extensions.getLoadedExtensionsNames(true) or {}) do
+        if name:sub(1, 8) == "beamjoy_" then
+            local ext = extensions[name]
+            if ext and type(ext.onGetRawPoiListForLevel) == "function" then
+                if not pcall(ext.onGetRawPoiListForLevel, level, raw) then return nil end
+            end
+        end
+    end
+    local context = {
+        stationsAllowed = beamjoy_context and beamjoy_context.stationsAllowed and beamjoy_context.stationsAllowed(),
+        locked = beamjoy_context and beamjoy_context.isScenarioLocked and beamjoy_context.isScenarioLocked(),
+    }
+    return stableKey({ level = level, context = context, raw = raw, pins = pois }, 0)
+end
+
 --- rebuild M.POIs from every extension that implements onBJRequestBigmapPOIs, and have the game
---- rebuild its POI list (world markers included) from it
-local function flushPOIs()
+--- rebuild its POI list (world markers included) from it. Only when something of ours changed :
+--- each rebuild makes gameplay_markerInteraction redo every marker on the map (13-16 ms, measured
+--- with the spike profiler on west_coast_usa), and most requests (a cache push, a race's state
+--- changing) leave every marker as it was (direct report : lag spikes)
+---@param force boolean? rebuild even when nothing changed
+local function flushPOIs(force)
     M.rebuildRequestedAt, M.rebuildLastRequestAt = nil, nil
+    local fresh = {}
+    extensions.hook("onBJRequestBigmapPOIs", fresh)
     table.clear(M.POIs)
+    for id, el in pairs(fresh) do M.POIs[id] = el end
+    local signature = poiSignature(M.POIs)
+    if not force and signature and signature == M.lastPOISignature then return end
+    M.lastPOISignature = signature
     table.clear(M.routeCache)
-    extensions.hook("onBJRequestBigmapPOIs", M.POIs)
     if extensions.gameplay_rawPois then
         extensions.gameplay_rawPois.clear() -- force the provider to rebuild with our new set
     end
@@ -528,7 +588,7 @@ local function onInit()
         enablePlaymodeMarkersInMultiplayer() -- re-assert after a reconnect
         installBigMapGroupsWrap()
         installRoutePreviewWrap()
-        flushPOIs() -- right away : the first set of markers for this session
+        flushPOIs(true) -- right away : the first set of markers for this session
     end)
 end
 

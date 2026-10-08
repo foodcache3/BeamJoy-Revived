@@ -113,6 +113,9 @@
 ---the whole layout before committing to start ; default true
 ---@field visibleGateCount integer? how many upcoming gates stay visible when limitVisibleGates is
 ---on, [1,5] ; default 2
+---@field showGates boolean? the gates themselves (their frame, arrow and label) once COUNTDOWN/RACE
+---begins ; off, a race is driven from the waypoint beams and the minimap alone. The lobby/GRID
+---phase still shows every gate, so players can see the layout ; default true
 ---@field waypointBeams boolean? the game's GPS-style beam (a tall white column, gone within 50 m)
 ---over the gate(s) to drive through next, once COUNTDOWN/RACE begins ; default true
 ---@field allowTuning boolean? only meaningful while a vehicle restriction is actually active
@@ -576,6 +579,7 @@ local function sanitizeRace(race, existingRaces)
     race.defaults.showGateNametags = race.defaults.showGateNametags == true
     race.defaults.limitVisibleGates = race.defaults.limitVisibleGates ~= false
     race.defaults.visibleGateCount = math.max(1, math.min(math.floor(tonumber(race.defaults.visibleGateCount) or 2), 5))
+    race.defaults.showGates = race.defaults.showGates ~= false
     race.defaults.waypointBeams = race.defaults.waypointBeams ~= false
     race.defaults.allowTuning = race.defaults.allowTuning ~= false
     race.defaults.randomizeVehiclePool = race.defaults.randomizeVehiclePool == true
@@ -1401,6 +1405,103 @@ local function raceSave(ctxt, race)
     return race.id
 end
 
+--- the most races one map import may add
+local MAX_MAP_IMPORT = 100
+
+--- Races a map comes with (its quickraces and time trials), read and converted by the client
+--- (beamjoy/mapRaces.lua : the server doesn't have the map's files). Same rules as the legacy
+--- importer : every race is ADDED, nothing is overwritten, and one whose name is already used is
+--- skipped. Only the fields an imported race has are kept ; the rest is sanitizeRace's defaults
+---@param ctxt BJSContext
+---@param races table[]
+local function raceMapImport(ctxt, races)
+    if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
+            BJ_PERMISSIONS.EditRaces) then
+        return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
+            services_lang.get("error.insufficientPermissions", ctxt.sender.lang))
+    end
+    if not table.isArray(races) then return end
+
+    local imported, skipped, failed = 0, 0, 0
+    for i, raw in ipairs(races) do
+        if i > MAX_MAP_IMPORT then break end
+        local race
+        if type(raw) == "table" and table.isArray(raw.gates) and table.isArray(raw.startPositions) then
+            local branching = raw.branchingEnabled == true
+            race = {
+                name = type(raw.name) == "string" and raw.name:trim() or nil,
+                mode = M.MODES.GRID,
+                loopable = raw.loopable == true,
+                branchingEnabled = branching,
+                distance = math.max(0, math.floor(tonumber(raw.distance) or 0)),
+                sectorCount = tonumber(raw.sectorCount) or 3,
+                gates = {},
+                startPositions = {},
+                props = {},
+                defaults = {
+                    laps = type(raw.defaults) == "table" and tonumber(raw.defaults.laps) or nil,
+                    joinable = type(raw.defaults) == "table" and raw.defaults.joinable == true,
+                },
+            }
+            for _, g in ipairs(raw.gates) do
+                local pos, dir = type(g) == "table" and sanePoint(g.pos), type(g) == "table" and sanePoint(g.dir)
+                if not pos or not dir then
+                    race = nil
+                    break
+                end
+                table.insert(race.gates, {
+                    pos = pos,
+                    dir = dir,
+                    width = math.clamp(tonumber(g.width) or 6, 1, 60),
+                    height = math.clamp(tonumber(g.height) or 4, 1, 60),
+                    parents = branching and table.isArray(g.parents) and table.map(g.parents, function(p)
+                        return math.floor(tonumber(p) or 0)
+                    end) or nil,
+                    isFinish = branching and g.isFinish == true or nil,
+                })
+            end
+            if race then
+                for _, s in ipairs(raw.startPositions) do
+                    local pos, dir = type(s) == "table" and sanePoint(s.pos), type(s) == "table" and sanePoint(s.dir)
+                    if pos and dir then table.insert(race.startPositions, { pos = pos, dir = dir }) end
+                end
+            end
+        end
+
+        local err = race and sanitizeRace(race) or "Invalid race data"
+        if err == "A race with this name already exists" then
+            skipped = skipped + 1
+        elseif err then
+            LogError(string.format("raceMapImport: %s failed sanitation: %s",
+                tostring(type(raw) == "table" and raw.name or "?"), err))
+            failed = failed + 1
+        else
+            local id = 1
+            while table.any(M.data, function(r) return r.id == id end) do
+                id = id + 1
+            end
+            race.id = id
+            race.author = ctxt.sender and ctxt.sender.playerName or "console"
+            race.leaderboard = {}
+            race.freeroamLeaderboard = {}
+            table.insert(M.data, race)
+            imported = imported + 1
+        end
+    end
+
+    if imported > 0 then
+        saveData()
+        services_players.players:forEach(function(p)
+            local caches = {}
+            M.onBJRequestCache(caches, p.playerID)
+            communications_tx.sendToPlayer(p.playerID, "sendCache", caches)
+        end)
+    end
+    if ctxt.sender then
+        communications_tx.sendToPlayer(ctxt.senderID, "raceMapImportDone", imported, skipped, failed)
+    end
+end
+
 ---@param ctxt BJSContext
 ---@param raceId integer
 local function raceDelete(ctxt, raceId)
@@ -1599,6 +1700,7 @@ local function onInit()
     communications_rx.addHandler("raceLeaderboardSummaryRequest", M.onRaceLeaderboardSummaryRequest)
     communications_rx.addHandler("raceLegacyImportPreview", M.raceLegacyImportPreview)
     communications_rx.addHandler("raceLegacyImportConfirm", M.raceLegacyImportConfirm)
+    communications_rx.addHandler("raceMapImport", M.raceMapImport)
 
     seedBundledRaces()
     applyBundledCourseUpdates()
@@ -1620,5 +1722,6 @@ M.raceSave = raceSave
 M.raceDelete = raceDelete
 M.raceLegacyImportPreview = raceLegacyImportPreview
 M.raceLegacyImportConfirm = raceLegacyImportConfirm
+M.raceMapImport = raceMapImport
 
 return M

@@ -23,6 +23,15 @@
         >
             <icon name="add"></icon>
         </button>
+        <button
+            class="btn info d-flex align-center gap-1"
+            ng-click="$ctrl.importMapRaces($event)"
+            ng-disabled="$ctrl.mapScanning"
+            title="{{'beamjoy.mapRaces.button.tooltip' | translate}}"
+        >
+            <icon name="import"></icon>
+            {{'beamjoy.mapRaces.button' | translate}}
+        </button>
     </div>
 
     <div

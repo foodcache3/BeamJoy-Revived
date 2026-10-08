@@ -493,6 +493,10 @@
                     <bj-slider ng-model="$ctrl.startOptions.visibleGateCount" min="1" max="5" hard-max="5" step="1"></bj-slider>
                 </div>
                 <div class="bjr-toggle-row">
+                    <span title="{{'beamjoy.window.config.tabs.races.showGates.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.showGates' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.showGates"></bj-toggle>
+                </div>
+                <div class="bjr-toggle-row">
                     <span title="{{'beamjoy.window.config.tabs.races.waypointBeams.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.waypointBeams' | translate}}</span>
                     <bj-toggle ng-model="$ctrl.startOptions.waypointBeams"></bj-toggle>
                 </div>

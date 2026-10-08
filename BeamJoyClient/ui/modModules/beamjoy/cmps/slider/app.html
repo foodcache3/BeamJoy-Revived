@@ -73,15 +73,13 @@
 </style>
 
 <div class="slider-row">
+    <!-- no ng-model / interpolated min, max, step : the controller sets them, then the value
+         (syncRange), see its comment -->
     <input
         type="range"
         ng-if-start="$ctrl.mode === 'slider'"
-        min="{{$ctrl.min}}"
-        max="{{$ctrl.max}}"
-        step="{{$ctrl.step}}"
         ng-disabled="$ctrl.disabled"
-        ng-model="$ctrl.ngModel"
-        ng-style="{'background': 'linear-gradient(to right, rgb(230, 92, 0) 0% ' + $ctrl.percent + '%, transparent ' + $ctrl.percent + '% 100%)'}"
+        ng-style="{'background': $ctrl.trackBackground}"
     />
     <span ng-if-end class="value-label">{{$ctrl.ngModel}}</span>
 

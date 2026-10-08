@@ -166,6 +166,8 @@
 ---COUNTDOWN/RACE begins, hiding every other gate (see BJRaceDefaults.limitVisibleGates). Default
 ---true
 ---@field visibleGateCount integer [1,5] (see BJRaceDefaults.visibleGateCount). Default 2
+---@field showGates boolean the gates themselves once COUNTDOWN/RACE begins (see
+---BJRaceDefaults.showGates). Default true
 ---@field waypointBeams boolean the GPS-style beam over the next gate once COUNTDOWN/RACE begins (see
 ---BJRaceDefaults.waypointBeams). Default true
 ---@field allowTuning boolean only meaningful while vehicleRestrictionStartMode isn't "free" (see
@@ -846,6 +848,12 @@ local function buildSettings(race, overrides)
     elseif defaults.limitVisibleGates ~= nil then
         limitVisibleGates = defaults.limitVisibleGates == true
     end
+    local showGates = true
+    if overrides.showGates ~= nil then
+        showGates = overrides.showGates == true
+    elseif defaults.showGates ~= nil then
+        showGates = defaults.showGates == true
+    end
     local waypointBeams = true
     if overrides.waypointBeams ~= nil then
         waypointBeams = overrides.waypointBeams == true
@@ -917,6 +925,7 @@ local function buildSettings(race, overrides)
         limitVisibleGates = limitVisibleGates,
         visibleGateCount = math.max(1, math.min(math.floor(tonumber(overrides.visibleGateCount) or
             defaults.visibleGateCount or 2), 5)),
+        showGates = showGates,
         waypointBeams = waypointBeams,
         allowTuning = allowTuning,
         randomizeVehiclePool = randomizeVehiclePool,
@@ -1300,7 +1309,7 @@ end
 
 ---@param ctxt BJSContext
 ---@param raceId integer
----@param opts {joinable: boolean?, laps: integer?, respawnStrategy: string?, placementMode: string?, gridTimeout: integer?, gridReadyTimeout: integer?, countdown: integer?, dnfEnabled: boolean?, dnfTimeout: integer?, resetPenaltyEnabled: boolean?, resetPenaltySeconds: integer?, autoSpectateOnFinish: boolean?, disableNodegrabber: boolean?, disableCameras: boolean?, disableGravityChange: boolean?, vehicleRestrictionMode: string?, vehicleRestrictionModel: string?, vehicleRestrictionParts: table?, vehicleRestrictionVars: table?, vehicleRestrictionPaints: table?, vehicleRestrictionLabel: string?, vehicleRestrictionPoolPresetId: integer?, ghostOnCountdown: boolean?, disableCollisions: boolean?, ghostBackmarkers: boolean?, showGateNametags: boolean?, limitVisibleGates: boolean?, visibleGateCount: integer?, waypointBeams: boolean?, allowTuning: boolean?}?
+---@param opts {joinable: boolean?, laps: integer?, respawnStrategy: string?, placementMode: string?, gridTimeout: integer?, gridReadyTimeout: integer?, countdown: integer?, dnfEnabled: boolean?, dnfTimeout: integer?, resetPenaltyEnabled: boolean?, resetPenaltySeconds: integer?, autoSpectateOnFinish: boolean?, disableNodegrabber: boolean?, disableCameras: boolean?, disableGravityChange: boolean?, vehicleRestrictionMode: string?, vehicleRestrictionModel: string?, vehicleRestrictionParts: table?, vehicleRestrictionVars: table?, vehicleRestrictionPaints: table?, vehicleRestrictionLabel: string?, vehicleRestrictionPoolPresetId: integer?, ghostOnCountdown: boolean?, disableCollisions: boolean?, ghostBackmarkers: boolean?, showGateNametags: boolean?, limitVisibleGates: boolean?, visibleGateCount: integer?, showGates: boolean?, waypointBeams: boolean?, allowTuning: boolean?}?
 local function raceStart(ctxt, raceId, opts)
     if not ctxt.sender then return end
     -- multiple independent sessions of the SAME race running concurrently (different players) is
