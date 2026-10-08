@@ -373,10 +373,21 @@ local function drawPropOverlays(props)
         local active = i == raceEditor.activePropIndex
         if p.kind == "line" and p.a and p.b then
             local a, b = vec3(p.a.x, p.a.y, p.a.z), vec3(p.b.x, p.b.y, p.b.z)
-            draw.addLine(a + lift, .1, b + lift, .1, active and PROP_ACTIVE_COLOR or PROP_LINE_COLOR)
+            local lineColor = active and PROP_ACTIVE_COLOR or PROP_LINE_COLOR
+            -- its path : a bent line as a few segments along its curve
+            local path = beamjoy_props.linePath(p, 16) or { a, b }
+            for k = 2, #path do
+                draw.addLine(path[k - 1] + lift, .1, path[k] + lift, .1, lineColor)
+            end
             for part, pos in pairs({ a = a, b = b }) do
                 local held = active and raceEditor.activePropPart == part
                 draw.addSphere(pos + lift, held and .7 or .45, held and PROP_ACTIVE_COLOR or PROP_LINE_COLOR)
+            end
+            -- the middle (bend) handle : on the selected line, and on any bent one
+            if active or p.mid then
+                local mid = p.mid and vec3(p.mid.x, p.mid.y, p.mid.z) or (a + b) * .5
+                local held = active and raceEditor.activePropPart == "mid"
+                draw.addSphere(mid + lift, held and .6 or .35, held and PROP_ACTIVE_COLOR or PROP_LINE_COLOR)
             end
         elseif active and p.pos then
             draw.addSphere(vec3(p.pos.x, p.pos.y, p.pos.z) + lift, .5, PROP_ACTIVE_COLOR)

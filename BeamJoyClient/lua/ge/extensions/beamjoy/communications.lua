@@ -3,7 +3,11 @@ local M = {
     handlers = Table(),
     oneUseHandlers = Table(),
 
-    RX_LOG_EVENTS_BLACKLIST = { "tick", "trafficRubberbandTick" },
+    -- events left out of the debug log, received / sent : frequent ones that would bury the rest
+    -- (clockSync : 8 pings every 5 minutes, 3 lines each ; its own burst result is logged instead,
+    -- see clockSync.lua)
+    RX_LOG_EVENTS_BLACKLIST = { "tick", "trafficRubberbandTick", "clockSync" },
+    TX_LOG_EVENTS_BLACKLIST = { "clockSync" },
 }
 
 local function onInit()
@@ -88,7 +92,9 @@ end
 local tx = require("ge/extensions/beamjoy/communications/tx")
 local function send(key, ...)
     tx(key, ...)
-    LogDebug(string.format("Event %s sent (%d args)", key, #{ ... }))
+    if not table.includes(M.TX_LOG_EVENTS_BLACKLIST, key) then
+        LogDebug(string.format("Event %s sent (%d args)", key, #{ ... }))
+    end
 end
 
 M.onInit = onInit

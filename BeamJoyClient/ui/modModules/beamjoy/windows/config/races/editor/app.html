@@ -697,6 +697,22 @@
                                 >
                                     {{'beamjoy.window.config.tabs.races.props.endB' | translate}}
                                 </button>
+                                <button
+                                    class="btn"
+                                    ng-class="$ctrl.activePropPart === 'mid' ? 'success' : 'neutral'"
+                                    ng-click="$ctrl.selectPropEnd($event, $index, 'mid')"
+                                    title="{{'beamjoy.window.config.tabs.races.props.endMid.tooltip' | translate}}"
+                                >
+                                    {{'beamjoy.window.config.tabs.races.props.endMid' | translate}}
+                                </button>
+                                <button
+                                    class="btn warning"
+                                    ng-if="prop.mid"
+                                    ng-click="$ctrl.straightenPropLine($event, $index)"
+                                    title="{{'beamjoy.window.config.tabs.races.props.straighten.tooltip' | translate}}"
+                                >
+                                    {{'beamjoy.window.config.tabs.races.props.straighten' | translate}}
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -768,6 +784,9 @@
         </div>
         <div ng-if="$ctrl.race.props.length === 0" class="p-2 opacity-70">
             {{'beamjoy.window.config.tabs.races.props.none' | translate}}
+        </div>
+        <div ng-if="$ctrl.activeProp !== null" class="px-2 pt-1 small opacity-70">
+            {{'beamjoy.window.config.tabs.races.props.deleteKey' | translate}}
         </div>
     </div>
 

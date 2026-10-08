@@ -16,8 +16,11 @@
 // With a placed prop in "swap" (the editor's "Swap mesh"), picking a tile gives it that mesh.
 
 const FAV_KEY = "beamjoy.propDrawer.favourites";
+// where the player moved the drawer (fractions of the screen), none while it sits by the window
+const POSITION_KEY = "beamjoy.propDrawer.position";
 const RECENT_KEY = "beamjoy.propDrawer.recent";
 const RECENT_MAX = 16;
+const KEEP_KEY = "beamjoy.propDrawer.keepPlacing";
 
 // search words folded onto the word the props use
 const SYNONYMS = {
@@ -205,20 +208,30 @@ angular.module("beamjoy").component("bjPropDrawer", {
             const meshes = this.meshes || [];
             return cat === "all" ? meshes : meshes.filter((i) => i.group === cat);
         };
+        // every count shown (the rail's and the two tabs') is of what the search matches (direct
+        // request)
         this.counts = {};
+        this.tabCounts = { curated: 0, all: null };
         const countRail = () => {
-            const counts = { favourites: this.favourites.length, recent: this.recent.length };
+            const words = tokens();
+            const match = (i) => matches(i, words);
+            const curated = this.curated.filter(match);
+            const meshes = this.meshes ? this.meshes.filter(match) : null;
+            const counts = {
+                favourites: this.favourites.map(entryFor).filter(match).length,
+                recent: this.recent.map(entryFor).filter(match).length,
+            };
             if (this.tab === "curated") {
-                counts.all = this.curated.length;
+                counts.all = curated.length;
                 this.CATEGORIES.forEach((c) => (counts[c] = 0));
-                this.curated.forEach((i) => (counts[i.cat] = (counts[i.cat] || 0) + 1));
+                curated.forEach((i) => (counts[i.cat] = (counts[i.cat] || 0) + 1));
             } else {
-                const meshes = this.meshes || [];
-                counts.all = meshes.length;
+                counts.all = (meshes || []).length;
                 this.GROUPS.forEach((g) => (counts[g] = 0));
-                meshes.forEach((i) => (counts[i.group] = (counts[i.group] || 0) + 1));
+                (meshes || []).forEach((i) => (counts[i.group] = (counts[i.group] || 0) + 1));
             }
             this.counts = counts;
+            this.tabCounts = { curated: curated.length, all: meshes ? meshes.length : null };
         };
         this.railItems = () => (this.tab === "curated" ? this.CATEGORIES : this.GROUPS);
         this.railName = (id) =>
@@ -433,6 +446,25 @@ angular.module("beamjoy").component("bjPropDrawer", {
             remember(item);
         };
         this.disarm = () => beamjoyStore.send("BJEditorRaceDisarmProp");
+        // "Keep placing" (direct request) : a prop stays armed after each one placed, as with
+        // Shift held, so several go down without picking it again. Kept on this PC
+        this.keepPlacing = false;
+        try {
+            this.keepPlacing = localStorage.getItem(KEEP_KEY) === "1";
+        } catch (e) {
+            this.keepPlacing = false;
+        }
+        const sendKeepPlacing = () => beamjoyStore.send("BJEditorRaceSetKeepPlacing", [this.keepPlacing]);
+        this.toggleKeepPlacing = (event) => {
+            if (event) event.stopPropagation();
+            this.keepPlacing = !this.keepPlacing;
+            try {
+                localStorage.setItem(KEEP_KEY, this.keepPlacing ? "1" : "0");
+            } catch (e) {
+                // kept for this session only
+            }
+            sendKeepPlacing();
+        };
         this.expandStrip = () => {
             this.stripExpanded = true;
             $timeout(() => {
@@ -457,6 +489,30 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 }
             })
         );
+
+        // BUDGET (the race's 200 props) : what's used, and what the prop or line under the mouse
+        // would add ; amber from 90 %, red once full
+        this.budget = () => {
+            const max = Math.max(1, Number(this.propMax) || 200);
+            const used = Math.min(max, Number(this.propTotal) || 0);
+            const adding =
+                this.placing.armed && (this.placing.overWorld || this.placing.dragging)
+                    ? Math.min(max - used, Number(this.placing.count) || 0)
+                    : 0;
+            const after = used + adding;
+            return {
+                used,
+                adding,
+                max,
+                usedPct: (used / max) * 100,
+                addingPct: (adding / max) * 100,
+                level: after >= max ? "full" : after >= max * 0.9 ? "warn" : "ok",
+            };
+        };
+        this.budgetText = () => {
+            const b = this.budget();
+            return b.adding > 0 ? `${b.used} + ${b.adding} / ${b.max}` : `${b.used} / ${b.max}`;
+        };
 
         this.close = () => {
             if (this.placing.armed) this.disarm();
@@ -548,6 +604,16 @@ angular.module("beamjoy").component("bjPropDrawer", {
 
         let anchor = null;
         let lastPos = "";
+        // moved by its header (direct request) : kept where it was left, on this PC, until docked
+        let floating = null;
+        try {
+            const saved = JSON.parse(localStorage.getItem(POSITION_KEY) || "null");
+            if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) floating = saved;
+        } catch (e) {
+            floating = null;
+        }
+        this.isFloating = () => floating !== null;
+        this.dragging = false;
         const PANEL_EM = 36;
         const PANEL_MIN_EM = 27;
         const PREVIEW_EM = 17;
@@ -585,6 +651,24 @@ angular.module("beamjoy").component("bjPropDrawer", {
                     width = r.width;
                     left = r.left;
                 }
+                if (floating) {
+                    // anywhere on screen, kept whole on it : the default width, the window's height
+                    const vh = window.innerHeight;
+                    pos.mode = "float";
+                    width = Math.min(PANEL_EM * fs, vw - 2 * margin);
+                    const h = Math.min(Math.max(height, 20 * fs), vh - 2 * margin);
+                    left = Math.min(Math.max(floating.x * vw, margin), vw - width - margin);
+                    const ftop = Math.min(Math.max(floating.y * vh, margin), vh - h - margin);
+                    pos.panel = { left: `${left}px`, top: `${ftop}px`, width: `${width}px`, height: `${h}px` };
+                    pos.strip = { left: `${left}px`, top: `${ftop}px` };
+                    const pvW = PREVIEW_EM * fs;
+                    if (left - gap - pvW >= margin) pos.preview = { left: `${left - gap - pvW}px`, width: `${pvW}px` };
+                    else if (left + width + gap + pvW <= vw - margin)
+                        pos.preview = { left: `${left + width + gap}px`, width: `${pvW}px` };
+                    else pos.dock = true;
+                    if (this.pos.preview && this.pos.preview.top) pos.preview.top = this.pos.preview.top;
+                    return applyPos(pos);
+                }
                 pos.panel = { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` };
                 const stripW = STRIP_EM * fs;
                 const stripLeft =
@@ -604,6 +688,9 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 }
                 if (this.pos.preview && this.pos.preview.top) pos.preview.top = this.pos.preview.top;
             }
+            applyPos(pos);
+        };
+        const applyPos = (pos) => {
             const key = JSON.stringify(pos);
             if (key === lastPos) return;
             const resized = !lastPos || JSON.parse(lastPos).panel.width !== pos.panel.width;
@@ -612,6 +699,63 @@ angular.module("beamjoy").component("bjPropDrawer", {
             $scope.$applyAsync(() => {
                 if (resized) $timeout(layoutGrid);
             });
+        };
+
+        // dragged by its header, the panel moved straight away (no digest per mouse move) ; where
+        // it lands is kept once it's let go
+        let drag = null;
+        const panelEl = () => root.querySelector(".pd-panel");
+        const onDragMove = (event) => {
+            const el = panelEl();
+            if (!drag || !el) return;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const left = Math.min(Math.max(drag.left + event.clientX - drag.x, 0), vw - drag.width);
+            const top = Math.min(Math.max(drag.top + event.clientY - drag.y, 0), vh - drag.height);
+            el.style.left = `${left}px`;
+            el.style.top = `${top}px`;
+            floating = { x: left / vw, y: top / vh };
+        };
+        const onDragEnd = () => {
+            document.removeEventListener("mousemove", onDragMove);
+            document.removeEventListener("mouseup", onDragEnd);
+            if (!drag) return;
+            drag = null;
+            try {
+                if (floating) localStorage.setItem(POSITION_KEY, JSON.stringify(floating));
+            } catch (e) {
+                // kept for this session only
+            }
+            $scope.$applyAsync(() => {
+                this.dragging = false;
+                lastPos = "";
+                reposition();
+            });
+        };
+        this.startDrag = (event) => {
+            if (event.button !== 0 || (event.target.closest && event.target.closest("button"))) return;
+            const el = panelEl();
+            if (!el) return;
+            const r = el.getBoundingClientRect();
+            drag = { x: event.clientX, y: event.clientY, left: r.left, top: r.top, width: r.width, height: r.height };
+            this.dragging = true;
+            this.hovered = null;
+            document.addEventListener("mousemove", onDragMove);
+            document.addEventListener("mouseup", onDragEnd);
+            event.preventDefault();
+        };
+        // back beside the config window
+        this.dock = (event) => {
+            if (event) event.stopPropagation();
+            if (event && event.target.closest && event.type === "dblclick" && event.target.closest("button")) return;
+            floating = null;
+            try {
+                localStorage.removeItem(POSITION_KEY);
+            } catch (e) {
+                // nothing saved
+            }
+            lastPos = "";
+            reposition();
         };
         let watcher = null;
         const startWatching = () => {
@@ -626,6 +770,13 @@ angular.module("beamjoy").component("bjPropDrawer", {
             window.removeEventListener("resize", reposition);
         };
 
+        // the same scroll step as BeamJoy's windows (cmps/window's WHEEL_SCROLL_MULTIPLIER)
+        const WHEEL_SCROLL_MULTIPLIER = 4;
+        const onWheel = (event) => {
+            event.currentTarget.scrollTop += event.deltaY * WHEEL_SCROLL_MULTIPLIER;
+            event.preventDefault();
+        };
+
         // LIFECYCLE --------------------------------------------------------------------------
 
         this.$postLink = () => {
@@ -635,6 +786,9 @@ angular.module("beamjoy").component("bjPropDrawer", {
             document.body.appendChild(root);
             const wrap = gridWrap();
             if (wrap) wrap.addEventListener("scroll", onScroll, { passive: true });
+            root.querySelectorAll(".pd-gridwrap, .pd-rail").forEach((el) =>
+                el.addEventListener("wheel", onWheel, { passive: false })
+            );
             if (this.open) startWatching();
         };
         this.$onChanges = (changes) => {
@@ -644,6 +798,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
             }
             if (changes.open) {
                 if (this.open) {
+                    sendKeepPlacing();
                     lastPos = "";
                     startWatching();
                     $timeout(() => {
@@ -660,6 +815,8 @@ angular.module("beamjoy").component("bjPropDrawer", {
         };
         this.$onDestroy = () => {
             stopWatching();
+            onDragEnd();
+            root.querySelectorAll(".pd-gridwrap, .pd-rail").forEach((el) => el.removeEventListener("wheel", onWheel));
             document.removeEventListener("keydown", onDocumentKey);
             const wrap = gridWrap();
             if (wrap) wrap.removeEventListener("scroll", onScroll);

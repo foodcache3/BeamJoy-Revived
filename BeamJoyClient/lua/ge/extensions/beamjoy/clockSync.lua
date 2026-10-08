@@ -94,6 +94,11 @@ local function onReply(seq, serverMs)
     if adopt then
         M.offsetMs, M.rttMs, M.adoptedAtMs = best.offset, best.rtt, now
     end
+    -- the burst's result, once (its pings aren't logged one by one, see communications.lua)
+    if #M.burstSamples == BURST_SIZE then
+        LogDebug(string.format("Clock synced : offset %.1f ms, round trip %.1f ms (best of %d)",
+            M.offsetMs, M.rttMs, BURST_SIZE))
+    end
 end
 
 local function onSlowUpdate()

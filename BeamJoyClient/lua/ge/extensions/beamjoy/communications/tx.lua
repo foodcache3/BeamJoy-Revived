@@ -26,7 +26,9 @@ return function(key, ...)
         }))
     end
 
-    LogDebug(string.format("Event %s sent (%d parts data)", key, #parts))
+    if not (beamjoy_communications and table.includes(beamjoy_communications.TX_LOG_EVENTS_BLACKLIST or {}, key)) then
+        LogDebug(string.format("Event %s sent (%d parts data)", key, #parts))
+    end
     if beamjoy_main.DEBUG then
         PrintObj(data)
     end

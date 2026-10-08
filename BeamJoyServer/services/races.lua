@@ -459,6 +459,8 @@ local function sanitizeProps(props)
                         shape = p.shape,
                         a = a,
                         b = b,
+                        -- bends the line through it (optional)
+                        mid = sanePoint(p.mid),
                         count = count,
                         yaw = math.clamp(tonumber(p.yaw) or 0, -360, 360),
                         scale = scale,

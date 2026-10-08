@@ -762,6 +762,10 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             event.stopPropagation();
             beamjoyStore.send("BJEditorRaceSelectProp", [idx + 1, part]);
         };
+        this.straightenPropLine = (event, idx) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceStraightenPropLine", [idx + 1]);
+        };
         this.deleteProp = (event, idx) => {
             event.stopPropagation();
             beamjoyStore.send("BJEditorRaceDeleteProp", [idx + 1]);

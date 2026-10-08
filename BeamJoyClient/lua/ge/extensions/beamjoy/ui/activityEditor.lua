@@ -100,6 +100,12 @@ end
 M.onInit = onInit
 M.onUpdate = onUpdate
 M.onBJClick = onBJClick
+-- the "Editor : delete selected" key binding (core/input/actions/beamjoy.json), same forwarding
+M.onBJEditorDeleteKey = function()
+    if M.activeEditor and M.activeEditor.onBJEditorDeleteKey then
+        M.activeEditor.onBJEditorDeleteKey()
+    end
+end
 M.onClose = onClose
 M.onBJHunterArenaChanged = onBJHunterArenaChanged
 M.onBJInfectedArenaChanged = onBJInfectedArenaChanged

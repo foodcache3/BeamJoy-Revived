@@ -8,7 +8,46 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2624, server build 2435.
+Version 1.11.0 : client build 2630, server build 2436.
+
+- **Prop lines can curve** (direct request) : a line's new "Middle (bend)" handle (beside First end
+  and Last end, or clicked in the world) bends it, the line running as a smooth curve through it
+  from end to end, its props spread evenly along the curve and each facing along it. "Straighten"
+  takes the bend out. Duplicating and splitting a bent line keep its curve. *(client + server : the
+  server keeps the bend)*
+
+- **Fixed: the invisible wall was invisible while placing it** (direct report). Its ghost now shows
+  the same blue panel a placed one does. *(client only)*
+- **Clock sync no longer fills the log** (direct request) : its pings (8 every 5 minutes, 3 lines
+  each) are left out of the per-event debug lines, and each sync logs its result once instead.
+  *(client only)*
+
+- **Fixed: some props showed the game's "no material" texture** (direct report : Automation Test
+  Track's tire wall and tire stacks). A map's own meshes take their materials from that map's
+  material files, loaded with the map only, and those props were offered on every map. Their
+  materials are now brought along before such a prop is shown, the way the game loads a car's own
+  materials (only the ones the current map doesn't have, so the map itself is left as it is). Every
+  player does the same, so a race's props look right on any map. *(client only)*
+- **The props drawer's counts follow the search** (direct request) : its categories, Favourites,
+  Recent, and the Curated / All game meshes tabs count what matches. A category the search empties
+  leaves the list unless it's the one open. *(client only)*
+
+- **"Keep placing"** (direct request) : a button in the props drawer's header (and its strip while
+  placing) keeps the picked prop armed after each one placed, as Shift does, so several go down
+  without picking it again. It stays on (on this PC) until turned off. *(client only)*
+- **The Delete key deletes the selected prop** in the race editor (direct request). It's a game key
+  binding ("Editor : delete selected", in the controls' BeamJoy section, so it can be rebound),
+  which like every other binding doesn't fire while a text box has the keyboard. *(client only)*
+
+- **The props drawer can be moved** (direct request) : drag it by its header anywhere on screen. It
+  stays where it's left (on this PC), kept whole on the screen ; its header's dock button, or a
+  double-click on the header, puts it back beside the config window. Its lists also scroll at the
+  same speed as BeamJoy's windows now. *(client only)*
+
+- **A prop budget bar in the props drawer** (direct request) : the race's props out of the 200 it
+  can hold, as a slim bar in the drawer's header (and its strip while placing). What's under the
+  mouse shows as a striped part of it ; the bar turns amber from 90 % and red once full, and a line
+  cut short because the race is nearly full says so while it's being dragged. *(client only)*
 
 - **The race editor's props drawer** (direct request) replaces the props dropdown. "Add props" opens
   it beside the config window, over the game view, or over the window itself when there's no room

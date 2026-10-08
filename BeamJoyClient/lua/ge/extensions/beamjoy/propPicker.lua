@@ -85,6 +85,7 @@ function M.measure(shape)
     if not M.isPlaceable(shape) then return nil end
     local key = shape:lower()
     if beamjoy_props.meta[key] or unmeasurable[key] then return beamjoy_props.meta[key] end
+    beamjoy_props.ensureMaterials(shape)
     local obj
     local ok, meta = pcall(function()
         obj = createObject("TSStatic")
@@ -147,6 +148,7 @@ end
 local function stepJob()
     local ok, err = pcall(function()
         if job.stage == "start" then
+            beamjoy_props.ensureMaterials(job.shape)
             local rect = RectI(0, 0, M.THUMB_SIZE, M.THUMB_SIZE)
             job.rect = rect
             job.preview = ShapePreview()

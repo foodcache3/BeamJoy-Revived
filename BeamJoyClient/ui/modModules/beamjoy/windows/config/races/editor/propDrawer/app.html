@@ -72,6 +72,7 @@
         }
     }
     .pd-head {
+        cursor: grab;
         display: flex;
         align-items: center;
         gap: 0.5em;
@@ -82,9 +83,62 @@
         font-weight: 800;
         font-size: 1.35em;
     }
-    .pd-count {
+    .pd-budget {
+        display: flex;
+        align-items: center;
+        gap: 0.45em;
+        min-width: 0;
+        --pd-level: var(--pd-accent);
+    }
+    .pd-budget.pd-warn {
+        --pd-level: rgb(230, 180, 0);
+    }
+    .pd-budget.pd-full {
+        --pd-level: rgb(220, 40, 30);
+    }
+    .pd-bar {
+        position: relative;
+        width: 7em;
+        height: 0.45em;
+        border-radius: 0.25em;
+        background: rgba(255, 255, 255, 0.12);
+        overflow: hidden;
+    }
+    .pd-bar-used,
+    .pd-bar-adding {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        transition: width 0.12s ease-out;
+    }
+    .pd-bar-used {
+        background: var(--pd-level);
+    }
+    .pd-bar-adding {
+        background: repeating-linear-gradient(-45deg, var(--pd-level) 0 0.25em, rgba(255, 255, 255, 0.55) 0.25em 0.5em);
+    }
+    .pd-budget-n {
         color: var(--pd-muted);
-        font-size: 0.9em;
+        font-size: 0.85em;
+        white-space: nowrap;
+    }
+    .pd-budget.pd-full .pd-budget-n {
+        color: #ff9a8f;
+    }
+    .pd-strip .pd-budget {
+        flex-direction: column;
+        gap: 0.25em;
+    }
+    .pd-strip .pd-bar {
+        width: 4.2em;
+    }
+    .pd-strip .pd-budget-n {
+        font-size: 0.72em;
+    }
+    .pd-hints .pd-capped {
+        color: rgb(240, 200, 60);
+        font-weight: 600;
     }
     .pd-icon {
         display: inline-flex;
@@ -106,8 +160,27 @@
         width: 1.2em;
         height: 1.2em;
     }
-    .pd-head .pd-icon {
+    .pd-head .pd-icon:first-of-type {
         margin-left: auto;
+    }
+    .pd-head button {
+        cursor: pointer;
+    }
+    .pd-icon.pd-keep.on {
+        background: rgba(230, 92, 0, 0.6);
+        color: #fff;
+    }
+    .pd-icon.pd-keep.on:hover {
+        background: rgba(230, 92, 0, 0.8);
+    }
+    .pd-panel.pd-float {
+        border-radius: 0.4em;
+    }
+    .pd-panel.pd-dragging {
+        opacity: 0.92;
+    }
+    .pd-panel.pd-dragging .pd-head {
+        cursor: grabbing;
     }
     .pd-search {
         display: flex;
@@ -170,6 +243,14 @@
     .pd-seg button.on {
         background: #363a45;
         color: #fff;
+    }
+    .pd-seg .pd-n {
+        margin-left: 0.3em;
+        font-size: 0.85em;
+        color: #979dad;
+    }
+    .pd-seg button.on .pd-n {
+        color: #c9ced9;
     }
     .pd-banner {
         display: flex;
@@ -554,20 +635,57 @@
         .pd-rendering {
             animation: none;
         }
+        .pd-bar-used,
+        .pd-bar-adding {
+            transition: none;
+        }
     }
 </style>
 
 <section
     class="pd-panel"
     ng-show="$ctrl.open && !$ctrl.folded() && $ctrl.pos.mode !== 'hidden'"
-    ng-class="'pd-' + $ctrl.pos.mode"
+    ng-class="['pd-' + $ctrl.pos.mode, {'pd-dragging': $ctrl.dragging}]"
     ng-style="$ctrl.pos.panel"
     ng-keydown="$ctrl.onKey($event)"
     aria-label="{{$ctrl.T('title')}}"
 >
-    <div class="pd-head">
+    <div
+        class="pd-head"
+        ng-mousedown="$ctrl.startDrag($event)"
+        ng-dblclick="$ctrl.dock($event)"
+        title="{{$ctrl.T('move.tooltip')}}"
+    >
         <span class="pd-title">{{$ctrl.T('title')}}</span>
-        <span class="pd-count">{{$ctrl.propTotal}}/{{$ctrl.propMax}}</span>
+        <span class="pd-budget" ng-class="'pd-' + $ctrl.budget().level" title="{{$ctrl.T('budget.tooltip')}}">
+            <span class="pd-bar">
+                <span class="pd-bar-used" ng-style="{width: $ctrl.budget().usedPct + '%'}"></span>
+                <span
+                    class="pd-bar-adding"
+                    ng-style="{left: $ctrl.budget().usedPct + '%', width: $ctrl.budget().addingPct + '%'}"
+                ></span>
+            </span>
+            <span class="pd-budget-n">{{$ctrl.budgetText()}}</span>
+        </span>
+        <button
+            class="pd-icon pd-keep"
+            ng-class="{on: $ctrl.keepPlacing}"
+            ng-click="$ctrl.toggleKeepPlacing($event)"
+            title="{{$ctrl.keepPlacing ? $ctrl.T('keep.on') : $ctrl.T('keep.off')}}"
+        >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 2.5l3 3-3 3"></path>
+                <path d="M4 11.5v-2a4 4 0 0 1 4-4h12"></path>
+                <path d="M7 21.5l-3-3 3-3"></path>
+                <path d="M20 12.5v2a4 4 0 0 1-4 4H4"></path>
+            </svg>
+        </button>
+        <button class="pd-icon" ng-if="$ctrl.isFloating()" ng-click="$ctrl.dock($event)" title="{{$ctrl.T('move.dock')}}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+                <rect x="3.5" y="5" width="17" height="14" rx="1.5"></rect>
+                <path d="M14 5v14" stroke-width="2.4"></path>
+            </svg>
+        </button>
         <button class="pd-icon" ng-click="$ctrl.close()" title="{{$ctrl.T('close')}}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
                 <path d="M6 6l12 12M18 6L6 18"></path>
@@ -596,10 +714,11 @@
     </label>
     <div class="pd-seg" role="tablist">
         <button role="tab" ng-class="{on: $ctrl.tab === 'curated'}" ng-click="$ctrl.setTab('curated')">
-            {{$ctrl.T('tabs.curated')}}
+            {{$ctrl.T('tabs.curated')}} <span class="pd-n">{{$ctrl.tabCounts.curated}}</span>
         </button>
         <button role="tab" ng-class="{on: $ctrl.tab === 'all'}" ng-click="$ctrl.setTab('all')">
             {{$ctrl.T('tabs.all')}}
+            <span class="pd-n" ng-if="$ctrl.tabCounts.all !== null">{{$ctrl.tabCounts.all}}</span>
         </button>
     </div>
     <div class="pd-banner swap" ng-if="$ctrl.swap" role="status">
@@ -623,7 +742,7 @@
             </button>
             <button
                 ng-repeat="id in $ctrl.railItems() track by id"
-                ng-if="$ctrl.counts[id] > 0"
+                ng-if="$ctrl.counts[id] > 0 || $ctrl.category[$ctrl.tab] === id"
                 ng-class="{on: $ctrl.category[$ctrl.tab] === id}"
                 ng-click="$ctrl.setCategory(id)"
             >
@@ -734,6 +853,29 @@
         <img ng-if="$ctrl.thumbOf($ctrl.armedItem()).url" ng-src="{{$ctrl.thumbOf($ctrl.armedItem()).url}}" alt="" />
     </span>
     <small>{{$ctrl.T('placing')}}<br />{{$ctrl.armedItem().name}}</small>
+    <span class="pd-budget" ng-class="'pd-' + $ctrl.budget().level" title="{{$ctrl.T('budget.tooltip')}}">
+        <span class="pd-bar">
+            <span class="pd-bar-used" ng-style="{width: $ctrl.budget().usedPct + '%'}"></span>
+            <span
+                class="pd-bar-adding"
+                ng-style="{left: $ctrl.budget().usedPct + '%', width: $ctrl.budget().addingPct + '%'}"
+            ></span>
+        </span>
+        <span class="pd-budget-n">{{$ctrl.budgetText()}}</span>
+    </span>
+    <button
+        class="pd-icon pd-keep"
+        ng-class="{on: $ctrl.keepPlacing}"
+        ng-click="$ctrl.toggleKeepPlacing($event)"
+        title="{{$ctrl.keepPlacing ? $ctrl.T('keep.on') : $ctrl.T('keep.off')}}"
+    >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 2.5l3 3-3 3"></path>
+            <path d="M4 11.5v-2a4 4 0 0 1 4-4h12"></path>
+            <path d="M7 21.5l-3-3 3-3"></path>
+            <path d="M20 12.5v2a4 4 0 0 1-4 4H4"></path>
+        </svg>
+    </button>
     <button class="pd-icon" ng-click="$ctrl.expandStrip()" title="{{$ctrl.T('strip.expand')}}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <path ng-attr-d="{{$ctrl.pos.mode === 'right' ? 'M9 5l7 7-7 7' : 'M15 5l-7 7 7 7'}}"></path>
@@ -784,12 +926,16 @@
     <span class="pd-line" ng-if="$ctrl.placing.dragging && $ctrl.placing.count > 1">
         {{$ctrl.T('hints.line').replace('{n}', $ctrl.placing.count).replace('{m}', $ctrl.placing.meters)}}
     </span>
+    <span class="pd-capped" ng-if="$ctrl.placing.capped">
+        {{$ctrl.T('budget.capped').replace('{n}', $ctrl.budget().max - $ctrl.budget().used)}}
+    </span>
     <span><span class="pd-kbd">{{$ctrl.T('keys.click')}}</span>{{$ctrl.T('hints.click')}}</span>
     <span><span class="pd-kbd">{{$ctrl.T('keys.drag')}}</span>{{$ctrl.T('hints.drag')}}</span>
     <span>
         <span class="pd-kbd">{{$ctrl.T('keys.wheel')}}</span>
         {{$ctrl.placing.dragging ? $ctrl.T('hints.spacing') : $ctrl.T('hints.turn')}}
     </span>
-    <span><span class="pd-kbd">Shift</span>{{$ctrl.T('hints.shift')}}</span>
+    <span ng-if="!$ctrl.keepPlacing"><span class="pd-kbd">Shift</span>{{$ctrl.T('hints.shift')}}</span>
+    <span ng-if="$ctrl.keepPlacing" class="pd-line">{{$ctrl.T('hints.keepOn')}}</span>
     <span><span class="pd-kbd">{{$ctrl.T('keys.stop')}}</span>{{$ctrl.T('hints.stop')}}</span>
 </div>

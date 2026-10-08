@@ -8,9 +8,11 @@
 ---
 --- Entries (see services/races.lua's sanitizeProps for the server-side checks) :
 ---   { kind = "static", shape, pos, dir, up, scale }
----   { kind = "line", shape, a, b, count, yaw, scale, followGround, heights }
+---   { kind = "line", shape, a, b, mid, count, yaw, scale, followGround, heights }
 --- A line is saved as itself and spread out here : `count` props evenly from `a` to `b` (both ends
 --- included), each facing along the line turned by `yaw` degrees round its own vertical axis.
+--- `mid` (optional) bends it : the line runs as a smooth curve from `a` through `mid` to `b`, its
+--- props spaced evenly along the curve and each facing along it there.
 --- `heights` (one ground height per prop, measured by the editor) is what makes it follow the
 --- ground ; without it the props sit on the straight line from `a` to `b`.
 ---
@@ -29,7 +31,7 @@ local M = {
     --- time it's previewed or armed). `collision` is the TSStatic collision type : "None" for the
     --- decorative ones cars should drive through (tape, flags, banners) ; `invisible` ones are drawn
     --- as a panel by the editor, since nothing of them shows in the world. A mesh under /levels/<map>/
-    --- is only offered on that map (it isn't installed elsewhere).
+    --- has its materials defined by that map only : ensureMaterials() brings them along elsewhere.
     CATALOG = {
         -- barriers
         { id = "concreteBarrier", cat = "barriers", tags = "concrete jersey wall race", shape = "/art/shapes/race/s_concrete_race_barrier.dae", yaw = 90, length = 3.1 },
@@ -196,8 +198,55 @@ function M.shapeLevel(shape)
     return type(shape) == "string" and shape:lower():match("^/levels/([^/]+)/") or nil
 end
 
---- the catalog as the editors' pickers need it : only what's installed (a mesh of another map
---- isn't), with its category, tags, collision and, once measured, its size
+---@return string? the map being played, lower case
+local function currentLevel()
+    local ok, level = pcall(function() return getCurrentLevelIdentifier and getCurrentLevelIdentifier() end)
+    return ok and type(level) == "string" and level ~= "" and level:lower() or nil
+end
+
+-- MATERIALS ------------------------------------------------------------------------------------
+-- A map's own meshes (/levels/<map>/...) take their materials from that map's material files,
+-- loaded with the map only : elsewhere they showed the game's "no material" texture (direct report :
+-- Automation Test Track's tire stacks). Their folder's material files are loaded here before such a
+-- mesh is first shown, the way the game loads a car's own materials when it's spawned
+-- (core/vehicle/manager.lua). Only the materials the current map doesn't already have are added
+-- (from a copy of the file under /temp), so nothing of the map itself changes.
+
+local MATERIALS_TEMP_DIR = "/temp/bjPropMaterials/"
+-- folders (lower case) already looked at on this map
+local materialDirs = {}
+
+---@param shape string
+function M.ensureMaterials(shape)
+    local level = M.shapeLevel(shape)
+    if not level or level == currentLevel() then return end
+    local dir = shape:match("^(.*/)[^/]*$")
+    if not dir or materialDirs[dir:lower()] then return end
+    materialDirs[dir:lower()] = true
+    local ok, err = pcall(function()
+        local missing, count = {}, 0
+        for _, file in ipairs(FS:findFiles(dir, "*materials.json", 0, true, false) or {}) do
+            local data = jsonReadFile(file)
+            for key, mat in pairs(type(data) == "table" and data or {}) do
+                local name = type(mat) == "table" and mat.class == "Material" and (mat.name or key) or nil
+                if type(name) == "string" and not scenetree.findObject(name) then
+                    mat.persistentId = nil
+                    missing[key] = mat
+                    count = count + 1
+                end
+            end
+        end
+        if count == 0 then return end
+        local copy = MATERIALS_TEMP_DIR .. dir:gsub("[^%w]+", "_") .. "materials.json"
+        jsonWriteFile(copy, missing, true)
+        loadJsonMaterialsFile(copy)
+        log("I", "beamjoy_props", string.format("%d materials of %s loaded for its props", count, dir))
+    end)
+    if not ok then LogWarn(string.format("beamjoy_props: materials of %s not loaded: %s", dir, tostring(err))) end
+end
+
+--- the catalog as the editors' pickers need it : only what's installed, with its category, tags,
+--- collision, the map it comes from when it's this one, and once measured its size
 ---@return table[]
 function M.catalogForUI()
     local out = {}
@@ -211,7 +260,7 @@ function M.catalogForUI()
                 tags = c.tags,
                 solid = c.collision ~= "None",
                 invisible = c.invisible,
-                map = M.shapeLevel(c.shape),
+                map = M.shapeLevel(c.shape) == currentLevel() and M.shapeLevel(c.shape) or nil,
                 length = c.length,
                 size = M.meta[c.shape:lower()],
             }
@@ -282,24 +331,65 @@ function M.total(props)
     return n
 end
 
+-- points a curved line's length is measured over (its props are spaced evenly along it)
+local CURVE_SAMPLES = 48
+
+--- a line's path : the straight segment from a to b, or the curve through `mid` (a quadratic
+--- Bezier whose control point puts its halfway point exactly on `mid`)
+---@param line table
+---@param samples integer? points on a curve (a straight line is its two ends)
+---@return vec3[]? points
+function M.linePath(line, samples)
+    local a, b = v3(line.a), v3(line.b)
+    if not a or not b then return nil end
+    local mid = v3(line.mid)
+    if not mid then return { a, b } end
+    local ctrl = mid * 2 - (a + b) * .5
+    local n = samples or CURVE_SAMPLES
+    local pts = {}
+    for k = 0, n do
+        local t = k / n
+        local u = 1 - t
+        pts[k + 1] = a * (u * u) + ctrl * (2 * u * t) + b * (t * t)
+    end
+    return pts
+end
+
 --- the props of a line, as single placements
 ---@param line table
 ---@return {pos: vec3, dir: vec3, up: vec3}[]
 function M.linePlacements(line)
-    local a, b = v3(line.a), v3(line.b)
-    if not a or not b then return {} end
+    local pts = M.linePath(line)
+    if not pts then return {} end
     local count = lineCount(line)
-    local along = vec3(b.x - a.x, b.y - a.y, 0)
-    if along:length() < 1e-3 then along = vec3(0, 1, 0) end
-    local dir = turn(along:normalized(), tonumber(line.yaw) or 0)
+    local yaw = tonumber(line.yaw) or 0
     local heights = line.followGround ~= false and type(line.heights) == "table" and #line.heights == count and
         line.heights or nil
+    -- length along the path, point to point
+    local lens = { 0 }
+    for k = 2, #pts do lens[k] = lens[k - 1] + pts[k]:distance(pts[k - 1]) end
+    local total = lens[#lens]
     local out = {}
+    local k = 1
     for i = 1, count do
-        local t = count == 1 and .5 or (i - 1) / (count - 1)
-        local p = a + (b - a) * t
+        local s = count == 1 and total / 2 or total * (i - 1) / (count - 1)
+        while k < #pts - 1 and lens[k + 1] < s do k = k + 1 end
+        local seg = lens[k + 1] - lens[k]
+        local f = seg > 1e-6 and math.max(0, math.min(1, (s - lens[k]) / seg)) or 0
+        local p = pts[k] + (pts[k + 1] - pts[k]) * f
+        local along = vec3(pts[k + 1].x - pts[k].x, pts[k + 1].y - pts[k].y, 0)
+        local a, b, mid = v3(line.a), v3(line.b), v3(line.mid)
+        if mid then
+            -- the curve's own direction there (its derivative), not the sampled segment's
+            local t = (k - 1 + f) / (#pts - 1)
+            local ctrl = mid * 2 - (a + b) * .5
+            local d = (ctrl - a) * (2 * (1 - t)) + (b - ctrl) * (2 * t)
+            along = vec3(d.x, d.y, 0)
+        end
+        if along:length() < 1e-3 then along = vec3(pts[#pts].x - pts[1].x, pts[#pts].y - pts[1].y, 0) end
+        if along:length() < 1e-3 then along = vec3(0, 1, 0) end
         if heights and tonumber(heights[i]) then p = vec3(p.x, p.y, heights[i]) end
-        out[i] = { pos = p, dir = dir, up = vec3(0, 0, 1) }
+        out[i] = { pos = p, dir = turn(along:normalized(), yaw), up = vec3(0, 0, 1) }
     end
     return out
 end
@@ -393,6 +483,7 @@ end
 ---@return table? obj
 local function spawn(p)
     if not shapeExists(p.shape) then return nil end
+    M.ensureMaterials(p.shape)
     local obj = createObject("TSStatic")
     obj:setField("shapeName", 0, p.shape)
     obj:setField("collisionType", 0, p.collision)
@@ -538,6 +629,8 @@ end
 local function cleanup()
     hideAll()
     M.sets = {}
+    -- a new map, its own materials : looked at again
+    materialDirs = {}
     if collisionReloadAt then
         collisionReloadAt = nil
         if be then be:reloadCollision() end
