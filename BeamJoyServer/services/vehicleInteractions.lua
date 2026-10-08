@@ -21,8 +21,10 @@
 ---
 --- Electrics for late joiners : BeamMP only sends a car's electrics as they change. A client that
 --- sees another player's car appear asks for them (vehicleResyncRequest(serverVIDs)) ; this passes
---- each car on to its owner (vehicleResync(serverVIDs)), whose game makes BeamMP send them all again.
---- Nothing is kept here.
+--- each car on to its owner (vehicleResync(requesterID, serverVIDs)), whose game reads that car's
+--- state and answers (vehicleResyncState(requesterIDs, serverVID, electricsJson, devicesJson)) ;
+--- this hands it to those players only (vehicleResyncState(serverVID, electricsJson,
+--- devicesJson)). Nothing is kept here.
 
 local M = {
     -- between the requester's own vehicle and the car, by BeamMP's copy of their positions :
@@ -51,6 +53,8 @@ local M = {
     -- joining player's game asks for every car on the server, in a few batched messages)
     MAX_RESYNC_CARS = 50,
     MAX_RESYNC_PER_SECOND = 5,
+    -- bytes : a car's electrics or modes, as JSON (a big modded car has a few hundred keys)
+    MAX_RESYNC_STATE = 65536,
     --- playerID -> { second, count }
     ---@type table<integer, {second: integer, count: integer}>
     resyncRate = {},
@@ -206,7 +210,33 @@ local function vehicleResyncRequest(ctxt, serverVIDs)
         end
     end
     for ownerID, list in pairs(byOwner) do
-        communications_tx.sendToPlayer(ownerID, "vehicleResync", list)
+        communications_tx.sendToPlayer(ownerID, "vehicleResync", ctxt.senderID, list)
+    end
+end
+
+--- an owner's answer : one of their cars' state, for the players who asked for it
+---@param ctxt BJSContext
+---@param requesterIDs integer[]
+---@param serverVID string
+---@param electricsJson string
+---@param devicesJson string
+local function vehicleResyncState(ctxt, requesterIDs, serverVID, electricsJson, devicesJson)
+    if not ctxt.sender or type(requesterIDs) ~= "table" then return end
+    local ownerID, vid = parseServerVID(serverVID)
+    -- only an owner speaks for their own car
+    if ownerID ~= ctxt.senderID then return end
+    electricsJson = type(electricsJson) == "string" and electricsJson or ""
+    devicesJson = type(devicesJson) == "string" and devicesJson or ""
+    if #electricsJson > M.MAX_RESYNC_STATE or #devicesJson > M.MAX_RESYNC_STATE then return end
+    local key = string.format("%d-%d", ownerID, vid)
+    local count = 0
+    for _, id in pairs(requesterIDs) do
+        id = tonumber(id)
+        count = count + 1
+        if count > 64 then break end
+        if id and id ~= ctxt.senderID and services_players.players:find(function(p) return p.playerID == id end) then
+            communications_tx.sendToPlayer(id, "vehicleResyncState", key, electricsJson, devicesJson)
+        end
     end
 end
 
@@ -244,6 +274,7 @@ local function onInit()
     communications_rx.addHandler("vehicleTriggerRequest", vehicleTriggerRequest)
     communications_rx.addHandler("vehicleLatches", vehicleLatches)
     communications_rx.addHandler("vehicleResyncRequest", vehicleResyncRequest)
+    communications_rx.addHandler("vehicleResyncState", vehicleResyncState)
 end
 
 M.onInit = onInit
@@ -253,6 +284,7 @@ M.onVehicleReset = onVehicleReset
 M.onBJRequestCache = onBJRequestCache
 M.vehicleLatches = vehicleLatches
 M.vehicleResyncRequest = vehicleResyncRequest
+M.vehicleResyncState = vehicleResyncState
 M.vehicleLocked = vehicleLocked
 M.vehicleTriggerRequest = vehicleTriggerRequest
 

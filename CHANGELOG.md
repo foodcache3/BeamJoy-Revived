@@ -8,7 +8,14 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2621, server build 2433.
+Version 1.11.0 : client build 2622, server build 2434.
+
+- **The electrics resync for late joiners only reaches the player who asked** (direct request). It
+  used to have BeamMP send the car's whole set again, and BeamMP sends to everyone : a player joining
+  a busy server made every car resend to every player, restarting blinkers along the way. The
+  owner's game now reads what BeamMP last sent for that car (never changing it) and BeamJoy hands it
+  to that one player, whose game applies it with BeamMP's own functions. Nothing else changes for
+  anyone, and the owner's own sync is left alone. *(client + server)*
 
 - **Lights and other electrics show right for players who join later** (direct request). BeamMP
   only sends a car's electrics (headlights, signals, hazards, a police lightbar, a mod's own
