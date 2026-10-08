@@ -181,7 +181,7 @@ end
 --- Settings > Visual's activity markers hidden
 ---@return boolean
 local function markersSuppressed()
-    if beamjoy_markerSettings and beamjoy_markerSettings.hideActivities then return true end
+    if beamjoy_markerSettings and beamjoy_markerSettings.activitiesHidden() then return true end
     return navigation ~= nil and navigation.inActivity ~= nil and navigation.inActivity() == true
 end
 

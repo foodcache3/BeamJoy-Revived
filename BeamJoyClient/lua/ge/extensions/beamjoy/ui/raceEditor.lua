@@ -74,6 +74,8 @@ local parent
 ---@type {kind:"left"|"right"|"top", anchor:vec3, axis:vec3, min:number, max:number}?
 local draggingHandle = nil
 local lastHandlePush = 0
+-- the props drawer's placing mode (PLACING below)
+local updatePlacing, disarmProp
 
 --- A race's length in metres, following its route. The route runs from gate to gate through
 --- each gate's `parents` (the gate(s) it's reached from ; 0 = the start), taking the shortest
@@ -605,6 +607,10 @@ end
 --- geometry though, not a real engine gizmo, so there's no native widget to ask "was this click on
 --- you" ; raw `ui_imgui` mouse state + `camera.mouseRay()` stand in for that.
 local function onUpdate()
+    if updatePlacing() then
+        draggingHandle = nil
+        return
+    end
     if not parent or parent.activeEditor ~= M or not M.race or not M.activeGateIndex then
         draggingHandle = nil
         return
@@ -693,6 +699,7 @@ local function onOpen(raceId)
     end
     parent.activeEditor = M
     beamjoy_communications_ui.send("BJEditorChangeTool", gizmo.tool)
+    disarmProp()
 
     M.id = raceId
     local existing = raceId and table.find(beamjoy_races.data, function(r) return r.id == raceId end)
@@ -849,6 +856,7 @@ end
 
 local function onSelectGate(index)
     if not M.race then return end
+    if index then disarmProp() end
     draggingHandle = nil
     M.activeGateIndex = (index and M.race.gates[index]) and index or nil
     M.activeStartIndex = nil
@@ -861,6 +869,7 @@ end
 
 local function onSelectStart(index)
     if not M.race then return end
+    if index then disarmProp() end
     draggingHandle = nil
     M.activeStartIndex = (index and M.race.startPositions[index]) and index or nil
     M.activeGateIndex = nil
@@ -883,8 +892,12 @@ end
 ---@param clickType "left"|"middle"|"right"
 ---@param data onBJClickData
 local function onWorldClick(clickType, data)
-    if clickType ~= "left" then return end
     if not parent or parent.activeEditor ~= M or not M.race then return end
+    if M.placing then
+        if clickType == "right" then disarmProp(true) end
+        return
+    end
+    if clickType ~= "left" then return end
 
     local camPos, rayDir = camera.mouseRay()
     if not camPos then return end
@@ -1357,14 +1370,14 @@ local function onImportCode(race)
 end
 
 -- PROPS ----------------------------------------------------------------------------------------
--- race.props (see beamjoy_props for the entries and how they're spawned). Placed a few metres
--- ahead of you, facing your way (turned by the catalog's yaw so a barrier's long side follows it),
--- then moved with the gizmo : a single prop as a whole (rotation in every axis), a line by either
--- of its two ends (translation only : a line's props face along it, turned by its own yaw)
+-- race.props (see beamjoy_props for the entries and how they're spawned). Placed with the mouse
+-- from the props drawer (PLACING below), turned by the mesh's own yaw so a barrier's long side
+-- follows the way it faces, then moved with the gizmo : a single prop as a whole (rotation in
+-- every axis), a line by either of its two ends (translation only : a line's props face along it,
+-- turned by its own yaw)
 
--- how far ahead of you a new prop (or a new line's first end) is placed, and a new line's length
+-- how far ahead of you "move it in front of you" puts a prop, and where teleporting to one lands
 local PROP_PLACE_AHEAD = 6
-local PROP_LINE_LENGTH = 20
 
 ---@param v vec3|table
 ---@return table
@@ -1412,6 +1425,7 @@ local updatePropGizmo
 ---@param part "a"|"b"|nil a line's end (its first by default)
 function M.onSelectProp(index, part)
     if not M.race then return end
+    if index then disarmProp() end
     draggingHandle = nil
     local prop = index and M.race.props[index]
     M.activePropIndex = prop and index or nil
@@ -1487,8 +1501,15 @@ local function propPlacement()
 end
 
 ---@param prop table
-local function addProp(prop)
+---@param unselected boolean? added as it is, nothing selected (the props drawer placing on)
+local function addProp(prop, unselected)
     table.insert(M.race.props, prop)
+    if unselected then
+        markDirty()
+        pushUpdate()
+        propsChanged()
+        return
+    end
     M.activePropIndex = #M.race.props
     M.activePropPart = prop.kind == "line" and "b" or nil
     M.activeGateIndex, M.activeStartIndex = nil, nil
@@ -1497,45 +1518,6 @@ local function addProp(prop)
     pushUpdate()
     pushActive()
     propsChanged()
-end
-
----@param catalogId string
-local function onCreateProp(catalogId)
-    local cat = beamjoy_props.getCatalogEntry(catalogId)
-    if not M.race or not cat or not propBudget(1) then return end
-    local at, facing = propPlacement()
-    if not at then return end
-    addProp({
-        kind = "static",
-        shape = cat.shape,
-        pos = xyz(at),
-        dir = xyz(beamjoy_props.turn(facing, cat.yaw)),
-        up = { x = 0, y = 0, z = 1 },
-        scale = 1,
-    })
-end
-
----@param catalogId string
-local function onCreatePropLine(catalogId)
-    local cat = beamjoy_props.getCatalogEntry(catalogId)
-    if not M.race or not cat or not propBudget(2) then return end
-    local a, facing = propPlacement()
-    if not a then return end
-    local b = a + facing * PROP_LINE_LENGTH
-    b = vec3(b.x, b.y, M.snapToGroundEnabled and groundHeightAt(b) or a.z)
-    local room = beamjoy_props.MAX_PROPS - beamjoy_props.total(M.race.props)
-    local line = {
-        kind = "line",
-        shape = cat.shape,
-        a = xyz(a),
-        b = xyz(b),
-        count = math.max(2, math.min(math.floor(PROP_LINE_LENGTH / cat.length + .5) + 1, room)),
-        yaw = cat.yaw,
-        scale = 1,
-        followGround = true,
-    }
-    updateLineHeights(line)
-    addProp(line)
 end
 
 ---@param index integer
@@ -1593,9 +1575,8 @@ local function onDuplicateProp(index)
         copy.a, copy.b = xyz(na), xyz(nb)
         updateLineHeights(copy)
     else
-        local cat = beamjoy_props.catalogForShape(prop.shape)
         local dir = flatDir(toVec(prop.dir))
-        local pos = toVec(prop.pos) + dir:cross(vec3(0, 0, 1)) * ((cat and cat.length or 2) * (prop.scale or 1))
+        local pos = toVec(prop.pos) + dir:cross(vec3(0, 0, 1)) * (beamjoy_props.tuning(prop.shape).length * (prop.scale or 1))
         if M.snapToGroundEnabled then pos = vec3(pos.x, pos.y, groundHeightAt(pos)) end
         copy.pos = xyz(pos)
     end
@@ -1641,9 +1622,8 @@ local function onTeleportToProp(index)
         target = toVec(prop.a)
         facing = flatDir(toVec(prop.b) - target)
     else
-        local cat = beamjoy_props.catalogForShape(prop.shape)
         target = toVec(prop.pos)
-        facing = beamjoy_props.turn(flatDir(toVec(prop.dir)), -(cat and cat.yaw or 0))
+        facing = beamjoy_props.turn(flatDir(toVec(prop.dir)), -beamjoy_props.tuning(prop.shape).yaw)
     end
     beamjoy_vehicles.setVehiclePositionRotation(current.veh, target - facing * (PROP_PLACE_AHEAD + 2), facing,
         vec3(0, 0, 1))
@@ -1656,10 +1636,261 @@ local function onSetPropToVehicle(index)
     if not prop or prop.kind == "line" then return end
     local at, facing = propPlacement()
     if not at then return end
-    local cat = beamjoy_props.catalogForShape(prop.shape)
     prop.pos = xyz(at)
-    prop.dir = xyz(beamjoy_props.turn(facing, cat and cat.yaw or 0))
+    prop.dir = xyz(beamjoy_props.turn(facing, beamjoy_props.tuning(prop.shape).yaw))
     prop.up = { x = 0, y = 0, z = 1 }
+    updatePropGizmo()
+    markDirty()
+    pushUpdate()
+    propsChanged()
+end
+
+-- PLACING --------------------------------------------------------------------------------------
+-- The props drawer's armed prop (direct request) : a ghost of it follows the mouse over the world ;
+-- a click places one there, a click-and-drag lays a line of them. The wheel turns it (or, while
+-- dragging, spaces the line out), Shift on release keeps it armed for the next one, a right-click
+-- or Esc stops. Per frame : one ray against the static collision (castRayStatic : neither the ghost
+-- nor the editor's preview props are in it, see beamjoy_props) and the ghost moved (one
+-- no-collision TSStatic, a line's worth while dragging).
+
+local PLACE_RAY_DISTANCE = 1000
+-- a shorter drag is a click : one prop
+local PLACE_LINE_MIN = 1.5
+local PLACE_LINE_MAX_COUNT = 60
+local PLACE_ROTATE_STEP = 15
+local PLACE_SPACING_MIN, PLACE_SPACING_MAX = .5, 4
+local GHOST_SET = "editorGhost"
+
+---@type {shape: string, rot: number, spacing: number, hit: vec3?, facing: vec3?, drag: {a: vec3, b: vec3, facing: vec3}?}?
+M.placing = nil
+local lastPlacingPush = nil
+
+---@param v number
+---@return number
+local function round2(v) return math.floor(v * 100 + .5) / 100 end
+
+---@param degrees number
+---@return number in -180..180
+local function wrapYaw(degrees) return (degrees + 180) % 360 - 180 end
+
+--- a mesh's own lift, kept on the entry for one the catalog doesn't tune (its lift was measured
+--- here, so every player stands it the same) ; nil otherwise
+---@param shape string
+---@param tuning table beamjoy_props.tuning(shape)
+---@return number?
+local function entryLift(shape, tuning)
+    if beamjoy_props.catalogForShape(shape) or math.abs(tuning.lift) < 1e-3 then return nil end
+    return round3(tuning.lift)
+end
+
+--- what a release would place now : one entry (a single prop or a line), with the line's length
+---@return table? entry, number meters
+local function placingEntry()
+    local p = M.placing
+    local t = beamjoy_props.tuning(p.shape)
+    local yaw = wrapYaw(t.yaw + p.rot)
+    local lift = entryLift(p.shape, t)
+    local d = p.drag
+    if d then
+        local meters = d.a:distance(d.b)
+        local room = beamjoy_props.MAX_PROPS - beamjoy_props.total(M.race.props)
+        if meters >= PLACE_LINE_MIN and room >= 2 then
+            local count = math.floor(meters / (t.length * p.spacing) + .5) + 1
+            local line = {
+                kind = "line",
+                shape = p.shape,
+                a = xyz(d.a),
+                b = xyz(d.b),
+                count = math.max(2, math.min(count, PLACE_LINE_MAX_COUNT, room)),
+                yaw = yaw,
+                scale = 1,
+                followGround = true,
+                lift = lift,
+            }
+            updateLineHeights(line)
+            return line, meters
+        end
+    end
+    local at, facing = d and d.a or p.hit, d and d.facing or p.facing
+    if not at or not facing then return nil, 0 end
+    return {
+        kind = "static",
+        shape = p.shape,
+        pos = xyz(at),
+        dir = xyz(beamjoy_props.turn(facing, yaw)),
+        up = { x = 0, y = 0, z = 1 },
+        scale = 1,
+        lift = lift,
+    }, 0
+end
+
+--- the drawer's placing strip : what's armed, and what a release would place
+---@param entry table?
+---@param meters number?
+local function pushPlacing(entry, meters)
+    local p = M.placing
+    local state = p and {
+        armed = true,
+        shape = p.shape,
+        dragging = p.drag ~= nil,
+        count = entry and beamjoy_props.weight(entry) or 0,
+        meters = math.floor((meters or 0) + .5),
+        rot = p.rot,
+        spacing = round2(p.spacing),
+        overWorld = p.hit ~= nil,
+    } or { armed = false }
+    local key = p and string.format("%s|%s|%d|%d|%d|%.2f|%s", p.shape, tostring(state.dragging), state.count,
+        state.meters, state.rot, state.spacing, tostring(state.overWorld)) or "off"
+    if key == lastPlacingPush then return end
+    lastPlacingPush = key
+    beamjoy_communications_ui.send("BJEditorRacePlacing", state)
+end
+
+---@param dropLineOnly boolean? while dragging, only drop the line being laid (stay armed)
+disarmProp = function(dropLineOnly)
+    if not M.placing then return end
+    if dropLineOnly and M.placing.drag then
+        M.placing.drag = nil
+        return
+    end
+    M.placing = nil
+    beamjoy_props.hide(GHOST_SET)
+    pushPlacing()
+end
+
+--- the drawer arms a mesh : nothing stays selected while placing (the gizmo would take the clicks)
+---@param shape string
+local function onArmProp(shape)
+    if not M.race or not parent or parent.activeEditor ~= M then return end
+    if not beamjoy_propPicker.isPlaceable(shape) then return end
+    if not propBudget(1) then return disarmProp() end
+    -- measured now, so the ghost already stands the way it'll be placed
+    beamjoy_propPicker.measure(shape)
+    local rot = M.placing and M.placing.shape == shape and M.placing.rot or 0
+    M.placing = { shape = shape, rot = rot, spacing = 1 }
+    draggingHandle = nil
+    if M.activeGateIndex or M.activeStartIndex or M.activePropIndex then
+        M.activeGateIndex, M.activeStartIndex = nil, nil
+        M.activePropIndex, M.activePropPart = nil, nil
+        gizmo.hide()
+        pushActive()
+        extensions.hook("onBJRaceMarkersRefresh")
+    end
+    pushPlacing()
+end
+
+--- what's being placed goes into the race ; armed still with Shift held, else the new prop is
+--- selected (its gizmo for fine adjustments)
+local function placeNow()
+    local entry = placingEntry()
+    M.placing.drag = nil
+    if not entry or not propBudget(beamjoy_props.weight(entry)) then return end
+    local io = ui_imgui.GetIO()
+    local keepArmed = io ~= nil and io.KeyShift == true
+    if keepArmed then
+        addProp(entry, true)
+        if beamjoy_props.total(M.race.props) >= beamjoy_props.MAX_PROPS then disarmProp() end
+    else
+        disarmProp()
+        addProp(entry)
+    end
+end
+
+---@return boolean escPressed
+local function escPressed()
+    local ok, pressed = pcall(function()
+        return ui_imgui.IsKeyPressed(ui_imgui.GetKeyIndex(ui_imgui.Key_Escape))
+    end)
+    return ok and pressed == true
+end
+
+---@return number the mouse wheel's turn this frame (0 without one)
+local function mouseWheel(io)
+    local ok, wheel = pcall(function() return io.MouseWheel end)
+    return ok and tonumber(wheel) or 0
+end
+
+--- per frame while a prop is armed ; false when none is (the editor's own mouse handling runs)
+---@return boolean
+updatePlacing = function()
+    local p = M.placing
+    if not p then return false end
+    if not parent or parent.activeEditor ~= M or not M.race then
+        disarmProp()
+        return false
+    end
+    if escPressed() then
+        disarmProp(true)
+        if not M.placing then return true end
+    end
+
+    local io = ui_imgui.GetIO()
+    local overUI = (getCEFFocusMouse and getCEFFocusMouse() == true) or (io ~= nil and io.WantCaptureMouse == true)
+    p.hit = nil
+    -- a line being dragged keeps following the mouse, even over the UI
+    if not overUI or p.drag then
+        local camPos, rayDir = camera.mouseRay()
+        if camPos then
+            local dist = castRayStatic(camPos, rayDir, PLACE_RAY_DISTANCE)
+            if dist and dist > 0 and dist < PLACE_RAY_DISTANCE then
+                p.hit = camPos + rayDir * dist
+                p.facing = flatDir(rayDir)
+            end
+        end
+    end
+
+    if not overUI then
+        local wheel = io and mouseWheel(io) or 0
+        if wheel ~= 0 then
+            if p.drag then
+                p.spacing = math.max(PLACE_SPACING_MIN, math.min(p.spacing * (wheel > 0 and 1.1 or 1 / 1.1),
+                    PLACE_SPACING_MAX))
+            else
+                p.rot = (p.rot + (wheel > 0 and 1 or -1) * PLACE_ROTATE_STEP) % 360
+            end
+        end
+    end
+
+    if p.drag then
+        if p.hit then p.drag.b = p.hit end
+        if ui_imgui.IsMouseReleased(ui_imgui.MouseButton_Left) then
+            placeNow()
+            if not M.placing then return true end
+        end
+    elseif p.hit and not overUI and ui_imgui.IsMouseClicked(ui_imgui.MouseButton_Left) and
+        not (gizmo.isHovered and gizmo.isHovered()) then
+        p.drag = { a = p.hit, b = p.hit, facing = p.facing }
+    end
+
+    local entry, meters
+    if p.hit or p.drag then entry, meters = placingEntry() end
+    if entry then
+        beamjoy_props.show(GHOST_SET, { entry }, { collision = false, collisionType = "None" })
+    else
+        beamjoy_props.hide(GHOST_SET)
+    end
+    pushPlacing(entry, meters)
+    return true
+end
+
+--- a placed prop takes another mesh (the drawer's "Swap mesh"), kept where it is and turned by the
+--- difference between the two meshes' own facings
+---@param index integer
+---@param shape string
+local function onSwapPropShape(index, shape)
+    local prop = M.race and M.race.props[index]
+    if not prop or prop.shape == shape or not beamjoy_propPicker.isPlaceable(shape) then return end
+    beamjoy_propPicker.measure(prop.shape)
+    beamjoy_propPicker.measure(shape)
+    local before, after = beamjoy_props.tuning(prop.shape), beamjoy_props.tuning(shape)
+    local delta = after.yaw - before.yaw
+    prop.shape = shape
+    if prop.kind == "line" then
+        prop.yaw = wrapYaw((tonumber(prop.yaw) or 0) + delta)
+    elseif prop.dir then
+        prop.dir = xyz(beamjoy_props.turn(toVec(prop.dir), delta))
+    end
+    prop.lift = entryLift(shape, after)
     updatePropGizmo()
     markDirty()
     pushUpdate()
@@ -1694,8 +1925,6 @@ local function onInit(activityEditor)
     beamjoy_communications_ui.addHandler("BJEditorRaceSave", onSave)
     beamjoy_communications_ui.addHandler("BJEditorRaceSaveAsNew", onSaveAsNew)
     beamjoy_communications_ui.addHandler("BJEditorRaceImportCode", onImportCode)
-    beamjoy_communications_ui.addHandler("BJEditorRaceCreateProp", onCreateProp)
-    beamjoy_communications_ui.addHandler("BJEditorRaceCreatePropLine", onCreatePropLine)
     beamjoy_communications_ui.addHandler("BJEditorRaceSelectProp", function(index, part) M.onSelectProp(index, part) end)
     beamjoy_communications_ui.addHandler("BJEditorRaceSetProp", onSetProp)
     beamjoy_communications_ui.addHandler("BJEditorRaceDeleteProp", onDeleteProp)
@@ -1703,11 +1932,15 @@ local function onInit(activityEditor)
     beamjoy_communications_ui.addHandler("BJEditorRaceSplitPropLine", onSplitPropLine)
     beamjoy_communications_ui.addHandler("BJEditorRaceTeleportToProp", onTeleportToProp)
     beamjoy_communications_ui.addHandler("BJEditorRaceSetPropToVehicle", onSetPropToVehicle)
+    beamjoy_communications_ui.addHandler("BJEditorRaceArmProp", onArmProp)
+    beamjoy_communications_ui.addHandler("BJEditorRaceDisarmProp", function() disarmProp() end)
+    beamjoy_communications_ui.addHandler("BJEditorRaceSwapPropShape", onSwapPropShape)
 end
 
 local function onClose()
     if not parent then return end
     if parent.activeEditor == M then
+        disarmProp()
         gizmo.hide()
         draggingHandle = nil
         M.race = nil

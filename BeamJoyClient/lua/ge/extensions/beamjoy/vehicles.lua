@@ -501,8 +501,12 @@ local function onVehicleResetted(vid)
         -- it run in parallel would still let a mid-race resetter phase through real racing
         -- opponents for however long RespawnGhostTimeout is configured, defeating the entire point
         -- of scoping the race-specific fix tightly in the first place.
-        local racing = beamjoy_raceRunner and beamjoy_raceRunner.session and
-            beamjoy_raceRunner.session.state == "RACE"
+        -- the whole session, grid and countdown included (direct report : the grid teleport is a
+        -- reset too, and this ghosted racers through the start with the race's own "ghost on
+        -- countdown" off) : the race's own ghost options decide there
+        local session = beamjoy_raceRunner and beamjoy_raceRunner.session
+        local racing = session and (session.state == "GRID" or session.state == "COUNTDOWN" or
+            session.state == "RACE")
         if not racing then
             M.applyRespawnProtection(vid)
         end

@@ -288,23 +288,18 @@
                 <icon name="snapToGround"></icon>
             </button>
             <vr></vr>
-            <bj-select class="flex-grow-1" options="$ctrl.propCatalogOptions" ng-model="$ctrl.propPick"></bj-select>
             <button
-                class="btn success"
-                ng-disabled="!$ctrl.propPick"
-                ng-click="$ctrl.createProp($event)"
-                title="{{'beamjoy.window.config.tabs.races.props.add.tooltip' | translate}}"
+                class="btn"
+                ng-class="$ctrl.propDrawerOpen ? 'primary' : 'success'"
+                ng-click="$ctrl.togglePropDrawer($event)"
+                title="{{'beamjoy.window.config.tabs.races.props.drawer.open.tooltip' | translate}}"
             >
-                {{'beamjoy.window.config.tabs.races.props.add' | translate}}
+                {{($ctrl.propDrawerOpen
+                    ? 'beamjoy.window.config.tabs.races.props.drawer.open.active'
+                    : 'beamjoy.window.config.tabs.races.props.drawer.open') | translate}}
             </button>
-            <button
-                class="btn success"
-                ng-disabled="!$ctrl.propPick"
-                ng-click="$ctrl.createPropLine($event)"
-                title="{{'beamjoy.window.config.tabs.races.props.addLine.tooltip' | translate}}"
-            >
-                {{'beamjoy.window.config.tabs.races.props.addLine' | translate}}
-            </button>
+            <span class="flex-grow-1"></span>
+            <span class="small opacity-70">{{$ctrl.propTotal}}/{{$ctrl.PROP_MAX}}</span>
         </div>
     </div>
 
@@ -642,9 +637,6 @@
     </div>
 
     <div class="section-panel" ng-if="$ctrl.activeSection === 'props'">
-        <div class="px-2 pb-1 small opacity-70">
-            {{'beamjoy.window.config.tabs.races.props.total' | translate}} {{$ctrl.propTotal}}/{{$ctrl.PROP_MAX}}
-        </div>
         <div ng-repeat="prop in $ctrl.race.props track by $index">
             <div
                 id="race-prop-row-{{$index}}"
@@ -761,6 +753,14 @@
                             >
                                 {{'beamjoy.window.config.tabs.races.props.split' | translate}}
                             </button>
+                            <button
+                                class="btn"
+                                ng-class="$ctrl.propSwap && $ctrl.propSwap.index === $index ? 'primary' : 'neutral'"
+                                ng-click="$ctrl.swapPropMesh($event, $index)"
+                                title="{{'beamjoy.window.config.tabs.races.props.swap.tooltip' | translate}}"
+                            >
+                                {{'beamjoy.window.config.tabs.races.props.swap' | translate}}
+                            </button>
                         </td>
                     </tr>
                 </table>
@@ -770,6 +770,17 @@
             {{'beamjoy.window.config.tabs.races.props.none' | translate}}
         </div>
     </div>
+
+    <!-- the props drawer : moves itself beside this window (propDrawer/app.js) -->
+    <bj-prop-drawer
+        open="$ctrl.propDrawerOpen"
+        catalog="$ctrl.propCatalog"
+        swap="$ctrl.propSwap"
+        prop-total="$ctrl.propTotal"
+        prop-max="$ctrl.PROP_MAX"
+        on-close="$ctrl.closePropDrawer()"
+        on-swap-end="$ctrl.endPropSwap()"
+    ></bj-prop-drawer>
 
     <div class="section-panel" ng-if="$ctrl.activeSection === 'settings'">
         <table class="w-100">

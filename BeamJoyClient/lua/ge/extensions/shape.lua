@@ -177,7 +177,7 @@ M.Arrow = Arrow
 -- the game's own GPS destination column (gameplay/markerInteraction.lua's drawDistanceColumn) :
 -- white, 1 km tall, wider and more opaque with distance. Gone within BEAM_HIDE_DISTANCE, where the
 -- marker it points at is in plain view anyway, fading out over the last BEAM_FADE metres
-local BEAM_HIDE_DISTANCE = 50
+local BEAM_HIDE_DISTANCE = 100 -- direct request (was 50)
 local BEAM_FADE = 15
 local beamTop = vec3(0, 0, 1000)
 local beamColor = ColorF(1, 1, 1, 1)

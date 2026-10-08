@@ -134,6 +134,15 @@ local function show(obj, onChange, onDragEnd)
     worldEditorCppApi.setScaleSnap(false, 0)
 end
 
+--- the mouse is on one of the shown gizmo's handles (what the game's editor.isAxisGizmoHovered
+--- checks) : a click there is for the gizmo
+---@return boolean
+local function isHovered()
+    if not M.state then return false end
+    local ok, element = pcall(function() return worldEditorCppApi.getAxisGizmoSelectedElement() end)
+    return ok and element ~= nil and element ~= -1
+end
+
 local function hide()
     M.state = false
     M.onChange = nil
@@ -161,6 +170,7 @@ M.onUpdate = onUpdate
 
 M.show = show
 M.hide = hide
+M.isHovered = isHovered
 M.setTool = setTool
 
 return M

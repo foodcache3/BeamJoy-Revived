@@ -31,9 +31,12 @@ angular.module("beamjoy").component("bjRaceHud", {
             // storage unavailable : the standard layout
         }
         this.spectator = false;
+        // a passive race run (raceFreeroam.lua) : the compact layout, unless the HUD is off
+        this.passive = false;
         this.layout = this.chosenLayout;
         const applyLayout = () => {
             if (this.chosenLayout === "off") this.layout = this.focused ? "compact" : "off";
+            else if (this.passive) this.layout = "compact";
             else this.layout = this.spectator ? "full" : this.chosenLayout;
         };
         $rootScope.$on("BJRaceHudLayout", (_, layout) => {
@@ -74,6 +77,7 @@ angular.module("beamjoy").component("bjRaceHud", {
 
         const build = (data) => {
             this.spectator = !!data.spectator;
+            this.passive = !!data.passive;
             applyLayout();
             const self = data.self || {};
             const laps = data.totalLaps || 1;

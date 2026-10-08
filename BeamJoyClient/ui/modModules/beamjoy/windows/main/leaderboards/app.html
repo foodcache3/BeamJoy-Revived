@@ -167,6 +167,26 @@
         align-items: center;
         column-gap: 0.65em;
     }
+    /* Real bug (direct report, the drag board's headers out of line with their columns) : the
+       columns are sized in em, and em is each element's own font size. The header's text (0.75em)
+       is smaller than the rows' (0.85em), so every header column came out narrower than the ones
+       under it. Both grids are the rows' size now, the header's labels shrunk inside their cells.
+       The rows scroll too : the header, the rows and the pinned row all keep the scrollbar's
+       gutter, so a scrollbar never narrows the rows alone */
+    bj-main-leaderboards .dlb-grid.lbx-head {
+        font-size: 0.85em;
+    }
+    bj-main-leaderboards .dlb-grid.lbx-head > * {
+        font-size: 0.8824em;
+    }
+    bj-main-leaderboards .dlb-grid.lbx-head,
+    bj-main-leaderboards .dlb-grid.lbx-pinned {
+        overflow: hidden;
+        scrollbar-gutter: stable;
+    }
+    bj-main-leaderboards .lbx-scroll {
+        scrollbar-gutter: stable;
+    }
     bj-main-leaderboards .dlb-grid.packages {
         grid-template-columns: 3em minmax(0, 1.2fr) 3.6em 7em 5.6em 3.8em minmax(0, 1fr) 5.6em;
     }

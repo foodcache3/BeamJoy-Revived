@@ -1,0 +1,795 @@
+<style>
+    /* the drawer lives on the page itself (moved there from the editor, see app.js), so every rule
+       here is its own, prefixed pd- ; sizes in em follow the config window's own font size */
+    bj-prop-drawer {
+        display: contents;
+        --pd-bg: rgba(14, 16, 22, 0.94);
+        --pd-tile: #22252c;
+        --pd-tile-hi: #2a2d35;
+        --pd-accent: rgb(230, 92, 0);
+        --pd-glow: #ff8a2a;
+        --pd-text: #eef0f4;
+        --pd-muted: #a7aebf;
+        --pd-line: rgba(255, 255, 255, 0.08);
+    }
+    .pd-panel,
+    .pd-strip,
+    .pd-preview,
+    .pd-hints {
+        position: fixed;
+        z-index: 60;
+        box-sizing: border-box;
+        color: var(--pd-text);
+        font-family: "Noto Sans", sans-serif;
+        font-size: 1em;
+        pointer-events: auto;
+        user-select: none;
+    }
+    .pd-panel *,
+    .pd-strip *,
+    .pd-preview *,
+    .pd-hints * {
+        box-sizing: border-box;
+    }
+    .pd-panel button,
+    .pd-strip button {
+        font-family: inherit;
+        color: inherit;
+    }
+    .pd-panel :focus-visible,
+    .pd-strip :focus-visible {
+        outline: 0.15em solid var(--pd-glow);
+        outline-offset: 0.1em;
+    }
+
+    /* panel */
+    .pd-panel {
+        display: flex;
+        flex-direction: column;
+        background: var(--pd-bg);
+        border: 1px solid var(--pd-line);
+        border-radius: 0.4em;
+        box-shadow: 0 0 2.6em rgba(0, 0, 0, 0.45);
+        animation: pd-in 0.16s ease-out;
+    }
+    .pd-panel.pd-left {
+        border-right: none;
+        border-radius: 0.4em 0 0 0.4em;
+    }
+    .pd-panel.pd-right {
+        border-left: none;
+        border-radius: 0 0.4em 0.4em 0;
+    }
+    .pd-panel.pd-cover {
+        border-radius: 0 0 0.3em 0.3em;
+        box-shadow: none;
+        animation: none;
+    }
+    @keyframes pd-in {
+        from {
+            opacity: 0;
+            transform: translateX(1.2em);
+        }
+    }
+    .pd-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.6em 0.5em 0.4em 0.9em;
+    }
+    .pd-title {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-size: 1.35em;
+    }
+    .pd-count {
+        color: var(--pd-muted);
+        font-size: 0.9em;
+    }
+    .pd-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.1em;
+        height: 2.1em;
+        flex-shrink: 0;
+        padding: 0;
+        border: none;
+        border-radius: 0.3em;
+        background: transparent;
+        cursor: pointer;
+    }
+    .pd-icon:hover {
+        background: rgba(255, 255, 255, 0.08);
+    }
+    .pd-icon svg {
+        width: 1.2em;
+        height: 1.2em;
+    }
+    .pd-head .pd-icon {
+        margin-left: auto;
+    }
+    .pd-search {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        margin: 0 0.8em;
+        height: 2.5em;
+        padding: 0 0.6em;
+        border-radius: 0.3em 0.3em 0 0;
+        background: rgba(0, 0, 0, 0.4);
+        border-bottom: 0.15em solid var(--pd-accent);
+        color: var(--pd-muted);
+    }
+    .pd-search svg {
+        width: 1.15em;
+        height: 1.15em;
+        flex-shrink: 0;
+    }
+    .pd-search input {
+        flex: 1;
+        min-width: 0;
+        height: 100%;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: #fff;
+        font: 1.05em "Noto Sans", sans-serif;
+        outline: none;
+    }
+    .pd-kbd {
+        display: inline-block;
+        min-width: 1.5em;
+        padding: 0.05em 0.45em;
+        border-radius: 0.25em;
+        background: #363a45;
+        border-bottom: 0.15em solid #1b1d23;
+        color: #fff;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-size: 0.85em;
+        text-align: center;
+    }
+    .pd-seg {
+        display: flex;
+        margin: 0.7em 0.8em 0;
+        padding: 0.2em;
+        border-radius: 0.35em;
+        background: rgba(0, 0, 0, 0.35);
+    }
+    .pd-seg button {
+        flex: 1;
+        height: 2.1em;
+        border: none;
+        border-radius: 0.3em;
+        background: transparent;
+        cursor: pointer;
+        font-size: 0.95em;
+        color: #c9ced9;
+    }
+    .pd-seg button.on {
+        background: #363a45;
+        color: #fff;
+    }
+    .pd-banner {
+        display: flex;
+        gap: 0.6em;
+        align-items: flex-start;
+        margin: 0.7em 0.8em 0;
+        padding: 0.55em 0.75em;
+        border-radius: 0.3em;
+        font-size: 0.9em;
+        line-height: 1.45;
+    }
+    .pd-banner.warn {
+        background: rgba(192, 205, 4, 0.1);
+        color: #e4e9a8;
+    }
+    .pd-banner.swap {
+        background: rgba(0, 140, 255, 0.14);
+        color: #cfe6ff;
+    }
+    .pd-banner button {
+        margin-left: auto;
+        flex-shrink: 0;
+        border: none;
+        background: none;
+        color: #8cc8ff;
+        cursor: pointer;
+        font-size: 1em;
+        text-decoration: underline;
+    }
+    .pd-body {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        margin-top: 0.7em;
+        border-top: 1px solid var(--pd-line);
+    }
+    .pd-rail {
+        width: 9.6em;
+        flex-shrink: 0;
+        overflow-y: auto;
+        padding: 0.5em 0.4em;
+        display: flex;
+        flex-direction: column;
+        gap: 0.15em;
+        border-right: 1px solid var(--pd-line);
+    }
+    .pd-cover .pd-rail {
+        width: 8.4em;
+    }
+    .pd-rail button span:first-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .pd-rail button {
+        display: flex;
+        align-items: center;
+        gap: 0.4em;
+        width: 100%;
+        padding: 0.45em 0.6em;
+        border: none;
+        border-radius: 0.3em;
+        background: none;
+        cursor: pointer;
+        text-align: left;
+        font-size: 0.95em;
+        color: #c9ced9;
+    }
+    .pd-rail button:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: #fff;
+    }
+    .pd-rail button.on {
+        background: rgba(230, 92, 0, 0.44);
+        color: #fff;
+    }
+    .pd-rail .pd-n {
+        margin-left: auto;
+        font-size: 0.85em;
+        color: #979dad;
+    }
+    .pd-rail button.on .pd-n {
+        color: #ffe0c8;
+    }
+    .pd-rail hr {
+        width: 100%;
+        border: none;
+        border-top: 1px solid var(--pd-line);
+        margin: 0.3em 0;
+    }
+    .pd-gridwrap {
+        flex: 1;
+        min-width: 0;
+        overflow-y: auto;
+        position: relative;
+    }
+    .pd-status {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5em;
+        padding: 0.6em 0.8em 0;
+        font-size: 0.85em;
+        color: #979dad;
+    }
+    .pd-empty {
+        padding: 1.8em 1.2em;
+        color: #c9ced9;
+        line-height: 1.5;
+    }
+    .pd-empty .btn {
+        margin-top: 0.8em;
+    }
+    .pd-spacer {
+        position: relative;
+    }
+    .pd-grid {
+        display: grid;
+        gap: 0.6em;
+        padding: 0.6em 0.8em;
+        will-change: transform;
+    }
+    .pd-cell {
+        position: relative;
+    }
+    .pd-tile {
+        display: flex;
+        flex-direction: column;
+        gap: 0.35em;
+        width: 100%;
+        height: 11em;
+        padding: 0.45em;
+        border: 1px solid transparent;
+        border-radius: 0.45em;
+        background: var(--pd-tile);
+        cursor: pointer;
+        text-align: left;
+    }
+    .pd-tile:hover,
+    .pd-tile.hi {
+        border-color: rgba(255, 138, 42, 0.55);
+        background: var(--pd-tile-hi);
+    }
+    .pd-tile.armed {
+        border-color: var(--pd-accent);
+        background: #2c2622;
+    }
+    .pd-thumb {
+        position: relative;
+        flex-shrink: 0;
+        height: 5.9em;
+        border-radius: 0.3em;
+        background: radial-gradient(ellipse at 50% 88%, #4c515c 0, #2c3038 52%, #1d2026 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+    .pd-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+    .pd-thumb .pd-ph {
+        width: 2.6em;
+        height: 2.6em;
+        opacity: 0.35;
+    }
+    .pd-rendering {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.08) 50%, transparent 70%);
+        background-size: 200% 100%;
+        animation: pd-sweep 0.9s linear infinite;
+    }
+    @keyframes pd-sweep {
+        from {
+            background-position: 120% 0;
+        }
+        to {
+            background-position: -80% 0;
+        }
+    }
+    .pd-tname {
+        flex-shrink: 0;
+        font-size: 0.92em;
+        line-height: 1.3;
+        height: 2.6em;
+        overflow: hidden;
+        word-break: break-word;
+    }
+    .pd-tmeta {
+        display: flex;
+        align-items: center;
+        gap: 0.35em;
+        font-size: 0.85em;
+        color: var(--pd-muted);
+    }
+    .pd-tmeta svg,
+    .pd-row svg {
+        width: 1em;
+        height: 1em;
+        flex-shrink: 0;
+    }
+    .pd-chip {
+        position: absolute;
+        padding: 0.05em 0.4em;
+        border-radius: 0.25em;
+        font-size: 0.78em;
+        font-weight: 600;
+        color: #fff;
+    }
+    .pd-chip.map {
+        left: 0.35em;
+        top: 0.35em;
+        background: #7b3fb0;
+    }
+    .pd-chip.placing {
+        right: 0.35em;
+        bottom: 0.35em;
+        background: var(--pd-accent);
+    }
+    .pd-star {
+        position: absolute;
+        right: 0.7em;
+        top: 0.7em;
+        width: 1.9em;
+        height: 1.9em;
+        padding: 0;
+        border: none;
+        border-radius: 0.3em;
+        background: rgba(10, 12, 17, 0.6);
+        color: #b8bdc8;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+    }
+    .pd-star svg {
+        width: 1.1em;
+        height: 1.1em;
+    }
+    .pd-cell:hover .pd-star,
+    .pd-star.on,
+    .pd-star:focus-visible {
+        opacity: 1;
+    }
+    .pd-star.on {
+        color: #ffc24a;
+    }
+    .pd-dock {
+        flex-shrink: 0;
+        display: grid;
+        grid-template-columns: 8em minmax(0, 1fr);
+        gap: 0.8em;
+        padding: 0.7em 0.8em;
+        border-top: 1px solid var(--pd-line);
+        background: rgba(0, 0, 0, 0.25);
+    }
+    .pd-dock .pd-thumb {
+        height: 6.4em;
+    }
+    .pd-dock-text {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3em;
+        min-width: 0;
+    }
+
+    /* the strip while placing */
+    .pd-strip {
+        width: 5.4em;
+        padding: 0.7em 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5em;
+        background: var(--pd-bg);
+        border: 1px solid var(--pd-line);
+        border-radius: 0.4em;
+    }
+    .pd-strip .pd-thumb {
+        width: 4.2em;
+        height: 3.4em;
+    }
+    .pd-strip small {
+        padding: 0 0.3em;
+        font-size: 0.8em;
+        color: var(--pd-muted);
+        text-align: center;
+        line-height: 1.3;
+        word-break: break-word;
+    }
+
+    /* the hover preview */
+    .pd-preview {
+        padding: 0.7em;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5em;
+        border-radius: 0.4em;
+        background: rgba(14, 16, 22, 0.96);
+        border: 1px solid var(--pd-line);
+        box-shadow: 0 1em 2.4em rgba(0, 0, 0, 0.45);
+        pointer-events: none;
+    }
+    .pd-preview .pd-thumb {
+        height: 11em;
+    }
+    .pd-pv-name {
+        margin: 0;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-size: 1.2em;
+        line-height: 1.2;
+    }
+    .pd-dock .pd-pv-name {
+        font-size: 1.05em;
+    }
+    .pd-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        font-size: 0.9em;
+        color: #c9ced9;
+    }
+    .pd-path {
+        font-size: 0.78em;
+        color: #8a90a0;
+        word-break: break-all;
+    }
+    .pd-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3em;
+    }
+    .pd-tags span {
+        padding: 0.05em 0.45em;
+        border-radius: 0.25em;
+        background: #282b33;
+        font-size: 0.85em;
+        color: var(--pd-muted);
+    }
+    .pd-how {
+        font-size: 0.85em;
+        color: #979dad;
+        border-top: 1px solid var(--pd-line);
+        padding-top: 0.5em;
+    }
+
+    /* what the mouse does while placing */
+    .pd-hints {
+        left: 50%;
+        bottom: 1.6em;
+        transform: translateX(-50%);
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 0.4em 1em;
+        max-width: 90vw;
+        padding: 0.55em 0.9em;
+        border-radius: 0.4em;
+        background: rgba(10, 12, 17, 0.85);
+        font-size: 0.9em;
+        color: #c9ced9;
+        pointer-events: none;
+    }
+    .pd-hints > span {
+        display: flex;
+        align-items: center;
+        gap: 0.4em;
+    }
+    .pd-hints .pd-line {
+        color: #fff;
+        font-weight: 600;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .pd-panel,
+        .pd-rendering {
+            animation: none;
+        }
+    }
+</style>
+
+<section
+    class="pd-panel"
+    ng-show="$ctrl.open && !$ctrl.folded() && $ctrl.pos.mode !== 'hidden'"
+    ng-class="'pd-' + $ctrl.pos.mode"
+    ng-style="$ctrl.pos.panel"
+    ng-keydown="$ctrl.onKey($event)"
+    aria-label="{{$ctrl.T('title')}}"
+>
+    <div class="pd-head">
+        <span class="pd-title">{{$ctrl.T('title')}}</span>
+        <span class="pd-count">{{$ctrl.propTotal}}/{{$ctrl.propMax}}</span>
+        <button class="pd-icon" ng-click="$ctrl.close()" title="{{$ctrl.T('close')}}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                <path d="M6 6l12 12M18 6L6 18"></path>
+            </svg>
+        </button>
+    </div>
+    <label class="pd-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="11" cy="11" r="7"></circle>
+            <path d="M20 20l-3.5-3.5"></path>
+        </svg>
+        <input
+            type="text"
+            ng-model="$ctrl.query"
+            ng-change="$ctrl.onQuery()"
+            placeholder="{{$ctrl.T('search')}}"
+            aria-label="{{$ctrl.T('search')}}"
+            spellcheck="false"
+        />
+        <span class="pd-kbd" ng-if="!$ctrl.query">/</span>
+        <button class="pd-icon" ng-if="$ctrl.query" ng-click="$ctrl.clearQuery()" title="{{$ctrl.T('clear')}}">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                <path d="M7 7l10 10M17 7L7 17"></path>
+            </svg>
+        </button>
+    </label>
+    <div class="pd-seg" role="tablist">
+        <button role="tab" ng-class="{on: $ctrl.tab === 'curated'}" ng-click="$ctrl.setTab('curated')">
+            {{$ctrl.T('tabs.curated')}}
+        </button>
+        <button role="tab" ng-class="{on: $ctrl.tab === 'all'}" ng-click="$ctrl.setTab('all')">
+            {{$ctrl.T('tabs.all')}}
+        </button>
+    </div>
+    <div class="pd-banner swap" ng-if="$ctrl.swap" role="status">
+        <span>{{$ctrl.T('swap.banner').replace('{name}', $ctrl.swap.name)}}</span>
+        <button ng-click="$ctrl.cancelSwap()">{{$ctrl.T('swap.cancel')}}</button>
+    </div>
+    <div class="pd-banner warn" ng-if="$ctrl.tab === 'all' && !$ctrl.swap">
+        <span>{{$ctrl.T('untuned')}}</span>
+    </div>
+    <div class="pd-body">
+        <nav class="pd-rail">
+            <button ng-class="{on: $ctrl.category[$ctrl.tab] === 'favourites'}" ng-click="$ctrl.setCategory('favourites')">
+                <span>{{$ctrl.T('rail.favourites')}}</span><span class="pd-n">{{$ctrl.counts.favourites}}</span>
+            </button>
+            <button ng-class="{on: $ctrl.category[$ctrl.tab] === 'recent'}" ng-click="$ctrl.setCategory('recent')">
+                <span>{{$ctrl.T('rail.recent')}}</span><span class="pd-n">{{$ctrl.counts.recent}}</span>
+            </button>
+            <hr />
+            <button ng-class="{on: $ctrl.category[$ctrl.tab] === 'all'}" ng-click="$ctrl.setCategory('all')">
+                <span>{{$ctrl.T('rail.all')}}</span><span class="pd-n">{{$ctrl.counts.all}}</span>
+            </button>
+            <button
+                ng-repeat="id in $ctrl.railItems() track by id"
+                ng-if="$ctrl.counts[id] > 0"
+                ng-class="{on: $ctrl.category[$ctrl.tab] === id}"
+                ng-click="$ctrl.setCategory(id)"
+            >
+                <span>{{$ctrl.railName(id)}}</span><span class="pd-n">{{$ctrl.counts[id]}}</span>
+            </button>
+        </nav>
+        <div class="pd-gridwrap">
+            <div class="pd-status">
+                <span>{{$ctrl.T('status.count').replace('{n}', $ctrl.filtered.length)}}</span>
+                <span ng-if="$ctrl.tab === 'all' && $ctrl.meshesLoading">{{$ctrl.T('loadingMeshes')}}</span>
+            </div>
+            <div class="pd-empty" ng-if="$ctrl.filtered.length === 0">
+                <div>{{$ctrl.emptyText()}}</div>
+                <button
+                    class="btn info"
+                    ng-if="$ctrl.query && $ctrl.tab === 'curated'"
+                    ng-click="$ctrl.setTab('all')"
+                >
+                    {{$ctrl.T('empty.searchAll')}}
+                </button>
+            </div>
+            <div class="pd-spacer" ng-style="{height: $ctrl.totalH + 'px'}">
+                <div
+                    class="pd-grid"
+                    role="listbox"
+                    ng-style="{
+                        transform: 'translateY(' + $ctrl.offsetY + 'px)',
+                        'grid-template-columns': 'repeat(' + $ctrl.cols + ', minmax(0, 1fr))'
+                    }"
+                >
+                    <div class="pd-cell" ng-repeat="v in $ctrl.visible track by v.item.key">
+                        <button
+                            class="pd-tile"
+                            role="option"
+                            ng-class="{hi: v.index === $ctrl.cursor, armed: $ctrl.isArmed(v.item)}"
+                            ng-click="$ctrl.pick(v.item)"
+                            ng-mouseenter="$ctrl.enter($event, v.item)"
+                            ng-mouseleave="$ctrl.leave(v.item)"
+                        >
+                            <span class="pd-thumb">
+                                <img
+                                    ng-if="$ctrl.thumbOf(v.item).url"
+                                    ng-src="{{$ctrl.thumbOf(v.item).url}}"
+                                    onerror="this.style.display='none'"
+                                    alt=""
+                                />
+                                <svg
+                                    class="pd-ph"
+                                    ng-if="!$ctrl.thumbOf(v.item).url"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="1.4"
+                                    stroke-linejoin="round"
+                                >
+                                    <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z M12 12l8-4.5 M12 12v9 M12 12L4 7.5"></path>
+                                </svg>
+                                <span class="pd-rendering" ng-if="$ctrl.thumbOf(v.item) && !$ctrl.thumbOf(v.item).done"></span>
+                                <span class="pd-chip map" ng-if="v.item.map">{{$ctrl.T('thisMap')}}</span>
+                                <span class="pd-chip placing" ng-if="$ctrl.isArmed(v.item)">{{$ctrl.T('placing')}}</span>
+                            </span>
+                            <span class="pd-tname">{{v.item.name}}</span>
+                            <span class="pd-tmeta">
+                                <svg ng-if="v.item.solid" viewBox="0 0 16 16">
+                                    <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="#a7aebf"></rect>
+                                </svg>
+                                <svg ng-if="!v.item.solid" viewBox="0 0 16 16">
+                                    <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="none" stroke="#a7aebf" stroke-width="1.4" stroke-dasharray="2.4 2"></rect>
+                                </svg>
+                                <span>{{$ctrl.tileSize(v.item)}}</span>
+                            </span>
+                        </button>
+                        <button
+                            class="pd-star"
+                            ng-class="{on: $ctrl.isFavourite(v.item)}"
+                            ng-click="$ctrl.toggleFavourite($event, v.item)"
+                            title="{{$ctrl.isFavourite(v.item) ? $ctrl.T('unstar') : $ctrl.T('star')}}"
+                        >
+                            <svg viewBox="0 0 24 24" ng-attr-fill="{{$ctrl.isFavourite(v.item) ? 'currentColor' : 'none'}}" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+                                <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- the preview docks here when there's no room beside the drawer -->
+    <div class="pd-dock" ng-if="$ctrl.pos.dock && $ctrl.previewItem()">
+        <span class="pd-thumb">
+            <img ng-if="$ctrl.thumbOf($ctrl.previewItem()).url" ng-src="{{$ctrl.thumbOf($ctrl.previewItem()).url}}" alt="" />
+        </span>
+        <div class="pd-dock-text">
+            <h3 class="pd-pv-name">{{$ctrl.previewItem().name}}</h3>
+            <div class="pd-row">{{$ctrl.dims($ctrl.previewItem())}}</div>
+            <div class="pd-row">{{$ctrl.previewItem().solid ? $ctrl.T('solid') : $ctrl.T('passable')}}</div>
+            <div class="pd-row">{{$ctrl.swap ? $ctrl.T('preview.howSwap') : $ctrl.T('preview.how')}}</div>
+        </div>
+    </div>
+</section>
+
+<div
+    class="pd-strip"
+    ng-if="$ctrl.open && $ctrl.folded() && $ctrl.pos.mode !== 'hidden'"
+    ng-style="$ctrl.pos.strip"
+>
+    <span class="pd-thumb">
+        <img ng-if="$ctrl.thumbOf($ctrl.armedItem()).url" ng-src="{{$ctrl.thumbOf($ctrl.armedItem()).url}}" alt="" />
+    </span>
+    <small>{{$ctrl.T('placing')}}<br />{{$ctrl.armedItem().name}}</small>
+    <button class="pd-icon" ng-click="$ctrl.expandStrip()" title="{{$ctrl.T('strip.expand')}}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <path ng-attr-d="{{$ctrl.pos.mode === 'right' ? 'M9 5l7 7-7 7' : 'M15 5l-7 7 7 7'}}"></path>
+        </svg>
+    </button>
+    <button class="pd-icon" ng-click="$ctrl.disarm()" title="{{$ctrl.T('strip.stop')}}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+            <path d="M6 6l12 12M18 6L6 18"></path>
+        </svg>
+    </button>
+</div>
+
+<aside
+    class="pd-preview"
+    ng-if="$ctrl.open && $ctrl.hovered && !$ctrl.folded() && !$ctrl.pos.dock && $ctrl.pos.mode !== 'hidden'"
+    ng-style="$ctrl.pos.preview"
+>
+    <span class="pd-thumb">
+        <img ng-if="$ctrl.thumbOf($ctrl.hovered).url" ng-src="{{$ctrl.thumbOf($ctrl.hovered).url}}" alt="" />
+        <span class="pd-rendering" ng-if="$ctrl.thumbOf($ctrl.hovered) && !$ctrl.thumbOf($ctrl.hovered).done"></span>
+        <span class="pd-chip map" ng-if="$ctrl.hovered.map">{{$ctrl.T('thisMap')}}</span>
+    </span>
+    <h3 class="pd-pv-name">{{$ctrl.hovered.name}}</h3>
+    <div class="pd-row" ng-if="$ctrl.hovered.catName">{{$ctrl.hovered.catName}}</div>
+    <div class="pd-row">
+        <svg viewBox="0 0 16 16" fill="none" stroke="#a7aebf" stroke-width="1.4">
+            <path d="M2 12L12 2M2 12h4M2 12V8M12 2H8M12 2v4"></path>
+        </svg>
+        {{$ctrl.dims($ctrl.hovered)}}
+    </div>
+    <div class="pd-row">
+        <svg ng-if="$ctrl.hovered.solid" viewBox="0 0 16 16">
+            <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="#a7aebf"></rect>
+        </svg>
+        <svg ng-if="!$ctrl.hovered.solid" viewBox="0 0 16 16">
+            <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="none" stroke="#a7aebf" stroke-width="1.4" stroke-dasharray="2.4 2"></rect>
+        </svg>
+        {{$ctrl.hovered.solid ? $ctrl.T('solid') : $ctrl.T('passable')}}
+    </div>
+    <div class="pd-path" ng-if="!$ctrl.hovered.curated">{{$ctrl.hovered.shape}}</div>
+    <div class="pd-tags" ng-if="$ctrl.hovered.tags">
+        <span ng-repeat="tag in $ctrl.hovered.tags.split(' ') track by $index" ng-if="tag">{{tag}}</span>
+    </div>
+    <div class="pd-how">{{$ctrl.swap ? $ctrl.T('preview.howSwap') : $ctrl.T('preview.how')}}</div>
+</aside>
+
+<div class="pd-hints" ng-if="$ctrl.open && $ctrl.placing.armed">
+    <span class="pd-line" ng-if="$ctrl.placing.dragging && $ctrl.placing.count > 1">
+        {{$ctrl.T('hints.line').replace('{n}', $ctrl.placing.count).replace('{m}', $ctrl.placing.meters)}}
+    </span>
+    <span><span class="pd-kbd">{{$ctrl.T('keys.click')}}</span>{{$ctrl.T('hints.click')}}</span>
+    <span><span class="pd-kbd">{{$ctrl.T('keys.drag')}}</span>{{$ctrl.T('hints.drag')}}</span>
+    <span>
+        <span class="pd-kbd">{{$ctrl.T('keys.wheel')}}</span>
+        {{$ctrl.placing.dragging ? $ctrl.T('hints.spacing') : $ctrl.T('hints.turn')}}
+    </span>
+    <span><span class="pd-kbd">Shift</span>{{$ctrl.T('hints.shift')}}</span>
+    <span><span class="pd-kbd">{{$ctrl.T('keys.stop')}}</span>{{$ctrl.T('hints.stop')}}</span>
+</div>

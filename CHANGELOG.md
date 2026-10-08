@@ -8,7 +8,46 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2622, server build 2434.
+Version 1.11.0 : client build 2624, server build 2435.
+
+- **The race editor's props drawer** (direct request) replaces the props dropdown. "Add props" opens
+  it beside the config window, over the game view, or over the window itself when there's no room
+  beside it. It has a search (synonyms too : tyre, pylon, arch...), categories, Favourites and
+  Recent, a thumbnail on every prop rendered on demand by the game (the World Editor's own ones
+  reused), and a preview with the prop's real size and whether cars hit it or drive through it.
+  The arrow keys, Enter, Esc and "/" work in it.
+- **Props are placed with the mouse** (direct request) : pick one and a ghost of it follows the
+  mouse over the world. A click places one there, a click-and-drag lays a line. The wheel turns it
+  (or spaces the line while dragging), Shift keeps it armed for the next one, and a right-click or
+  Esc stops. The drawer folds to a strip while placing.
+- **About 100 curated props** (direct request), up from 22, in eight categories : race barricades,
+  safety cushions, guardrails, tapes, spectator fences, sponsor fences, rally signboards and
+  pacenote boards, truss pieces, timing boards, ramps, scenery and trees. Tire stacks and flip ramps
+  that ship with one map are offered on that map only.
+- **"All game meshes"** (direct request) : a second tab lists every mesh the game has. BeamJoy
+  measures each one and stands it up from its size (which way it faces, its spacing on a line,
+  how far it's lifted off the ground). The race keeps that lift, so every player sees it the same.
+  *(client + server : the server keeps the lift)*
+- **"Swap mesh"** (direct request) gives a placed prop or line another mesh from the drawer,
+  keeping it where it is.
+
+- **"Run from freeroam" is now "Passive"** (direct request), in the race editor, the Freeroam
+  config ("Passive races"), the race leaderboard's switch and the run's messages.
+- **Passive runs are quieter** (direct request) : no gates drawn while running one (the waypoint
+  beam and the minimap lead the way), the world's activity markers (race starts, derby, bus lines,
+  deliveries, drag strips, drift zones) hidden until it ends, the race HUD in its compact layout
+  (unless it's off), and no name over a passive race's start gate. *(client only)*
+- **Fixed: ghosted at the start of a race with "Ghost on countdown" off** (direct report). The grid
+  teleport counts as a reset, and freeroam's respawn protection ghosted the car through the
+  countdown. It stands down for the whole race now ; only the race's own ghost options decide.
+  *(client only)*
+- **Fixed: a click on a menu or a gizmo also clicked the world** (direct report : the config menu
+  selected the prop behind it, and a gizmo over a prop couldn't be grabbed). A click on BeamJoy's
+  UI, an ImGui window or the gizmo's handles is theirs only now. *(client only)*
+- **Fixed: the drag leaderboard's headers out of line with their columns** (direct report). The
+  header's smaller text made every column narrower than the ones under it, and a scrollbar
+  narrowed the rows alone. All the leaderboards had it. *(client only)*
+- **The waypoint beam disappears 100 m from the gate** (direct request), not 50. *(client only)*
 
 - **The electrics resync for late joiners only reaches the player who asked** (direct request). It
   used to have BeamMP send the car's whole set again, and BeamMP sends to everyone : a player joining

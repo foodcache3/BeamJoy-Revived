@@ -442,14 +442,11 @@ local function drawFreeroam(fr)
                 for j in pairs(visibleGateSet(i, #race.gates, race.loopable, 2) or {}) do visible[j] = true end
             end
         end
-        local showGates = not race.defaults or race.defaults.showGates ~= false
+        -- no gates drawn during a passive run (direct request) : the waypoint beam and the minimap
+        -- lead the way
         for i in pairs(visible) do
             local g = race.gates[i]
             local role = gateRole(race, i)
-            if showGates then
-                drawGate(g, i, next[i] and GATE_NEXT_COLOR or role and START_COLOR or GATE_COLOR, false, role, false,
-                    nil, true)
-            end
             if next[i] and race.defaults and race.defaults.waypointBeams ~= false then
                 draw.addBeam(vec3(g.pos.x, g.pos.y, g.pos.z))
             end
@@ -468,8 +465,8 @@ local function drawFreeroam(fr)
     for _, race in ipairs(fr.nearby) do
         for i, g in ipairs(race.gates) do
             if fr.isStartGate(race, i) then
+                -- no name over it (direct request)
                 drawGate(g, i, START_COLOR, false, nil, false, nil, true)
-                draw.addText(race.name, vec3(g.pos.x, g.pos.y, g.pos.z + g.height + .8), TEXT_COLOR, TEXT_BG_COLOR)
                 local left, right = gateEnds(g)
                 table.insert(M.minimapGates, { left = left, right = right, color = MINIMAP_START, next = false })
                 drew = true

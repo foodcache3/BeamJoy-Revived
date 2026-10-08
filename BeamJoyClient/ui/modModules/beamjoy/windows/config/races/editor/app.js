@@ -503,6 +503,8 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         this.changeSection = (event, section) => {
             event.stopPropagation();
             this.activeSection = section;
+            // the props drawer belongs to the Props section
+            if (section !== "props") this.closePropDrawer();
         };
 
         this.changeTool = (event, tool) => {
@@ -695,18 +697,54 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         this.activeProp = null;
         this.activePropPart = null;
         this.propCatalog = [];
-        this.propCatalogOptions = [];
-        this.propPick = null;
         $rootScope.$on("BJEditorPropCatalog", (_, catalog) => {
             this.propCatalog = Array.isArray(catalog) ? catalog : [];
-            this.propCatalogOptions = this.propCatalog.map((c) => ({ value: c.id, label: c.label }));
-            if (!this.propPick && this.propCatalog.length > 0) this.propPick = this.propCatalog[0].id;
         });
-        // the catalog's name for a prop's mesh, else the mesh's file name (one no longer offered)
+        // the catalog's name for a prop's mesh, else the mesh's file name, readable (a game mesh
+        // from the drawer's "All game meshes", or one no longer offered)
         this.propLabel = (prop) => {
-            const shape = String((prop && prop.shape) || "").toLowerCase();
-            const entry = this.propCatalog.find((c) => c.shape.toLowerCase() === shape);
-            return entry ? entry.label : shape.split("/").pop();
+            const shape = String((prop && prop.shape) || "");
+            const entry = this.propCatalog.find((c) => c.shape.toLowerCase() === shape.toLowerCase());
+            if (entry) return entry.label;
+            const words = shape
+                .split("/")
+                .pop()
+                .replace(/\.c?dae$/i, "")
+                .replace(/^(s_|ind_|hr_|ut_|eca_|si_|ak_|clutter_|italy_|bld_|gm_)+/i, "")
+                .split(/[_\-]+/)
+                .filter((w) => w);
+            const name = words.join(" ");
+            return name ? name.charAt(0).toUpperCase() + name.slice(1) : shape;
+        };
+
+        // the props drawer (propDrawer/app.js) : opened from the Props toolbar, or by a placed
+        // prop's "Swap mesh" (`propSwap` : that prop waits for the mesh picked next)
+        this.propDrawerOpen = false;
+        this.propSwap = null;
+        this.togglePropDrawer = (event) => {
+            event.stopPropagation();
+            if (this.propDrawerOpen) this.closePropDrawer();
+            else this.propDrawerOpen = true;
+        };
+        this.closePropDrawer = () => {
+            if (this.propDrawerOpen) beamjoyStore.send("BJEditorRaceDisarmProp");
+            this.propDrawerOpen = false;
+            this.propSwap = null;
+        };
+        this.swapPropMesh = (event, idx) => {
+            event.stopPropagation();
+            if (this.propSwap && this.propSwap.index === idx) {
+                this.propSwap = null;
+                return;
+            }
+            const prop = this.race && this.race.props[idx];
+            if (!prop) return;
+            beamjoyStore.send("BJEditorRaceDisarmProp");
+            this.propSwap = { index: idx, name: translate(this.propLabel(prop)) };
+            this.propDrawerOpen = true;
+        };
+        this.endPropSwap = () => {
+            this.propSwap = null;
         };
         // a plain number (not a function the template calls), refreshed with each echo
         this.propTotal = 0;
@@ -715,14 +753,6 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
                 (n, p) => n + (p.kind === "line" ? Math.max(1, Number(p.count) || 1) : 1),
                 0
             );
-        };
-        this.createProp = (event) => {
-            event.stopPropagation();
-            if (this.propPick) beamjoyStore.send("BJEditorRaceCreateProp", [this.propPick]);
-        };
-        this.createPropLine = (event) => {
-            event.stopPropagation();
-            if (this.propPick) beamjoyStore.send("BJEditorRaceCreatePropLine", [this.propPick]);
         };
         this.selectProp = (event, idx) => {
             event.stopPropagation();

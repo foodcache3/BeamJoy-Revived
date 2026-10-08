@@ -82,6 +82,16 @@ local function onUpdate()
         rightMouseHoldStart = nil
     end
     local isClickWithinGame = false
+    -- Real bug (direct report : a click on the config menu selected the prop behind it, and a
+    -- gizmo over a prop couldn't be grabbed, the prop got selected instead) : a click on the UI,
+    -- an ImGui window, or the shown gizmo's handles is theirs, not the world's
+    if type and (
+            -- (`type` is this function's own click kind here, not Lua's type())
+            (getCEFFocusMouse and getCEFFocusMouse() == true) or
+            (gizmo and gizmo.isHovered and gizmo.isHovered()) or
+            (ui_imgui.GetIO and ui_imgui.GetIO().WantCaptureMouse == true)) then
+        type = nil
+    end
     if not M.isNodegrabberRenderActive and type then
         local mousePos = ui_imgui.GetMousePos()
         local viewport = ui_imgui.GetWindowViewport()

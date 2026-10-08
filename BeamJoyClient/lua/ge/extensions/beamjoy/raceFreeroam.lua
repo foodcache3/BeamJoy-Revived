@@ -180,6 +180,8 @@ local function pushHud()
     end
     beamjoy_communications_ui.send("BJRaceHud", {
         active = true,
+        -- the HUD's compact layout for it (direct request)
+        passive = true,
         raceName = run.race.name,
         totalGates = totalSteps(run.race),
         totalSectors = 1,

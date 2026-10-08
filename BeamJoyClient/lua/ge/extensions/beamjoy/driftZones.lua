@@ -286,7 +286,7 @@ local LAYER = "driftZones"
 local function draw()
     local layer = shape.layer(LAYER)
     layer.reset()
-    if M.editing or (beamjoy_markerSettings and beamjoy_markerSettings.hideActivities) then return end
+    if M.editing or (beamjoy_markerSettings and beamjoy_markerSettings.activitiesHidden()) then return end
     local startColor = BJColor(.2, 1, .4, .85)
     local finishColor = BJColor(1, 1, 1, .9)
     local edgeColor = BJColor(1, .45, .1, .45)

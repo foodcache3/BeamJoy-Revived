@@ -20,36 +20,144 @@
 local M = {
     MAX_PROPS = 200,
 
-    --- the props offered in the editors. `yaw` (degrees) turns the mesh so its long side follows
-    --- the direction it's placed facing (a mesh's own +Y is that direction, quatFromDir) ;
-    --- `length` is the gap between props on a new line ; `zOffset` (mesh units, scaled) lifts a
-    --- mesh whose origin isn't at its base ; `collision` is the TSStatic collision type (meshes
-    --- with no collision mesh of their own get "None") ; `invisible` ones are drawn as a panel by
-    --- the editor, since nothing of them shows in the world.
+    --- the props offered in the editors, in the prop picker's categories (`cat`), with a few English
+    --- `tags` its search also matches. `yaw` (degrees) turns the mesh so its long side follows the
+    --- direction it's placed facing (a mesh's own +Y is that direction, quatFromDir) ; `length` is
+    --- the gap between props on a new line ; `zOffset` (mesh units, scaled) lifts a mesh whose origin
+    --- isn't at its base. Those three were tuned by hand on the first props ; one without them is
+    --- tuned from its measured size (tuning() below : beamjoy_propPicker measures a mesh the first
+    --- time it's previewed or armed). `collision` is the TSStatic collision type : "None" for the
+    --- decorative ones cars should drive through (tape, flags, banners) ; `invisible` ones are drawn
+    --- as a panel by the editor, since nothing of them shows in the world. A mesh under /levels/<map>/
+    --- is only offered on that map (it isn't installed elsewhere).
     CATALOG = {
-        { id = "concreteBarrier", shape = "/art/shapes/race/s_concrete_race_barrier.dae", yaw = 90, length = 3.1 },
-        { id = "concreteArrowBarrier", shape = "/art/shapes/race/s_concrete_arrow_barrier.dae", yaw = 90, length = 3.1 },
-        { id = "roadBarrier", shape = "/art/shapes/garage_and_dealership/Clutter/concrete_road_barrier_a.dae", yaw = 90, length = 3.1 },
-        { id = "jerseyBarrier", shape = "/art/shapes/objects/jerseybarrier_3m.dae", yaw = 0, length = 3.2 },
-        { id = "jerseyBarrierEnd", shape = "/art/shapes/objects/jerseybarrier_end.dae", yaw = 0, length = 3.4 },
-        { id = "precastBlock", shape = "/art/shapes/objects/s_precast_block.dae", yaw = 90, length = 2 },
-        { id = "plasticBarrier", shape = "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE", yaw = 90, length = 1.5 },
-        { id = "plasticBarrierRed", shape = "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier_red.DAE", yaw = 90, length = 1.5 },
-        { id = "constructionBarrier", shape = "/art/shapes/objects/constructionbarrier_arrows.dae", yaw = 0, length = 2 },
-        { id = "cone", shape = "/art/shapes/garage_and_dealership/Clutter/road_cone.DAE", yaw = 0, length = 2.5 },
-        { id = "bollard", shape = "/art/shapes/objects/bollard_yellow.dae", yaw = 0, length = 1.5 },
-        { id = "barrel", shape = "/art/shapes/garage_and_dealership/Clutter/clutter_barrels_red.dae", yaw = 0, length = 1 },
-        { id = "foamBlock", shape = "/art/shapes/race/dragstrip/dragStrip_FoamBlockReflector.dae", yaw = 0, length = 1.6 },
-        { id = "woodCrate", shape = "/art/shapes/objects/s_wood_crate_closed.dae", yaw = 0, length = 3 },
-        { id = "arrowSignLeft", shape = "/art/shapes/objects/race_arrowsign_1_L.dae", yaw = 0, length = 3.1 },
-        { id = "arrowSignRight", shape = "/art/shapes/objects/race_arrowsign_1_R.dae", yaw = 0, length = 3.1 },
-        { id = "constructionSign", shape = "/art/shapes/objects/construction_sign_big_a.DAE", yaw = 0, length = 2.6 },
-        { id = "startTree", shape = "/art/shapes/race/rally/rally_assets/s_rally_start_tree.dae", yaw = 0, length = 1 },
-        { id = "banner", shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_ngrc.dae", yaw = 0, length = 2.6, collision = "None" },
-        { id = "flagFeather", shape = "/art/shapes/garage_and_dealership/s_flag_floor_feather_01.dae", yaw = 0, length = 4, collision = "None" },
-        { id = "flagTeardrop", shape = "/art/shapes/garage_and_dealership/s_flag_floor_teardrop_01.dae", yaw = 0, length = 4, collision = "None" },
-        { id = "invisibleWall", shape = "/assets/meshes/props/misc/invisible_wall_1m.dae", yaw = 0, length = 1, zOffset = .5, invisible = true },
+        -- barriers
+        { id = "concreteBarrier", cat = "barriers", tags = "concrete jersey wall race", shape = "/art/shapes/race/s_concrete_race_barrier.dae", yaw = 90, length = 3.1 },
+        { id = "concreteArrowBarrier", cat = "barriers", tags = "concrete chevron arrow wall", shape = "/art/shapes/race/s_concrete_arrow_barrier.dae", yaw = 90, length = 3.1 },
+        { id = "roadBarrier", cat = "barriers", tags = "concrete jersey wall", shape = "/art/shapes/garage_and_dealership/Clutter/concrete_road_barrier_a.dae", yaw = 90, length = 3.1 },
+        { id = "roadBarrierB", cat = "barriers", tags = "concrete jersey wall", shape = "/art/shapes/garage_and_dealership/Clutter/concrete_road_barrier_b.dae" },
+        { id = "jerseyBarrier", cat = "barriers", tags = "concrete wall", shape = "/art/shapes/objects/jerseybarrier_3m.dae", yaw = 0, length = 3.2 },
+        { id = "jerseyBarrierEnd", cat = "barriers", tags = "concrete end cap", shape = "/art/shapes/objects/jerseybarrier_end.dae", yaw = 0, length = 3.4 },
+        { id = "precastBlock", cat = "barriers", tags = "concrete cube block", shape = "/art/shapes/objects/s_precast_block.dae", yaw = 90, length = 2 },
+        { id = "plasticBarrier", cat = "barriers", tags = "water filled red white", shape = "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE", yaw = 90, length = 1.5 },
+        { id = "plasticBarrierRed", cat = "barriers", tags = "water filled", shape = "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier_red.DAE", yaw = 90, length = 1.5 },
+        { id = "raceBarricade", cat = "barriers", tags = "crowd fence metal", shape = "/art/shapes/race/ut_race_mesh_barricade_.DAE" },
+        { id = "raceBarricadeCurve", cat = "barriers", tags = "crowd fence metal bend", shape = "/art/shapes/race/ut_race_mesh_barricade_curve.DAE" },
+        { id = "raceBarricadeCurveB", cat = "barriers", tags = "crowd fence metal bend", shape = "/art/shapes/race/ut_race_mesh_barricade_curve_b.DAE" },
+        { id = "safetyCushion", cat = "barriers", tags = "crash impact attenuator", shape = "/art/shapes/race/rally/rally_assets/s_safety_cushion_01.dae" },
+        { id = "constructionBarrier", cat = "barriers", tags = "roadworks arrows", shape = "/art/shapes/objects/constructionbarrier_arrows.dae", yaw = 0, length = 2 },
+        { id = "guardrail", cat = "barriers", tags = "armco rail steel", shape = "/art/shapes/objects/guardrail1.dae" },
+        { id = "guardrailPost", cat = "barriers", tags = "armco post", shape = "/art/shapes/objects/guardrailpost.dae" },
+        { id = "guardrailItaly", cat = "barriers", tags = "armco rail steel italy", shape = "/art/shapes/objects/italy_guardrails_common_section.dae" },
+        { id = "tireStackAtt", cat = "barriers", tags = "tyre wall", shape = "/levels/automation_test_track/art/shapes/objects/tirestack.dae" },
+        { id = "tireStackAttBlue", cat = "barriers", tags = "tyre wall", shape = "/levels/automation_test_track/art/shapes/objects/tirestack_blue.dae" },
+        { id = "tireWallAtt", cat = "barriers", tags = "tyre stack", shape = "/levels/automation_test_track/art/shapes/objects/tirewall.dae" },
+        { id = "tireStackHr", cat = "barriers", tags = "tyre wall", shape = "/levels/hirochi_raceway/art/shapes/objects/hr_tirestack.dae" },
+        { id = "tireStackHrGreen", cat = "barriers", tags = "tyre wall", shape = "/levels/hirochi_raceway/art/shapes/objects/hr_tirestack_green.dae" },
+        { id = "tireStackHrWhite", cat = "barriers", tags = "tyre wall", shape = "/levels/hirochi_raceway/art/shapes/objects/hr_tirestack_white.dae" },
+        -- fences and tape
+        { id = "tape6", cat = "fences", tags = "police ribbon closure", shape = "/art/shapes/race/rally/rally_assets/s_tape_road_closure_6m.dae", collision = "None" },
+        { id = "tape8", cat = "fences", tags = "police ribbon closure", shape = "/art/shapes/race/rally/rally_assets/s_tape_road_closure_8m.dae", collision = "None" },
+        { id = "tape10", cat = "fences", tags = "police ribbon closure", shape = "/art/shapes/race/rally/rally_assets/s_tape_road_closure_10m.dae", collision = "None" },
+        { id = "spectatorTape", cat = "fences", tags = "crowd ribbon", shape = "/art/shapes/race/rally/rally_assets/s_spectator_tape_5m.dae", collision = "None" },
+        { id = "spectatorTapeBig", cat = "fences", tags = "crowd ribbon", shape = "/art/shapes/race/rally/rally_assets/s_spectator_tape_big_a.dae", collision = "None" },
+        { id = "spectatorGrid", cat = "fences", tags = "crowd barrier mesh", shape = "/art/shapes/race/rally/rally_assets/s_spectator_grid_a_2m.dae" },
+        { id = "spectatorTarp", cat = "fences", tags = "screen sheet", shape = "/art/shapes/race/rally/rally_assets/s_spectator_tarp_4m.dae", collision = "None" },
+        { id = "metalFence", cat = "fences", tags = "mesh wire", shape = "/art/shapes/objects/s_metal_fence.dae" },
+        { id = "scrapFence", cat = "fences", tags = "corrugated sheet", shape = "/art/shapes/objects/s_scrap_fence_35_a.dae" },
+        { id = "scrapFenceLong", cat = "fences", tags = "corrugated sheet", shape = "/art/shapes/objects/s_scrap_fence_5.dae" },
+        { id = "brickWall", cat = "fences", tags = "masonry", shape = "/assets/meshes/architecture/modular/architectural_elements/fences/stone/s_brick_wall_001_300x400.dae" },
+        { id = "concreteWall", cat = "fences", tags = "masonry", shape = "/assets/meshes/architecture/modular/architectural_elements/fences/stone/s_conc_wall_001_400x400.dae" },
+        { id = "woodFence", cat = "fences", tags = "planks rural", shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001.dae" },
+        -- cones and markers
+        { id = "cone", cat = "markers", tags = "pylon traffic", shape = "/art/shapes/garage_and_dealership/Clutter/road_cone.DAE", yaw = 0, length = 2.5 },
+        { id = "raceCone", cat = "markers", tags = "pylon autocross", shape = "/art/shapes/race/cone.dae" },
+        { id = "bollard", cat = "markers", tags = "post yellow", shape = "/art/shapes/objects/bollard_yellow.dae", yaw = 0, length = 1.5 },
+        { id = "steelBollard", cat = "markers", tags = "post", shape = "/art/shapes/garage_and_dealership/Clutter/si_bollard.DAE" },
+        { id = "foamBlock", cat = "markers", tags = "drag strip reflector", shape = "/art/shapes/race/dragstrip/dragStrip_FoamBlockReflector.dae", yaw = 0, length = 1.6 },
+        { id = "flagMarker", cat = "markers", tags = "pole", shape = "/art/shapes/race/flagMarker.dae", collision = "None" },
+        { id = "flagMarkerOrange", cat = "markers", tags = "pole", shape = "/art/shapes/race/flagMarkerOrange.dae", collision = "None" },
+        { id = "cornerMarker", cat = "markers", tags = "rally post", shape = "/art/shapes/race/rally/rally_assets/s_corner_marker.dae", collision = "None" },
+        { id = "chevron", cat = "markers", tags = "bend arrow", shape = "/art/shapes/race/chevron_x1.dae" },
+        { id = "chevronTriple", cat = "markers", tags = "bend arrow", shape = "/art/shapes/race/chevron_x3.dae" },
+        -- signs
+        { id = "arrowSignLeft", cat = "signs", tags = "direction turn", shape = "/art/shapes/objects/race_arrowsign_1_L.dae", yaw = 0, length = 3.1 },
+        { id = "arrowSignRight", cat = "signs", tags = "direction turn", shape = "/art/shapes/objects/race_arrowsign_1_R.dae", yaw = 0, length = 3.1 },
+        { id = "arrowBoardLeft", cat = "signs", tags = "roadworks direction", shape = "/art/shapes/objects/arrowboard_L.dae" },
+        { id = "arrowBoardRight", cat = "signs", tags = "roadworks direction", shape = "/art/shapes/objects/arrowboard_R.dae" },
+        { id = "constructionSign", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_a.DAE", yaw = 0, length = 2.6 },
+        { id = "constructionSignB", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_b.DAE" },
+        { id = "constructionSignC", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_c.DAE" },
+        { id = "signboardStart", cat = "signs", tags = "rally board", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_start.dae", collision = "None" },
+        { id = "signboardFinish", cat = "signs", tags = "rally board end", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_finish.dae", collision = "None" },
+        { id = "signboardStop", cat = "signs", tags = "rally board", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_stop.dae", collision = "None" },
+        { id = "signboardTimeControl", cat = "signs", tags = "rally board", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_time_control.dae", collision = "None" },
+        { id = "cornerLeft", cat = "signs", tags = "rally pacenote turn", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_left.dae", collision = "None" },
+        { id = "cornerRight", cat = "signs", tags = "rally pacenote turn", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_right.dae", collision = "None" },
+        { id = "cornerStraight", cat = "signs", tags = "rally pacenote", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_straight.dae", collision = "None" },
+        { id = "checkpointSign", cat = "signs", tags = "gate", shape = "/art/shapes/race/sign_checkpoint.dae" },
+        { id = "finishSign", cat = "signs", tags = "end", shape = "/art/shapes/race/sign_finish.dae" },
+        { id = "driftSign", cat = "signs", tags = "drift zone", shape = "/art/shapes/objects/s_sign_drift.dae" },
+        -- start and finish
+        { id = "startTree", cat = "start", tags = "lights christmas countdown", shape = "/art/shapes/race/rally/rally_assets/s_rally_start_tree.dae", yaw = 0, length = 1 },
+        { id = "startSensor", cat = "start", tags = "timing beam", shape = "/art/shapes/race/rally/rally_assets/s_rally_start_sensor.dae", collision = "None" },
+        { id = "truss1", cat = "start", tags = "gantry arch gate", shape = "/art/shapes/race/rally/rally_assets/s_trusssystem_01.dae" },
+        { id = "truss2", cat = "start", tags = "gantry arch gate", shape = "/art/shapes/race/rally/rally_assets/s_trusssystem_02.dae" },
+        { id = "truss3", cat = "start", tags = "gantry arch gate", shape = "/art/shapes/race/rally/rally_assets/s_trusssystem_03.dae" },
+        { id = "truss4", cat = "start", tags = "gantry arch gate", shape = "/art/shapes/race/rally/rally_assets/s_trusssystem_04.dae" },
+        { id = "truss5", cat = "start", tags = "gantry arch gate", shape = "/art/shapes/race/rally/rally_assets/s_trusssystem_05.dae" },
+        { id = "truss6", cat = "start", tags = "gantry arch gate", shape = "/art/shapes/race/rally/rally_assets/s_trusssystem_06.dae" },
+        { id = "banner", cat = "start", tags = "sponsor fence branding ngrc", shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_ngrc.dae", yaw = 0, length = 2.6, collision = "None" },
+        { id = "bannerApm", cat = "start", tags = "sponsor fence branding", shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_apm.dae", collision = "None" },
+        { id = "bannerBlastr", cat = "start", tags = "sponsor fence branding", shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_blastr.dae", collision = "None" },
+        { id = "bannerRotopad", cat = "start", tags = "sponsor fence branding", shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_rotopad.dae", collision = "None" },
+        { id = "arrowFlag", cat = "start", tags = "pennant", shape = "/art/shapes/race/arrowFlag_01.dae", collision = "None" },
+        { id = "arrowFlagB", cat = "start", tags = "pennant", shape = "/art/shapes/race/arrowFlag_02.dae", collision = "None" },
+        { id = "flagFeather", cat = "start", tags = "banner", shape = "/art/shapes/garage_and_dealership/s_flag_floor_feather_01.dae", yaw = 0, length = 4, collision = "None" },
+        { id = "flagTeardrop", cat = "start", tags = "banner", shape = "/art/shapes/garage_and_dealership/s_flag_floor_teardrop_01.dae", yaw = 0, length = 4, collision = "None" },
+        { id = "timerBoard", cat = "start", tags = "scoreboard clock drag timing", shape = "/art/shapes/race/dragstrip/timerboard.dae" },
+        { id = "timeStand", cat = "start", tags = "scoreboard drag timing", shape = "/art/shapes/race/dragstrip/s_gm_dragstrip_timestand.dae" },
+        -- ramps and obstacles
+        { id = "rampLarge", cat = "ramps", tags = "jump kicker", shape = "/art/shapes/objects/ramp_massive.dae" },
+        { id = "crossRampHr", cat = "ramps", tags = "jump derby", shape = "/levels/hirochi_raceway/art/shapes/buildings/derby_crossramp.dae" },
+        { id = "tireHr", cat = "ramps", tags = "tyre wheel", shape = "/levels/hirochi_raceway/art/shapes/buildings/hr_tire.DAE" },
+        { id = "flipRamp2x2", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_2x2_1.dae" },
+        { id = "flipRamp4x2Mild", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_mild.dae" },
+        { id = "flipRamp4x2Heavy", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_heavy.dae" },
+        { id = "flipRamp4x4", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x4.dae" },
+        -- scenery
+        { id = "woodCrate", cat = "scenery", tags = "box", shape = "/art/shapes/objects/s_wood_crate_closed.dae", yaw = 0, length = 3 },
+        { id = "crateStack", cat = "scenery", tags = "boxes", shape = "/art/shapes/garage_and_dealership/Clutter/crate_stack.DAE" },
+        { id = "palletStack", cat = "scenery", tags = "cargo", shape = "/art/shapes/garage_and_dealership/Clutter/pallet_stack.DAE" },
+        { id = "brickPallet", cat = "scenery", tags = "cargo bricks", shape = "/art/shapes/objects/s_brickpallet.dae" },
+        { id = "barrel", cat = "scenery", tags = "drum oil red", shape = "/art/shapes/garage_and_dealership/Clutter/clutter_barrels_red.dae", yaw = 0, length = 1 },
+        { id = "barrelWhite", cat = "scenery", tags = "drum oil", shape = "/art/shapes/garage_and_dealership/Clutter/clutter_barrels_white.dae" },
+        { id = "metalDrum", cat = "scenery", tags = "barrel oil", shape = "/art/shapes/garage_and_dealership/Clutter/metal_drum_a.DAE" },
+        { id = "dumpster", cat = "scenery", tags = "skip trash", shape = "/art/shapes/garage_and_dealership/Clutter/ind_dumpster_full.DAE" },
+        { id = "cityBin", cat = "scenery", tags = "trash", shape = "/art/shapes/garage_and_dealership/Clutter/clutter_city_bin_round.dae" },
+        { id = "scaffold", cat = "scenery", tags = "construction frame", shape = "/art/shapes/objects/s_scaffold_side_open.dae" },
+        { id = "lightPole", cat = "scenery", tags = "street lamp", shape = "/art/shapes/objects/pole_light_single.dae" },
+        { id = "standingLight", cat = "scenery", tags = "flood lamp", shape = "/art/shapes/objects/s_standinglight_01.dae" },
+        { id = "spotlight", cat = "scenery", tags = "flood lamp", shape = "/art/shapes/objects/s_spotlight_01.dae" },
+        { id = "foldTable", cat = "scenery", tags = "pit", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_table_01.dae" },
+        { id = "foldChair", cat = "scenery", tags = "pit seat", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_chair_01.dae", collision = "None" },
+        { id = "tireRack", cat = "scenery", tags = "tyre pit", shape = "/art/shapes/garage_and_dealership/garage/s_tire_rack.dae" },
+        { id = "wheelbarrow", cat = "scenery", tags = "construction", shape = "/art/shapes/objects/s_wheelbarrow.dae" },
+        { id = "tarp", cat = "scenery", tags = "sheet cover", shape = "/art/shapes/objects/s_tarp_thrown_01.dae", collision = "None" },
+        { id = "tree", cat = "scenery", tags = "forest beech", shape = "/assets/meshes/foliage/trees_library/beech/tree_beech_large_b.dae" },
+        { id = "bush", cat = "scenery", tags = "shrub hedge beech", shape = "/assets/meshes/foliage/trees_library/beech/tree_beech_bush_a.dae", collision = "None" },
+        { id = "deadTree", cat = "scenery", tags = "forest bare beech", shape = "/assets/meshes/foliage/trees_library/beech/tree_beech_dead_a.dae" },
+        -- utility
+        { id = "invisibleWall", cat = "utility", tags = "collision blocker hidden", shape = "/assets/meshes/props/misc/invisible_wall_1m.dae", yaw = 0, length = 1, zOffset = .5, invisible = true },
     },
+
+    --- the picker's categories, in order
+    CATEGORIES = { "barriers", "fences", "markers", "signs", "start", "ramps", "scenery", "utility" },
+
+    --- meshes measured by beamjoy_propPicker (their object box, unscaled) : shape (lower case) ->
+    --- { x, y, z, minZ }
+    ---@type table<string, {x: number, y: number, z: number, minZ: number}>
+    meta = {},
 
     ---@type table<string, {signature: string?, objects: table[], entries: table[], collision: boolean, pending: table<integer, true>}>
     sets = {},
@@ -81,12 +189,59 @@ function M.catalogForShape(shape)
     return type(shape) == "string" and catalogByShape[shape:lower()] or nil
 end
 
---- the catalog as the editors' pickers need it
----@return {id: string, shape: string, label: string, invisible: boolean?}[]
+--- the map a mesh ships with, from its path (/levels/<map>/...), nil for a shared one
+---@param shape string
+---@return string?
+function M.shapeLevel(shape)
+    return type(shape) == "string" and shape:lower():match("^/levels/([^/]+)/") or nil
+end
+
+--- the catalog as the editors' pickers need it : only what's installed (a mesh of another map
+--- isn't), with its category, tags, collision and, once measured, its size
+---@return table[]
 function M.catalogForUI()
-    return table.map(M.CATALOG, function(c)
-        return { id = c.id, shape = c.shape, label = "beamjoy.props.catalog." .. c.id, invisible = c.invisible }
-    end)
+    local out = {}
+    for _, c in ipairs(M.CATALOG) do
+        if FS:fileExists(c.shape) then
+            out[#out + 1] = {
+                id = c.id,
+                shape = c.shape,
+                label = "beamjoy.props.catalog." .. c.id,
+                cat = c.cat,
+                tags = c.tags,
+                solid = c.collision ~= "None",
+                invisible = c.invisible,
+                map = M.shapeLevel(c.shape),
+                length = c.length,
+                size = M.meta[c.shape:lower()],
+            }
+        end
+    end
+    return out
+end
+
+--- how a mesh is laid down : `yaw` (degrees, its long side along the way it faces), `length`
+--- (metres between props on a line) and `lift` (mesh units, to stand its base on the ground). The
+--- hand-tuned catalog values where there are some ; else from the mesh's measured box : turned a
+--- quarter when it's longer across (x) than deep (y), spaced by its longer side, lifted by how far
+--- it reaches below its origin ; else defaults
+---@param shape string
+---@return {yaw: number, length: number, lift: number, measured: boolean}
+function M.tuning(shape)
+    local cat = M.catalogForShape(shape)
+    local meta = type(shape) == "string" and M.meta[shape:lower()] or nil
+    local yaw, length, lift = 0, 2, 0
+    if meta then
+        yaw = (meta.x > meta.y * 1.15) and 90 or 0
+        length = math.max(.3, math.max(meta.x, meta.y) + .05)
+        lift = (meta.minZ < -.02) and -meta.minZ or 0
+    end
+    if cat then
+        if cat.yaw ~= nil then yaw = cat.yaw end
+        if cat.length ~= nil then length = cat.length end
+        if cat.zOffset ~= nil then lift = cat.zOffset end
+    end
+    return { yaw = yaw, length = length, lift = lift, measured = meta ~= nil }
 end
 
 ---@param v table? {x, y, z}
@@ -158,7 +313,9 @@ function M.expand(props)
         local cat = M.catalogForShape(e.shape)
         if type(e.shape) == "string" then
             local scale = math.max(.1, math.min(tonumber(e.scale) or 1, 10))
-            local lift = cat and cat.zOffset and cat.zOffset * scale or 0
+            -- an entry's own lift (set when it was placed, so every player stands it the same) ;
+            -- else the catalog's
+            local lift = (tonumber(e.lift) or (cat and cat.zOffset) or 0) * scale
             local placements
             if e.kind == "line" then
                 placements = M.linePlacements(e)
@@ -266,9 +423,10 @@ end
 --- is the same (moved if needed), so dragging one prop in the editor only touches that one
 ---@param key string the set
 ---@param props table[]? entries (see the top of this file)
----@param opts {signature: string?, collision: boolean?}? `signature` : nothing is done while it's
----the one the set already shows ; `collision` (default true) : cars hit them (a static collision
----reload follows any change)
+---@param opts {signature: string?, collision: boolean?, collisionType: string?}? `signature` :
+---nothing is done while it's the one the set already shows ; `collision` (default true) : cars hit
+---them (a static collision reload follows any change) ; `collisionType` : every object's, whatever
+---its mesh (the editor's placing ghost is "None", never in the static collision)
 function M.show(key, props, opts)
     opts = opts or {}
     local set = M.sets[key]
@@ -278,6 +436,9 @@ function M.show(key, props, opts)
     local collision = opts.collision ~= false
 
     local wanted = M.expand(props)
+    if opts.collisionType then
+        for _, p in ipairs(wanted) do p.collision = opts.collisionType end
+    end
     local changed = false
     for i, p in ipairs(wanted) do
         local old, obj = set.entries[i], set.objects[i]

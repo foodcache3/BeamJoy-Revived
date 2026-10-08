@@ -456,7 +456,7 @@ local function onGetRawPoiListForLevel(level, elements)
     table.clear(M.lineById)
     if contributionsSuppressed() then return end
     -- Settings > Visual : hidden, "Start line" prompt included
-    if beamjoy_markerSettings and beamjoy_markerSettings.hideActivities then return end
+    if beamjoy_markerSettings and beamjoy_markerSettings.activitiesHidden() then return end
     local rot = quat(0, 0, 0, 1)
     for _, line in ipairs(allLines()) do
         local s1 = line.stops and line.stops[1]

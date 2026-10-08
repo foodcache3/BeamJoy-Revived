@@ -1940,6 +1940,13 @@ local function onSessionUpdate(session)
         if myVeh and session.settings.ghostOnCountdown ~= false then
             beamjoy_vehicles.setGhostReason(myVeh.vid, "race", true)
         end
+        -- Real bug (direct report : still ghosted at the start with "ghost on countdown" off) :
+        -- freeroam's respawn protection (Freeroam.CollisionsMode "ghosts") came on with the grid
+        -- teleport (a reset to the game) and outlasted the countdown. From here the race's own
+        -- options alone decide (vehicles.lua's onVehicleResetted stands down for the whole session)
+        if myVeh then
+            beamjoy_vehicles.setGhostReason(myVeh.vid, "respawn", false)
+        end
         -- opt-in, independent reason from "race" above (see BJRaceDefaults.disableCollisions) :
         -- stays active for the WHOLE race regardless of participant count, never cleared at the
         -- RACE transition below (unlike "race", which lifts for multiplayer at the green light).

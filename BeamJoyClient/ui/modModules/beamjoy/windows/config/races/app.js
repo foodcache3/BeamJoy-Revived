@@ -1,3 +1,4 @@
+await import(`/ui/modModules/beamjoy/windows/config/races/editor/propDrawer/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/races/editor/app.js`);
 
 angular.module("beamjoy").component("bjConfigRaces", {

@@ -182,7 +182,7 @@ local function onGetRawPoiListForLevel(level, elements)
     table.clear(M.depotById)
     if contributionsSuppressed() then return end
     -- Settings > Visual : hidden, job board prompt included
-    if beamjoy_markerSettings and beamjoy_markerSettings.hideActivities then return end
+    if beamjoy_markerSettings and beamjoy_markerSettings.activitiesHidden() then return end
     local rot = quat(0, 0, 0, 1)
     for _, depot in ipairs(depots()) do
         local id = "bjDepot_" .. tostring(depot.id)

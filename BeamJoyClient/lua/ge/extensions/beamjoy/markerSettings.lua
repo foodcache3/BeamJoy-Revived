@@ -9,6 +9,8 @@
 ---  - opaqueGhosts : ghosted vehicles (no collisions) are drawn solid instead of see-through
 ---    (beamjoy_vehicles.computeDisplayAlpha). Only the look : they're still ghosts.
 --- Saved on this PC, shared between servers.
+--- A passive race run (beamjoy_raceFreeroam) hides the activity markers too while it lasts (direct
+--- request) : read activitiesHidden(), not hideActivities, for "are they shown".
 
 local M = {
     hideActivities = false,
@@ -68,6 +70,23 @@ local function onInit()
     end)
 end
 
+--- the activity markers are hidden : the player's setting, or a passive race run going on
+---@return boolean
+function M.activitiesHidden()
+    return M.hideActivities == true or (beamjoy_raceFreeroam ~= nil and beamjoy_raceFreeroam.run ~= nil)
+end
+
+-- markers go when a passive run starts and come back when it ends
+local lastPassiveRun = false
+local function onSlowUpdate()
+    local running = beamjoy_raceFreeroam ~= nil and beamjoy_raceFreeroam.run ~= nil
+    if running ~= lastPassiveRun then
+        lastPassiveRun = running
+        refreshPOIs()
+    end
+end
+
 M.onInit = onInit
+M.onSlowUpdate = onSlowUpdate
 
 return M

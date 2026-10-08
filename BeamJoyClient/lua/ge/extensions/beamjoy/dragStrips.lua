@@ -425,7 +425,7 @@ local LINE_COLOR, MARK_COLOR, EDGE_COLOR, TEXT_COLOR, TEXT_BG
 local function draw()
     local layer = shape.layer(LAYER)
     layer.reset()
-    if M.editing or (beamjoy_markerSettings and beamjoy_markerSettings.hideActivities) then return end
+    if M.editing or (beamjoy_markerSettings and beamjoy_markerSettings.activitiesHidden()) then return end
     LINE_COLOR = LINE_COLOR or BJColor(1, 1, 1, .85)
     MARK_COLOR = MARK_COLOR or BJColor(1, .85, .2, .8)
     EDGE_COLOR = EDGE_COLOR or BJColor(1, 1, 1, .35)

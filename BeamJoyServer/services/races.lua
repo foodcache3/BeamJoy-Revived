@@ -428,6 +428,16 @@ local function saneShape(shape)
         (shape:lower():find("%.dae$") or shape:lower():find("%.cdae$")) ~= nil
 end
 
+--- a prop's own lift (metres, mesh units) : set by the editor for a mesh it tuned itself (one
+--- outside its catalog), so every player stands it at the same height
+---@param v any
+---@return number?
+local function saneLift(v)
+    local lift = tonumber(v)
+    if not lift or lift ~= lift then return nil end
+    return math.clamp(lift, -50, 50)
+end
+
 --- race.props (see the client's beamjoy_props for what each entry is) : only the known fields of
 --- well-formed entries are kept, malformed ones are dropped
 ---@param props any
@@ -453,6 +463,7 @@ local function sanitizeProps(props)
                         yaw = math.clamp(tonumber(p.yaw) or 0, -360, 360),
                         scale = scale,
                         followGround = p.followGround ~= false,
+                        lift = saneLift(p.lift),
                     }
                     if entry.followGround and type(p.heights) == "table" and #p.heights == count and
                         table.every(p.heights, function(h) return tonumber(h) ~= nil end) then
@@ -470,6 +481,7 @@ local function sanitizeProps(props)
                         dir = dir,
                         up = up or { x = 0, y = 0, z = 1 },
                         scale = scale,
+                        lift = saneLift(p.lift),
                     }
                     total = total + 1
                 end
