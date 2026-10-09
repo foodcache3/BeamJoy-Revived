@@ -130,6 +130,84 @@ end
 
 local WANTED = { BeamNGWaypoint = true, SpawnSphere = true }
 
+-- NESTED PREFABS ----------------------------------------------------------------------------------
+-- A prefab may only point at others (`new Prefab() { FileName = ... }`, or a "Prefab" line with its
+-- `filename`), e.g. hirochi_raceway's quickraces keep their barriers in art/prefabs. Those are read
+-- too, their objects placed through the pointing prefab's position, turn and scale.
+
+-- prefabs inside prefabs, this deep at most
+local MAX_PREFAB_DEPTH = 4
+
+---@class BJPrefabTransform
+---@field pos table
+---@field x table its own axes in the world (unit length)
+---@field y table
+---@field z table
+---@field scale table per axis
+
+---@param fields table position, rotationMatrix, scale as read
+---@return BJPrefabTransform
+local function prefabTransform(fields)
+    local pos = type(fields.position) == "table" and toV(fields.position) or toV(numbers(fields.position)) or v()
+    local m = type(fields.rotationMatrix) == "table" and fields.rotationMatrix or numbers(fields.rotationMatrix)
+    local sc = type(fields.scale) == "table" and fields.scale or numbers(fields.scale)
+    local s = toV(sc) or v(1, 1, 1)
+    if s.x <= 0 or s.y <= 0 or s.z <= 0 then s = v(1, 1, 1) end
+    local xf = { pos = pos, x = v(1, 0, 0), y = v(0, 1, 0), z = v(0, 0, 1), scale = s }
+    if #m == 9 then
+        local x, y, z = axis(m, 1), axis(m, 2), axis(m, 3)
+        if len(x) > 1e-4 and len(y) > 1e-4 and len(z) > 1e-4 then
+            xf.x, xf.y, xf.z = mul(x, 1 / len(x)), mul(y, 1 / len(y)), mul(z, 1 / len(z))
+        end
+    end
+    return xf
+end
+
+--- a direction from the prefab's own space into its parent's
+local function turnBy(xf, d)
+    return add(add(mul(xf.x, d.x), mul(xf.y, d.y)), mul(xf.z, d.z))
+end
+
+--- a point from the prefab's own space into its parent's
+local function placeBy(xf, p)
+    return add(xf.pos, turnBy(xf, v(p.x * xf.scale.x, p.y * xf.scale.y, p.z * xf.scale.z)))
+end
+
+--- `inner` placed inside `outer` : one transform doing both
+---@param outer BJPrefabTransform?
+---@param inner BJPrefabTransform
+---@return BJPrefabTransform
+local function compose(outer, inner)
+    if not outer then return inner end
+    return {
+        pos = placeBy(outer, inner.pos),
+        x = turnBy(outer, inner.x),
+        y = turnBy(outer, inner.y),
+        z = turnBy(outer, inner.z),
+        scale = v(outer.scale.x * inner.scale.x, outer.scale.y * inner.scale.y, outer.scale.z * inner.scale.z),
+    }
+end
+
+---@param xf BJPrefabTransform
+local function isIdentity(xf)
+    local function near(a, b) return math.abs(a.x - b.x) + math.abs(a.y - b.y) + math.abs(a.z - b.z) < 1e-5 end
+    return near(xf.pos, v()) and near(xf.x, v(1, 0, 0)) and near(xf.y, v(0, 1, 0)) and near(xf.z, v(0, 0, 1)) and
+        near(xf.scale, v(1, 1, 1))
+end
+
+--- a waypoint or spawn sphere of a nested prefab, into the world
+---@param xf BJPrefabTransform?
+---@param obj BJMapObject?
+---@return BJMapObject?
+local function objectThrough(xf, obj)
+    if not xf or not obj then return obj end
+    obj.pos = placeBy(xf, obj.pos)
+    if obj.xAxis then obj.xAxis = turnBy(xf, obj.xAxis) end
+    if obj.yAxis then obj.yAxis = turnBy(xf, obj.yAxis) end
+    obj.radius = obj.radius * math.max(xf.scale.x, xf.scale.y, xf.scale.z)
+    return obj
+end
+
 -- PROPS ------------------------------------------------------------------------------------------
 
 -- vehicles a race places that come along as a static prop (by jbeam)
@@ -158,8 +236,9 @@ end
 --- a prefab's TSStatic (or a cone vehicle) as a race prop (beamjoy_props' entries), or nil
 ---@param class string
 ---@param fields table position, rotationMatrix, scale, shapeName, collisionType, jbeam as read
+---@param xf BJPrefabTransform? the prefab holding it, when it's inside another one
 ---@return table?
-local function makeProp(class, fields)
+local function makeProp(class, fields, xf)
     local shape
     if class == "TSStatic" then
         shape = propShape(fields.shapeName)
@@ -173,12 +252,17 @@ local function makeProp(class, fields)
     local dir, up = v(0, 1, 0), v(0, 0, 1)
     if #m == 9 then dir, up = axis(m, 2), axis(m, 3) end
     if len(dir) < 1e-4 or len(up) < 1e-4 then dir, up = v(0, 1, 0), v(0, 0, 1) end
+    if xf then pos, dir, up = placeBy(xf, pos), turnBy(xf, dir), turnBy(xf, up) end
     local prop = { kind = "static", shape = shape, scale = 1 }
     if class == "TSStatic" then
         -- stands exactly where the map has it (no lift of its own)
         prop.lift = 0
         local sc = type(fields.scale) == "table" and fields.scale or numbers(fields.scale)
-        local sx, sy, sz = tonumber(sc[1]), tonumber(sc[2]), tonumber(sc[3])
+        local sx, sy, sz = tonumber(sc[1] or sc.x), tonumber(sc[2] or sc.y), tonumber(sc[3] or sc.z)
+        if xf and sx and sy and sz then
+            -- its prefab's scale (along the prefab's own axes, close enough for a prop turned in it)
+            sx, sy, sz = sx * xf.scale.x, sy * xf.scale.y, sz * xf.scale.z
+        end
         if sx and sy and sz and sx > 0 and sy > 0 and sz > 0 then
             if math.abs(sx - sy) < 1e-3 and math.abs(sx - sz) < 1e-3 then
                 prop.scale = clamp(round(sx, 3), .1, 10)
@@ -200,30 +284,35 @@ end
 
 --- a Torque prefab (`new Class(name) { field = "value"; ... };`) : its waypoints and spawn spheres,
 --- and its props when `props` is given
+local readPrefab
+
 ---@param text string
 ---@param into table<string, BJMapObject>
 ---@param props table[]?
-local function parsePrefabText(text, into, props)
+---@param nest {xf: BJPrefabTransform?, depth: integer, seen: table<string, boolean>}? when inside another prefab
+local function parsePrefabText(text, into, props, nest)
+    local xf = nest and nest.xf
     local at = 1
     while true do
         local s, e, class, name = text:find("new%s+([%w_]+)%s*%(%s*([^%)]-)%s*%)%s*{", at)
         if not s then break end
         at = e + 1
-        if props and (class == "TSStatic" or class == "BeamNGVehicle") then
-            local close = text:find("};", e, true) or #text
-            local fields = {}
-            for k, val in text:sub(e + 1, close):gmatch("([%w_]+)%s*=%s*\"(.-)\"%s*;") do
-                fields[k] = val
-            end
-            props[#props + 1] = makeProp(class, fields)
-        elseif WANTED[class] and name ~= "" then
+        local function fields()
             -- these classes hold no children : their block ends at the first "};"
             local close = text:find("};", e, true) or #text
-            local fields = {}
+            local out = {}
             for k, val in text:sub(e + 1, close):gmatch("([%w_]+)%s*=%s*\"(.-)\"%s*;") do
-                fields[k] = val
+                out[k] = val
             end
-            into[name] = into[name] or makeObject(class, fields)
+            return out
+        end
+        if props and (class == "TSStatic" or class == "BeamNGVehicle") then
+            props[#props + 1] = makeProp(class, fields(), xf)
+        elseif class == "Prefab" then
+            local f = fields()
+            readPrefab(f.FileName or f.fileName or f.filename, into, props, nest, prefabTransform(f))
+        elseif WANTED[class] and name ~= "" then
+            into[name] = into[name] or objectThrough(xf, makeObject(class, fields()))
         end
     end
 end
@@ -232,37 +321,63 @@ end
 ---@param text string
 ---@param into table<string, BJMapObject>
 ---@param props table[]?
-local function parsePrefabJson(text, into, props)
+---@param nest {xf: BJPrefabTransform?, depth: integer, seen: table<string, boolean>}? when inside another prefab
+local function parsePrefabJson(text, into, props, nest)
+    local xf = nest and nest.xf
     for line in text:gmatch("[^\r\n]+") do
         if props and (line:find('"TSStatic"', 1, true) or line:find('"BeamNGVehicle"', 1, true)) then
             local ok, o = pcall(jsonDecode, line)
             if ok and type(o) == "table" and (o.class == "TSStatic" or o.class == "BeamNGVehicle") then
-                props[#props + 1] = makeProp(o.class, o)
+                props[#props + 1] = makeProp(o.class, o, xf)
+            end
+        elseif line:find('"Prefab"', 1, true) then
+            local ok, o = pcall(jsonDecode, line)
+            if ok and type(o) == "table" and o.class == "Prefab" then
+                readPrefab(o.filename or o.fileName or o.FileName, into, props, nest, prefabTransform(o))
             end
         elseif line:find("BeamNGWaypoint", 1, true) or line:find("SpawnSphere", 1, true) then
             local ok, o = pcall(jsonDecode, line)
             if ok and type(o) == "table" and WANTED[o.class] then
                 local name = o.name or o.internalName
                 if type(name) == "string" and name ~= "" then
-                    into[name] = into[name] or makeObject(o.class, o)
+                    into[name] = into[name] or objectThrough(xf, makeObject(o.class, o))
                 end
             end
         end
     end
 end
 
----@param path string
+---@param path string?
 ---@param into table<string, BJMapObject>
 ---@param props table[]? its props are added to it
-local function readPrefab(path, into, props)
-    if not path or not FS:fileExists(path) then return end
-    local text = readFile(path)
-    if type(text) ~= "string" or #text > M.MAX_PREFAB_BYTES then return end
-    if path:lower():find("%.json$") then
-        parsePrefabJson(text, into, props)
-    else
-        parsePrefabText(text, into, props)
+---@param parent {xf: BJPrefabTransform?, depth: integer, seen: table<string, boolean>}? the prefab pointing at this one
+---@param xf BJPrefabTransform? where that one places it
+readPrefab = function(path, into, props, parent, xf)
+    if type(path) ~= "string" or path == "" or path:find("..", 1, true) then return end
+    if not path:find("^/") then path = "/" .. path end
+    if not FS:fileExists(path) then return end
+    -- pointed at by a prefab read on its own (no parent of its own) : still placed by it
+    if not parent and xf then parent = { depth = 0, seen = {} } end
+    local nest = { depth = 0, seen = {} }
+    if parent then
+        if parent.depth >= MAX_PREFAB_DEPTH or parent.seen[path:lower()] then return end
+        nest.depth, nest.seen = parent.depth + 1, parent.seen
+        nest.xf = compose(parent.xf, xf)
+        if isIdentity(nest.xf) then nest.xf = nil end
     end
+    nest.seen[path:lower()] = true
+    local text = readFile(path)
+    if type(text) ~= "string" or #text > M.MAX_PREFAB_BYTES then
+        nest.seen[path:lower()] = nil
+        return
+    end
+    if path:lower():find("%.json$") then
+        parsePrefabJson(text, into, props, nest)
+    else
+        parsePrefabText(text, into, props, nest)
+    end
+    -- only a loop is refused : the same prefab placed twice by its parent is read twice
+    nest.seen[path:lower()] = nil
 end
 
 ---@param ... table[]
@@ -889,11 +1004,24 @@ local function scan()
                     string.format("%d m", race.distance)
             end
             row.detail = table.concat(parts, " · ")
-            if existing[race.name:lower()] then
+            -- added as a new race (everything, or its gates and grid only), or its props added to
+            -- the race of the same name this server already has (props only)
+            local used = existing[race.name:lower()] == true
+            if used then
                 row.disabled, row.tag = true, translate("beamjoy.mapRaces.nameUsed", "name already used")
             end
             -- a reversed track is offered, not ticked
             if reverse then row.checked = false end
+            local props
+            if not used then
+                props = { disabled = true, tag = translate("beamjoy.mapRaces.noRace", "no race with this name") }
+            elseif #race.props == 0 then
+                props = { disabled = true, tag = translate("beamjoy.mapRaces.noProps", "no props") }
+            else
+                props = { disabled = false, tag = translate("beamjoy.mapRaces.addsProps", "adds to your race"),
+                    checked = not reverse }
+            end
+            row.modes = { props = props }
             M.found[key] = race
         else
             row.disabled = true
@@ -917,21 +1045,28 @@ local function scan()
     beamjoy_communications_ui.send("BJMapRacesScan", { level = level, rows = rows })
 end
 
---- `keys` : the ticked rows
+--- `keys` : the ticked rows. `mode` : "all" (new races, with their props), "gates" (new races,
+--- no props) or "props" (only the props, added to the races of the same name the server has)
 ---@param keys string[]
-local function import(keys)
+---@param mode string?
+local function import(keys, mode)
     local races = {}
     for _, key in ipairs(type(keys) == "table" and keys or {}) do
         local race = M.found[key]
         if race then
-            local copy = {}
-            for k, val in pairs(race) do copy[k] = val end
-            copy.propsFound = nil
-            races[#races + 1] = copy
+            if mode == "props" then
+                races[#races + 1] = { name = race.name, props = race.props }
+            else
+                local copy = {}
+                for k, val in pairs(race) do copy[k] = val end
+                copy.propsFound = nil
+                if mode == "gates" then copy.props = {} end
+                races[#races + 1] = copy
+            end
         end
     end
     if #races == 0 then return end
-    beamjoy_communications.send("raceMapImport", races)
+    beamjoy_communications.send(mode == "props" and "raceMapImportProps" or "raceMapImport", races)
 end
 
 ---@param imported integer
@@ -952,6 +1087,26 @@ local function onImportDone(imported, skipped, failed)
     if skipped > 0 or failed > 0 then toast.warn(text, nil, 8) else toast.success(text, nil, 6) end
 end
 
+---@param updated integer races given props
+---@param added integer props added to them
+---@param skipped integer races not found (or someone else's, with authorship restricted)
+---@param failed integer
+local function onImportPropsDone(updated, added, skipped, failed)
+    updated, added = tonumber(updated) or 0, tonumber(added) or 0
+    skipped, failed = tonumber(skipped) or 0, tonumber(failed) or 0
+    local text = beamjoy_lang.translate("beamjoy.mapRaces.propsDone", "Map props : {added} added to {updated} races")
+        :gsub("{added}", tostring(added)):gsub("{updated}", tostring(updated))
+    if skipped > 0 then
+        text = text .. ", " .. beamjoy_lang.translate("beamjoy.mapRaces.propsDoneSkipped", "{skipped} skipped")
+            :gsub("{skipped}", tostring(skipped))
+    end
+    if failed > 0 then
+        text = text .. ", " .. beamjoy_lang.translate("beamjoy.mapRaces.doneFailed", "{failed} failed (see the server console)")
+            :gsub("{failed}", tostring(failed))
+    end
+    if skipped > 0 or failed > 0 then toast.warn(text, nil, 8) else toast.success(text, nil, 6) end
+end
+
 local function onInit()
     beamjoy_communications_ui.addHandler("BJMapRacesScanRequest", function()
         local ok, err = pcall(scan)
@@ -962,6 +1117,7 @@ local function onInit()
     end)
     beamjoy_communications_ui.addHandler("BJMapRacesImport", import)
     beamjoy_communications.addHandler("raceMapImportDone", onImportDone)
+    beamjoy_communications.addHandler("raceMapImportPropsDone", onImportPropsDone)
 end
 
 M.onInit = onInit

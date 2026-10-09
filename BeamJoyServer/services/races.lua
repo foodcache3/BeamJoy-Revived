@@ -1534,6 +1534,93 @@ local function raceMapImport(ctxt, races)
     end
 end
 
+--- a prop as raceMapImportProps compares them : the same mesh at the same place is the same prop
+---@param p table
+---@return string
+local function propKey(p)
+    local function at(pt)
+        if type(pt) ~= "table" then return "-" end
+        return string.format("%.1f|%.1f|%.1f", tonumber(pt.x) or 0, tonumber(pt.y) or 0, tonumber(pt.z) or 0)
+    end
+    local shape = type(p.shape) == "string" and p.shape:lower() or ""
+    if p.kind == "line" then return shape .. "|line|" .. at(p.a) .. "|" .. at(p.b) end
+    return shape .. "|" .. at(p.pos)
+end
+
+---@param p table
+---@return integer
+local function propCount(p)
+    if p.kind == "line" then return math.max(0, math.floor(tonumber(p.count) or 0)) end
+    return 1
+end
+
+--- The props of a map's races (Import map races, "props only" : direct request), added to the races
+--- of the same name this server already has (e.g. imported before props came along). Gates, grid,
+--- options and times are left as they are ; a prop the race already has isn't added twice, and a
+--- race only takes them up to MAX_PROPS. Same authorship rule as raceSave.
+---@param ctxt BJSContext
+---@param list {name: string, props: table[]}[]
+local function raceMapImportProps(ctxt, list)
+    if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
+            BJ_PERMISSIONS.EditRaces) then
+        return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
+            services_lang.get("error.insufficientPermissions", ctxt.sender.lang))
+    end
+    if not table.isArray(list) then return end
+
+    local updated, added, skipped, failed = 0, 0, 0, 0
+    for i, raw in ipairs(list) do
+        if i > MAX_MAP_IMPORT then break end
+        local name = type(raw) == "table" and type(raw.name) == "string" and raw.name:trim():lower()
+        local race = name and table.find(M.data, function(r)
+            return type(r.name) == "string" and r.name:trim():lower() == name
+        end)
+        if not race or ctxt.sender and services_config.data.RaceAuthorshipRestriction and
+            not services_permissions.isStaff(ctxt.sender.playerName) and
+            race.author ~= ctxt.sender.playerName then
+            skipped = skipped + 1
+        elseif not table.isArray(raw.props) then
+            failed = failed + 1
+        else
+            local merged, seen, total = {}, {}, 0
+            for _, p in ipairs(race.props or {}) do
+                merged[#merged + 1] = p
+                seen[propKey(p)] = true
+                total = total + propCount(p)
+            end
+            local before = #merged
+            for _, p in ipairs(raw.props) do
+                if type(p) == "table" and not seen[propKey(p)] and total + propCount(p) <= MAX_PROPS then
+                    seen[propKey(p)] = true
+                    merged[#merged + 1] = p
+                    total = total + propCount(p)
+                end
+            end
+            local props, err = sanitizeProps(merged)
+            if not props then
+                LogError(string.format("raceMapImportProps: %s : %s", tostring(race.name), tostring(err)))
+                failed = failed + 1
+            elseif #props > before then
+                race.props = props
+                updated = updated + 1
+                added = added + #props - before
+            end
+        end
+    end
+
+    if updated > 0 then
+        saveData()
+        services_players.players:forEach(function(p)
+            local caches = {}
+            M.onBJRequestCache(caches, p.playerID)
+            communications_tx.sendToPlayer(p.playerID, "sendCache", caches)
+        end)
+    end
+    if ctxt.sender then
+        communications_tx.sendToPlayer(ctxt.senderID, "raceMapImportPropsDone", updated, added, skipped, failed)
+    end
+end
+
 ---@param ctxt BJSContext
 ---@param raceId integer
 local function raceDelete(ctxt, raceId)
@@ -1733,6 +1820,7 @@ local function onInit()
     communications_rx.addHandler("raceLegacyImportPreview", M.raceLegacyImportPreview)
     communications_rx.addHandler("raceLegacyImportConfirm", M.raceLegacyImportConfirm)
     communications_rx.addHandler("raceMapImport", M.raceMapImport)
+    communications_rx.addHandler("raceMapImportProps", M.raceMapImportProps)
 
     seedBundledRaces()
     applyBundledCourseUpdates()
@@ -1755,5 +1843,6 @@ M.raceDelete = raceDelete
 M.raceLegacyImportPreview = raceLegacyImportPreview
 M.raceLegacyImportConfirm = raceLegacyImportConfirm
 M.raceMapImport = raceMapImport
+M.raceMapImportProps = raceMapImportProps
 
 return M

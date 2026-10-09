@@ -80,7 +80,14 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
     // that can't be imported, `tag` says why) can't be ticked at all. Rows sharing a `group` sit
     // under one heading that ticks or unticks the whole group. onConfirm receives the ticked keys ;
     // confirm stays disabled while nothing is ticked.
-    this.askChecklist = (message, items, onConfirm, onCancel) => {
+    // options.modes (optional) : [{key, label, hint?}], buttons over the list choosing what the
+    // ticked rows do (the map race importer : everything, gates only, props only) ; a row's own
+    // `modes[key]` ({disabled, tag, checked}) replaces its state in that mode. onConfirm then also
+    // receives the chosen mode's key. options.mode : the one chosen first.
+    this.askChecklist = (message, items, onConfirm, onCancel, options) => {
+        this.state.checklistModes = (options && Array.isArray(options.modes) && options.modes.length)
+            ? options.modes : null;
+        this.state.checklistMode = null;
         this.state.visible = true;
         this.state.message = message;
         this.state.showInput = false;
@@ -102,14 +109,32 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
         this.state.checklist = groups;
         this.state.onConfirm = onConfirm;
         this.state.onCancel = onCancel;
+        if (this.state.checklistModes) {
+            this.setChecklistMode((options && options.mode) || this.state.checklistModes[0].key);
+        }
+    };
+
+    // a mode's own rows : each row as that mode has it, ticks back to that mode's defaults
+    this.setChecklistMode = (key) => {
+        if (!this.state.checklist || !this.state.checklistModes) return;
+        this.state.checklistMode = key;
+        this.state.checklist.forEach((group) => group.rows.forEach((row) => {
+            if (!row.base) row.base = { disabled: row.disabled, tag: row.tag, checked: row.checked };
+            const own = (row.modes && row.modes[key]) || {};
+            row.disabled = own.disabled !== undefined ? own.disabled : row.base.disabled;
+            row.tag = own.tag !== undefined ? own.tag : row.base.tag;
+            row.checked = !row.disabled && (own.checked !== undefined ? own.checked !== false : row.base.checked);
+        }));
     };
 
     this.resolve = (confirmed) => {
-        const { onConfirm, onCancel, showInput, inputValue, checklist } = this.state;
+        const { onConfirm, onCancel, showInput, inputValue, checklist, checklistMode } = this.state;
         const picked = checklist
             ? checklist.flatMap((g) => g.rows.filter((r) => r.checked).map((r) => r.key))
             : undefined;
         this.state.checklist = null;
+        this.state.checklistModes = null;
+        this.state.checklistMode = null;
         this.state.visible = false;
         this.state.message = "";
         this.state.showInput = false;
@@ -118,7 +143,10 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
         this.state.infoOnly = false;
         this.state.onConfirm = null;
         this.state.onCancel = null;
-        if (confirmed && onConfirm) onConfirm(checklist ? picked : showInput ? inputValue.trim() : undefined);
+        if (confirmed && onConfirm) {
+            if (checklist) onConfirm(picked, checklistMode || undefined);
+            else onConfirm(showInput ? inputValue.trim() : undefined);
+        }
         if (!confirmed && onCancel) onCancel();
     };
 });
@@ -192,6 +220,14 @@ angular.module("beamjoy").component("bjConfirm", {
         this.selectAll = (value, event) => {
             if (event) event.stopPropagation();
             setAll(rows(), value);
+        };
+        this.setMode = (key, event) => {
+            if (event) event.stopPropagation();
+            beamjoyConfirm.setChecklistMode(key);
+        };
+        this.modeHint = () => {
+            const mode = (this.state.checklistModes || []).find((m) => m.key === this.state.checklistMode);
+            return mode && mode.hint;
         };
         this.cancel = (event) => {
             event.stopPropagation();

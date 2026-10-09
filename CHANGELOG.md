@@ -8,7 +8,20 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2642, server build 2439.
+Version 1.11.0 : client build 2643, server build 2440.
+
+- **Import map races : choose what to import** (direct request). Buttons over the list pick
+  Everything (new races with their props), Gates and grid only (new races, no props) or Props only :
+  the map's barriers and cones added to the races you already have with the same name (e.g. ones
+  imported before props came along). Their gates, grid, options and times stay as they are, a prop
+  the race already has isn't added twice, and the race's prop limit still applies ; the race
+  authorship restriction applies as it does to saving. *(client + server)*
+
+- **Fixed: some map races imported without their props** (direct report : Hirochi Raceway's
+  Forgotten raceway). Their track prefab only points at other prefabs holding the barriers
+  (`new Prefab() { FileName = ... }`, or a "Prefab" line in a .prefab.json) ; those are now read too,
+  placed by the pointing prefab's position, turn and scale. Hirochi's Forgotten raceway now brings
+  315 props, Fullcircuit1 265, Shortcircuit1 197. *(client only)*
 
 - **While dragging a prop line, wheel up adds props** (direct request) and wheel down takes some
   away (it was the other way round). *(client only)*

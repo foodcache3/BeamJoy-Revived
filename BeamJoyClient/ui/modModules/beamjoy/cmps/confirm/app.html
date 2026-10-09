@@ -51,6 +51,39 @@
         max-height: 20vh;
         margin-bottom: 0.6em;
     }
+    /* the checklist's modes (askChecklist's options.modes) : one segmented row */
+    #beamjoy-confirm .checklist-modes {
+        display: flex;
+        margin-bottom: 0.4em;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 0.3em;
+        overflow: hidden;
+    }
+    #beamjoy-confirm .checklist-modes button {
+        flex: 1;
+        padding: 0.4em 0.6em;
+        border: none;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.75);
+        font: inherit;
+        cursor: pointer;
+    }
+    #beamjoy-confirm .checklist-modes button + button {
+        border-left: 1px solid rgba(255, 255, 255, 0.25);
+    }
+    #beamjoy-confirm .checklist-modes button:hover {
+        background: rgba(255, 255, 255, 0.08);
+    }
+    #beamjoy-confirm .checklist-modes button.on {
+        background: #ff6600;
+        color: white;
+        font-weight: bold;
+    }
+    #beamjoy-confirm .checklist-mode-hint {
+        margin-bottom: 0.5em;
+        font-size: 0.9em;
+        color: rgba(255, 255, 255, 0.7);
+    }
     #beamjoy-confirm .checklist-bar {
         display: flex;
         align-items: center;
@@ -157,6 +190,14 @@
     <div class="confirm-box cursor-default" ng-class="{'has-checklist': $ctrl.state.checklist}"
         ng-click="$event.stopPropagation()">
         <div class="confirm-message">{{$ctrl.state.message}}</div>
+        <div class="checklist-modes" ng-if="$ctrl.state.checklist && $ctrl.state.checklistModes">
+            <button
+                ng-repeat="mode in $ctrl.state.checklistModes track by mode.key"
+                ng-class="{on: mode.key === $ctrl.state.checklistMode}"
+                ng-click="$ctrl.setMode(mode.key, $event)"
+            >{{mode.label}}</button>
+        </div>
+        <div class="checklist-mode-hint" ng-if="$ctrl.state.checklist && $ctrl.modeHint()">{{$ctrl.modeHint()}}</div>
         <div class="checklist-bar" ng-if="$ctrl.state.checklist">
             <span>{{$ctrl.countText()}}</span>
             <span class="spacer"></span>

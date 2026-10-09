@@ -73,7 +73,19 @@ angular.module("beamjoy").component("bjConfigRaces", {
                     ? "beamjoy.mapRaces.failed" : "beamjoy.mapRaces.none"));
                 return;
             }
-            if (!rows.some((r) => !r.disabled)) {
+            // what the ticked races bring (direct request) : everything, their gates and grid only, or
+            // only their props, added to the races of the same name this server already has
+            const usable = (mode) => rows.some((r) => {
+                const own = r.modes && r.modes[mode];
+                return !(own && own.disabled !== undefined ? own.disabled : r.disabled);
+            });
+            const modes = ["all", "gates", "props"].map((key) => ({
+                key,
+                label: translate(`beamjoy.mapRaces.mode.${key}`),
+                hint: translate(`beamjoy.mapRaces.mode.${key}.hint`),
+            }));
+            const first = modes.find((m) => usable(m.key));
+            if (!first) {
                 beamjoyConfirm.info(
                     `${translate("beamjoy.mapRaces.noneImportable")}\n\n` +
                         rows.map((r) => `${r.label} (${r.tag})`).join("\n")
@@ -83,7 +95,9 @@ angular.module("beamjoy").component("bjConfigRaces", {
             beamjoyConfirm.askChecklist(
                 translate("beamjoy.mapRaces.pick"),
                 rows,
-                (keys) => beamjoyStore.send("BJMapRacesImport", [keys])
+                (keys, mode) => beamjoyStore.send("BJMapRacesImport", [keys, mode || "all"]),
+                undefined,
+                { modes, mode: first.key }
             );
         });
 
