@@ -1685,14 +1685,17 @@ end
 local function onSplitPropLine(index)
     local line = M.race and M.race.props[index]
     if not line or line.kind ~= "line" then return end
-    local singles = table.map(beamjoy_props.linePlacements(line), function(p)
+    local singles = table.map(beamjoy_props.linePlacements(line), function(p, k)
+        -- a line with another mesh every other prop (see onSetPropAlt) keeps it
+        local other = type(line.alt) == "string" and k % 2 == 0
         return {
             kind = "static",
-            shape = line.shape,
+            shape = other and line.alt or line.shape,
             pos = xyz(p.pos),
-            dir = xyz(p.dir),
+            dir = xyz(other and beamjoy_props.turn(p.dir, tonumber(line.altYaw) or 0) or p.dir),
             up = xyz(p.up),
             scale = line.scale or 1,
+            lift = other and line.altLift or line.lift,
         }
     end)
     table.remove(M.race.props, index)
@@ -1789,6 +1792,18 @@ local function placingEntry()
     local p = M.placing
     -- the line being dragged holds fewer props than its length asks for : the race is nearly full
     p.capped = false
+    if p.prefab then
+        -- a prefab : one at the click, turned by the wheel (no line of them)
+        local at, facing = p.drag and p.drag.a or p.hit, p.drag and p.drag.facing or p.facing
+        local entry = beamjoy_props.prefabEntry(p.prefab)
+        if not entry or not at or not facing then return nil, 0 end
+        entry.kind = "static"
+        entry.pos = xyz(at)
+        entry.dir = xyz(beamjoy_props.turn(facing, p.rot))
+        entry.up = { x = 0, y = 0, z = 1 }
+        entry.scale = 1
+        return entry, 0
+    end
     local t = beamjoy_props.tuning(p.shape)
     local yaw = wrapYaw(t.yaw + p.rot)
     local lift = entryLift(p.shape, t)
@@ -1861,6 +1876,7 @@ local function pushPlacing(entry, meters)
     local state = p and {
         armed = true,
         shape = p.shape,
+        prefab = p.prefab,
         dragging = p.drag ~= nil,
         count = entry and beamjoy_props.weight(entry) or 0,
         meters = math.floor((meters or 0) + .5),
@@ -1870,7 +1886,8 @@ local function pushPlacing(entry, meters)
         capped = p.drag ~= nil and p.capped == true,
         keepPlacing = M.keepPlacing,
     } or { armed = false }
-    local key = p and string.format("%s|%s|%d|%d|%d|%.2f|%s|%s|%s", p.shape, tostring(state.dragging), state.count,
+    local key = p and string.format("%s|%s|%s|%d|%d|%d|%.2f|%s|%s|%s", p.shape, tostring(p.prefab),
+        tostring(state.dragging), state.count,
         state.meters, state.rot, state.spacing, tostring(state.overWorld), tostring(state.capped),
         tostring(state.keepPlacing)) or "off"
     if key == lastPlacingPush then return end
@@ -1900,6 +1917,29 @@ local function onArmProp(shape)
     beamjoy_propPicker.measure(shape)
     local rot = M.placing and M.placing.shape == shape and M.placing.rot or 0
     M.placing = { shape = shape, rot = rot, spacing = 1 }
+    draggingHandle = nil
+    if M.activeGateIndex or M.activeStartIndex or M.activePropIndex then
+        M.activeGateIndex, M.activeStartIndex = nil, nil
+        M.activePropIndex, M.activePropPart = nil, nil
+        gizmo.hide()
+        pushActive()
+        extensions.hook("onBJRaceMarkersRefresh")
+    end
+    pushPlacing()
+end
+
+--- the drawer's Prefabs tab arms a prefab : placed like a mesh, its whole ghost following the mouse
+---@param id string
+local function onArmPrefab(id)
+    if not M.race or not parent or parent.activeEditor ~= M then return end
+    local template = beamjoy_props.prefabEntry(id)
+    if not template or not beamjoy_propPicker.isPlaceable(template.shape) then return end
+    for _, part in ipairs(template.parts) do
+        if not beamjoy_propPicker.isPlaceable(part.shape) then return end
+    end
+    if not propBudget(beamjoy_props.weight(template)) then return disarmProp() end
+    local rot = M.placing and M.placing.prefab == id and M.placing.rot or 0
+    M.placing = { shape = template.shape, prefab = id, rot = rot, spacing = 1 }
     draggingHandle = nil
     if M.activeGateIndex or M.activeStartIndex or M.activePropIndex then
         M.activeGateIndex, M.activeStartIndex = nil, nil
@@ -2036,11 +2076,42 @@ local function onSwapPropShape(index, shape)
     prop.shape = shape
     if prop.kind == "line" then
         prop.yaw = wrapYaw((tonumber(prop.yaw) or 0) + delta)
+        -- the other mesh keeps its own facing : the line's turn taken back off it
+        if prop.alt == shape then
+            prop.alt, prop.altYaw, prop.altLift = nil, nil, nil
+        elseif prop.alt then
+            prop.altYaw = wrapYaw((tonumber(prop.altYaw) or 0) - delta)
+        end
     elseif prop.dir then
         prop.dir = xyz(beamjoy_props.turn(toVec(prop.dir), delta))
     end
     prop.lift = entryLift(shape, after)
     updatePropGizmo()
+    markDirty()
+    pushUpdate()
+    propsChanged()
+end
+
+--- a line's every other prop is another mesh (direct request : red and white barriers in turn), or
+--- (no shape) all the line's own again. Turned and lifted as that mesh is laid down, measured now
+--- so every player stands it the same
+---@param index integer
+---@param shape string?
+local function onSetPropAlt(index, shape)
+    local prop = M.race and M.race.props[index]
+    if not prop or prop.kind ~= "line" then return end
+    if type(shape) ~= "string" or shape == "" or shape == prop.shape then
+        prop.alt, prop.altYaw, prop.altLift = nil, nil, nil
+    else
+        if not beamjoy_propPicker.isPlaceable(shape) then return end
+        beamjoy_propPicker.measure(prop.shape)
+        beamjoy_propPicker.measure(shape)
+        local own, other = beamjoy_props.tuning(prop.shape), beamjoy_props.tuning(shape)
+        prop.alt = shape
+        local yaw = wrapYaw(other.yaw - own.yaw)
+        prop.altYaw = yaw ~= 0 and yaw or nil
+        prop.altLift = entryLift(shape, other)
+    end
     markDirty()
     pushUpdate()
     propsChanged()
@@ -2083,8 +2154,10 @@ local function onInit(activityEditor)
     beamjoy_communications_ui.addHandler("BJEditorRaceTeleportToProp", onTeleportToProp)
     beamjoy_communications_ui.addHandler("BJEditorRaceSetPropToVehicle", onSetPropToVehicle)
     beamjoy_communications_ui.addHandler("BJEditorRaceArmProp", onArmProp)
+    beamjoy_communications_ui.addHandler("BJEditorRaceArmPrefab", onArmPrefab)
     beamjoy_communications_ui.addHandler("BJEditorRaceDisarmProp", function() disarmProp() end)
     beamjoy_communications_ui.addHandler("BJEditorRaceSwapPropShape", onSwapPropShape)
+    beamjoy_communications_ui.addHandler("BJEditorRaceSetPropAlt", onSetPropAlt)
     beamjoy_communications_ui.addHandler("BJEditorRaceSetKeepPlacing", function(state)
         M.keepPlacing = state == true
         if M.placing then pushPlacing() end

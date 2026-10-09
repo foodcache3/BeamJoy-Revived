@@ -8,7 +8,7 @@
 ---
 --- Entries (see services/races.lua's sanitizeProps for the server-side checks) :
 ---   { kind = "static", shape, pos, dir, up, scale, stretch, lift, solid }
----   { kind = "line", shape, a, b, mid, count, yaw, scale, followGround, heights }
+---   { kind = "line", shape, a, b, mid, count, yaw, scale, followGround, heights, alt, altYaw, altLift }
 --- A line is saved as itself and spread out here : `count` props evenly from `a` to `b` (both ends
 --- included), each facing along the line turned by `yaw` degrees round its own vertical axis.
 --- `mid` (optional) bends it : the line runs as a smooth curve from `a` through `mid` to `b`, its
@@ -16,11 +16,19 @@
 --- Optional on both : `stretch` {x, y, z} scales a mesh unevenly (on top of `scale` : a map's own
 --- race props, imported by beamjoy/mapRaces, are often stretched barriers), `lift` stands it that
 --- much higher (mesh units), `solid = false` lets cars drive through it whatever its mesh.
+--- `alt` (optional, a line's) : every other prop of it is that mesh instead (the 2nd, 4th...), turned
+--- `altYaw` degrees more and lifted `altLift` (mesh units) instead of `lift` : red and white barriers
+--- in turn.
+--- `parts` (optional) : more meshes that go with each prop (a prefab : a gazebo's frame and cover, a
+--- billboard's stand and boards), each `{ shape, pos, dir?, up? }` relative to the prop's own mesh
+--- (in its own axes and scale : `pos` from its origin, `dir` / `up` its facing and up there, the
+--- prop's own by default). Moved, turned, scaled and deleted with it ; every part counts as a prop.
 --- `heights` (one ground height per prop, measured by the editor) is what makes it follow the
 --- ground ; without it the props sit on the straight line from `a` to `b`.
 ---
---- Lamps : a catalog entry with a `light` casts it, through a SpotLight of its own at the mesh's lamp
---- head (`offset`, mesh units from its origin, turned and scaled with it), shining along `aim`. On at
+--- Lamps : a catalog entry with a `light` casts it, through a SpotLight of its own at each of the
+--- mesh's lamp heads (`offsets`, mesh units from its origin, turned and scaled with it), shining
+--- along `aim`. On at
 --- night only, as the map's own lamps are (core_environment's night window), never casting shadows,
 --- and no more than MAX_LIGHTS of them at once. A map's own props on the same mesh light up too.
 ---
@@ -152,13 +160,20 @@ local M = {
         -- the lamps' heads measured on their meshes (their glass and bulb) : the pole's hangs at the end of
         -- its arm, the two flood lights face their own +X
         { id = "lightPole", cat = "scenery", tags = "street lamp light", shape = "/art/shapes/objects/pole_light_single.dae",
-            light = { offset = { 5.0, 0, 12.55 }, aim = { 0, 0, -1 }, range = 35, innerAngle = 50, outerAngle = 150,
+            light = { offsets = { { 5.0, 0, 12.55 } }, aim = { 0, 0, -1 }, range = 35, innerAngle = 50, outerAngle = 150,
                 color = { 1, .8, .6 }, intensity = 8000 } },
+        -- the same arm and head on a bridge railing mount, and one each side
+        { id = "lightPoleBridge", cat = "scenery", tags = "street lamp light railing", shape = "/art/shapes/objects/pole_light_bridge.dae",
+            light = { offsets = { { 5.0, 0, 12.55 } }, aim = { 0, 0, -1 }, range = 35, innerAngle = 50, outerAngle = 150,
+                color = { 1, .8, .6 }, intensity = 8000 } },
+        { id = "lightPoleDouble", cat = "scenery", tags = "street lamp light twin", shape = "/art/shapes/objects/pole_light_double.dae",
+            light = { offsets = { { 5.0, 0, 12.55 }, { -5.0, 0, 12.55 } }, aim = { 0, 0, -1 }, range = 35, innerAngle = 50,
+                outerAngle = 150, color = { 1, .8, .6 }, intensity = 8000 } },
         { id = "standingLight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_standinglight_01.dae",
-            light = { offset = { .1, 0, 1.51 }, aim = { 1, 0, -.25 }, range = 30, innerAngle = 40, outerAngle = 110,
+            light = { offsets = { { .1, 0, 1.51 } }, aim = { 1, 0, -.25 }, range = 30, innerAngle = 40, outerAngle = 110,
                 color = { .9, .95, 1 }, intensity = 6000 } },
         { id = "spotlight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_spotlight_01.dae",
-            light = { offset = { .06, 0, .03 }, aim = { 1, 0, .15 }, range = 30, innerAngle = 20, outerAngle = 70,
+            light = { offsets = { { .06, 0, .03 } }, aim = { 1, 0, .15 }, range = 30, innerAngle = 20, outerAngle = 70,
                 color = { .9, .95, 1 }, intensity = 6000 } },
         { id = "foldTable", cat = "scenery", tags = "pit", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_table_01.dae" },
         { id = "foldChair", cat = "scenery", tags = "pit seat", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_chair_01.dae", collision = "None" },
@@ -175,6 +190,14 @@ local M = {
     --- the picker's categories, in order
     CATEGORIES = { "barriers", "fences", "markers", "signs", "start", "ramps", "scenery", "utility" },
 
+    --- prefabs (the drawer's Prefabs tab, direct request) : several meshes placed as one prop (see
+    --- `parts` at the top of this file). The game's own layouts (its art/prefabs files : the rally
+    --- gazebos, the billboards on stands), `shape` the mesh at their origin, `thumb` the mesh the
+    --- drawer pictures them by. Filled below
+    ---@type table[]
+    PREFABS = {},
+    PREFAB_CATEGORIES = { "gazebos", "billboards" },
+
     --- meshes measured by beamjoy_propPicker (their object box, unscaled) : shape (lower case) ->
     --- { x, y, z, minZ }
     ---@type table<string, {x: number, y: number, z: number, minZ: number}>
@@ -187,6 +210,90 @@ local M = {
     -- (110 ms measured, 2026-10-08), so they come in a few per frame (at least one a frame)
     SPAWN_BUDGET_MS = 3,
 }
+
+-- the rally gazebos (art/prefabs/p_rally_gazebo_mod_<colour>_3x3 / _3x6) : a 3 x 3 m frame and its
+-- cover at the same origin ; 3 x 6, the long cover in the middle with the frame 1.5 m to one side
+-- and the frame's add-on 1.5 m to the other
+do
+    local RALLY = "/art/shapes/race/rally/rally_assets/s_rally_gazebo_mod_"
+    for _, colour in ipairs({ "dkblue", "ngrc", "rotopad", "blastr" }) do
+        table.insert(M.PREFABS, { id = "gazebo3x3" .. colour, cat = "gazebos", size = "3x3", colour = colour,
+            shape = RALLY .. "frame_3x3.dae", thumb = RALLY .. "cover_" .. colour .. "_3x3.dae",
+            parts = { { shape = RALLY .. "cover_" .. colour .. "_3x3.dae", pos = { 0, 0, 0 } } } })
+        table.insert(M.PREFABS, { id = "gazebo3x6" .. colour, cat = "gazebos", size = "3x6", colour = colour,
+            shape = RALLY .. "cover_" .. colour .. "_3x6.dae", thumb = RALLY .. "cover_" .. colour .. "_3x6.dae",
+            parts = { { shape = RALLY .. "frame_addon_3x3.dae", pos = { 1.5, 0, 0 } },
+                { shape = RALLY .. "frame_3x3.dae", pos = { -1.5, 0, 0 } } } })
+    end
+end
+-- the billboards on stands (art/prefabs/p_billboard_<metal|wood>_stand_0<n>.prefab) : the stand at
+-- the origin, its boards stacked on it
+for _, p in ipairs({
+    { id = "billboardMetal1", cat = "billboards", kind = "metal", n = 1, shape = "/art/shapes/garage_and_dealership/s_billboard_metal_stand_01.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_metal_03.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_metal_03.dae", pos = { 0, 0, 3.8 } } } },
+    { id = "billboardMetal2", cat = "billboards", kind = "metal", n = 2, shape = "/art/shapes/garage_and_dealership/s_billboard_metal_stand_01.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_metal_02.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_metal_01.dae", pos = { 0, 0, 3.3 } }, { shape = "/art/shapes/garage_and_dealership/s_billboard_metal_02.dae", pos = { 0, 0, 4.095 } } } },
+    { id = "billboardMetal3", cat = "billboards", kind = "metal", n = 3, shape = "/art/shapes/garage_and_dealership/s_billboard_metal_stand_01.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_metal_02.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_metal_02.dae", pos = { 0, 0, 3.547 } } } },
+    { id = "billboardMetal4", cat = "billboards", kind = "metal", n = 4, shape = "/art/shapes/garage_and_dealership/s_billboard_metal_stand_03.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_04.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_04.dae", pos = { 0, -0.07, 1.366 } } } },
+    { id = "billboardMetal5", cat = "billboards", kind = "metal", n = 5, shape = "/art/shapes/garage_and_dealership/s_billboard_metal_stand_03.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_08.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_08.dae", pos = { 0, -0.059, 1.529 } } } },
+    { id = "billboardMetal6", cat = "billboards", kind = "metal", n = 6, shape = "/art/shapes/garage_and_dealership/s_billboard_metal_stand_02.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_03.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_03.dae", pos = { 0, -0.013, 3 } }, { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_07.dae", pos = { 0, -0.013, 1.9 } } } },
+    { id = "billboardMetal7", cat = "billboards", kind = "metal", n = 7, shape = "/art/shapes/garage_and_dealership/s_billboard_metal_stand_02.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_02.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_02.dae", pos = { 0, -0.011, 2.9 } }, { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_08.dae", pos = { 0, -0.011, 1.9 } } } },
+    { id = "billboardMetal8", cat = "billboards", kind = "metal", n = 8, shape = "/art/shapes/garage_and_dealership/s_billboard_metal_stand_02.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_09.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_09.dae", pos = { 0, -0.013, 3.4 } }, { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_01.dae", pos = { 0, -0.013, 2.3 } } } },
+    { id = "billboardMetal9", cat = "billboards", kind = "metal", n = 9, shape = "/art/shapes/garage_and_dealership/s_billboard_metal_stand_02.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_metal_01.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_metal_01.dae", pos = { 0, 0, 3.389 } }, { shape = "/art/shapes/garage_and_dealership/s_billboard_hang_02.dae", pos = { 0, -0.007, 2.766 }, dir = { 0, 0.999, 0.053 }, up = { 0, -0.053, 0.999 } } } },
+    { id = "billboardWood1", cat = "billboards", kind = "wood", n = 1, shape = "/art/shapes/garage_and_dealership/s_billboard_wood_stand_01.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_3m_03.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_3m_03.dae", pos = { 0, 0, 3.3 } }, { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_3m_01.dae", pos = { 0, 0, 2.3 } } } },
+    { id = "billboardWood2", cat = "billboards", kind = "wood", n = 2, shape = "/art/shapes/garage_and_dealership/s_billboard_wood_stand_01.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_3m_02.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_3m_02.dae", pos = { 0, 0, 3.5 } } } },
+    { id = "billboardWood3", cat = "billboards", kind = "wood", n = 3, shape = "/art/shapes/garage_and_dealership/s_billboard_wood_pole_02.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_3m_03.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_3m_03.dae", pos = { 0, -0.1, 3.4 } } } },
+    { id = "billboardWood4", cat = "billboards", kind = "wood", n = 4, shape = "/art/shapes/garage_and_dealership/s_billboard_wood_pole_02.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_3m_02.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_3m_02.dae", pos = { 0, -0.059, 3.4 } }, { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_0.5m_04.dae", pos = { 0, -0.041, 2.7 } } } },
+    { id = "billboardWood5", cat = "billboards", kind = "wood", n = 5, shape = "/art/shapes/garage_and_dealership/s_billboard_wood_pole_02.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_3m_01.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_3m_01.dae", pos = { 0, -0.06, 3.642 } }, { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_0.5m_05.dae", pos = { 0, -0.057, 3.1 } } } },
+    { id = "billboardWood6", cat = "billboards", kind = "wood", n = 6, shape = "/art/shapes/garage_and_dealership/s_billboard_wood_pole_01.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_02.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_02.dae", pos = { 0, -0.046, 3.4 } }, { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_0.5m_03.dae", pos = { 0, -0.038, 2.4 } } } },
+    { id = "billboardWood7", cat = "billboards", kind = "wood", n = 7, shape = "/art/shapes/garage_and_dealership/s_billboard_wood_pole_01.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_06.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_06.dae", pos = { 0, -0.045, 3.7 } }, { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_0.5m_01.dae", pos = { 0, -0.039, 2.9 } } } },
+    { id = "billboardWood8", cat = "billboards", kind = "wood", n = 8, shape = "/art/shapes/garage_and_dealership/s_billboard_wood_pole_01.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_0.5m_02.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_0.5m_02.dae", pos = { 0, -0.042, 3.657 } } } },
+    { id = "billboardWood9", cat = "billboards", kind = "wood", n = 9, shape = "/art/shapes/garage_and_dealership/s_billboard_wood_pole_01.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_05.dae",
+        parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_05.dae", pos = { 0, -0.049, 3.723 } } } },
+}) do
+    table.insert(M.PREFABS, p)
+end
+
+local prefabById = {}
+for _, p in ipairs(M.PREFABS) do prefabById[p.id] = p end
+
+---@param id string
+---@return table?
+function M.getPrefab(id) return prefabById[id] end
+
+---@param v number[]? {x, y, z}
+---@return table? {x, y, z}
+local function xyzOf(v) return v and { x = v[1], y = v[2], z = v[3] } or nil end
+
+--- a new prop of a prefab, placed nowhere yet : its own mesh and its parts (copies)
+---@param id string
+---@return {shape: string, parts: table[], prefab: string}?
+function M.prefabEntry(id)
+    local p = prefabById[id]
+    if not p then return nil end
+    return {
+        shape = p.shape,
+        prefab = p.id,
+        parts = table.map(p.parts, function(part)
+            return { shape = part.shape, pos = xyzOf(part.pos), dir = xyzOf(part.dir), up = xyzOf(part.up) }
+        end),
+    }
+end
 
 local GROUP_NAME = "BJPropsGroup"
 -- the game rebuilds its whole static collision on a reload, a hitch on a big map : one reload
@@ -285,6 +392,33 @@ function M.catalogForUI()
             }
         end
     end
+    -- the prefabs : the drawer's Prefabs tab, named here (their names are built from parts)
+    local tr = function(key) return beamjoy_lang and beamjoy_lang.translate(key) or key end
+    for _, p in ipairs(M.PREFABS) do
+        local installed = FS:fileExists(p.shape)
+        for _, part in ipairs(p.parts) do installed = installed and FS:fileExists(part.shape) end
+        if installed then
+            local name
+            if p.cat == "gazebos" then
+                name = tr("beamjoy.props.prefabs.gazebo"):gsub("{size}", p.size == "3x6" and "3 x 6" or "3 x 3")
+                    :gsub("{colour}", tr("beamjoy.props.prefabs.colour." .. p.colour))
+            else
+                name = tr("beamjoy.props.prefabs.billboard." .. p.kind):gsub("{n}", tostring(p.n))
+            end
+            out[#out + 1] = {
+                id = p.id,
+                prefab = p.id,
+                shape = p.shape,
+                thumb = p.thumb,
+                name = name,
+                cat = p.cat,
+                tags = p.cat == "gazebos" and "tent canopy pit marquee" or "sign sponsor advert banner board",
+                solid = true,
+                parts = #p.parts + 1,
+                size = M.meta[(p.thumb or p.shape):lower()],
+            }
+        end
+    end
     return out
 end
 
@@ -339,7 +473,9 @@ end
 ---@param entry table
 ---@return integer
 function M.weight(entry)
-    return entry.kind == "line" and lineCount(entry) or 1
+    -- each prop and every part of it
+    local each = 1 + (type(entry.parts) == "table" and #entry.parts or 0)
+    return (entry.kind == "line" and lineCount(entry) or 1) * each
 end
 
 ---@param props table[]?
@@ -430,6 +566,11 @@ function M.expand(props)
             -- an entry's own lift (set when it was placed, so every player stands it the same) ;
             -- else the catalog's
             local lift = (tonumber(e.lift) or (cat and cat.zOffset) or 0) * scales.z
+            -- a line's other mesh, every other prop (see the top of this file)
+            local alt = e.kind == "line" and type(e.alt) == "string" and e.alt ~= e.shape and e.alt or nil
+            local altCat = alt and M.catalogForShape(alt)
+            local altLift = alt and (tonumber(e.altLift) or (altCat and altCat.zOffset) or 0) * scales.z
+            local altYaw = tonumber(e.altYaw) or 0
             local placements
             if e.kind == "line" then
                 placements = M.linePlacements(e)
@@ -437,20 +578,46 @@ function M.expand(props)
                 local pos, dir, up = v3(e.pos), v3(e.dir), v3(e.up) or vec3(0, 0, 1)
                 placements = (pos and dir) and { { pos = pos, dir = dir, up = up } } or {}
             end
-            for _, p in ipairs(placements) do
+            for k, p in ipairs(placements) do
                 if #out >= M.MAX_PROPS then return out end
                 if p.dir:length() > 1e-4 and p.up:length() > 1e-4 then
+                    local other = alt ~= nil and k % 2 == 0
+                    local dir = other and turn(p.dir, altYaw) or p.dir
+                    local c = other and altCat or cat
+                    local pos = p.pos + vec3(0, 0, other and altLift or lift)
+                    local rot = quatFromDir(dir, p.up)
                     table.insert(out, {
-                        shape = e.shape,
-                        pos = p.pos + vec3(0, 0, lift),
-                        dir = p.dir:normalized(),
+                        shape = other and alt or e.shape,
+                        pos = pos,
+                        dir = dir:normalized(),
                         up = p.up:normalized(),
-                        rot = quatFromDir(p.dir, p.up),
+                        rot = rot,
                         scale = scale,
                         scales = scales,
-                        collision = e.solid == false and "None" or (cat and cat.collision or "Collision Mesh"),
+                        collision = e.solid == false and "None" or (c and c.collision or "Collision Mesh"),
                         entry = i,
                     })
+                    -- a prefab's other meshes, where they sit on this one
+                    for _, part in ipairs(type(e.parts) == "table" and e.parts or {}) do
+                        local off = v3(part.pos)
+                        if type(part.shape) == "string" and off then
+                            if #out >= M.MAX_PROPS then return out end
+                            local pdir = rot * (v3(part.dir) or vec3(0, 1, 0))
+                            local pup = rot * (v3(part.up) or vec3(0, 0, 1))
+                            local pc = M.catalogForShape(part.shape)
+                            table.insert(out, {
+                                shape = part.shape,
+                                pos = pos + rot * vec3(off.x * scales.x, off.y * scales.y, off.z * scales.z),
+                                dir = pdir:normalized(),
+                                up = pup:normalized(),
+                                rot = quatFromDir(pdir, pup),
+                                scale = scale,
+                                scales = scales,
+                                collision = e.solid == false and "None" or (pc and pc.collision or "Collision Mesh"),
+                                entry = i,
+                            })
+                        end
+                    end
                 end
             end
         end
@@ -506,7 +673,7 @@ local MAX_LIGHTS = 40
 -- ms between two looks at the time of day
 local NIGHT_CHECK_MS = 1000
 
----@type table<integer, userdata> a prop object's id -> its light
+---@type table<integer, {lights: userdata[], spec: table}> a prop object's id -> its lights
 local lightOf = {}
 local lightCount = 0
 ---@type boolean? the lamps' state (nil : not looked yet)
@@ -530,13 +697,13 @@ local function setLightOn(light, on)
     end
 end
 
---- the light where the lamp's head is, shining the way it faces
+--- the light where its lamp head is, shining the way it faces
 ---@param light userdata
 ---@param spec table the catalog's `light`
+---@param o number[] that head's offset
 ---@param p table an expand() entry
-local function placeLight(light, spec, p)
+local function placeLight(light, spec, o, p)
     local scales = p.scales or vec3(p.scale, p.scale, p.scale)
-    local o = spec.offset
     local pos = p.pos + p.rot * vec3(o[1] * scales.x, o[2] * scales.y, o[3] * scales.z)
     local aim = (p.rot * vec3(spec.aim[1], spec.aim[2], spec.aim[3])):normalized()
     local up = math.abs(aim.z) > .98 and (p.rot * vec3(0, 1, 0)) or vec3(0, 0, 1)
@@ -549,26 +716,40 @@ end
 local function addLight(obj, p)
     local cat = M.catalogForShape(p.shape)
     local spec = cat and cat.light
-    if not spec or lightCount >= MAX_LIGHTS then return end
-    local light = createObject("SpotLight")
-    if not light then return end
-    light.canSave = false
-    local c = spec.color
-    light:setField("color", 0, string.format("%g %g %g 1", c[1], c[2], c[3]))
-    light:setField("range", 0, tostring(spec.range))
-    light:setField("innerAngle", 0, tostring(spec.innerAngle))
-    light:setField("outerAngle", 0, tostring(spec.outerAngle))
-    light:setField("intensity", 0, tostring(spec.intensity))
-    light:setField("castShadows", 0, "false")
-    light:setField("useColorTemperature", 0, "false")
-    light:registerObject("")
-    if not simObjectExists(light) then return end
-    group():addObject(light)
-    placeLight(light, spec, p)
+    if not spec or lightCount + #spec.offsets > MAX_LIGHTS then return end
     if lampsOn == nil then lampsOn = isNight() end
-    setLightOn(light, lampsOn)
-    lightOf[obj:getID()] = { light = light, spec = spec }
-    lightCount = lightCount + 1
+    local lights = {}
+    for _, o in ipairs(spec.offsets) do
+        local light = createObject("SpotLight")
+        if light then
+            light.canSave = false
+            local c = spec.color
+            light:setField("color", 0, string.format("%g %g %g 1", c[1], c[2], c[3]))
+            light:setField("range", 0, tostring(spec.range))
+            light:setField("innerAngle", 0, tostring(spec.innerAngle))
+            light:setField("outerAngle", 0, tostring(spec.outerAngle))
+            light:setField("intensity", 0, tostring(spec.intensity))
+            light:setField("castShadows", 0, "false")
+            light:setField("useColorTemperature", 0, "false")
+            light:registerObject("")
+            if simObjectExists(light) then
+                group():addObject(light)
+                placeLight(light, spec, o, p)
+                setLightOn(light, lampsOn)
+                lights[#lights + 1] = light
+            end
+        end
+    end
+    if #lights == 0 then return end
+    lightOf[obj:getID()] = { lights = lights, spec = spec }
+    lightCount = lightCount + #lights
+end
+
+---@param l {lights: userdata[]}
+local function deleteLights(l)
+    for _, light in ipairs(l.lights) do
+        if simObjectExists(light) then light:delete() end
+    end
 end
 
 ---@param obj userdata
@@ -577,8 +758,8 @@ local function removeLight(obj)
     local l = id and lightOf[id]
     if not l then return end
     lightOf[id] = nil
-    lightCount = lightCount - 1
-    if simObjectExists(l.light) then l.light:delete() end
+    lightCount = lightCount - #l.lights
+    deleteLights(l)
 end
 
 --- dusk and dawn : every lamp on or off
@@ -594,7 +775,9 @@ local function updateLamps()
     if night == lampsOn then return end
     lampsOn = night
     for _, l in pairs(lightOf) do
-        if simObjectExists(l.light) then setLightOn(l.light, night) end
+        for _, light in ipairs(l.lights) do
+            if simObjectExists(light) then setLightOn(light, night) end
+        end
     end
 end
 
@@ -602,7 +785,11 @@ local function place(obj, p)
     obj:setPosRot(p.pos.x, p.pos.y, p.pos.z, p.rot.x, p.rot.y, p.rot.z, p.rot.w)
     obj:setScale(p.scales or vec3(p.scale, p.scale, p.scale))
     local l = lightOf[obj:getID()]
-    if l and simObjectExists(l.light) then placeLight(l.light, l.spec, p) end
+    if l then
+        for i, light in ipairs(l.lights) do
+            if simObjectExists(light) then placeLight(light, l.spec, l.spec.offsets[i], p) end
+        end
+    end
 end
 
 ---@param p table an expand() entry
@@ -760,9 +947,7 @@ local function cleanup()
     hideAll()
     M.sets = {}
     -- any lamp whose prop went some other way
-    for _, l in pairs(lightOf) do
-        if simObjectExists(l.light) then l.light:delete() end
-    end
+    for _, l in pairs(lightOf) do deleteLights(l) end
     lightOf, lightCount, lampsOn = {}, 0, nil
     -- a new map, its own materials : looked at again
     materialDirs = {}

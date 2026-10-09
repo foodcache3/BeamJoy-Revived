@@ -2,8 +2,9 @@
 // small dropdown. It slides out beside the config window, over the game view (or covers the
 // window when there's no room beside it), and folds to a slim strip while a prop is armed.
 //
-// Two lists : the curated catalog (beamjoy_props.CATALOG, sent as BJEditorPropCatalog, with
-// categories and hand-written tags) and every mesh the game has (beamjoy_propPicker's index, its
+// Three lists : the curated catalog (beamjoy_props.CATALOG, sent as BJEditorPropCatalog, with
+// categories and hand-written tags), the prefabs (beamjoy_props.PREFABS, in the same message :
+// several meshes placed as one prop, pictured by their most telling mesh) and every mesh the game has (beamjoy_propPicker's index, its
 // names and tags made from each file path). Search matches every word against a prop's name,
 // tags and category, synonyms folded in. Favourites and Recent are this PC's own (localStorage).
 //
@@ -120,8 +121,10 @@ angular.module("beamjoy").component("bjPropDrawer", {
 
         this.CATEGORIES = ["barriers", "fences", "markers", "signs", "start", "ramps", "scenery", "utility"];
         this.GROUPS = ["art", "assets", "map"];
+        this.PREFAB_CATEGORIES = ["gazebos", "billboards"];
         this.tab = "curated";
-        this.category = { curated: "all", all: "all" };
+        this.category = { curated: "all", all: "all", prefabs: "all" };
+        this.prefabs = [];
         this.query = "";
         this.curated = [];
         this.meshes = null; // the game's meshes, once indexed
@@ -147,12 +150,35 @@ angular.module("beamjoy").component("bjPropDrawer", {
         // ITEMS ------------------------------------------------------------------------------
 
         const finish = (item) => {
-            item.catName = item.cat ? translate("beamjoy.props.categories." + item.cat) : "";
+            item.catName = !item.cat
+                ? ""
+                : translate((item.prefab ? "beamjoy.props.prefabs.categories." : "beamjoy.props.categories.") + item.cat);
             item.hay = `${item.name} ${item.tags} ${item.catName} ${fileWords(item.shape).join(" ")}`.toLowerCase();
             return item;
         };
         const buildCurated = () => {
-            this.curated = (Array.isArray(this.catalog) ? this.catalog : []).map((c) => {
+            const all = Array.isArray(this.catalog) ? this.catalog : [];
+            // a prefab : its own key, pictured (thumbnail, size) by its `thumb` mesh
+            this.prefabs = all
+                .filter((c) => c.prefab)
+                .map((c) => {
+                    const item = finish({
+                        key: "prefab:" + c.prefab,
+                        thumbKey: keyOf(c.thumb || c.shape),
+                        thumbShape: c.thumb || c.shape,
+                        shape: c.shape,
+                        prefab: c.prefab,
+                        parts: c.parts || 1,
+                        name: c.name || c.prefab,
+                        cat: c.cat,
+                        tags: c.tags || "",
+                        solid: c.solid !== false,
+                        curated: true,
+                    });
+                    if (c.size) this.sizes[item.thumbKey] = c.size;
+                    return item;
+                });
+            this.curated = all.filter((c) => !c.prefab).map((c) => {
                 const name = translate(c.label);
                 const item = finish({
                     key: keyOf(c.shape),
@@ -200,6 +226,9 @@ angular.module("beamjoy").component("bjPropDrawer", {
             });
         const source = () => {
             const cat = this.category[this.tab];
+            if (this.tab === "prefabs") {
+                return cat === "all" ? this.prefabs : this.prefabs.filter((i) => i.cat === cat);
+            }
             if (cat === "favourites") return this.favourites.map(entryFor);
             if (cat === "recent") return this.recent.map(entryFor);
             if (this.tab === "curated") {
@@ -211,17 +240,22 @@ angular.module("beamjoy").component("bjPropDrawer", {
         // every count shown (the rail's and the two tabs') is of what the search matches (direct
         // request)
         this.counts = {};
-        this.tabCounts = { curated: 0, all: null };
+        this.tabCounts = { curated: 0, all: null, prefabs: 0 };
         const countRail = () => {
             const words = tokens();
             const match = (i) => matches(i, words);
             const curated = this.curated.filter(match);
+            const prefabs = this.prefabs.filter(match);
             const meshes = this.meshes ? this.meshes.filter(match) : null;
             const counts = {
                 favourites: this.favourites.map(entryFor).filter(match).length,
                 recent: this.recent.map(entryFor).filter(match).length,
             };
-            if (this.tab === "curated") {
+            if (this.tab === "prefabs") {
+                counts.all = prefabs.length;
+                this.PREFAB_CATEGORIES.forEach((c) => (counts[c] = 0));
+                prefabs.forEach((i) => (counts[i.cat] = (counts[i.cat] || 0) + 1));
+            } else if (this.tab === "curated") {
                 counts.all = curated.length;
                 this.CATEGORIES.forEach((c) => (counts[c] = 0));
                 curated.forEach((i) => (counts[i.cat] = (counts[i.cat] || 0) + 1));
@@ -231,11 +265,14 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 (meshes || []).forEach((i) => (counts[i.group] = (counts[i.group] || 0) + 1));
             }
             this.counts = counts;
-            this.tabCounts = { curated: curated.length, all: meshes ? meshes.length : null };
+            this.tabCounts = { curated: curated.length, all: meshes ? meshes.length : null, prefabs: prefabs.length };
         };
-        this.railItems = () => (this.tab === "curated" ? this.CATEGORIES : this.GROUPS);
-        this.railName = (id) =>
-            this.tab === "curated" ? translate("beamjoy.props.categories." + id) : T("groups." + id);
+        this.railItems = () =>
+            this.tab === "prefabs" ? this.PREFAB_CATEGORIES : this.tab === "curated" ? this.CATEGORIES : this.GROUPS;
+        this.railName = (id) => {
+            if (this.tab === "prefabs") return translate("beamjoy.props.prefabs.categories." + id);
+            return this.tab === "curated" ? translate("beamjoy.props.categories." + id) : T("groups." + id);
+        };
 
         const refilter = (keepScroll) => {
             const words = tokens();
@@ -250,7 +287,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
         this.onQuery = () => {
             // a short pause before filtering a few thousand meshes ; the curated list at once
             if (searchTimer) $timeout.cancel(searchTimer);
-            if (this.tab === "curated") return refilter();
+            if (this.tab !== "all") return refilter();
             searchTimer = $timeout(() => refilter(), 120);
         };
         this.clearQuery = () => {
@@ -284,7 +321,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
 
         // FAVOURITES / RECENT --------------------------------------------------------------
 
-        this.isFavourite = (item) => this.favourites.some((s) => keyOf(s) === item.key);
+        this.isFavourite = (item) => !item.prefab && this.favourites.some((s) => keyOf(s) === item.key);
         this.toggleFavourite = (event, item) => {
             event.stopPropagation();
             this.favourites = this.isFavourite(item)
@@ -295,6 +332,8 @@ angular.module("beamjoy").component("bjPropDrawer", {
             else countRail();
         };
         const remember = (item) => {
+            // Recent and Favourites are of meshes ; prefabs have their own tab
+            if (item.prefab) return;
             this.recent = [item.shape].concat(this.recent.filter((s) => keyOf(s) !== item.key)).slice(0, RECENT_MAX);
             writeList(RECENT_KEY, this.recent);
             countRail();
@@ -361,16 +400,17 @@ angular.module("beamjoy").component("bjPropDrawer", {
             const wanted = [];
             const seen = new Set();
             const add = (item) => {
-                if (!item || seen.has(item.key)) return;
-                seen.add(item.key);
-                const t = this.thumbs[item.key];
+                const key = item && (item.thumbKey || item.key);
+                if (!item || seen.has(key)) return;
+                seen.add(key);
+                const t = this.thumbs[key];
                 if (!t || !t.done) {
-                    wanted.push(item.shape);
-                    this.thumbs[item.key] = { done: false };
+                    wanted.push(item.thumbShape || item.shape);
+                    this.thumbs[key] = { done: false };
                 }
             };
             add(this.hovered);
-            if (this.placing.armed) add(entryFor(this.placing.shape));
+            if (this.placing.armed) add(this.armedItem());
             this.visible.forEach((v) => add(v.item));
             const key = wanted.join("|");
             if (wanted.length > 0 && key !== lastThumbRequest) beamjoyStore.send("BJPropThumbsRequest", [wanted]);
@@ -392,17 +432,19 @@ angular.module("beamjoy").component("bjPropDrawer", {
             "$destroy",
             $rootScope.$on("BJPropThumbs", (_, list) => (Array.isArray(list) ? list : []).forEach(takeThumb))
         );
-        this.thumbOf = (item) => item && this.thumbs[item.key];
+        this.thumbOf = (item) => item && this.thumbs[item.thumbKey || item.key];
 
         // SIZE / COLLISION TEXT --------------------------------------------------------------
 
-        this.sizeOf = (item) => item && this.sizes[item.key];
+        this.sizeOf = (item) => item && this.sizes[item.thumbKey || item.key];
         this.tileSize = (item) => {
+            if (item && item.prefab) return T("prefab.parts").replace("{n}", item.parts);
             const s = this.sizeOf(item);
             if (s) return `${fmt(Math.max(s.x, s.y))} m`;
             return item.length ? `${fmt(item.length)} m` : "";
         };
         this.dims = (item) => {
+            if (item && item.prefab) return T("prefab.parts").replace("{n}", item.parts);
             const s = this.sizeOf(item);
             return s ? `${fmt(s.x)} × ${fmt(s.y)} × ${fmt(s.z)} m` : T("preview.unmeasured");
         };
@@ -428,11 +470,16 @@ angular.module("beamjoy").component("bjPropDrawer", {
 
         // PICKING ----------------------------------------------------------------------------
 
-        this.isArmed = (item) => this.placing.armed && keyOf(this.placing.shape) === item.key;
+        this.isArmed = (item) =>
+            this.placing.armed &&
+            (item.prefab ? this.placing.prefab === item.prefab : !this.placing.prefab && keyOf(this.placing.shape) === item.key);
         this.pick = (item) => {
             if (!item) return;
+            // a prop's mesh can't be swapped for a whole prefab
+            if (this.swap && item.prefab) return;
             if (this.swap) {
-                beamjoyStore.send("BJEditorRaceSwapPropShape", [this.swap.index + 1, item.shape]);
+                if (this.swap.alt) beamjoyStore.send("BJEditorRaceSetPropAlt", [this.swap.index + 1, item.shape]);
+                else beamjoyStore.send("BJEditorRaceSwapPropShape", [this.swap.index + 1, item.shape]);
                 remember(item);
                 this.onSwapEnd();
                 return;
@@ -442,7 +489,8 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 return;
             }
             this.stripExpanded = false;
-            beamjoyStore.send("BJEditorRaceArmProp", [item.shape]);
+            if (item.prefab) beamjoyStore.send("BJEditorRaceArmPrefab", [item.prefab]);
+            else beamjoyStore.send("BJEditorRaceArmProp", [item.shape]);
             remember(item);
         };
         this.disarm = () => beamjoyStore.send("BJEditorRaceDisarmProp");
@@ -473,7 +521,11 @@ angular.module("beamjoy").component("bjPropDrawer", {
             });
         };
         this.folded = () => this.placing.armed && !this.stripExpanded && !this.swap;
-        this.armedItem = () => (this.placing.armed ? entryFor(this.placing.shape) : null);
+        this.armedItem = () => {
+            if (!this.placing.armed) return null;
+            if (this.placing.prefab) return this.prefabs.find((i) => i.prefab === this.placing.prefab) || null;
+            return entryFor(this.placing.shape);
+        };
         $scope.$on(
             "$destroy",
             $rootScope.$on("BJEditorRacePlacing", (_, state) => {

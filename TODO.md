@@ -429,11 +429,34 @@ under `levels/<map>/driftSpots/` (`spot.driftSpot.json`, `race.race.json`, `boun
 `info.json`), drag strips are `levels/<map>/dragstrips/*.dragSettings.json` pointing at a
 `*.strip.json`, both read once per map and cached.
 
+## Races: props : multi-select and your own prefabs
+
+**Status:** planned, not started (direct request, 2026-10-09 : "add the prefab saving to the todo").
+Built-in prefabs (several meshes placed as one prop, the rally gazebos first) are being built now in
+the props drawer's Prefabs tab ; this is the part left for later.
+
+- **Multi-select** in the race editor : Shift+click props in the world or the list (maybe a drag
+  box too) ; the selection moves with one gizmo (pivot at its middle ; turning is yaw only, every
+  prop and line point swung round the pivot), deletes with the Delete key, duplicates as one.
+  Useful on its own, before prefabs.
+- **Save as prefab** : the selection stored relative to an anchor (its middle and a facing), every
+  prop as it is : lines stay lines (count, curve, alternate mesh, lift, follow ground), single
+  props keep their turn, scale and stretch. Named by the player.
+- **Placing one** : the drawer's Prefabs tab lists the built-in ones and "Mine" (rename, delete) ;
+  picking one arms it like a mesh, its whole ghost follows the cursor, the wheel turns it, a click
+  places it. Placed as one prop made of several meshes (the same entry kind the built-in prefabs
+  use : its parts relative to it), so it selects, moves and deletes as one ; "Split" makes it
+  separate props again. Every mesh counts toward the race's 500.
+- **Where they're kept** : per player on their own PC by default (simplest, client only) ; a
+  shared library on the server (every editor sees the same ones) would need server storage, a
+  permission for adding / deleting, and syncing. Ask which before building.
+
 ## Races: placed props (a framework, saved with the race)
 
 **Status:** built for races (client 2615 / server 2428) : static props and the line tool in the race
 editor's Props tab, saved with the race, spawned by each client for its racers and spectators
-(`beamjoy/props.lua`, `services/races.lua`'s sanitizeProps). Not built : physics props (below),
+(`beamjoy/props.lua`, `services/races.lua`'s sanitizeProps). Not built : physics props (below :
+investigated 2026-10-09 and dropped, each one a full vehicle, too heavy at a race's prop counts),
 props for hunter / infected / derby arenas and the passive zones, preview pictures in the catalog,
 spacing in metres and curved lines. The catalog is `beamjoy_props.CATALOG` (a mesh's yaw, length
 and collision were read from the game's .dae files ; orientations still want a check in game).

@@ -448,6 +448,33 @@ end
 --- well-formed entries are kept, malformed ones are dropped
 ---@param props any
 ---@return table[]? props, string? err
+-- a prefab prop's own meshes besides its first (see the client's beamjoy/props.lua `parts`)
+local MAX_PROP_PARTS = 16
+-- metres from the prop's own mesh, at most
+local MAX_PART_OFFSET = 100
+
+---@param v any
+---@return table[]? a prop's parts, kept as they're well-formed
+local function saneParts(v)
+    if type(v) ~= "table" then return nil end
+    local out = {}
+    for _, part in ipairs(v) do
+        if #out >= MAX_PROP_PARTS then break end
+        local pos = type(part) == "table" and sanePoint(part.pos)
+        if pos and saneShape(part.shape) and math.abs(pos.x) <= MAX_PART_OFFSET and
+            math.abs(pos.y) <= MAX_PART_OFFSET and math.abs(pos.z) <= MAX_PART_OFFSET then
+            out[#out + 1] = { shape = part.shape, pos = pos, dir = sanePoint(part.dir), up = sanePoint(part.up) }
+        end
+    end
+    return #out > 0 and out or nil
+end
+
+---@param v any
+---@return string? a prefab's id (what the editor names the prop by)
+local function sanePrefabId(v)
+    return type(v) == "string" and #v <= 40 and v:match("^[%w_]+$") and v or nil
+end
+
 local function sanitizeProps(props)
     if props == nil then return {} end
     if type(props) ~= "table" then return nil, "Invalid prop data" end
@@ -475,11 +502,20 @@ local function sanitizeProps(props)
                         stretch = saneStretch(p.stretch),
                         solid = p.solid == false and false or nil,
                     }
+                    -- every other prop of the line another mesh (optional), turned and lifted as
+                    -- that mesh is laid down
+                    if saneShape(p.alt) and p.alt ~= p.shape then
+                        entry.alt = p.alt
+                        entry.altYaw = tonumber(p.altYaw) and math.clamp(tonumber(p.altYaw), -360, 360) or nil
+                        entry.altLift = saneLift(p.altLift)
+                    end
                     if entry.followGround and type(p.heights) == "table" and #p.heights == count and
                         table.every(p.heights, function(h) return tonumber(h) ~= nil end) then
                         entry.heights = table.map(p.heights, function(h) return tonumber(h) end)
                     end
-                    total = total + count
+                    entry.parts = saneParts(p.parts)
+                    entry.prefab = entry.parts and sanePrefabId(p.prefab) or nil
+                    total = total + count * (1 + (entry.parts and #entry.parts or 0))
                 end
             else
                 local pos, dir, up = sanePoint(p.pos), sanePoint(p.dir), sanePoint(p.up)
@@ -495,7 +531,9 @@ local function sanitizeProps(props)
                         stretch = saneStretch(p.stretch),
                         solid = p.solid == false and false or nil,
                     }
-                    total = total + 1
+                    entry.parts = saneParts(p.parts)
+                    entry.prefab = entry.parts and sanePrefabId(p.prefab) or nil
+                    total = total + 1 + (entry.parts and #entry.parts or 0)
                 end
             end
         end
@@ -1550,8 +1588,10 @@ end
 ---@param p table
 ---@return integer
 local function propCount(p)
-    if p.kind == "line" then return math.max(0, math.floor(tonumber(p.count) or 0)) end
-    return 1
+    -- each prop and every part of it (a prefab)
+    local each = 1 + (type(p.parts) == "table" and #p.parts or 0)
+    if p.kind == "line" then return math.max(0, math.floor(tonumber(p.count) or 0)) * each end
+    return each
 end
 
 --- The props of a map's races (Import map races, "props only" : direct request), added to the races

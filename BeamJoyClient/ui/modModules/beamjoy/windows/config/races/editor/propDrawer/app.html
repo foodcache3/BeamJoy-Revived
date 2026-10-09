@@ -787,13 +787,22 @@
         <button role="tab" ng-class="{on: $ctrl.tab === 'curated'}" ng-click="$ctrl.setTab('curated')">
             {{$ctrl.T('tabs.curated')}} <span class="pd-n">{{$ctrl.tabCounts.curated}}</span>
         </button>
+        <button
+            role="tab"
+            ng-if="$ctrl.prefabs.length > 0"
+            ng-class="{on: $ctrl.tab === 'prefabs'}"
+            ng-click="$ctrl.setTab('prefabs')"
+            title="{{$ctrl.T('tabs.prefabs.tooltip')}}"
+        >
+            {{$ctrl.T('tabs.prefabs')}} <span class="pd-n">{{$ctrl.tabCounts.prefabs}}</span>
+        </button>
         <button role="tab" ng-class="{on: $ctrl.tab === 'all'}" ng-click="$ctrl.setTab('all')">
             {{$ctrl.T('tabs.all')}}
             <span class="pd-n" ng-if="$ctrl.tabCounts.all !== null">{{$ctrl.tabCounts.all}}</span>
         </button>
     </div>
     <div class="pd-banner swap" ng-if="$ctrl.swap" role="status">
-        <span>{{$ctrl.T('swap.banner').replace('{name}', $ctrl.swap.name)}}</span>
+        <span>{{$ctrl.T($ctrl.swap.alt ? 'alt.banner' : 'swap.banner').replace('{name}', $ctrl.swap.name)}}</span>
         <button ng-click="$ctrl.cancelSwap()">{{$ctrl.T('swap.cancel')}}</button>
     </div>
     <div class="pd-banner warn" ng-if="$ctrl.tab === 'all' && !$ctrl.swap">
@@ -801,13 +810,21 @@
     </div>
     <div class="pd-body">
         <nav class="pd-rail">
-            <button ng-class="{on: $ctrl.category[$ctrl.tab] === 'favourites'}" ng-click="$ctrl.setCategory('favourites')">
+            <button
+                ng-if="$ctrl.tab !== 'prefabs'"
+                ng-class="{on: $ctrl.category[$ctrl.tab] === 'favourites'}"
+                ng-click="$ctrl.setCategory('favourites')"
+            >
                 <span>{{$ctrl.T('rail.favourites')}}</span><span class="pd-n">{{$ctrl.counts.favourites}}</span>
             </button>
-            <button ng-class="{on: $ctrl.category[$ctrl.tab] === 'recent'}" ng-click="$ctrl.setCategory('recent')">
+            <button
+                ng-if="$ctrl.tab !== 'prefabs'"
+                ng-class="{on: $ctrl.category[$ctrl.tab] === 'recent'}"
+                ng-click="$ctrl.setCategory('recent')"
+            >
                 <span>{{$ctrl.T('rail.recent')}}</span><span class="pd-n">{{$ctrl.counts.recent}}</span>
             </button>
-            <hr />
+            <hr ng-if="$ctrl.tab !== 'prefabs'" />
             <button ng-class="{on: $ctrl.category[$ctrl.tab] === 'all'}" ng-click="$ctrl.setCategory('all')">
                 <span>{{$ctrl.T('rail.all')}}</span><span class="pd-n">{{$ctrl.counts.all}}</span>
             </button>
@@ -888,6 +905,7 @@
                         </button>
                         <button
                             class="pd-star"
+                            ng-if="!v.item.prefab"
                             ng-class="{on: $ctrl.isFavourite(v.item)}"
                             ng-click="$ctrl.toggleFavourite($event, v.item)"
                             title="{{$ctrl.isFavourite(v.item) ? $ctrl.T('unstar') : $ctrl.T('star')}}"

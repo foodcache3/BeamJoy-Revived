@@ -703,8 +703,11 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         // the catalog's name for a prop's mesh, else the mesh's file name, readable (a game mesh
         // from the drawer's "All game meshes", or one no longer offered)
         this.propLabel = (prop) => {
+            // a prefab : its own name (the drawer's Prefabs tab)
+            const prefab = prop && prop.prefab && this.propCatalog.find((c) => c.prefab === prop.prefab);
+            if (prefab) return prefab.name;
             const shape = String((prop && prop.shape) || "");
-            const entry = this.propCatalog.find((c) => c.shape.toLowerCase() === shape.toLowerCase());
+            const entry = this.propCatalog.find((c) => !c.prefab && c.shape.toLowerCase() === shape.toLowerCase());
             if (entry) return entry.label;
             const words = shape
                 .split("/")
@@ -733,7 +736,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         };
         this.swapPropMesh = (event, idx) => {
             event.stopPropagation();
-            if (this.propSwap && this.propSwap.index === idx) {
+            if (this.propSwap && this.propSwap.index === idx && !this.propSwap.alt) {
                 this.propSwap = null;
                 return;
             }
@@ -743,6 +746,25 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             this.propSwap = { index: idx, name: translate(this.propLabel(prop)) };
             this.propDrawerOpen = true;
         };
+        // a line's other mesh, every other prop (red and white barriers in turn) : picked in the
+        // drawer the same way, `alt` set on the swap
+        this.pickPropAlt = (event, idx) => {
+            event.stopPropagation();
+            if (this.propSwap && this.propSwap.index === idx && this.propSwap.alt) {
+                this.propSwap = null;
+                return;
+            }
+            const prop = this.race && this.race.props[idx];
+            if (!prop) return;
+            beamjoyStore.send("BJEditorRaceDisarmProp");
+            this.propSwap = { index: idx, name: translate(this.propLabel(prop)), alt: true };
+            this.propDrawerOpen = true;
+        };
+        this.clearPropAlt = (event, idx) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceSetPropAlt", [idx + 1, ""]);
+        };
+        this.propAltLabel = (prop) => (prop && prop.alt ? this.propLabel({ shape: prop.alt }) : null);
         this.endPropSwap = () => {
             this.propSwap = null;
         };

@@ -1,9 +1,12 @@
 local M = {
     ---@type tablelib<string, {key: string, handlerFn: fun(ctxt: BJSContext, ...: any)}>
     handlers = Table(),
-    ---@type table<string, {senderID: integer, created: integer, key?: string, parts?: integer, data?: tablelib<integer, string>}>
+    ---@type table<string, {senderID: integer, created: integer, key?: string, parts?: integer, enc?: string, data?: tablelib<integer, string>}>
     pending = Table(),
 }
+
+-- a client's packed message (communications/lzw.lua) : at most this much once unpacked
+local MAX_UNPACKED_BYTES = 20 * 1024 * 1024
 
 local function onInit()
     local constants = require("communications/constants")
@@ -43,6 +46,14 @@ local function finalizeCommunication(id)
     M.pending[id] = nil
     utils_async.removeTask(getTimeoutKey(id))
     local strData = table.join(comm.data)
+    if comm.enc == "lzw" then
+        local unpacked, unpackedData = pcall(require("communications/lzw").decode, strData, MAX_UNPACKED_BYTES)
+        if not unpacked then
+            return LogWarn(string.format("Event %s from player %d : invalid data (%s)", tostring(comm.key),
+                comm.senderID, tostring(unpackedData)))
+        end
+        strData = unpackedData
+    end
     local parsedOk, parsedData = true, {}
     if #strData > 0 then parsedOk, parsedData = pcall(utils_json.parse, strData) end
     if not parsedOk or type(parsedData) ~= "table" then
@@ -91,6 +102,7 @@ function _BJSRxEvent(senderID, dataStr)
         table.assign(M.pending[data.id], {
             key = data.key,
             parts = data.parts,
+            enc = data.enc,
         })
     else
         M.pending[data.id] = {
@@ -98,6 +110,7 @@ function _BJSRxEvent(senderID, dataStr)
             created = GetCurrentTime(),
             key = data.key,
             parts = data.parts,
+            enc = data.enc,
             data = Table(),
         }
     end

@@ -717,6 +717,33 @@
                         </td>
                     </tr>
                     <tr ng-if="prop.kind === 'line'">
+                        <td
+                            class="text-right"
+                            title="{{'beamjoy.window.config.tabs.races.props.alt.tooltip' | translate}}"
+                        >
+                            {{'beamjoy.window.config.tabs.races.props.alt' | translate}}
+                        </td>
+                        <td>
+                            <div class="d-flex gap-1 align-center">
+                                <button
+                                    class="btn"
+                                    ng-class="$ctrl.propSwap && $ctrl.propSwap.index === $index && $ctrl.propSwap.alt ? 'primary' : 'neutral'"
+                                    ng-click="$ctrl.pickPropAlt($event, $index)"
+                                >
+                                    {{($ctrl.propAltLabel(prop) || 'beamjoy.window.config.tabs.races.props.alt.none') | translate}}
+                                </button>
+                                <button
+                                    class="btn danger"
+                                    ng-if="prop.alt"
+                                    ng-click="$ctrl.clearPropAlt($event, $index)"
+                                    title="{{'beamjoy.window.config.tabs.races.props.alt.clear' | translate}}"
+                                >
+                                    <icon name="remove"></icon>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr ng-if="prop.kind === 'line'">
                         <td class="text-right">{{'beamjoy.window.config.tabs.races.props.count' | translate}}</td>
                         <td>
                             <bj-slider ng-model="prop.count" min="1" max="50" hard-max="500" step="1"></bj-slider>
@@ -771,6 +798,7 @@
                             </button>
                             <button
                                 class="btn"
+                                ng-if="!prop.parts"
                                 ng-class="$ctrl.propSwap && $ctrl.propSwap.index === $index ? 'primary' : 'neutral'"
                                 ng-click="$ctrl.swapPropMesh($event, $index)"
                                 title="{{'beamjoy.window.config.tabs.races.props.swap.tooltip' | translate}}"

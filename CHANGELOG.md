@@ -8,7 +8,30 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2646, server build 2440.
+Version 1.11.0 : client build 2650, server build 2443.
+
+- **Props drawer : a Prefabs tab** (direct request). Props made of several meshes, placed, moved,
+  turned, scaled, duplicated and deleted as one : the game's rally gazebos (3 x 3 and 3 x 6, in
+  dark blue, NGRC, Rotopad and Blastr) and its 18 billboards on stands (metal and wood), laid out
+  as the game's own prefab files have them. Each mesh counts toward the race's prop limit.
+  Multi-select and saving your own prefabs are planned (TODO.md). *(client + server)*
+
+- **Light pole (bridge) and Light pole (double) props, lit** (direct request) : added to the props
+  drawer's scenery, and cast light at night like the other lamps (the double from both its heads).
+  *(client)*
+
+- **Fixed: "zlib uncompress() failed, trying with a larger buffer size" flooding the server log**
+  (direct report, on map race imports). BeamMP's server unpacks a packet into a buffer 5 times its
+  compressed size and retries with 30 MB when that's short ; race data (the same mesh paths and
+  fields hundreds of times) packs 6 to 8 times, so every piece of a big message tripped it. Messages
+  over 4 KB are now packed by BeamJoy itself (LZW) before sending : about 4 times smaller (a Hirochi
+  import : 598 KB in 30 packets down to 152 KB in 8), and what's left only packs about 1.5 times.
+  *(client + server : deploy both together, an older server can't read the packed messages)*
+
+- **Prop lines : alternate with another mesh** (direct request : red and white plastic barriers in
+  turn). A line's "Alternate with" picks a second mesh in the props drawer ; every other prop of
+  the line uses it, turned and lifted as that mesh is laid down. Kept when the line is split into
+  props, and when the line's own mesh is swapped. *(client + server)*
 
 - **Light props cast light** (direct request). The light pole, standing light and spotlight props
   shine from their lamp heads at night, switching on and off with the map's own street lights.
