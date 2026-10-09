@@ -6,6 +6,17 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [1.10.7] - 2026-10-09 (hotfix)
+
+Client build 2495, server build 2354 (unchanged : only the client changed).
+
+- **Fixed : the spawn queue staying forced on for a whole race, hunt or infected round.** It's
+  only forced during the countdown now, when every grid car is (re)spawned at once ; once the
+  countdown is over, anything still queued is applied and the player's own spawn-queue setting is
+  put back.
+- **Fixed : leaving the server or quitting the game during a round left the spawn queue turned on**
+  in the player's game settings. It's now put back then too.
+
 ## [1.10.6] - 2026-09-24
 
 Client build 2494, server build 2354.

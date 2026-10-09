@@ -80,8 +80,8 @@ local M = {
     hunterGpsActive = false,
 
     ---@type boolean whether THIS client has forced BeamMP's native spawn-queue setting on for the
-    ---current hunt (only ever done once per hunt, at the COUNTDOWN transition below), so
-    ---clearHuntState knows whether previousSpawnQueueSetting below is meaningful to restore
+    ---current hunt's countdown (set at the COUNTDOWN transition below, cleared once it's over), so
+    ---restoreSpawnQueue knows whether previousSpawnQueueSetting below is meaningful to restore
     spawnQueueForced = false,
     ---@type boolean? the native "enableSpawnQueue" value as it was right before this forced it on;
     ---only meaningful while spawnQueueForced is true
@@ -151,6 +151,16 @@ end
 --- see raceRunner.lua/infectedRunner.lua for the same flow, ported once this was confirmed here.
 local function flushSpawnQueue()
     pcall(function() MPVehicleGE.applyQueuedEvents() end)
+end
+
+--- puts the player's own spawn-queue setting back : the queue is only forced for the countdown
+--- (direct request). Called once the countdown is over (onSlowUpdate), when the hunt ends for this
+--- player (clearHuntState), and when BeamJoy unloads (leaving the server mid-countdown)
+local function restoreSpawnQueue()
+    if not M.spawnQueueForced then return end
+    M.spawnQueueForced = false
+    settings.setValue("enableSpawnQueue", M.previousSpawnQueueSetting == true)
+    M.previousSpawnQueueSetting = nil
 end
 
 --- shared by every "my vehicle is confirmed" call site (matches/randomize/onBJVehicleInstantiated)
@@ -538,11 +548,7 @@ local function clearHuntState()
         M.hunterGpsActive = false
         extensions.core_groundMarkers.setPath(nil)
     end
-    if M.spawnQueueForced then
-        M.spawnQueueForced = false
-        settings.setValue("enableSpawnQueue", M.previousSpawnQueueSetting)
-        M.previousSpawnQueueSetting = nil
-    end
+    restoreSpawnQueue()
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if myVeh then
         beamjoy_vehicles.setGhostReason(myVeh.vid, "hunter", false)
@@ -811,13 +817,14 @@ local function onSessionUpdate(session)
         -- (randomizeVehiclePool, or steering someone into the role's required vehicle) means a
         -- genuine new vehicle spawn too, for several players at once, all broadcast to every other
         -- client together - exactly the kind of simultaneous-spawn burst BeamMP's own native spawn
-        -- queue (enableSpawnQueue) exists to smooth out. Forced on for the round, restored to
-        -- whatever it was in clearHuntState once the hunt is over, not left permanently changed.
+        -- queue (enableSpawnQueue) exists to smooth out. Forced on for the countdown only,
+        -- restored to whatever it was once the countdown is over (onSlowUpdate) or the hunt ends
+        -- early (clearHuntState), not left permanently changed.
         -- Forcing the setting on isn't enough by itself though: with it on, BeamMP queues those
         -- spawns instead of applying them, and normally waits for the player to notice and click
         -- the native "spawn queue" button themselves. flushSpawnQueue (called every onSlowUpdate
-        -- tick below for the rest of the hunt, plus once immediately here) auto-applies the queue
-        -- on their behalf instead, so no manual click is ever needed.
+        -- tick while it's forced, plus once immediately here) auto-applies the queue on their
+        -- behalf instead, so no manual click is ever needed.
         if not M.spawnQueueForced then
             M.spawnQueueForced = true
             M.previousSpawnQueueSetting = settings.getValue("enableSpawnQueue") == true
@@ -1698,6 +1705,7 @@ local function onSlowUpdate()
     updateHunterGpsGuidance()
     if M.spawnQueueForced then
         flushSpawnQueue()
+        if not (M.session and M.session.state == "COUNTDOWN") then restoreSpawnQueue() end
     end
 end
 
@@ -1752,6 +1760,9 @@ end
 M.onInit = onInit
 M.onUpdate = onUpdate
 M.onSlowUpdate = onSlowUpdate
+M.onServerLeave = restoreSpawnQueue
+M.onExtensionUnloaded = restoreSpawnQueue
+M.onPreExit = restoreSpawnQueue
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onBJRequestCanSpawnVehicle = onBJRequestCanSpawnVehicle
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
