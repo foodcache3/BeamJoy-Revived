@@ -528,15 +528,14 @@ angular.module("beamjoy").component("bjPropDrawer", {
                     ["keys.ctrlRelease", "help.ctrlRelease"],
                     ["keys.keepButton", "help.keepButton"],
                     ["keys.stop", "help.stop"],
+                    ["keys.delete", "help.delete"],
                 ],
             },
             {
                 title: "help.editing",
                 rows: [
-                    ["keys.clickProp", "help.clickProp"],
-                    ["keys.gizmo", "help.gizmo"],
                     ["keys.bend", "help.bend"],
-                    ["keys.delete", "help.delete"],
+                    ["keys.ctrlDrag", "help.ctrlDrag"],
                     ["keys.swap", "help.swap"],
                 ],
             },

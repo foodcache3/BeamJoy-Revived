@@ -8,7 +8,22 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2638, server build 2439.
+Version 1.11.0 : client build 2642, server build 2439.
+
+- **While dragging a prop line, wheel up adds props** (direct request) and wheel down takes some
+  away (it was the other way round). *(client only)*
+
+- **Fixed: prop lines followed the ground with snap to ground off** (direct report). A line laid
+  with the mouse always had "Follow the ground" on ; it now takes the editor's snap to ground
+  setting, so with it off the line runs straight between the two points clicked (its own Follow
+  the ground switch still turns that on or off afterwards). *(client only)*
+
+- **The props drawer's controls card is shorter** (direct request) : the "click a prop" and "gizmo"
+  rows are gone, and Delete is listed with placing. *(client only)*
+
+- **Ctrl + drag moves a whole prop line** (direct request) : with Ctrl held, dragging either end
+  or the middle handle with the gizmo moves the entire line, its bend kept, instead of just that
+  handle. *(client only)*
 
 - **A race can hold 500 props** (direct request), up from 200 (a line counting each of its props ;
   "Import map races" keeps up to 500 per race too). The collision rebuild props cost when a race

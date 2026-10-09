@@ -1445,6 +1445,34 @@ function M.onSelectProp(index, part)
     propsChanged()
 end
 
+--- Ctrl held while a line's handle is dragged (direct request) : the whole line goes with it
+---@return boolean
+local function ctrlHeld()
+    local ok, held = pcall(function()
+        local io = ui_imgui.GetIO()
+        return io ~= nil and io.KeyCtrl == true
+    end)
+    return ok and held == true
+end
+
+--- every point of a line moved by the same offset (its ends, and its middle when it's bent)
+---@param line table
+---@param delta vec3
+local function shiftLine(line, delta)
+    for _, key in ipairs({ "a", "b", "mid" }) do
+        local p = toVec(line[key])
+        if p then line[key] = xyz(p + delta) end
+    end
+end
+
+--- after a whole line was moved : every point of it back on the ground
+---@param line table
+local function snapLine(line)
+    for _, key in ipairs({ "a", "b", "mid" }) do
+        if line[key] then line[key].z = groundHeightAt(toVec(line[key])) end
+    end
+end
+
 updatePropGizmo = function()
     gizmo.hide()
     local prop = M.race and M.activePropIndex and M.race.props[M.activePropIndex]
@@ -1453,6 +1481,7 @@ updatePropGizmo = function()
     if prop.kind == "line" and M.activePropPart == "mid" then
         -- the middle : where the curve passes halfway (the straight line's middle until it's bent)
         local a, b = toVec(prop.a), toVec(prop.b)
+        local whole = false
         gizmo.show({
             pos = toVec(prop.mid) or (a + b) * .5,
             dir = flatDir(b - a),
@@ -1460,12 +1489,21 @@ updatePropGizmo = function()
             scales = vec3(1, 1, 1),
         }, function(updated) ---@param updated GizmoObject
             if not parent or parent.activeEditor ~= M then return end
-            prop.mid = xyz(updated.pos)
+            if ctrlHeld() then
+                -- the whole line, its bend kept (a straight one stays straight)
+                local before = toVec(prop.mid) or (toVec(prop.a) + toVec(prop.b)) * .5
+                shiftLine(prop, updated.pos - before)
+                whole = true
+            else
+                prop.mid = xyz(updated.pos)
+            end
             prop.heights = nil -- measured again once dropped
             markDirty()
             propsChanged()
         end, function()
-            if prop.mid and M.snapToGroundEnabled then
+            if whole and M.snapToGroundEnabled then
+                snapLine(prop)
+            elseif prop.mid and M.snapToGroundEnabled then
                 prop.mid.z = groundHeightAt(toVec(prop.mid))
             end
             updateLineHeights(prop)
@@ -1477,6 +1515,7 @@ updatePropGizmo = function()
         local part = M.activePropPart == "b" and "b" or "a"
         local other = part == "a" and "b" or "a"
         local pos = toVec(prop[part])
+        local whole = false
         gizmo.show({
             pos = pos,
             dir = flatDir(toVec(prop[other]) - pos),
@@ -1484,13 +1523,21 @@ updatePropGizmo = function()
             scales = vec3(1, 1, 1),
         }, function(updated) ---@param updated GizmoObject
             if not parent or parent.activeEditor ~= M then return end
-            -- an end only moves : the line's props face along it whatever the gizmo was turned to
-            prop[part] = xyz(updated.pos)
+            -- an end only moves : the line's props face along it whatever the gizmo was turned to ;
+            -- with Ctrl held the whole line moves with it
+            if ctrlHeld() then
+                shiftLine(prop, updated.pos - toVec(prop[part]))
+                whole = true
+            else
+                prop[part] = xyz(updated.pos)
+            end
             prop.heights = nil -- straight while dragging, measured again once dropped
             markDirty()
             propsChanged()
         end, function()
-            if M.snapToGroundEnabled then
+            if whole and M.snapToGroundEnabled then
+                snapLine(prop)
+            elseif M.snapToGroundEnabled then
                 prop[part].z = groundHeightAt(toVec(prop[part]))
             end
             updateLineHeights(prop)
@@ -1763,7 +1810,9 @@ local function placingEntry()
                 count = math.max(2, math.min(count, PLACE_LINE_MAX_COUNT, room)),
                 yaw = yaw,
                 scale = 1,
-                followGround = true,
+                -- the editor's snap to ground decides (direct report : lines followed the ground
+                -- with it off) ; off, a straight line between the two points clicked
+                followGround = M.snapToGroundEnabled,
                 lift = lift,
             }
             updateLineHeights(line)
@@ -1930,7 +1979,8 @@ updatePlacing = function()
             -- Shift + wheel turns them while a line is dragged too (direct request)
             local shift = io ~= nil and io.KeyShift == true
             if p.drag and not shift then
-                p.spacing = math.max(PLACE_SPACING_MIN, math.min(p.spacing * (wheel > 0 and 1.1 or 1 / 1.1),
+                -- wheel up : more props on the line (closer together), down : fewer (direct request)
+                p.spacing = math.max(PLACE_SPACING_MIN, math.min(p.spacing * (wheel > 0 and 1 / 1.1 or 1.1),
                     PLACE_SPACING_MAX))
             else
                 p.rot = (p.rot + (wheel > 0 and 1 or -1) * PLACE_ROTATE_STEP) % 360
