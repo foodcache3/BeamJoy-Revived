@@ -19,6 +19,11 @@
 --- `heights` (one ground height per prop, measured by the editor) is what makes it follow the
 --- ground ; without it the props sit on the straight line from `a` to `b`.
 ---
+--- Lamps : a catalog entry with a `light` casts it, through a SpotLight of its own at the mesh's lamp
+--- head (`offset`, mesh units from its origin, turned and scaled with it), shining along `aim`. On at
+--- night only, as the map's own lamps are (core_environment's night window), never casting shadows,
+--- and no more than MAX_LIGHTS of them at once. A map's own props on the same mesh light up too.
+---
 --- Sets : each consumer shows its props under its own key (`show(key, props, opts)`), so a race and
 --- anything later (hunter arenas, passive zones) never clear each other's.
 
@@ -144,9 +149,17 @@ local M = {
         { id = "dumpster", cat = "scenery", tags = "skip trash", shape = "/art/shapes/garage_and_dealership/Clutter/ind_dumpster_full.DAE" },
         { id = "cityBin", cat = "scenery", tags = "trash", shape = "/art/shapes/garage_and_dealership/Clutter/clutter_city_bin_round.dae" },
         { id = "scaffold", cat = "scenery", tags = "construction frame", shape = "/art/shapes/objects/s_scaffold_side_open.dae" },
-        { id = "lightPole", cat = "scenery", tags = "street lamp", shape = "/art/shapes/objects/pole_light_single.dae" },
-        { id = "standingLight", cat = "scenery", tags = "flood lamp", shape = "/art/shapes/objects/s_standinglight_01.dae" },
-        { id = "spotlight", cat = "scenery", tags = "flood lamp", shape = "/art/shapes/objects/s_spotlight_01.dae" },
+        -- the lamps' heads measured on their meshes (their glass and bulb) : the pole's hangs at the end of
+        -- its arm, the two flood lights face their own +X
+        { id = "lightPole", cat = "scenery", tags = "street lamp light", shape = "/art/shapes/objects/pole_light_single.dae",
+            light = { offset = { 5.0, 0, 12.55 }, aim = { 0, 0, -1 }, range = 35, innerAngle = 50, outerAngle = 150,
+                color = { 1, .8, .6 }, intensity = 8000 } },
+        { id = "standingLight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_standinglight_01.dae",
+            light = { offset = { .1, 0, 1.51 }, aim = { 1, 0, -.25 }, range = 30, innerAngle = 40, outerAngle = 110,
+                color = { .9, .95, 1 }, intensity = 6000 } },
+        { id = "spotlight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_spotlight_01.dae",
+            light = { offset = { .06, 0, .03 }, aim = { 1, 0, .15 }, range = 30, innerAngle = 20, outerAngle = 70,
+                color = { .9, .95, 1 }, intensity = 6000 } },
         { id = "foldTable", cat = "scenery", tags = "pit", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_table_01.dae" },
         { id = "foldChair", cat = "scenery", tags = "pit seat", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_chair_01.dae", collision = "None" },
         { id = "tireRack", cat = "scenery", tags = "tyre pit", shape = "/art/shapes/garage_and_dealership/garage/s_tire_rack.dae" },
@@ -486,9 +499,110 @@ local function shapeExists(shape)
     return not missingShapes[shape]
 end
 
+-- LAMPS : see the top of this file
+
+--- lamps lit at once, at most : each is a light the renderer pays for every frame
+local MAX_LIGHTS = 40
+-- ms between two looks at the time of day
+local NIGHT_CHECK_MS = 1000
+
+---@type table<integer, userdata> a prop object's id -> its light
+local lightOf = {}
+local lightCount = 0
+---@type boolean? the lamps' state (nil : not looked yet)
+local lampsOn = nil
+local nextNightCheck = 0
+
+---@return boolean the map's own night lights are on (or would be)
+local function isNight()
+    local ok, state = pcall(function() return core_environment.getLightState() end)
+    return ok and type(state) == "table" and state.isNight == true
+end
+
+---@param light userdata
+---@param on boolean
+local function setLightOn(light, on)
+    if light.setLightEnabled then
+        light:setLightEnabled(on)
+    else
+        light:setField("isEnabled", 0, on and "true" or "false")
+        if light.postApply then light:postApply() end
+    end
+end
+
+--- the light where the lamp's head is, shining the way it faces
+---@param light userdata
+---@param spec table the catalog's `light`
+---@param p table an expand() entry
+local function placeLight(light, spec, p)
+    local scales = p.scales or vec3(p.scale, p.scale, p.scale)
+    local o = spec.offset
+    local pos = p.pos + p.rot * vec3(o[1] * scales.x, o[2] * scales.y, o[3] * scales.z)
+    local aim = (p.rot * vec3(spec.aim[1], spec.aim[2], spec.aim[3])):normalized()
+    local up = math.abs(aim.z) > .98 and (p.rot * vec3(0, 1, 0)) or vec3(0, 0, 1)
+    local rot = quatFromDir(aim, up)
+    light:setPosRot(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, rot.w)
+end
+
+---@param obj userdata the prop's own object
+---@param p table an expand() entry
+local function addLight(obj, p)
+    local cat = M.catalogForShape(p.shape)
+    local spec = cat and cat.light
+    if not spec or lightCount >= MAX_LIGHTS then return end
+    local light = createObject("SpotLight")
+    if not light then return end
+    light.canSave = false
+    local c = spec.color
+    light:setField("color", 0, string.format("%g %g %g 1", c[1], c[2], c[3]))
+    light:setField("range", 0, tostring(spec.range))
+    light:setField("innerAngle", 0, tostring(spec.innerAngle))
+    light:setField("outerAngle", 0, tostring(spec.outerAngle))
+    light:setField("intensity", 0, tostring(spec.intensity))
+    light:setField("castShadows", 0, "false")
+    light:setField("useColorTemperature", 0, "false")
+    light:registerObject("")
+    if not simObjectExists(light) then return end
+    group():addObject(light)
+    placeLight(light, spec, p)
+    if lampsOn == nil then lampsOn = isNight() end
+    setLightOn(light, lampsOn)
+    lightOf[obj:getID()] = { light = light, spec = spec }
+    lightCount = lightCount + 1
+end
+
+---@param obj userdata
+local function removeLight(obj)
+    local id = obj and simObjectExists(obj) and obj:getID()
+    local l = id and lightOf[id]
+    if not l then return end
+    lightOf[id] = nil
+    lightCount = lightCount - 1
+    if simObjectExists(l.light) then l.light:delete() end
+end
+
+--- dusk and dawn : every lamp on or off
+local function updateLamps()
+    local now = GetCurrentTimeMillis()
+    if now < nextNightCheck then return end
+    nextNightCheck = now + NIGHT_CHECK_MS
+    if lightCount == 0 then
+        lampsOn = nil
+        return
+    end
+    local night = isNight()
+    if night == lampsOn then return end
+    lampsOn = night
+    for _, l in pairs(lightOf) do
+        if simObjectExists(l.light) then setLightOn(l.light, night) end
+    end
+end
+
 local function place(obj, p)
     obj:setPosRot(p.pos.x, p.pos.y, p.pos.z, p.rot.x, p.rot.y, p.rot.z, p.rot.w)
     obj:setScale(p.scales or vec3(p.scale, p.scale, p.scale))
+    local l = lightOf[obj:getID()]
+    if l and simObjectExists(l.light) then placeLight(l.light, l.spec, p) end
 end
 
 ---@param p table an expand() entry
@@ -505,10 +619,12 @@ local function spawn(p)
     if not simObjectExists(obj) then return nil end
     group():addObject(obj)
     place(obj, p)
+    addLight(obj, p)
     return obj
 end
 
 local function deleteObject(obj)
+    removeLight(obj)
     if obj and simObjectExists(obj) then obj:delete() end
 end
 
@@ -606,6 +722,7 @@ end
 --- props come in a few per frame ; then the static collision catches up with them (debounced, see
 --- scheduleCollisionReload : it waits for the last prop)
 local function onUpdate()
+    updateLamps()
     if anyPending() then
         if spawnPending() then
             if collisionReloadAt then scheduleCollisionReload() end
@@ -642,6 +759,11 @@ end
 local function cleanup()
     hideAll()
     M.sets = {}
+    -- any lamp whose prop went some other way
+    for _, l in pairs(lightOf) do
+        if simObjectExists(l.light) then l.light:delete() end
+    end
+    lightOf, lightCount, lampsOn = {}, 0, nil
     -- a new map, its own materials : looked at again
     materialDirs = {}
     if collisionReloadAt then

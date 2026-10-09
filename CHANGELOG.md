@@ -8,7 +8,12 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2645, server build 2440.
+Version 1.11.0 : client build 2646, server build 2440.
+
+- **Light props cast light** (direct request). The light pole, standing light and spotlight props
+  shine from their lamp heads at night, switching on and off with the map's own street lights.
+  No shadows, and at most 40 lit at once to keep the frame rate. A map's own props on those
+  meshes (imported races) light up too. *(client)*
 
 - **Big Map pins for drag strips and drift zones** (direct request). Each gets a pin in the Big Map's
   BeamJoy section, in its own "Drag strips" / "Drift zones" group, with the game's own drag and drift
