@@ -1698,7 +1698,7 @@ end
 -- PLACING --------------------------------------------------------------------------------------
 -- The props drawer's armed prop (direct request) : a ghost of it follows the mouse over the world ;
 -- a click places one there, a click-and-drag lays a line of them. The wheel turns it (or, while
--- dragging, spaces the line out), Shift on release keeps it armed for the next one, a right-click
+-- dragging, spaces the line out), Ctrl on release keeps it armed for the next one, a right-click
 -- or Esc stops. Per frame : one ray against the static collision (castRayStatic : neither the ghost
 -- nor the editor's preview props are in it, see beamjoy_props) and the ghost moved (one
 -- no-collision TSStatic, a line's worth while dragging).
@@ -1714,7 +1714,7 @@ local GHOST_SET = "editorGhost"
 ---@type {shape: string, rot: number, spacing: number, hit: vec3?, facing: vec3?, drag: {a: vec3, b: vec3, facing: vec3}?}?
 M.placing = nil
 --- the drawer's "Keep placing" (direct request) : a prop stays armed after each one placed, as with
---- Shift held, until it's turned off or placing stops. The player's own choice, kept by the drawer
+--- Ctrl held, until it's turned off or placing stops. The player's own choice, kept by the drawer
 M.keepPlacing = false
 local lastPlacingPush = nil
 
@@ -1862,15 +1862,16 @@ local function onArmProp(shape)
     pushPlacing()
 end
 
---- what's being placed goes into the race ; armed still with Shift held, else the new prop is
+--- what's being placed goes into the race ; armed still with Ctrl held, else the new prop is
 --- selected (its gizmo for fine adjustments)
 local function placeNow()
     local entry = placingEntry()
     M.placing.drag = nil
     if not entry or not propBudget(beamjoy_props.weight(entry)) then return end
     local io = ui_imgui.GetIO()
-    -- the drawer's "Keep placing" (on until turned off), or Shift held for this one
-    local keepArmed = M.keepPlacing or (io ~= nil and io.KeyShift == true)
+    -- the drawer's "Keep placing" (on until turned off), or Ctrl held for this one (direct request :
+    -- Shift turns the props while dragging)
+    local keepArmed = M.keepPlacing or (io ~= nil and io.KeyCtrl == true)
     if keepArmed then
         addProp(entry, true)
         if beamjoy_props.total(M.race.props) >= beamjoy_props.MAX_PROPS then disarmProp() end
@@ -1926,7 +1927,9 @@ updatePlacing = function()
     if not overUI then
         local wheel = io and mouseWheel(io) or 0
         if wheel ~= 0 then
-            if p.drag then
+            -- Shift + wheel turns them while a line is dragged too (direct request)
+            local shift = io ~= nil and io.KeyShift == true
+            if p.drag and not shift then
                 p.spacing = math.max(PLACE_SPACING_MIN, math.min(p.spacing * (wheel > 0 and 1.1 or 1 / 1.1),
                     PLACE_SPACING_MAX))
             else

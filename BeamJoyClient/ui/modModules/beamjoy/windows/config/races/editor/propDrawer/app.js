@@ -447,7 +447,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
         };
         this.disarm = () => beamjoyStore.send("BJEditorRaceDisarmProp");
         // "Keep placing" (direct request) : a prop stays armed after each one placed, as with
-        // Shift held, so several go down without picking it again. Kept on this PC
+        // Ctrl held, so several go down without picking it again. Kept on this PC
         this.keepPlacing = false;
         try {
             this.keepPlacing = localStorage.getItem(KEEP_KEY) === "1";
@@ -514,7 +514,53 @@ angular.module("beamjoy").component("bjPropDrawer", {
             return b.adding > 0 ? `${b.used} + ${b.adding} / ${b.max}` : `${b.used} / ${b.max}`;
         };
 
+        // CONTROLS (direct request) : every key and click of placing and editing props, in a card
+        // over the drawer ; its "?" button (header or strip) opens it
+        this.HELP = [
+            {
+                title: "help.placing",
+                rows: [
+                    ["keys.click", "help.click"],
+                    ["keys.drag", "help.drag"],
+                    ["keys.wheel", "help.wheel"],
+                    ["keys.wheelDragging", "help.wheelDragging"],
+                    ["keys.shiftWheel", "help.shiftWheel"],
+                    ["keys.ctrlRelease", "help.ctrlRelease"],
+                    ["keys.keepButton", "help.keepButton"],
+                    ["keys.stop", "help.stop"],
+                ],
+            },
+            {
+                title: "help.editing",
+                rows: [
+                    ["keys.clickProp", "help.clickProp"],
+                    ["keys.gizmo", "help.gizmo"],
+                    ["keys.bend", "help.bend"],
+                    ["keys.delete", "help.delete"],
+                    ["keys.swap", "help.swap"],
+                ],
+            },
+            {
+                title: "help.drawer",
+                rows: [
+                    ["keys.slash", "help.slash"],
+                    ["keys.arrows", "help.arrows"],
+                    ["keys.enter", "help.enter"],
+                    ["keys.esc", "help.esc"],
+                    ["keys.star", "help.star"],
+                    ["keys.moveDrawer", "help.moveDrawer"],
+                ],
+            },
+        ];
+        this.helpOpen = false;
+        this.toggleHelp = (event) => {
+            if (event) event.stopPropagation();
+            if (this.folded()) this.expandStrip();
+            this.helpOpen = !this.helpOpen;
+        };
+
         this.close = () => {
+            this.helpOpen = false;
             if (this.placing.armed) this.disarm();
             if (this.swap) this.onSwapEnd();
             this.onClose();
@@ -570,7 +616,8 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 case "Escape":
                     event.preventDefault();
                     event.stopPropagation();
-                    if (this.query) this.clearQuery();
+                    if (this.helpOpen) this.helpOpen = false;
+                    else if (this.query) this.clearQuery();
                     else if (this.placing.armed) this.disarm();
                     else if (this.swap) this.cancelSwap();
                     else this.close();

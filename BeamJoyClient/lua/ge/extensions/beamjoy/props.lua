@@ -7,12 +7,15 @@
 --- collision, and props it can't see there can't be snapped onto by mistake.
 ---
 --- Entries (see services/races.lua's sanitizeProps for the server-side checks) :
----   { kind = "static", shape, pos, dir, up, scale }
+---   { kind = "static", shape, pos, dir, up, scale, stretch, lift, solid }
 ---   { kind = "line", shape, a, b, mid, count, yaw, scale, followGround, heights }
 --- A line is saved as itself and spread out here : `count` props evenly from `a` to `b` (both ends
 --- included), each facing along the line turned by `yaw` degrees round its own vertical axis.
 --- `mid` (optional) bends it : the line runs as a smooth curve from `a` through `mid` to `b`, its
 --- props spaced evenly along the curve and each facing along it there.
+--- Optional on both : `stretch` {x, y, z} scales a mesh unevenly (on top of `scale` : a map's own
+--- race props, imported by beamjoy/mapRaces, are often stretched barriers), `lift` stands it that
+--- much higher (mesh units), `solid = false` lets cars drive through it whatever its mesh.
 --- `heights` (one ground height per prop, measured by the editor) is what makes it follow the
 --- ground ; without it the props sit on the straight line from `a` to `b`.
 ---
@@ -403,9 +406,14 @@ function M.expand(props)
         local cat = M.catalogForShape(e.shape)
         if type(e.shape) == "string" then
             local scale = math.max(.1, math.min(tonumber(e.scale) or 1, 10))
+            local stretch = v3(e.stretch)
+            local function axisScale(k)
+                return scale * (stretch and math.max(.05, math.min(stretch[k], 20)) or 1)
+            end
+            local scales = vec3(axisScale("x"), axisScale("y"), axisScale("z"))
             -- an entry's own lift (set when it was placed, so every player stands it the same) ;
             -- else the catalog's
-            local lift = (tonumber(e.lift) or (cat and cat.zOffset) or 0) * scale
+            local lift = (tonumber(e.lift) or (cat and cat.zOffset) or 0) * scales.z
             local placements
             if e.kind == "line" then
                 placements = M.linePlacements(e)
@@ -423,7 +431,8 @@ function M.expand(props)
                         up = p.up:normalized(),
                         rot = quatFromDir(p.dir, p.up),
                         scale = scale,
-                        collision = cat and cat.collision or "Collision Mesh",
+                        scales = scales,
+                        collision = e.solid == false and "None" or (cat and cat.collision or "Collision Mesh"),
                         entry = i,
                     })
                 end
@@ -476,7 +485,7 @@ end
 
 local function place(obj, p)
     obj:setPosRot(p.pos.x, p.pos.y, p.pos.z, p.rot.x, p.rot.y, p.rot.z, p.rot.w)
-    obj:setScale(vec3(p.scale, p.scale, p.scale))
+    obj:setScale(p.scales or vec3(p.scale, p.scale, p.scale))
 end
 
 ---@param p table an expand() entry
@@ -504,7 +513,8 @@ end
 ---@param b table expand() entry
 ---@return boolean same mesh in the same place
 local function samePlacement(a, b)
-    return a.shape == b.shape and a.collision == b.collision and a.scale == b.scale and
+    local sa, sb = a.scales or vec3(a.scale, a.scale, a.scale), b.scales or vec3(b.scale, b.scale, b.scale)
+    return a.shape == b.shape and a.collision == b.collision and sa:distance(sb) < 1e-4 and
         a.pos:distance(b.pos) < 1e-3 and
         math.abs(a.rot.x - b.rot.x) + math.abs(a.rot.y - b.rot.y) + math.abs(a.rot.z - b.rot.z) +
         math.abs(a.rot.w - b.rot.w) < 1e-5

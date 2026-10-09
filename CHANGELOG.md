@@ -8,7 +8,28 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2630, server build 2436.
+Version 1.11.0 : client build 2635, server build 2438.
+
+- **A controls card in the props drawer** (direct request) : its "?" button (in the header, and on
+  the strip while placing) lists every key and click for placing props, editing placed ones, and
+  the drawer itself. *(client only)*
+- **Shift + wheel turns the props while dragging a line** (direct request), the wheel alone still
+  setting its spacing. *(client only)*
+- **Ctrl, not Shift, keeps a prop armed** for the next one when held on release (direct request :
+  Shift now turns the props). *(client only)*
+
+- **"Import map races" brings the map's props along** (direct request) : the barriers, tire walls,
+  signs and cones each race places (its prefabs : the shared ones plus the forward ones, or the
+  reverse ones for a reversed race), where the map puts them, turned and stretched the same,
+  drive-through where the map has it so. Cones the map places as vehicles become race cones.
+  Within a race's 200 props, the ones nearest the route are kept ; the list says how many come
+  along. *(client + server)*
+- **Props can be stretched unevenly and set drive-through** per prop (what the import needs) ; the
+  editor's Size still scales them as a whole. *(client + server)*
+
+- **Fixed: importing a map's races failed every race** with "failed sanitation: Invalid race data"
+  (direct report, on a modded map). A logic slip in the server's import turned a race that passed
+  its checks into that error, so nothing could ever be imported. *(server only)*
 
 - **Prop lines can curve** (direct request) : a line's new "Middle (bend)" handle (beside First end
   and Last end, or clicked in the world) bends it, the line running as a smooth curve through it

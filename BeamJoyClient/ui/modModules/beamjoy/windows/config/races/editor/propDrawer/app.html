@@ -46,6 +46,8 @@
     .pd-panel {
         display: flex;
         flex-direction: column;
+        /* the controls card lies over it */
+        overflow: hidden;
         background: var(--pd-bg);
         border: 1px solid var(--pd-line);
         border-radius: 0.4em;
@@ -165,6 +167,63 @@
     }
     .pd-head button {
         cursor: pointer;
+    }
+    .pd-icon.on:not(.pd-keep) {
+        background: rgba(255, 255, 255, 0.14);
+        color: #fff;
+    }
+    .pd-help {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: 3.4em;
+        z-index: 3;
+        display: flex;
+        flex-direction: column;
+        background: rgba(14, 16, 22, 0.98);
+        border-top: 1px solid var(--pd-line);
+    }
+    .pd-help-head {
+        display: flex;
+        align-items: center;
+        padding: 0.6em 0.5em 0.2em 0.9em;
+    }
+    .pd-help-title {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-size: 1.1em;
+    }
+    .pd-help-head .pd-icon {
+        margin-left: auto;
+    }
+    .pd-help-body {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 0 0.9em 0.9em;
+    }
+    .pd-help-body h4 {
+        margin: 0.9em 0 0.4em;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-size: 0.95em;
+        color: #ffb36b;
+    }
+    .pd-help-row {
+        display: grid;
+        grid-template-columns: 9.5em minmax(0, 1fr);
+        gap: 0.7em;
+        align-items: baseline;
+        padding: 0.3em 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        font-size: 0.92em;
+        line-height: 1.4;
+        color: #d8dbe2;
+    }
+    .pd-help-row .pd-kbd {
+        justify-self: start;
+        white-space: nowrap;
     }
     .pd-icon.pd-keep.on {
         background: rgba(230, 92, 0, 0.6);
@@ -668,6 +727,18 @@
             <span class="pd-budget-n">{{$ctrl.budgetText()}}</span>
         </span>
         <button
+            class="pd-icon"
+            ng-class="{on: $ctrl.helpOpen}"
+            ng-click="$ctrl.toggleHelp($event)"
+            title="{{$ctrl.T('help.button')}}"
+        >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.8"></path>
+                <path d="M12 17.2h.01" stroke-width="2.8"></path>
+            </svg>
+        </button>
+        <button
             class="pd-icon pd-keep"
             ng-class="{on: $ctrl.keepPlacing}"
             ng-click="$ctrl.toggleKeepPlacing($event)"
@@ -830,6 +901,26 @@
             </div>
         </div>
     </div>
+    <!-- the controls card (its "?" button), over everything under the header -->
+    <div class="pd-help" ng-if="$ctrl.helpOpen" role="dialog" aria-label="{{$ctrl.T('help.title')}}">
+        <div class="pd-help-head">
+            <span class="pd-help-title">{{$ctrl.T('help.title')}}</span>
+            <button class="pd-icon" ng-click="$ctrl.toggleHelp($event)" title="{{$ctrl.T('close')}}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+                    <path d="M6 6l12 12M18 6L6 18"></path>
+                </svg>
+            </button>
+        </div>
+        <div class="pd-help-body">
+            <section ng-repeat="group in $ctrl.HELP track by group.title">
+                <h4>{{$ctrl.T(group.title)}}</h4>
+                <div class="pd-help-row" ng-repeat="row in group.rows track by $index">
+                    <span class="pd-kbd">{{$ctrl.T(row[0])}}</span>
+                    <span>{{$ctrl.T(row[1])}}</span>
+                </div>
+            </section>
+        </div>
+    </div>
     <!-- the preview docks here when there's no room beside the drawer -->
     <div class="pd-dock" ng-if="$ctrl.pos.dock && $ctrl.previewItem()">
         <span class="pd-thumb">
@@ -863,6 +954,18 @@
         </span>
         <span class="pd-budget-n">{{$ctrl.budgetText()}}</span>
     </span>
+    <button
+        class="pd-icon"
+        ng-class="{on: $ctrl.helpOpen}"
+        ng-click="$ctrl.toggleHelp($event)"
+        title="{{$ctrl.T('help.button')}}"
+    >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.8"></path>
+            <path d="M12 17.2h.01" stroke-width="2.8"></path>
+        </svg>
+    </button>
     <button
         class="pd-icon pd-keep"
         ng-class="{on: $ctrl.keepPlacing}"
@@ -935,7 +1038,10 @@
         <span class="pd-kbd">{{$ctrl.T('keys.wheel')}}</span>
         {{$ctrl.placing.dragging ? $ctrl.T('hints.spacing') : $ctrl.T('hints.turn')}}
     </span>
-    <span ng-if="!$ctrl.keepPlacing"><span class="pd-kbd">Shift</span>{{$ctrl.T('hints.shift')}}</span>
+    <span ng-if="$ctrl.placing.dragging">
+        <span class="pd-kbd">{{$ctrl.T('keys.shiftWheel')}}</span>{{$ctrl.T('hints.turn')}}
+    </span>
+    <span ng-if="!$ctrl.keepPlacing"><span class="pd-kbd">Ctrl</span>{{$ctrl.T('hints.shift')}}</span>
     <span ng-if="$ctrl.keepPlacing" class="pd-line">{{$ctrl.T('hints.keepOn')}}</span>
     <span><span class="pd-kbd">{{$ctrl.T('keys.stop')}}</span>{{$ctrl.T('hints.stop')}}</span>
 </div>

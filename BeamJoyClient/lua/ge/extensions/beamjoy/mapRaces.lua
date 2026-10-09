@@ -17,7 +17,13 @@
 --- gates' order (or their parents, for a branching route), a circuit stays a circuit with the
 --- map's lap count, and the map's start becomes grid slot 1 with more slots behind it (two by two,
 --- dropped where the ground isn't road-level). A reversible track is offered reversed too, not
---- ticked by default. The props a track places (barriers, cones) aren't imported.
+--- ticked by default.
+---
+--- The props a track places come along (direct request) : the static meshes of its prefabs (the
+--- shared ones and its forward ones ; a reversed track takes its reverse ones), each where the map
+--- puts it, stretched and turned the same, drive-through if the map has it so. Cones the map places
+--- as vehicles become race cones (BeamMP would send a vehicle to everyone) ; other vehicles are left
+--- out. A race holds up to beamjoy_props.MAX_PROPS : past that, the ones nearest the route are kept.
 ---
 --- Nothing is overwritten : the server adds the ticked races (services/races.lua's raceMapImport),
 --- and skips one whose name is already used.
@@ -124,16 +130,93 @@ end
 
 local WANTED = { BeamNGWaypoint = true, SpawnSphere = true }
 
---- a Torque prefab (`new Class(name) { field = "value"; ... };`) : its waypoints and spawn spheres
+-- PROPS ------------------------------------------------------------------------------------------
+
+-- vehicles a race places that come along as a static prop (by jbeam)
+local VEHICLE_PROPS = { cones = "/art/shapes/race/cone.dae" }
+
+local function round(x, d)
+    local m = 10 ^ d
+    return math.floor(x * m + .5) / m
+end
+
+--- a mesh path as races store it (a leading "/"), or nil for one a race can't hold or that isn't
+--- installed (services/races.lua saneShape)
+---@param s any
+---@return string?
+local function propShape(s)
+    if type(s) ~= "string" or s == "" then return nil end
+    if not s:find("^/") then s = "/" .. s end
+    local lower = s:lower()
+    if s:find("..", 1, true) or #s > 200 then return nil end
+    if not (lower:find("^/art/") or lower:find("^/assets/") or lower:find("^/levels/")) then return nil end
+    if not (lower:find("%.dae$") or lower:find("%.cdae$")) then return nil end
+    if not FS:fileExists(s) then return nil end
+    return s
+end
+
+--- a prefab's TSStatic (or a cone vehicle) as a race prop (beamjoy_props' entries), or nil
+---@param class string
+---@param fields table position, rotationMatrix, scale, shapeName, collisionType, jbeam as read
+---@return table?
+local function makeProp(class, fields)
+    local shape
+    if class == "TSStatic" then
+        shape = propShape(fields.shapeName)
+    elseif class == "BeamNGVehicle" then
+        shape = VEHICLE_PROPS[tostring(fields.jbeam or fields.JBeam or ""):lower()]
+    end
+    if not shape then return nil end
+    local pos = type(fields.position) == "table" and toV(fields.position) or toV(numbers(fields.position))
+    if not pos then return nil end
+    local m = type(fields.rotationMatrix) == "table" and fields.rotationMatrix or numbers(fields.rotationMatrix)
+    local dir, up = v(0, 1, 0), v(0, 0, 1)
+    if #m == 9 then dir, up = axis(m, 2), axis(m, 3) end
+    if len(dir) < 1e-4 or len(up) < 1e-4 then dir, up = v(0, 1, 0), v(0, 0, 1) end
+    local prop = { kind = "static", shape = shape, scale = 1 }
+    if class == "TSStatic" then
+        -- stands exactly where the map has it (no lift of its own)
+        prop.lift = 0
+        local sc = type(fields.scale) == "table" and fields.scale or numbers(fields.scale)
+        local sx, sy, sz = tonumber(sc[1]), tonumber(sc[2]), tonumber(sc[3])
+        if sx and sy and sz and sx > 0 and sy > 0 and sz > 0 then
+            if math.abs(sx - sy) < 1e-3 and math.abs(sx - sz) < 1e-3 then
+                prop.scale = clamp(round(sx, 3), .1, 10)
+            else
+                prop.stretch = v(clamp(round(sx, 3), .05, 20), clamp(round(sy, 3), .05, 20), clamp(round(sz, 3), .05, 20))
+            end
+        end
+        if tostring(fields.collisionType) == "None" then prop.solid = false end
+    else
+        -- a vehicle's position is its own reference point : stood upright on the ground (toRace)
+        dir, up = flat(dir) or v(0, 1, 0), v(0, 0, 1)
+        prop.onGround = true
+    end
+    prop.pos = v(round(pos.x, 3), round(pos.y, 3), round(pos.z, 3))
+    prop.dir = v(round(dir.x, 4), round(dir.y, 4), round(dir.z, 4))
+    prop.up = v(round(up.x, 4), round(up.y, 4), round(up.z, 4))
+    return prop
+end
+
+--- a Torque prefab (`new Class(name) { field = "value"; ... };`) : its waypoints and spawn spheres,
+--- and its props when `props` is given
 ---@param text string
 ---@param into table<string, BJMapObject>
-local function parsePrefabText(text, into)
+---@param props table[]?
+local function parsePrefabText(text, into, props)
     local at = 1
     while true do
         local s, e, class, name = text:find("new%s+([%w_]+)%s*%(%s*([^%)]-)%s*%)%s*{", at)
         if not s then break end
         at = e + 1
-        if WANTED[class] and name ~= "" then
+        if props and (class == "TSStatic" or class == "BeamNGVehicle") then
+            local close = text:find("};", e, true) or #text
+            local fields = {}
+            for k, val in text:sub(e + 1, close):gmatch("([%w_]+)%s*=%s*\"(.-)\"%s*;") do
+                fields[k] = val
+            end
+            props[#props + 1] = makeProp(class, fields)
+        elseif WANTED[class] and name ~= "" then
             -- these classes hold no children : their block ends at the first "};"
             local close = text:find("};", e, true) or #text
             local fields = {}
@@ -145,12 +228,18 @@ local function parsePrefabText(text, into)
     end
 end
 
---- a .prefab.json (one JSON object per line)
+--- a .prefab.json (one JSON object per line), with its props when `props` is given
 ---@param text string
 ---@param into table<string, BJMapObject>
-local function parsePrefabJson(text, into)
+---@param props table[]?
+local function parsePrefabJson(text, into, props)
     for line in text:gmatch("[^\r\n]+") do
-        if line:find("BeamNGWaypoint", 1, true) or line:find("SpawnSphere", 1, true) then
+        if props and (line:find('"TSStatic"', 1, true) or line:find('"BeamNGVehicle"', 1, true)) then
+            local ok, o = pcall(jsonDecode, line)
+            if ok and type(o) == "table" and (o.class == "TSStatic" or o.class == "BeamNGVehicle") then
+                props[#props + 1] = makeProp(o.class, o)
+            end
+        elseif line:find("BeamNGWaypoint", 1, true) or line:find("SpawnSphere", 1, true) then
             local ok, o = pcall(jsonDecode, line)
             if ok and type(o) == "table" and WANTED[o.class] then
                 local name = o.name or o.internalName
@@ -164,15 +253,26 @@ end
 
 ---@param path string
 ---@param into table<string, BJMapObject>
-local function readPrefab(path, into)
+---@param props table[]? its props are added to it
+local function readPrefab(path, into, props)
     if not path or not FS:fileExists(path) then return end
     local text = readFile(path)
     if type(text) ~= "string" or #text > M.MAX_PREFAB_BYTES then return end
     if path:lower():find("%.json$") then
-        parsePrefabJson(text, into)
+        parsePrefabJson(text, into, props)
     else
-        parsePrefabText(text, into)
+        parsePrefabText(text, into, props)
     end
+end
+
+---@param ... table[]
+---@return table[]
+local function concat(...)
+    local out = {}
+    for _, list in ipairs({ ... }) do
+        for _, x in ipairs(list) do out[#out + 1] = x end
+    end
+    return out
 end
 
 --- an object of the level itself, already in the scene
@@ -330,13 +430,26 @@ local function fromQuickrace(info, file, level)
             if FS:fileExists(f) then return f end
         end
     end
-    for _, suf in ipairs({ "", "_forward" }) do
-        for _, ext in ipairs({ ".prefab", ".prefab.json" }) do
-            readPrefab(dir .. trackName .. suf .. ext, objs)
-        end
+    -- its props : the shared prefabs', then the forward or the reverse ones
+    local mainProps, fwdProps, revProps = {}, {}, {}
+    for _, ext in ipairs({ ".prefab", ".prefab.json" }) do
+        readPrefab(dir .. trackName .. ext, objs, mainProps)
+        readPrefab(dir .. trackName .. "_forward" .. ext, objs, fwdProps)
     end
-    for _, list in ipairs({ info.prefabs, info.forwardPrefabs }) do
-        for _, p in ipairs(type(list) == "table" and list or {}) do readPrefab(prefabPath(p), objs) end
+    for _, p in ipairs(type(info.prefabs) == "table" and info.prefabs or {}) do readPrefab(prefabPath(p), objs, mainProps) end
+    for _, p in ipairs(type(info.forwardPrefabs) == "table" and info.forwardPrefabs or {}) do
+        readPrefab(prefabPath(p), objs, fwdProps)
+    end
+    if info.reversible == true then
+        -- the reverse prefabs' objects only stand in for names the others don't have (its spawn)
+        local revObjs = {}
+        for _, ext in ipairs({ ".prefab", ".prefab.json" }) do
+            readPrefab(dir .. trackName .. "_reverse" .. ext, revObjs, revProps)
+        end
+        for _, p in ipairs(type(info.reversePrefabs) == "table" and info.reversePrefabs or {}) do
+            readPrefab(prefabPath(p), revObjs, revProps)
+        end
+        for name, o in pairs(revObjs) do objs[name] = objs[name] or o end
     end
 
     local track = { name = displayName(info.name, trackName), fallbackName = trackName, nodes = {}, segs = {} }
@@ -387,6 +500,8 @@ local function fromQuickrace(info, file, level)
     track.endNode = not closed and route[#route] or nil
     track.closed = closed
     track.laps = closed and tonumber(info.lapCount) or nil
+    track.props = concat(mainProps, fwdProps)
+    track.reverseProps = concat(mainProps, revProps)
 
     local spheres = type(info.spawnSpheres) == "table" and info.spawnSpheres or {}
     local function spawn(name)
@@ -415,6 +530,7 @@ local function reversed(track)
         closed = track.closed,
         laps = track.laps,
         start = track.reverseStart,
+        props = track.reverseProps,
     }
     for i, s in ipairs(track.segs) do r.segs[i] = { a = s.b, b = s.a } end
     if track.closed then
@@ -560,6 +676,36 @@ local function toRace(track)
         end
     end
 
+    -- its props : on the ground for a placed vehicle, the same one twice only once, and within a
+    -- race's limit the ones nearest the route
+    local props, seen = {}, {}
+    for _, p in ipairs(track.props or {}) do
+        local key = string.format("%s|%.1f|%.1f|%.1f", p.shape:lower(), p.pos.x, p.pos.y, p.pos.z)
+        if not seen[key] then
+            seen[key] = true
+            local prop = {}
+            for k, val in pairs(p) do prop[k] = val end
+            prop.pos = v(p.pos.x, p.pos.y, p.pos.z)
+            if prop.onGround then
+                local g = groundAt(prop.pos, 1)
+                if g then prop.pos.z = g end
+            end
+            prop.onGround = nil
+            local near = math.huge
+            for _, g in ipairs(gates) do
+                near = math.min(near, (g.pos.x - prop.pos.x) ^ 2 + (g.pos.y - prop.pos.y) ^ 2)
+            end
+            props[#props + 1] = { prop = prop, near = near }
+        end
+    end
+    local maxProps = beamjoy_props and beamjoy_props.MAX_PROPS or 200
+    local propsTotal = #props
+    if #props > maxProps then
+        table.sort(props, function(a, b) return a.near < b.near end)
+    end
+    local kept = {}
+    for k = 1, math.min(#props, maxProps) do kept[k] = props[k].prop end
+
     local laps = closed and math.max(1, math.floor(tonumber(track.laps) or 3)) or 3
     local race = {
         name = track.name,
@@ -570,13 +716,42 @@ local function toRace(track)
         startPositions = startPositions,
         sectorCount = 3,
         defaults = { laps = laps, joinable = #startPositions > 1 },
+        props = kept,
     }
+    -- for the scan's list only (the server doesn't keep it)
+    race.propsFound = propsTotal
     local ok, raceEditor = pcall(require, "ge/extensions/beamjoy/ui/raceEditor")
     race.distance = ok and raceEditor.computeRaceDistance and raceEditor.computeRaceDistance(race) or 0
     return race
 end
 
 -- SCAN ------------------------------------------------------------------------------------------
+
+--- a race path's props, from the prefabs beside it : a time trial's mainPrefab / forwardPrefab /
+--- reversePrefab, or a quickrace's <name>, <name>_forward, <name>_reverse
+---@param track BJMapTrack?
+---@param dirs string[] where to look, in order
+---@param names {main: string, forward: string, reverse: string}
+local function attachPrefabProps(track, dirs, names)
+    if not track then return end
+    local lists = {}
+    for kind, name in pairs(names) do
+        lists[kind] = {}
+        for _, d in ipairs(dirs) do
+            local found
+            for _, ext in ipairs({ ".prefab.json", ".prefab" }) do
+                if FS:fileExists(d .. name .. ext) then
+                    readPrefab(d .. name .. ext, {}, lists[kind])
+                    found = true
+                    break
+                end
+            end
+            if found then break end
+        end
+    end
+    track.props = concat(lists.main, lists.forward)
+    track.reverseProps = concat(lists.main, lists.reverse)
+end
 
 ---@param level string
 ---@return {track: BJMapTrack?, reason: string?, source: string, file: string}[]
@@ -591,11 +766,11 @@ local function readTracks(level)
                 local folder = infoFile:match("^(.*/)[^/]+$")
                 local mtd = type(info.missionTypeData) == "table" and info.missionTypeData or {}
                 local raceFile = type(mtd.raceFile) == "string" and mtd.raceFile or "race.race.json"
+                local dirs = { folder }
                 if not raceFile:find("^/") and not raceFile:find("^levels/") and not raceFile:find("^gameplay/") then
                     -- a mission's files are looked for in its layers, in order : its own folder,
                     -- then shared ones (west_coast_usa's career time trials keep their race in
                     -- /levels/<map>/gameplay/trackLayers/...)
-                    local dirs = { folder }
                     for _, layer in ipairs(type(info.layers) == "table" and info.layers or {}) do
                         if type(layer) == "table" and type(layer.dir) == "string" then
                             dirs[#dirs + 1] = layer.dir:find("/$") and layer.dir or (layer.dir .. "/")
@@ -614,6 +789,8 @@ local function readTracks(level)
                 local track, reason = fromRacePath(jsonReadFile(raceFile),
                     displayName(info.name, id), id, mtd.closed, mtd.defaultLaps)
                 if track and mtd.reversible == false then track.reverseStart = nil end
+                attachPrefabProps(track, dirs or { folder },
+                    { main = "mainPrefab", forward = "forwardPrefab", reverse = "reversePrefab" })
                 out[#out + 1] = { track = track, reason = reason, source = "timeTrial", file = infoFile,
                     name = track and track.name or displayName(info.name, id) }
             end
@@ -633,6 +810,8 @@ local function readTracks(level)
                     local isPath = lower:find("%.race%.json$") ~= nil
                     if isPath then
                         track, reason = fromRacePath(data, displayName(data.name, base), base)
+                        attachPrefabProps(track, { file:match("^(.*/)[^/]*$") },
+                            { main = base, forward = base .. "_forward", reverse = base .. "_reverse" })
                     elseif data.lapConfig then
                         track, reason = fromQuickrace(data, file, level)
                     end
@@ -697,6 +876,13 @@ local function scan()
                 translate("beamjoy.mapRaces.circuit", "circuit, {laps} laps"):gsub("{laps}", tostring(race.defaults.laps)) or
                 translate("beamjoy.mapRaces.pointToPoint", "point to point")
             local parts = { detail, shape }
+            if #race.props > 0 then
+                local found = tonumber(race.propsFound) or #race.props
+                parts[#parts + 1] = found > #race.props and
+                    translate("beamjoy.mapRaces.propsCut", "{props} props (nearest of {found})")
+                    :gsub("{props}", tostring(#race.props)):gsub("{found}", tostring(found)) or
+                    translate("beamjoy.mapRaces.props", "{props} props"):gsub("{props}", tostring(#race.props))
+            end
             if race.branchingEnabled then parts[#parts + 1] = translate("beamjoy.mapRaces.branching", "branching route") end
             if race.distance and race.distance > 0 then
                 parts[#parts + 1] = race.distance >= 1000 and string.format("%.1f km", race.distance / 1000) or
@@ -736,7 +922,13 @@ end
 local function import(keys)
     local races = {}
     for _, key in ipairs(type(keys) == "table" and keys or {}) do
-        if M.found[key] then races[#races + 1] = M.found[key] end
+        local race = M.found[key]
+        if race then
+            local copy = {}
+            for k, val in pairs(race) do copy[k] = val end
+            copy.propsFound = nil
+            races[#races + 1] = copy
+        end
     end
     if #races == 0 then return end
     beamjoy_communications.send("raceMapImport", races)
@@ -778,6 +970,7 @@ M.import = import
 -- for tests
 M.parsePrefabText = parsePrefabText
 M.parsePrefabJson = parsePrefabJson
+M.makeProp = makeProp
 M.fromRacePath = fromRacePath
 M.fromQuickrace = fromQuickrace
 M.reversed = reversed

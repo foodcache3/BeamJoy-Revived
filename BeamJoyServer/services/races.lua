@@ -432,6 +432,12 @@ end
 --- outside its catalog), so every player stands it at the same height
 ---@param v any
 ---@return number?
+local function saneStretch(v)
+    local p = sanePoint(v)
+    if not p then return nil end
+    return { x = math.clamp(p.x, .05, 20), y = math.clamp(p.y, .05, 20), z = math.clamp(p.z, .05, 20) }
+end
+
 local function saneLift(v)
     local lift = tonumber(v)
     if not lift or lift ~= lift then return nil end
@@ -466,6 +472,8 @@ local function sanitizeProps(props)
                         scale = scale,
                         followGround = p.followGround ~= false,
                         lift = saneLift(p.lift),
+                        stretch = saneStretch(p.stretch),
+                        solid = p.solid == false and false or nil,
                     }
                     if entry.followGround and type(p.heights) == "table" and #p.heights == count and
                         table.every(p.heights, function(h) return tonumber(h) ~= nil end) then
@@ -484,6 +492,8 @@ local function sanitizeProps(props)
                         up = up or { x = 0, y = 0, z = 1 },
                         scale = scale,
                         lift = saneLift(p.lift),
+                        stretch = saneStretch(p.stretch),
+                        solid = p.solid == false and false or nil,
                     }
                     total = total + 1
                 end
@@ -1451,7 +1461,8 @@ local function raceMapImport(ctxt, races)
                 sectorCount = tonumber(raw.sectorCount) or 3,
                 gates = {},
                 startPositions = {},
-                props = {},
+                -- the map's own barriers and cones, read by the client (sanitizeProps checks them)
+                props = table.isArray(raw.props) and raw.props or {},
                 defaults = {
                     laps = type(raw.defaults) == "table" and tonumber(raw.defaults.laps) or nil,
                     joinable = type(raw.defaults) == "table" and raw.defaults.joinable == true,
@@ -1482,7 +1493,14 @@ local function raceMapImport(ctxt, races)
             end
         end
 
-        local err = race and sanitizeRace(race) or "Invalid race data"
+        -- not `race and sanitizeRace(race) or "..."` : sanitizeRace returns nil for a good race,
+        -- which that turned into "Invalid race data" (every race failed, direct report)
+        local err
+        if race then
+            err = sanitizeRace(race)
+        else
+            err = "Invalid race data"
+        end
         if err == "A race with this name already exists" then
             skipped = skipped + 1
         elseif err then
