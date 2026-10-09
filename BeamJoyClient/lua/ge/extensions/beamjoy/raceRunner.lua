@@ -280,6 +280,21 @@ local function totalSteps(race)
     return total
 end
 
+--- raceGrid.lua's own isBranchEnd : the end of a branch : a gate no other gate follows but the start/finish line (step 1). A
+--- loopable branching race's line closes the lap from one, whichever branch it ends and however
+--- long that branch is (steps count the longest way round, so a shorter last branch ends below the
+--- top step)
+---@param race BJRace
+---@param index integer? a gate index (0 / nil : none crossed yet)
+---@return boolean
+local function isBranchEnd(race, index)
+    if not index or not race.gates[index] then return false end
+    for _, g in ipairs(race.gates) do
+        if g.step ~= 1 and table.includes(g.parents or {}, index) then return false end
+    end
+    return true
+end
+
 --- true from the moment a participant is frozen at their start position (COUNTDOWN) through the
 --- actual race (RACE): whenever race-integrity restrictions (nodegrabber, walking away,
 --- disallowed cameras) ought to apply. Exists specifically so that class of check has ONE place to
@@ -2589,11 +2604,11 @@ local function onUpdate()
     if race.branchingEnabled then
         candidates = {}
         for i, g in ipairs(race.gates) do
-            -- a loopable race's own step-1 gate is always a valid candidate (the loop-closing
-            -- transition), regardless of parents. Mirrors raceGrid.lua's own identical exception,
-            -- see its comment for the real bug this fixes (a forgotten backward link silently
-            -- freezing progress for the rest of the race)
-            local isLoopClosing = race.loopable and g.step == 1
+            -- a loopable race's own step-1 gate closes the lap from the end of a branch, whether
+            -- or not the author linked it back. Mirrors raceGrid.lua's own
+            -- identical rule, see its comment for the real bugs this fixes (a forgotten backward
+            -- link freezing progress ; the line closing a lap from anywhere on it)
+            local isLoopClosing = race.loopable and g.step == 1 and isBranchEnd(race, participant.lastCrossedGate)
             if isLoopClosing or table.includes(g.parents, participant.lastCrossedGate) then
                 table.insert(candidates, i)
             end

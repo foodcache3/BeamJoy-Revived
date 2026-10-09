@@ -179,14 +179,21 @@ end
 ---@param fromIds integer[] node ids (gate indices, or 0 for "start"/nothing crossed yet) to walk
 ---one step forward from, using the EXACT same reachability rule raceGrid.lua's own
 ---raceGateCrossed validates a real crossing against: `parents` graph edges, plus the loopable
----"step 1 is always reachable" exception (see that file's own "make step 1 unconditionally
----reachable whenever the race is loopable" comment). Kept in lockstep with that rule specifically
+---race's step 1 reachable from the end of any branch (see that file's own loop-closing comment). Kept in lockstep with that rule specifically
 ---so a visible/highlighted gate here can never be one the server would actually reject crossing.
 ---@return integer[] gate indices reachable in exactly one step from any id in fromIds
 local function branchingStep(race, fromIds)
     local reachable = {}
+    -- the line closes the lap only from the end of a branch (raceGrid.lua's own isBranchEnd)
+    local fromLast = table.any(fromIds, function(f)
+        if not race.gates[f] then return false end
+        for _, g in ipairs(race.gates) do
+            if g.step ~= 1 and table.includes(g.parents or {}, f) then return false end
+        end
+        return true
+    end)
     for i, g in ipairs(race.gates) do
-        local isLoopClosing = race.loopable and g.step == 1
+        local isLoopClosing = race.loopable and g.step == 1 and fromLast
         if isLoopClosing or table.any(fromIds, function(f) return table.includes(g.parents, f) end) then
             table.insert(reachable, i)
         end

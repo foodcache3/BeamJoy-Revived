@@ -67,10 +67,33 @@ local function markSeeded(mapName, activityType, itemName)
     dao_main.save(M.LEDGER_FILE, ledger)
 end
 
+local sync
+
+-- Real, confirmed bug (direct report : a fresh install came up without any bundled races, its
+-- Hunter arenas seeded fine). The server fires onInit in pairs() order over the extensions table, a
+-- hash Lua 5.3 shuffles every boot, so a service seeding from the bundled mirror (services_races,
+-- services_hunter, ...) could run before this module's own onInit had made it. On a fresh install
+-- the mirror didn't exist yet : that service saw no maps and seeded nothing (later boots found the
+-- previous boot's mirror). The mirror is now made by whichever comes first, this module's onInit or
+-- the first read of it, once per boot.
+local synced = false
+local function ensureSynced()
+    if synced then return end
+    synced = true
+    M.sourcePath = BJSPluginPath .. "/bundledContent/activities"
+    sync()
+end
+
+---@return string BeamJoyData/db/bundled
+local function destPath()
+    return dao_main.getDbPath() .. "/" .. M.path
+end
+
 ---@param mapName string
 ---@param activityType string
 ---@return table? raw bundled array for this map/type, same shape as dao_activity.get's own
 local function get(mapName, activityType)
+    ensureSynced()
     return dao_main.get(M.path .. "/" .. mapName .. "_" .. activityType .. ".json")
 end
 
@@ -80,11 +103,12 @@ end
 ---@param activityType string
 ---@return string[]
 local function listMapsForType(activityType)
-    local destPath = dao_main.dbPath .. "/" .. M.path
+    ensureSynced()
+    local dest = destPath()
     local maps = {}
-    if FS.Exists(destPath) then
+    if FS.Exists(dest) then
         local pattern = "^(.+)_" .. activityType .. "%.json$"
-        for _, filename in pairs(FS.ListFiles(destPath)) do
+        for _, filename in pairs(FS.ListFiles(dest)) do
             local mapName = filename:match(pattern)
             if mapName then table.insert(maps, mapName) end
         end
@@ -97,24 +121,23 @@ end
 --- to be admin-edited, treat it as a pure reflection of whatever's currently installed, including
 --- a file a newer mod version removed entirely (mirrored deletion, same "the package IS the
 --- truth" convention this codebase's own BJ.zip client deploy already follows)
-local function sync()
-    local destPath = dao_main.dbPath .. "/" .. M.path
-    if FS.Exists(destPath) then
-        for _, filename in pairs(FS.ListFiles(destPath)) do
-            FS.Remove(destPath .. "/" .. filename)
+function sync()
+    local dest = destPath()
+    if FS.Exists(dest) then
+        for _, filename in pairs(FS.ListFiles(dest)) do
+            FS.Remove(dest .. "/" .. filename)
         end
     else
-        FS.CreateDirectory(destPath)
+        FS.CreateDirectory(dest)
     end
     if not FS.Exists(M.sourcePath) then return end
     for _, filename in pairs(FS.ListFiles(M.sourcePath)) do
-        FS.Copy(M.sourcePath .. "/" .. filename, destPath .. "/" .. filename)
+        FS.Copy(M.sourcePath .. "/" .. filename, dest .. "/" .. filename)
     end
 end
 
 local function onInit()
-    M.sourcePath = BJSPluginPath .. "/bundledContent/activities"
-    M.sync()
+    ensureSynced()
 end
 
 M.onInit = onInit

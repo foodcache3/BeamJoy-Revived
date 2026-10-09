@@ -198,7 +198,7 @@ local M = {
     --- drawer pictures them by. Filled below
     ---@type table[]
     PREFABS = {},
-    PREFAB_CATEGORIES = { "gazebos", "billboards" },
+    PREFAB_CATEGORIES = { "gazebos", "billboards", "fences", "pits", "scenery" },
 
     --- meshes measured by beamjoy_propPicker (their object box, unscaled) : shape (lower case) ->
     --- { x, y, z, minZ }
@@ -267,6 +267,65 @@ for _, p in ipairs({
         parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_0.5m_02.dae", pos = { 0, -0.042, 3.657 } } } },
     { id = "billboardWood9", cat = "billboards", kind = "wood", n = 9, shape = "/art/shapes/garage_and_dealership/s_billboard_wood_pole_01.dae", thumb = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_05.dae",
         parts = { { shape = "/art/shapes/garage_and_dealership/s_billboard_wood_1.5m_05.dae", pos = { 0, -0.049, 3.723 } } } },
+}) do
+    table.insert(M.PREFABS, p)
+end
+-- more of the game's own layouts (direct request) : the rally fences with their sponsor banners
+-- (art/shapes/race/rally/rally_assets/p_metal_fence_branding_*), Industrial's walls topped with
+-- mesh fence, West Coast's branded fuel pumps, Johnson Valley's trailer with its tent, Utah's
+-- barrels under a tarp, East Coast's cafe tables, a brick pallet ; the lowest mesh of each is the
+-- prop's own (it stands on the ground). The container stacks are laid out with the game's own
+-- container spacing (Cliff's ind_containers_2x2x2 : 2.5 m apart, 2.61 m high), its own stacks
+-- being made for a slope. Named by `beamjoy.props.prefabs.name.<id>`
+for _, p in ipairs({
+    { id = "fenceBannerBlastr", cat = "fences", shape = "/art/shapes/objects/s_metal_fence.dae", thumb = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_blastr.dae", tags = "fence banner sponsor advert rally blastr",
+        parts = { { shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_blastr.dae", pos = { 0, 0, 0 } } } },
+    { id = "fenceBannerNgrc", cat = "fences", shape = "/art/shapes/objects/s_metal_fence.dae", thumb = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_ngrc.dae", tags = "fence banner sponsor advert rally ngrc",
+        parts = { { shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_ngrc.dae", pos = { 0, 0, 0 } } } },
+    { id = "fenceBannerRotopad", cat = "fences", shape = "/art/shapes/objects/s_metal_fence.dae", thumb = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_rotopad.dae", tags = "fence banner sponsor advert rally rotopad",
+        parts = { { shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_rotopad.dae", pos = { 0, 0, 0 } } } },
+    { id = "wallFence2m", cat = "fences", shape = "/levels/Industrial/art/shapes/buildings/ind_mesh_fence_2m.dae", thumb = "/levels/Industrial/art/shapes/buildings/ind_conc_wall_2m.dae", tags = "wall concrete fence mesh industrial",
+        parts = { { shape = "/levels/Industrial/art/shapes/buildings/ind_conc_wall_2m.dae", pos = { 0, 0, 1 } } } },
+    { id = "wallFence4m", cat = "fences", shape = "/levels/Industrial/art/shapes/buildings/ind_mesh_fence_4m.dae", thumb = "/levels/Industrial/art/shapes/buildings/ind_conc_wall_4m.dae", tags = "wall concrete fence mesh industrial",
+        parts = { { shape = "/levels/Industrial/art/shapes/buildings/ind_conc_wall_4m.dae", pos = { 0, 0, 1 } } } },
+    { id = "fuelPumpNodeoline", cat = "pits", shape = "/levels/west_coast_usa/art/shapes/buildings/s_fuel_pump_2000.dae", thumb = "/levels/west_coast_usa/art/shapes/buildings/s_fuel_pump_2000.dae", tags = "fuel pump petrol gas station pit nodeoline",
+        parts = { { shape = "/levels/west_coast_usa/art/shapes/buildings/s_fuel_pump_2000_nodeoline.dae", pos = { 0, 0, 0 } } } },
+    { id = "fuelPumpTyranos", cat = "pits", shape = "/levels/west_coast_usa/art/shapes/buildings/s_fuel_pump_2000.dae", thumb = "/levels/west_coast_usa/art/shapes/buildings/s_fuel_pump_2000.dae", tags = "fuel pump petrol gas station pit tyranos",
+        parts = { { shape = "/levels/west_coast_usa/art/shapes/buildings/s_fuel_pump_2000_tyranos.dae", pos = { 0, 0, 0 } } } },
+    { id = "fuelPumpApex", cat = "pits", shape = "/levels/west_coast_usa/art/shapes/buildings/s_fuel_pump_2015.dae", thumb = "/levels/west_coast_usa/art/shapes/buildings/s_fuel_pump_2015.dae", tags = "fuel pump petrol gas station pit apex",
+        parts = { { shape = "/levels/west_coast_usa/art/shapes/buildings/s_fuel_pump_2015_apex.dae", pos = { 0, 0, 0 } } } },
+    { id = "fuelPumpTrilobite", cat = "pits", shape = "/levels/west_coast_usa/art/shapes/buildings/s_fuel_pump_2015.dae", thumb = "/levels/west_coast_usa/art/shapes/buildings/s_fuel_pump_2015.dae", tags = "fuel pump petrol gas station pit trilobite",
+        parts = { { shape = "/levels/west_coast_usa/art/shapes/buildings/s_fuel_pump_2015_trilobite.dae", pos = { 0, 0, 0 } } } },
+    { id = "truckTent", cat = "pits", shape = "/levels/johnson_valley/art/shapes/building/s_semi_trailer_tent.dae", thumb = "/levels/johnson_valley/art/shapes/building/s_semi_trailer_tent.dae", tags = "truck trailer tent hospitality paddock team",
+        parts = { { shape = "/levels/johnson_valley/art/shapes/building/s_semi_trailer.dae", pos = { 1.341, -9.23, 0 }, dir = { 0, -1, 0 } } } },
+    { id = "barrelsTarp", cat = "pits", shape = "/levels/Utah/art/shapes/clutter/clutter_barrels_white.dae", thumb = "/levels/Utah/art/shapes/clutter/clutter_barrels_tarp_group_a300.dae", tags = "barrels oil drums tarp clutter pit",
+        parts = { { shape = "/levels/Utah/art/shapes/clutter/clutter_barrels_red.dae", pos = { 0.542, 0.215, 0 }, dir = { -0.068, 0.9977, 0 } },
+            { shape = "/levels/Utah/art/shapes/clutter/clutter_barrels_red.dae", pos = { 0.076, 0.594, 0 }, dir = { 0.9999, 0.0145, 0 } },
+            { shape = "/levels/Utah/art/shapes/clutter/clutter_barrels_white.dae", pos = { 0.601, 0.815, 0 }, dir = { -0.4639, -0.8859, 0 } },
+            { shape = "/levels/Utah/art/shapes/clutter/clutter_barrels_white.dae", pos = { 1.121, 0.581, 0 }, dir = { -0.7514, 0.6599, 0 } },
+            { shape = "/levels/Utah/art/shapes/clutter/clutter_barrels_red.dae", pos = { 0.683, 0.549, 0.862 }, dir = { -0.068, 0.9977, 0 } },
+            { shape = "/levels/Utah/art/shapes/clutter/clutter_barrels_red.dae", pos = { 0.24, 0.171, 0.862 }, dir = { -0.068, 0.9977, 0 } },
+            { shape = "/levels/Utah/art/shapes/clutter/clutter_barrels_tarp_group_a300.dae", pos = { 0.269, 0.303, -0.002 }, dir = { -0.83, -0.5577, 0 } } } },
+    { id = "cafeTable", cat = "pits", shape = "/levels/east_coast_usa/art/shapes/clutter/clutter_city_wood_stool.dae", thumb = "/levels/east_coast_usa/art/shapes/clutter/clutter_city_wood_table.dae", tags = "table stools seats spectators cafe",
+        parts = { { shape = "/levels/east_coast_usa/art/shapes/clutter/clutter_city_wood_stool.dae", pos = { 0.177, 1.082, 0 }, dir = { 0.0676, -0.9977, 0 } },
+            { shape = "/levels/east_coast_usa/art/shapes/clutter/clutter_city_wood_stool.dae", pos = { -0.342, 0.675, 0 }, dir = { -0.8326, -0.5539, 0 } },
+            { shape = "/levels/east_coast_usa/art/shapes/clutter/clutter_city_wood_table.dae", pos = { 0.066, 0.492, -0.002 }, dir = { -0.8083, -0.5887, 0 } } } },
+    { id = "cafeTableSmall", cat = "pits", shape = "/levels/east_coast_usa/art/shapes/clutter/clutter_city_wood_stool.dae", thumb = "/levels/east_coast_usa/art/shapes/clutter/clutter_city_wood_table_small.dae", tags = "table stools seats spectators cafe small",
+        parts = { { shape = "/levels/east_coast_usa/art/shapes/clutter/clutter_city_wood_stool.dae", pos = { -0.395, 0.592, 0 }, dir = { -0.8997, -0.4365, 0 } },
+            { shape = "/levels/east_coast_usa/art/shapes/clutter/clutter_city_wood_table_small.dae", pos = { -0.183, 0.282, -0.006 }, dir = { 0.8375, 0.5464, 0 } } } },
+    { id = "brickPallet", cat = "scenery", shape = "/art/shapes/garage_and_dealership/Clutter/wood_pallet.DAE", thumb = "/art/shapes/objects/s_brickpallet.dae", tags = "bricks pallet construction",
+        parts = { { shape = "/art/shapes/objects/s_brickpallet.dae", pos = { 0, 0, 0.126 }, dir = { -1, 0, 0 } } } },
+    { id = "containers2High", cat = "scenery", shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", thumb = "/levels/Industrial/art/shapes/misc/container_01_a.dae", tags = "containers shipping stack port wall",
+        parts = { { shape = "/levels/Industrial/art/shapes/misc/container_01_b.dae", pos = { 0, 0, 2.61 } } } },
+    { id = "containers2x2", cat = "scenery", shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", thumb = "/levels/Industrial/art/shapes/misc/container_01_a.dae", tags = "containers shipping stack port wall",
+        parts = { { shape = "/levels/Industrial/art/shapes/misc/container_01_b.dae", pos = { 2.5, 0, 0 } },
+            { shape = "/levels/Industrial/art/shapes/misc/container_01_b.dae", pos = { 0, 0, 2.61 } },
+            { shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", pos = { 2.5, 0, 2.61 } } } },
+    { id = "containers3Pyramid", cat = "scenery", shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", thumb = "/levels/Industrial/art/shapes/misc/container_01_a.dae", tags = "containers shipping stack port wall",
+        parts = { { shape = "/levels/Industrial/art/shapes/misc/container_01_b.dae", pos = { 2.5, 0, 0 } },
+            { shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", pos = { 5, 0, 0 } },
+            { shape = "/levels/Industrial/art/shapes/misc/container_01_b.dae", pos = { 1.25, 0, 2.61 } },
+            { shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", pos = { 3.75, 0, 2.61 } } } },
 }) do
     table.insert(M.PREFABS, p)
 end
@@ -404,8 +463,10 @@ function M.catalogForUI()
             if p.cat == "gazebos" then
                 name = tr("beamjoy.props.prefabs.gazebo"):gsub("{size}", p.size == "3x6" and "3 x 6" or "3 x 3")
                     :gsub("{colour}", tr("beamjoy.props.prefabs.colour." .. p.colour))
-            else
+            elseif p.cat == "billboards" then
                 name = tr("beamjoy.props.prefabs.billboard." .. p.kind):gsub("{n}", tostring(p.n))
+            else
+                name = tr("beamjoy.props.prefabs.name." .. p.id)
             end
             out[#out + 1] = {
                 id = p.id,
@@ -414,7 +475,7 @@ function M.catalogForUI()
                 thumb = p.thumb,
                 name = name,
                 cat = p.cat,
-                tags = p.cat == "gazebos" and "tent canopy pit marquee" or "sign sponsor advert banner board",
+                tags = p.tags or (p.cat == "gazebos" and "tent canopy pit marquee" or "sign sponsor advert banner board"),
                 solid = true,
                 parts = #p.parts + 1,
                 size = M.meta[(p.thumb or p.shape):lower()],

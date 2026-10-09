@@ -8,7 +8,28 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2654, server build 2446.
+Version 1.11.0 : client build 2656, server build 2448.
+
+- **Fix : a fresh install's first boot coming up without its bundled races** (direct report, also
+  shipped as the 1.10.7 hotfix). The server starts its modules in an order that changes every boot ;
+  a service seeding before the bundled files were copied into BeamJoyData found nothing, and saves
+  into a data folder not created yet failed silently while the seed ledger recorded them as done.
+  The copy is now made by whichever comes first, and a missing data folder is created on save.
+  *(server)*
+
+- **17 more prefabs** (direct request), in three new Prefabs categories. Fences and walls : the
+  rally fence with a Blastr, NGRC or Rotopad banner, Industrial's concrete wall topped with mesh
+  fence (2 m and 4 m). Pits and paddock : fuel pumps (Nodeoline, Tyranos, Apex, Trilobite), a
+  trailer with its tent, barrels under a tarp, cafe tables with stools. Scenery : bricks on a
+  pallet, three container stacks. Laid out as the game's own prefab files have them (the
+  containers with its own spacing). *(client)*
+
+- **Fix : branching lap races counting a lap from anywhere** (direct report, Italy's Heads-Up
+  Quarry Slam : through the first two checkpoints, back over the start/finish line, and a new lap
+  began). The line closed a lap from any point of it ; it only does from the end of a branch now
+  (the last checkpoint before the line, on whichever branch, short or long), or from one its author
+  linked to it. The gates shown ahead follow the same rule.
+  *(client + server ; the server's check is the one that counts)*
 
 - **A race holds up to 1000 props** (was 500, direct request). The biggest stock races ship more
   than 500 (driver_training's ArdenteExperience 712, industrial's Track rally 531) and now import

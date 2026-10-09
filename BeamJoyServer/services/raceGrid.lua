@@ -262,6 +262,21 @@ local function totalSteps(race)
     return total
 end
 
+--- the end of a branch : a gate no other gate follows but the start/finish line (step 1). A
+--- loopable branching race's line closes the lap from one, whichever branch it ends and however
+--- long that branch is (steps count the longest way round, so a shorter last branch ends below the
+--- top step)
+---@param race BJRace
+---@param index integer? a gate index (0 / nil : none crossed yet)
+---@return boolean
+local function isBranchEnd(race, index)
+    if not index or not race.gates[index] then return false end
+    for _, g in ipairs(race.gates) do
+        if g.step ~= 1 and table.includes(g.parents or {}, index) then return false end
+    end
+    return true
+end
+
 ---@param a BJRaceGate
 ---@param b BJRaceGate
 ---@return number
@@ -1714,7 +1729,14 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         -- discarding the stray re-crossing as a no-op instead of registering it. Any REAL lap
         -- (at least one other gate crossed since the last step-1 crossing) leaves currentGate at
         -- that other gate's step, so this never reintroduces the original "stuck" bug above.
-        local isLoopClosing = race.loopable and gate.step == 1 and participant.currentGate ~= gate.step
+        --
+        -- Real, confirmed bug fixed here as well (direct report, Italy's Heads-Up Quarry Slam :
+        -- through the first two checkpoints, then back over the start/finish line, and a new lap
+        -- began, the whole course skipped). Only refusing an immediate re-crossing still let the
+        -- line close a lap from ANY point of it. It closes one only from the end of a branch now
+        -- (isBranchEnd : the last gate before the line, on whichever branch, short or long), or from
+        -- a gate the author linked to it as a parent (the normal check below).
+        local isLoopClosing = race.loopable and gate.step == 1 and isBranchEnd(race, participant.lastCrossedGate)
         if not isLoopClosing and not table.includes(gate.parents, participant.lastCrossedGate) then
             return
         end

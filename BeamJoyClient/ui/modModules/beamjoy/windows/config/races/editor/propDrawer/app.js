@@ -121,7 +121,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
 
         this.CATEGORIES = ["barriers", "fences", "markers", "signs", "start", "ramps", "scenery", "utility"];
         this.GROUPS = ["art", "assets", "map"];
-        this.PREFAB_CATEGORIES = ["gazebos", "billboards"];
+        this.PREFAB_CATEGORIES = ["gazebos", "billboards", "fences", "pits", "scenery"];
         this.tab = "curated";
         this.category = { curated: "all", all: "all", prefabs: "all" };
         this.prefabs = [];

@@ -9,6 +9,14 @@ local function init()
     M.init = true
 end
 
+--- the database folder, set up on first use (a module that reaches for it in its own onInit can't
+--- rely on anything else having touched dao_main first : see dao/bundled.lua)
+---@return string
+local function getDbPath()
+    if not M.init then init() end
+    return M.dbPath
+end
+
 ---@param filePath string
 ---@return any?
 local function get(filePath)
@@ -44,6 +52,12 @@ local function save(filePath, data)
         return
     end
     filePath = M.dbPath .. "/" .. filePath
+    -- its folder, when it isn't there yet (real, confirmed bug : a fresh install's first boot,
+    -- services_hunter seeding its bundled arenas before dao_activity's own onInit had made the
+    -- activities folder, the onInit order being a hash's ; every save failed without a word, while
+    -- the seed ledger recorded them as done, so they never came back)
+    local dir = filePath:match("^(.*)/[^/]+$")
+    if dir and not FS.Exists(dir) then FS.CreateDirectory(dir) end
     local tmpFilePath = filePath .. ".tmp"
     local file, err = io.open(tmpFilePath, "w")
     if file and not err then
@@ -57,6 +71,7 @@ local function save(filePath, data)
     end
 end
 
+M.getDbPath = getDbPath
 M.get = get
 M.save = save
 
