@@ -123,7 +123,6 @@ end
 
 local function renderAll()
     shape.reset()
-    local lift = vec3(0, 0, .05)
     for zi, zone in ipairs(state.zones) do
         local active = state.activeZone == zi
         local pts = zone.points
@@ -134,19 +133,20 @@ local function renderAll()
             shape.addText(zone.name ~= "" and zone.name or beamjoy_lang.translate("beamjoy.driftZones.zone"),
                 p + vec3(0, 0, 2.5), DIM_COLOR, TEXT_BG)
         else
+            -- on the road's surface, as the zone is drawn when driven (beamjoy/driftZones.lua)
             for i = 2, #pts do
                 local a, b = v3(pts[i - 1]), v3(pts[i])
                 local right = flatDir(a, b):cross(vec3(0, 0, 1)) * half
-                shape.addLine(a + lift, .2, b + lift, .2, ROUTE_COLOR)
-                shape.addLine(a - right + lift, .1, b - right + lift, .1, EDGE_COLOR)
-                shape.addLine(a + right + lift, .1, b + right + lift, .1, EDGE_COLOR)
+                shape.addGroundLine(a, b, .2, ROUTE_COLOR)
+                shape.addGroundLine(a - right, b - right, .1, EDGE_COLOR)
+                shape.addGroundLine(a + right, b + right, .1, EDGE_COLOR)
             end
             -- the gates, across the route
             for _, gate in ipairs({ { 1, 2, START_COLOR }, { #pts, #pts - 1, FINISH_COLOR } }) do
                 local p, other = v3(pts[gate[1]]), v3(pts[gate[2]])
                 local dir = gate[1] == 1 and flatDir(p, other) or flatDir(other, p)
                 local right = dir:cross(vec3(0, 0, 1)) * half
-                shape.addLine(p - right + lift, .25, p + right + lift, .25, gate[3])
+                shape.addGroundLine(p - right, p + right, .25, gate[3], .05, 1.5)
                 shape.addArrow(p + vec3(0, 0, 1) + dir * 2, dir, 2, gate[3])
             end
             for i, pt in ipairs(pts) do

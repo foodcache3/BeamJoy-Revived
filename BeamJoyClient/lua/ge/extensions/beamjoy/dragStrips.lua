@@ -1,13 +1,14 @@
 --- BeamJoy's own drag strips (services/dragStrips.lua, made in Config > Freeroam > Drag strips) :
 --- run by this game, for this game's own car, like a real lane.
----   - Roll up to a lane's start line : the pre-stage light comes on a metre short of it, the stage
----     light in the last 40 cm. Held staged for a second, the tree starts : a sportsman tree's three
----     ambers half a second apart then green, a pro tree's three together then green 0.4 s later
----     (on screen, in the drag overlay : there's no tree in the world).
----   - Leaving the line before the green is a red light (out). After it, the reaction time is how
----     long you took, and the clock starts as the car's nose crosses the line : every mark (60 ft,
----     330 ft, 1/8 mile, 1000 ft, 1/4 mile) and the speed traps are timed from there, placed between
----     two frames by distance.
+---   - Roll your front tyres up to a lane's start line, as on the game's own strips
+---     (gameplay/drag/phaseHandlers.lua) : the pre-stage light comes on 7 inches (17.8 cm) short of
+---     it, the stage light with the tyres on it. Held staged for a second, the tree starts : a
+---     sportsman tree's three ambers half a second apart then green, a pro tree's three together
+---     then green 0.4 s later (on screen, windows/dragTree : there's no tree in the world).
+---   - Leaving the stage beam before the green is a red light (out). After it, the reaction time is
+---     how long you took, and the clock starts as the front tyres leave the beam : every mark
+---     (60 ft, 330 ft, 1/8 mile, 1000 ft, 1/4 mile) and the speed traps are timed from there, placed
+---     between two frames by distance.
 ---   - Out of the lane, stopping, slowing time or changing gravity during a run : out.
 --- What it shows and where results go is the drag overlay's (beamjoy/dragRun.lua) : this hands it
 --- a strip's data and a racer the same shape as the game's own (gameplay/drag) so the overlay, the
@@ -44,13 +45,21 @@ local MARKS = {
 local FINISH = { ["1_4"] = "time_1_4", ["1_8"] = "time_1_8", ["1000"] = "time_1000" }
 M.LENGTHS = { "1_4", "1_8", "1000" }
 
--- metres : the pre-stage light within this of the line, the stage light within STAGE_DEPTH
-local PRESTAGE_DEPTH = 1
-local STAGE_DEPTH = .4
--- past the line by this much, the car has left the stage beam
-local LEAVE_DEPTH = .05
--- how far back from the line a car is "in the lane" (rolling up to stage)
+-- metres, the front tyres from the line (the game's own beams, gameplay/drag/phaseHandlers.lua) :
+-- the pre-stage beam 7 inches short of it, the stage beam on it, each 7 inches deep either way ;
+-- past BEAMS_OFF both are dark (rolled through or not there yet)
+local BEAM = .178
+local PRESTAGE_AT = -BEAM
+local BEAMS_OFF = .4
+-- past the stage beam by this much, the car has left it (the game's own small buffer, for the
+-- car's rocking on its springs)
+local LEAVE_DEPTH = BEAM + .02
+-- how far back from the line a car is "in the lane" (rolling up to stage), and how far past it
+-- it still is (rolled a little too deep : backing up re-stages)
 local APPROACH = 25
+local OVERSHOOT = 3
+-- rolled back this far behind the line while the tree runs : it stops, stage again
+local ROLLBACK = PRESTAGE_AT - BEAM - .3
 -- seconds : staged this long, the tree starts (after a short random wait, so it can't be timed)
 local STAGED_HOLD = 1
 local TREE_WAIT_MIN, TREE_WAIT_MAX = .6, 1.4
@@ -123,6 +132,10 @@ local function newRacer(data, laneIndex)
         vehSpeed = 0,
         lights = { prestage = false, stage = false, amber = 0, a1 = false, a2 = false, a3 = false,
             green = false, red = false },
+        --- metres from the front tyres to the start line (- : short of it), for the tree's staging
+        --- guide ; nil once the run is on
+        ---@type number?
+        stageDistance = nil,
     }
 end
 
@@ -138,14 +151,56 @@ local function laneCoords(lane, p)
     return d:dot(right), d:dot(dir)
 end
 
+--- each car's front wheels (their hub nodes), found as the game's own strips find them
+--- (gameplay/drag/core.lua buildWheelGeometry) : the wheels furthest forward, with any within
+--- 20 cm of those (a car's two front wheels are never quite level)
+---@type table<integer, {count: integer, nodes: integer[]}>
+local frontWheels = {}
+
+---@param veh userdata
+---@param vid integer
+---@return integer[] the front wheels' hub nodes (none : a car with no wheels)
+local function frontWheelNodes(veh, vid)
+    local count = veh:getWheelCount()
+    local known = frontWheels[vid]
+    if known and known.count == count then return known.nodes end
+    local forward = vec3(veh:getDirectionVector())
+    local wheels, best = {}, -math.huge
+    for i = 0, count - 1 do
+        local axis = veh:getWheelAxisNodes(i)
+        local node = axis and axis[1]
+        if node then
+            local frontness = forward:dot(vec3(veh:getNodePosition(node)))
+            wheels[#wheels + 1] = { node = node, frontness = frontness }
+            best = math.max(best, frontness)
+        end
+    end
+    local nodes = {}
+    for _, w in ipairs(wheels) do
+        if w.frontness >= best - .2 then nodes[#nodes + 1] = w.node end
+    end
+    frontWheels[vid] = { count = count, nodes = nodes }
+    return nodes
+end
+
 ---@param car BJVehicle
----@return vec3 center, vec3 nose, vec3 dir, number speed
+---@return vec3 center, vec3 front the middle of the front tyres, vec3 dir, number speed
 local function carFrame(car)
     local pos, dir = beamjoy_vehicles.getVehiclePositionRotation(car.veh)
     local flat = vec3(dir.x, dir.y, 0)
     flat = flat:length() > 1e-4 and flat:normalized() or vec3(0, 1, 0)
-    local nose = pos + flat * (car.veh:getInitialLength() / 2)
-    return pos, nose, flat, car.veh:getVelocity():length()
+    local front
+    local nodes = frontWheelNodes(car.veh, car.vid)
+    if #nodes > 0 then
+        -- node positions are relative to the car's own position (its reference node)
+        local origin, sum = vec3(car.veh:getPosition()), vec3(0, 0, 0)
+        for _, node in ipairs(nodes) do sum = sum + vec3(car.veh:getNodePosition(node)) end
+        front = origin + sum / #nodes
+    else
+        -- no wheels (a trailer, a prop) : near the front of the car
+        front = pos + flat * math.max(0, car.veh:getInitialLength() / 2 - 1)
+    end
+    return pos, front, flat, car.veh:getVelocity():length()
 end
 
 ---@return BJVehicle?
@@ -240,16 +295,19 @@ end
 local function step(a, car)
     local r = a.racer
     local t = now()
-    local center, nose, _, speed = carFrame(car)
+    local center, front, _, speed = carFrame(car)
     local lx = laneCoords(a.lane, center)
-    local _, ly = laneCoords(a.lane, nose)
+    -- every distance along the lane is the front tyres' : the beams, the marks
+    local _, ly = laneCoords(a.lane, front)
     local half = a.strip.laneWidth / 2
     local phase = r.currentPhase
     r.vehSpeed = speed
+    r.stageDistance = phase <= 2 and ly or nil
 
     if phase == 1 then
-        r.lights.prestage = ly >= -PRESTAGE_DEPTH and ly <= LEAVE_DEPTH
-        r.lights.stage = ly >= -STAGE_DEPTH and ly <= LEAVE_DEPTH
+        local lit = math.abs(ly) <= BEAMS_OFF
+        r.lights.prestage = lit and ly >= PRESTAGE_AT - BEAM and ly < PRESTAGE_AT + BEAM
+        r.lights.stage = lit and ly >= -BEAM and ly < BEAM
         if r.lights.stage and speed < .5 then
             a.stagedSince = a.stagedSince or t
             if t - a.stagedSince >= STAGED_HOLD then
@@ -266,7 +324,7 @@ local function step(a, car)
         if rule then return disqualify(a, rule) end
         treeLights(a, t)
         if ly > LEAVE_DEPTH then
-            -- the nose crossed the line between the last frame and this one
+            -- the front tyres left the beam between the last frame and this one
             local leftAt = t
             if a.prevLy and a.prevT and ly ~= a.prevLy then
                 leftAt = a.prevT + (t - a.prevT) * (LEAVE_DEPTH - a.prevLy) / (ly - a.prevLy)
@@ -283,13 +341,13 @@ local function step(a, car)
             a.leftAt = leftAt
             a.prevLy, a.prevT, a.prevSpeed = 0, leftAt, speed
             return
-        elseif ly < -PRESTAGE_DEPTH - .5 then
+        elseif ly < ROLLBACK then
             -- rolled back out of the beams before going : the tree stops
             resetToStage(a)
             return
         end
-        r.lights.prestage = ly >= -PRESTAGE_DEPTH
-        r.lights.stage = ly >= -STAGE_DEPTH
+        r.lights.prestage = ly >= PRESTAGE_AT - BEAM and ly < PRESTAGE_AT + BEAM
+        r.lights.stage = ly >= -BEAM
     elseif phase == 3 then
         local rule = brokenRule()
         if rule then return disqualify(a, rule) end
@@ -323,17 +381,18 @@ local function step(a, car)
     if phase ~= 3 then a.prevLy, a.prevT, a.prevSpeed = ly, t, speed end
 end
 
---- the lane whose approach the car is in, facing down it
+--- the lane whose approach the car is in, facing down it : its front tyres anywhere from well
+--- short of the line to a little past it (too deep : backing up stages it again)
 ---@param car BJVehicle
 ---@return table? strip, integer? laneIndex
 local function laneAt(car)
-    local center, nose, dir = carFrame(car)
+    local center, front, dir = carFrame(car)
     for _, strip in ipairs(M.nearby) do
         for i, lane in ipairs(strip.lanes) do
             local lx = laneCoords(lane, center)
-            local _, ly = laneCoords(lane, nose)
+            local _, ly = laneCoords(lane, front)
             local facing = dir:dot(vec3(lane.dir.x, lane.dir.y, 0):normalized())
-            if math.abs(lx) <= strip.laneWidth / 2 and ly >= -APPROACH and ly <= LEAVE_DEPTH and facing >= .7 then
+            if math.abs(lx) <= strip.laneWidth / 2 + .3 and ly >= -APPROACH and ly <= OVERSHOOT and facing >= .7 then
                 return strip, i
             end
         end
@@ -407,6 +466,13 @@ function M.current()
     return M.active.data, M.active.racer
 end
 
+--- a car spawned again (another config : maybe other wheels) or gone : its front wheels are
+--- looked up again next time
+---@param vid integer
+local function forgetWheels(vid)
+    frontWheels[vid] = nil
+end
+
 ---@param vid integer
 local function onVehicleResetted(vid)
     local a = M.active
@@ -418,10 +484,47 @@ end
 -- THE STRIPS IN THE WORLD ---------------------------------------------------------------------
 
 local LAYER = "dragStrips"
-local LINE_COLOR, MARK_COLOR, EDGE_COLOR, TEXT_COLOR, TEXT_BG
+local LINE_COLOR, MARK_COLOR, EDGE_COLOR
+
+--- the strip's lines, painted on the road (each piece set on the surface, so a strip on a slope or
+--- a cambered road keeps them on it)
+---@param layer table a shape layer (shape.layer / the shape module itself)
+---@param strip table
+---@param colors {line: BJColor, mark: BJColor, edge: BJColor}
+---@param opts {startOnly: boolean?, lineColor: (fun(i: integer): BJColor)?}?
+local function drawStrip(layer, strip, colors, opts)
+    opts = opts or {}
+    local marks, finishId = marksOf(strip)
+    local finishDistance = 0
+    for _, m in ipairs(marks) do
+        if m.id == finishId then finishDistance = m.distance end
+    end
+    local half = strip.laneWidth / 2
+    for i, lane in ipairs(strip.lanes) do
+        local p = vec3(lane.pos.x, lane.pos.y, lane.pos.z)
+        local dir = vec3(lane.dir.x, lane.dir.y, 0):normalized()
+        local right = dir:cross(vec3(0, 0, 1)) * half
+        local startColor = opts.lineColor and opts.lineColor(i) or colors.line
+        layer.addGroundLine(p - right, p + right, .15, startColor, .03, 1)
+        if not opts.startOnly then
+            for _, m in ipairs(marks) do
+                if m.type == "distanceTimer" and m.distance > 1 then
+                    local c = p + dir * m.distance
+                    local isFinish = m.id == finishId
+                    layer.addGroundLine(c - right, c + right, isFinish and .25 or .08,
+                        isFinish and colors.line or colors.mark, .03, 1)
+                end
+            end
+            local finish = p + dir * finishDistance
+            layer.addGroundLine(p - right, finish - right, .06, colors.edge, .03, 8)
+            layer.addGroundLine(p + right, finish + right, .06, colors.edge, .03, 8)
+        end
+    end
+end
+M.drawStrip = drawStrip
 
 --- painted-line look : the start and finish lines across each lane, short ticks at the marks and
---- the lane edges, the lane's name at its start
+--- the lane edges (no floating names : the lines say where it is, the overlay which it is)
 local function draw()
     local layer = shape.layer(LAYER)
     layer.reset()
@@ -429,40 +532,9 @@ local function draw()
     LINE_COLOR = LINE_COLOR or BJColor(1, 1, 1, .85)
     MARK_COLOR = MARK_COLOR or BJColor(1, .85, .2, .8)
     EDGE_COLOR = EDGE_COLOR or BJColor(1, 1, 1, .35)
-    TEXT_COLOR = TEXT_COLOR or BJColor(1, 1, 1, .9)
-    TEXT_BG = TEXT_BG or BJColor(0, 0, 0, .4)
-    local lift = vec3(0, 0, .03)
+    local colors = { line = LINE_COLOR, mark = MARK_COLOR, edge = EDGE_COLOR }
     for _, strip in ipairs(M.nearby) do
-        local marks, finishId = marksOf(strip)
-        local half = strip.laneWidth / 2
-        for i, lane in ipairs(strip.lanes) do
-            local p = vec3(lane.pos.x, lane.pos.y, lane.pos.z)
-            local dir = vec3(lane.dir.x, lane.dir.y, 0):normalized()
-            local right = dir:cross(vec3(0, 0, 1)) * half
-            local function across(d, color, width)
-                local c = p + dir * d
-                local h = be:getSurfaceHeightBelow(c + vec3(0, 0, 3))
-                if not h or h < c.z - 20 then h = c.z end
-                c = vec3(c.x, c.y, h) + lift
-                layer.addLine(c - right, width, c + right, width, color)
-                return c
-            end
-            across(0, LINE_COLOR, .15)
-            local finishPos
-            for _, m in ipairs(marks) do
-                if m.type == "distanceTimer" and m.distance > 1 then
-                    local c = across(m.distance, m.id == finishId and LINE_COLOR or MARK_COLOR,
-                        m.id == finishId and .25 or .08)
-                    if m.id == finishId then finishPos = c end
-                end
-            end
-            if finishPos then
-                layer.addLine(p - right + lift, .06, finishPos - right, .06, EDGE_COLOR)
-                layer.addLine(p + right + lift, .06, finishPos + right, .06, EDGE_COLOR)
-            end
-            layer.addText(string.format("%s, %s %d", strip.name, beamjoy_lang.translate("beamjoy.dragStrips.lane"), i),
-                p + vec3(0, 0, 1.5), TEXT_COLOR, TEXT_BG)
-        end
+        drawStrip(layer, strip, colors)
     end
 end
 
@@ -499,6 +571,44 @@ local function retrieveCache(caches)
     M.active = nil
     lastNearKey = nil
     extensions.hook("onBJDragStripsChanged")
+    if bigmap and bigmap.updatePOIs then bigmap.updatePOIs() end
+end
+
+--- a Big Map pin per strip in the BeamJoy section's "Drag strips" group, in the middle of its start
+--- line ; quick travel puts the car a few metres short of lane 1, facing down it, and the strip
+--- shows on the map (start to finish) while the pin is hovered or selected
+---@param POIS table<string, table>
+local function onBJRequestBigmapPOIs(POIS)
+    for _, strip in ipairs(M.strips) do
+        local lanes = strip.lanes or {}
+        if #lanes > 0 then
+            local center = vec3(0, 0, 0)
+            for _, lane in ipairs(lanes) do center = center + vec3(lane.pos.x, lane.pos.y, lane.pos.z) end
+            center = center / #lanes
+            local dir = vec3(lanes[1].dir.x, lanes[1].dir.y, 0):normalized()
+            local marks, finishId = marksOf(strip)
+            local finish
+            for _, m in ipairs(marks) do if m.id == finishId then finish = m end end
+            local first = vec3(lanes[1].pos.x, lanes[1].pos.y, lanes[1].pos.z)
+            POIS["bjDragStrip_" .. tostring(strip.id)] = {
+                name = strip.name,
+                description = string.var(beamjoy_lang.translate("beamjoy.bigmap.dragDescription"), {
+                    beamjoy_lang.translate("beamjoy.dragStrips.length." .. tostring(strip.length or "1_4")),
+                    #lanes,
+                    beamjoy_lang.translate("beamjoy.drag.tree." .. tostring(strip.tree or "sportsman")),
+                }),
+                icon = "drag02",
+                mapIcon = "mission_dragRace1_triangle",
+                groupType = "other",
+                customGroupTags = { "bjDragStrips" },
+                pos = center,
+                canQuickTravel = true,
+                quickTravelPos = first - dir * 8,
+                quickTravelRot = dir,
+                previewPoints = { center, center + dir * (finish and finish.distance or 402.336) },
+            }
+        end
+    end
 end
 
 --- the strips for the Leaderboards window's Drag list (beamjoy/freeroamChallenges.lua)
@@ -529,6 +639,7 @@ local function onServerLeave()
     M.strips = {}
     M.nearby = {}
     shape.layer(LAYER).reset()
+    if bigmap and bigmap.updatePOIs then bigmap.updatePOIs() end
 end
 
 M.marksOf = marksOf
@@ -537,8 +648,11 @@ M.onInit = onInit
 M.onUpdate = onUpdate
 M.onSlowUpdate = onSlowUpdate
 M.onVehicleResetted = onVehicleResetted
+M.onVehicleSpawned = forgetWheels
+M.onVehicleDestroyed = forgetWheels
 M.onServerLeave = onServerLeave
 M.onBJStationEditorState = onBJStationEditorState
 M.retrieveCache = retrieveCache
+M.onBJRequestBigmapPOIs = onBJRequestBigmapPOIs
 
 return M

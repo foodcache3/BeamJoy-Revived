@@ -8,7 +8,36 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2643, server build 2440.
+Version 1.11.0 : client build 2645, server build 2440.
+
+- **Big Map pins for drag strips and drift zones** (direct request). Each gets a pin in the Big Map's
+  BeamJoy section, in its own "Drag strips" / "Drift zones" group, with the game's own drag and drift
+  icons. Hovered, a strip shows its length and a zone its route ; quick travel puts you just short
+  of lane 1 or the start gate, facing the right way. *(client)*
+
+- **Drag strips : staged on the front tyres, as on the game's own strips** (direct report : the
+  overlay vanished on the way to the line, so the car could never stage). The beams now read the
+  middle of the front wheels, not an estimate of the front bumper : pre-stage lights 7 inches
+  short of the line, stage with the tyres on it, and the clock starts as they leave the beam.
+  Rolling a little too deep keeps you in the lane (back up to stage again). *(client)*
+
+- **Drag strips : a big tree** (direct request), top middle of the screen like the game's own : the
+  staging bulb, three ambers and the green, all red on a red light, with how far your front tyres
+  are from the line while you stage. Replaces the small row of lights in the drag overlay. *(client)*
+
+- **Drag strip editor : two handles, like a prop line** (direct request). A strip is now its start
+  and its finish, each moved with the gizmo ; it runs straight between them with its lanes side by
+  side and parallel (lane count, lane width and a new gap between lanes). Ctrl while dragging moves
+  the whole strip, the rotate tool on the start swings it round. The finish handle settles back on
+  the strip's distance, and both sit on the road, so a strip on a slope or a cambered road works.
+  Existing strips open with their lanes as they were. *(client)*
+
+- **Drag strips : lines on the road, no floating names** (direct request). The start, finish, mark
+  and edge lines follow the road's slope and camber, and the strip's name and lane labels no longer
+  hover over the lanes. *(client)*
+
+- **Fixed: drift zone lines not following the road's camber** (direct report). The gates and the
+  corridor edges are drawn on the road's surface, in the world and in the editor. *(client)*
 
 - **Import map races : choose what to import** (direct request). Buttons over the list pick
   Everything (new races with their props), Gates and grid only (new races, no props) or Props only :

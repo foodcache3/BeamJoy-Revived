@@ -426,40 +426,38 @@ angular.module("beamjoy").component("bjConfigDeliveries", {
 });
 
 // Nested: the Drag strips editor sidebar. A strip list ; the active strip expands to its length,
-// tree, lane width and lanes. All state is pushed from ui/dragStripEditor.lua ; every row action is
-// a BJEditorDragStrips* send with 1-based indices. The strips run in beamjoy/dragStrips.lua.
+// tree, lanes (count, width, gap) and its two handles, start and finish, which the gizmo moves in
+// the world. All state is pushed from ui/dragStripEditor.lua ; every row action is a
+// BJEditorDragStrips* send with 1-based indices. The strips run in beamjoy/dragStrips.lua.
 angular.module("beamjoy").component("bjConfigDragStrips", {
     templateUrl: "/ui/modModules/beamjoy/windows/config/freeroam/dragStrips/app.html",
-    controller: function ($rootScope, $scope, $timeout, beamjoyStore) {
+    controller: function ($rootScope, $scope, beamjoyStore) {
         // kept in sync with services/dragStrips.lua
         this.LENGTHS = ["1_4", "1_8", "1000"];
         this.TREES = ["sportsman", "pro"];
+        this.HANDLES = ["start", "finish"];
         this.MAX_LANES = 4;
 
         this.strips = [];
         this.activeStrip = null; // 1-based, or null
-        this.activeLane = null; // 1-based, or null
-        // the lane widths last seen, to spot a slider move (see the watch below)
-        let widths = "";
+        this.activeHandle = null; // "start" / "finish", or null
+        // the slider values last seen, to spot a slider move (see the watch below)
+        let sliders = "";
+        const sliderKey = () => this.strips.map((s) => `${s.laneWidth}/${s.laneGap}`).join(",");
 
         $rootScope.$on("BJEditorDragStripsListUpdate", (_, strips) => {
-            // an empty Lua table arrives as {} : not an array
-            this.strips = Array.isArray(strips) ? strips : [];
-            this.strips.forEach((s) => {
-                if (!Array.isArray(s.lanes)) s.lanes = [];
+            $scope.$applyAsync(() => {
+                // an empty Lua table arrives as {} : not an array
+                this.strips = Array.isArray(strips) ? strips : [];
+                sliders = sliderKey();
             });
-            widths = this.strips.map((s) => s.laneWidth).join(",");
         });
         $rootScope.$on("BJEditorDragStripsActiveUpdate", (_, active) => {
-            active = active || {};
-            this.activeStrip = active.strip || null;
-            this.activeLane = active.lane || null;
-            if (this.activeStrip && this.activeLane) {
-                $timeout(() => {
-                    const el = document.getElementById(`drag-lane-row-${this.activeStrip}-${this.activeLane}`);
-                    if (el) el.scrollIntoView({ behavior: "smooth", block: "nearest" });
-                });
-            }
+            $scope.$applyAsync(() => {
+                active = active || {};
+                this.activeStrip = active.strip || null;
+                this.activeHandle = active.handle || null;
+            });
         });
 
         this.$onInit = () => {
@@ -469,23 +467,27 @@ angular.module("beamjoy").component("bjConfigDragStrips", {
         const send = (event, args) => beamjoyStore.send(event, args);
 
         this.lengthLabel = (len) => `beamjoy.dragStrips.length.${len || "1_4"}`;
+        this.lanesOf = (strip) => Array.from({ length: strip.laneCount || 1 }, (_, i) => i + 1);
 
-        // the lane width slider (bj-slider has no change callback) : whichever strip's width moved
-        $scope.$watch(
-            () => this.strips.map((s) => s.laneWidth).join(","),
-            (now) => {
-                if (now === widths) return;
-                const before = widths.split(",");
-                widths = now;
-                this.strips.forEach((s, i) => {
-                    if (String(s.laneWidth) !== before[i]) send("BJEditorDragStripsSetStrip", [i + 1, { laneWidth: Number(s.laneWidth) }]);
-                });
-            }
-        );
+        // the lane width and gap sliders (bj-slider has no change callback) : whichever moved
+        $scope.$watch(sliderKey, (now) => {
+            if (now === sliders) return;
+            const before = sliders.split(",");
+            sliders = now;
+            this.strips.forEach((s, i) => {
+                const [width, gap] = (before[i] || "").split("/");
+                if (String(s.laneWidth) !== width) send("BJEditorDragStripsSetStrip", [i + 1, { laneWidth: Number(s.laneWidth) }]);
+                if (String(s.laneGap) !== gap) send("BJEditorDragStripsSetStrip", [i + 1, { laneGap: Number(s.laneGap) }]);
+            });
+        });
 
         this.selectStrip = (event, si) => {
             event.stopPropagation();
             send("BJEditorDragStripsSelectStrip", [si]);
+        };
+        this.selectHandle = (event, si, handle) => {
+            event.stopPropagation();
+            send("BJEditorDragStripsSelectHandle", [si, handle]);
         };
         this.addStrip = (event) => {
             event.stopPropagation();
@@ -496,21 +498,16 @@ angular.module("beamjoy").component("bjConfigDragStrips", {
             send("BJEditorDragStripsDeleteStrip", [si]);
         };
         this.setStrip = (si, partial) => send("BJEditorDragStripsSetStrip", [si, partial]);
-        this.selectLane = (event, si, li) => {
+        this.setLaneCount = (event, strip, si, delta) => {
             event.stopPropagation();
-            send("BJEditorDragStripsSelectLane", [si, li]);
+            const count = Math.max(1, Math.min(this.MAX_LANES, (strip.laneCount || 1) + delta));
+            if (count === strip.laneCount) return;
+            strip.laneCount = count;
+            this.setStrip(si, { laneCount: count });
         };
-        this.addLane = (event, si) => {
+        this.setStripToVehicle = (event, si) => {
             event.stopPropagation();
-            send("BJEditorDragStripsAddLane", [si]);
-        };
-        this.deleteLane = (event, si, li) => {
-            event.stopPropagation();
-            send("BJEditorDragStripsDeleteLane", [si, li]);
-        };
-        this.setLaneToVehicle = (event, si, li) => {
-            event.stopPropagation();
-            send("BJEditorDragStripsSetLaneToVehicle", [si, li]);
+            send("BJEditorDragStripsSetStripToVehicle", [si]);
         };
         this.teleportToLane = (event, si, li) => {
             event.stopPropagation();

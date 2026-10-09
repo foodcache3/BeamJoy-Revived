@@ -373,6 +373,8 @@ local CUSTOM_GROUPS = {
     bjDeliveryDepots = { label = "beamjoy.delivery.depots", icon = "deliveryTruck" },
     bjRaces = { label = "beamjoy.bigmap.races", icon = "raceFlag" },
     bjDerbyArenas = { label = "beamjoy.bigmap.derbyArenas", icon = "carCrash" },
+    bjDragStrips = { label = "beamjoy.bigmap.dragStrips", icon = "drag02" },
+    bjDriftZones = { label = "beamjoy.bigmap.driftZones", icon = "drift01" },
 }
 
 ---@return table[]?
@@ -610,6 +612,8 @@ M.onBigmapBuildGroupData = function(groupData)
     groupData.bjDeliveryDepots = { label = tr("beamjoy.delivery.depots"), icon = "deliveryTruck" }
     groupData.bjRaces = { label = tr("beamjoy.bigmap.races"), icon = "raceFlag" }
     groupData.bjDerbyArenas = { label = tr("beamjoy.bigmap.derbyArenas"), icon = "carCrash" }
+    groupData.bjDragStrips = { label = tr("beamjoy.bigmap.dragStrips"), icon = "drag02" }
+    groupData.bjDriftZones = { label = tr("beamjoy.bigmap.driftZones"), icon = "drift01" }
 end
 
 --- vueBigMap's freeroam-mode side menu only lists `type_garage` when a career is active (see its

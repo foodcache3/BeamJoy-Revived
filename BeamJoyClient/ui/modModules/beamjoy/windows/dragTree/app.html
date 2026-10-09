@@ -1,0 +1,110 @@
+<style>
+    /* fixed + viewport units (the <beamjoy> parent has no size of its own, see raceCountdown) ;
+       sized like the game's own tree app (600 x 200 px at 1080p) and never in the way of a click */
+    #beamjoy-drag-tree {
+        --bulb: min(9vh, 6.2vw);
+        position: fixed;
+        top: 2.5vh;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 4;
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: calc(var(--bulb) * 0.18);
+    }
+    #beamjoy-drag-tree .dt-row {
+        display: flex;
+        gap: calc(var(--bulb) * 0.26);
+        padding: calc(var(--bulb) * 0.14);
+        border-radius: calc(var(--bulb) * 0.64);
+        background: rgba(0, 0, 0, 0.35);
+    }
+    #beamjoy-drag-tree .dt-bulb {
+        position: relative;
+        width: var(--bulb);
+        height: var(--bulb);
+        border-radius: 50%;
+        background: radial-gradient(50% 50% at 50% 50%, rgba(0, 0, 0, 0) 52%, rgba(212, 212, 212, 0.07) 63%, rgba(0, 0, 0, 0) 100%),
+            radial-gradient(120% 120% at 50% -20%, rgba(255, 255, 255, 0.1) 0%, rgba(0, 0, 0, 0) 55%), #060607;
+        box-shadow: inset 0 0 0 calc(var(--bulb) * 0.03) rgba(255, 255, 255, 0.08);
+    }
+    #beamjoy-drag-tree .dt-bulb.go {
+        box-shadow: inset 0 0 0 calc(var(--bulb) * 0.03) rgba(255, 255, 255, 0.08), 0 0 0 calc(var(--bulb) * 0.04) rgba(0, 0, 0, 0.5);
+    }
+    #beamjoy-drag-tree .dt-bulb.blue {
+        background: radial-gradient(50% 50% at 50% 50%, #cfd0ff 0%, #0003cc 100%);
+        box-shadow: inset 0 0 0 calc(var(--bulb) * 0.04) #1217d6, 0 0 calc(var(--bulb) * 0.33) #1217d6;
+    }
+    #beamjoy-drag-tree .dt-bulb.amber {
+        background: radial-gradient(50% 50% at 50% 50%, #edf09d 0%, #fff600 100%);
+        box-shadow: 0 0 0 calc(var(--bulb) * 0.04) #d9e000, 0 0 calc(var(--bulb) * 0.33) rgba(246, 255, 0, 0.75);
+    }
+    #beamjoy-drag-tree .dt-bulb.green {
+        background: radial-gradient(50% 50% at 50% 50%, #bf0 0%, rgba(8, 246, 16, 0) 100%), #0f1;
+        box-shadow: inset 0 0 0 calc(var(--bulb) * 0.04) #95ff8b, 0 0 calc(var(--bulb) * 0.33) rgba(13, 255, 0, 0.75);
+    }
+    #beamjoy-drag-tree .dt-bulb.red {
+        background: radial-gradient(50% 50% at 50% 50%, rgba(255, 175, 63, 0.7) 0%, rgba(255, 154, 65, 0) 100%), #f00;
+        box-shadow: 0 0 0 calc(var(--bulb) * 0.04) #ff5900, 0 0 calc(var(--bulb) * 0.33) #f00;
+    }
+    /* the staging bulb's marks : the pre-stage beam's arc on top, the stage beam's below, the bar
+       between them with both lit (staged) */
+    #beamjoy-drag-tree .dt-beams {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+    }
+    #beamjoy-drag-tree .dt-beams path {
+        fill: none;
+        stroke: #dad9ff;
+        stroke-width: 2;
+        stroke-linecap: round;
+        filter: drop-shadow(0 0 2px #1024ff);
+    }
+    #beamjoy-drag-tree .dt-distance {
+        display: flex;
+        align-items: center;
+        gap: 0.6em;
+        color: #fff;
+        text-shadow: 0 0 0.2em rgba(12, 13, 204, 0.85), 0 0 1em rgba(0, 0, 0, 0.9);
+    }
+    #beamjoy-drag-tree .dt-distance.on-line {
+        color: #cfd0ff;
+    }
+    #beamjoy-drag-tree .dt-glyph {
+        font-size: 0.95em;
+        line-height: 1;
+    }
+    #beamjoy-drag-tree .dt-value {
+        font-family: "Overpass Mono", "Overpass", "Noto Sans", monospace;
+        font-style: italic;
+        font-weight: 900;
+        font-size: 1.6em;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+    }
+</style>
+
+<section id="beamjoy-drag-tree" ng-if="$ctrl.t.active" aria-hidden="true">
+    <div class="dt-row">
+        <div class="dt-bulb" ng-class="{blue: $ctrl.staging() && !$ctrl.red(), red: $ctrl.red()}">
+            <svg class="dt-beams" viewBox="0 0 26 26" ng-if="!$ctrl.red()">
+                <path ng-if="$ctrl.prestage()" d="M4.5 10.5 A8.8 8.8 0 0 1 21.5 10.5"></path>
+                <path ng-if="$ctrl.prestage() && $ctrl.stage()" d="M8 13 H18"></path>
+                <path ng-if="$ctrl.stage()" d="M4.5 15.5 A8.8 8.8 0 0 0 21.5 15.5"></path>
+            </svg>
+        </div>
+        <div class="dt-bulb" ng-class="{amber: $ctrl.amber(1), red: $ctrl.red()}"></div>
+        <div class="dt-bulb" ng-class="{amber: $ctrl.amber(2), red: $ctrl.red()}"></div>
+        <div class="dt-bulb" ng-class="{amber: $ctrl.amber(3), red: $ctrl.red()}"></div>
+        <div class="dt-bulb go" ng-class="{green: $ctrl.green(), red: $ctrl.red()}"></div>
+    </div>
+    <div class="dt-distance" ng-if="$ctrl.showDistance()" ng-class="{'on-line': $ctrl.onLine()}">
+        <span class="dt-glyph">{{$ctrl.glyph()}}</span>
+        <span class="dt-value">{{$ctrl.distanceText()}}</span>
+        <span class="dt-glyph">{{$ctrl.glyph()}}</span>
+    </div>
+</section>

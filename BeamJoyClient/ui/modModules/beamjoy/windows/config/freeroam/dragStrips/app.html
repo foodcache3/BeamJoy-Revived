@@ -65,8 +65,8 @@
             placeholder="{{'beamjoy.dragStrips.strip' | translate}} {{stripIdx}}"
         />
         <span class="flex-grow-1 opacity-70 small">
-            {{$ctrl.lengthLabel(strip.length) | translate}}, {{strip.lanes.length}}
-            {{(strip.lanes.length === 1 ? 'beamjoy.dragStrips.lane' : 'beamjoy.dragStrips.lanes') | translate}}
+            {{$ctrl.lengthLabel(strip.length) | translate}}, {{strip.laneCount}}
+            {{(strip.laneCount === 1 ? 'beamjoy.dragStrips.lane' : 'beamjoy.dragStrips.lanes') | translate}}
         </span>
         <button
             class="btn danger"
@@ -112,6 +112,54 @@
                 </td>
             </tr>
             <tr>
+                <td class="text-right" title="{{'beamjoy.dragStrips.edit.handles.tooltip' | translate}}">
+                    {{'beamjoy.dragStrips.edit.handles' | translate}}
+                </td>
+                <td>
+                    <div class="d-flex gap-1 flex-wrap">
+                        <button
+                            ng-repeat="handle in $ctrl.HANDLES"
+                            class="btn info"
+                            ng-class="{success: $ctrl.activeHandle === handle}"
+                            ng-click="$ctrl.selectHandle($event, stripIdx, handle)"
+                        >
+                            {{('beamjoy.dragStrips.edit.handle.' + handle) | translate}}
+                        </button>
+                        <button
+                            class="btn info"
+                            ng-click="$ctrl.setStripToVehicle($event, stripIdx)"
+                            title="{{'beamjoy.dragStrips.edit.toVehicle.tooltip' | translate}}"
+                        >
+                            <icon name="car"></icon>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="text-right">{{'beamjoy.dragStrips.lanes' | translate}}</td>
+                <td>
+                    <div class="d-flex gap-1 align-center">
+                        <button
+                            class="btn info"
+                            ng-disabled="strip.laneCount <= 1"
+                            ng-click="$ctrl.setLaneCount($event, strip, stripIdx, -1)"
+                            title="{{'beamjoy.dragStrips.edit.removeLane' | translate}}"
+                        >
+                            <icon name="remove"></icon>
+                        </button>
+                        <span style="min-width: 1.5em; text-align: center">{{strip.laneCount}}</span>
+                        <button
+                            class="btn success"
+                            ng-disabled="strip.laneCount >= $ctrl.MAX_LANES"
+                            ng-click="$ctrl.setLaneCount($event, strip, stripIdx, 1)"
+                            title="{{'beamjoy.dragStrips.edit.addLane' | translate}}"
+                        >
+                            <icon name="add"></icon>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            <tr>
                 <td class="text-right">{{'beamjoy.dragStrips.edit.laneWidth' | translate}}</td>
                 <td>
                     <bj-slider
@@ -123,51 +171,33 @@
                     ></bj-slider>
                 </td>
             </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.dragStrips.edit.laneGap.tooltip' | translate}}">
+                    {{'beamjoy.dragStrips.edit.laneGap' | translate}}
+                </td>
+                <td>
+                    <bj-slider
+                        ng-model="strip.laneGap"
+                        min="0"
+                        max="10"
+                        hard-max="10"
+                        step="0.1"
+                    ></bj-slider>
+                </td>
+            </tr>
         </table>
 
-        <div class="d-flex align-center gap-1 mt-1 mb-1">
-            <span class="flex-grow-1 opacity-70 small">
-                {{'beamjoy.dragStrips.lanes' | translate}} ({{strip.lanes.length}}/{{$ctrl.MAX_LANES}})
-            </span>
-            <button
-                class="btn success"
-                ng-disabled="strip.lanes.length >= $ctrl.MAX_LANES"
-                ng-click="$ctrl.addLane($event, stripIdx)"
-                title="{{'beamjoy.dragStrips.edit.addLane' | translate}}"
-            >
-                <icon name="add"></icon>
-            </button>
-        </div>
         <div
-            ng-repeat="lane in strip.lanes track by $index"
-            ng-init="laneIdx = $index + 1"
-            id="drag-lane-row-{{stripIdx}}-{{laneIdx}}"
-            class="lane-row d-flex p-1 gap-1 cursor-pointer align-center"
-            ng-class="{active: $ctrl.activeStrip === stripIdx && $ctrl.activeLane === laneIdx}"
-            ng-click="$ctrl.selectLane($event, stripIdx, laneIdx)"
+            ng-repeat="laneIdx in $ctrl.lanesOf(strip) track by laneIdx"
+            class="lane-row d-flex p-1 gap-1 align-center"
         >
             <span class="flex-grow-1">{{'beamjoy.dragStrips.lane' | translate}} {{laneIdx}}</span>
-            <button
-                class="btn info"
-                ng-click="$ctrl.setLaneToVehicle($event, stripIdx, laneIdx)"
-                title="{{'beamjoy.window.config.tabs.races.setToVehicle' | translate}}"
-            >
-                <icon name="car"></icon>
-            </button>
             <button
                 class="btn info"
                 ng-click="$ctrl.teleportToLane($event, stripIdx, laneIdx)"
                 title="{{'beamjoy.window.config.editor.pointList.teleportToHere' | translate}}"
             >
                 <icon name="teleportTo"></icon>
-            </button>
-            <button
-                class="btn danger"
-                ng-disabled="strip.lanes.length <= 1"
-                ng-click="$ctrl.deleteLane($event, stripIdx, laneIdx)"
-                title="{{'beamjoy.common.delete' | translate}}"
-            >
-                <icon name="delete"></icon>
             </button>
         </div>
         <div class="opacity-70 small mt-1">{{'beamjoy.dragStrips.edit.hint' | translate}}</div>

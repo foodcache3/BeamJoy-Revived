@@ -193,6 +193,17 @@ local function Beam(pos, camPos)
 end
 M.Beam = Beam
 
+--- the point moved onto the surface right below it (or just above it : probed from a few metres up,
+--- so a road under a bridge stays the road), or left as it is when there's nothing near
+---@param pos vec3
+---@param above number? metres above pos the probe starts (default 3)
+---@return vec3
+function M.onGround(pos, above)
+    local h = be:getSurfaceHeightBelow(vec3(pos.x, pos.y, pos.z + (above or 3)))
+    if not h or h < pos.z - 20 then return vec3(pos) end
+    return vec3(pos.x, pos.y, h)
+end
+
 -- DRAW BUFFERS : what's added is redrawn every frame until its layer is reset. The module's own
 -- add*/reset functions work on the default layer, which most renderers share (each clears it
 -- wholesale before drawing its own content) ; layer(name) gives one that only its owner resets,
@@ -343,6 +354,27 @@ local function bufferApi(shapes)
         api.addQuad(verts[3], verts[4], verts[8], verts[7], color)
         api.addQuad(verts[2], verts[3], verts[7], verts[6], color)
         api.addQuad(verts[1], verts[4], verts[8], verts[5], color)
+    end
+
+    --- a line painted on the ground from one point to another : cut into pieces of about `step`
+    --- metres, each end set on the surface below it, so it follows the road's slope and camber
+    --- instead of cutting through a crest or floating over a dip
+    ---@param fromPos vec3
+    ---@param toPos vec3
+    ---@param width number
+    ---@param color BJColor?
+    ---@param lift number? metres above the surface (default .05)
+    ---@param step number? metres per piece (default 6)
+    function api.addGroundLine(fromPos, toPos, width, color, lift, step)
+        fromPos, toPos = vec3(fromPos), vec3(toPos)
+        lift = vec3(0, 0, lift or .05)
+        local n = math.max(1, math.ceil(fromPos:distance(toPos) / (step or 6)))
+        local prev = M.onGround(fromPos) + lift
+        for i = 1, n do
+            local p = M.onGround(fromPos + (toPos - fromPos) * (i / n)) + lift
+            api.addLine(prev, width, p, width, color)
+            prev = p
+        end
     end
 
     ---@param text string

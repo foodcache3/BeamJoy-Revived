@@ -291,23 +291,26 @@ local function draw()
     local finishColor = BJColor(1, 1, 1, .9)
     local edgeColor = BJColor(1, .45, .1, .45)
     local textColor, textBg = BJColor(1, 1, 1, .9), BJColor(0, 0, 0, .4)
-    local lift = vec3(0, 0, .05)
     for _, zone in ipairs(M.nearby) do
         local half = zone.width / 2
+        -- every line on the road's own surface : across a cambered road its two ends sit at
+        -- different heights, along a crest it bends with it
         for _, which in ipairs({ "start", "finish" }) do
             local pos, dir = gate(zone, which)
             local right = dir:cross(vec3(0, 0, 1)) * half
             local color = which == "start" and startColor or finishColor
-            layer.addLine(pos - right + lift, .2, pos + right + lift, .2, color)
-            layer.addLine(pos - right, .12, pos - right + vec3(0, 0, 2.5), .12, color)
-            layer.addLine(pos + right, .12, pos + right + vec3(0, 0, 2.5), .12, color)
+            layer.addGroundLine(pos - right, pos + right, .2, color, .05, 1.5)
+            for _, side in ipairs({ pos - right, pos + right }) do
+                local foot = shape.onGround(side)
+                layer.addLine(foot, .12, foot + vec3(0, 0, 2.5), .12, color)
+            end
         end
         -- the corridor's edges, segment by segment
         for i = 2, #zone.points do
             local a, b = v3(zone.points[i - 1]), v3(zone.points[i])
             local right = flatDir(a, b):cross(vec3(0, 0, 1)) * half
-            layer.addLine(a - right + lift, .08, b - right + lift, .08, edgeColor)
-            layer.addLine(a + right + lift, .08, b + right + lift, .08, edgeColor)
+            layer.addGroundLine(a - right, b - right, .08, edgeColor)
+            layer.addGroundLine(a + right, b + right, .08, edgeColor)
         end
         local pos = gate(zone, "start")
         layer.addText(zone.name, pos + vec3(0, 0, 3), textColor, textBg)
@@ -348,6 +351,38 @@ local function retrieveCache(caches)
     M.run = nil
     lastNearKey = nil
     extensions.hook("onBJDriftZonesChanged")
+    if bigmap and bigmap.updatePOIs then bigmap.updatePOIs() end
+end
+
+--- a Big Map pin per zone in the BeamJoy section's "Drift zones" group, at its start gate ; quick
+--- travel puts the car a little short of the gate, facing through it, and the route shows on the
+--- map while the pin is hovered or selected
+---@param POIS table<string, table>
+local function onBJRequestBigmapPOIs(POIS)
+    for _, zone in ipairs(M.zones) do
+        if type(zone.points) == "table" and #zone.points >= 2 then
+            local pos, dir = gate(zone, "start")
+            local points, length = {}, 0
+            for i, p in ipairs(zone.points) do
+                points[i] = v3(p)
+                if i > 1 then length = length + points[i]:distance(points[i - 1]) end
+            end
+            POIS["bjDriftZone_" .. tostring(zone.id)] = {
+                name = zone.name,
+                description = string.var(beamjoy_lang.translate("beamjoy.bigmap.driftDescription"),
+                    { math.floor(length + .5) }),
+                icon = "drift01",
+                mapIcon = "mission_drift_triangle",
+                groupType = "other",
+                customGroupTags = { "bjDriftZones" },
+                pos = pos,
+                canQuickTravel = true,
+                quickTravelPos = pos - dir * 15,
+                quickTravelRot = dir,
+                previewPoints = points,
+            }
+        end
+    end
 end
 
 --- the zones for the Leaderboards window's Drift list (beamjoy/freeroamChallenges.lua)
@@ -374,6 +409,7 @@ local function onServerLeave()
     M.run, M.zones, M.nearby, result = nil, {}, {}, nil
     lastLy, lastPos = {}, nil
     shape.layer(LAYER).reset()
+    if bigmap and bigmap.updatePOIs then bigmap.updatePOIs() end
 end
 
 M.inCorridor = inCorridor
@@ -384,5 +420,6 @@ M.onVehicleResetted = onVehicleResetted
 M.onServerLeave = onServerLeave
 M.onBJStationEditorState = onBJStationEditorState
 M.retrieveCache = retrieveCache
+M.onBJRequestBigmapPOIs = onBJRequestBigmapPOIs
 
 return M

@@ -277,45 +277,6 @@
         outline: 2px solid #ffbca0;
         outline-offset: 2px;
     }
-    /* the tree, for BeamJoy's own strips (no tree in the world) : pre-stage and stage, the three
-       ambers, green, red, left to right */
-    #beamjoy-drag-hud .dh-tree {
-        display: flex;
-        align-items: center;
-        gap: 0.35em;
-        padding: 0.45em 0.9em;
-    }
-    #beamjoy-drag-hud .dh-tree .gap {
-        width: 0.5em;
-    }
-    #beamjoy-drag-hud .dh-bulb {
-        width: 1.05em;
-        height: 1.05em;
-        border-radius: 50%;
-        background: #2a2d35;
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
-        transition: background-color 0.05s linear;
-    }
-    #beamjoy-drag-hud .dh-bulb.small {
-        width: 0.75em;
-        height: 0.75em;
-    }
-    #beamjoy-drag-hud .dh-bulb.stage.on {
-        background: #f2f5ff;
-        box-shadow: 0 0 0.5em rgba(242, 245, 255, 0.8);
-    }
-    #beamjoy-drag-hud .dh-bulb.amber.on {
-        background: #ffb300;
-        box-shadow: 0 0 0.6em rgba(255, 179, 0, 0.9);
-    }
-    #beamjoy-drag-hud .dh-bulb.green.on {
-        background: #3ddc6f;
-        box-shadow: 0 0 0.6em rgba(61, 220, 111, 0.9);
-    }
-    #beamjoy-drag-hud .dh-bulb.red.on {
-        background: #ff3b3b;
-        box-shadow: 0 0 0.6em rgba(255, 59, 59, 0.9);
-    }
     #beamjoy-drag-hud .dh-hint {
         font-size: 0.7em;
         color: #979dad;
@@ -347,17 +308,6 @@
             {{$ctrl.side().label}}
             <b>{{$ctrl.side().value}}</b>
         </div>
-    </div>
-
-    <div class="dh-tree dh-line" ng-if="!!($ctrl.h.lights)" title="{{'beamjoy.drag.tree.lights' | translate}}">
-        <span class="dh-bulb small stage" ng-class="{on: $ctrl.h.lights.prestage}"></span>
-        <span class="dh-bulb small stage" ng-class="{on: $ctrl.h.lights.stage}"></span>
-        <span class="gap"></span>
-        <span class="dh-bulb amber" ng-class="{on: $ctrl.h.lights.a1}"></span>
-        <span class="dh-bulb amber" ng-class="{on: $ctrl.h.lights.a2}"></span>
-        <span class="dh-bulb amber" ng-class="{on: $ctrl.h.lights.a3}"></span>
-        <span class="dh-bulb green" ng-class="{on: $ctrl.h.lights.green}"></span>
-        <span class="dh-bulb red" ng-class="{on: $ctrl.h.lights.red}"></span>
     </div>
 
     <div class="dh-grid dh-cols dh-line">

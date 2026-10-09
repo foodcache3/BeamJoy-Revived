@@ -179,6 +179,7 @@ local function readRun(data, racer)
     run.dial = racer.timers and racer.timers.dial and tonumber(racer.timers.dial.value) or nil
     run.mainId = mainMark and mainMark.id or nil
     run.lights = racer.lights
+    run.stageDistance = racer.stageDistance
     return run
 end
 
@@ -264,8 +265,6 @@ local function hudPayload()
         speed = run.speed,
         imperial = imperial(),
         slip = M.slip ~= nil,
-        -- the tree, on screen : BeamJoy's own strips only (the game's have one in the world)
-        lights = run.lights,
     }
 end
 
@@ -281,8 +280,7 @@ local function pushHud(force)
     local payload = hudPayload()
     local run = M.run
     local sig = run and table.concat({ payload.state, run.set, run.count, tostring(M.opponent and M.opponent.rev),
-        tostring(run.result ~= nil), tostring(M.board and M.board.rev), tostring(M.slip ~= nil),
-        lightsKey(run.lights) }, "|") or "off"
+        tostring(run.result ~= nil), tostring(M.board and M.board.rev), tostring(M.slip ~= nil) }, "|") or "off"
     if not force and sig == M.lastHudSig then return end
     M.lastHudSig = sig
     beamjoy_communications_ui.send("BJDragHud", payload)
@@ -293,6 +291,47 @@ local function pushLive()
     local run = M.run
     if not run then return end
     beamjoy_communications_ui.send("BJDragHudLive", { elapsed = run.elapsed, speed = run.speed })
+end
+
+-- THE TREE ------------------------------------------------------------------------------------
+-- BeamJoy's own strips have no tree in the world : it's on screen instead, big, top middle
+-- (windows/dragTree), as the game's own tree app shows it. Up from rolling into the lane until
+-- 2 s after the green (or the red light), with how far the front tyres are from the line.
+
+local TREE_HOLD = 2
+-- seconds between two pushes of the distance alone (the lights go out as soon as they change)
+local TREE_DISTANCE_PUSH = .05
+
+---@param dtReal number
+local function pushTree(dtReal)
+    local run = M.run
+    local lights = run and run.lights
+    local show = false
+    if lights then
+        if run.phase == "stage" or run.phase == "countdown" then
+            M.treeHold = nil
+            show = true
+        elseif lights.green or lights.red then
+            M.treeHold = (M.treeHold or TREE_HOLD) - (dtReal or 0)
+            show = M.treeHold > 0
+        end
+    end
+    M.treeTimer = (M.treeTimer or 0) + (dtReal or 0)
+    local sig = show and table.concat({ lightsKey(lights), run.tree, tostring(run.phase == "stage") }, "|") or "off"
+    local distance = show and run.phase == "stage" and run.stageDistance or nil
+    local distanceDue = distance ~= nil and M.treeTimer >= TREE_DISTANCE_PUSH and
+        (not M.lastTreeDistance or math.abs(distance - M.lastTreeDistance) >= .005)
+    if sig == M.lastTreeSig and not distanceDue then return end
+    M.lastTreeSig = sig
+    M.treeTimer = 0
+    M.lastTreeDistance = distance
+    beamjoy_communications_ui.send("BJDragTree", show and {
+        active = true,
+        lights = lights,
+        tree = run.tree,
+        distance = distance,
+        imperial = imperial(),
+    } or { active = false })
 end
 
 -- THE TIMESLIP ----------------------------------------------------------------------------------
@@ -362,6 +401,7 @@ local function leave()
     M.opponent = nil
     sendState()
     pushHud(true)
+    pushTree(0)
 end
 
 local function onUpdate(dtReal)
@@ -388,6 +428,7 @@ local function onUpdate(dtReal)
     end
     sendState()
     pushHud(false)
+    pushTree(dtReal)
     if run.phase == "race" and not run.over then
         M.liveTimer = M.liveTimer + (dtReal or 0)
         if M.liveTimer >= M.LIVE_PUSH_SECONDS then
@@ -451,6 +492,10 @@ end
 local function onInit()
     beamjoy_communications.addHandler("dragOpponent", onOpponent)
     beamjoy_communications_ui.addHandler("BJDragHudRequest", function() pushHud(true) end)
+    beamjoy_communications_ui.addHandler("BJDragTreeRequest", function()
+        M.lastTreeSig = nil
+        pushTree(0)
+    end)
     beamjoy_communications_ui.addHandler("BJDragTimeslipOpen", openTimeslip)
     beamjoy_communications_ui.addHandler("BJDragTimeslipClose", closeTimeslip)
     beamjoy_communications_ui.addHandler("BJDragTimeslipRequest", pushSlip)

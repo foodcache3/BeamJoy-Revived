@@ -55,6 +55,7 @@ await import(`/ui/modModules/beamjoy/windows/derbyCountdown/app.js`);
 await import(`/ui/modModules/beamjoy/windows/derbyHud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/busHud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/dragHud/app.js`);
+await import(`/ui/modModules/beamjoy/windows/dragTree/app.js`);
 await import(`/ui/modModules/beamjoy/windows/dragTimeslip/app.js`);
 await import(`/ui/modModules/beamjoy/windows/driftZoneHud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/deliveryBoard/app.js`);
@@ -101,6 +102,7 @@ beamjoyModule.component("beamjoy", {
                         <bj-derby-hud></bj-derby-hud>
                         <bj-bus-hud></bj-bus-hud>
                         <bj-drag-hud></bj-drag-hud>
+                        <bj-drag-tree></bj-drag-tree>
                         <bj-drag-timeslip></bj-drag-timeslip>
                         <bj-drift-zone-hud></bj-drift-zone-hud>
                         <bj-delivery-board></bj-delivery-board>
