@@ -8,7 +8,33 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2650, server build 2443.
+Version 1.11.0 : client build 2654, server build 2446.
+
+- **A race holds up to 1000 props** (was 500, direct request). The biggest stock races ship more
+  than 500 (driver_training's ArdenteExperience 712, industrial's Track rally 531) and now import
+  whole ; a race imported cut down gets the rest with Import map races, "Props only". *(client +
+  server, deploy together : an older server still refuses a race over 500)*
+
+- **Bundled races : renames and new props reach servers that already have them** (direct request).
+  A bundled race can list the names it shipped under before (`formerNames`) : a server with the
+  old name gets it renamed in place, times and settings kept, instead of a duplicate ; one that
+  deleted it keeps it deleted. And whenever a bundled race's props change, each server adds the
+  ones its copy is missing, once, on the same track only. See bundledContent/activities/README.md.
+  *(server)*
+
+- **The race editor's list shows each race's prop count** (direct request), next to its gates and
+  length, counted as the prop limit counts them (every prop of a line, every mesh of a prefab).
+  Races with no props leave it out. *(client)*
+
+- **Fix : the map race importer's tabs squeezed to a sliver on a long list** (direct report). Only
+  the list shrinks and scrolls now ; the tabs, their hint, the count bar and the buttons keep
+  their height. *(client)*
+
+- **Fix : the BeamMP launcher closing on a race save** (direct report). The launcher aborts on any
+  packet over 500 bytes that holds the letters "Zp" (BeamMP-Launcher ServerSend), and the packed
+  text of big messages (build 2650) held them nearly every time. Packed text now never has a
+  capital Z, and any message holding "Zp" (a race named "Zpeed ...") goes packed whatever its size.
+  *(client + server, deploy together)*
 
 - **Props drawer : a Prefabs tab** (direct request). Props made of several meshes, placed, moved,
   turned, scaled, duplicated and deleted as one : the game's rally gazebos (3 x 3 and 3 x 6, in

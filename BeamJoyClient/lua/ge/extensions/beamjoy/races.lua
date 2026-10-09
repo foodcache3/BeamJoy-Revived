@@ -147,6 +147,9 @@ local function pushListToUI()
             -- UI hint) and lets the race list show grid-slot count without sending full positions
             startPositions = #r.startPositions,
             distance = r.distance,
+            -- the race list shows how many props a race has (direct request) : every prop a line
+            -- or a prefab stands for, as the editor's prop limit counts them
+            props = beamjoy_props and beamjoy_props.total(r.props) or 0,
             defaults = r.defaults,
         }
     end):values())

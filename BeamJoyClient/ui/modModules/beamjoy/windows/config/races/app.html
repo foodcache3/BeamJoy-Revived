@@ -45,6 +45,9 @@
                 {{('beamjoy.window.config.tabs.races.modes.' + race.mode) | translate}}
                 &middot; {{race.gates}} {{'beamjoy.window.config.tabs.races.gates' | translate}}
                 &middot; {{$ctrl.formatDistance(race.distance)}}
+                <span ng-show="race.props > 0">
+                    &middot; {{race.props}} {{'beamjoy.window.config.tabs.races.props' | translate}}
+                </span>
                 &middot; {{'beamjoy.window.config.tabs.races.author' | translate}}:
                 {{race.author || ('beamjoy.window.config.tabs.races.unknownAuthor' | translate)}}
             </span>

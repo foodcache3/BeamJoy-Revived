@@ -36,4 +36,22 @@ Do NOT include `id` or `leaderboard` on a bundled race, they're assigned automat
 time, matching how a brand-new admin-authored race is handled. A race name colliding with one
 that's already on the target map (admin-authored or previously seeded) is skipped, not overwritten.
 
+## Renaming a bundled race, or changing its props
+
+Servers that already have a bundled race get two kinds of change to it on their next boot
+(`services/races.lua`, `renameBundledRaces` / `mergeBundledProps`) ; everything else about a race
+is only ever seeded once.
+
+- **Renamed** : list the names it shipped under before in `formerNames`, e.g.
+  `"name": "Harbor Sprint", "formerNames": ["Harbour Sprint"]`. A server that has it under an old
+  name gets it renamed in place (its id, times and settings kept) instead of a second copy. A server
+  that deleted it keeps it deleted. A server that already has a race of the new name keeps both as
+  they are. Keep old names listed : a server that skipped some updates catches up from any of them.
+  Without `formerNames`, a renamed race is seeded again as a new race next to the old one.
+- **Props** : nothing to add, just change them. Each time a race's `props` change, every server
+  adds the ones its copy doesn't have yet, once (the same as the importer's "Props only"). Props
+  already there aren't doubled, and a server's own extra props stay. A server whose race of that
+  name is a different track (its first or last gate more than 30 m away) is left alone, and a
+  deleted race stays deleted. Props a server removed come back the next time the shipped props change.
+
 No content is bundled yet, this folder just establishes the convention for future rounds.

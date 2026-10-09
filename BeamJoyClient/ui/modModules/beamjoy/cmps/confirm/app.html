@@ -51,6 +51,15 @@
         max-height: 20vh;
         margin-bottom: 0.6em;
     }
+    /* everything but the list keeps its height : the list alone shrinks (and scrolls) on a long
+       one. The modes row clips (overflow hidden, for its rounded corners), so it would otherwise
+       be squeezed to a sliver (direct report) */
+    #beamjoy-confirm .checklist-modes,
+    #beamjoy-confirm .checklist-mode-hint,
+    #beamjoy-confirm .checklist-bar,
+    #beamjoy-confirm .confirm-actions {
+        flex: none;
+    }
     /* the checklist's modes (askChecklist's options.modes) : one segmented row */
     #beamjoy-confirm .checklist-modes {
         display: flex;
@@ -239,7 +248,7 @@
             maxlength="{{$ctrl.state.inputMaxLength}}"
             ng-keydown="$event.key === 'Enter' && $ctrl.confirm($event)"
         />
-        <div class="d-flex gap-1 justify-end">
+        <div class="confirm-actions d-flex gap-1 justify-end">
             <button class="btn info" ng-click="$ctrl.cancel($event)" ng-if="!$ctrl.state.infoOnly">
                 {{'beamjoy.common.cancel' | translate}}
             </button>

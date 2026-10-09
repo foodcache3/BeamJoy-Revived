@@ -1541,6 +1541,7 @@
     "beamjoy.window.config.tabs.races.create": "New race",
     "beamjoy.window.config.tabs.races.empty": "No races on this map yet.",
     "beamjoy.window.config.tabs.races.gates": "gates",
+    "beamjoy.window.config.tabs.races.props": "props",
     "beamjoy.window.config.tabs.races.author": "by",
     "beamjoy.window.config.tabs.races.unknownAuthor": "unknown",
     "beamjoy.window.config.tabs.races.notYourRace.tooltip": "Only the author of this race (or staff) can save changes to it.",

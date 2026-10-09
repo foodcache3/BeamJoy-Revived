@@ -813,7 +813,7 @@ local function toRace(track)
             props[#props + 1] = { prop = prop, near = near }
         end
     end
-    local maxProps = beamjoy_props and beamjoy_props.MAX_PROPS or 500
+    local maxProps = beamjoy_props and beamjoy_props.MAX_PROPS or 1000
     local propsTotal = #props
     if #props > maxProps then
         table.sort(props, function(a, b) return a.near < b.near end)

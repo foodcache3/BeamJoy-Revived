@@ -7,12 +7,16 @@
 ---
 --- The same file on both sides (Client/BJ/lua/ge/extensions/beamjoy/communications/lzw.lua and
 --- Server/BeamJoyServer/communications/lzw.lua). Codes up to 65536 : the table starts over once full,
---- so a long message keeps adapting to what it holds further on. Each code written as 3 characters of a URL-safe base 64 (no quote, backslash or slash : a
---- JSON string carries them as they are). Plain arithmetic, no bit library : LuaJIT and Lua 5.3.
+--- so a long message keeps adapting to what it holds further on. Each code written as 3 characters of
+--- a URL-safe base 63 (no quote, backslash or slash : a JSON string carries them as they are). Never a
+--- capital Z : the BeamMP launcher aborts on any packet over 500 bytes holding "Zp" (BeamMP-Launcher
+--- src/Network/GlobalHandler.cpp ServerSend ; direct report, the launcher closing on a race save).
+--- Plain arithmetic, no bit library : LuaJIT and Lua 5.3.
 
 local M = {}
 
-local ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+local ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYabcdefghijklmnopqrstuvwxyz0123456789-_"
+local BASE = #ALPHABET
 local MAX_CODES = 65536
 
 local DIGIT, VALUE = {}, {}
@@ -43,7 +47,7 @@ function M.encode(s)
     local out, n = {}, 0
     local function emit(code)
         n = n + 1
-        out[n] = DIGIT[math.floor(code / 4096)] .. DIGIT[math.floor(code / 64) % 64] .. DIGIT[code % 64]
+        out[n] = DIGIT[math.floor(code / (BASE * BASE))] .. DIGIT[math.floor(code / BASE) % BASE] .. DIGIT[code % BASE]
     end
     local w = ""
     for i = 1, #s do
@@ -79,7 +83,7 @@ function M.decode(t, maxBytes)
     for i = 1, #t, 3 do
         local a, b, c = VALUE[t:byte(i)], VALUE[t:byte(i + 1)], VALUE[t:byte(i + 2)]
         if not a or not b or not c then error("lzw: bad character") end
-        local code = a * 4096 + b * 64 + c
+        local code = (a * BASE + b) * BASE + c
         if prev and nextCode == MAX_CODES - 1 then
             -- the encoder's table filled with its last phrase and started over : so does this one,
             -- that phrase never used

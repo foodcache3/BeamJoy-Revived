@@ -404,7 +404,7 @@ end
 ---@return string? error
 --- the most props a race may hold (a line counts each of its props), mirrors the client's
 --- beamjoy_props.MAX_PROPS
-local MAX_PROPS = 500
+local MAX_PROPS = 1000
 
 ---@param v any
 ---@return {x: number, y: number, z: number}?
@@ -1221,6 +1221,7 @@ local function seedBundledRaces()
                     -- and re-mutating the same shared bundled table across every map it happens to
                     -- also ship for would be a real bug otherwise
                     local candidate = table.deepcopy(race)
+                    candidate.formerNames = nil
                     local err = sanitizeRace(candidate, targetList)
                     if err then
                         if err == "A race with this name already exists" then
@@ -1324,6 +1325,7 @@ local function applyBundledCourseUpdates()
                 elseif update.force then
                     candidate = table.deepcopy(bundled)
                     candidate.id, candidate.name, candidate.leaderboard = live.id, live.name, {}
+                    candidate.formerNames = nil
                 elseif sameGates(live, bundled) then
                     -- already the fixed course (a fresh install seeds it directly)
                 elseif courseMatches(live, update.previous) then
@@ -1661,6 +1663,151 @@ local function raceMapImportProps(ctxt, list)
     end
 end
 
+--- Bundled races renamed, or given props, after servers already have them (direct request).
+--- Seeding adds a bundled race once per name, so on its own a renamed race would come back as a
+--- second race and new props would only ever reach fresh installs. Two things a bundled race can
+--- carry for that, both handled at boot :
+---   `formerNames` (optional, the names it shipped under before) : a server that has the race
+---   under one of them has it renamed in place, its id, times and settings kept ; a server that
+---   deleted it keeps it deleted ; a server that already has a race of the new name keeps both as
+---   they are. Runs before seeding, so the new name is never seeded next to the old one.
+---   its `props` : whenever they change (the ledger keeps "<name>#props@<fingerprint>"), each
+---   server adds the ones its copy doesn't have yet, once, up to MAX_PROPS, as "Props only" does ;
+---   the race's own props, course and times stay. Only on the same track (its first and last
+---   gates within 30 m of the shipped ones) : an admin's own race that happens to have the name
+---   isn't given props for another course. Runs after seeding (a race seeded just now already
+---   has them all).
+
+---@param list table[] a map's races
+---@param name string
+---@return table?
+local function raceNamed(list, name)
+    local key = name:trim():lower()
+    return table.find(list, function(r) return type(r.name) == "string" and r.name:trim():lower() == key end)
+end
+
+--- a fingerprint of a race's props (the props themselves, in any order) : changes when they do
+---@param props table[]
+---@return string
+local function propsFingerprint(props)
+    local keys = {}
+    for _, p in ipairs(props) do
+        if type(p) == "table" then keys[#keys + 1] = propKey(p) .. "|" .. tostring(propCount(p)) end
+    end
+    table.sort(keys)
+    local text = table.concat(keys, ";")
+    local h = 5381
+    for i = 1, #text do h = (h * 33 + text:byte(i)) % 4294967296 end
+    return string.format("%d-%08x", #keys, math.floor(h))
+end
+
+--- the same track, give or take moved gates : starts and finishes within 30 m of each other's
+---@param a table race
+---@param b table race
+---@return boolean
+local function sameTrack(a, b)
+    if not table.isArray(a.gates) or not table.isArray(b.gates) or #a.gates == 0 or #b.gates == 0 then
+        return false
+    end
+    local function near(ga, gb)
+        local pa, pb = type(ga) == "table" and ga.pos or {}, type(gb) == "table" and gb.pos or {}
+        local dx, dy, dz = (tonumber(pa.x) or 0) - (tonumber(pb.x) or 0), (tonumber(pa.y) or 0) - (tonumber(pb.y) or 0),
+            (tonumber(pa.z) or 0) - (tonumber(pb.z) or 0)
+        return dx * dx + dy * dy + dz * dz < 30 * 30
+    end
+    return near(a.gates[1], b.gates[1]) and near(a.gates[#a.gates], b.gates[#b.gates])
+end
+
+local function renameBundledRaces()
+    for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
+        local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
+        local list, changed
+        for _, race in ipairs(table.isArray(bundled) and bundled or {}) do
+            local name = type(race.name) == "string" and race.name or ""
+            if name ~= "" and table.isArray(race.formerNames) and
+                not dao_bundled.isSeeded(mapName, M.ACTIVITY_TYPE, name) then
+                list = list or dao_activity.get(mapName, M.ACTIVITY_TYPE) or {}
+                if not raceNamed(list, name) then
+                    local renamed, deleted = false, false
+                    for _, old in ipairs(race.formerNames) do
+                        if type(old) == "string" and old:trim() ~= "" then
+                            local live = raceNamed(list, old)
+                            if live then
+                                live.name = name
+                                renamed, changed = true, true
+                                LogInfo(string.format("bundled race renamed: %s / %s -> %s", mapName, old, name))
+                                break
+                            elseif dao_bundled.isSeeded(mapName, M.ACTIVITY_TYPE, old) then
+                                deleted = true
+                            end
+                        end
+                    end
+                    if renamed or deleted then
+                        -- seeding leaves it be : renamed in place, or deleted on purpose under its old name
+                        dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, name)
+                        if deleted and not renamed then
+                            LogInfo(string.format("bundled race %s / %s not seeded, it was deleted under an older name",
+                                mapName, name))
+                        end
+                    end
+                end
+                -- else : a race of the new name is already here, seeding skips it as it always has
+            end
+        end
+        if changed then dao_activity.save(mapName, M.ACTIVITY_TYPE, list) end
+    end
+end
+
+local function mergeBundledProps()
+    for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
+        local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
+        local list, changed
+        for _, race in ipairs(table.isArray(bundled) and bundled or {}) do
+            local name = type(race.name) == "string" and race.name or ""
+            if name ~= "" and table.isArray(race.props) and #race.props > 0 then
+                local key = string.format("%s#props@%s", name, propsFingerprint(race.props))
+                if not dao_bundled.isSeeded(mapName, M.ACTIVITY_TYPE, key) then
+                    list = list or dao_activity.get(mapName, M.ACTIVITY_TYPE) or {}
+                    local live = raceNamed(list, name)
+                    local done = true
+                    if live and not sameTrack(live, race) then
+                        LogInfo(string.format("bundled props %s / %s left alone : this server's race of that name is another track",
+                            mapName, name))
+                    elseif live then
+                        local merged, seen, total = {}, {}, 0
+                        for _, p in ipairs(table.isArray(live.props) and live.props or {}) do
+                            merged[#merged + 1] = p
+                            seen[propKey(p)] = true
+                            total = total + propCount(p)
+                        end
+                        local before = #merged
+                        for _, p in ipairs(race.props) do
+                            if type(p) == "table" and not seen[propKey(p)] and total + propCount(p) <= MAX_PROPS then
+                                seen[propKey(p)] = true
+                                merged[#merged + 1] = table.deepcopy(p)
+                                total = total + propCount(p)
+                            end
+                        end
+                        local props, err = sanitizeProps(merged)
+                        if not props then
+                            -- the shipped props are at fault : said on every boot until they're fixed
+                            done = false
+                            LogError(string.format("bundled props %s / %s : %s", mapName, name, tostring(err)))
+                        elseif #props > before then
+                            live.props = props
+                            changed = true
+                            LogInfo(string.format("bundled props: %s / %s, %d added", mapName, name, #props - before))
+                        end
+                    end
+                    -- no race of this name here (deleted on purpose) : nothing to add to
+                    if done then dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, key) end
+                end
+            end
+        end
+        if changed then dao_activity.save(mapName, M.ACTIVITY_TYPE, list) end
+    end
+end
+
 ---@param ctxt BJSContext
 ---@param raceId integer
 local function raceDelete(ctxt, raceId)
@@ -1862,8 +2009,10 @@ local function onInit()
     communications_rx.addHandler("raceMapImport", M.raceMapImport)
     communications_rx.addHandler("raceMapImportProps", M.raceMapImportProps)
 
+    renameBundledRaces()
     seedBundledRaces()
     applyBundledCourseUpdates()
+    mergeBundledProps()
     loadData()
 end
 
