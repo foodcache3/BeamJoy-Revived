@@ -404,7 +404,7 @@ end
 ---@return string? error
 --- the most props a race may hold (a line counts each of its props), mirrors the client's
 --- beamjoy_props.MAX_PROPS
-local MAX_PROPS = 200
+local MAX_PROPS = 500
 
 ---@param v any
 ---@return {x: number, y: number, z: number}?

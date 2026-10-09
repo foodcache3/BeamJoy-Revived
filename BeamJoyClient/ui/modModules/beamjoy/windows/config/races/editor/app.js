@@ -693,7 +693,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
 
         // PROPS : race.props, spawned and edited Lua-side (beamjoy_props, ui/raceEditor.lua). Only
         // the PROP_FIELDS are edited here ; placement goes through the gizmo like gates
-        this.PROP_MAX = 200;
+        this.PROP_MAX = 500;
         this.activeProp = null;
         this.activePropPart = null;
         this.propCatalog = [];

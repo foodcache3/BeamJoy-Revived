@@ -8,7 +8,12 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2635, server build 2438.
+Version 1.11.0 : client build 2638, server build 2439.
+
+- **A race can hold 500 props** (direct request), up from 200 (a line counting each of its props ;
+  "Import map races" keeps up to 500 per race too). The collision rebuild props cost when a race
+  starts is the map's own collision far more than theirs, so it barely changes. *(client + server :
+  both need updating, an older client shows only a race's first 200)*
 
 - **A controls card in the props drawer** (direct request) : its "?" button (in the header, and on
   the strip while placing) lists every key and click for placing props, editing placed ones, and

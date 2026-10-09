@@ -493,7 +493,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
         // BUDGET (the race's 200 props) : what's used, and what the prop or line under the mouse
         // would add ; amber from 90 %, red once full
         this.budget = () => {
-            const max = Math.max(1, Number(this.propMax) || 200);
+            const max = Math.max(1, Number(this.propMax) || 500);
             const used = Math.min(max, Number(this.propTotal) || 0);
             const adding =
                 this.placing.armed && (this.placing.overWorld || this.placing.dragging)

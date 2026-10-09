@@ -23,7 +23,10 @@
 --- anything later (hunter arenas, passive zones) never clear each other's.
 
 local M = {
-    MAX_PROPS = 200,
+    -- raised from 200 (direct request) : the static collision rebuild a race's props cost is the
+    -- map's own collision far more than theirs (0.201 s with 217 instances, 0.203 s with 17, logged
+    -- 2026-10-08)
+    MAX_PROPS = 500,
 
     --- the props offered in the editors, in the prop picker's categories (`cat`), with a few English
     --- `tags` its search also matches. `yaw` (degrees) turns the mesh so its long side follows the
