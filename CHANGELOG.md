@@ -8,8 +8,15 @@ the live server per the usual workflow: see each entry.
 
 ## [1.10.7] - 2026-10-09 (hotfix)
 
-Client build 2495, server build 2354 (unchanged : only the client changed).
+Client build 2495, server build 2355. Both the client and the server changed.
 
+- **Fixed : a fresh install's first boot could come up without its bundled races** (and Hunter
+  arenas, bus lines and the rest). The server starts its modules in an order that changes every
+  boot ; when a service seeded its bundled content before the bundled files had been copied into
+  BeamJoyData, it found nothing to seed. The copy is now made by whichever comes first.
+- **Fixed : seeded content could be lost on a fresh install** : saves into a data folder that
+  wasn't created yet failed silently, while the seed ledger still recorded them as done, so they
+  were never seeded again. Missing data folders are now created when saving.
 - **Fixed : the spawn queue staying forced on for a whole race, hunt or infected round.** It's
   only forced during the countdown now, when every grid car is (re)spawned at once ; once the
   countdown is over, anything still queued is applied and the player's own spawn-queue setting is

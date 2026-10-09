@@ -4,9 +4,9 @@ local M = {
 }
 
 local function onInit()
-    if not FS.Exists(dao_main.dbPath .. "/" .. M.path) then
-        FS.CreateDirectory(dao_main.dbPath .. "/" .. M.path)
-    end
+    -- getDbPath, not dbPath : dao_main may not be set up yet when this runs (onInit order is a hash's)
+    local dir = dao_main.getDbPath() .. "/" .. M.path
+    if not FS.Exists(dir) then FS.CreateDirectory(dir) end
 end
 
 ---@param playerName string
@@ -18,7 +18,7 @@ end
 ---@return table<string, BJSPlayerSaved>
 local function getAll()
     local res = {}
-    for _, fileName in pairs(FS.ListFiles(dao_main.dbPath .. "/" .. M.path)) do
+    for _, fileName in pairs(FS.ListFiles(dao_main.getDbPath() .. "/" .. M.path)) do
         if fileName:endswith(".json") then
             local playerName = fileName:gsub(".json$", "")
             res[playerName] = get(playerName)
