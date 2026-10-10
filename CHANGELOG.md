@@ -8,8 +8,15 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2662, server build 2448.
+Version 1.11.0 : client build 2664, server build 2448.
 
+- **Props list cleanup** (direct request). New prefabs : West Coast's three-bay scaffolding, a
+  guardrail section with a post at each end (as West Coast lays them), and a wood fence section
+  (two poles, three boards) ; the single scaffold side, guardrail rail and fence board left the
+  curated list, as did both chevrons. The arrow boards face the right way (their square box hid
+  their face from the size-based guess), the giant tire is Scenery, and "Ramps and obstacles" is
+  "Ramps". The road barriers look right on East Coast : its own material of that name, made for
+  its older copy of the mesh, no longer takes over theirs. *(client)*
 - **"Other maps" in the props drawer's All game meshes** (direct request), off by default : a switch
   at the foot of the list that also lists the meshes of the game's other maps (Hirochi's and
   Automation Test Track's tire stacks were only found on their own map), in a group of their own.
@@ -19,7 +26,10 @@ Version 1.11.0 : client build 2662, server build 2448.
   meshes take their materials from the map : the beech leaves are only defined by East Coast,
   Derby, Hirochi and Driver Training, the wall's bricks by West Coast. What such a mesh needs and
   the current map hasn't got is now borrowed from a map that has it, those materials only, so
-  nothing of the map itself changes. *(client)*
+  nothing of the map itself changes. The shared beech meshes ask for names no map maps (their own
+  trees are renamed copies) : those get a copy of the beech material of their own. Previews made
+  before are made again. Previews are rendered at the mesh's largest drawn detail level ; one that
+  still shows nothing keeps its renders and what the renderer said of it, to find out why. *(client)*
 - **East Coast's rally gates in the props list** (direct request) : "Rally gate" and "Rally gate,
   finish", under Start and finish. They stand on their origin, their concrete feet sunk into the
   ground as on East Coast (lifted by their measured size, they floated over 3 m up). Gates placed

@@ -69,7 +69,6 @@ local M = {
         { id = "raceBarricadeCurveB", cat = "barriers", tags = "crowd fence metal bend", shape = "/art/shapes/race/ut_race_mesh_barricade_curve_b.DAE" },
         { id = "safetyCushion", cat = "barriers", tags = "crash impact attenuator", shape = "/art/shapes/race/rally/rally_assets/s_safety_cushion_01.dae" },
         { id = "constructionBarrier", cat = "barriers", tags = "roadworks arrows", shape = "/art/shapes/objects/constructionbarrier_arrows.dae", yaw = 0, length = 2 },
-        { id = "guardrail", cat = "barriers", tags = "armco rail steel", shape = "/art/shapes/objects/guardrail1.dae" },
         { id = "guardrailPost", cat = "barriers", tags = "armco post", shape = "/art/shapes/objects/guardrailpost.dae" },
         { id = "guardrailItaly", cat = "barriers", tags = "armco rail steel italy", shape = "/art/shapes/objects/italy_guardrails_common_section.dae" },
         { id = "tireStackAtt", cat = "barriers", tags = "tyre wall", shape = "/levels/automation_test_track/art/shapes/objects/tirestack.dae" },
@@ -91,7 +90,6 @@ local M = {
         { id = "scrapFenceLong", cat = "fences", tags = "corrugated sheet", shape = "/art/shapes/objects/s_scrap_fence_5.dae" },
         { id = "brickWall", cat = "fences", tags = "masonry", shape = "/assets/meshes/architecture/modular/architectural_elements/fences/stone/s_brick_wall_001_300x400.dae" },
         { id = "concreteWall", cat = "fences", tags = "masonry", shape = "/assets/meshes/architecture/modular/architectural_elements/fences/stone/s_conc_wall_001_400x400.dae" },
-        { id = "woodFence", cat = "fences", tags = "planks rural", shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001.dae" },
         -- cones and markers
         { id = "cone", cat = "markers", tags = "pylon traffic", shape = "/art/shapes/garage_and_dealership/Clutter/road_cone.DAE", yaw = 0, length = 2.5 },
         { id = "raceCone", cat = "markers", tags = "pylon autocross", shape = "/art/shapes/race/cone.dae" },
@@ -101,13 +99,13 @@ local M = {
         { id = "flagMarker", cat = "markers", tags = "pole", shape = "/art/shapes/race/flagMarker.dae", collision = "None" },
         { id = "flagMarkerOrange", cat = "markers", tags = "pole", shape = "/art/shapes/race/flagMarkerOrange.dae", collision = "None" },
         { id = "cornerMarker", cat = "markers", tags = "rally post", shape = "/art/shapes/race/rally/rally_assets/s_corner_marker.dae", collision = "None" },
-        { id = "chevron", cat = "markers", tags = "bend arrow", shape = "/art/shapes/race/chevron_x1.dae" },
-        { id = "chevronTriple", cat = "markers", tags = "bend arrow", shape = "/art/shapes/race/chevron_x3.dae" },
         -- signs
         { id = "arrowSignLeft", cat = "signs", tags = "direction turn", shape = "/art/shapes/objects/race_arrowsign_1_L.dae", yaw = 0, length = 3.1 },
         { id = "arrowSignRight", cat = "signs", tags = "direction turn", shape = "/art/shapes/objects/race_arrowsign_1_R.dae", yaw = 0, length = 3.1 },
-        { id = "arrowBoardLeft", cat = "signs", tags = "roadworks direction", shape = "/art/shapes/objects/arrowboard_L.dae" },
-        { id = "arrowBoardRight", cat = "signs", tags = "roadworks direction", shape = "/art/shapes/objects/arrowboard_R.dae" },
+        -- turned by hand (direct report : a quarter turn counterclockwise) : their box is about
+        -- square, so the size-based guess couldn't tell their face from their side
+        { id = "arrowBoardLeft", cat = "signs", tags = "roadworks direction", shape = "/art/shapes/objects/arrowboard_L.dae", yaw = -90 },
+        { id = "arrowBoardRight", cat = "signs", tags = "roadworks direction", shape = "/art/shapes/objects/arrowboard_R.dae", yaw = -90 },
         { id = "constructionSign", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_a.DAE", yaw = 0, length = 2.6 },
         { id = "constructionSignB", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_b.DAE" },
         { id = "constructionSignC", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_c.DAE" },
@@ -148,7 +146,6 @@ local M = {
         -- ramps and obstacles
         { id = "rampLarge", cat = "ramps", tags = "jump kicker", shape = "/art/shapes/objects/ramp_massive.dae" },
         { id = "crossRampHr", cat = "ramps", tags = "jump derby", shape = "/levels/hirochi_raceway/art/shapes/buildings/derby_crossramp.dae" },
-        { id = "tireHr", cat = "ramps", tags = "tyre wheel", shape = "/levels/hirochi_raceway/art/shapes/buildings/hr_tire.DAE" },
         { id = "flipRamp2x2", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_2x2_1.dae" },
         { id = "flipRamp4x2Mild", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_mild.dae" },
         { id = "flipRamp4x2Heavy", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_heavy.dae" },
@@ -163,7 +160,6 @@ local M = {
         { id = "metalDrum", cat = "scenery", tags = "barrel oil", shape = "/art/shapes/garage_and_dealership/Clutter/metal_drum_a.DAE" },
         { id = "dumpster", cat = "scenery", tags = "skip trash", shape = "/art/shapes/garage_and_dealership/Clutter/ind_dumpster_full.DAE" },
         { id = "cityBin", cat = "scenery", tags = "trash", shape = "/art/shapes/garage_and_dealership/Clutter/clutter_city_bin_round.dae" },
-        { id = "scaffold", cat = "scenery", tags = "construction frame", shape = "/art/shapes/objects/s_scaffold_side_open.dae" },
         -- the lamps' heads measured on their meshes (their glass and bulb) : the pole's hangs at the end of
         -- its arm, the two flood lights face their own +X
         { id = "lightPole", cat = "scenery", tags = "street lamp light", shape = "/art/shapes/objects/pole_light_single.dae",
@@ -185,6 +181,7 @@ local M = {
         { id = "foldTable", cat = "scenery", tags = "pit", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_table_01.dae" },
         { id = "foldChair", cat = "scenery", tags = "pit seat", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_chair_01.dae", collision = "None" },
         { id = "tireRack", cat = "scenery", tags = "tyre pit", shape = "/art/shapes/garage_and_dealership/garage/s_tire_rack.dae" },
+        { id = "tireHr", cat = "scenery", tags = "tyre wheel giant", shape = "/levels/hirochi_raceway/art/shapes/buildings/hr_tire.DAE" },
         { id = "wheelbarrow", cat = "scenery", tags = "construction", shape = "/art/shapes/objects/s_wheelbarrow.dae" },
         { id = "tarp", cat = "scenery", tags = "sheet cover", shape = "/art/shapes/objects/s_tarp_thrown_01.dae", collision = "None" },
         { id = "tree", cat = "scenery", tags = "forest beech", shape = "/assets/meshes/foliage/trees_library/beech/tree_beech_large_b.dae" },
@@ -320,6 +317,40 @@ for _, p in ipairs({
             { shape = "/levels/east_coast_usa/art/shapes/clutter/clutter_city_wood_table_small.dae", pos = { -0.183, 0.282, -0.006 }, dir = { 0.8375, 0.5464, 0 } } } },
     { id = "brickPallet", cat = "scenery", shape = "/art/shapes/garage_and_dealership/Clutter/wood_pallet.DAE", thumb = "/art/shapes/objects/s_brickpallet.dae", tags = "bricks pallet construction",
         parts = { { shape = "/art/shapes/objects/s_brickpallet.dae", pos = { 0, 0, 0.126 }, dir = { -1, 0, 0 } } } },
+    -- West Coast's scaffolding (levels/west_coast_usa/art/prefabs/p_scaffold_short) : three bays of
+    -- 3 m, three levels of 2.3 m, its closed side at the origin
+    { id = "scaffold", cat = "scenery", shape = "/art/shapes/objects/s_scaffold_base_side_close.dae", thumb = "/art/shapes/objects/s_scaffold_side_close.dae", tags = "scaffolding construction frame platform",
+        parts = (function()
+            local S = "/art/shapes/objects/s_scaffold_"
+            local parts = {}
+            local function add(name, x, z) parts[#parts + 1] = { shape = S .. name .. ".dae", pos = { x, 0, z } } end
+            add("platform", 0, 0)
+            add("base_side_open", -3, 0)
+            add("base_side_open", -6, 0)
+            add("platform", -3, 0)
+            for _, z in ipairs({ 2.3, 4.6 }) do
+                add("support", 0, z)
+                add("support", -3, z)
+                add("side_close", 0, z)
+                add("side_open", -3, z)
+                add("side_open", -6, z)
+            end
+            add("platform", 0, 2.3)
+            add("platform", -3, 2.3)
+            return parts
+        end)() },
+    -- a guardrail section with its posts, as West Coast lays them (its rails 2 m apart, a post at
+    -- each joint, 1 m either side of the rail's middle, 0.14 m behind it, 0.95 m under its origin)
+    { id = "guardrail", cat = "fences", shape = "/art/shapes/objects/guardrail1.dae", thumb = "/art/shapes/objects/guardrail1.dae", tags = "guardrail armco rail steel post barrier",
+        parts = { { shape = "/art/shapes/objects/guardrailpost.dae", pos = { -1, 0.14, -0.95 } },
+            { shape = "/art/shapes/objects/guardrailpost.dae", pos = { 1, 0.14, -0.95 } } } },
+    -- the asset kit's wood fence (no map lays it out) : a pole each end of its 2 m boards, three of
+    -- them on the poles' face
+    { id = "woodFence", cat = "fences", shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_root_fence_pole_001.dae", thumb = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001.dae", tags = "wood fence planks rural rail post",
+        parts = { { shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_root_fence_pole_001.dae", pos = { 2, 0, 0 } },
+            { shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001.dae", pos = { 0, -0.08, 0.9 } },
+            { shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001_var1.dae", pos = { 0, -0.08, 0.6 } },
+            { shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001.dae", pos = { 0, -0.08, 0.3 } } } },
     { id = "containers2High", cat = "scenery", shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", thumb = "/levels/Industrial/art/shapes/misc/container_01_a.dae", tags = "containers shipping stack port wall",
         parts = { { shape = "/levels/Industrial/art/shapes/misc/container_01_b.dae", pos = { 0, 0, 2.61 } } } },
     { id = "containers2x2", cat = "scenery", shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", thumb = "/levels/Industrial/art/shapes/misc/container_01_a.dae", tags = "containers shipping stack port wall",
@@ -406,9 +437,13 @@ end
 --
 -- The game's shared meshes (/assets/...) can need materials only some maps define too (direct
 -- report : the beech tree and bush's leaves, defined by East Coast, Derby, Hirochi, Driver Training
--- only ; the brick wall's bricks, by West Coast only). What a mesh needs is read from its .dae (a
--- material's id there, less "-material", is what a Material maps to) ; what the current map has no
--- material for is borrowed from MATERIAL_SOURCES, those materials only.
+-- only ; the brick wall's bricks, by West Coast only). What a mesh needs is read from its .dae : the
+-- engine maps a material by its name there (its id, less "-material", when it has none ; direct
+-- report : "Unable to find material mapping to: m_ind_beech_leaves", the id being beech_leaves).
+-- What the current map has nothing mapped to is borrowed from MATERIAL_SOURCES, those materials
+-- only : by that name, else by the id, then as a copy of its own (bj_<name>) mapped to the name, so
+-- nothing of the map's changes (no map maps the shared beech meshes' names : their own trees are
+-- copies named otherwise).
 
 local MATERIALS_TEMP_DIR = "/temp/bjPropMaterials/"
 -- folders (lower case) already looked at on this map
@@ -426,6 +461,18 @@ local MATERIAL_SOURCES = {
     -- architraves
     "/art/shapes/common/materials/main.materials.json",
 }
+-- shared meshes some maps give a material of their own made for an older mesh of the same name
+-- (direct report : the road barriers looked wrong on East Coast, whose concrete_road_barrier_a
+-- material is its own old texture for its own older copy of the mesh, laid out differently). Their
+-- shared material is mapped again, under a name of its own, before such a mesh is first loaded :
+-- it's the one then bound to it, while the map's own copy, loaded with the map, keeps the map's
+-- shape (lower case) -> {mapTo, from (a material file)}
+local SHARED_MATERIALS = {
+    ["/art/shapes/garage_and_dealership/clutter/concrete_road_barrier_a.dae"] = { mapTo = "concrete_road_barrier_a", from = "/art/shapes/race/main.materials.json" },
+    ["/art/shapes/garage_and_dealership/clutter/concrete_road_barrier_b.dae"] = { mapTo = "concrete_road_barrier_a", from = "/art/shapes/race/main.materials.json" },
+}
+-- mapTo names mapped again this map
+local sharedDone = {}
 -- mapTo -> {key, mat} of MATERIAL_SOURCES, read once
 local borrowable = nil
 -- the current map's mapTo names (true), gathered on first need
@@ -486,7 +533,8 @@ local function meshMaterials(shape)
             id = id:gsub("%-material$", "")
             if not seen[id] then
                 seen[id] = true
-                out[#out + 1] = { id = id, name = tag:match('name="([^"]+)"') }
+                local name = tag:match('name="([^"]+)"')
+                out[#out + 1] = { id = id, need = name or id }
             end
         end
     end
@@ -504,14 +552,22 @@ local function borrowMaterials(shape)
         local have, from = mappedNames(), borrowableMaterials()
         local add, count = {}, 0
         for _, m in ipairs(meshMaterials(shape)) do
-            if not have[m.id] and not (m.name and have[m.name]) then
-                local src = from[m.id] or (m.name and from[m.name])
-                if src and not scenetree.findObject(src.mat.name or src.key) then
-                    src.mat.persistentId = nil
-                    add[src.key] = src.mat
-                    count = count + 1
-                    have[src.mat.mapTo] = true
+            local src = not have[m.need] and (from[m.need] or from[m.id]) or nil
+            if src then
+                local mat, key = src.mat, src.key
+                if mat.mapTo ~= m.need then
+                    -- the source maps the id : a copy of its own, mapped to the name the mesh uses
+                    mat = {}
+                    for k, v in pairs(src.mat) do mat[k] = v end
+                    key = "bj_" .. m.need
+                    mat.name, mat.mapTo, mat.internalName = key, m.need, nil
                 end
+                if not scenetree.findObject(mat.name or key) then
+                    mat.persistentId = nil
+                    add[key] = mat
+                    count = count + 1
+                end
+                have[m.need] = true
             end
         end
         if count == 0 then return end
@@ -523,9 +579,35 @@ local function borrowMaterials(shape)
     if not ok then LogWarn(string.format("beamjoy_props: materials of %s not borrowed: %s", shape, tostring(err))) end
 end
 
+--- maps a shared mesh's own material again, ahead of a map's one of the same name
+---@param shape string
+local function ensureSharedMaterial(shape)
+    local s = SHARED_MATERIALS[shape:lower()]
+    if not s or sharedDone[s.mapTo] then return end
+    sharedDone[s.mapTo] = true
+    local ok, err = pcall(function()
+        local data = jsonReadFile(s.from)
+        for _, mat in pairs(type(data) == "table" and data or {}) do
+            if type(mat) == "table" and mat.class == "Material" and mat.mapTo == s.mapTo then
+                local copy = {}
+                for k, v in pairs(mat) do copy[k] = v end
+                local name = "bj_shared_" .. s.mapTo
+                copy.name, copy.persistentId, copy.internalName = name, nil, nil
+                if scenetree.findObject(name) then return end
+                local file = MATERIALS_TEMP_DIR .. "shared_" .. s.mapTo .. ".materials.json"
+                jsonWriteFile(file, { [name] = copy }, true)
+                loadJsonMaterialsFile(file)
+                return
+            end
+        end
+    end)
+    if not ok then LogWarn(string.format("beamjoy_props: %s not mapped again: %s", s.mapTo, tostring(err))) end
+end
+
 ---@param shape string
 function M.ensureMaterials(shape)
     if type(shape) ~= "string" then return end
+    ensureSharedMaterial(shape)
     local level = M.shapeLevel(shape)
     local dir = shape:match("^(.*/)[^/]*$")
     if level and level ~= currentLevel() and dir and not materialDirs[dir:lower()] then
@@ -1143,7 +1225,7 @@ local function cleanup()
     for _, l in pairs(lightOf) do deleteLights(l) end
     lightOf, lightCount, lampsOn = {}, 0, nil
     -- a new map, its own materials : looked at again
-    materialDirs, materialShapes, mapped = {}, {}, nil
+    materialDirs, materialShapes, mapped, sharedDone = {}, {}, nil, {}
     if collisionReloadAt then
         collisionReloadAt = nil
         if be then be:reloadCollision() end
