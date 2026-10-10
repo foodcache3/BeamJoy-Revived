@@ -401,6 +401,43 @@
         border-top: 1px solid var(--pd-line);
         margin: 0.3em 0;
     }
+    /* "Other maps" : a switch at the rail's foot, All game meshes only */
+    .pd-rail .pd-others {
+        margin-top: auto;
+        border-top: 1px solid var(--pd-line);
+        border-radius: 0;
+        padding-top: 0.6em;
+    }
+    .pd-rail .pd-others .pd-switch {
+        flex-shrink: 0;
+        width: 1.9em;
+        height: 1em;
+        border-radius: 0.5em;
+        background: rgba(255, 255, 255, 0.16);
+        position: relative;
+        transition: background 0.15s;
+    }
+    .pd-rail .pd-others .pd-switch::after {
+        content: "";
+        position: absolute;
+        top: 0.12em;
+        left: 0.12em;
+        width: 0.76em;
+        height: 0.76em;
+        border-radius: 50%;
+        background: #c9ced9;
+        transition: transform 0.15s;
+    }
+    .pd-rail .pd-others.on {
+        background: none;
+    }
+    .pd-rail .pd-others.on .pd-switch {
+        background: rgba(230, 92, 0, 0.8);
+    }
+    .pd-rail .pd-others.on .pd-switch::after {
+        transform: translateX(0.9em);
+        background: #fff;
+    }
     .pd-gridwrap {
         flex: 1;
         min-width: 0;
@@ -836,11 +873,22 @@
             >
                 <span>{{$ctrl.railName(id)}}</span><span class="pd-n">{{$ctrl.counts[id]}}</span>
             </button>
+            <button
+                class="pd-others"
+                ng-if="$ctrl.tab === 'all'"
+                ng-class="{on: $ctrl.otherMaps}"
+                ng-click="$ctrl.toggleOtherMaps()"
+                title="{{$ctrl.T('otherMaps.hint')}}"
+                role="switch"
+                aria-checked="{{$ctrl.otherMaps}}"
+            >
+                <span>{{$ctrl.T('otherMaps.label')}}</span><span class="pd-switch"></span>
+            </button>
         </nav>
         <div class="pd-gridwrap">
             <div class="pd-status">
                 <span>{{$ctrl.T('status.count').replace('{n}', $ctrl.filtered.length)}}</span>
-                <span ng-if="$ctrl.tab === 'all' && $ctrl.meshesLoading">{{$ctrl.T('loadingMeshes')}}</span>
+                <span ng-if="$ctrl.tab === 'all' && ($ctrl.meshesLoading || $ctrl.otherMeshesLoading)">{{$ctrl.T('loadingMeshes')}}</span>
             </div>
             <div class="pd-empty" ng-if="$ctrl.filtered.length === 0">
                 <div>{{$ctrl.emptyText()}}</div>

@@ -8,8 +8,18 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2659, server build 2448.
+Version 1.11.0 : client build 2662, server build 2448.
 
+- **"Other maps" in the props drawer's All game meshes** (direct request), off by default : a switch
+  at the foot of the list that also lists the meshes of the game's other maps (Hirochi's and
+  Automation Test Track's tire stacks were only found on their own map), in a group of their own.
+  Stock maps only, since a modded map's meshes are missing for players without that mod. The
+  mesh lists are walked a few milliseconds a frame instead of one folder a frame. *(client)*
+- **Fix : "no material" on the tree, bush and brick wall props** (direct report). The game's shared
+  meshes take their materials from the map : the beech leaves are only defined by East Coast,
+  Derby, Hirochi and Driver Training, the wall's bricks by West Coast. What such a mesh needs and
+  the current map hasn't got is now borrowed from a map that has it, those materials only, so
+  nothing of the map itself changes. *(client)*
 - **East Coast's rally gates in the props list** (direct request) : "Rally gate" and "Rally gate,
   finish", under Start and finish. They stand on their origin, their concrete feet sunk into the
   ground as on East Coast (lifted by their measured size, they floated over 3 m up). Gates placed
@@ -17,9 +27,10 @@ Version 1.11.0 : client build 2659, server build 2448.
 - **Fix : prop previews shown end-on, off to one side, or empty** (direct report). Every preview
   was taken with the same camera, so a barricade long one way showed as a thin post, a curved one
   was cut off by the tile's edge, and a guardrail or safety cushion didn't show at all. Each
-  preview is now framed for its prop : turned to its long side, centred on it, at its full detail,
-  and taken from both sides, the one showing more kept. A prop that still shows nothing keeps the
-  placeholder tile. Previews made before are made again. *(client)*
+  preview is now framed for its prop : turned to its long side, at its full detail, and taken from
+  both sides, the one showing more kept ; then the square around what was drawn is cut out and
+  scaled to the tile, so every prop is centred and fills it. A prop that still shows nothing keeps
+  the placeholder tile. Previews made before are made again. *(client)*
 - **Fix : prop previews black at night** (direct report). The previews are lit by the map's own sun,
   and the game's preview renderer has no light of its own to set. At night a missing preview now
   waits (its tile says why) and is made once it's day ; a render that still comes out black isn't

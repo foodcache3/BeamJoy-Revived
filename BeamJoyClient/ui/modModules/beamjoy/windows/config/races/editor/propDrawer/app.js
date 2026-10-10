@@ -22,6 +22,8 @@ const POSITION_KEY = "beamjoy.propDrawer.position";
 const RECENT_KEY = "beamjoy.propDrawer.recent";
 const RECENT_MAX = 16;
 const KEEP_KEY = "beamjoy.propDrawer.keepPlacing";
+// "Other maps" in All game meshes (off unless the player turned it on)
+const OTHERS_KEY = "beamjoy.propDrawer.otherMaps";
 
 // search words folded onto the word the props use
 const SYNONYMS = {
@@ -93,9 +95,10 @@ const meshTags = (shape) =>
         .join(" ")
         .replace(/_/g, " ")
         .toLowerCase();
-const meshGroup = (shape) => {
+const meshGroup = (shape, level) => {
     const s = String(shape).toLowerCase();
-    if (s.startsWith("/levels/")) return "map";
+    // a map's own, unless it's known to be another map's (the map being played comes with the index)
+    if (s.startsWith("/levels/")) return !level || s.startsWith("/levels/" + level.toLowerCase() + "/") ? "map" : "others";
     if (s.startsWith("/assets/")) return "assets";
     return "art";
 };
@@ -129,6 +132,17 @@ angular.module("beamjoy").component("bjPropDrawer", {
         this.curated = [];
         this.meshes = null; // the game's meshes, once indexed
         this.meshesLoading = false;
+        // the other stock maps' meshes, indexed once "Other maps" is on (direct request : off unless
+        // turned on, a few thousand map buildings and rocks otherwise in every search)
+        this.otherMeshes = null;
+        this.otherMeshesLoading = false;
+        this.otherMaps = false;
+        try {
+            this.otherMaps = localStorage.getItem(OTHERS_KEY) === "1";
+        } catch (e) {
+            this.otherMaps = false;
+        }
+        this.level = null;
         this.favourites = readList(FAV_KEY);
         this.recent = readList(RECENT_KEY);
         this.thumbs = {}; // shape (lower case) -> { done, url }
@@ -202,10 +216,10 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 shape,
                 name: meshName(shape),
                 cat: null,
-                group: meshGroup(shape),
+                group: meshGroup(shape, this.level),
                 tags: meshTags(shape),
                 solid: true,
-                map: meshGroup(shape) === "map",
+                map: meshGroup(shape, this.level) === "map",
                 curated: false,
             });
         // a favourite or recent prop, whichever list it's from (a game mesh before the index is in)
@@ -224,6 +238,9 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 if (SYNONYMS[w] && item.hay.includes(SYNONYMS[w])) return true;
                 return w.length > 3 && w.endsWith("s") && item.hay.includes(w.slice(0, -1));
             });
+        // the game's meshes in All, the other maps' with them once "Other maps" is on
+        const allMeshes = () =>
+            (this.meshes || []).concat(this.otherMaps && this.otherMeshes ? this.otherMeshes : []);
         const source = () => {
             const cat = this.category[this.tab];
             if (this.tab === "prefabs") {
@@ -234,7 +251,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
             if (this.tab === "curated") {
                 return cat === "all" ? this.curated : this.curated.filter((i) => i.cat === cat);
             }
-            const meshes = this.meshes || [];
+            const meshes = allMeshes();
             return cat === "all" ? meshes : meshes.filter((i) => i.group === cat);
         };
         // every count shown (the rail's and the two tabs') is of what the search matches (direct
@@ -246,7 +263,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
             const match = (i) => matches(i, words);
             const curated = this.curated.filter(match);
             const prefabs = this.prefabs.filter(match);
-            const meshes = this.meshes ? this.meshes.filter(match) : null;
+            const meshes = this.meshes ? allMeshes().filter(match) : null;
             const counts = {
                 favourites: this.favourites.map(entryFor).filter(match).length,
                 recent: this.recent.map(entryFor).filter(match).length,
@@ -261,14 +278,20 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 curated.forEach((i) => (counts[i.cat] = (counts[i.cat] || 0) + 1));
             } else {
                 counts.all = (meshes || []).length;
-                this.GROUPS.forEach((g) => (counts[g] = 0));
+                this.GROUPS.concat(["others"]).forEach((g) => (counts[g] = 0));
                 (meshes || []).forEach((i) => (counts[i.group] = (counts[i.group] || 0) + 1));
             }
             this.counts = counts;
             this.tabCounts = { curated: curated.length, all: meshes ? meshes.length : null, prefabs: prefabs.length };
         };
         this.railItems = () =>
-            this.tab === "prefabs" ? this.PREFAB_CATEGORIES : this.tab === "curated" ? this.CATEGORIES : this.GROUPS;
+            this.tab === "prefabs"
+                ? this.PREFAB_CATEGORIES
+                : this.tab === "curated"
+                ? this.CATEGORIES
+                : this.otherMaps
+                ? this.GROUPS.concat(["others"])
+                : this.GROUPS;
         this.railName = (id) => {
             if (this.tab === "prefabs") return translate("beamjoy.props.prefabs.categories." + id);
             return this.tab === "curated" ? translate("beamjoy.props.categories." + id) : T("groups." + id);
@@ -303,6 +326,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 this.meshesLoading = true;
                 beamjoyStore.send("BJPropIndexRequest");
             }
+            if (tab === "all") askOtherMeshes();
             refilter();
         };
         this.setCategory = (cat) => {
@@ -310,12 +334,28 @@ angular.module("beamjoy").component("bjPropDrawer", {
             this.cursor = -1;
             refilter();
         };
+        const askOtherMeshes = () => {
+            if (!this.otherMaps || this.otherMeshes || this.otherMeshesLoading) return;
+            this.otherMeshesLoading = true;
+            beamjoyStore.send("BJPropIndexRequest", [{ others: true }]);
+        };
+        this.toggleOtherMaps = () => {
+            this.otherMaps = !this.otherMaps;
+            try {
+                localStorage.setItem(OTHERS_KEY, this.otherMaps ? "1" : "0");
+            } catch (e) {
+                // storage refused : kept for this session only
+            }
+            if (!this.otherMaps && this.category.all === "others") this.category.all = "all";
+            askOtherMeshes();
+            refilter();
+        };
         this.emptyText = () => {
             const cat = this.category[this.tab];
             if (this.query) return T("empty.search").replace("{query}", this.query);
             if (cat === "favourites") return T("empty.favourites");
             if (cat === "recent") return T("empty.recent");
-            if (this.tab === "all" && this.meshesLoading) return T("loadingMeshes");
+            if (this.tab === "all" && (this.meshesLoading || this.otherMeshesLoading)) return T("loadingMeshes");
             return T("empty.category");
         };
 
@@ -471,15 +511,22 @@ angular.module("beamjoy").component("bjPropDrawer", {
             "$destroy",
             $rootScope.$on("BJPropIndex", (_, data) => {
                 const shapes = data && Array.isArray(data.shapes) ? data.shapes : [];
-                this.meshes = shapes.map((shape) => {
+                if (data && typeof data.level === "string") this.level = data.level;
+                const items = shapes.map((shape) => {
                     const known = byShape[keyOf(shape)];
                     if (known && known.curated) {
                         // the catalog's name, grouped with the rest
-                        return Object.assign({}, known, { group: meshGroup(shape) });
+                        return Object.assign({}, known, { group: meshGroup(shape, this.level) });
                     }
                     return (byShape[keyOf(shape)] = meshItem(shape));
                 });
-                this.meshesLoading = false;
+                if (data && data.others) {
+                    this.otherMeshes = items;
+                    this.otherMeshesLoading = false;
+                } else {
+                    this.meshes = items;
+                    this.meshesLoading = false;
+                }
                 if (this.tab === "all") refilter(true);
             })
         );

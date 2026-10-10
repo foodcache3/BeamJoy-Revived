@@ -8,9 +8,12 @@
 ---
 --- Framed for each mesh (direct report : props shown end-on, off to one side, or not at all ; the
 --- asset browser's own camera, used before, is the same for every mesh) : turned to the long side
---- of its box and a bit off square, centred on that box, at its full detail, and from both sides,
---- the one showing more of it kept (a guardrail is only drawn from its front). No grid, so a
---- render that shows nothing is told apart and the tile keeps its placeholder.
+--- of its box and a bit off square, at its full detail, and from both sides, the one showing more
+--- of it kept (a guardrail is only drawn from its front). Rendered larger than the tile, then the
+--- square around what's drawn is cut out and scaled to the tile, so every mesh is centred and fills
+--- it whatever fitToShape made of it (direct report : the preview's own orbit centring left props
+--- off to one side, and put the camera inside some). No grid, so a render that shows nothing is
+--- told apart and the tile keeps its placeholder.
 ---
 --- Made in daylight only (direct report : at night the previews were black). ShapePreview lights the
 --- mesh with the map's own sun, which is next to nothing at night, and has no light of its own to
@@ -21,8 +24,11 @@
 --- Sizes come from the mesh's object box (a TSStatic of it, made for a moment far under the map,
 --- then deleted), kept in beamjoy_props.meta for its tuning() and saved beside the thumbnails.
 ---
---- The mesh index ("All game meshes") walks /art/shapes, /assets/meshes and the current map's art,
---- one folder a frame.
+--- The mesh index ("All game meshes") walks /art/shapes, /assets/meshes and the current map's art ;
+--- the other maps' art has an index of its own, made only once the drawer's "Other maps" is on
+--- (direct request : a search for "tire" missed the tire stacks of Hirochi and Automation Test
+--- Track). Stock maps only : a modded map's meshes are missing for whoever hasn't got that mod.
+--- Walked a few milliseconds a frame.
 
 local M = {
     THUMB_SIZE = 128,
@@ -30,11 +36,20 @@ local M = {
 
 local CACHE_DIR = "/temp/bjPropThumbs"
 local META_FILE = CACHE_DIR .. "/meta.json"
--- the thumbnails : v2 since they're framed for each mesh (those made before are left unused, as are
+-- the thumbnails : v3 since they're cut around the mesh (those made before are left unused, as are
 -- the World Editor's own, made with the one camera for all)
-local THUMB_DIR = CACHE_DIR .. "/v2"
+local THUMB_DIR = CACHE_DIR .. "/v3"
 -- frames the preview is given to load and settle before it's captured (as the asset browser does)
 local SETTLE_FRAMES = 3
+-- the render the thumbnail is cut from (px), and the margin left around the mesh (of its size)
+local RENDER_SIZE = 256
+local CROP_MARGIN = .12
+-- the smallest square cut (px of the render) : a tiny mesh is enlarged at most this much
+local CROP_MIN = 56
+-- time a frame may spend scaling the cut into the thumbnail (ms)
+local COMPOSE_BUDGET_MS = 4
+-- thumbnails made between two timing lines in the log
+local STATS_EVERY = 20
 -- the camera's pitch, and its turn off square to the mesh's long side (so it shows some depth)
 local THUMB_PITCH = 0.35
 local THUMB_TURN = 0.6
@@ -54,6 +69,9 @@ local deferred = {}
 local lastNight, nightCheckedAt = nil, 0
 -- thumbnails made this session get a fresh url : the UI may still hold the black one by its path
 local made = 0
+-- what the last thumbnails took (direct question : how much slower framing made them), logged
+-- every STATS_EVERY : wall time, frames, and the Lua work in them
+local stats = { n = 0, ms = 0, frames = 0, work = 0 }
 
 ---@return boolean
 local function isNight()
@@ -61,29 +79,63 @@ local function isNight()
     return ok and type(state) == "table" and state.isNight == true
 end
 
---- what of the mesh a thumbnail shows, sampled on a 16 x 16 grid against its background (the
---- corner's colour)
+---@class BJThumbLook
+---@field seen integer samples that are the mesh
+---@field brightest number the brightest of them (luminance, 0 - 255)
+---@field x0 integer the mesh's extent in the image (px), when seen
+---@field y0 integer
+---@field x1 integer
+---@field y1 integer
+---@field step integer between samples (px)
+---@field bg integer[] the background's colour
+
+--- where the mesh is in an image, sampled every `step` px against its background : the colour most
+--- of the border has (the corner's colour, used before, was the mesh's own when a mesh reached it :
+--- a jersey barrier came out as "nothing")
 ---@param bitmap any GBitmap
----@return integer seen samples that are the mesh
----@return number brightest of them (luminance, 0 - 255)
-local function look(bitmap)
+---@param samples integer? per side (16)
+---@return BJThumbLook
+local function look(bitmap, samples)
     local w, h = bitmap:getWidth(), bitmap:getHeight()
-    if not w or not h or w < 2 or h < 2 then return 0, 0 end
-    local c = ColorI(0, 0, 0, 0)
-    bitmap:getColor(0, 0, c)
+    local out = { seen = 0, brightest = 0, x0 = 0, y0 = 0, x1 = 0, y1 = 0, step = 1, bg = { 0, 0, 0 } }
+    if not w or not h or w < 2 or h < 2 then return out end
+    local step = math.max(1, math.floor(math.min(w, h) / (samples or 16)))
+    out.step = step
     -- a ColorI's channels are red / green / blue (as the game's own code reads them)
-    local br, bg, bb = c.red, c.green, c.blue
-    local brightest, seen = 0, 0
-    for i = 0, 15 do
-        for j = 0, 15 do
-            bitmap:getColor(math.floor((w - 1) * i / 15), math.floor((h - 1) * j / 15), c)
+    local c = ColorI(0, 0, 0, 0)
+    local counts, most = {}, 0
+    local function vote(x, y)
+        bitmap:getColor(x, y, c)
+        local key = math.floor(c.red / 8) * 1024 + math.floor(c.green / 8) * 32 + math.floor(c.blue / 8)
+        local n = (counts[key] or 0) + 1
+        counts[key] = n
+        if n > most then most, out.bg = n, { c.red, c.green, c.blue } end
+    end
+    for x = 0, w - 1, step do
+        vote(x, 0)
+        vote(x, h - 1)
+    end
+    for y = step, h - 2, step do
+        vote(0, y)
+        vote(w - 1, y)
+    end
+    local br, bg, bb = out.bg[1], out.bg[2], out.bg[3]
+    local x0, y0, x1, y1 = w, h, -1, -1
+    for y = 0, h - 1, step do
+        for x = 0, w - 1, step do
+            bitmap:getColor(x, y, c)
             if math.abs(c.red - br) + math.abs(c.green - bg) + math.abs(c.blue - bb) > 24 then
-                seen = seen + 1
-                brightest = math.max(brightest, .299 * c.red + .587 * c.green + .114 * c.blue)
+                out.seen = out.seen + 1
+                out.brightest = math.max(out.brightest, .299 * c.red + .587 * c.green + .114 * c.blue)
+                if x < x0 then x0 = x end
+                if x > x1 then x1 = x end
+                if y < y0 then y0 = y end
+                if y > y1 then y1 = y end
             end
         end
     end
-    return seen, brightest
+    if out.seen > 0 then out.x0, out.y0, out.x1, out.y1 = x0, y0, x1, y1 end
+    return out
 end
 
 --- a thumbnail too dark to show : nothing but its background, or nothing of the mesh brighter than
@@ -91,8 +143,8 @@ end
 ---@param bitmap any GBitmap
 ---@return boolean
 local function tooDark(bitmap)
-    local seen, brightest = look(bitmap)
-    return seen == 0 or brightest < 40
+    local seen = look(bitmap)
+    return seen.seen == 0 or seen.brightest < 40
 end
 
 ---@param path string a png
@@ -111,8 +163,17 @@ local metaDirtyAt = nil
 
 ---@type string[]?
 local index = nil
----@type {roots: string[], dirs: string[], found: table<string, string>, level: string?}?
+-- the other stock maps' meshes, once asked for
+---@type string[]?
+local othersIndex = nil
+---@alias BJMeshIndexing {roots: string[], dirs: string[], found: table<string, string>, level: string?, others: boolean}
+---@type BJMeshIndexing?
 local indexing = nil
+-- the other kind, waiting for this one to finish
+---@type boolean?
+local othersAsked = nil
+-- time a frame may spend walking folders (ms)
+local INDEX_BUDGET_MS = 4
 
 --- a mesh from the game's own art, as the server accepts in a race (services/races.lua saneShape)
 ---@param shape any
@@ -255,39 +316,80 @@ end
 --- the camera's turns for a mesh : across its long side and a bit off square, then the same from
 --- the other side. At a turn of 0 the preview looks along the mesh's y axis (a race barricade, 10 m
 --- along y, was shown end-on)
----@param box table? objBox's
+---@param size table? beamjoy_props.meta's {x, y, z}
 ---@return number[]
-local function thumbYaws(box)
+local function thumbYaws(size)
     local base = 0
-    if box and box.max.y - box.min.y > box.max.x - box.min.x then base = math.pi / 2 end
+    if size and tonumber(size.x) and tonumber(size.y) and size.y > size.x then base = math.pi / 2 end
     return { base + THUMB_TURN, base + THUMB_TURN + math.pi }
 end
 
 --- points the job's camera for its current view, fitted to the mesh
 local function aim()
-    local preview = job.preview
-    preview:setCamRotation(THUMB_PITCH, job.yaws[job.view])
-    preview:fitToShape()
-    if job.box then
-        -- on the box's centre, whatever fitToShape orbits (a curved barricade came out off to one
-        -- side, cut by the tile's edge)
-        local min, max = job.box.min, job.box.max
-        pcall(function()
-            preview:setOrbitPos(Point3F((min.x + max.x) / 2, (min.y + max.y) / 2, (min.z + max.z) / 2))
-        end)
+    job.preview:setCamRotation(THUMB_PITCH, job.yaws[job.view])
+    job.preview:fitToShape()
+end
+
+--- the square of the render cut out around the mesh, with a margin : {x, y, side} (px, may reach
+--- past the render's edge, filled with its background there)
+---@param seen BJThumbLook
+---@return {x: number, y: number, side: number}
+local function cropOf(seen)
+    local w = seen.x1 - seen.x0 + seen.step
+    local h = seen.y1 - seen.y0 + seen.step
+    local side = math.max(CROP_MIN, math.max(w, h) * (1 + 2 * CROP_MARGIN))
+    local cx, cy = seen.x0 + w / 2, seen.y0 + h / 2
+    return { x = cx - side / 2, y = cy - side / 2, side = side }
+end
+
+--- scales rows of the cut into the thumbnail until the frame's budget is spent : true once done.
+--- Shrunk with 4 samples a pixel, enlarged with the nearest
+---@return boolean
+local function compose()
+    local src, out, crop, bg = job.best.bitmap, job.out, job.crop, job.best.seen.bg
+    local n = M.THUMB_SIZE
+    local srcW, srcH = src:getWidth(), src:getHeight()
+    local scale = crop.side / n
+    local c, o = ColorI(0, 0, 0, 255), ColorI(0, 0, 0, 255)
+    local offsets = scale >= 2 and { -scale / 4, scale / 4 } or { 0 }
+    local deadline = os.clock() + COMPOSE_BUDGET_MS / 1000
+    while job.row < n do
+        local j = job.row
+        for i = 0, n - 1 do
+            local r, g, b, k = 0, 0, 0, 0
+            local cx, cy = crop.x + (i + .5) * scale, crop.y + (j + .5) * scale
+            for _, dy in ipairs(offsets) do
+                for _, dx in ipairs(offsets) do
+                    local x, y = math.floor(cx + dx), math.floor(cy + dy)
+                    if x >= 0 and y >= 0 and x < srcW and y < srcH then
+                        src:getColor(x, y, c)
+                        r, g, b = r + c.red, g + c.green, b + c.blue
+                    else
+                        r, g, b = r + bg[1], g + bg[2], b + bg[3]
+                    end
+                    k = k + 1
+                end
+            end
+            o.red, o.green, o.blue, o.alpha = math.floor(r / k + .5), math.floor(g / k + .5), math.floor(b / k + .5), 255
+            out:setColor(i, j, o)
+        end
+        job.row = j + 1
+        if os.clock() > deadline then break end
     end
+    return job.row >= n
 end
 
 --- one step of the thumbnail being made ; true once it's done (made or given up)
 ---@return boolean
 local function stepJob()
+    local workFrom = os.clock()
+    job.steps = (job.steps or 0) + 1
     local ok, err = pcall(function()
         if job.stage == "start" then
             beamjoy_props.ensureMaterials(job.shape)
-            local rect = RectI(0, 0, M.THUMB_SIZE, M.THUMB_SIZE)
+            local rect = RectI(0, 0, RENDER_SIZE, RENDER_SIZE)
             job.rect = rect
-            job.box = objBox(job.shape)
-            job.yaws, job.view = thumbYaws(job.box), 1
+            job.yaws, job.view = thumbYaws(beamjoy_props.meta[job.shape:lower()]), 1
             job.preview = ShapePreview()
             -- no grid (the sixth) : only the background around the mesh, so an empty render shows
             if not pcall(function() job.preview:setRenderState(false, false, false, false, false, false) end) then
@@ -312,32 +414,41 @@ local function stepJob()
             end
         elseif job.stage == "capture" then
             local bitmap = GBitmap()
-            bitmap:init(M.THUMB_SIZE, M.THUMB_SIZE)
+            bitmap:init(RENDER_SIZE, RENDER_SIZE)
             job.preview:copyToBmp(bitmap:getPtr())
-            local seen, brightest = look(bitmap)
+            -- 32 samples a side : the cut is placed to 8 px of the render, inside its margin
+            local seen = look(bitmap, 32)
             local okPolys, polys = pcall(function() return tonumber(job.preview.mDetailPolys) end)
-            if okPolys and polys == 0 then seen = 0 end
+            if okPolys and polys == 0 then seen.seen = 0 end
             -- the other side is kept only when it shows clearly more of the mesh
-            if seen > 0 and (not job.best or seen > job.best.seen * 1.25) then
-                job.best = { bitmap = bitmap, seen = seen, brightest = brightest }
+            if seen.seen > 0 and (not job.best or seen.seen > job.best.seen.seen * 1.25) then
+                job.best = { bitmap = bitmap, seen = seen }
             end
             if job.view < #job.yaws then
+                -- the mesh is loaded by now : the other side is rendered at once, captured next frame
                 job.view = job.view + 1
                 aim()
-                job.stage, job.frames = "settle", SETTLE_FRAMES
+                job.preview:renderWorld(job.rect)
                 return
             end
             if not job.best then
                 job.stage = "empty"
                 return
             end
-            if job.best.brightest < 40 then
+            if job.best.seen.brightest < 40 then
                 -- unlit (night, or dusk) : not kept, made again by day
                 job.stage = "dark"
                 return
             end
+            job.crop = cropOf(job.best.seen)
+            job.out = GBitmap()
+            job.out:init(M.THUMB_SIZE, M.THUMB_SIZE)
+            job.row = 0
+            job.stage = "compose"
+        elseif job.stage == "compose" then
+            if not compose() then return end
             FS:directoryCreate(job.path:match("^(.*)/[^/]*$"), true)
-            if not job.best.bitmap:saveFile(job.path) then error("not saved") end
+            if not job.out:saveFile(job.path) then error("not saved") end
             job.stage = "done"
         end
     end)
@@ -347,7 +458,16 @@ local function stepJob()
         thumbs[job.shape] = false
         return true
     end
+    job.work = (job.work or 0) + (os.clock() - workFrom) * 1000
     if job.stage == "done" then
+        stats.n, stats.frames, stats.work = stats.n + 1, stats.frames + job.steps, stats.work + job.work
+        stats.ms = stats.ms + (GetCurrentTimeMillis() - (job.startedAt or GetCurrentTimeMillis()))
+        if stats.n >= STATS_EVERY then
+            log("I", "beamjoy_propPicker", string.format(
+                "%d thumbnails : %.0f ms each, %.1f frames, %.1f ms of Lua work", stats.n,
+                stats.ms / stats.n, stats.frames / stats.n, stats.work / stats.n))
+            stats = { n = 0, ms = 0, frames = 0, work = 0 }
+        end
         made = made + 1
         deferred[job.shape] = nil
         thumbs[job.shape] = job.path .. "?v=" .. made
@@ -408,7 +528,10 @@ local function processQueue()
     end
     if not thumbSettled(shape) then
         if isNight() then return defer(shape) end
-        job = { shape = shape, stage = "start", frames = 0, path = THUMB_DIR .. shape .. ".png" }
+        job = {
+            shape = shape, stage = "start", frames = 0, path = THUMB_DIR .. shape .. ".png",
+            startedAt = GetCurrentTimeMillis(),
+        }
         return
     end
     notify(shape)
@@ -460,11 +583,36 @@ local function collect(dir, depth, found)
     end
 end
 
-local function startIndex()
+--- the art folders of every stock map but this one
+---@param level string?
+---@return string[]
+local function otherMapRoots(level)
+    local roots = {}
+    local ok, dirs = pcall(FS.findFiles, FS, "/levels/", "*", 0, false, true)
+    for _, dir in ipairs(ok and type(dirs) == "table" and dirs or {}) do
+        local name = type(dir) == "string" and dir:match("([^/]+)/?$")
+        if name and (not level or name:lower() ~= level:lower()) then
+            local stock = pcall(function() return isOfficialContentVPath("/levels/" .. name .. "/") end) and
+                isOfficialContentVPath("/levels/" .. name .. "/")
+            if stock and FS:directoryExists("/levels/" .. name .. "/art/") then
+                table.insert(roots, "/levels/" .. name .. "/art/")
+            end
+        end
+    end
+    return roots
+end
+
+---@param others boolean? the other maps' index
+local function startIndex(others)
     local level = currentLevel()
-    local roots = { "/art/shapes/", "/assets/meshes/" }
-    if level then table.insert(roots, "/levels/" .. level .. "/art/") end
-    indexing = { roots = roots, dirs = {}, found = {}, level = level }
+    local roots
+    if others then
+        roots = otherMapRoots(level)
+    else
+        roots = { "/art/shapes/", "/assets/meshes/" }
+        if level then table.insert(roots, "/levels/" .. level .. "/art/") end
+    end
+    indexing = { roots = roots, dirs = {}, found = {}, level = level, others = others == true }
     for _, root in ipairs(roots) do
         collect(root, 0, indexing.found)
         local ok, dirs = pcall(FS.findFiles, FS, root, "*", 0, false, true)
@@ -474,28 +622,44 @@ local function startIndex()
     end
 end
 
---- one folder a frame ; the list goes to the drawer once every folder is walked
+--- folders until the frame's budget is spent ; the list goes to the drawer once every folder is
+--- walked
 local function processIndex()
     if not indexing then return end
-    local dir = table.remove(indexing.dirs, 1)
-    if dir then
+    local deadline = os.clock() + INDEX_BUDGET_MS / 1000
+    repeat
+        local dir = table.remove(indexing.dirs, 1)
+        if not dir then break end
         collect(dir, -1, indexing.found)
-        return
-    end
+    until os.clock() > deadline
+    if #indexing.dirs > 0 then return end
     local list = {}
     for _, shape in pairs(indexing.found) do table.insert(list, shape) end
     table.sort(list, function(a, b) return a:lower() < b:lower() end)
-    index = list
-    local level = indexing.level
+    local level, others = indexing.level, indexing.others
     indexing = nil
-    beamjoy_communications_ui.send("BJPropIndex", { level = level, shapes = index })
+    if others then othersIndex = list else index = list end
+    beamjoy_communications_ui.send("BJPropIndex", { level = level, shapes = list, others = others or nil })
+    -- the other kind, asked for meanwhile
+    if othersAsked ~= nil then
+        local next = othersAsked
+        othersAsked = nil
+        startIndex(next)
+    end
 end
 
-local function onIndexRequest()
-    if index then
-        return beamjoy_communications_ui.send("BJPropIndex", { level = currentLevel(), shapes = index })
+---@param data table? {others = true} : the other maps' meshes
+local function onIndexRequest(data)
+    local others = type(data) == "table" and data.others == true
+    local done = others and othersIndex or not others and index
+    if done then
+        return beamjoy_communications_ui.send("BJPropIndex", { level = currentLevel(), shapes = done, others = others or nil })
     end
-    if not indexing then startIndex() end
+    if indexing then
+        if indexing.others ~= others then othersAsked = others end
+        return
+    end
+    startIndex(others)
 end
 
 -- HOOKS -----------------------------------------------------------------------------------------
@@ -537,7 +701,7 @@ end
 
 -- a map's own meshes only exist on it : its index is made again on the next map
 local function onClientEndMission()
-    index, indexing, queue = nil, nil, {}
+    index, othersIndex, indexing, othersAsked, queue = nil, nil, nil, nil, {}
     deferred, lastNight = {}, nil
     dropJob()
     if metaDirtyAt then saveMeta() end

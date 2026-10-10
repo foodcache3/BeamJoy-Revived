@@ -403,18 +403,143 @@ end
 -- mesh is first shown, the way the game loads a car's own materials when it's spawned
 -- (core/vehicle/manager.lua). Only the materials the current map doesn't already have are added
 -- (from a copy of the file under /temp), so nothing of the map itself changes.
+--
+-- The game's shared meshes (/assets/...) can need materials only some maps define too (direct
+-- report : the beech tree and bush's leaves, defined by East Coast, Derby, Hirochi, Driver Training
+-- only ; the brick wall's bricks, by West Coast only). What a mesh needs is read from its .dae (a
+-- material's id there, less "-material", is what a Material maps to) ; what the current map has no
+-- material for is borrowed from MATERIAL_SOURCES, those materials only.
 
 local MATERIALS_TEMP_DIR = "/temp/bjPropMaterials/"
 -- folders (lower case) already looked at on this map
 local materialDirs = {}
+-- material files the shared meshes' materials are borrowed from, the first defining one wins
+local MATERIAL_SOURCES = {
+    -- beech_trunk, beech_branch_01, beech_leaves, beech_blocker
+    "/levels/east_coast_usa/art/shapes/trees/trees_beech/main.materials.json",
+    -- leaves_strong
+    "/levels/east_coast_usa/art/shapes/trees/main.materials.json",
+    -- brick_plain
+    "/levels/west_coast_usa/art/shapes/buildings/main.materials.json",
+    -- balustrades
+    "/levels/derby/art/shapes/buildings/main.materials.json",
+    -- architraves
+    "/art/shapes/common/materials/main.materials.json",
+}
+-- mapTo -> {key, mat} of MATERIAL_SOURCES, read once
+local borrowable = nil
+-- the current map's mapTo names (true), gathered on first need
+local mapped = nil
+-- shapes (lower case) already looked at on this map
+local materialShapes = {}
+-- shape (lower case) -> what its .dae asks for, read once a session
+local meshMaterialsOf = {}
+
+---@return table<string, boolean>
+local function mappedNames()
+    if mapped then return mapped end
+    mapped = {}
+    local set = Sim.getMaterialSet()
+    for i = 0, set:size() - 1 do
+        local mat = set:at(i)
+        if mat then
+            local to = mat:getField("mapTo", 0)
+            if type(to) == "string" and to ~= "" and to ~= "unmapped_mat" then
+                mapped[to] = true
+            else
+                mapped[mat:getName()] = true
+            end
+        end
+    end
+    return mapped
+end
+
+---@return table<string, {key: string, mat: table}>
+local function borrowableMaterials()
+    if borrowable then return borrowable end
+    borrowable = {}
+    for _, file in ipairs(MATERIAL_SOURCES) do
+        local ok, data = pcall(jsonReadFile, file)
+        for key, mat in pairs(ok and type(data) == "table" and data or {}) do
+            if type(mat) == "table" and mat.class == "Material" and type(mat.mapTo) == "string" and
+                not borrowable[mat.mapTo] then
+                borrowable[mat.mapTo] = { key = key, mat = mat }
+            end
+        end
+    end
+    return borrowable
+end
+
+--- the materials a mesh's .dae asks for : its id (less "-material") and its name
+---@param shape string
+---@return {id: string, name: string?}[]
+local function meshMaterials(shape)
+    local key = shape:lower()
+    if meshMaterialsOf[key] then return meshMaterialsOf[key] end
+    local dae = shape:gsub("%.[cC][dD][aA][eE]$", ".dae")
+    local out, seen = {}, {}
+    meshMaterialsOf[key] = out
+    if not FS:fileExists(dae) then return out end
+    for tag in (readFile(dae) or ""):gmatch("<material%s[^>]*>") do
+        local id = tag:match('id="([^"]+)"')
+        if id then
+            id = id:gsub("%-material$", "")
+            if not seen[id] then
+                seen[id] = true
+                out[#out + 1] = { id = id, name = tag:match('name="([^"]+)"') }
+            end
+        end
+    end
+    return out
+end
+
+--- borrows what the current map has no material for, of what the mesh asks for
+---@param shape string
+local function borrowMaterials(shape)
+    local key = shape:lower()
+    -- the shared meshes only : the game's own art has its materials everywhere
+    if materialShapes[key] or not key:find("^/assets/") then return end
+    materialShapes[key] = true
+    local ok, err = pcall(function()
+        local have, from = mappedNames(), borrowableMaterials()
+        local add, count = {}, 0
+        for _, m in ipairs(meshMaterials(shape)) do
+            if not have[m.id] and not (m.name and have[m.name]) then
+                local src = from[m.id] or (m.name and from[m.name])
+                if src and not scenetree.findObject(src.mat.name or src.key) then
+                    src.mat.persistentId = nil
+                    add[src.key] = src.mat
+                    count = count + 1
+                    have[src.mat.mapTo] = true
+                end
+            end
+        end
+        if count == 0 then return end
+        local copy = MATERIALS_TEMP_DIR .. "borrowed" .. shape:gsub("[^%w]+", "_") .. ".materials.json"
+        jsonWriteFile(copy, add, true)
+        loadJsonMaterialsFile(copy)
+        log("I", "beamjoy_props", string.format("%d materials borrowed for %s", count, shape))
+    end)
+    if not ok then LogWarn(string.format("beamjoy_props: materials of %s not borrowed: %s", shape, tostring(err))) end
+end
 
 ---@param shape string
 function M.ensureMaterials(shape)
+    if type(shape) ~= "string" then return end
     local level = M.shapeLevel(shape)
-    if not level or level == currentLevel() then return end
     local dir = shape:match("^(.*/)[^/]*$")
-    if not dir or materialDirs[dir:lower()] then return end
-    materialDirs[dir:lower()] = true
+    if level and level ~= currentLevel() and dir and not materialDirs[dir:lower()] then
+        materialDirs[dir:lower()] = true
+        M.ensureFolderMaterials(dir)
+        -- what the map has changed
+        mapped = nil
+    end
+    borrowMaterials(shape)
+end
+
+--- a map's own mesh folder : its material files' materials the current map hasn't got
+---@param dir string
+function M.ensureFolderMaterials(dir)
     local ok, err = pcall(function()
         local missing, count = {}, 0
         for _, file in ipairs(FS:findFiles(dir, "*materials.json", 0, true, false) or {}) do
@@ -1018,7 +1143,7 @@ local function cleanup()
     for _, l in pairs(lightOf) do deleteLights(l) end
     lightOf, lightCount, lampsOn = {}, 0, nil
     -- a new map, its own materials : looked at again
-    materialDirs = {}
+    materialDirs, materialShapes, mapped = {}, {}, nil
     if collisionReloadAt then
         collisionReloadAt = nil
         if be then be:reloadCollision() end
