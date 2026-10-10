@@ -424,10 +424,26 @@ angular.module("beamjoy").component("bjPropDrawer", {
         const takeThumb = (data) => {
             if (!data || typeof data.shape !== "string") return;
             const key = keyOf(data.shape);
-            this.thumbs[key] = { done: true, url: typeof data.url === "string" ? data.url : null };
+            // deferred : waits for daylight (previews are lit by the map's sun, black at night)
+            this.thumbs[key] = {
+                done: true,
+                url: typeof data.url === "string" ? data.url : null,
+                deferred: data.deferred === true,
+            };
             if (data.size && typeof data.size === "object") this.sizes[key] = data.size;
         };
         $scope.$on("$destroy", $rootScope.$on("BJPropThumb", (_, data) => takeThumb(data)));
+        // daybreak : the tiles that waited are asked for again
+        $scope.$on(
+            "$destroy",
+            $rootScope.$on("BJPropThumbsRetry", () => {
+                Object.keys(this.thumbs).forEach((k) => {
+                    if (this.thumbs[k] && this.thumbs[k].deferred) delete this.thumbs[k];
+                });
+                lastThumbRequest = "";
+                requestThumbs(true);
+            })
+        );
         $scope.$on(
             "$destroy",
             $rootScope.$on("BJPropThumbs", (_, list) => (Array.isArray(list) ? list : []).forEach(takeThumb))

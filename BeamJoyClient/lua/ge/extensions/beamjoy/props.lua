@@ -140,6 +140,11 @@ local M = {
         { id = "flagTeardrop", cat = "start", tags = "banner", shape = "/art/shapes/garage_and_dealership/s_flag_floor_teardrop_01.dae", yaw = 0, length = 4, collision = "None" },
         { id = "timerBoard", cat = "start", tags = "scoreboard clock drag timing", shape = "/art/shapes/race/dragstrip/timerboard.dae" },
         { id = "timeStand", cat = "start", tags = "scoreboard drag timing", shape = "/art/shapes/race/dragstrip/s_gm_dragstrip_timestand.dae" },
+        -- East Coast's rally gates (direct request). Stood on their origin, as the map places them :
+        -- their concrete feet are sunk 2.30 m into the ground (the measured lift, 3.26 m, raised
+        -- them out of it, and their collision mesh reaches lower still)
+        { id = "rallyGate", cat = "start", tags = "arch gantry banner hirochi gripall", shape = "/levels/east_coast_usa/art/shapes/race/race_rally_gate.dae", yaw = 0, length = 12, zOffset = 0 },
+        { id = "rallyGateFinish", cat = "start", tags = "arch gantry banner finish line", shape = "/levels/east_coast_usa/art/shapes/race/race_rally_gate_finish.dae", yaw = 0, length = 12, zOffset = 0 },
         -- ramps and obstacles
         { id = "rampLarge", cat = "ramps", tags = "jump kicker", shape = "/art/shapes/objects/ramp_massive.dae" },
         { id = "crossRampHr", cat = "ramps", tags = "jump derby", shape = "/levels/hirochi_raceway/art/shapes/buildings/derby_crossramp.dae" },

@@ -1610,8 +1610,10 @@ local function onSetProp(index, partial)
     if prop.kind == "line" then
         if partial.count ~= nil then
             local others = beamjoy_props.total(M.race.props) - beamjoy_props.weight(prop)
+            -- each of its props with its parts (a line of prefabs)
+            local each = 1 + (type(prop.parts) == "table" and #prop.parts or 0)
             prop.count = math.max(1, math.min(math.floor(tonumber(partial.count) or prop.count),
-                beamjoy_props.MAX_PROPS - others))
+                math.floor((beamjoy_props.MAX_PROPS - others) / each)))
         end
         if partial.yaw ~= nil then
             prop.yaw = ((tonumber(partial.yaw) or 0) + 180) % 360 - 180

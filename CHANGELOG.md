@@ -8,7 +8,25 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2656, server build 2448.
+Version 1.11.0 : client build 2659, server build 2448.
+
+- **East Coast's rally gates in the props list** (direct request) : "Rally gate" and "Rally gate,
+  finish", under Start and finish. They stand on their origin, their concrete feet sunk into the
+  ground as on East Coast (lifted by their measured size, they floated over 3 m up). Gates placed
+  before keep the height they were placed at. *(client)*
+- **Fix : prop previews shown end-on, off to one side, or empty** (direct report). Every preview
+  was taken with the same camera, so a barricade long one way showed as a thin post, a curved one
+  was cut off by the tile's edge, and a guardrail or safety cushion didn't show at all. Each
+  preview is now framed for its prop : turned to its long side, centred on it, at its full detail,
+  and taken from both sides, the one showing more kept. A prop that still shows nothing keeps the
+  placeholder tile. Previews made before are made again. *(client)*
+- **Fix : prop previews black at night** (direct report). The previews are lit by the map's own sun,
+  and the game's preview renderer has no light of its own to set. At night a missing preview now
+  waits (its tile says why) and is made once it's day ; a render that still comes out black isn't
+  kept, and black previews already saved from before are thrown away and made again. *(client)*
+- **Fix : the editor's prop counter counted a prefab as one prop** (direct report). The "used / 1000"
+  counter and the drawer's budget bar count every mesh of a prefab now, as the limit itself does ;
+  a line's length is capped the same way. *(client)*
 
 - **Fix : a fresh install's first boot coming up without its bundled races** (direct report, also
   shipped as the 1.10.7 hotfix). The server starts its modules in an order that changes every boot ;

@@ -770,11 +770,13 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         };
         // a plain number (not a function the template calls), refreshed with each echo
         this.propTotal = 0;
+        // as beamjoy_props.weight counts them (the race's prop limit) : every prop of a line, and
+        // every mesh of a prefab (direct report : prefabs counted as one)
         const updatePropTotal = () => {
-            this.propTotal = ((this.race && this.race.props) || []).reduce(
-                (n, p) => n + (p.kind === "line" ? Math.max(1, Number(p.count) || 1) : 1),
-                0
-            );
+            this.propTotal = ((this.race && this.race.props) || []).reduce((n, p) => {
+                const each = 1 + (Array.isArray(p.parts) ? p.parts.length : 0);
+                return n + (p.kind === "line" ? Math.max(1, Number(p.count) || 1) : 1) * each;
+            }, 0);
         };
         this.selectProp = (event, idx) => {
             event.stopPropagation();
