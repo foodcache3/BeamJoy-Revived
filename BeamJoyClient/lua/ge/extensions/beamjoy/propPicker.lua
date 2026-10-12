@@ -292,7 +292,23 @@ local function defer(shape)
     notify(shape)
 end
 
+-- the one preview every thumbnail is rendered with (direct report : the game's VRAM only ever went
+-- up, tools:Texture at 1.7 GB). A ShapePreview has render targets of its own, freed only once Lua's
+-- garbage collector gets to it, and a small userdata gives it no hurry : one made per thumbnail,
+-- they piled up. Its mesh is let go after each thumbnail
+local sharedPreview = nil
+
+--- lets go of a preview's mesh (and what it holds of its materials)
+---@param preview any? ShapePreview
+local function release(preview)
+    if preview then pcall(function() preview:clearShape() end) end
+end
+
 local function dropJob()
+    if job then
+        release(job.preview)
+        release(job.fresh)
+    end
     job = nil
 end
 
@@ -335,10 +351,13 @@ local function render(preview)
     synced(function() (preview or job.preview):renderWorld(job.rect) end)
 end
 
---- a preview of the job's mesh, set up for a thumbnail : no grid, its largest drawn detail level
+--- a preview of the job's mesh, set up for a thumbnail : no grid, its largest drawn detail level.
+--- The shared one, or one of its own for an empty render's probe (a preview made anew)
+---@param own boolean?
 ---@return any ShapePreview
-local function newPreview()
-    local preview = ShapePreview()
+local function newPreview(own)
+    local preview = own and ShapePreview() or sharedPreview or ShapePreview()
+    if not own then sharedPreview = preview end
     -- no grid (the sixth) : only the background around the mesh, so an empty render shows
     if not pcall(function() preview:setRenderState(false, false, false, false, false, false) end) then
         preview:setRenderState(false, false, false, false, false)
@@ -566,7 +585,7 @@ local function stepJob()
                     end)
                 end
                 -- then a preview made anew, now, the way the first was
-                job.fresh = newPreview()
+                job.fresh = newPreview(true)
                 render(job.fresh)
                 job.fresh:setCamRotation(THUMB_PITCH, job.yaws[1])
                 job.fresh:fitToShape()
@@ -590,6 +609,7 @@ local function stepJob()
             pcall(function()
                 bitmap:saveFile(DEBUG_DIR .. job.shape:gsub("%.[^.]*$", "") .. ".fresh.png")
             end)
+            release(job.fresh)
             job.fresh = nil
             job.stage = "empty"
         elseif job.stage == "compose" then
@@ -861,6 +881,9 @@ end
 
 local function onExit()
     if metaDirtyAt then saveMeta() end
+    dropJob()
+    release(sharedPreview)
+    sharedPreview = nil
 end
 
 M.onInit = onInit

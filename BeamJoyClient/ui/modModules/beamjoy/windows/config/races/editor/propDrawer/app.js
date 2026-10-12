@@ -22,6 +22,7 @@ const POSITION_KEY = "beamjoy.propDrawer.position";
 const RECENT_KEY = "beamjoy.propDrawer.recent";
 const RECENT_MAX = 16;
 const KEEP_KEY = "beamjoy.propDrawer.keepPlacing";
+const FIXED_KEY = "beamjoy.propDrawer.fixedRotation";
 // "Other maps" in All game meshes (off unless the player turned it on)
 const OTHERS_KEY = "beamjoy.propDrawer.otherMaps";
 
@@ -576,6 +577,25 @@ angular.module("beamjoy").component("bjPropDrawer", {
             }
             sendKeepPlacing();
         };
+        // "Fixed rotation" (direct request : trusses) : a prop placed alone keeps the turn the wheel
+        // gave it, whichever way the camera looks. Kept on this PC
+        this.fixedRotation = false;
+        try {
+            this.fixedRotation = localStorage.getItem(FIXED_KEY) === "1";
+        } catch (e) {
+            this.fixedRotation = false;
+        }
+        const sendFixedRotation = () => beamjoyStore.send("BJEditorRaceSetFixedRotation", [this.fixedRotation]);
+        this.toggleFixedRotation = (event) => {
+            if (event) event.stopPropagation();
+            this.fixedRotation = !this.fixedRotation;
+            try {
+                localStorage.setItem(FIXED_KEY, this.fixedRotation ? "1" : "0");
+            } catch (e) {
+                // kept for this session only
+            }
+            sendFixedRotation();
+        };
         this.expandStrip = () => {
             this.stripExpanded = true;
             $timeout(() => {
@@ -642,6 +662,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
                     ["keys.shiftWheel", "help.shiftWheel"],
                     ["keys.ctrlRelease", "help.ctrlRelease"],
                     ["keys.keepButton", "help.keepButton"],
+                    ["keys.fixedButton", "help.fixedButton"],
                     ["keys.stop", "help.stop"],
                     ["keys.delete", "help.delete"],
                 ],
@@ -652,6 +673,9 @@ angular.module("beamjoy").component("bjPropDrawer", {
                     ["keys.bend", "help.bend"],
                     ["keys.ctrlDrag", "help.ctrlDrag"],
                     ["keys.swap", "help.swap"],
+                    ["keys.ctrlClick", "help.ctrlClick"],
+                    ["keys.shiftClick", "help.shiftClick"],
+                    ["keys.eyedropper", "help.eyedropper"],
                 ],
             },
             {
@@ -960,6 +984,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
             if (changes.open) {
                 if (this.open) {
                     sendKeepPlacing();
+                    sendFixedRotation();
                     lastPos = "";
                     startWatching();
                     $timeout(() => {

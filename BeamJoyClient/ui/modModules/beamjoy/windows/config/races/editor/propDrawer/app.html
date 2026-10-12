@@ -788,6 +788,18 @@
                 <path d="M20 12.5v2a4 4 0 0 1-4 4H4"></path>
             </svg>
         </button>
+        <button
+            class="pd-icon pd-keep"
+            ng-class="{on: $ctrl.fixedRotation}"
+            ng-click="$ctrl.toggleFixedRotation($event)"
+            title="{{$ctrl.fixedRotation ? $ctrl.T('fixed.on') : $ctrl.T('fixed.off')}}"
+        >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="8.5"></circle>
+                <path d="M12 6.5l2.2 5.5h-4.4z" fill="currentColor"></path>
+                <path d="M12 17.5v-5.5"></path>
+            </svg>
+        </button>
         <button class="pd-icon" ng-if="$ctrl.isFloating()" ng-click="$ctrl.dock($event)" title="{{$ctrl.T('move.dock')}}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
                 <rect x="3.5" y="5" width="17" height="14" rx="1.5"></rect>
@@ -1046,6 +1058,18 @@
             <path d="M20 12.5v2a4 4 0 0 1-4 4H4"></path>
         </svg>
     </button>
+    <button
+        class="pd-icon pd-keep"
+        ng-class="{on: $ctrl.fixedRotation}"
+        ng-click="$ctrl.toggleFixedRotation($event)"
+        title="{{$ctrl.fixedRotation ? $ctrl.T('fixed.on') : $ctrl.T('fixed.off')}}"
+    >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="8.5"></circle>
+            <path d="M12 6.5l2.2 5.5h-4.4z" fill="currentColor"></path>
+            <path d="M12 17.5v-5.5"></path>
+        </svg>
+    </button>
     <button class="pd-icon" ng-click="$ctrl.expandStrip()" title="{{$ctrl.T('strip.expand')}}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <path ng-attr-d="{{$ctrl.pos.mode === 'right' ? 'M9 5l7 7-7 7' : 'M15 5l-7 7 7 7'}}"></path>
@@ -1110,5 +1134,7 @@
     </span>
     <span ng-if="!$ctrl.keepPlacing"><span class="pd-kbd">Ctrl</span>{{$ctrl.T('hints.shift')}}</span>
     <span ng-if="$ctrl.keepPlacing" class="pd-line">{{$ctrl.T('hints.keepOn')}}</span>
+    <span ng-if="$ctrl.fixedRotation" class="pd-line">{{$ctrl.T('hints.fixedOn')}}</span>
+    <span ng-if="$ctrl.placing.picked" class="pd-line">{{$ctrl.T('hints.picked')}}</span>
     <span><span class="pd-kbd">{{$ctrl.T('keys.stop')}}</span>{{$ctrl.T('hints.stop')}}</span>
 </div>

@@ -141,7 +141,7 @@ const raceShareCopyToClipboard = async (text) => {
 };
 
 // the props' fields edited in the sidebar (everything else about a prop is set Lua-side)
-const PROP_FIELDS = ["scale", "count", "yaw", "followGround"];
+const PROP_FIELDS = ["scale", "count", "yaw", "followGround", "gap"];
 
 angular.module("beamjoy").component("bjConfigRacesEditor", {
     bindings: {
@@ -372,6 +372,9 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         $rootScope.$on("BJEditorRaceActiveProp", (_, active) => {
             this.activeProp = active && active.index ? active.index - 1 : null;
             this.activePropPart = (active && active.part) || null;
+            // the props selected together (Lua sends an empty list as {})
+            this.selectedProps =
+                active && Array.isArray(active.selected) ? active.selected.map((i) => Number(i) - 1) : [];
             if (this.activeProp !== null) {
                 $timeout(() => {
                     const el = document.getElementById(`race-prop-row-${this.activeProp}`);
@@ -436,6 +439,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
                 PROP_FIELDS.forEach((k) => {
                     if (!angular.equals(prop[k], prevProp[k])) {
                         // numbers coerced, same bj-slider string quirk as gate width/height below
+                        if (k === "gap" && !(Number(prop[k]) > 0)) return;
                         partial[k] = k === "followGround" ? prop[k] === true : Number(prop[k]);
                     }
                 });
@@ -498,6 +502,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
                 this.raceId === "new" ? null : this.raceId,
             ]);
             beamjoyStore.send("BJVehiclePresetListRequest");
+            beamjoyStore.send("BJEditorRacePropClipboardRequest");
         };
 
         this.changeSection = (event, section) => {
@@ -778,9 +783,57 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
                 return n + (p.kind === "line" ? Math.max(1, Number(p.count) || 1) : 1) * each;
             }, 0);
         };
+        // MULTIPLE SELECTION AND GROUPS (direct request) : Ctrl+click adds a prop to the
+        // selection (or takes it out), Shift+click picks one of a group alone ; a prop of a group
+        // brings its group. The selection moves, turns, copies and deletes as one
+        this.selectedProps = [];
+        this.isPropSelected = (idx) => this.selectedProps.includes(idx);
+        this.severalSelected = () => this.selectedProps.length > 1;
+        this.selectionText = () =>
+            translate("beamjoy.window.config.tabs.races.props.selection.count").replace("{n}", this.selectedProps.length);
+        this.selectionGrouped = () =>
+            this.selectedProps.some((i) => this.race && this.race.props[i] && this.race.props[i].group);
         this.selectProp = (event, idx) => {
             event.stopPropagation();
-            beamjoyStore.send("BJEditorRaceSelectProp", [this.activeProp === idx ? null : idx + 1]);
+            const mode = event.ctrlKey ? "add" : event.shiftKey ? "alone" : "";
+            if (!mode && this.activeProp === idx) {
+                beamjoyStore.send("BJEditorRaceSelectProp", [null]);
+                return;
+            }
+            beamjoyStore.send("BJEditorRaceSelectProp", [idx + 1, "", mode]);
+        };
+        this.clearPropSelection = (event) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceSelectProp", [null]);
+        };
+        this.groupProps = (event) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceGroupProps");
+        };
+        this.ungroupProps = (event) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceUngroupProps");
+        };
+        this.deleteSelectedProps = (event) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceDeleteSelectedProps");
+        };
+        // CLIPBOARD (direct request : a race's props pasted into another) : Copy takes the
+        // selection, or every prop when nothing is selected ; Paste adds them where they were
+        this.propClipboard = { entries: 0, count: 0, sameMap: false };
+        $scope.$on(
+            "$destroy",
+            $rootScope.$on("BJEditorRacePropClipboard", (_, state) => {
+                this.propClipboard = state && typeof state === "object" ? state : { entries: 0, count: 0 };
+            })
+        );
+        this.copyProps = (event) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceCopyProps");
+        };
+        this.pasteProps = (event) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRacePasteProps");
         };
         this.selectPropEnd = (event, idx, part) => {
             event.stopPropagation();
@@ -794,9 +847,30 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             event.stopPropagation();
             beamjoyStore.send("BJEditorRaceDeleteProp", [idx + 1]);
         };
-        this.duplicateProp = (event, idx) => {
+        // the eyedropper (direct request, in place of Duplicate) : that prop armed in the drawer,
+        // to place more of it
+        this.eyedropProp = (event, idx) => {
             event.stopPropagation();
-            beamjoyStore.send("BJEditorRaceDuplicateProp", [idx + 1]);
+            this.propSwap = null;
+            beamjoyStore.send("BJEditorRaceEyedropProp", [idx + 1]);
+            this.propDrawerOpen = true;
+        };
+        // cars hit it, or drive through it (direct request)
+        this.togglePropSolid = (event, idx) => {
+            event.stopPropagation();
+            const prop = this.race && this.race.props[idx];
+            if (!prop) return;
+            beamjoyStore.send("BJEditorRaceSetPropSolid", [idx + 1, prop.solid === false]);
+        };
+        this.splitPrefab = (event, idx) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceSplitPrefab", [idx + 1]);
+        };
+        // a line's fixed gap (direct request : guardrails chained on a line) : on, a longer line
+        // takes more props instead of spreading them out
+        this.setPropFixedGap = (event, idx, on) => {
+            if (event) event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceSetProp", [idx + 1, { fixedGap: on === true }]);
         };
         this.splitPropLine = (event, idx) => {
             event.stopPropagation();

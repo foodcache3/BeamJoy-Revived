@@ -298,6 +298,26 @@
                     ? 'beamjoy.window.config.tabs.races.props.drawer.open.active'
                     : 'beamjoy.window.config.tabs.races.props.drawer.open') | translate}}
             </button>
+            <button
+                class="btn neutral"
+                ng-click="$ctrl.copyProps($event)"
+                ng-disabled="$ctrl.race.props.length === 0"
+                title="{{($ctrl.selectedProps.length > 0
+                    ? 'beamjoy.window.config.tabs.races.props.copy.selection'
+                    : 'beamjoy.window.config.tabs.races.props.copy.all') | translate}}"
+            >
+                <icon name="copy"></icon>
+            </button>
+            <button
+                class="btn neutral"
+                ng-click="$ctrl.pasteProps($event)"
+                ng-disabled="!$ctrl.propClipboard.entries || !$ctrl.propClipboard.sameMap"
+                title="{{($ctrl.propClipboard.entries && !$ctrl.propClipboard.sameMap
+                    ? 'beamjoy.window.config.tabs.races.props.paste.otherMap'
+                    : 'beamjoy.window.config.tabs.races.props.paste') | translate}}{{$ctrl.propClipboard.count ? ' (' + $ctrl.propClipboard.count + ')' : ''}}"
+            >
+                <icon name="paste"></icon>
+            </button>
             <span class="flex-grow-1"></span>
             <span class="small opacity-70">{{$ctrl.propTotal}}/{{$ctrl.PROP_MAX}}</span>
         </div>
@@ -637,19 +657,70 @@
     </div>
 
     <div class="section-panel" ng-if="$ctrl.activeSection === 'props'">
+        <!-- several props selected (Ctrl+click, a group) : what's done to them all -->
+        <div class="d-flex gap-1 align-center p-1 px-2" ng-if="$ctrl.severalSelected()">
+            <span class="flex-grow-1">{{$ctrl.selectionText()}}</span>
+            <button
+                class="btn success"
+                ng-click="$ctrl.groupProps($event)"
+                title="{{'beamjoy.window.config.tabs.races.props.selection.group.tooltip' | translate}}"
+            >
+                {{'beamjoy.window.config.tabs.races.props.selection.group' | translate}}
+            </button>
+            <button
+                class="btn warning"
+                ng-if="$ctrl.selectionGrouped()"
+                ng-click="$ctrl.ungroupProps($event)"
+                title="{{'beamjoy.window.config.tabs.races.props.selection.ungroup.tooltip' | translate}}"
+            >
+                {{'beamjoy.window.config.tabs.races.props.selection.ungroup' | translate}}
+            </button>
+            <button
+                class="btn danger"
+                ng-click="$ctrl.deleteSelectedProps($event)"
+                title="{{'beamjoy.window.config.tabs.races.props.selection.delete' | translate}}"
+            >
+                <icon name="delete"></icon>
+            </button>
+            <button
+                class="btn neutral"
+                ng-click="$ctrl.clearPropSelection($event)"
+                title="{{'beamjoy.window.config.tabs.races.props.selection.clear' | translate}}"
+            >
+                <icon name="remove"></icon>
+            </button>
+        </div>
         <div ng-repeat="prop in $ctrl.race.props track by $index">
             <div
                 id="race-prop-row-{{$index}}"
                 class="gate-row d-flex p-1 px-2 gap-1 cursor-pointer align-center"
-                ng-class="{active: $index === $ctrl.activeProp}"
+                ng-class="{active: $index === $ctrl.activeProp || $ctrl.isPropSelected($index)}"
                 ng-click="$ctrl.selectProp($event, $index)"
+                title="{{'beamjoy.window.config.tabs.races.props.row.tooltip' | translate}}"
             >
                 <span class="gate-name flex-grow-1">
                     {{$ctrl.propLabel(prop) | translate}}
                     <span ng-if="prop.kind === 'line'" class="small opacity-70">
                         ({{'beamjoy.window.config.tabs.races.props.line' | translate}}, {{prop.count}})
                     </span>
+                    <span
+                        ng-if="prop.group"
+                        class="small opacity-70"
+                        title="{{'beamjoy.window.config.tabs.races.props.group.tooltip' | translate}}"
+                    >
+                        [{{'beamjoy.window.config.tabs.races.props.group' | translate}} {{prop.group}}]
+                    </span>
                 </span>
+                <button
+                    class="btn"
+                    ng-class="prop.solid === false ? 'neutral' : 'info'"
+                    ng-click="$ctrl.togglePropSolid($event, $index)"
+                    title="{{(prop.solid === false
+                        ? 'beamjoy.window.config.tabs.races.props.solid.off'
+                        : 'beamjoy.window.config.tabs.races.props.solid.on') | translate}}"
+                >
+                    <icon name="{{prop.solid === false ? 'passable' : 'solid'}}"></icon>
+                </button>
                 <button
                     class="btn info"
                     ng-click="$ctrl.teleportToProp($event, $index)"
@@ -659,10 +730,10 @@
                 </button>
                 <button
                     class="btn info"
-                    ng-click="$ctrl.duplicateProp($event, $index)"
-                    title="{{'beamjoy.window.config.tabs.races.props.duplicate' | translate}}"
+                    ng-click="$ctrl.eyedropProp($event, $index)"
+                    title="{{'beamjoy.window.config.tabs.races.props.eyedropper' | translate}}"
                 >
-                    <icon name="duplicate"></icon>
+                    <icon name="eyedropper"></icon>
                 </button>
                 <button
                     class="btn danger"
@@ -672,7 +743,7 @@
                     <icon name="delete"></icon>
                 </button>
             </div>
-            <div class="gate-detail px-2 pb-2" ng-if="$index === $ctrl.activeProp">
+            <div class="gate-detail px-2 pb-2" ng-if="$index === $ctrl.activeProp && !$ctrl.severalSelected()">
                 <table class="w-100">
                     <tr ng-if="prop.kind === 'line'">
                         <td
@@ -744,6 +815,31 @@
                         </td>
                     </tr>
                     <tr ng-if="prop.kind === 'line'">
+                        <td
+                            class="text-right"
+                            title="{{'beamjoy.window.config.tabs.races.props.fixedGap.tooltip' | translate}}"
+                        >
+                            {{'beamjoy.window.config.tabs.races.props.fixedGap' | translate}}
+                        </td>
+                        <td>
+                            <button
+                                class="btn"
+                                ng-class="prop.gap ? 'success' : 'neutral'"
+                                ng-click="$ctrl.setPropFixedGap($event, $index, !prop.gap)"
+                            >
+                                {{(prop.gap
+                                    ? 'beamjoy.window.config.tabs.races.props.fixedGap.on'
+                                    : 'beamjoy.window.config.tabs.races.props.fixedGap.off') | translate}}
+                            </button>
+                        </td>
+                    </tr>
+                    <tr ng-if="prop.kind === 'line' && prop.gap">
+                        <td class="text-right">{{'beamjoy.window.config.tabs.races.props.gap' | translate}}</td>
+                        <td>
+                            <bj-slider ng-model="prop.gap" min="0.5" max="20" hard-max="100" step="0.05"></bj-slider>
+                        </td>
+                    </tr>
+                    <tr ng-if="prop.kind === 'line' && !prop.gap">
                         <td class="text-right">{{'beamjoy.window.config.tabs.races.props.count' | translate}}</td>
                         <td>
                             <bj-slider ng-model="prop.count" min="1" max="50" hard-max="500" step="1"></bj-slider>
@@ -787,6 +883,14 @@
                                 title="{{'beamjoy.window.config.tabs.races.props.setToVehicle' | translate}}"
                             >
                                 <icon name="car"></icon>
+                            </button>
+                            <button
+                                class="btn warning"
+                                ng-if="prop.kind !== 'line' && prop.parts"
+                                ng-click="$ctrl.splitPrefab($event, $index)"
+                                title="{{'beamjoy.window.config.tabs.races.props.splitPrefab.tooltip' | translate}}"
+                            >
+                                {{'beamjoy.window.config.tabs.races.props.splitPrefab' | translate}}
                             </button>
                             <button
                                 class="btn warning"

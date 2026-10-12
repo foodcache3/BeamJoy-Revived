@@ -376,11 +376,15 @@ end
 local function drawPropOverlays(props)
     if type(props) ~= "table" then return end
     local lift = vec3(0, 0, .5)
+    -- several selected (a selection, a group) : each highlighted, none with its own handles held
+    local selection = raceEditor.activePropIndex and raceEditor.propSelection or {}
+    local several = #selection > 1
     for i, p in ipairs(props) do
-        local active = i == raceEditor.activePropIndex
+        local selected = several and table.includes(selection, i)
+        local active = i == raceEditor.activePropIndex and not several
         if p.kind == "line" and p.a and p.b then
             local a, b = vec3(p.a.x, p.a.y, p.a.z), vec3(p.b.x, p.b.y, p.b.z)
-            local lineColor = active and PROP_ACTIVE_COLOR or PROP_LINE_COLOR
+            local lineColor = (active or selected) and PROP_ACTIVE_COLOR or PROP_LINE_COLOR
             -- its path : a bent line as a few segments along its curve
             local path = beamjoy_props.linePath(p, 16) or { a, b }
             for k = 2, #path do
@@ -396,7 +400,7 @@ local function drawPropOverlays(props)
                 local held = active and raceEditor.activePropPart == "mid"
                 draw.addSphere(mid + lift, held and .6 or .35, held and PROP_ACTIVE_COLOR or PROP_LINE_COLOR)
             end
-        elseif active and p.pos then
+        elseif (active or selected) and p.pos then
             draw.addSphere(vec3(p.pos.x, p.pos.y, p.pos.z) + lift, .5, PROP_ACTIVE_COLOR)
         end
     end

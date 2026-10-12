@@ -7,10 +7,13 @@
 --- collision, and props it can't see there can't be snapped onto by mistake.
 ---
 --- Entries (see services/races.lua's sanitizeProps for the server-side checks) :
----   { kind = "static", shape, pos, dir, up, scale, stretch, lift, solid }
----   { kind = "line", shape, a, b, mid, count, yaw, scale, followGround, heights, alt, altYaw, altLift }
+---   { kind = "static", shape, pos, dir, up, scale, stretch, lift, solid, group }
+---   { kind = "line", shape, a, b, mid, count, gap, yaw, scale, followGround, heights, alt, altYaw, altLift, group }
 --- A line is saved as itself and spread out here : `count` props evenly from `a` to `b` (both ends
---- included), each facing along the line turned by `yaw` degrees round its own vertical axis.
+--- included), each facing along the line turned by `yaw` degrees round its own vertical axis. With
+--- a `gap` (metres), one every `gap` from `a` instead, `count` being as many as its length takes.
+--- `group` (optional, a number) : props of the same group are selected and moved together in the
+--- editor, nothing more.
 --- `mid` (optional) bends it : the line runs as a smooth curve from `a` through `mid` to `b`, its
 --- props spaced evenly along the curve and each facing along it there.
 --- Optional on both : `stretch` {x, y, z} scales a mesh unevenly (on top of `scale` : a map's own
@@ -341,12 +344,12 @@ for _, p in ipairs({
         end)() },
     -- a guardrail section with its posts, as West Coast lays them (its rails 2 m apart, a post at
     -- each joint, 1 m either side of the rail's middle, 0.14 m behind it, 0.95 m under its origin)
-    { id = "guardrail", cat = "fences", shape = "/art/shapes/objects/guardrail1.dae", thumb = "/art/shapes/objects/guardrail1.dae", tags = "guardrail armco rail steel post barrier",
+    { id = "guardrail", cat = "fences", shape = "/art/shapes/objects/guardrail1.dae", thumb = "/art/shapes/objects/guardrail1.dae", tags = "guardrail armco rail steel post barrier", length = 2,
         parts = { { shape = "/art/shapes/objects/guardrailpost.dae", pos = { -1, 0.14, -0.95 } },
             { shape = "/art/shapes/objects/guardrailpost.dae", pos = { 1, 0.14, -0.95 } } } },
     -- the asset kit's wood fence (no map lays it out) : a pole each end of its 2 m boards, three of
     -- them on the poles' face
-    { id = "woodFence", cat = "fences", shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_root_fence_pole_001.dae", thumb = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001.dae", tags = "wood fence planks rural rail post",
+    { id = "woodFence", cat = "fences", shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_root_fence_pole_001.dae", thumb = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001.dae", tags = "wood fence planks rural rail post", length = 2,
         parts = { { shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_root_fence_pole_001.dae", pos = { 2, 0, 0 } },
             { shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001.dae", pos = { 0, -0.08, 0.9 } },
             { shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001_var1.dae", pos = { 0, -0.08, 0.6 } },
@@ -392,6 +395,30 @@ function M.prefabEntry(id)
     }
 end
 
+--- how a prefab is laid down in a line (direct request : prefabs in a line), as tuning() does a
+--- mesh : `yaw` its long side along the line, `length` the gap from one to the next. The prefab's
+--- own `length` where it's set (a guardrail section : its rails 2 m apart), else measured from
+--- its meshes' sizes where they sit (beamjoy_propPicker measures them when it's armed)
+---@param id string
+---@return {yaw: number, length: number}
+function M.prefabTuning(id)
+    local p = prefabById[id]
+    if not p then return { yaw = 0, length = 2 } end
+    local minX, maxX, minY, maxY = math.huge, -math.huge, math.huge, -math.huge
+    local function add(shape, pos)
+        local m = M.meta[shape:lower()]
+        local hx, hy = (m and m.x or 1) / 2, (m and m.y or 1) / 2
+        local x, y = pos and pos[1] or 0, pos and pos[2] or 0
+        minX, maxX = math.min(minX, x - hx), math.max(maxX, x + hx)
+        minY, maxY = math.min(minY, y - hy), math.max(maxY, y + hy)
+    end
+    add(p.shape)
+    for _, part in ipairs(p.parts) do add(part.shape, part.pos) end
+    local x, y = maxX - minX, maxY - minY
+    local yaw = p.yaw or ((x > y * 1.15) and 90 or 0)
+    return { yaw = yaw, length = p.length or math.max(.3, math.max(x, y) + .05) }
+end
+
 local GROUP_NAME = "BJPropsGroup"
 -- the game rebuilds its whole static collision on a reload, a hitch on a big map : one reload
 -- after a burst of changes, not one per change
@@ -435,20 +462,28 @@ end
 -- (core/vehicle/manager.lua). Only the materials the current map doesn't already have are added
 -- (from a copy of the file under /temp), so nothing of the map itself changes.
 --
--- The game's shared meshes (/assets/...) can need materials only some maps define too (direct
--- report : the beech tree and bush's leaves, defined by East Coast, Derby, Hirochi, Driver Training
--- only ; the brick wall's bricks, by West Coast only). What a mesh needs is read from its .dae : the
--- engine maps a material by its name there (its id, less "-material", when it has none ; direct
--- report : "Unable to find material mapping to: m_ind_beech_leaves", the id being beech_leaves).
--- What the current map has nothing mapped to is borrowed from MATERIAL_SOURCES, those materials
--- only : by that name, else by the id, then as a copy of its own (bj_<name>) mapped to the name, so
--- nothing of the map's changes (no map maps the shared beech meshes' names : their own trees are
--- copies named otherwise).
+-- That folder isn't always where a mesh's materials are (direct report : props from other maps
+-- saved in a race on Italy came with no material after the game's cache was cleared, when they'd
+-- been fine before only because the drawer had loaded the right folders by chance). Hirochi's
+-- objects take hr_bld_metal_trim from its buildings folder ; Industrial's buildings ask for
+-- ind_bld__2__concrete, which only Utah, Derby and Small Island define ; Jungle Rock Island's ask
+-- for East Coast's eca_bld_metalbeams. So what a mesh asks for, read from its .dae (the engine maps
+-- a material by its name there, its id less "-material" when it has none ; direct report :
+-- "Unable to find material mapping to: m_ind_beech_leaves", the id being beech_leaves), is looked
+-- up wherever it's defined, when the current map has nothing mapped to it : the shared meshes'
+-- usual sources first (MATERIAL_SOURCES), then the mesh's own map, then every other map, each map's
+-- material files read once a session only when it's needed. Those materials only : by that name,
+-- else by the id, then as a copy of its own (bj_<name>) mapped to the name, so nothing of the map's
+-- changes (no map maps the shared beech meshes' names : their own trees are copies named
+-- otherwise).
+--
+-- A copy loaded from /temp keeps its textures : a texture named by its file alone is looked for
+-- beside its material file, so it's given its source folder (372 of the stock maps' are).
 
 local MATERIALS_TEMP_DIR = "/temp/bjPropMaterials/"
 -- folders (lower case) already looked at on this map
 local materialDirs = {}
--- material files the shared meshes' materials are borrowed from, the first defining one wins
+-- material files the shared meshes' materials are borrowed from first, the first defining one wins
 local MATERIAL_SOURCES = {
     -- beech_trunk, beech_branch_01, beech_leaves, beech_blocker
     "/levels/east_coast_usa/art/shapes/trees/trees_beech/main.materials.json",
@@ -473,14 +508,17 @@ local SHARED_MATERIALS = {
 }
 -- mapTo names mapped again this map
 local sharedDone = {}
--- mapTo -> {key, mat} of MATERIAL_SOURCES, read once
-local borrowable = nil
--- the current map's mapTo names (true), gathered on first need
+-- the current map's mapTo names (lower case -> true), gathered on first need
 local mapped = nil
 -- shapes (lower case) already looked at on this map
 local materialShapes = {}
 -- shape (lower case) -> what its .dae asks for, read once a session
 local meshMaterialsOf = {}
+-- where materials are defined, read once a session : the sources' (`sources`), and each map's
+-- (lower case), once it's needed ; mapTo (lower case) -> {file, key}
+local materialIndex = {}
+-- every map's material files, by map (lower case), listed once a session
+local levelMaterialFiles = nil
 
 ---@return table<string, boolean>
 local function mappedNames()
@@ -492,34 +530,106 @@ local function mappedNames()
         if mat then
             local to = mat:getField("mapTo", 0)
             if type(to) == "string" and to ~= "" and to ~= "unmapped_mat" then
-                mapped[to] = true
+                mapped[to:lower()] = true
             else
-                mapped[mat:getName()] = true
+                mapped[mat:getName():lower()] = true
             end
         end
     end
     return mapped
 end
 
----@return table<string, {key: string, mat: table}>
-local function borrowableMaterials()
-    if borrowable then return borrowable end
-    borrowable = {}
-    for _, file in ipairs(MATERIAL_SOURCES) do
+---@param files string[]
+---@return table<string, {file: string, key: string}>
+local function indexFiles(files)
+    local index = {}
+    for _, file in ipairs(files) do
         local ok, data = pcall(jsonReadFile, file)
         for key, mat in pairs(ok and type(data) == "table" and data or {}) do
-            if type(mat) == "table" and mat.class == "Material" and type(mat.mapTo) == "string" and
-                not borrowable[mat.mapTo] then
-                borrowable[mat.mapTo] = { key = key, mat = mat }
+            if type(mat) == "table" and mat.class == "Material" then
+                local to = type(mat.mapTo) == "string" and mat.mapTo ~= "" and mat.mapTo or mat.name or key
+                if type(to) == "string" and not index[to:lower()] then
+                    index[to:lower()] = { file = file, key = key }
+                end
             end
         end
     end
-    return borrowable
+    return index
+end
+
+---@return table<string, string[]>
+local function materialFilesByLevel()
+    if levelMaterialFiles then return levelMaterialFiles end
+    levelMaterialFiles = {}
+    for _, file in ipairs(FS:findFiles("/levels/", "*materials.json", -1, true, false) or {}) do
+        local level = file:lower():match("^/levels/([^/]+)/")
+        if level then
+            levelMaterialFiles[level] = levelMaterialFiles[level] or {}
+            table.insert(levelMaterialFiles[level], file)
+        end
+    end
+    return levelMaterialFiles
+end
+
+---@param which string "sources", or a map (lower case)
+---@return table<string, {file: string, key: string}>
+local function indexOf(which)
+    if not materialIndex[which] then
+        materialIndex[which] = indexFiles(which == "sources" and MATERIAL_SOURCES or
+            (materialFilesByLevel()[which] or {}))
+    end
+    return materialIndex[which]
+end
+
+--- where a material is defined : the sources, the mesh's own map, then the other maps in turn
+---@param names string[] what it may be mapped to (lower case), in order
+---@param level string? the mesh's own map (lower case)
+---@return {file: string, key: string, mapTo: string}?
+local function findMaterial(names, level)
+    local order = { "sources" }
+    if level then order[#order + 1] = level end
+    local others = {}
+    for l in pairs(materialFilesByLevel()) do
+        if l ~= level then others[#others + 1] = l end
+    end
+    table.sort(others)
+    for _, l in ipairs(others) do order[#order + 1] = l end
+    for _, which in ipairs(order) do
+        local index = indexOf(which)
+        for _, name in ipairs(names) do
+            local found = index[name]
+            if found then return { file = found.file, key = found.key, mapTo = name } end
+        end
+    end
+    return nil
+end
+
+local IMAGE_EXT = { dds = true, png = true, jpg = true, jpeg = true, tga = true, bmp = true }
+
+--- a copy of a material, its textures named by their file alone given their source folder (a copy
+--- is loaded from /temp, where they wouldn't be found)
+---@param mat table
+---@param dir string the source material file's folder, with its last /
+---@return table
+local function rebased(mat, dir)
+    local out = {}
+    for k, v in pairs(mat) do
+        if type(v) == "table" then
+            out[k] = rebased(v, dir)
+        elseif type(v) == "string" and not v:find("/", 1, true) and IMAGE_EXT[(v:match("%.(%w+)$") or ""):lower()] then
+            out[k] = dir .. v
+        elseif type(v) == "string" and v:sub(1, 2) == "./" then
+            out[k] = dir .. v:sub(3)
+        else
+            out[k] = v
+        end
+    end
+    return out
 end
 
 --- the materials a mesh's .dae asks for : its id (less "-material") and its name
 ---@param shape string
----@return {id: string, name: string?}[]
+---@return {id: string, need: string}[]
 local function meshMaterials(shape)
     local key = shape:lower()
     if meshMaterialsOf[key] then return meshMaterialsOf[key] end
@@ -541,34 +651,50 @@ local function meshMaterials(shape)
     return out
 end
 
---- borrows what the current map has no material for, of what the mesh asks for
+--- borrows what the current map has no material for, of what the mesh asks for, from wherever
+--- it's defined
 ---@param shape string
 local function borrowMaterials(shape)
     local key = shape:lower()
-    -- the shared meshes only : the game's own art has its materials everywhere
-    if materialShapes[key] or not key:find("^/assets/") then return end
+    local level = M.shapeLevel(shape)
+    -- the game's own art has its materials everywhere, and a map's own meshes on it
+    if materialShapes[key] or key:find("^/art/") or (level and level == currentLevel()) then return end
     materialShapes[key] = true
     local ok, err = pcall(function()
-        local have, from = mappedNames(), borrowableMaterials()
-        local add, count = {}, 0
+        local have = mappedNames()
+        local add, count, missing = {}, 0, {}
+        local files = {}
         for _, m in ipairs(meshMaterials(shape)) do
-            local src = not have[m.need] and (from[m.need] or from[m.id]) or nil
-            if src then
-                local mat, key = src.mat, src.key
-                if mat.mapTo ~= m.need then
-                    -- the source maps the id : a copy of its own, mapped to the name the mesh uses
-                    mat = {}
-                    for k, v in pairs(src.mat) do mat[k] = v end
-                    key = "bj_" .. m.need
-                    mat.name, mat.mapTo, mat.internalName = key, m.need, nil
+            local need = m.need:lower()
+            if not have[need] then
+                local src = findMaterial({ need, m.id:lower() }, level)
+                if src then
+                    files[src.file] = files[src.file] or jsonReadFile(src.file)
+                    local data = files[src.file]
+                    local found = type(data) == "table" and data[src.key]
+                    if type(found) == "table" then
+                        local mat = rebased(found, src.file:match("^(.*/)[^/]*$") or "/")
+                        local name = src.key
+                        if src.mapTo ~= need then
+                            -- the source maps the id : a copy of its own, mapped to the name the
+                            -- mesh uses
+                            name = "bj_" .. m.need
+                            mat.name, mat.mapTo, mat.internalName = name, m.need, nil
+                        end
+                        if not scenetree.findObject(mat.name or name) then
+                            mat.persistentId = nil
+                            add[name] = mat
+                            count = count + 1
+                        end
+                    end
+                else
+                    missing[#missing + 1] = m.need
                 end
-                if not scenetree.findObject(mat.name or key) then
-                    mat.persistentId = nil
-                    add[key] = mat
-                    count = count + 1
-                end
-                have[m.need] = true
+                have[need] = true
             end
+        end
+        if #missing > 0 then
+            LogWarn(string.format("beamjoy_props: %s : no map defines %s", shape, table.concat(missing, ", ")))
         end
         if count == 0 then return end
         local copy = MATERIALS_TEMP_DIR .. "borrowed" .. shape:gsub("[^%w]+", "_") .. ".materials.json"
@@ -589,8 +715,7 @@ local function ensureSharedMaterial(shape)
         local data = jsonReadFile(s.from)
         for _, mat in pairs(type(data) == "table" and data or {}) do
             if type(mat) == "table" and mat.class == "Material" and mat.mapTo == s.mapTo then
-                local copy = {}
-                for k, v in pairs(mat) do copy[k] = v end
+                local copy = rebased(mat, s.from:match("^(.*/)[^/]*$") or "/")
                 local name = "bj_shared_" .. s.mapTo
                 copy.name, copy.persistentId, copy.internalName = name, nil, nil
                 if scenetree.findObject(name) then return end
@@ -626,9 +751,11 @@ function M.ensureFolderMaterials(dir)
         local missing, count = {}, 0
         for _, file in ipairs(FS:findFiles(dir, "*materials.json", 0, true, false) or {}) do
             local data = jsonReadFile(file)
+            local from = file:match("^(.*/)[^/]*$") or dir
             for key, mat in pairs(type(data) == "table" and data or {}) do
                 local name = type(mat) == "table" and mat.class == "Material" and (mat.name or key) or nil
                 if type(name) == "string" and not scenetree.findObject(name) then
+                    mat = rebased(mat, from)
                     mat.persistentId = nil
                     missing[key] = mat
                     count = count + 1
@@ -785,13 +912,38 @@ function M.linePath(line, samples)
     return pts
 end
 
---- the props of a line, as single placements
+--- a line's length along its path (metres)
+---@param line table
+---@return number
+function M.lineLength(line)
+    local pts = M.linePath(line)
+    if not pts then return 0 end
+    local total = 0
+    for k = 2, #pts do total = total + pts[k]:distance(pts[k - 1]) end
+    return total
+end
+
+--- how many props a line with a fixed gap holds : one every `gap` metres from its first end, as
+--- many as its length takes
+---@param line table
+---@param gap number metres
+---@return integer
+function M.gapCount(line, gap)
+    if not gap or gap <= 0 then return lineCount(line) end
+    return math.floor(M.lineLength(line) / gap + 1e-6) + 1
+end
+
+--- the props of a line, as single placements : `count` of them spread evenly from end to end, or
+--- with a `gap` (direct request : guardrails chained on a line), one every `gap` metres from its
+--- first end, so lengthening it adds props instead of spreading them out
 ---@param line table
 ---@return {pos: vec3, dir: vec3, up: vec3}[]
 function M.linePlacements(line)
     local pts = M.linePath(line)
     if not pts then return {} end
     local count = lineCount(line)
+    local gap = tonumber(line.gap)
+    if gap and gap <= 0 then gap = nil end
     local yaw = tonumber(line.yaw) or 0
     local heights = line.followGround ~= false and type(line.heights) == "table" and #line.heights == count and
         line.heights or nil
@@ -802,7 +954,12 @@ function M.linePlacements(line)
     local out = {}
     local k = 1
     for i = 1, count do
-        local s = count == 1 and total / 2 or total * (i - 1) / (count - 1)
+        local s
+        if gap then
+            s = math.min(total, (i - 1) * gap)
+        else
+            s = count == 1 and total / 2 or total * (i - 1) / (count - 1)
+        end
         while k < #pts - 1 and lens[k + 1] < s do k = k + 1 end
         local seg = lens[k + 1] - lens[k]
         local f = seg > 1e-6 and math.max(0, math.min(1, (s - lens[k]) / seg)) or 0
@@ -1206,8 +1363,13 @@ local raceEditor = require("ge/extensions/beamjoy/ui/raceEditor")
 --- watching, from its grid until it ends. Follows the same refresh hook as the race markers
 local function syncRace()
     if raceEditor.race then
+        -- no collision at all, not only no reload : a reload asked by anything else (the race's
+        -- own set leaving solid props behind as the editor opens, another set) took the editor's
+        -- props into the static collision, and one deleted afterwards stayed there, invisible,
+        -- for cars and the editor's own ground snapping until the race was next started (direct
+        -- report). Clicks pick props by their handles (raceEditor onWorldClick), not collision
         return M.show("race", raceEditor.race.props,
-            { signature = "editor:" .. tostring(raceEditor.propsRevision), collision = false })
+            { signature = "editor:" .. tostring(raceEditor.propsRevision), collision = false, collisionType = "None" })
     end
     local session = beamjoy_raceRunner and (beamjoy_raceRunner.session or beamjoy_raceRunner.spectatingSession)
     local race = session and beamjoy_races and

@@ -469,6 +469,24 @@ local function saneParts(v)
     return #out > 0 and out or nil
 end
 
+--- a line's fixed gap between its props (metres), or none (its props spread from end to end)
+---@param v any
+---@return number?
+local function saneGap(v)
+    local gap = tonumber(v)
+    if not gap or gap ~= gap or gap <= 0 then return nil end
+    return math.clamp(gap, .2, 100)
+end
+
+--- the editor's group a prop belongs to (props selected and moved together), or none
+---@param v any
+---@return integer?
+local function saneGroup(v)
+    local g = tonumber(v)
+    if not g or g ~= g or g < 1 or g > 1000000 then return nil end
+    return math.floor(g)
+end
+
 ---@param v any
 ---@return string? a prefab's id (what the editor names the prop by)
 local function sanePrefabId(v)
@@ -495,6 +513,8 @@ local function sanitizeProps(props)
                         -- bends the line through it (optional)
                         mid = sanePoint(p.mid),
                         count = count,
+                        gap = saneGap(p.gap),
+                        group = saneGroup(p.group),
                         yaw = math.clamp(tonumber(p.yaw) or 0, -360, 360),
                         scale = scale,
                         followGround = p.followGround ~= false,
@@ -530,6 +550,7 @@ local function sanitizeProps(props)
                         lift = saneLift(p.lift),
                         stretch = saneStretch(p.stretch),
                         solid = p.solid == false and false or nil,
+                        group = saneGroup(p.group),
                     }
                     entry.parts = saneParts(p.parts)
                     entry.prefab = entry.parts and sanePrefabId(p.prefab) or nil

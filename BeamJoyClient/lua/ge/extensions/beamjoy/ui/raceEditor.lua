@@ -41,6 +41,10 @@ local M = {
     ---@type "a"|"b"|"mid"|nil which handle of the selected line the gizmo holds (an end, or its
     ---middle : dragging that bends the line)
     activePropPart = nil,
+    --- the props selected together (direct request : multiple selection and groups), indices into
+    --- race.props in order, the active one among them ; moved, turned, copied and deleted as one
+    ---@type integer[]
+    propSelection = {},
     --- bumped on every change to the props, so their preview (beamjoy_props) only rebuilds then
     propsRevision = 0,
     dirty = false,
@@ -77,6 +81,29 @@ local draggingHandle = nil
 local lastHandlePush = 0
 -- the props drawer's placing mode (PLACING below)
 local updatePlacing, disarmProp
+-- the props clipboard (CLIPBOARD below)
+local pushClipboard
+
+--- Ctrl held : a line's handle dragged takes the whole line with it (direct request), a click
+--- adds a prop to the selection
+---@return boolean
+local function ctrlHeld()
+    local ok, held = pcall(function()
+        local io = ui_imgui.GetIO()
+        return io ~= nil and io.KeyCtrl == true
+    end)
+    return ok and held == true
+end
+
+---@return boolean
+local function shiftHeld()
+    local ok, held = pcall(function()
+        local io = ui_imgui.GetIO()
+        return io ~= nil and io.KeyShift == true
+    end)
+    return ok and held == true
+end
+
 
 --- A race's length in metres, following its route. The route runs from gate to gate through
 --- each gate's `parents` (the gate(s) it's reached from ; 0 = the start), taking the shortest
@@ -242,7 +269,13 @@ end
 local function pushActive()
     beamjoy_communications_ui.send("BJEditorRaceActiveGate", M.activeGateIndex)
     beamjoy_communications_ui.send("BJEditorRaceActiveStart", M.activeStartIndex)
-    beamjoy_communications_ui.send("BJEditorRaceActiveProp", { index = M.activePropIndex, part = M.activePropPart })
+    if not M.activePropIndex then
+        M.propSelection = {}
+    elseif not table.includes(M.propSelection, M.activePropIndex) then
+        M.propSelection = { M.activePropIndex }
+    end
+    beamjoy_communications_ui.send("BJEditorRaceActiveProp", { index = M.activePropIndex, part = M.activePropPart,
+        selected = M.propSelection })
 end
 
 --- the props' preview and the markers catch up with a change to the props
@@ -758,11 +791,13 @@ local function onOpen(raceId)
     M.activeGateIndex = nil
     M.activeStartIndex = nil
     M.activePropIndex, M.activePropPart = nil, nil
+    M.propSelection = {}
     M.dirty = false
     propsChanged()
     pushUpdate()
     pushActive()
     beamjoy_communications_ui.send("BJEditorPropCatalog", beamjoy_props.catalogForUI())
+    pushClipboard()
     M.savedRace = table.clone(M.race) -- after pushUpdate, so .distance is already computed
     beamjoy_communications_ui.send("BJEditorDirty", M.dirty)
     beamjoy_communications_ui.send("BJEditorRaceSnapToGround", M.snapToGroundEnabled)
@@ -899,6 +934,9 @@ local function onWorldClick(clickType, data)
         return
     end
     if clickType ~= "left" then return end
+    -- a click on the gizmo is for the gizmo (Ctrl+drag of a line's handle would otherwise also be
+    -- a Ctrl+click taking that line out of the selection)
+    if gizmo.isHovered and gizmo.isHovered() then return end
 
     local camPos, rayDir = camera.mouseRay()
     if not camPos then return end
@@ -987,14 +1025,17 @@ local function onWorldClick(clickType, data)
 
     if bestKind == "gate" and bestIndex == M.activeGateIndex then return end
     if bestKind == "start" and bestIndex == M.activeStartIndex then return end
-    if bestKind == "prop" and bestIndex == M.activePropIndex and bestPart == M.activePropPart then return end
+    -- Ctrl+click adds a prop to the selection (or takes it out), Shift+click picks one of a group
+    -- alone (direct request : multiple selection and groups)
+    local mode = bestKind == "prop" and (ctrlHeld() and "add" or shiftHeld() and "alone") or nil
+    if bestKind == "prop" and not mode and bestIndex == M.activePropIndex and bestPart == M.activePropPart then return end
 
     if bestKind == "gate" then
         onSelectGate(bestIndex)
     elseif bestKind == "start" then
         onSelectStart(bestIndex)
     elseif bestKind == "prop" then
-        M.onSelectProp(bestIndex, bestPart)
+        M.onSelectProp(bestIndex, bestPart, mode)
     end
 end
 
@@ -1407,6 +1448,10 @@ end
 ---@return number
 local function round3(h) return math.floor(h * 1000 + .5) / 1000 end
 
+---@param v number
+---@return number
+local function round2(v) return math.floor(v * 100 + .5) / 100 end
+
 --- a line's ground heights, one per prop (beamjoy_props.linePlacements), measured here so a
 --- running race never has to : the editor's preview isn't in the static collision (see
 --- beamjoy_props), so the probes can't land on the line's own props
@@ -1417,7 +1462,7 @@ local function updateLineHeights(line)
         return
     end
     local straight = beamjoy_props.linePlacements({ a = line.a, b = line.b, mid = line.mid, count = line.count,
-        followGround = false })
+        gap = line.gap, followGround = false })
     line.heights = table.map(straight, function(p) return round3(groundHeightAt(p.pos)) end)
 end
 
@@ -1429,30 +1474,79 @@ local function propBudget(extra)
     return false
 end
 
+-- a line's fixed gap (metres), within these
+local GAP_MIN, GAP_MAX = .2, 100
+
+--- a line with a fixed gap (direct request : guardrails chained on a line) holds as many props as
+--- its length takes, within the race's limit : fitted again whenever its length changes
+---@param line table a line of the race
+local function fitLineCount(line)
+    local gap = tonumber(line.gap)
+    if line.kind ~= "line" or not gap then return end
+    local each = 1 + (type(line.parts) == "table" and #line.parts or 0)
+    local others = beamjoy_props.total(M.race.props) - beamjoy_props.weight(line)
+    local room = math.max(1, math.floor((beamjoy_props.MAX_PROPS - others) / each))
+    line.count = math.max(1, math.min(beamjoy_props.gapCount(line, gap), room))
+end
+
+--- the props selected with a prop : its group, or itself alone
+---@param index integer
+---@return integer[]
+local function groupOf(index)
+    local g = tonumber(M.race.props[index] and M.race.props[index].group)
+    if not g then return { index } end
+    local out = {}
+    for i, p in ipairs(M.race.props) do
+        if tonumber(p.group) == g then out[#out + 1] = i end
+    end
+    return out
+end
+
 local updatePropGizmo
+--- selects a prop (direct request : multiple selection and groups). A prop of a group brings its
+--- group ; "add" (Ctrl+click) adds it to what's selected, or takes it away when it was in ;
+--- "alone" (Shift+click) selects it without its group, to edit one of a group
 ---@param index integer?
----@param part "a"|"b"|nil a line's end (its first by default)
-function M.onSelectProp(index, part)
+---@param part "a"|"b"|"mid"|nil a line's handle (its first end by default)
+---@param mode "add"|"alone"|nil
+function M.onSelectProp(index, part, mode)
     if not M.race then return end
     if index then disarmProp() end
     draggingHandle = nil
     local prop = index and M.race.props[index]
-    M.activePropIndex = prop and index or nil
-    M.activePropPart = prop and prop.kind == "line" and ((part == "b" or part == "mid") and part or "a") or nil
+    if not prop then
+        M.activePropIndex, M.propSelection = nil, {}
+    elseif mode == "add" and M.activePropIndex then
+        local members = groupOf(index)
+        local removing = table.includes(M.propSelection, index)
+        local selection = {}
+        for _, i in ipairs(M.propSelection) do
+            if not (removing and table.includes(members, i)) then selection[#selection + 1] = i end
+        end
+        if not removing then
+            for _, i in ipairs(members) do
+                if not table.includes(selection, i) then selection[#selection + 1] = i end
+            end
+        end
+        M.propSelection = table.sort(selection)
+        if removing then
+            M.activePropIndex = table.includes(M.propSelection, M.activePropIndex) and M.activePropIndex or
+                M.propSelection[#M.propSelection]
+        else
+            M.activePropIndex = index
+        end
+    else
+        M.propSelection = mode == "alone" and { index } or groupOf(index)
+        M.activePropIndex = index
+    end
+    local active = M.activePropIndex and M.race.props[M.activePropIndex]
+    -- a line's handles while it's alone in the selection, the whole selection's gizmo otherwise
+    M.activePropPart = active and active.kind == "line" and #M.propSelection <= 1 and
+        ((part == "b" or part == "mid") and part or "a") or nil
     M.activeGateIndex, M.activeStartIndex = nil, nil
     updatePropGizmo()
     pushActive()
     propsChanged()
-end
-
---- Ctrl held while a line's handle is dragged (direct request) : the whole line goes with it
----@return boolean
-local function ctrlHeld()
-    local ok, held = pcall(function()
-        local io = ui_imgui.GetIO()
-        return io ~= nil and io.KeyCtrl == true
-    end)
-    return ok and held == true
 end
 
 --- every point of a line moved by the same offset (its ends, and its middle when it's bent)
@@ -1473,9 +1567,107 @@ local function snapLine(line)
     end
 end
 
+--- a line edited by its handles follows the ground as the editor's snapping says (direct report :
+--- a line laid with snapping on still followed the ground, edited with it off), measured again
+---@param line table
+local function lineEdited(line)
+    line.followGround = M.snapToGroundEnabled
+    fitLineCount(line)
+    updateLineHeights(line)
+end
+
+--- the points a prop stands on : a single prop's position, a line's ends and its bend
+---@param prop table
+---@return vec3[]
+local function propPoints(prop)
+    if prop.kind == "line" then
+        local out = {}
+        for _, key in ipairs({ "a", "b", "mid" }) do
+            if prop[key] then out[#out + 1] = toVec(prop[key]) end
+        end
+        return out
+    end
+    return prop.pos and { toVec(prop.pos) } or {}
+end
+
+--- the gizmo on several props (a selection, a group) : moved and turned as one round their
+--- middle, each from where it was when the gizmo was shown. Snapping keeps them as they stand
+--- together (direct request : stacked trusses), the whole lot lifted or lowered with the ground
+--- under their middle, instead of each dropped on the ground
+local function showSelectionGizmo()
+    local before, sum, n = {}, vec3(0, 0, 0), 0
+    for _, i in ipairs(M.propSelection) do
+        local prop = M.race.props[i]
+        if prop then
+            before[i] = table.clone(prop)
+            for _, p in ipairs(propPoints(prop)) do sum, n = sum + p, n + 1 end
+        end
+    end
+    if n == 0 then return end
+    local pivot = sum * (1 / n)
+    local up = vec3(0, 0, 1)
+    local offset = vec3(0, 0, 0)
+    ---@param q table? a turn round the pivot
+    ---@param delta vec3 a move
+    local function apply(q, delta)
+        local function place(p)
+            local v = toVec(p) - pivot
+            return xyz(pivot + delta + (q and q * v or v))
+        end
+        for i, was in pairs(before) do
+            local prop = M.race.props[i]
+            if prop then
+                if prop.kind == "line" then
+                    for _, key in ipairs({ "a", "b", "mid" }) do
+                        if was[key] then prop[key] = place(was[key]) end
+                    end
+                    prop.heights = nil
+                elseif was.pos then
+                    prop.pos = place(was.pos)
+                    if q then
+                        prop.dir = xyz(q * toVec(was.dir))
+                        prop.up = xyz(q * (toVec(was.up) or up))
+                    end
+                end
+            end
+        end
+    end
+    gizmo.show({
+        pos = pivot,
+        dir = vec3(0, 1, 0),
+        up = up,
+        scales = vec3(1, 1, 1),
+    }, function(updated) ---@param updated GizmoObject
+        if not parent or parent.activeEditor ~= M then return end
+        if gizmo.tool == "rotate" then
+            apply(quatFromDir(updated.dir, updated.up), vec3(0, 0, 0))
+        else
+            offset = updated.pos - pivot
+            apply(nil, offset)
+        end
+        markDirty()
+        propsChanged()
+    end, function()
+        if M.snapToGroundEnabled and gizmo.tool ~= "rotate" then
+            -- the height they stood at above the ground under their middle, kept
+            local rise = groundHeightAt(pivot + offset) - groundHeightAt(pivot)
+            apply(nil, vec3(offset.x, offset.y, rise))
+        end
+        for i in pairs(before) do
+            local prop = M.race.props[i]
+            if prop and prop.kind == "line" then updateLineHeights(prop) end
+        end
+        pushUpdate()
+        updatePropGizmo()
+        propsChanged()
+    end)
+end
+
 updatePropGizmo = function()
     gizmo.hide()
-    local prop = M.race and M.activePropIndex and M.race.props[M.activePropIndex]
+    if not M.race or not M.activePropIndex then return end
+    if #M.propSelection > 1 then return showSelectionGizmo() end
+    local prop = M.activePropIndex and M.race.props[M.activePropIndex]
     if not prop then return end
     local up = vec3(0, 0, 1)
     if prop.kind == "line" and M.activePropPart == "mid" then
@@ -1498,6 +1690,7 @@ updatePropGizmo = function()
                 prop.mid = xyz(updated.pos)
             end
             prop.heights = nil -- measured again once dropped
+            fitLineCount(prop)
             markDirty()
             propsChanged()
         end, function()
@@ -1506,7 +1699,7 @@ updatePropGizmo = function()
             elseif prop.mid and M.snapToGroundEnabled then
                 prop.mid.z = groundHeightAt(toVec(prop.mid))
             end
-            updateLineHeights(prop)
+            lineEdited(prop)
             pushUpdate()
             updatePropGizmo()
             propsChanged()
@@ -1532,6 +1725,7 @@ updatePropGizmo = function()
                 prop[part] = xyz(updated.pos)
             end
             prop.heights = nil -- straight while dragging, measured again once dropped
+            fitLineCount(prop)
             markDirty()
             propsChanged()
         end, function()
@@ -1540,7 +1734,7 @@ updatePropGizmo = function()
             elseif M.snapToGroundEnabled then
                 prop[part].z = groundHeightAt(toVec(prop[part]))
             end
-            updateLineHeights(prop)
+            lineEdited(prop)
             pushUpdate()
             updatePropGizmo()
             propsChanged()
@@ -1609,6 +1803,7 @@ local function addProp(prop, unselected)
     end
     M.activePropIndex = #M.race.props
     M.activePropPart = prop.kind == "line" and "b" or nil
+    M.propSelection = {}
     M.activeGateIndex, M.activeStartIndex = nil, nil
     updatePropGizmo()
     markDirty()
@@ -1618,7 +1813,8 @@ local function addProp(prop, unselected)
 end
 
 ---@param index integer
----@param partial table scale / count / yaw / followGround
+---@param partial table scale / count / yaw / followGround / gap (metres) / fixedGap (on : a gap
+---of the line's own spacing now ; off : its count kept)
 local function onSetProp(index, partial)
     local prop = M.race and M.race.props[index]
     if not prop or type(partial) ~= "table" then return end
@@ -1626,7 +1822,20 @@ local function onSetProp(index, partial)
         prop.scale = math.max(.1, math.min(tonumber(partial.scale) or 1, 10))
     end
     if prop.kind == "line" then
-        if partial.count ~= nil then
+        if partial.fixedGap ~= nil then
+            if partial.fixedGap == true and not prop.gap then
+                local count = math.max(1, tonumber(prop.count) or 1)
+                local spacing = count > 1 and beamjoy_props.lineLength(prop) / (count - 1) or
+                    beamjoy_props.tuning(prop.shape).length * (prop.scale or 1)
+                prop.gap = math.max(GAP_MIN, math.min(round2(spacing), GAP_MAX))
+            elseif partial.fixedGap == false then
+                prop.gap = nil
+            end
+        end
+        if partial.gap ~= nil and prop.gap and tonumber(partial.gap) then
+            prop.gap = math.max(GAP_MIN, math.min(tonumber(partial.gap), GAP_MAX))
+        end
+        if partial.count ~= nil and not prop.gap then
             local others = beamjoy_props.total(M.race.props) - beamjoy_props.weight(prop)
             -- each of its props with its parts (a line of prefabs)
             local each = 1 + (type(prop.parts) == "table" and #prop.parts or 0)
@@ -1637,8 +1846,22 @@ local function onSetProp(index, partial)
             prop.yaw = ((tonumber(partial.yaw) or 0) + 180) % 360 - 180
         end
         if partial.followGround ~= nil then prop.followGround = partial.followGround == true end
-        if partial.count ~= nil or partial.followGround ~= nil then updateLineHeights(prop) end
+        fitLineCount(prop)
+        updateLineHeights(prop)
     end
+    markDirty()
+    pushUpdate()
+    propsChanged()
+end
+
+--- cars hit the prop, or drive through it (direct request), whatever its mesh. The editor's own
+--- preview is never solid (beamjoy_props syncRace) : it shows in the race
+---@param index integer
+---@param solid boolean
+local function onSetPropSolid(index, solid)
+    local prop = M.race and M.race.props[index]
+    if not prop then return end
+    prop.solid = solid == false and false or nil
     markDirty()
     pushUpdate()
     propsChanged()
@@ -1648,8 +1871,50 @@ end
 local function onDeleteProp(index)
     if not M.race or not M.race.props[index] then return end
     table.remove(M.race.props, index)
-    M.activePropIndex, M.activePropPart = nil, nil
+    M.activePropIndex, M.activePropPart, M.propSelection = nil, nil, {}
     gizmo.hide()
+    markDirty()
+    pushUpdate()
+    pushActive()
+    propsChanged()
+end
+
+--- every selected prop goes (the Delete key, the selection's Delete)
+local function onDeleteSelectedProps()
+    if not M.race or #M.propSelection == 0 then return end
+    local doomed = table.sort(table.clone(M.propSelection), function(a, b) return a > b end)
+    for _, i in ipairs(doomed) do
+        if M.race.props[i] then table.remove(M.race.props, i) end
+    end
+    M.activePropIndex, M.activePropPart, M.propSelection = nil, nil, {}
+    gizmo.hide()
+    markDirty()
+    pushUpdate()
+    pushActive()
+    propsChanged()
+end
+
+--- the selected props become a group (direct request) : selected and moved together from then on,
+--- a prop of another group leaving it
+local function onGroupProps()
+    if not M.race or #M.propSelection < 2 then return end
+    local id = 0
+    for _, p in ipairs(M.race.props) do id = math.max(id, tonumber(p.group) or 0) end
+    for _, i in ipairs(M.propSelection) do
+        if M.race.props[i] then M.race.props[i].group = id + 1 end
+    end
+    markDirty()
+    pushUpdate()
+    pushActive()
+    propsChanged()
+end
+
+--- the selected props leave their groups (they stay selected)
+local function onUngroupProps()
+    if not M.race then return end
+    for _, i in ipairs(M.propSelection) do
+        if M.race.props[i] then M.race.props[i].group = nil end
+    end
     markDirty()
     pushUpdate()
     pushActive()
@@ -1692,6 +1957,7 @@ local function onStraightenPropLine(index)
     local line = M.race and M.race.props[index]
     if not line or line.kind ~= "line" or not line.mid then return end
     line.mid = nil
+    fitLineCount(line)
     updateLineHeights(line)
     updatePropGizmo()
     markDirty()
@@ -1699,7 +1965,35 @@ local function onStraightenPropLine(index)
     propsChanged()
 end
 
---- a line becomes its props, one by one, each where it was
+--- a prop's place in the list taken by others, selected together (and grouped, as they were one)
+---@param index integer
+---@param singles table[]
+---@param group integer? the group they make
+local function replaceProp(index, singles, group)
+    table.remove(M.race.props, index)
+    for i, single in ipairs(singles) do
+        single.group = group
+        table.insert(M.race.props, index + i - 1, single)
+    end
+    M.activePropIndex = #singles > 0 and index or nil
+    M.activePropPart = nil
+    M.propSelection = {}
+    for i = 1, #singles do M.propSelection[i] = index + i - 1 end
+    updatePropGizmo()
+    markDirty()
+    pushUpdate()
+    pushActive()
+    propsChanged()
+end
+
+---@return integer a group no prop of the race has yet
+local function newGroupId()
+    local id = 0
+    for _, p in ipairs(M.race.props) do id = math.max(id, tonumber(p.group) or 0) end
+    return id + 1
+end
+
+--- a line becomes its props, one by one, each where it was (a line of prefabs, its prefabs)
 ---@param index integer
 local function onSplitPropLine(index)
     local line = M.race and M.race.props[index]
@@ -1715,19 +2009,37 @@ local function onSplitPropLine(index)
             up = xyz(p.up),
             scale = line.scale or 1,
             lift = other and line.altLift or line.lift,
+            stretch = line.stretch and table.clone(line.stretch) or nil,
+            solid = line.solid,
+            parts = not other and type(line.parts) == "table" and table.clone(line.parts) or nil,
+            prefab = not other and line.prefab or nil,
         }
     end)
-    table.remove(M.race.props, index)
-    for i, single in ipairs(singles) do
-        table.insert(M.race.props, index + i - 1, single)
-    end
-    M.activePropIndex = #singles > 0 and index or nil
-    M.activePropPart = nil
-    updatePropGizmo()
-    markDirty()
-    pushUpdate()
-    pushActive()
-    propsChanged()
+    replaceProp(index, singles, tonumber(line.group))
+end
+
+--- a prefab becomes its meshes (direct request), each where it was : a group of them, to move
+--- together still or (Shift+click) one by one
+---@param index integer
+local function onSplitPrefab(index)
+    local prop = M.race and M.race.props[index]
+    if not prop or prop.kind == "line" or type(prop.parts) ~= "table" then return end
+    local singles = table.map(beamjoy_props.expand({ prop }), function(e)
+        return {
+            kind = "static",
+            shape = e.shape,
+            pos = xyz(e.pos),
+            dir = xyz(e.dir),
+            up = xyz(e.up),
+            scale = prop.scale or 1,
+            stretch = prop.stretch and table.clone(prop.stretch) or nil,
+            -- already lifted as the prefab stood
+            lift = 0,
+            solid = prop.solid,
+        }
+    end)
+    if #singles == 0 then return end
+    replaceProp(index, singles, tonumber(prop.group) or newGroupId())
 end
 
 --- your car a few metres short of the prop (a line's first end), facing it
@@ -1742,8 +2054,9 @@ local function onTeleportToProp(index)
         facing = flatDir(toVec(prop.b) - target)
     else
         target = toVec(prop.pos)
-        -- facing it as it was placed (its long side across)
-        facing = beamjoy_props.turn(singleAlong(prop), -SINGLE_ACROSS)
+        -- facing it as it was placed (its long side across ; a prefab, the way it faces)
+        facing = type(prop.parts) == "table" and flatDir(toVec(prop.dir)) or
+            beamjoy_props.turn(singleAlong(prop), -SINGLE_ACROSS)
     end
     beamjoy_vehicles.setVehiclePositionRotation(current.veh, target - facing * (PROP_PLACE_AHEAD + 2), facing,
         vec3(0, 0, 1))
@@ -1788,13 +2101,22 @@ M.placing = nil
 M.keepPlacing = false
 local lastPlacingPush = nil
 
----@param v number
----@return number
-local function round2(v) return math.floor(v * 100 + .5) / 100 end
+
+--- the drawer's "Fixed rotation" (direct request : trusses) : a prop placed alone keeps the turn
+--- the wheel gave it, whichever way the camera looks (at 0, as if placed looking north). The
+--- player's own choice, kept by the drawer
+M.fixedRotation = false
+local NORTH = vec3(0, 1, 0)
 
 ---@param degrees number
 ---@return number in -180..180
 local function wrapYaw(degrees) return (degrees + 180) % 360 - 180 end
+
+---@param v vec3
+---@return number the heading of a direction, as turn() counts it from north (degrees)
+local function headingOf(v)
+    return math.deg(math.atan2(-v.x, v.y))
+end
 
 --- a mesh's own lift, kept on the entry for one the catalog doesn't tune (its lift was measured
 --- here, so every player stands it the same) ; nil otherwise
@@ -1806,63 +2128,95 @@ local function entryLift(shape, tuning)
     return round3(tuning.lift)
 end
 
---- what a release would place now : one entry (a single prop or a line), with the line's length
+--- how what's armed is laid down : a mesh's tuning, or a prefab's (its yaw in a line, its length)
+---@param p table M.placing
+---@return {yaw: number, length: number, lift: number}
+local function placingTuning(p)
+    if p.prefab then
+        local t = beamjoy_props.prefabTuning(p.prefab)
+        return { yaw = t.yaw, length = t.length, lift = 0 }
+    end
+    return beamjoy_props.tuning(p.shape)
+end
+
+--- what a release would place now : one entry (a single prop or a line), with the line's length.
+--- A prefab is laid in a line too (direct request), one every its own length, the gap fixed so a
+--- longer line takes more of them (a guardrail stays one rail). What the eyedropper picked up
+--- (`template` : the prop's scale, collision, other mesh...) goes with it
 ---@return table? entry, number meters
 local function placingEntry()
     local p = M.placing
     -- the line being dragged holds fewer props than its length asks for : the race is nearly full
     p.capped = false
-    if p.prefab then
-        -- a prefab : one at the click, turned by the wheel (no line of them)
-        local at, facing = p.drag and p.drag.a or p.hit, p.drag and p.drag.facing or p.facing
-        local entry = beamjoy_props.prefabEntry(p.prefab)
-        if not entry or not at or not facing then return nil, 0 end
-        entry.kind = "static"
-        entry.pos = xyz(at)
-        entry.dir = xyz(beamjoy_props.turn(facing, p.rot))
-        entry.up = { x = 0, y = 0, z = 1 }
-        entry.scale = 1
-        return entry, 0
-    end
-    local t = beamjoy_props.tuning(p.shape)
+    local tpl = p.template or {}
+    local scale = tonumber(tpl.scale) or 1
+    local prefab = p.prefab and beamjoy_props.prefabEntry(p.prefab)
+    if p.prefab and not prefab then return nil, 0 end
+    local t = placingTuning(p)
     local yaw = wrapYaw(t.yaw + p.rot)
-    local lift = entryLift(p.shape, t)
+    local lift = not prefab and entryLift(p.shape, t) or nil
+    local each = prefab and 1 + #prefab.parts or 1
     local d = p.drag
     if d then
         local meters = d.a:distance(d.b)
-        local room = beamjoy_props.MAX_PROPS - beamjoy_props.total(M.race.props)
         if meters >= PLACE_LINE_MIN then
-            p.capped = room < 2 or
-                math.min(math.floor(meters / (t.length * p.spacing) + .5) + 1, PLACE_LINE_MAX_COUNT) > room
-        end
-        if meters >= PLACE_LINE_MIN and room >= 2 then
-            local count = math.floor(meters / (t.length * p.spacing) + .5) + 1
+            local room = math.floor((beamjoy_props.MAX_PROPS - beamjoy_props.total(M.race.props)) / each)
+            local step = t.length * scale * p.spacing
+            local fixed = prefab ~= nil or tpl.gap == true
             local line = {
                 kind = "line",
-                shape = p.shape,
+                shape = prefab and prefab.shape or p.shape,
+                prefab = prefab and prefab.prefab or nil,
+                parts = prefab and prefab.parts or nil,
                 a = xyz(d.a),
                 b = xyz(d.b),
-                count = math.max(2, math.min(count, PLACE_LINE_MAX_COUNT, room)),
+                gap = fixed and math.max(GAP_MIN, round2(step)) or nil,
                 yaw = yaw,
-                scale = 1,
+                scale = scale,
+                stretch = tpl.stretch,
+                solid = tpl.solid,
+                alt = not prefab and tpl.alt or nil,
+                altYaw = not prefab and tpl.altYaw or nil,
+                altLift = not prefab and tpl.altLift or nil,
                 -- the editor's snap to ground decides (direct report : lines followed the ground
                 -- with it off) ; off, a straight line between the two points clicked
                 followGround = M.snapToGroundEnabled,
                 lift = lift,
             }
-            updateLineHeights(line)
-            return line, meters
+            local wanted = fixed and beamjoy_props.gapCount(line, line.gap) or math.floor(meters / step + .5) + 1
+            wanted = math.min(wanted, PLACE_LINE_MAX_COUNT)
+            local least = fixed and 1 or 2
+            p.capped = room < least or wanted > room
+            if room >= least then
+                line.count = math.max(least, math.min(wanted, room))
+                updateLineHeights(line)
+                return line, meters
+            end
         end
     end
     local at, facing = d and d.a or p.hit, d and d.facing or p.facing
     if not at or not facing then return nil, 0 end
+    local base = M.fixedRotation and NORTH or facing
+    if prefab then
+        -- a prefab : one at the click, turned by the wheel
+        prefab.kind = "static"
+        prefab.pos = xyz(at)
+        prefab.dir = xyz(beamjoy_props.turn(base, p.rot))
+        prefab.up = { x = 0, y = 0, z = 1 }
+        prefab.scale = scale
+        prefab.stretch = tpl.stretch
+        prefab.solid = tpl.solid
+        return prefab, 0
+    end
     return {
         kind = "static",
         shape = p.shape,
         pos = xyz(at),
-        dir = xyz(singleDir(facing, yaw)),
+        dir = xyz(singleDir(base, yaw)),
         up = { x = 0, y = 0, z = 1 },
-        scale = 1,
+        scale = scale,
+        stretch = tpl.stretch,
+        solid = tpl.solid,
         lift = lift,
     }, 0
 end
@@ -1905,11 +2259,13 @@ local function pushPlacing(entry, meters)
         overWorld = p.hit ~= nil,
         capped = p.drag ~= nil and p.capped == true,
         keepPlacing = M.keepPlacing,
+        fixedRotation = M.fixedRotation,
+        picked = p.template ~= nil,
     } or { armed = false }
-    local key = p and string.format("%s|%s|%s|%d|%d|%d|%.2f|%s|%s|%s", p.shape, tostring(p.prefab),
+    local key = p and string.format("%s|%s|%s|%d|%d|%d|%.2f|%s|%s|%s|%s|%s", p.shape, tostring(p.prefab),
         tostring(state.dragging), state.count,
         state.meters, state.rot, state.spacing, tostring(state.overWorld), tostring(state.capped),
-        tostring(state.keepPlacing)) or "off"
+        tostring(state.keepPlacing), tostring(state.fixedRotation), tostring(state.picked)) or "off"
     if key == lastPlacingPush then return end
     lastPlacingPush = key
     beamjoy_communications_ui.send("BJEditorRacePlacing", state)
@@ -1958,6 +2314,9 @@ local function onArmPrefab(id)
         if not beamjoy_propPicker.isPlaceable(part.shape) then return end
     end
     if not propBudget(beamjoy_props.weight(template)) then return disarmProp() end
+    -- measured now, so a line of it is spaced by its own size (beamjoy_props.prefabTuning)
+    beamjoy_propPicker.measure(template.shape)
+    for _, part in ipairs(template.parts) do beamjoy_propPicker.measure(part.shape) end
     local rot = M.placing and M.placing.prefab == id and M.placing.rot or 0
     M.placing = { shape = template.shape, prefab = id, rot = rot, spacing = 1 }
     draggingHandle = nil
@@ -1967,6 +2326,39 @@ local function onArmPrefab(id)
         gizmo.hide()
         pushActive()
         extensions.hook("onBJRaceMarkersRefresh")
+    end
+    pushPlacing()
+end
+
+--- the eyedropper (direct request, in place of Duplicate) : a placed prop's mesh or prefab armed,
+--- with what makes it that prop (its scale, collision, a line's other mesh and fixed gap, its turn
+--- along a line). A single prop's own heading too while Fixed rotation is on
+---@param index integer
+local function onEyedropProp(index)
+    local prop = M.race and M.race.props[index]
+    if not prop then return end
+    if type(prop.prefab) == "string" and type(prop.parts) == "table" and beamjoy_props.getPrefab(prop.prefab) then
+        onArmPrefab(prop.prefab)
+    else
+        onArmProp(prop.shape)
+    end
+    local p = M.placing
+    if not p then return end
+    p.template = {
+        scale = prop.scale,
+        stretch = prop.stretch and table.clone(prop.stretch) or nil,
+        solid = prop.solid,
+    }
+    local t = placingTuning(p)
+    if prop.kind == "line" then
+        p.template.alt, p.template.altYaw, p.template.altLift = prop.alt, prop.altYaw, prop.altLift
+        p.template.gap = prop.gap ~= nil
+        p.rot = math.floor((tonumber(prop.yaw) or 0) - t.yaw + .5) % 360
+    elseif M.fixedRotation and prop.dir then
+        local heading = headingOf(flatDir(toVec(prop.dir)))
+        -- placed as singleDir turns it (a prefab : as it is)
+        local rot = p.prefab and heading or heading - t.yaw - SINGLE_ACROSS
+        p.rot = math.floor(rot + .5) % 360
     end
     pushPlacing()
 end
@@ -2079,7 +2471,97 @@ end
 
 local function onBJEditorDeleteKey()
     if not parent or parent.activeEditor ~= M or not M.race or not M.activePropIndex then return end
-    onDeleteProp(M.activePropIndex)
+    onDeleteSelectedProps()
+end
+
+-- CLIPBOARD ------------------------------------------------------------------------------------
+-- Props copied from one race and pasted into another (direct request) : the selection, or every
+-- prop of the race when nothing is selected. Kept in a file, so it outlives the session ; pasted on
+-- the map they were copied on only, where they stand.
+
+local CLIPBOARD_FILE = "/temp/bjPropClipboard.json"
+---@type {map: string?, props: table[]}?
+local clipboard = nil
+local clipboardRead = false
+
+---@return string? the map being played, lower case
+local function currentMap()
+    local ok, level = pcall(function() return getCurrentLevelIdentifier and getCurrentLevelIdentifier() end)
+    return ok and type(level) == "string" and level ~= "" and level:lower() or nil
+end
+
+local function readClipboard()
+    if clipboardRead then return end
+    clipboardRead = true
+    local ok, data = pcall(jsonReadFile, CLIPBOARD_FILE)
+    if ok and type(data) == "table" and type(data.props) == "table" and table.isArray(data.props) then
+        clipboard = { map = data.map, props = data.props }
+    end
+end
+
+--- what the clipboard holds, for the Paste button
+pushClipboard = function()
+    readClipboard()
+    local props = clipboard and clipboard.props or {}
+    beamjoy_communications_ui.send("BJEditorRacePropClipboard", {
+        entries = #props,
+        count = beamjoy_props.total(props),
+        sameMap = clipboard ~= nil and clipboard.map == currentMap(),
+    })
+end
+
+local function onCopyProps()
+    if not M.race then return end
+    local props = {}
+    if #M.propSelection > 0 then
+        for _, i in ipairs(M.propSelection) do
+            if M.race.props[i] then props[#props + 1] = table.clone(M.race.props[i]) end
+        end
+    else
+        for _, prop in ipairs(M.race.props) do props[#props + 1] = table.clone(prop) end
+    end
+    if #props == 0 then return end
+    clipboardRead = true
+    clipboard = { map = currentMap(), props = props }
+    pcall(jsonWriteFile, CLIPBOARD_FILE, clipboard, false)
+    toast.success(string.format("%d props copied", beamjoy_props.total(props)), nil, 3)
+    pushClipboard()
+end
+
+--- the clipboard's props added to the race where they were, selected ; their groups kept apart
+--- from the race's own
+local function onPasteProps()
+    readClipboard()
+    if not M.race or not clipboard or #clipboard.props == 0 then return end
+    if clipboard.map ~= currentMap() then
+        toast.warn("Those props were copied on another map", nil, 4)
+        return
+    end
+    if not propBudget(beamjoy_props.total(clipboard.props)) then return end
+    disarmProp()
+    local base, groups = newGroupId() - 1, {}
+    local first = #M.race.props + 1
+    for _, prop in ipairs(clipboard.props) do
+        local copy = table.clone(prop)
+        local g = tonumber(copy.group)
+        if g then
+            if not groups[g] then
+                base = base + 1
+                groups[g] = base
+            end
+            copy.group = groups[g]
+        end
+        table.insert(M.race.props, copy)
+    end
+    M.propSelection = {}
+    for i = first, #M.race.props do M.propSelection[#M.propSelection + 1] = i end
+    M.activePropIndex, M.activePropPart = first, nil
+    M.activeGateIndex, M.activeStartIndex = nil, nil
+    updatePropGizmo()
+    markDirty()
+    pushUpdate()
+    pushActive()
+    propsChanged()
 end
 
 --- a placed prop takes another mesh (the drawer's "Swap mesh"), kept where it is and turned by the
@@ -2165,9 +2647,20 @@ local function onInit(activityEditor)
     beamjoy_communications_ui.addHandler("BJEditorRaceSave", onSave)
     beamjoy_communications_ui.addHandler("BJEditorRaceSaveAsNew", onSaveAsNew)
     beamjoy_communications_ui.addHandler("BJEditorRaceImportCode", onImportCode)
-    beamjoy_communications_ui.addHandler("BJEditorRaceSelectProp", function(index, part) M.onSelectProp(index, part) end)
+    beamjoy_communications_ui.addHandler("BJEditorRaceSelectProp", function(index, part, mode)
+        M.onSelectProp(index, part, (mode == "add" or mode == "alone") and mode or nil)
+    end)
     beamjoy_communications_ui.addHandler("BJEditorRaceSetProp", onSetProp)
     beamjoy_communications_ui.addHandler("BJEditorRaceDeleteProp", onDeleteProp)
+    beamjoy_communications_ui.addHandler("BJEditorRaceDeleteSelectedProps", onDeleteSelectedProps)
+    beamjoy_communications_ui.addHandler("BJEditorRaceGroupProps", onGroupProps)
+    beamjoy_communications_ui.addHandler("BJEditorRaceUngroupProps", onUngroupProps)
+    beamjoy_communications_ui.addHandler("BJEditorRaceSetPropSolid", onSetPropSolid)
+    beamjoy_communications_ui.addHandler("BJEditorRaceSplitPrefab", onSplitPrefab)
+    beamjoy_communications_ui.addHandler("BJEditorRaceEyedropProp", onEyedropProp)
+    beamjoy_communications_ui.addHandler("BJEditorRaceCopyProps", onCopyProps)
+    beamjoy_communications_ui.addHandler("BJEditorRacePasteProps", onPasteProps)
+    beamjoy_communications_ui.addHandler("BJEditorRacePropClipboardRequest", pushClipboard)
     beamjoy_communications_ui.addHandler("BJEditorRaceDuplicateProp", onDuplicateProp)
     beamjoy_communications_ui.addHandler("BJEditorRaceSplitPropLine", onSplitPropLine)
     beamjoy_communications_ui.addHandler("BJEditorRaceStraightenPropLine", onStraightenPropLine)
@@ -2180,6 +2673,10 @@ local function onInit(activityEditor)
     beamjoy_communications_ui.addHandler("BJEditorRaceSetPropAlt", onSetPropAlt)
     beamjoy_communications_ui.addHandler("BJEditorRaceSetKeepPlacing", function(state)
         M.keepPlacing = state == true
+        if M.placing then pushPlacing() end
+    end)
+    beamjoy_communications_ui.addHandler("BJEditorRaceSetFixedRotation", function(state)
+        M.fixedRotation = state == true
         if M.placing then pushPlacing() end
     end)
 end
@@ -2196,6 +2693,7 @@ local function onClose()
         M.activeGateIndex = nil
         M.activeStartIndex = nil
         M.activePropIndex, M.activePropPart = nil, nil
+        M.propSelection = {}
         M.dirty = false
         propsChanged()
     end

@@ -8,7 +8,47 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2668, server build 2448.
+Version 1.11.0 : client build 2670, server build 2449.
+
+- **Fix : props from other maps with no material** (direct report : a race saved on Italy, the
+  game's cache cleared, its props came back with "no material"). Only the prop's own folder's
+  materials were loaded, but many are defined elsewhere : Hirochi's objects take a material from its
+  buildings folder, Industrial's buildings ask for a concrete only Utah, Derby and Small Island
+  define, Jungle Rock Island's for one of East Coast's. They'd shown fine before only because the
+  drawer had loaded the right folders by chance. What a mesh asks for is now looked up wherever
+  it's defined : its own map first, then the others, each map's material files read once a session
+  and only when needed. A texture named by its file alone keeps working from the copy. *(client)*
+- **Fix : deleted props' collision stayed in the editor** (direct report : the mouse's placing went
+  "funky" and the car hit props already removed, until the race was saved and started). Opening the
+  editor right after a race rebuilt the game's collision with the editor's own props in it, so
+  props deleted afterwards stayed solid, invisible. The editor's props are now never solid ; they
+  are in the race. *(client)*
+- **Fix : a line edited with snapping off still followed the ground** (direct report). A line
+  edited by its handles now follows the ground as the editor's snapping says. *(client)*
+- **Multiple selection and groups** (direct request). Ctrl+click (in the list or the world) adds a
+  prop to the selection or takes it out ; the gizmo moves and turns the selection as one, round its
+  middle, and snapping keeps it standing together (lifted with the ground under its middle). Group
+  makes the selection a group : clicking one selects them all ; Shift+click picks one alone ;
+  Ungroup undoes it. The Delete key deletes the whole selection. *(client + server)*
+- **Copy and paste props between races** (direct request). Copy takes the selection, or every prop
+  of the race ; Paste adds them to the race being edited where they were copied (same map only),
+  selected, their groups kept apart. Kept in a file, so it outlives the session. *(client)*
+- **Prefabs in a line, and lines with a fixed gap** (direct request). A prefab dragged lays a line
+  of them, one every its own length (a guardrail section : 2 m), so a longer line takes more instead
+  of stretching them apart. Any line can switch between Count (spread from end to end) and Fixed
+  gap (one every so many metres from its first end). Split prefab turns a prefab into its meshes, as
+  a group ; splitting a line of prefabs keeps them whole. *(client + server)*
+- **Fixed rotation, eyedropper, collision switch** (direct request). The drawer's compass button
+  keeps a placed prop's turn whichever way the camera looks (trusses line up). Each prop's
+  eyedropper (in place of Duplicate) arms that prop again with its scale, collision and line
+  settings, and its heading while Fixed rotation is on. A switch beside Teleport makes a prop solid
+  or drive-through. *(client)*
+
+- **Fix : video memory only ever went up while browsing props** (direct report : the game's
+  tools:Texture at 1.7 GB). Each prop preview was rendered by a renderer of its own, whose render
+  targets were only freed whenever Lua's garbage collector got round to it, so they piled up. One
+  renderer now makes every preview, and lets go of each prop's mesh once its preview is made.
+  *(client)*
 
 - **Fix : props placed alone came a quarter turn off** (direct report : right in a line, sideways
   alone). A prop's turn lays its long side along a direction : a line's own, but for one placed alone
