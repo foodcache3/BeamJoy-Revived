@@ -8,8 +8,64 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2670, server build 2449.
+Version 1.11.0 : client build 2675, server build 2451.
 
+- **Fix : props said solid whose mesh has no collision** (direct report : the showroom's backdrops,
+  a ground plane). A mesh only has collision when it carries a collision mesh, and many don't (the
+  maps make those solid by their visible mesh instead). Each mesh's own is now read from its file,
+  once : the editor's list and the drawer say drive-through for those, and the prop's switch makes
+  them solid by their visible mesh, as the maps do. Map races imported keep a prop the map made
+  solid that way. The guardrail post had none either. *(client + server : the server keeps the
+  switch both ways)*
+- **Fix : selecting a prop turned the editor's collision switch off** ; only an edit does now (a
+  gate's too). The copy button's tooltip no longer counts the props (direct request). *(client)*
+
+- **Collision switch in the race editor** (direct request). The editor's props have no collision,
+  so ones deleted or moved can't leave an invisible copy behind. A new button beside Fixed rotation
+  makes them solid as in the race, to drive into them. Any edit to the props turns it back off, and
+  their collision is rebuilt right then. *(client)*
+- **Fix : the collision button didn't respond** (direct report). Lua's `x == false and false or
+  nil` is always nil, so a prop could never be made drive-through, and the server dropped the
+  setting the same way when saving. *(client + server)*
+- **Fix : Ctrl+click didn't select several props** (direct report). Left Ctrl is the game's node
+  grabber : held, it took every click in the world. The node grabber is off while the race editor
+  is open (back on when it closes), and a list click also reads Ctrl and Shift from the game itself
+  should the UI's click not carry them. *(client)*
+- **End caps on lines** (direct request) : a mesh at either end of a line (a barrier's end piece),
+  against its end prop and facing out, with a button to turn it round. *(client + server)*
+- **Props follow the ground's tilt** (direct request), lines especially : each prop of a line is
+  tilted as the ground under its whole length (from the ground at its two ends and two sides), and
+  a single prop placed or moved with snapping on lies on the slope too, facing as it did.
+  *(client + server)*
+- **The eyedropper copies lines** (direct request) : on a line, a click lays a copy of the whole
+  line at the mouse (the wheel turns it), a drag lays a new line like it, end caps included.
+  *(client)*
+- **Ctrl + wheel turns a prop being placed a degree at a time** (direct request). *(client)*
+- **Keep placing and Fixed rotation moved beside the snapping button** (direct request). *(client)*
+- The Move buttons read First end, Middle, Last end ; picking the alternate mesh no longer lights
+  up Swap mesh ; Copy and Paste say how many props they take and that Copy takes the selection or
+  everything (direct requests). *(client)*
+
+- **Fix : fences and tarps on a bent line didn't join** (direct report). Each prop stood at its
+  point on the curve facing the curve's way there, so a mesh whose origin is at one end (the
+  spectator fences and tarps) swung its far end off the curve, leaving gaps and kinks of up to
+  ~75 cm on a tight bend. Line props are now laid as the game's own spline tools lay rigid fence
+  panels : the back end on the curve, the front end where the curve is exactly the mesh's length
+  further across the ground, facing from one to the other, so neighbours meet end to end. A
+  straight line is unchanged. *(client)*
+- **Lamps cast light** (direct request) : the lamps from every map's meshes now light up at night,
+  not only the catalog's five : lamp1, Driver Training's light pole and high mast, the showroom's
+  light panel and neon tubes, East Coast's lamppost, Small Island's wind vane beacon, Utah's string
+  lights and camp lamppost, Industrial's big light pole, and West Coast's tunnel ceiling light,
+  airport mast, city light, marker lights (every colour), street, bridge and floodlight poles,
+  hanging and roof strip lights, substation floodlights and warehouse lamp. Each light is where,
+  how bright and what colour the maps put theirs on that mesh (the same on every map's copy of it),
+  or where its bulb glows for the few no map lights ; their bulbs glow at night and go dark by
+  day, as the maps' do. The 40 lights allowed at once now go to the lamps nearest the camera
+  instead of the first placed, so a long row of masts stays lit around you. They never cast
+  shadows (the shadow maps are left to the map's own lamps) and stay apart from the map's lamps :
+  the game's night lights manager neither sees nor switches them, and nothing of the map's is
+  changed. *(client)*
 - **Fix : props from other maps with no material** (direct report : a race saved on Italy, the
   game's cache cleared, its props came back with "no material"). Only the prop's own folder's
   materials were loaded, but many are defined elsewhere : Hirochi's objects take a material from its

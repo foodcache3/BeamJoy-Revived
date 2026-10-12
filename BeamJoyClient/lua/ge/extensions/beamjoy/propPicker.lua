@@ -179,7 +179,11 @@ local function loadMeta()
     if ok and type(data) == "table" then
         for shape, m in pairs(data) do
             if type(m) == "table" and tonumber(m.x) and tonumber(m.y) and tonumber(m.z) then
-                beamjoy_props.meta[shape] = { x = m.x, y = m.y, z = m.z, minZ = tonumber(m.minZ) or 0 }
+                beamjoy_props.meta[shape] = { x = m.x, y = m.y, z = m.z, minZ = tonumber(m.minZ) or 0,
+                    minX = tonumber(m.minX), maxX = tonumber(m.maxX), minY = tonumber(m.minY), maxY = tonumber(m.maxY) }
+                -- its own collision (meshHasCollision) ; not `type(m.col) == "boolean" and m.col or
+                -- nil`, which is never false
+                if m.col == true or m.col == false then beamjoy_props.meta[shape].col = m.col end
             end
         end
     end
@@ -231,13 +235,25 @@ local function objBox(shape)
     return box
 end
 
---- the mesh's size (its object box, unscaled, in metres), measured the first time it's asked for
+--- the mesh's size (its object box, unscaled, in metres) and where its box sits round its origin
+--- (`minX`... : how far a line's props reach along it, beamjoy_props.linePlacements), measured the
+--- first time it's asked for ; again for one measured before those were kept
 ---@param shape string
----@return {x: number, y: number, z: number, minZ: number}?
+---@return {x: number, y: number, z: number, minZ: number, minX: number, maxX: number, minY: number, maxY: number}?
 function M.measure(shape)
     if not M.isPlaceable(shape) then return nil end
     local key = shape:lower()
-    if beamjoy_props.meta[key] or unmeasurable[key] then return beamjoy_props.meta[key] end
+    local known = beamjoy_props.meta[key]
+    if unmeasurable[key] then return known end
+    if known and known.minX ~= nil then
+        -- whether it has a collision of its own (direct report : the drawer called every game mesh
+        -- solid), read for one measured before that was kept
+        if known.col == nil then
+            beamjoy_props.meshHasCollision(shape)
+            metaDirtyAt = metaDirtyAt or GetCurrentTimeMillis() + META_SAVE_DELAY_MS
+        end
+        return known
+    end
     beamjoy_props.ensureMaterials(shape)
     local box, err = objBox(shape)
     local ok, meta = err == nil, nil
@@ -247,6 +263,10 @@ function M.measure(shape)
             y = round2(box.max.y - box.min.y),
             z = round2(box.max.z - box.min.z),
             minZ = round2(box.min.z),
+            minX = round2(box.min.x),
+            maxX = round2(box.max.x),
+            minY = round2(box.min.y),
+            maxY = round2(box.max.y),
         }
     else
         meta = err
@@ -254,10 +274,11 @@ function M.measure(shape)
     if not ok or not meta then
         unmeasurable[key] = true
         if not ok then LogWarn(string.format("beamjoy_propPicker: %s not measured: %s", shape, tostring(meta))) end
-        return nil
+        return known
     end
     if meta then
         beamjoy_props.meta[key] = meta
+        beamjoy_props.meshHasCollision(shape) -- kept in it as `col`
         metaDirtyAt = metaDirtyAt or GetCurrentTimeMillis() + META_SAVE_DELAY_MS
     end
     return meta
@@ -657,7 +678,8 @@ end
 ---@return boolean sized its size is known, or can't be
 local function sized(shape)
     local key = shape:lower()
-    return beamjoy_props.meta[key] ~= nil or unmeasurable[key] == true
+    local meta = beamjoy_props.meta[key]
+    return meta ~= nil and meta.col ~= nil or unmeasurable[key] == true
 end
 
 --- looks for a thumbnail already on disk ; true when there's nothing left to make for it

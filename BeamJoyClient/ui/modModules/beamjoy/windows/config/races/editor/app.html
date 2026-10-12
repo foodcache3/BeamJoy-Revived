@@ -287,6 +287,39 @@
             >
                 <icon name="snapToGround"></icon>
             </button>
+            <!-- placing's own switches, beside the snapping (direct request ; they were the props
+                 drawer's) -->
+            <button
+                class="btn"
+                ng-class="$ctrl.keepPlacing ? 'success' : 'neutral'"
+                ng-click="$ctrl.toggleKeepPlacing($event)"
+                title="{{($ctrl.keepPlacing
+                    ? 'beamjoy.window.config.tabs.races.props.drawer.keep.on'
+                    : 'beamjoy.window.config.tabs.races.props.drawer.keep.off') | translate}}"
+            >
+                <icon name="keepPlacing"></icon>
+            </button>
+            <button
+                class="btn"
+                ng-class="$ctrl.fixedRotation ? 'success' : 'neutral'"
+                ng-click="$ctrl.toggleFixedRotation($event)"
+                title="{{($ctrl.fixedRotation
+                    ? 'beamjoy.window.config.tabs.races.props.drawer.fixed.on'
+                    : 'beamjoy.window.config.tabs.races.props.drawer.fixed.off') | translate}}"
+            >
+                <icon name="fixedRotation"></icon>
+            </button>
+            <button
+                class="btn"
+                ng-class="$ctrl.testCollision ? 'success' : 'neutral'"
+                ng-click="$ctrl.toggleTestCollision($event)"
+                ng-disabled="$ctrl.race.props.length === 0"
+                title="{{($ctrl.testCollision
+                    ? 'beamjoy.window.config.tabs.races.props.testCollision.on'
+                    : 'beamjoy.window.config.tabs.races.props.testCollision.off') | translate}}"
+            >
+                <icon name="{{$ctrl.testCollision ? 'solid' : 'passable'}}"></icon>
+            </button>
             <vr></vr>
             <button
                 class="btn"
@@ -302,9 +335,7 @@
                 class="btn neutral"
                 ng-click="$ctrl.copyProps($event)"
                 ng-disabled="$ctrl.race.props.length === 0"
-                title="{{($ctrl.selectedProps.length > 0
-                    ? 'beamjoy.window.config.tabs.races.props.copy.selection'
-                    : 'beamjoy.window.config.tabs.races.props.copy.all') | translate}}"
+                title="{{$ctrl.copyTooltip()}}"
             >
                 <icon name="copy"></icon>
             </button>
@@ -312,9 +343,7 @@
                 class="btn neutral"
                 ng-click="$ctrl.pasteProps($event)"
                 ng-disabled="!$ctrl.propClipboard.entries || !$ctrl.propClipboard.sameMap"
-                title="{{($ctrl.propClipboard.entries && !$ctrl.propClipboard.sameMap
-                    ? 'beamjoy.window.config.tabs.races.props.paste.otherMap'
-                    : 'beamjoy.window.config.tabs.races.props.paste') | translate}}{{$ctrl.propClipboard.count ? ' (' + $ctrl.propClipboard.count + ')' : ''}}"
+                title="{{$ctrl.pasteTooltip()}}"
             >
                 <icon name="paste"></icon>
             </button>
@@ -713,13 +742,13 @@
                 </span>
                 <button
                     class="btn"
-                    ng-class="prop.solid === false ? 'neutral' : 'info'"
+                    ng-class="$ctrl.isPropSolid($index) ? 'info' : 'neutral'"
                     ng-click="$ctrl.togglePropSolid($event, $index)"
-                    title="{{(prop.solid === false
+                    title="{{(!$ctrl.isPropSolid($index)
                         ? 'beamjoy.window.config.tabs.races.props.solid.off'
                         : 'beamjoy.window.config.tabs.races.props.solid.on') | translate}}"
                 >
-                    <icon name="{{prop.solid === false ? 'passable' : 'solid'}}"></icon>
+                    <icon name="{{$ctrl.isPropSolid($index) ? 'solid' : 'passable'}}"></icon>
                 </button>
                 <button
                     class="btn info"
@@ -763,18 +792,18 @@
                                 </button>
                                 <button
                                     class="btn"
-                                    ng-class="$ctrl.activePropPart === 'b' ? 'success' : 'neutral'"
-                                    ng-click="$ctrl.selectPropEnd($event, $index, 'b')"
-                                >
-                                    {{'beamjoy.window.config.tabs.races.props.endB' | translate}}
-                                </button>
-                                <button
-                                    class="btn"
                                     ng-class="$ctrl.activePropPart === 'mid' ? 'success' : 'neutral'"
                                     ng-click="$ctrl.selectPropEnd($event, $index, 'mid')"
                                     title="{{'beamjoy.window.config.tabs.races.props.endMid.tooltip' | translate}}"
                                 >
                                     {{'beamjoy.window.config.tabs.races.props.endMid' | translate}}
+                                </button>
+                                <button
+                                    class="btn"
+                                    ng-class="$ctrl.activePropPart === 'b' ? 'success' : 'neutral'"
+                                    ng-click="$ctrl.selectPropEnd($event, $index, 'b')"
+                                >
+                                    {{'beamjoy.window.config.tabs.races.props.endB' | translate}}
                                 </button>
                                 <button
                                     class="btn warning"
@@ -808,6 +837,66 @@
                                     ng-if="prop.alt"
                                     ng-click="$ctrl.clearPropAlt($event, $index)"
                                     title="{{'beamjoy.window.config.tabs.races.props.alt.clear' | translate}}"
+                                >
+                                    <icon name="remove"></icon>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr ng-if="prop.kind === 'line'">
+                        <td
+                            class="text-right"
+                            title="{{'beamjoy.window.config.tabs.races.props.caps.tooltip' | translate}}"
+                        >
+                            {{'beamjoy.window.config.tabs.races.props.caps' | translate}}
+                        </td>
+                        <td>
+                            <div class="d-flex gap-1 align-center flex-wrap">
+                                <span class="small opacity-70">{{'beamjoy.window.config.tabs.races.props.caps.a' | translate}}</span>
+                                <button
+                                    class="btn"
+                                    ng-class="$ctrl.isCapPick($index, 'a') ? 'primary' : 'neutral'"
+                                    ng-click="$ctrl.pickPropCap($event, $index, 'a')"
+                                >
+                                    {{($ctrl.propCapLabel(prop, 'a') || 'beamjoy.window.config.tabs.races.props.caps.none') | translate}}
+                                </button>
+                                <button
+                                    class="btn neutral"
+                                    ng-if="prop.capA"
+                                    ng-click="$ctrl.flipPropCap($event, $index, 'a')"
+                                    title="{{'beamjoy.window.config.tabs.races.props.caps.flip' | translate}}"
+                                >
+                                    <icon name="rotate"></icon>
+                                </button>
+                                <button
+                                    class="btn danger"
+                                    ng-if="prop.capA"
+                                    ng-click="$ctrl.clearPropCap($event, $index, 'a')"
+                                    title="{{'beamjoy.window.config.tabs.races.props.caps.clear' | translate}}"
+                                >
+                                    <icon name="remove"></icon>
+                                </button>
+                                <span class="small opacity-70">{{'beamjoy.window.config.tabs.races.props.caps.b' | translate}}</span>
+                                <button
+                                    class="btn"
+                                    ng-class="$ctrl.isCapPick($index, 'b') ? 'primary' : 'neutral'"
+                                    ng-click="$ctrl.pickPropCap($event, $index, 'b')"
+                                >
+                                    {{($ctrl.propCapLabel(prop, 'b') || 'beamjoy.window.config.tabs.races.props.caps.none') | translate}}
+                                </button>
+                                <button
+                                    class="btn neutral"
+                                    ng-if="prop.capB"
+                                    ng-click="$ctrl.flipPropCap($event, $index, 'b')"
+                                    title="{{'beamjoy.window.config.tabs.races.props.caps.flip' | translate}}"
+                                >
+                                    <icon name="rotate"></icon>
+                                </button>
+                                <button
+                                    class="btn danger"
+                                    ng-if="prop.capB"
+                                    ng-click="$ctrl.clearPropCap($event, $index, 'b')"
+                                    title="{{'beamjoy.window.config.tabs.races.props.caps.clear' | translate}}"
                                 >
                                     <icon name="remove"></icon>
                                 </button>
@@ -903,7 +992,7 @@
                             <button
                                 class="btn"
                                 ng-if="!prop.parts"
-                                ng-class="$ctrl.propSwap && $ctrl.propSwap.index === $index ? 'primary' : 'neutral'"
+                                ng-class="$ctrl.propSwap && $ctrl.propSwap.index === $index && !$ctrl.propSwap.alt && !$ctrl.propSwap.cap ? 'primary' : 'neutral'"
                                 ng-click="$ctrl.swapPropMesh($event, $index)"
                                 title="{{'beamjoy.window.config.tabs.races.props.swap.tooltip' | translate}}"
                             >

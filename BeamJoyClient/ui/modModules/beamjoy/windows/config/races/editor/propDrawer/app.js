@@ -21,8 +21,6 @@ const FAV_KEY = "beamjoy.propDrawer.favourites";
 const POSITION_KEY = "beamjoy.propDrawer.position";
 const RECENT_KEY = "beamjoy.propDrawer.recent";
 const RECENT_MAX = 16;
-const KEEP_KEY = "beamjoy.propDrawer.keepPlacing";
-const FIXED_KEY = "beamjoy.propDrawer.fixedRotation";
 // "Other maps" in All game meshes (off unless the player turned it on)
 const OTHERS_KEY = "beamjoy.propDrawer.otherMaps";
 
@@ -494,6 +492,14 @@ angular.module("beamjoy").component("bjPropDrawer", {
         // SIZE / COLLISION TEXT --------------------------------------------------------------
 
         this.sizeOf = (item) => item && this.sizes[item.thumbKey || item.key];
+        // cars hit it : the catalog's and the prefabs' say ; a game mesh's own collision, once it's
+        // measured (direct report : a backdrop or a ground plane said solid, and had none)
+        this.solidOf = (item) => {
+            if (!item) return false;
+            if (item.curated || item.prefab) return item.solid;
+            const s = this.sizes[item.key];
+            return !(s && s.col === false);
+        };
         this.tileSize = (item) => {
             if (item && item.prefab) return T("prefab.parts").replace("{n}", item.parts);
             const s = this.sizeOf(item);
@@ -542,7 +548,8 @@ angular.module("beamjoy").component("bjPropDrawer", {
             // a prop's mesh can't be swapped for a whole prefab
             if (this.swap && item.prefab) return;
             if (this.swap) {
-                if (this.swap.alt) beamjoyStore.send("BJEditorRaceSetPropAlt", [this.swap.index + 1, item.shape]);
+                if (this.swap.cap) beamjoyStore.send("BJEditorRaceSetPropCap", [this.swap.index + 1, this.swap.cap, item.shape]);
+                else if (this.swap.alt) beamjoyStore.send("BJEditorRaceSetPropAlt", [this.swap.index + 1, item.shape]);
                 else beamjoyStore.send("BJEditorRaceSwapPropShape", [this.swap.index + 1, item.shape]);
                 remember(item);
                 this.onSwapEnd();
@@ -558,44 +565,8 @@ angular.module("beamjoy").component("bjPropDrawer", {
             remember(item);
         };
         this.disarm = () => beamjoyStore.send("BJEditorRaceDisarmProp");
-        // "Keep placing" (direct request) : a prop stays armed after each one placed, as with
-        // Ctrl held, so several go down without picking it again. Kept on this PC
-        this.keepPlacing = false;
-        try {
-            this.keepPlacing = localStorage.getItem(KEEP_KEY) === "1";
-        } catch (e) {
-            this.keepPlacing = false;
-        }
-        const sendKeepPlacing = () => beamjoyStore.send("BJEditorRaceSetKeepPlacing", [this.keepPlacing]);
-        this.toggleKeepPlacing = (event) => {
-            if (event) event.stopPropagation();
-            this.keepPlacing = !this.keepPlacing;
-            try {
-                localStorage.setItem(KEEP_KEY, this.keepPlacing ? "1" : "0");
-            } catch (e) {
-                // kept for this session only
-            }
-            sendKeepPlacing();
-        };
-        // "Fixed rotation" (direct request : trusses) : a prop placed alone keeps the turn the wheel
-        // gave it, whichever way the camera looks. Kept on this PC
-        this.fixedRotation = false;
-        try {
-            this.fixedRotation = localStorage.getItem(FIXED_KEY) === "1";
-        } catch (e) {
-            this.fixedRotation = false;
-        }
-        const sendFixedRotation = () => beamjoyStore.send("BJEditorRaceSetFixedRotation", [this.fixedRotation]);
-        this.toggleFixedRotation = (event) => {
-            if (event) event.stopPropagation();
-            this.fixedRotation = !this.fixedRotation;
-            try {
-                localStorage.setItem(FIXED_KEY, this.fixedRotation ? "1" : "0");
-            } catch (e) {
-                // kept for this session only
-            }
-            sendFixedRotation();
-        };
+        // Keep placing and Fixed rotation : the editor's toolbar switches now (editor/app.js), their
+        // state read back from BJEditorRacePlacing for the hints
         this.expandStrip = () => {
             this.stripExpanded = true;
             $timeout(() => {
@@ -660,6 +631,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
                     ["keys.wheel", "help.wheel"],
                     ["keys.wheelDragging", "help.wheelDragging"],
                     ["keys.shiftWheel", "help.shiftWheel"],
+                    ["keys.ctrlWheel", "help.ctrlWheel"],
                     ["keys.ctrlRelease", "help.ctrlRelease"],
                     ["keys.keepButton", "help.keepButton"],
                     ["keys.fixedButton", "help.fixedButton"],
@@ -983,8 +955,6 @@ angular.module("beamjoy").component("bjPropDrawer", {
             }
             if (changes.open) {
                 if (this.open) {
-                    sendKeepPlacing();
-                    sendFixedRotation();
                     lastPos = "";
                     startWatching();
                     $timeout(() => {

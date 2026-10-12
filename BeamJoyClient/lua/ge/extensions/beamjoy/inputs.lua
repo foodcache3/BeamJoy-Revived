@@ -63,7 +63,10 @@ local function onUpdate()
             return ac[1] == "nodegrabberRender"
         end)
     if nodegrabberUpdate then
-        M.isNodegrabberRenderActive = nodegrabberUpdate[4] == 1
+        -- blocked (the race editor : Left Ctrl is its multiple selection there), it grabs nothing
+        local blocked = core_input_actionFilter and core_input_actionFilter.isActionBlocked and
+            core_input_actionFilter.isActionBlocked("nodegrabberRender") == true
+        M.isNodegrabberRenderActive = nodegrabberUpdate[4] == 1 and not blocked
     end
 
     local type

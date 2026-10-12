@@ -18,7 +18,8 @@
 --- props spaced evenly along the curve and each facing along it there.
 --- Optional on both : `stretch` {x, y, z} scales a mesh unevenly (on top of `scale` : a map's own
 --- race props, imported by beamjoy/mapRaces, are often stretched barriers), `lift` stands it that
---- much higher (mesh units), `solid = false` lets cars drive through it whatever its mesh.
+--- much higher (mesh units), `solid = false` lets cars drive through it whatever its mesh, `true`
+--- makes it solid though its mesh has no collision of its own (collisionOf).
 --- `alt` (optional, a line's) : every other prop of it is that mesh instead (the 2nd, 4th...), turned
 --- `altYaw` degrees more and lifted `altLift` (mesh units) instead of `lift` : red and white barriers
 --- in turn.
@@ -27,13 +28,22 @@
 --- (in its own axes and scale : `pos` from its origin, `dir` / `up` its facing and up there, the
 --- prop's own by default). Moved, turned, scaled and deleted with it ; every part counts as a prop.
 --- `heights` (one ground height per prop, measured by the editor) is what makes it follow the
---- ground ; without it the props sit on the straight line from `a` to `b`.
+--- ground ; without it the props sit on the straight line from `a` to `b`. `normals` (one per prop,
+--- measured with them, {x, y} : the ground's up there, its z following) tilts each prop as the
+--- ground under it ; a single prop's tilt is its own `up`.
+--- `capA` / `capB` (optional, a line's) : a mesh at its first / last end, butting against the
+--- line's end prop and facing out of the line, turned `capAYaw` / `capBYaw` degrees (its tuning
+--- yaw, or that and a half turn when flipped) and lifted `capALift` / `capBLift` (mesh units).
 ---
---- Lamps : a catalog entry with a `light` casts it, through a SpotLight of its own at each of the
---- mesh's lamp heads (`offsets`, mesh units from its origin, turned and scaled with it), shining
---- along `aim`. On at
---- night only, as the map's own lamps are (core_environment's night window), never casting shadows,
---- and no more than MAX_LIGHTS of them at once. A map's own props on the same mesh light up too.
+--- Lamps : a mesh named in LAMPS (by its file name, so every map's copy of it, picked from the
+--- catalog or from any map's meshes) casts light, through a light of its own at each of its lamp
+--- heads, turned and scaled with it. On at night only, as the map's own lamps are
+--- (core_environment's night window), its bulb glowing then as theirs do ; never casting shadows ;
+--- no more than MAX_LIGHTS heads lit at once, the nearest the camera. They're kept apart from the
+--- map's own lamps : unnamed, never saved, in this module's own group, and without any of the fields
+--- core_environment's night lights manager picks lamps up by (`nightLight`, `dayIntensity`,
+--- `nightIntensity` on a light, `nightEmissive` or `child` on a mesh), so it never switches them and
+--- they never switch anything of the map's.
 ---
 --- Sets : each consumer shows its props under its own key (`show(key, props, opts)`), so a race and
 --- anything later (hunter arenas, passive zones) never clear each other's.
@@ -53,7 +63,9 @@ local M = {
     --- isn't at its base. Those three were tuned by hand on the first props ; one without them is
     --- tuned from its measured size (tuning() below : beamjoy_propPicker measures a mesh the first
     --- time it's previewed or armed). `collision` is the TSStatic collision type : "None" for the
-    --- decorative ones cars should drive through (tape, flags, banners) ; `invisible` ones are drawn
+    --- decorative ones cars should drive through (tape, flags, banners) and the ones whose mesh has
+    --- no collision of its own (the guardrail post : checked against every mesh's .dae, see
+    --- meshHasCollision) ; `invisible` ones are drawn
     --- as a panel by the editor, since nothing of them shows in the world. A mesh under /levels/<map>/
     --- has its materials defined by that map only : ensureMaterials() brings them along elsewhere.
     CATALOG = {
@@ -72,7 +84,7 @@ local M = {
         { id = "raceBarricadeCurveB", cat = "barriers", tags = "crowd fence metal bend", shape = "/art/shapes/race/ut_race_mesh_barricade_curve_b.DAE" },
         { id = "safetyCushion", cat = "barriers", tags = "crash impact attenuator", shape = "/art/shapes/race/rally/rally_assets/s_safety_cushion_01.dae" },
         { id = "constructionBarrier", cat = "barriers", tags = "roadworks arrows", shape = "/art/shapes/objects/constructionbarrier_arrows.dae", yaw = 0, length = 2 },
-        { id = "guardrailPost", cat = "barriers", tags = "armco post", shape = "/art/shapes/objects/guardrailpost.dae" },
+        { id = "guardrailPost", cat = "barriers", tags = "armco post", shape = "/art/shapes/objects/guardrailpost.dae", collision = "None" },
         { id = "guardrailItaly", cat = "barriers", tags = "armco rail steel italy", shape = "/art/shapes/objects/italy_guardrails_common_section.dae" },
         { id = "tireStackAtt", cat = "barriers", tags = "tyre wall", shape = "/levels/automation_test_track/art/shapes/objects/tirestack.dae" },
         { id = "tireStackAttBlue", cat = "barriers", tags = "tyre wall", shape = "/levels/automation_test_track/art/shapes/objects/tirestack_blue.dae" },
@@ -163,24 +175,13 @@ local M = {
         { id = "metalDrum", cat = "scenery", tags = "barrel oil", shape = "/art/shapes/garage_and_dealership/Clutter/metal_drum_a.DAE" },
         { id = "dumpster", cat = "scenery", tags = "skip trash", shape = "/art/shapes/garage_and_dealership/Clutter/ind_dumpster_full.DAE" },
         { id = "cityBin", cat = "scenery", tags = "trash", shape = "/art/shapes/garage_and_dealership/Clutter/clutter_city_bin_round.dae" },
-        -- the lamps' heads measured on their meshes (their glass and bulb) : the pole's hangs at the end of
-        -- its arm, the two flood lights face their own +X
-        { id = "lightPole", cat = "scenery", tags = "street lamp light", shape = "/art/shapes/objects/pole_light_single.dae",
-            light = { offsets = { { 5.0, 0, 12.55 } }, aim = { 0, 0, -1 }, range = 35, innerAngle = 50, outerAngle = 150,
-                color = { 1, .8, .6 }, intensity = 8000 } },
+        -- lamps : their light is LAMPS' (below)
+        { id = "lightPole", cat = "scenery", tags = "street lamp light", shape = "/art/shapes/objects/pole_light_single.dae" },
         -- the same arm and head on a bridge railing mount, and one each side
-        { id = "lightPoleBridge", cat = "scenery", tags = "street lamp light railing", shape = "/art/shapes/objects/pole_light_bridge.dae",
-            light = { offsets = { { 5.0, 0, 12.55 } }, aim = { 0, 0, -1 }, range = 35, innerAngle = 50, outerAngle = 150,
-                color = { 1, .8, .6 }, intensity = 8000 } },
-        { id = "lightPoleDouble", cat = "scenery", tags = "street lamp light twin", shape = "/art/shapes/objects/pole_light_double.dae",
-            light = { offsets = { { 5.0, 0, 12.55 }, { -5.0, 0, 12.55 } }, aim = { 0, 0, -1 }, range = 35, innerAngle = 50,
-                outerAngle = 150, color = { 1, .8, .6 }, intensity = 8000 } },
-        { id = "standingLight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_standinglight_01.dae",
-            light = { offsets = { { .1, 0, 1.51 } }, aim = { 1, 0, -.25 }, range = 30, innerAngle = 40, outerAngle = 110,
-                color = { .9, .95, 1 }, intensity = 6000 } },
-        { id = "spotlight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_spotlight_01.dae",
-            light = { offsets = { { .06, 0, .03 } }, aim = { 1, 0, .15 }, range = 30, innerAngle = 20, outerAngle = 70,
-                color = { .9, .95, 1 }, intensity = 6000 } },
+        { id = "lightPoleBridge", cat = "scenery", tags = "street lamp light railing", shape = "/art/shapes/objects/pole_light_bridge.dae" },
+        { id = "lightPoleDouble", cat = "scenery", tags = "street lamp light twin", shape = "/art/shapes/objects/pole_light_double.dae" },
+        { id = "standingLight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_standinglight_01.dae" },
+        { id = "spotlight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_spotlight_01.dae" },
         { id = "foldTable", cat = "scenery", tags = "pit", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_table_01.dae" },
         { id = "foldChair", cat = "scenery", tags = "pit seat", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_chair_01.dae", collision = "None" },
         { id = "tireRack", cat = "scenery", tags = "tyre pit", shape = "/art/shapes/garage_and_dealership/garage/s_tire_rack.dae" },
@@ -815,7 +816,7 @@ function M.catalogForUI()
                 name = name,
                 cat = p.cat,
                 tags = p.tags or (p.cat == "gazebos" and "tent canopy pit marquee" or "sign sponsor advert banner board"),
-                solid = true,
+                solid = M.solidByDefault({ shape = p.shape, parts = p.parts }),
                 parts = #p.parts + 1,
                 size = M.meta[(p.thumb or p.shape):lower()],
             }
@@ -877,7 +878,10 @@ end
 function M.weight(entry)
     -- each prop and every part of it
     local each = 1 + (type(entry.parts) == "table" and #entry.parts or 0)
-    return (entry.kind == "line" and lineCount(entry) or 1) * each
+    if entry.kind ~= "line" then return each end
+    -- and a line's end caps
+    local caps = (type(entry.capA) == "string" and 1 or 0) + (type(entry.capB) == "string" and 1 or 0)
+    return lineCount(entry) * each + caps
 end
 
 ---@param props table[]?
@@ -933,10 +937,123 @@ function M.gapCount(line, gap)
     return math.floor(M.lineLength(line) / gap + 1e-6) + 1
 end
 
+-- a tilt no steeper than this (the ground's x and y slope, each), so a probe landing on a wall
+-- can't lay a prop on its side
+local MAX_TILT = .7
+
+--- a prop's up from a tilt kept on its line (`normals`, the ground's up there : its x and y, its z
+--- following), straight up without one
+---@param n table? {x, y}
+---@return vec3
+local function tiltOf(n)
+    local x, y = n and tonumber(n.x), n and tonumber(n.y)
+    if not x or not y then return vec3(0, 0, 1) end
+    x, y = math.max(-MAX_TILT, math.min(x, MAX_TILT)), math.max(-MAX_TILT, math.min(y, MAX_TILT))
+    return vec3(x, y, math.sqrt(math.max(.01, 1 - x * x - y * y))):normalized()
+end
+M.tiltOf = tiltOf
+M.MAX_TILT = MAX_TILT
+
+--- an entry's scale on each of its mesh's axes (`scale`, times `stretch`)
+---@param e table
+---@return vec3
+local function scalesOf(e)
+    local scale = math.max(.1, math.min(tonumber(e.scale) or 1, 10))
+    local stretch = v3(e.stretch)
+    local function axisScale(k)
+        return scale * (stretch and math.max(.05, math.min(stretch[k], 20)) or 1)
+    end
+    return vec3(axisScale("x"), axisScale("y"), axisScale("z"))
+end
+
+--- how far a mesh reaches behind and ahead of its origin along the way it's laid (its +Y turned
+--- back by `yaw`), scaled : its box's span on that way. Measured once a session per mesh, the same
+--- on every player's game ; nil when it can't be
+---@param shape string?
+---@param yaw number degrees
+---@param scales vec3
+---@return number? back, number? ahead
+local function reachAlong(shape, yaw, scales)
+    if type(shape) ~= "string" then return nil end
+    local m = M.meta[shape:lower()]
+    if (not m or m.minX == nil) and beamjoy_propPicker and beamjoy_propPicker.measure then
+        m = beamjoy_propPicker.measure(shape)
+    end
+    if not m or m.minX == nil then return nil end
+    -- the way, in the mesh's own axes
+    local way = turn(vec3(0, 1, 0), -yaw)
+    local back, ahead = math.huge, -math.huge
+    for _, x in ipairs({ m.minX * scales.x, m.maxX * scales.x }) do
+        for _, y in ipairs({ m.minY * scales.y, m.maxY * scales.y }) do
+            local d = x * way.x + y * way.y
+            back, ahead = math.min(back, d), math.max(ahead, d)
+        end
+    end
+    if ahead - back < .05 then return nil end
+    return back, ahead
+end
+
+---@param pts vec3[]
+---@param lens number[] length along the path at each point
+---@param s number length along the path, past either end continuing its end segment's way
+---@return vec3 point, integer segment (from pts[k] to pts[k + 1])
+local function pathAt(pts, lens, s)
+    local n = #pts
+    if s <= 0 or s >= lens[n] then
+        local k = s <= 0 and 1 or n - 1
+        local seg = pts[k + 1] - pts[k]
+        local len = seg:length()
+        local from, over = s <= 0 and pts[1] or pts[n], s <= 0 and s or s - lens[n]
+        return len > 1e-6 and from + seg * (over / len) or from, k
+    end
+    local k = 1
+    while k < n - 1 and lens[k + 1] < s do k = k + 1 end
+    local seg = lens[k + 1] - lens[k]
+    local f = seg > 1e-6 and (s - lens[k]) / seg or 0
+    return pts[k] + (pts[k + 1] - pts[k]) * f, k
+end
+
+--- the point on the path, ahead of `from` (on it, in segment k), exactly `reach` metres from it
+--- across the ground (x, y) : where a rigid mesh that long, its back end at `from`, has its front
+--- end on the path too. Past the path's end, its last segment's way on
+---@param pts vec3[]
+---@param from vec3
+---@param k integer
+---@param reach number
+---@return vec3
+local function chordEnd(pts, from, k, reach)
+    local n = #pts
+    for j = k, n - 1 do
+        local p, q = j == k and from or pts[j], pts[j + 1]
+        local dx, dy = q.x - p.x, q.y - p.y
+        local last = j == n - 1
+        local qx, qy = q.x - from.x, q.y - from.y
+        if last or qx * qx + qy * qy >= reach * reach then
+            -- |p + t (q - p) - from| = reach, the far root
+            local wx, wy = p.x - from.x, p.y - from.y
+            local a = dx * dx + dy * dy
+            if a > 1e-12 then
+                local b = 2 * (wx * dx + wy * dy)
+                local c = wx * wx + wy * wy - reach * reach
+                local t = (-b + math.sqrt(math.max(0, b * b - 4 * a * c))) / (2 * a)
+                return p + (q - p) * t
+            end
+        end
+    end
+    return from
+end
+
 --- the props of a line, as single placements : `count` of them spread evenly from end to end, or
 --- with a `gap` (direct request : guardrails chained on a line), one every `gap` metres from its
---- first end, so lengthening it adds props instead of spreading them out
----@param line table
+--- first end, so lengthening it adds props instead of spreading them out.
+--- On a curve each prop is a rigid mesh laid on it as the game's own spline tools lay theirs
+--- (editor/toolUtilities/geom ribbonIntervalFrame, direct report : fences and tarps on a bend
+--- didn't join) : its back end where it stands on the curve, its front end where the curve is
+--- exactly its length further across the ground, facing from one to the other (the chord), so
+--- neighbours meet end to end instead of each sticking out along the curve's way at its own
+--- point. A straight line is the same either way. A mesh not measured faces the curve's way there
+---@param line table (with its `shape`, `alt`, `yaw`, `altYaw`, `scale` and `stretch` : the meshes'
+---reach along it)
 ---@return {pos: vec3, dir: vec3, up: vec3}[]
 function M.linePlacements(line)
     local pts = M.linePath(line)
@@ -947,12 +1064,22 @@ function M.linePlacements(line)
     local yaw = tonumber(line.yaw) or 0
     local heights = line.followGround ~= false and type(line.heights) == "table" and #line.heights == count and
         line.heights or nil
+    local normals = line.followGround ~= false and type(line.normals) == "table" and #line.normals == count and
+        line.normals or nil
     -- length along the path, point to point
     local lens = { 0 }
     for k = 2, #pts do lens[k] = lens[k - 1] + pts[k]:distance(pts[k - 1]) end
     local total = lens[#lens]
+    local a, b, mid = v3(line.a), v3(line.b), v3(line.mid)
+    -- each mesh's reach along the line (a line's every other prop may be its `alt` mesh)
+    local reaches = {}
+    do
+        local scales = scalesOf(line)
+        reaches[1] = { reachAlong(line.shape, yaw, scales) }
+        local alt = type(line.alt) == "string" and line.alt ~= line.shape and line.alt or nil
+        reaches[2] = alt and { reachAlong(alt, yaw + (tonumber(line.altYaw) or 0), scales) } or reaches[1]
+    end
     local out = {}
-    local k = 1
     for i = 1, count do
         local s
         if gap then
@@ -960,25 +1087,177 @@ function M.linePlacements(line)
         else
             s = count == 1 and total / 2 or total * (i - 1) / (count - 1)
         end
-        while k < #pts - 1 and lens[k + 1] < s do k = k + 1 end
-        local seg = lens[k + 1] - lens[k]
-        local f = seg > 1e-6 and math.max(0, math.min(1, (s - lens[k]) / seg)) or 0
-        local p = pts[k] + (pts[k + 1] - pts[k]) * f
-        local along = vec3(pts[k + 1].x - pts[k].x, pts[k + 1].y - pts[k].y, 0)
-        local a, b, mid = v3(line.a), v3(line.b), v3(line.mid)
-        if mid then
+        local p, k = pathAt(pts, lens, math.max(0, math.min(total, s)))
+        local along
+        local reach = reaches[i % 2 == 0 and 2 or 1]
+        local back, ahead
+        if reach and reach[1] then back, ahead = reach[1], reach[2] end
+        if mid and back then
+            local from, kb = pathAt(pts, lens, s + back)
+            local to = chordEnd(pts, from, kb, ahead - back)
+            along = vec3(to.x - from.x, to.y - from.y, 0)
+            if along:length() > 1e-4 then
+                along = along:normalized()
+                -- its origin, `back` behind its back end along the chord
+                p = vec3(from.x - along.x * back, from.y - along.y * back, p.z)
+            end
+        elseif mid then
             -- the curve's own direction there (its derivative), not the sampled segment's
+            local f = lens[k + 1] - lens[k] > 1e-6 and (math.max(0, math.min(total, s)) - lens[k]) / (lens[k + 1] - lens[k]) or 0
             local t = (k - 1 + f) / (#pts - 1)
             local ctrl = mid * 2 - (a + b) * .5
             local d = (ctrl - a) * (2 * (1 - t)) + (b - ctrl) * (2 * t)
             along = vec3(d.x, d.y, 0)
+        else
+            along = vec3(pts[k + 1].x - pts[k].x, pts[k + 1].y - pts[k].y, 0)
         end
         if along:length() < 1e-3 then along = vec3(pts[#pts].x - pts[1].x, pts[#pts].y - pts[1].y, 0) end
         if along:length() < 1e-3 then along = vec3(0, 1, 0) end
         if heights and tonumber(heights[i]) then p = vec3(p.x, p.y, heights[i]) end
-        out[i] = { pos = p, dir = turn(along:normalized(), yaw), up = vec3(0, 0, 1) }
+        along = along:normalized()
+        -- tilted as the ground under it (direct request) : its dir kept square to its up
+        local up = tiltOf(normals and normals[i])
+        local dir = turn(along, yaw)
+        if up.z < .9999 then dir = (dir - up * dir:dot(up)):normalized() end
+        -- `way` (flat, along the line there) and `back` / `ahead` (how far the mesh reaches along
+        -- it, when it's measured) : where the editor measures the ground under it
+        out[i] = { pos = p, dir = dir, up = up, way = along, back = back, ahead = ahead }
     end
     return out
+end
+
+--- a line's end caps (see `capA` / `capB` at the top of this file), as single placements : each
+--- with its back end on the line's own end (its end prop's back end at the first, front end at the
+--- last), facing out of the line, tilted as that end prop is
+---@param line table
+---@param placements table[] M.linePlacements(line)
+---@return {shape: string, pos: vec3, dir: vec3, up: vec3, lift: number?, yaw: number}[]
+function M.lineCaps(line, placements)
+    local out = {}
+    local n = #placements
+    if n == 0 then return out end
+    local scales = scalesOf(line)
+    for _, k in ipairs({ "A", "B" }) do
+        local shape = line["cap" .. k]
+        if type(shape) == "string" and shape ~= "" then
+            local first = k == "A"
+            local pl = placements[first and 1 or n]
+            local up = pl.up or vec3(0, 0, 1)
+            local way = pl.way or vec3(0, 1, 0)
+            local function onTilt(v)
+                local t = v - up * v:dot(up)
+                return t:length() > 1e-6 and t:normalized() or v
+            end
+            -- the line's own end, then the cap's back end on it, facing out
+            local anchor = pl.pos + onTilt(way) * ((first and pl.back or pl.ahead) or 0)
+            local outward = first and -way or way
+            local yaw = tonumber(line["cap" .. k .. "Yaw"]) or 0
+            local back = reachAlong(shape, yaw, scales)
+            out[#out + 1] = {
+                shape = shape,
+                pos = anchor - onTilt(outward) * (back or 0),
+                dir = onTilt(turn(outward, yaw)),
+                up = up,
+                yaw = yaw,
+                lift = tonumber(line["cap" .. k .. "Lift"]),
+            }
+        end
+    end
+    return out
+end
+
+-- COLLISION -----------------------------------------------------------------------------------
+
+-- Torque's collision in a mesh : a "collision-N" detail, its meshes "Colmesh" (or a ColBox,
+-- ColSphere... made of them). A TSStatic's "Collision Mesh" is nothing without one (direct
+-- report : the showroom's backdrops, the small grid's ground, said solid and weren't) ; the maps
+-- give those "Visible Mesh Final" instead
+local COLLISION_NODES = { "^collision%-%d", "^colmesh", "^colbox", "^colsphere", "^colcapsule", "^colconvex" }
+local meshCollision = {}
+
+---@param shape string
+---@return boolean false when its .dae has no collision ; true when it has, or can't be read (a
+---compiled .cdae alone : as it was taken before)
+local function readCollision(shape)
+    local ok, text = pcall(readFile, shape)
+    if not ok or type(text) ~= "string" or text == "" then return true end
+    for name in text:gmatch('<node[^>]-%sname="([Cc][Oo][Ll][^"]*)"') do
+        local node = name:lower()
+        for _, pattern in ipairs(COLLISION_NODES) do
+            if node:find(pattern) then return true end
+        end
+    end
+    return false
+end
+
+--- whether a mesh brings a collision of its own : read from its .dae once, kept with its size
+--- (beamjoy_propPicker's meta, saved) once it's measured
+---@param shape string
+---@return boolean
+function M.meshHasCollision(shape)
+    if type(shape) ~= "string" then return false end
+    local key = shape:lower()
+    local meta = M.meta[key]
+    if meta and meta.col ~= nil then return meta.col end
+    if meshCollision[key] == nil then meshCollision[key] = readCollision(shape) end
+    if meta then meta.col = meshCollision[key] end
+    return meshCollision[key]
+end
+
+--- cars hit the mesh as it comes : a catalog entry's own say (tape and flags aren't), else its own
+--- collision
+---@param shape string
+---@return boolean
+local function solidMesh(shape)
+    local c = M.catalogForShape(shape)
+    if c then return c.collision ~= "None" end
+    return M.meshHasCollision(shape)
+end
+
+--- the TSStatic collision type of one of an entry's meshes : `solid` false, none ; nothing said, the
+--- mesh's own (solidMesh) ; true, solid whatever the mesh : its collision where it has one, else
+--- its visible mesh's, as the maps give their backdrops and ground planes
+---@param shape string
+---@param solid boolean?
+---@return string
+local function collisionOf(shape, solid)
+    if solid == false then return "None" end
+    if solidMesh(shape) then return "Collision Mesh" end
+    if solid ~= true then return "None" end
+    return M.meshHasCollision(shape) and "Collision Mesh" or "Visible Mesh Final"
+end
+
+--- an entry's meshes : its own, a line's other one and caps, a prefab's parts
+---@param e table
+---@return string[]
+local function meshesOf(e)
+    local out = {}
+    for _, s in ipairs({ e.shape, e.kind == "line" and e.alt or nil, e.kind == "line" and e.capA or nil,
+        e.kind == "line" and e.capB or nil }) do
+        if type(s) == "string" then out[#out + 1] = s end
+    end
+    for _, part in ipairs(type(e.parts) == "table" and e.parts or {}) do
+        if type(part.shape) == "string" then out[#out + 1] = part.shape end
+    end
+    return out
+end
+
+--- cars hit an entry when nothing is said of it : one of its meshes is solid as it comes
+---@param e table
+---@return boolean
+function M.solidByDefault(e)
+    for _, s in ipairs(meshesOf(e)) do
+        if solidMesh(s) then return true end
+    end
+    return false
+end
+
+--- whether cars hit an entry (its `solid`, else its meshes')
+---@param e table
+---@return boolean
+function M.isSolid(e)
+    if e.solid == false or e.solid == true then return e.solid end
+    return M.solidByDefault(e)
 end
 
 --- every prop to spawn for a list of entries, in order, each with what spawning it needs
@@ -990,11 +1269,7 @@ function M.expand(props)
         local cat = M.catalogForShape(e.shape)
         if type(e.shape) == "string" then
             local scale = math.max(.1, math.min(tonumber(e.scale) or 1, 10))
-            local stretch = v3(e.stretch)
-            local function axisScale(k)
-                return scale * (stretch and math.max(.05, math.min(stretch[k], 20)) or 1)
-            end
-            local scales = vec3(axisScale("x"), axisScale("y"), axisScale("z"))
+            local scales = scalesOf(e)
             -- an entry's own lift (set when it was placed, so every player stands it the same) ;
             -- else the catalog's
             local lift = (tonumber(e.lift) or (cat and cat.zOffset) or 0) * scales.z
@@ -1015,8 +1290,9 @@ function M.expand(props)
                 if p.dir:length() > 1e-4 and p.up:length() > 1e-4 then
                     local other = alt ~= nil and k % 2 == 0
                     local dir = other and turn(p.dir, altYaw) or p.dir
-                    local c = other and altCat or cat
-                    local pos = p.pos + vec3(0, 0, other and altLift or lift)
+                    -- on tilted ground : the turned one kept square to its up, lifted along it
+                    if other and p.up.z < .9999 then dir = (dir - p.up * dir:dot(p.up)):normalized() end
+                    local pos = p.pos + p.up * (other and altLift or lift)
                     local rot = quatFromDir(dir, p.up)
                     table.insert(out, {
                         shape = other and alt or e.shape,
@@ -1026,7 +1302,7 @@ function M.expand(props)
                         rot = rot,
                         scale = scale,
                         scales = scales,
-                        collision = e.solid == false and "None" or (c and c.collision or "Collision Mesh"),
+                        collision = collisionOf(other and alt or e.shape, e.solid),
                         entry = i,
                     })
                     -- a prefab's other meshes, where they sit on this one
@@ -1036,7 +1312,6 @@ function M.expand(props)
                             if #out >= M.MAX_PROPS then return out end
                             local pdir = rot * (v3(part.dir) or vec3(0, 1, 0))
                             local pup = rot * (v3(part.up) or vec3(0, 0, 1))
-                            local pc = M.catalogForShape(part.shape)
                             table.insert(out, {
                                 shape = part.shape,
                                 pos = pos + rot * vec3(off.x * scales.x, off.y * scales.y, off.z * scales.z),
@@ -1045,11 +1320,30 @@ function M.expand(props)
                                 rot = quatFromDir(pdir, pup),
                                 scale = scale,
                                 scales = scales,
-                                collision = e.solid == false and "None" or (pc and pc.collision or "Collision Mesh"),
+                                collision = collisionOf(part.shape, e.solid),
                                 entry = i,
                             })
                         end
                     end
+                end
+            end
+            -- a line's end caps
+            if e.kind == "line" then
+                for _, c in ipairs(M.lineCaps(e, placements)) do
+                    if #out >= M.MAX_PROPS then return out end
+                    local cc = M.catalogForShape(c.shape)
+                    local capLift = (c.lift or (cc and cc.zOffset) or 0) * scales.z
+                    table.insert(out, {
+                        shape = c.shape,
+                        pos = c.pos + c.up * capLift,
+                        dir = c.dir,
+                        up = c.up,
+                        rot = quatFromDir(c.dir, c.up),
+                        scale = scale,
+                        scales = scales,
+                        collision = collisionOf(c.shape, e.solid),
+                        entry = i,
+                    })
                 end
             end
         end
@@ -1100,17 +1394,112 @@ end
 
 -- LAMPS : see the top of this file
 
---- lamps lit at once, at most : each is a light the renderer pays for every frame
+--- lamp heads lit at once, at most, the nearest the camera : each is a light the renderer pays for
+--- every frame
 local MAX_LIGHTS = 40
--- ms between two looks at the time of day
-local NIGHT_CHECK_MS = 1000
+-- ms between two looks at the time of day and at which heads are nearest
+local LAMP_CHECK_MS = 500
+-- a lit head keeps its light against an unlit one up to this much nearer (no handing a light back
+-- and forth between two heads about as far)
+local KEEP_BIAS = .85
 
----@type table<integer, {lights: userdata[], spec: table}> a prop object's id -> its lights
-local lightOf = {}
-local lightCount = 0
----@type boolean? the lamps' state (nil : not looked yet)
-local lampsOn = nil
-local nextNightCheck = 0
+--- the lamps : a mesh's file name (lower case, without its extension : every map's copy of it) -> how
+--- it shines. `heads` : where its lights are, mesh units from its origin, each {x, y, z} or
+--- {x, y, z, aimX, aimY, aimZ} ; a `spot` lamp's shine along that aim (else `aim`, else down) in a cone
+--- (`inner` / `outer`, degrees) `range` metres long, the others all round, `range` their radius.
+--- `brightness` is the engine's own render value (the light's intensity follows from it), `color`
+--- its colour. `glow` (0-255) : what the maps light the mesh's bulb with at night (their
+--- `nightEmissiveColor`), black by day as theirs are ; none for a bulb whose material glows all the
+--- time, on the maps too. `always` : lit day and night (the showroom's).
+--- Taken from where the maps put their lights on these meshes (the same offsets on every copy), and
+--- for those no map lights (lamp1, s_wh_lamp, substation_lightning, deco_lightpoles, the red and
+--- green marker lights) from where the mesh's bulb glows (its emissive texture under its UVs)
+local DOWN = { 0, 0, -1 }
+local LAMPS = {
+    -- West Coast's street lights (the first three are /art/shapes/objects/ too)
+    pole_light_single = { spot = true, heads = { { 5.19, 0, 12.33 } }, range = 45, inner = 25, outer = 150,
+        color = { .742, .881, 1 }, brightness = 1, glow = { 189, 225, 255 } },
+    pole_light_double = { spot = true, heads = { { 5.2, 0, 12.31 }, { -5.2, 0, 12.31 } }, range = 70, inner = 25,
+        outer = 160, color = { .778, 1, .896 }, brightness = .69, glow = { 218, 254, 255 } },
+    pole_light_bridge = { spot = true, heads = { { 5.2, 0, 12.33 } }, range = 45, inner = 25, outer = 150,
+        color = { 1, .268, .007 }, brightness = 1, glow = { 255, 95, 17 } },
+    light_city = { spot = true, heads = { { 0, 2.53, .47 } }, range = 45, inner = 25, outer = 150,
+        color = { 1, .281, .008 }, brightness = 1, glow = { 255, 101, 21 } },
+    ceiling_light_tunnel = { spot = true, heads = { { .02, .01, -.33 } }, range = 12, inner = 80, outer = 160,
+        color = { 1, .562, .263 }, brightness = 2.2, glow = { 255, 54, 0 } },
+    -- floodlight masts : two banks facing either side, the tall one's single bank
+    pole_lighting1 = { spot = true, heads = { { .8, 1.75, 18.8, .45, .62, -.64 }, { .8, -1.75, 18.8, .45, -.62, -.64 } },
+        range = 80, inner = 50, outer = 130, color = { .906, .89, 1 }, brightness = 1, glow = { 231, 227, 255 } },
+    pole_lighting2 = { spot = true, heads = { { 1.8, 0, 34.23, .86, 0, -.51 } }, range = 150, inner = 25, outer = 140,
+        color = { .855, .996, 1 }, brightness = 5, glow = { 218, 254, 255 } },
+    -- the airport's mast (Italy's, and West Coast's copy) : four of its eight lamps, as the maps light it
+    italy_airport_lightpole = { spot = true, heads = { { 1.3, 0, 30, .5, 0, -.87 }, { -1.3, 0, 30, -.5, 0, -.87 },
+        { 0, 1.23, 30, 0, .5, -.87 }, { 0, -1.23, 30, 0, -.5, -.87 } }, range = 55, inner = 75, outer = 130,
+        color = { .774, .807, 1 }, brightness = 1, glow = { 195, 205, 255 } },
+    -- four floodlights at its corners, facing out
+    substation_lightning = { spot = true, heads = { { -.77, .63, 10.17, -.66, .66, -.36 },
+        { .77, -.63, 10.17, .66, -.66, -.36 }, { -.77, -.64, 10.17, -.66, -.66, -.36 },
+        { .76, .65, 10.17, .66, .66, -.36 } }, range = 40, inner = 40, outer = 120, color = { .906, .89, 1 },
+        brightness = 1, glow = { 231, 227, 255 } },
+    -- a lantern, glazed both sides
+    lamp1 = { heads = { { 0, 0, 7.53 } }, range = 15, color = { 1, .85, .6 }, brightness = .6, glow = { 255, 200, 140 } },
+    -- West Coast's warehouse and garage lights (their bulbs glow all the time)
+    s_wh_lamp = { spot = true, heads = { { 0, 0, 5.62 } }, range = 20, inner = 40, outer = 140, color = { 1, .9, .75 },
+        brightness = 1.5 },
+    s_long_light_hanging = { spot = true, heads = { { 0, .1, -.25 } }, range = 8, inner = 60, outer = 170,
+        color = { .986, .833, .614 }, brightness = 2 },
+    s_long_light_roof = { spot = true, heads = { { 0, .03, -.85 } }, range = 45, inner = 25, outer = 150,
+        color = { .742, .881, 1 }, brightness = .22 },
+    s_small_light_hanging = { spot = true, heads = { { 0, .04, -.06 } }, range = 20, inner = 80, outer = 170,
+        color = { .742, .881, 1 }, brightness = .24 },
+    -- West Coast's road marker lights (the map lights its amber ones only)
+    marker_light_amber = { heads = { { 0, 0, .17 } }, range = 10, color = { 1, .498, 0 }, brightness = .1 },
+    marker_light_red = { heads = { { 0, 0, .14 } }, range = 10, color = { 1, .05, .02 }, brightness = .1 },
+    marker_light_green = { heads = { { 0, 0, .14 } }, range = 10, color = { .1, 1, .2 }, brightness = .1 },
+    -- Driver Training's poles
+    s_light_pole = { spot = true, heads = { { 0, -.42, 11.92 } }, range = 20, inner = 45, outer = 100,
+        color = { .674, .74, 1 }, brightness = 2.4 },
+    s_light_pole_high_mast = { spot = true, heads = { { 0, -.44, 17.89, .02, -.65, -.75 },
+        { -.39, .21, 17.89, -.56, .31, -.75 }, { .39, .21, 17.89, .58, .27, -.75 } }, range = 80, inner = 45,
+        outer = 95, color = { 1, .944, .993 }, brightness = 2.4 },
+    -- Industrial's yard light
+    big_lightpole = { spot = true, heads = { { 0, .5, 9.2, 0, .75, -.66 } }, range = 75, inner = 40, outer = 120,
+        color = { 1, .908, .728 }, brightness = .6 },
+    -- East Coast's lamppost (Italy's and Johnson Valley's too)
+    eca_lamppost = { heads = { { 2.7, .02, 7.86 } }, range = 20, color = { 1, .915, .798 }, brightness = .7 },
+    -- Utah's
+    ut_lampost_camp = { heads = { { 0, .69, 3.52 } }, range = 15, color = { 1, .882, .439 }, brightness = .6 },
+    -- the string of bulbs between two poles : three lights along its eleven bulbs
+    deco_lightpoles = { heads = { { 0, -2.6, 3.82 }, { 0, -5.71, 3.42 }, { 0, -9.04, 3.52 } }, range = 6,
+        color = { 1, .85, .55 }, brightness = .25 },
+    deco_lightpoles_a = { heads = { { .05, -2.6, 3.63 }, { .05, -5.71, 3.07 }, { .05, -9.04, 3.29 } }, range = 6,
+        color = { 1, .85, .55 }, brightness = .25 },
+    -- Small Island's wind vane : the red beacon on its top
+    si_wind_vane = { heads = { { 0, -.12, 6.24 } }, range = 4, color = { 1, 0, 0 }, brightness = .5 },
+    -- the showroom's panel and neon tubes : lit day and night, as there (and glowing all the time)
+    lightplane_a = { heads = { { 0, 0, .5 } }, range = 12, color = { 1, 1, 1 }, brightness = 2, always = true },
+    lighttube_a = { heads = { { 0, 0, 0 } }, range = 6, color = { 1, 1, 1 }, brightness = .5, always = true },
+    lighttube_b = { heads = { { 0, 0, 1.12 } }, range = 6, color = { 1, 1, 1 }, brightness = .5, always = true },
+    -- the catalog's flood lights, facing their own +X
+    s_standinglight_01 = { spot = true, heads = { { .1, 0, 1.51, 1, 0, -.25 } }, range = 30, inner = 40, outer = 110,
+        color = { .9, .95, 1 }, brightness = 1.2 },
+    s_spotlight_01 = { spot = true, heads = { { .06, 0, .03, 1, 0, .15 } }, range = 30, inner = 20, outer = 70,
+        color = { .9, .95, 1 }, brightness = 1.2 },
+}
+
+---@param shape string?
+---@return table? the mesh's lamp (LAMPS), nil for one that isn't
+function M.lampForShape(shape)
+    if type(shape) ~= "string" then return nil end
+    local file = shape:match("([^/\\]+)$")
+    return file and LAMPS[(file:lower():gsub("%.c?dae$", ""))] or nil
+end
+
+---@type table<userdata, {spec: table, p: table, lights: table<integer, userdata>}> a lamp prop's object -> it
+local lamps = {}
+---@type boolean? the bulbs' state (nil : not looked yet)
+local lampsNight = nil
+local nextLampCheck = 0
 
 ---@return boolean the map's own night lights are on (or would be)
 local function isNight()
@@ -1118,97 +1507,152 @@ local function isNight()
     return ok and type(state) == "table" and state.isNight == true
 end
 
----@param light userdata
----@param on boolean
-local function setLightOn(light, on)
-    if light.setLightEnabled then
-        light:setLightEnabled(on)
-    else
-        light:setField("isEnabled", 0, on and "true" or "false")
-        if light.postApply then light:postApply() end
-    end
+--- where a head is and, a spot's, the way it shines
+---@param spec table a LAMPS entry
+---@param i integer the head
+---@param p table an expand() entry
+---@return vec3 pos, vec3? aim
+local function headOf(spec, i, p)
+    local h = spec.heads[i]
+    local s = p.scales or vec3(p.scale, p.scale, p.scale)
+    local pos = p.pos + p.rot * vec3(h[1] * s.x, h[2] * s.y, h[3] * s.z)
+    if not spec.spot then return pos, nil end
+    local a = h[4] and h or spec.aim or DOWN
+    local o = h[4] and 3 or 0
+    return pos, (p.rot * vec3(a[o + 1], a[o + 2], a[o + 3])):normalized()
 end
 
---- the light where its lamp head is, shining the way it faces
 ---@param light userdata
----@param spec table the catalog's `light`
----@param o number[] that head's offset
----@param p table an expand() entry
-local function placeLight(light, spec, o, p)
-    local scales = p.scales or vec3(p.scale, p.scale, p.scale)
-    local pos = p.pos + p.rot * vec3(o[1] * scales.x, o[2] * scales.y, o[3] * scales.z)
-    local aim = (p.rot * vec3(spec.aim[1], spec.aim[2], spec.aim[3])):normalized()
-    local up = math.abs(aim.z) > .98 and (p.rot * vec3(0, 1, 0)) or vec3(0, 0, 1)
-    local rot = quatFromDir(aim, up)
+---@param spec table
+---@param i integer
+---@param p table
+local function placeLight(light, spec, i, p)
+    local pos, aim = headOf(spec, i, p)
+    local rot = quat(0, 0, 0, 1)
+    if aim then
+        -- a SpotLight shines along its own +Y
+        rot = quatFromDir(aim, math.abs(aim.z) > .98 and (p.rot * vec3(0, 1, 0)) or vec3(0, 0, 1))
+    end
     light:setPosRot(pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, rot.w)
+end
+
+---@param spec table
+---@return userdata?
+local function createLight(spec)
+    local light = createObject(spec.spot and "SpotLight" or "PointLight")
+    if not light then return nil end
+    light.canSave = false
+    local c = spec.color
+    light:setField("color", 0, string.format("%g %g %g 1", c[1], c[2], c[3]))
+    light:setField(spec.spot and "range" or "radius", 0, tostring(spec.range))
+    if spec.spot then
+        light:setField("innerAngle", 0, tostring(spec.inner))
+        light:setField("outerAngle", 0, tostring(spec.outer))
+    end
+    light:setField("brightness", 0, tostring(spec.brightness))
+    -- the shadow maps' room is the map's own lamps'
+    light:setField("castShadows", 0, "false")
+    light:registerObject("")
+    if not simObjectExists(light) then return nil end
+    group():addObject(light)
+    return light
+end
+
+--- the bulb lit at night, dark by day, as the maps' are
+---@param obj userdata
+---@param l table
+---@param night boolean
+local function setGlow(obj, l, night)
+    local g = l.spec.glow
+    if not g or not simObjectExists(obj) then return end
+    obj:setField("instanceColor", 0, night and string.format("%g %g %g 1", g[1] / 255, g[2] / 255, g[3] / 255) or "0 0 0 1")
+    if obj.updateInstanceRenderData then obj:updateInstanceRenderData() end
+end
+
+---@param l table
+local function deleteLights(l)
+    for i, light in pairs(l.lights) do
+        if simObjectExists(light) then light:delete() end
+        l.lights[i] = nil
+    end
 end
 
 ---@param obj userdata the prop's own object
 ---@param p table an expand() entry
-local function addLight(obj, p)
-    local cat = M.catalogForShape(p.shape)
-    local spec = cat and cat.light
-    if not spec or lightCount + #spec.offsets > MAX_LIGHTS then return end
-    if lampsOn == nil then lampsOn = isNight() end
-    local lights = {}
-    for _, o in ipairs(spec.offsets) do
-        local light = createObject("SpotLight")
-        if light then
-            light.canSave = false
-            local c = spec.color
-            light:setField("color", 0, string.format("%g %g %g 1", c[1], c[2], c[3]))
-            light:setField("range", 0, tostring(spec.range))
-            light:setField("innerAngle", 0, tostring(spec.innerAngle))
-            light:setField("outerAngle", 0, tostring(spec.outerAngle))
-            light:setField("intensity", 0, tostring(spec.intensity))
-            light:setField("castShadows", 0, "false")
-            light:setField("useColorTemperature", 0, "false")
-            light:registerObject("")
-            if simObjectExists(light) then
-                group():addObject(light)
-                placeLight(light, spec, o, p)
-                setLightOn(light, lampsOn)
-                lights[#lights + 1] = light
-            end
-        end
-    end
-    if #lights == 0 then return end
-    lightOf[obj:getID()] = { lights = lights, spec = spec }
-    lightCount = lightCount + #lights
-end
-
----@param l {lights: userdata[]}
-local function deleteLights(l)
-    for _, light in ipairs(l.lights) do
-        if simObjectExists(light) then light:delete() end
-    end
+local function addLamp(obj, p)
+    local spec = M.lampForShape(p.shape)
+    if not spec then return end
+    local l = { spec = spec, p = p, lights = {} }
+    lamps[obj] = l
+    if lampsNight == nil then lampsNight = isNight() end
+    setGlow(obj, l, lampsNight)
+    -- its lights are handed out on the next update
+    nextLampCheck = 0
 end
 
 ---@param obj userdata
-local function removeLight(obj)
-    local id = obj and simObjectExists(obj) and obj:getID()
-    local l = id and lightOf[id]
+local function removeLamp(obj)
+    local l = obj and lamps[obj]
     if not l then return end
-    lightOf[id] = nil
-    lightCount = lightCount - #l.lights
+    lamps[obj] = nil
     deleteLights(l)
 end
 
---- dusk and dawn : every lamp on or off
+--- every lit lamp's heads, the nearest the camera first, get a light, MAX_LIGHTS at most ; the
+--- bulbs follow dusk and dawn
 local function updateLamps()
-    local now = GetCurrentTimeMillis()
-    if now < nextNightCheck then return end
-    nextNightCheck = now + NIGHT_CHECK_MS
-    if lightCount == 0 then
-        lampsOn = nil
+    if not next(lamps) then
+        lampsNight = nil
         return
     end
+    local now = GetCurrentTimeMillis()
+    if now < nextLampCheck then return end
+    nextLampCheck = now + LAMP_CHECK_MS
     local night = isNight()
-    if night == lampsOn then return end
-    lampsOn = night
-    for _, l in pairs(lightOf) do
-        for _, light in ipairs(l.lights) do
-            if simObjectExists(light) then setLightOn(light, night) end
+    local nightChanged = night ~= lampsNight
+    lampsNight = night
+    local cam = core_camera and core_camera.getPosition()
+    local heads = {}
+    for obj, l in pairs(lamps) do
+        if not simObjectExists(obj) then
+            -- gone some other way
+            lamps[obj] = nil
+            deleteLights(l)
+        else
+            if nightChanged then setGlow(obj, l, night) end
+            if night or l.spec.always then
+                for i in ipairs(l.spec.heads) do
+                    local d = cam and headOf(l.spec, i, l.p):squaredDistance(cam) or 0
+                    if l.lights[i] then d = d * KEEP_BIAS * KEEP_BIAS end
+                    heads[#heads + 1] = { l = l, i = i, d = d }
+                end
+            end
+        end
+    end
+    table.sort(heads, function(a, b) return a.d < b.d end)
+    local wanted = {}
+    for k = 1, math.min(#heads, MAX_LIGHTS) do
+        local h = heads[k]
+        wanted[h.l] = wanted[h.l] or {}
+        wanted[h.l][h.i] = true
+    end
+    for _, l in pairs(lamps) do
+        for i, light in pairs(l.lights) do
+            if not (wanted[l] and wanted[l][i]) then
+                if simObjectExists(light) then light:delete() end
+                l.lights[i] = nil
+            end
+        end
+    end
+    for l, is in pairs(wanted) do
+        for i in pairs(is) do
+            if not l.lights[i] then
+                local light = createLight(l.spec)
+                if light then
+                    placeLight(light, l.spec, i, l.p)
+                    l.lights[i] = light
+                end
+            end
         end
     end
 end
@@ -1216,10 +1660,11 @@ end
 local function place(obj, p)
     obj:setPosRot(p.pos.x, p.pos.y, p.pos.z, p.rot.x, p.rot.y, p.rot.z, p.rot.w)
     obj:setScale(p.scales or vec3(p.scale, p.scale, p.scale))
-    local l = lightOf[obj:getID()]
+    local l = lamps[obj]
     if l then
-        for i, light in ipairs(l.lights) do
-            if simObjectExists(light) then placeLight(light, l.spec, l.spec.offsets[i], p) end
+        l.p = p
+        for i, light in pairs(l.lights) do
+            if simObjectExists(light) then placeLight(light, l.spec, i, p) end
         end
     end
 end
@@ -1238,12 +1683,12 @@ local function spawn(p)
     if not simObjectExists(obj) then return nil end
     group():addObject(obj)
     place(obj, p)
-    addLight(obj, p)
+    addLamp(obj, p)
     return obj
 end
 
 local function deleteObject(obj)
-    removeLight(obj)
+    removeLamp(obj)
     if obj and simObjectExists(obj) then obj:delete() end
 end
 
@@ -1301,7 +1746,12 @@ function M.show(key, props, opts)
         changed = true
     end
 
-    if (changed and collision) or collision ~= set.collision then
+    if set.collision and not collision then
+        -- solid props going (the editor's collision switch off for an edit) : rebuilt now, not
+        -- once things settle, or the gizmo's snapping and cars meet their old collision while the
+        -- edit goes on. Their objects are already deleted, the new ones aren't solid
+        be:reloadCollision()
+    elseif (changed and collision) or collision ~= set.collision then
         scheduleCollisionReload()
     end
     set.collision = collision
@@ -1359,17 +1809,24 @@ end
 
 local raceEditor = require("ge/extensions/beamjoy/ui/raceEditor")
 
---- a race's props : the race being edited (a preview, no collision), else the race you're in or
---- watching, from its grid until it ends. Follows the same refresh hook as the race markers
+--- a race's props : the race being edited (a preview, no collision unless the editor's collision
+--- switch is on), else the race you're in or watching, from its grid until it ends. Follows the
+--- same refresh hook as the race markers
 local function syncRace()
     if raceEditor.race then
+        local signature = "editor:" .. tostring(raceEditor.propsRevision)
+        if raceEditor.testCollision then
+            -- solid as in the race (direct request) : any change to the props turns it back off
+            -- (raceEditor propsChanged), so none ever moves or goes while its collision is built
+            return M.show("race", raceEditor.race.props, { signature = signature .. ":solid" })
+        end
         -- no collision at all, not only no reload : a reload asked by anything else (the race's
         -- own set leaving solid props behind as the editor opens, another set) took the editor's
         -- props into the static collision, and one deleted afterwards stayed there, invisible,
         -- for cars and the editor's own ground snapping until the race was next started (direct
         -- report). Clicks pick props by their handles (raceEditor onWorldClick), not collision
         return M.show("race", raceEditor.race.props,
-            { signature = "editor:" .. tostring(raceEditor.propsRevision), collision = false, collisionType = "None" })
+            { signature = signature, collision = false, collisionType = "None" })
     end
     local session = beamjoy_raceRunner and (beamjoy_raceRunner.session or beamjoy_raceRunner.spectatingSession)
     local race = session and beamjoy_races and
@@ -1384,8 +1841,8 @@ local function cleanup()
     hideAll()
     M.sets = {}
     -- any lamp whose prop went some other way
-    for _, l in pairs(lightOf) do deleteLights(l) end
-    lightOf, lightCount, lampsOn = {}, 0, nil
+    for _, l in pairs(lamps) do deleteLights(l) end
+    lamps, lampsNight = {}, nil
     -- a new map, its own materials : looked at again
     materialDirs, materialShapes, mapped, sharedDone = {}, {}, nil, {}
     if collisionReloadAt then

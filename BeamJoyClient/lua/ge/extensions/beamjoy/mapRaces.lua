@@ -270,7 +270,13 @@ local function makeProp(class, fields, xf)
                 prop.stretch = v(clamp(round(sx, 3), .05, 20), clamp(round(sy, 3), .05, 20), clamp(round(sz, 3), .05, 20))
             end
         end
-        if tostring(fields.collisionType) == "None" then prop.solid = false end
+        local collision = tostring(fields.collisionType)
+        if collision == "None" then
+            prop.solid = false
+        elseif collision:find("^Visible Mesh") and not beamjoy_props.solidByDefault(prop) then
+            -- solid by its visible mesh, its own having no collision (a backdrop, a ground plane)
+            prop.solid = true
+        end
     else
         -- a vehicle's position is its own reference point : stood upright on the ground (toRace)
         dir, up = flat(dir) or v(0, 1, 0), v(0, 0, 1)

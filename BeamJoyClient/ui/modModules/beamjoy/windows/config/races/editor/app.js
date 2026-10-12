@@ -225,6 +225,16 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         $rootScope.$on("BJEditorRaceSnapMethod", (_, method) => {
             this.snapMethod = method === "raycast" ? "raycast" : "terrain";
         });
+        // the editor's props solid as in the race, to drive into them (direct request). Lua turns
+        // it back off on any change to the props, whose collision only a rebuild would follow
+        this.testCollision = false;
+        $rootScope.$on("BJEditorRaceTestCollision", (_, state) => {
+            this.testCollision = state === true;
+        });
+        this.toggleTestCollision = (event) => {
+            if (event) event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceSetTestCollision", [!this.testCollision]);
+        };
         // single button cycles all three states rather than two separate controls, per direct
         // request : off -> terrain (on) -> raycast (on) -> off
         this.cycleSnapMode = () => {
@@ -503,6 +513,8 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             ]);
             beamjoyStore.send("BJVehiclePresetListRequest");
             beamjoyStore.send("BJEditorRacePropClipboardRequest");
+            sendKeepPlacing();
+            sendFixedRotation();
         };
 
         this.changeSection = (event, section) => {
@@ -741,7 +753,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         };
         this.swapPropMesh = (event, idx) => {
             event.stopPropagation();
-            if (this.propSwap && this.propSwap.index === idx && !this.propSwap.alt) {
+            if (this.propSwap && this.propSwap.index === idx && !this.propSwap.alt && !this.propSwap.cap) {
                 this.propSwap = null;
                 return;
             }
@@ -770,6 +782,34 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             beamjoyStore.send("BJEditorRaceSetPropAlt", [idx + 1, ""]);
         };
         this.propAltLabel = (prop) => (prop && prop.alt ? this.propLabel({ shape: prop.alt }) : null);
+        // a line's end caps (direct request) : a mesh at either end, picked in the drawer the same
+        // way, `cap` ("a" or "b") set on the swap
+        this.isCapPick = (idx, which) =>
+            !!(this.propSwap && this.propSwap.index === idx && this.propSwap.cap === which);
+        this.pickPropCap = (event, idx, which) => {
+            event.stopPropagation();
+            if (this.isCapPick(idx, which)) {
+                this.propSwap = null;
+                return;
+            }
+            const prop = this.race && this.race.props[idx];
+            if (!prop) return;
+            beamjoyStore.send("BJEditorRaceDisarmProp");
+            this.propSwap = { index: idx, name: translate(this.propLabel(prop)), cap: which };
+            this.propDrawerOpen = true;
+        };
+        this.clearPropCap = (event, idx, which) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceSetPropCap", [idx + 1, which, ""]);
+        };
+        this.flipPropCap = (event, idx, which) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRaceFlipPropCap", [idx + 1, which]);
+        };
+        this.propCapLabel = (prop, which) => {
+            const shape = prop && (which === "a" ? prop.capA : prop.capB);
+            return shape ? this.propLabel({ shape }) : null;
+        };
         this.endPropSwap = () => {
             this.propSwap = null;
         };
@@ -780,7 +820,8 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         const updatePropTotal = () => {
             this.propTotal = ((this.race && this.race.props) || []).reduce((n, p) => {
                 const each = 1 + (Array.isArray(p.parts) ? p.parts.length : 0);
-                return n + (p.kind === "line" ? Math.max(1, Number(p.count) || 1) : 1) * each;
+                const caps = p.kind === "line" ? (p.capA ? 1 : 0) + (p.capB ? 1 : 0) : 0;
+                return n + (p.kind === "line" ? Math.max(1, Number(p.count) || 1) : 1) * each + caps;
             }, 0);
         };
         // MULTIPLE SELECTION AND GROUPS (direct request) : Ctrl+click adds a prop to the
@@ -827,6 +868,55 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
                 this.propClipboard = state && typeof state === "object" ? state : { entries: 0, count: 0 };
             })
         );
+        // PLACING SWITCHES (direct request : beside the snapping button ; they were the props
+        // drawer's). "Keep placing" : a prop stays armed after each one placed, as with Ctrl held.
+        // "Fixed rotation" (trusses) : a prop placed alone keeps the turn the wheel gave it,
+        // whichever way the camera looks. Both kept on this PC, under the drawer's former keys
+        const KEEP_KEY = "beamjoy.propDrawer.keepPlacing";
+        const FIXED_KEY = "beamjoy.propDrawer.fixedRotation";
+        const readSwitch = (key) => {
+            try {
+                return localStorage.getItem(key) === "1";
+            } catch (e) {
+                return false;
+            }
+        };
+        const writeSwitch = (key, on) => {
+            try {
+                localStorage.setItem(key, on ? "1" : "0");
+            } catch (e) {
+                // kept for this session only
+            }
+        };
+        this.keepPlacing = readSwitch(KEEP_KEY);
+        this.fixedRotation = readSwitch(FIXED_KEY);
+        const sendKeepPlacing = () => beamjoyStore.send("BJEditorRaceSetKeepPlacing", [this.keepPlacing]);
+        const sendFixedRotation = () => beamjoyStore.send("BJEditorRaceSetFixedRotation", [this.fixedRotation]);
+        this.toggleKeepPlacing = (event) => {
+            if (event) event.stopPropagation();
+            this.keepPlacing = !this.keepPlacing;
+            writeSwitch(KEEP_KEY, this.keepPlacing);
+            sendKeepPlacing();
+        };
+        this.toggleFixedRotation = (event) => {
+            if (event) event.stopPropagation();
+            this.fixedRotation = !this.fixedRotation;
+            writeSwitch(FIXED_KEY, this.fixedRotation);
+            sendFixedRotation();
+        };
+        // what Copy takes and what Paste adds, said in full (direct request)
+        this.copyTooltip = () =>
+            translate(
+                this.selectedProps.length > 0
+                    ? "beamjoy.window.config.tabs.races.props.copy.selection"
+                    : "beamjoy.window.config.tabs.races.props.copy.all"
+            );
+        this.pasteTooltip = () => {
+            const clip = this.propClipboard || {};
+            if (!clip.entries) return translate("beamjoy.window.config.tabs.races.props.paste.empty");
+            if (!clip.sameMap) return translate("beamjoy.window.config.tabs.races.props.paste.otherMap");
+            return translate("beamjoy.window.config.tabs.races.props.paste").replace("{n}", clip.count || clip.entries);
+        };
         this.copyProps = (event) => {
             event.stopPropagation();
             beamjoyStore.send("BJEditorRaceCopyProps");
@@ -856,11 +946,23 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             this.propDrawerOpen = true;
         };
         // cars hit it, or drive through it (direct request)
+        // whether cars hit each prop, from Lua : its own say, else whether its mesh has a collision
+        // (direct report : a backdrop or a ground plane said solid, and had none)
+        this.propsSolid = [];
+        $rootScope.$on("BJEditorRacePropsSolid", (_, list) => {
+            this.propsSolid = Array.isArray(list) ? list : [];
+        });
+        this.isPropSolid = (idx) => {
+            const known = this.propsSolid[idx];
+            if (known === true || known === false) return known;
+            const prop = this.race && this.race.props[idx];
+            return !!prop && prop.solid !== false;
+        };
         this.togglePropSolid = (event, idx) => {
             event.stopPropagation();
             const prop = this.race && this.race.props[idx];
             if (!prop) return;
-            beamjoyStore.send("BJEditorRaceSetPropSolid", [idx + 1, prop.solid === false]);
+            beamjoyStore.send("BJEditorRaceSetPropSolid", [idx + 1, !this.isPropSolid(idx)]);
         };
         this.splitPrefab = (event, idx) => {
             event.stopPropagation();

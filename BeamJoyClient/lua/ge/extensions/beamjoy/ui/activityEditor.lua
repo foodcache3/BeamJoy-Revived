@@ -107,6 +107,11 @@ M.onBJEditorDeleteKey = function()
     end
 end
 M.onClose = onClose
+-- leaving the map or the server : an editor's own state goes with it (the race editor gives the
+-- game's node grabber back)
+M.onClientEndMission = onClose
+M.onServerLeave = onClose
+M.onExtensionUnloaded = onClose
 M.onBJHunterArenaChanged = onBJHunterArenaChanged
 M.onBJInfectedArenaChanged = onBJInfectedArenaChanged
 M.onBJDerbyArenasChanged = onBJDerbyArenasChanged

@@ -493,6 +493,17 @@ local function sanePrefabId(v)
     return type(v) == "string" and #v <= 40 and v:match("^[%w_]+$") and v or nil
 end
 
+--- a prop's collision against its mesh's own : `false` cars drive through it, `true` solid though its
+--- mesh has no collision of its own (a ground plane, a backdrop : its visible mesh then), none as its
+--- mesh has it. Not `v == false and false or nil`, which is always nil (passable props were saved
+--- solid)
+---@param v any
+---@return boolean?
+local function passable(v)
+    if v == false or v == true then return v end
+    return nil
+end
+
 local function sanitizeProps(props)
     if props == nil then return {} end
     if type(props) ~= "table" then return nil, "Invalid prop data" end
@@ -520,7 +531,7 @@ local function sanitizeProps(props)
                         followGround = p.followGround ~= false,
                         lift = saneLift(p.lift),
                         stretch = saneStretch(p.stretch),
-                        solid = p.solid == false and false or nil,
+                        solid = passable(p.solid),
                     }
                     -- every other prop of the line another mesh (optional), turned and lifted as
                     -- that mesh is laid down
@@ -533,9 +544,31 @@ local function sanitizeProps(props)
                         table.every(p.heights, function(h) return tonumber(h) ~= nil end) then
                         entry.heights = table.map(p.heights, function(h) return tonumber(h) end)
                     end
+                    -- one tilt per prop, the ground's up under it ({x, y}, its z following), kept
+                    -- within a 45 degree slope
+                    if entry.heights and type(p.normals) == "table" and #p.normals == count and
+                        table.every(p.normals, function(n)
+                            return type(n) == "table" and tonumber(n.x) ~= nil and tonumber(n.y) ~= nil
+                        end) then
+                        entry.normals = table.map(p.normals, function(n)
+                            return { x = math.clamp(tonumber(n.x), -.7, .7), y = math.clamp(tonumber(n.y), -.7, .7) }
+                        end)
+                    end
+                    -- a mesh at either end (optional), facing out of the line
+                    local caps = 0
+                    for _, k in ipairs({ "A", "B" }) do
+                        local cap = p["cap" .. k]
+                        if saneShape(cap) then
+                            entry["cap" .. k] = cap
+                            local yaw = tonumber(p["cap" .. k .. "Yaw"])
+                            entry["cap" .. k .. "Yaw"] = yaw and math.clamp(yaw, -360, 360) or nil
+                            entry["cap" .. k .. "Lift"] = saneLift(p["cap" .. k .. "Lift"])
+                            caps = caps + 1
+                        end
+                    end
                     entry.parts = saneParts(p.parts)
                     entry.prefab = entry.parts and sanePrefabId(p.prefab) or nil
-                    total = total + count * (1 + (entry.parts and #entry.parts or 0))
+                    total = total + count * (1 + (entry.parts and #entry.parts or 0)) + caps
                 end
             else
                 local pos, dir, up = sanePoint(p.pos), sanePoint(p.dir), sanePoint(p.up)
@@ -549,7 +582,7 @@ local function sanitizeProps(props)
                         scale = scale,
                         lift = saneLift(p.lift),
                         stretch = saneStretch(p.stretch),
-                        solid = p.solid == false and false or nil,
+                        solid = passable(p.solid),
                         group = saneGroup(p.group),
                     }
                     entry.parts = saneParts(p.parts)

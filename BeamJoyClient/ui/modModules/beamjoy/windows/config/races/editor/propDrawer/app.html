@@ -775,31 +775,6 @@
                 <path d="M12 17.2h.01" stroke-width="2.8"></path>
             </svg>
         </button>
-        <button
-            class="pd-icon pd-keep"
-            ng-class="{on: $ctrl.keepPlacing}"
-            ng-click="$ctrl.toggleKeepPlacing($event)"
-            title="{{$ctrl.keepPlacing ? $ctrl.T('keep.on') : $ctrl.T('keep.off')}}"
-        >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M17 2.5l3 3-3 3"></path>
-                <path d="M4 11.5v-2a4 4 0 0 1 4-4h12"></path>
-                <path d="M7 21.5l-3-3 3-3"></path>
-                <path d="M20 12.5v2a4 4 0 0 1-4 4H4"></path>
-            </svg>
-        </button>
-        <button
-            class="pd-icon pd-keep"
-            ng-class="{on: $ctrl.fixedRotation}"
-            ng-click="$ctrl.toggleFixedRotation($event)"
-            title="{{$ctrl.fixedRotation ? $ctrl.T('fixed.on') : $ctrl.T('fixed.off')}}"
-        >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="8.5"></circle>
-                <path d="M12 6.5l2.2 5.5h-4.4z" fill="currentColor"></path>
-                <path d="M12 17.5v-5.5"></path>
-            </svg>
-        </button>
         <button class="pd-icon" ng-if="$ctrl.isFloating()" ng-click="$ctrl.dock($event)" title="{{$ctrl.T('move.dock')}}">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
                 <rect x="3.5" y="5" width="17" height="14" rx="1.5"></rect>
@@ -851,7 +826,7 @@
         </button>
     </div>
     <div class="pd-banner swap" ng-if="$ctrl.swap" role="status">
-        <span>{{$ctrl.T($ctrl.swap.alt ? 'alt.banner' : 'swap.banner').replace('{name}', $ctrl.swap.name)}}</span>
+        <span>{{$ctrl.T($ctrl.swap.cap ? 'cap.banner.' + $ctrl.swap.cap : $ctrl.swap.alt ? 'alt.banner' : 'swap.banner').replace('{name}', $ctrl.swap.name)}}</span>
         <button ng-click="$ctrl.cancelSwap()">{{$ctrl.T('swap.cancel')}}</button>
     </div>
     <div class="pd-banner warn" ng-if="$ctrl.tab === 'all' && !$ctrl.swap">
@@ -955,10 +930,10 @@
                             </span>
                             <span class="pd-tname">{{v.item.name}}</span>
                             <span class="pd-tmeta">
-                                <svg ng-if="v.item.solid" viewBox="0 0 16 16">
+                                <svg ng-if="$ctrl.solidOf(v.item)" viewBox="0 0 16 16">
                                     <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="#a7aebf"></rect>
                                 </svg>
-                                <svg ng-if="!v.item.solid" viewBox="0 0 16 16">
+                                <svg ng-if="!$ctrl.solidOf(v.item)" viewBox="0 0 16 16">
                                     <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="none" stroke="#a7aebf" stroke-width="1.4" stroke-dasharray="2.4 2"></rect>
                                 </svg>
                                 <span>{{$ctrl.tileSize(v.item)}}</span>
@@ -1008,7 +983,7 @@
         <div class="pd-dock-text">
             <h3 class="pd-pv-name">{{$ctrl.previewItem().name}}</h3>
             <div class="pd-row">{{$ctrl.dims($ctrl.previewItem())}}</div>
-            <div class="pd-row">{{$ctrl.previewItem().solid ? $ctrl.T('solid') : $ctrl.T('passable')}}</div>
+            <div class="pd-row">{{$ctrl.solidOf($ctrl.previewItem()) ? $ctrl.T('solid') : $ctrl.T('passable')}}</div>
             <div class="pd-row">{{$ctrl.swap ? $ctrl.T('preview.howSwap') : $ctrl.T('preview.how')}}</div>
         </div>
     </div>
@@ -1045,31 +1020,6 @@
             <path d="M12 17.2h.01" stroke-width="2.8"></path>
         </svg>
     </button>
-    <button
-        class="pd-icon pd-keep"
-        ng-class="{on: $ctrl.keepPlacing}"
-        ng-click="$ctrl.toggleKeepPlacing($event)"
-        title="{{$ctrl.keepPlacing ? $ctrl.T('keep.on') : $ctrl.T('keep.off')}}"
-    >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17 2.5l3 3-3 3"></path>
-            <path d="M4 11.5v-2a4 4 0 0 1 4-4h12"></path>
-            <path d="M7 21.5l-3-3 3-3"></path>
-            <path d="M20 12.5v2a4 4 0 0 1-4 4H4"></path>
-        </svg>
-    </button>
-    <button
-        class="pd-icon pd-keep"
-        ng-class="{on: $ctrl.fixedRotation}"
-        ng-click="$ctrl.toggleFixedRotation($event)"
-        title="{{$ctrl.fixedRotation ? $ctrl.T('fixed.on') : $ctrl.T('fixed.off')}}"
-    >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="8.5"></circle>
-            <path d="M12 6.5l2.2 5.5h-4.4z" fill="currentColor"></path>
-            <path d="M12 17.5v-5.5"></path>
-        </svg>
-    </button>
     <button class="pd-icon" ng-click="$ctrl.expandStrip()" title="{{$ctrl.T('strip.expand')}}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <path ng-attr-d="{{$ctrl.pos.mode === 'right' ? 'M9 5l7 7-7 7' : 'M15 5l-7 7 7 7'}}"></path>
@@ -1101,13 +1051,13 @@
         {{$ctrl.dims($ctrl.hovered)}}
     </div>
     <div class="pd-row">
-        <svg ng-if="$ctrl.hovered.solid" viewBox="0 0 16 16">
+        <svg ng-if="$ctrl.solidOf($ctrl.hovered)" viewBox="0 0 16 16">
             <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="#a7aebf"></rect>
         </svg>
-        <svg ng-if="!$ctrl.hovered.solid" viewBox="0 0 16 16">
+        <svg ng-if="!$ctrl.solidOf($ctrl.hovered)" viewBox="0 0 16 16">
             <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="none" stroke="#a7aebf" stroke-width="1.4" stroke-dasharray="2.4 2"></rect>
         </svg>
-        {{$ctrl.hovered.solid ? $ctrl.T('solid') : $ctrl.T('passable')}}
+        {{$ctrl.solidOf($ctrl.hovered) ? $ctrl.T('solid') : $ctrl.T('passable')}}
     </div>
     <div class="pd-path" ng-if="!$ctrl.hovered.curated">{{$ctrl.hovered.shape}}</div>
     <div class="pd-tags" ng-if="$ctrl.hovered.tags">
@@ -1132,9 +1082,10 @@
     <span ng-if="$ctrl.placing.dragging">
         <span class="pd-kbd">{{$ctrl.T('keys.shiftWheel')}}</span>{{$ctrl.T('hints.turn')}}
     </span>
-    <span ng-if="!$ctrl.keepPlacing"><span class="pd-kbd">Ctrl</span>{{$ctrl.T('hints.shift')}}</span>
-    <span ng-if="$ctrl.keepPlacing" class="pd-line">{{$ctrl.T('hints.keepOn')}}</span>
-    <span ng-if="$ctrl.fixedRotation" class="pd-line">{{$ctrl.T('hints.fixedOn')}}</span>
+    <span><span class="pd-kbd">{{$ctrl.T('keys.ctrlWheel')}}</span>{{$ctrl.T('hints.fineTurn')}}</span>
+    <span ng-if="!$ctrl.placing.keepPlacing"><span class="pd-kbd">Ctrl</span>{{$ctrl.T('hints.shift')}}</span>
+    <span ng-if="$ctrl.placing.keepPlacing" class="pd-line">{{$ctrl.T('hints.keepOn')}}</span>
+    <span ng-if="$ctrl.placing.fixedRotation" class="pd-line">{{$ctrl.T('hints.fixedOn')}}</span>
     <span ng-if="$ctrl.placing.picked" class="pd-line">{{$ctrl.T('hints.picked')}}</span>
     <span><span class="pd-kbd">{{$ctrl.T('keys.stop')}}</span>{{$ctrl.T('hints.stop')}}</span>
 </div>
