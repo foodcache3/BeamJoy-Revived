@@ -17,9 +17,11 @@
 ---
 --- Made in daylight only (direct report : at night the previews were black). ShapePreview lights the
 --- mesh with the map's own sun, which is next to nothing at night, and has no light of its own to
---- set. So at night a missing thumbnail waits (the drawer's tile says so) and is made once it's day ;
---- a render that still comes out black (dusk) isn't kept, and a black one already on disk from
---- before is thrown away the first time it's looked at.
+--- set. So at night a missing thumbnail waits (the drawer's tile says so) and is made once it's day,
+--- night as the game's own light state has it, when it starts and again when it's captured. Not
+--- judged by how dark the render looks (direct report : the black tire stacks, the dark tarp and the
+--- city bin waited for a daylight they already had, and the dark ones on disk were thrown away and
+--- made again every time they were looked at).
 ---
 --- Sizes come from the mesh's object box (a TSStatic of it, made for a moment far under the map,
 --- then deleted), kept in beamjoy_props.meta for its tuning() and saved beside the thumbnails.
@@ -50,7 +52,7 @@ local CROP_MIN = 56
 local COMPOSE_BUDGET_MS = 4
 -- a render that shows nothing is kept here, both sides, with what the preview said of it in the log,
 -- to find out why (direct report : some meshes show nothing one session and fine the next ; a retry
--- would only hide it)
+-- would only hide it). Found that way : shaders compiled in the background, see render()
 local DEBUG_DIR = CACHE_DIR .. "/empty"
 -- thumbnails made between two timing lines in the log
 local STATS_EVERY = 20
@@ -87,7 +89,6 @@ end
 
 ---@class BJThumbLook
 ---@field seen integer samples that are the mesh
----@field brightest number the brightest of them (luminance, 0 - 255)
 ---@field x0 integer the mesh's extent in the image (px), when seen
 ---@field y0 integer
 ---@field x1 integer
@@ -103,7 +104,7 @@ end
 ---@return BJThumbLook
 local function look(bitmap, samples)
     local w, h = bitmap:getWidth(), bitmap:getHeight()
-    local out = { seen = 0, brightest = 0, x0 = 0, y0 = 0, x1 = 0, y1 = 0, step = 1, bg = { 0, 0, 0 } }
+    local out = { seen = 0, x0 = 0, y0 = 0, x1 = 0, y1 = 0, step = 1, bg = { 0, 0, 0 } }
     if not w or not h or w < 2 or h < 2 then return out end
     local step = math.max(1, math.floor(math.min(w, h) / (samples or 16)))
     out.step = step
@@ -132,7 +133,6 @@ local function look(bitmap, samples)
             bitmap:getColor(x, y, c)
             if math.abs(c.red - br) + math.abs(c.green - bg) + math.abs(c.blue - bb) > 24 then
                 out.seen = out.seen + 1
-                out.brightest = math.max(out.brightest, .299 * c.red + .587 * c.green + .114 * c.blue)
                 if x < x0 then x0 = x end
                 if x > x1 then x1 = x end
                 if y < y0 then y0 = y end
@@ -144,25 +144,6 @@ local function look(bitmap, samples)
     return out
 end
 
---- a thumbnail too dark to show : nothing but its background, or nothing of the mesh brighter than
---- a dim grey (a black tire still catches some light by day)
----@param bitmap any GBitmap
----@return boolean
-local function tooDark(bitmap)
-    local seen = look(bitmap)
-    return seen.seen == 0 or seen.brightest < 40
-end
-
----@param path string a png
----@return boolean? too dark (nil : couldn't be read)
-local function fileTooDark(path)
-    local ok, dark = pcall(function()
-        local bitmap = GBitmap()
-        if not bitmap:loadFile(path) then return nil end
-        return tooDark(bitmap)
-    end)
-    return ok and dark or nil
-end
 -- meshes whose size couldn't be read (lower case), not tried again
 local unmeasurable = {}
 local metaDirtyAt = nil
@@ -288,11 +269,7 @@ end
 ---@return string? url of a thumbnail already on disk
 local function cachedThumb(shape)
     local path = THUMB_DIR .. shape .. ".png"
-    if not FS:fileExists(path) then return nil end
-    if not fileTooDark(path) then return path end
-    -- made black anyhow : made again
-    pcall(function() FS:removeFile(path) end)
-    return nil
+    return FS:fileExists(path) and path or nil
 end
 
 ---@param shape string
@@ -329,6 +306,112 @@ local function thumbYaws(size)
     if size and tonumber(size.x) and tonumber(size.y) and size.y > size.x then base = math.pi / 2 end
     return { base + THUMB_TURN, base + THUMB_TURN + math.pi }
 end
+
+-- whether the game let async shader compilation be switched off (logged once)
+local syncReported = false
+
+--- runs `fn` with the game's shaders compiled on the spot. The game compiles a shader it hasn't got
+--- yet in the background and draws nothing with it meanwhile ; the first mesh shown with a material
+--- new to the session came out empty, both sides, when the next using it was fine (direct report :
+--- the jersey barrier, the 6 m tape but not the 8 m ; the Hirochi tire stack but not its green and
+--- white ones). The game's own captures turn that off the same way (tech/techCore.lua,
+--- util/precompileShaders.lua). Around the mesh's loading too, where its materials are set up : only
+--- around the render (build 2665) changed nothing. Back on at once, the game has no getter for it
+---@param fn function
+local function synced(fn)
+    local sync, syncErr = pcall(function() Engine.Render.setAsyncShaderCompilation(false) end)
+    if not syncReported then
+        syncReported = true
+        log("I", "beamjoy_propPicker", "shaders compiled on the spot for previews : " ..
+            (sync and "yes" or ("no (" .. tostring(syncErr) .. ")")))
+    end
+    local ok, err = pcall(fn)
+    if sync then pcall(function() Engine.Render.setAsyncShaderCompilation(true) end) end
+    if not ok then error(err, 0) end
+end
+
+---@param preview any? ShapePreview (the job's)
+local function render(preview)
+    synced(function() (preview or job.preview):renderWorld(job.rect) end)
+end
+
+--- a preview of the job's mesh, set up for a thumbnail : no grid, its largest drawn detail level
+---@return any ShapePreview
+local function newPreview()
+    local preview = ShapePreview()
+    -- no grid (the sixth) : only the background around the mesh, so an empty render shows
+    if not pcall(function() preview:setRenderState(false, false, false, false, false, false) end) then
+        preview:setRenderState(false, false, false, false, false)
+    end
+    preview:setCamRotation(THUMB_PITCH, job.yaws[1])
+    synced(function() preview:setObjectModel(job.shape) end)
+    -- its full detail : left to the preview, a small tile could get a mesh's lowest level, or none
+    -- (forced the way the game's own resource checker does). The largest level drawn (its size 0 or
+    -- more), by the shape's own list as the shape editor reads it : the first level isn't always
+    -- one (collision ones come first in some meshes)
+    pcall(function()
+        local detail, best = 0, -1
+        local okInfo, info = pcall(function() return preview:getTSShapeInfo() end)
+        if okInfo and type(info) == "table" and type(info.details) == "table" then
+            for i, d in pairs(info.details) do
+                local size = type(d) == "table" and tonumber(d.size)
+                if size and size >= 0 and size > best then detail, best = i - 1, size end
+            end
+        end
+        preview.mFixedDetail = true
+        preview:setCurrentDetail(detail)
+    end)
+    return preview
+end
+
+--- what a preview says it drew
+---@param p any ShapePreview
+---@return string
+local function saidBy(p)
+    local said = {}
+    for _, field in ipairs({ "mCurrentDL", "mDetailPolys", "mDetailSize", "mPixelSize", "mNumDrawCalls", "mNumMaterials" }) do
+        local okField, value = pcall(function() return p[field] end)
+        said[#said + 1] = field:sub(2) .. "=" .. (okField and tostring(value) or "?")
+    end
+    local okName, name = pcall(function() return p:getCurentDetailName() end)
+    said[#said + 1] = "detail=" .. (okName and tostring(name) or "?")
+    return table.concat(said, " ")
+end
+
+--- the material each of a preview's material slots is bound to, and the file it came from
+---@param p any ShapePreview
+---@return string
+local function materialsOf(p)
+    local okN, names = pcall(function() return p:getMaterialNames() end)
+    if not okN or type(names) ~= "table" then return "materials unknown" end
+    local byMap = {}
+    local set = Sim.getMaterialSet()
+    for i = 0, set:size() - 1 do
+        local mat = set:at(i)
+        if mat then
+            local to = mat:getField("mapTo", 0)
+            if type(to) ~= "string" or to == "" or to == "unmapped_mat" then to = mat:getName() end
+            byMap[to] = byMap[to] or {}
+            table.insert(byMap[to], mat)
+        end
+    end
+    local out = {}
+    for _, n in ipairs(names) do
+        local parts = {}
+        for _, mat in ipairs(byMap[n] or {}) do
+            local okF, file = pcall(function() return mat:getFileName() end)
+            parts[#parts + 1] = string.format("%s from %s", mat:getName(), okF and tostring(file) or "?")
+        end
+        out[#out + 1] = tostring(n) .. " -> " .. (#parts > 0 and table.concat(parts, " + ") or "nothing")
+    end
+    return table.concat(out, " ; ")
+end
+
+-- an empty preview's probes : the same preview rendered every frame up to this many frames, to see
+-- whether its mesh ever shows (something still loading) or not
+local PROBE_FRAMES = 90
+-- frames a fresh preview gets before its capture (as the first)
+local PROBE_FRESH_FRAMES = SETTLE_FRAMES + 1
 
 --- points the job's camera for its current view, fitted to the mesh
 local function aim()
@@ -396,36 +479,14 @@ local function stepJob()
             local rect = RectI(0, 0, RENDER_SIZE, RENDER_SIZE)
             job.rect = rect
             job.yaws, job.view = thumbYaws(beamjoy_props.meta[job.shape:lower()]), 1
-            job.preview = ShapePreview()
-            -- no grid (the sixth) : only the background around the mesh, so an empty render shows
-            if not pcall(function() job.preview:setRenderState(false, false, false, false, false, false) end) then
-                job.preview:setRenderState(false, false, false, false, false)
-            end
-            job.preview:setCamRotation(THUMB_PITCH, job.yaws[1])
-            job.preview:setObjectModel(job.shape)
-            -- its full detail : left to the preview, a small tile could get a mesh's lowest level,
-            -- or none (forced the way the game's own resource checker does). The largest level drawn
-            -- (its size 0 or more), by the shape's own list as the shape editor reads it : the
-            -- first level isn't always one (collision ones come first in some meshes)
-            pcall(function()
-                local detail, best = 0, -1
-                local okInfo, info = pcall(function() return job.preview:getTSShapeInfo() end)
-                if okInfo and type(info) == "table" and type(info.details) == "table" then
-                    for i, d in pairs(info.details) do
-                        local size = type(d) == "table" and tonumber(d.size)
-                        if size and size >= 0 and size > best then detail, best = i - 1, size end
-                    end
-                end
-                job.preview.mFixedDetail = true
-                job.preview:setCurrentDetail(detail)
-            end)
-            job.preview:renderWorld(rect)
+            job.preview = newPreview()
+            render()
             aim()
             job.stage, job.frames = "settle", SETTLE_FRAMES
         elseif job.stage == "settle" then
             job.frames = job.frames - 1
             if job.frames <= 0 then
-                job.preview:renderWorld(job.rect)
+                render()
                 job.stage = "capture"
             end
         elseif job.stage == "capture" then
@@ -436,15 +497,14 @@ local function stepJob()
             local seen = look(bitmap, 32)
             -- what the preview says it drew (kept for an empty render's report)
             local p = job.preview
-            local said = {}
-            for _, field in ipairs({ "mCurrentDL", "mDetailPolys", "mDetailSize", "mPixelSize", "mNumDrawCalls", "mNumMaterials" }) do
-                local okField, value = pcall(function() return p[field] end)
-                said[#said + 1] = field:sub(2) .. "=" .. (okField and tostring(value) or "?")
-            end
-            local okName, name = pcall(function() return p:getCurentDetailName() end)
-            said[#said + 1] = "detail=" .. (okName and tostring(name) or "?")
             job.views = job.views or {}
-            job.views[job.view] = { bitmap = bitmap, seen = seen, said = table.concat(said, " ") }
+            job.views[job.view] = { bitmap = bitmap, seen = seen, said = saidBy(p) }
+            -- nothing in it to draw (an invisible wall) : its placeholder, nothing to report
+            local okPolys, polys = pcall(function() return p.mDetailPolys end)
+            if okPolys and tonumber(polys) == 0 then
+                job.stage = "empty"
+                return
+            end
             -- the other side is kept only when it shows clearly more of the mesh
             if seen.seen > 0 and (not job.best or seen.seen > job.best.seen.seen * 1.25) then
                 job.best = { bitmap = bitmap, seen = seen }
@@ -453,7 +513,7 @@ local function stepJob()
                 -- the mesh is loaded by now : the other side is rendered at once, captured next frame
                 job.view = job.view + 1
                 aim()
-                job.preview:renderWorld(job.rect)
+                render()
                 return
             end
             if not job.best then
@@ -468,14 +528,19 @@ local function stepJob()
                             i, v.seen.seen, 32 * 32, v.seen.bg[1], v.seen.bg[2], v.seen.bg[3], v.said)
                     end
                     LogWarn(string.format("beamjoy_propPicker: %s shows nothing in its preview (%d frames since it was "
-                        .. "loaded, measured %s) : %s ; renders kept in %s", job.shape, job.steps,
-                        job.measuredNow and "just before" or "earlier", table.concat(lines, " | "), DEBUG_DIR))
+                        .. "loaded, measured %s) : %s ; materials : %s ; renders kept in %s", job.shape, job.steps,
+                        job.measuredNow and "just before" or "earlier", table.concat(lines, " | "),
+                        materialsOf(p), DEBUG_DIR))
                 end)
-                job.stage = "empty"
+                -- probed, to find out why (the thumbnail stays a placeholder whatever they find)
+                job.view = 1
+                aim()
+                render()
+                job.stage, job.frames = "probe", 0
                 return
             end
-            if job.best.seen.brightest < 40 then
-                -- unlit (night, or dusk) : not kept, made again by day
+            if isNight() then
+                -- night fell meanwhile : unlit, not kept, made again by day
                 job.stage = "dark"
                 return
             end
@@ -484,6 +549,49 @@ local function stepJob()
             job.out:init(M.THUMB_SIZE, M.THUMB_SIZE)
             job.row = 0
             job.stage = "compose"
+        elseif job.stage == "probe" then
+            -- the same preview, rendered every frame : the frame its mesh first shows, if it does
+            job.frames = job.frames + 1
+            local bitmap = GBitmap()
+            bitmap:init(RENDER_SIZE, RENDER_SIZE)
+            job.preview:copyToBmp(bitmap:getPtr())
+            local seen = look(bitmap, 32)
+            if seen.seen > 0 or job.frames >= PROBE_FRAMES then
+                job.probe = string.format("the same preview %s", seen.seen > 0 and
+                    string.format("shows it %d frames later (%d samples ; %s)", job.frames, seen.seen, saidBy(job.preview)) or
+                    string.format("still shows nothing %d frames later (%s)", job.frames, saidBy(job.preview)))
+                if seen.seen > 0 then
+                    pcall(function()
+                        bitmap:saveFile(DEBUG_DIR .. job.shape:gsub("%.[^.]*$", "") .. ".later.png")
+                    end)
+                end
+                -- then a preview made anew, now, the way the first was
+                job.fresh = newPreview()
+                render(job.fresh)
+                job.fresh:setCamRotation(THUMB_PITCH, job.yaws[1])
+                job.fresh:fitToShape()
+                job.stage, job.frames = "probeFresh", PROBE_FRESH_FRAMES
+                return
+            end
+            render()
+        elseif job.stage == "probeFresh" then
+            job.frames = job.frames - 1
+            if job.frames > 0 then
+                if job.frames == 1 then render(job.fresh) end
+                return
+            end
+            local bitmap = GBitmap()
+            bitmap:init(RENDER_SIZE, RENDER_SIZE)
+            job.fresh:copyToBmp(bitmap:getPtr())
+            local seen = look(bitmap, 32)
+            LogWarn(string.format("beamjoy_propPicker: %s probed : %s ; a new preview of it %s (%s) ; materials : %s",
+                job.shape, job.probe, seen.seen > 0 and string.format("shows it (%d samples)", seen.seen) or "shows nothing",
+                saidBy(job.fresh), materialsOf(job.fresh)))
+            pcall(function()
+                bitmap:saveFile(DEBUG_DIR .. job.shape:gsub("%.[^.]*$", "") .. ".fresh.png")
+            end)
+            job.fresh = nil
+            job.stage = "empty"
         elseif job.stage == "compose" then
             if not compose() then return end
             FS:directoryCreate(job.path:match("^(.*)/[^/]*$"), true)

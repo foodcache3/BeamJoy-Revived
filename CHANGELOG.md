@@ -8,8 +8,27 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2664, server build 2448.
+Version 1.11.0 : client build 2668, server build 2448.
 
+- **Fix : props placed alone came a quarter turn off** (direct report : right in a line, sideways
+  alone). A prop's turn lays its long side along a direction : a line's own, but for one placed alone
+  the way you look, so a long prop stood end on. One placed alone (or moved to your car) now stands
+  as one of a line drawn left to right across your view. Duplicating a prop puts the copy on along
+  its long side, and teleporting to one faces it as it was placed. Props already placed don't
+  move. *(client)*
+
+- **Fix : some prop previews empty, the same ones every session** (direct report). The first prop
+  shown with a material new to the session came out blank (the jersey barrier, the 6 m tape but not
+  the 8 m, the Hirochi tire stack but not its green and white ones) : the game compiles a shader it
+  hasn't got yet in the background and draws nothing with it meanwhile. Previews now load and render
+  their meshes with shaders compiled on the spot, as the game's own captures do. A preview that
+  still shows nothing is probed and logged. The invisible wall is no longer reported. *(client)*
+- **Fix : dark props' previews missing, seemingly at random** (direct report : tire stacks, tarp,
+  city bin). A preview was judged "made at night" by how dark the prop looked, so a black or dark
+  prop failed whenever the map's sun was low, waiting for a daylight it already had ; and one saved
+  earlier was measured again, thrown away and made again each time the drawer looked at it. Night is
+  now the game's own light state, when the preview starts and when it's captured ; a saved preview
+  is kept. *(client)*
 - **Props list cleanup** (direct request). New prefabs : West Coast's three-bay scaffolding, a
   guardrail section with a post at each end (as West Coast lays them), and a wood fence section
   (two poles, three boards) ; the single scaffold side, guardrail rail and fence board left the

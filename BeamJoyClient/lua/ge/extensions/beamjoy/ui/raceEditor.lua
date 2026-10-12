@@ -1579,6 +1579,24 @@ local function propPlacement()
     return at, facing
 end
 
+-- a prop placed alone stands as one of a line drawn left to right across your view, its long side
+-- across (direct report : alone, many came end on, a quarter turn off the same prop in a line). The
+-- tuning yaw lays a mesh's long side along a direction : a line's, or this one, your right
+local SINGLE_ACROSS = -90
+
+---@param facing vec3 your flat facing
+---@param yaw number the mesh's tuning yaw plus any turn of yours (degrees)
+---@return vec3 dir the prop's
+local function singleDir(facing, yaw)
+    return beamjoy_props.turn(facing, yaw + SINGLE_ACROSS)
+end
+
+---@param prop table a single prop
+---@return vec3 along its long side, as a line of it would run
+local function singleAlong(prop)
+    return beamjoy_props.turn(flatDir(toVec(prop.dir)), -beamjoy_props.tuning(prop.shape).yaw)
+end
+
 ---@param prop table
 ---@param unselected boolean? added as it is, nothing selected (the props drawer placing on)
 local function addProp(prop, unselected)
@@ -1638,8 +1656,8 @@ local function onDeleteProp(index)
     propsChanged()
 end
 
---- a copy beside the original : a single prop one of its own lengths to its right, a line 4 m to
---- the right of its direction
+--- a copy beside the original : a single prop one of its own lengths on along its long side (as the
+--- next of a line), a line 4 m to the right of its direction
 ---@param index integer
 local function onDuplicateProp(index)
     local prop = M.race and M.race.props[index]
@@ -1661,8 +1679,7 @@ local function onDuplicateProp(index)
         end
         updateLineHeights(copy)
     else
-        local dir = flatDir(toVec(prop.dir))
-        local pos = toVec(prop.pos) + dir:cross(vec3(0, 0, 1)) * (beamjoy_props.tuning(prop.shape).length * (prop.scale or 1))
+        local pos = toVec(prop.pos) + singleAlong(prop) * (beamjoy_props.tuning(prop.shape).length * (prop.scale or 1))
         if M.snapToGroundEnabled then pos = vec3(pos.x, pos.y, groundHeightAt(pos)) end
         copy.pos = xyz(pos)
     end
@@ -1725,7 +1742,8 @@ local function onTeleportToProp(index)
         facing = flatDir(toVec(prop.b) - target)
     else
         target = toVec(prop.pos)
-        facing = beamjoy_props.turn(flatDir(toVec(prop.dir)), -beamjoy_props.tuning(prop.shape).yaw)
+        -- facing it as it was placed (its long side across)
+        facing = beamjoy_props.turn(singleAlong(prop), -SINGLE_ACROSS)
     end
     beamjoy_vehicles.setVehiclePositionRotation(current.veh, target - facing * (PROP_PLACE_AHEAD + 2), facing,
         vec3(0, 0, 1))
@@ -1739,7 +1757,7 @@ local function onSetPropToVehicle(index)
     local at, facing = propPlacement()
     if not at then return end
     prop.pos = xyz(at)
-    prop.dir = xyz(beamjoy_props.turn(facing, beamjoy_props.tuning(prop.shape).yaw))
+    prop.dir = xyz(singleDir(facing, beamjoy_props.tuning(prop.shape).yaw))
     prop.up = { x = 0, y = 0, z = 1 }
     updatePropGizmo()
     markDirty()
@@ -1842,7 +1860,7 @@ local function placingEntry()
         kind = "static",
         shape = p.shape,
         pos = xyz(at),
-        dir = xyz(beamjoy_props.turn(facing, yaw)),
+        dir = xyz(singleDir(facing, yaw)),
         up = { x = 0, y = 0, z = 1 },
         scale = 1,
         lift = lift,
