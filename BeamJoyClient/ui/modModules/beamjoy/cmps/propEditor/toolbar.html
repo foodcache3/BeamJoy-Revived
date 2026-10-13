@@ -1,0 +1,82 @@
+<style>
+    /* inline in the host's toolbar row : these buttons are more of its flex items. A host row
+       holding the point list editor's toolbar too (.bj-tool-row, the arena editors) lays that one
+       out inline the same way */
+    bj-prop-editor-toolbar,
+    bj-prop-editor-toolbar > .prop-toolbar,
+    .bj-tool-row > bj-point-list-editor-toolbar,
+    .bj-tool-row > bj-point-list-editor-toolbar > div {
+        display: contents;
+    }
+    .bj-tool-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.25em;
+        margin-bottom: 0.5em;
+    }
+</style>
+
+<div class="prop-toolbar">
+    <!-- placing's own switches, beside the snapping (direct request) -->
+    <button
+        class="btn"
+        ng-class="$ctrl.p.keepPlacing ? 'success' : 'neutral'"
+        ng-click="$ctrl.p.toggleKeepPlacing($event)"
+        title="{{($ctrl.p.keepPlacing
+            ? 'beamjoy.window.config.tabs.races.props.drawer.keep.on'
+            : 'beamjoy.window.config.tabs.races.props.drawer.keep.off') | translate}}"
+    >
+        <icon name="keepPlacing"></icon>
+    </button>
+    <button
+        class="btn"
+        ng-class="$ctrl.p.fixedRotation ? 'success' : 'neutral'"
+        ng-click="$ctrl.p.toggleFixedRotation($event)"
+        title="{{($ctrl.p.fixedRotation
+            ? 'beamjoy.window.config.tabs.races.props.drawer.fixed.on'
+            : 'beamjoy.window.config.tabs.races.props.drawer.fixed.off') | translate}}"
+    >
+        <icon name="fixedRotation"></icon>
+    </button>
+    <button
+        class="btn"
+        ng-class="$ctrl.p.testCollision ? 'success' : 'neutral'"
+        ng-click="$ctrl.p.toggleTestCollision($event)"
+        ng-disabled="$ctrl.p.props.length === 0"
+        title="{{($ctrl.p.testCollision
+            ? 'beamjoy.window.config.tabs.races.props.testCollision.on'
+            : 'beamjoy.window.config.tabs.races.props.testCollision.off') | translate}}"
+    >
+        <icon name="{{$ctrl.p.testCollision ? 'solid' : 'passable'}}"></icon>
+    </button>
+    <vr></vr>
+    <button
+        class="btn"
+        ng-class="$ctrl.p.drawerOpen ? 'primary' : 'success'"
+        ng-click="$ctrl.p.toggleDrawer($event)"
+        title="{{'beamjoy.window.config.tabs.races.props.drawer.open.tooltip' | translate}}"
+    >
+        {{($ctrl.p.drawerOpen
+            ? 'beamjoy.window.config.tabs.races.props.drawer.open.active'
+            : 'beamjoy.window.config.tabs.races.props.drawer.open') | translate}}
+    </button>
+    <button
+        class="btn neutral"
+        ng-click="$ctrl.p.copy($event)"
+        ng-disabled="$ctrl.p.props.length === 0"
+        title="{{$ctrl.p.copyTooltip()}}"
+    >
+        <icon name="copy"></icon>
+    </button>
+    <button
+        class="btn neutral"
+        ng-click="$ctrl.p.paste($event)"
+        ng-disabled="!$ctrl.p.clipboard.entries || !$ctrl.p.clipboard.sameMap"
+        title="{{$ctrl.p.pasteTooltip()}}"
+    >
+        <icon name="paste"></icon>
+    </button>
+    <span class="flex-grow-1"></span>
+    <span class="small opacity-70">{{$ctrl.p.total}}/{{$ctrl.p.MAX}}</span>
+</div>

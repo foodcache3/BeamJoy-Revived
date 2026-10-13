@@ -91,10 +91,21 @@
                 <div class="section-tab cursor-pointer" ng-repeat="section in $ctrl.SECTIONS"
                     ng-class="{active: $ctrl.activeSection === section}" ng-click="$ctrl.changeSection($event, section)">
                     {{('beamjoy.window.config.tabs.derbyArena.sections.' + section) | translate}}
+                    <span ng-if="section === 'props'">({{$ctrl.props.props.length}})</span>
                 </div>
             </div>
             <bj-point-list-editor-toolbar ng-if="$ctrl.activeSection === 'positions'" events="$ctrl.pointListEvents"></bj-point-list-editor-toolbar>
+            <!-- the Props section's toolbar : the gizmo and snapping, then the props' own buttons -->
+            <div class="bj-tool-row" ng-if="$ctrl.activeSection === 'props'">
+                <bj-point-list-editor-toolbar events="$ctrl.pointListEvents"></bj-point-list-editor-toolbar>
+                <bj-prop-editor-toolbar></bj-prop-editor-toolbar>
+            </div>
         </div>
+    </div>
+
+    <div class="section-panel" ng-if="!$ctrl.meta.blank && $ctrl.activeSection === 'props'">
+        <!-- the arena's props and the props drawer, shared with the race editor (cmps/propEditor) -->
+        <bj-prop-editor></bj-prop-editor>
     </div>
 
     <div class="section-panel" ng-if="!$ctrl.meta.blank && $ctrl.activeSection === 'positions'">

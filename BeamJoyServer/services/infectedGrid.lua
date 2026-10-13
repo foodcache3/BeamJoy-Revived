@@ -551,7 +551,7 @@ local function infectedStart(ctxt, opts)
         createdAt = ctxt.time,
         participants = Table(),
         forcedInfectedIds = Table(),
-        arenaSnapshot = table.clone(arena),
+        arenaSnapshot = services_props.withoutProps(arena),
         -- never trusted from the normal client UI's own opts (a modified client could otherwise
         -- self-grant this): only ever true via the staff-gated "/infected debug start" command
         debugSolo = opts.debugSolo == true and services_permissions.isStaff(ctxt.sender.playerName),

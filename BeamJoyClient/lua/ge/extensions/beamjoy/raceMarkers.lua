@@ -12,7 +12,7 @@
 -- file-top-level), since it's a "game util" global not guaranteed initialized yet while
 -- extensions are still being loaded. Colors are built lazily here for the same reason.
 local GATE_COLOR, GATE_NEXT_COLOR, GATE_SELECTED_COLOR, START_COLOR, START_SELECTED_COLOR,
-TEXT_COLOR, TEXT_BG_COLOR, PATH_COLOR, HANDLE_COLOR, PROP_LINE_COLOR, PROP_ACTIVE_COLOR, PROP_INVISIBLE_COLOR
+TEXT_COLOR, TEXT_BG_COLOR, PATH_COLOR, HANDLE_COLOR
 
 -- shares the same cached module table `ui/activityEditor.lua` holds in its `editors` list (Lua's
 -- `require` caches by resolved path) rather than needing raceEditor registered as its own global
@@ -45,9 +45,6 @@ local function onInit()
     TEXT_BG_COLOR = BJColor(0, 0, 0, .4)
     PATH_COLOR = BJColor(1, 1, 1, .35)
     HANDLE_COLOR = BJColor(0, 1, 1, .9)
-    PROP_LINE_COLOR = BJColor(1, .55, .1, .8)
-    PROP_ACTIVE_COLOR = BJColor(0, 1, 1, .9)
-    PROP_INVISIBLE_COLOR = BJColor(.4, .8, 1, .25)
     MINIMAP_NEXT = color(0, 255, 0, 255)
     MINIMAP_GATE = color(255, 204, 0, 255)
     MINIMAP_START = color(0, 153, 255, 255)
@@ -369,51 +366,6 @@ local function drawStart(startPosition, index, color)
     draw.addText(string.format("Start %d", index), pos + vec3(0, 0, 1.5), TEXT_COLOR, TEXT_BG_COLOR)
 end
 
---- the race editor's handles on its props (the meshes themselves are spawned by beamjoy_props) :
---- a line's path and its two ends (the one the gizmo holds highlighted), the selected single prop,
---- and every invisible mesh's panel, since nothing of those shows in the world
----@param props table[]?
-local function drawPropOverlays(props)
-    if type(props) ~= "table" then return end
-    local lift = vec3(0, 0, .5)
-    -- several selected (a selection, a group) : each highlighted, none with its own handles held
-    local selection = raceEditor.activePropIndex and raceEditor.propSelection or {}
-    local several = #selection > 1
-    for i, p in ipairs(props) do
-        local selected = several and table.includes(selection, i)
-        local active = i == raceEditor.activePropIndex and not several
-        if p.kind == "line" and p.a and p.b then
-            local a, b = vec3(p.a.x, p.a.y, p.a.z), vec3(p.b.x, p.b.y, p.b.z)
-            local lineColor = (active or selected) and PROP_ACTIVE_COLOR or PROP_LINE_COLOR
-            -- its path : a bent line as a few segments along its curve
-            local path = beamjoy_props.linePath(p, 16) or { a, b }
-            for k = 2, #path do
-                draw.addLine(path[k - 1] + lift, .1, path[k] + lift, .1, lineColor)
-            end
-            for part, pos in pairs({ a = a, b = b }) do
-                local held = active and raceEditor.activePropPart == part
-                draw.addSphere(pos + lift, held and .7 or .45, held and PROP_ACTIVE_COLOR or PROP_LINE_COLOR)
-            end
-            -- the middle (bend) handle : on the selected line, and on any bent one
-            if active or p.mid then
-                local mid = p.mid and vec3(p.mid.x, p.mid.y, p.mid.z) or (a + b) * .5
-                local held = active and raceEditor.activePropPart == "mid"
-                draw.addSphere(mid + lift, held and .6 or .35, held and PROP_ACTIVE_COLOR or PROP_LINE_COLOR)
-            end
-        elseif (active or selected) and p.pos then
-            draw.addSphere(vec3(p.pos.x, p.pos.y, p.pos.z) + lift, .5, PROP_ACTIVE_COLOR)
-        end
-    end
-    for _, e in ipairs(beamjoy_props.expand(props)) do
-        local cat = beamjoy_props.catalogForShape(e.shape)
-        if cat and cat.invisible then
-            local half = e.scale / 2
-            local d, u = e.dir * half, e.up * half
-            draw.addQuad(e.pos - d - u, e.pos + d - u, e.pos + d + u, e.pos - d + u, PROP_INVISIBLE_COLOR)
-        end
-    end
-end
-
 -- Confirmed real GPU cost: onBJRaceMarkersRefresh fires on every session update, and the server
 -- pushes one on every participant's gate crossing, not just the local player's own. For the live
 -- session's own render branch below, nothing actually drawn depends on any OTHER participant's
@@ -557,8 +509,8 @@ local function render()
         table.forEach(race.startPositions, function(s, i)
             drawStart(s, i, i == raceEditor.activeStartIndex and START_SELECTED_COLOR or START_COLOR)
         end)
-        drawPropOverlays(race.props)
-        hasContent = #race.gates > 0 or #race.startPositions > 0 or (type(race.props) == "table" and #race.props > 0)
+        -- its props' handles are the props editor's own (ui/propEditor.lua drawOverlays)
+        hasContent = #race.gates > 0 or #race.startPositions > 0
     else
         local builder = beamjoy_races.testBuilder
         if builder and (#builder.gates > 0 or #builder.startPositions > 0) then

@@ -19,6 +19,10 @@ local M = {
     enabled = false,
     ---@type BJHunterDefaults
     defaults = {},
+    --- the arena's props (direct request : props in Hunter as in races), edited by the props
+    --- editor (ui/propEditor.lua) through the list editor
+    ---@type table[]
+    props = {},
 }
 ---@type BJActivityEditorCommon?
 local parent
@@ -67,6 +71,7 @@ local listEditor = pointListEditor.new({
         requestState = "BJEditorHunterArenaRequestState",
     },
     isActive = function() return parent ~= nil and parent.activeEditor == M end,
+    props = function() return M.props end,
 })
 
 local function pushMeta()
@@ -84,6 +89,7 @@ local function refresh(keepSelection)
     local arena = beamjoy_hunter.data or {}
     M.enabled = arena.enabled == true
     M.defaults = table.clone(arena.defaults or {})
+    M.props = table.isArray(arena.props) and table.clone(arena.props) or {}
     listEditor.open({
         hunterSpawns = arena.hunterSpawns,
         preySpawns = arena.preySpawns,
@@ -145,6 +151,7 @@ local function onSave()
         end),
         respawnHubs = table.map(lists.respawnHubs, math.roundPosRotDirUp),
         defaults = M.defaults,
+        props = M.props,
     }
     beamjoy_communications.send("hunterArenaSave", payload)
     beamjoy_communications.addOneUseHandler("hunterArenaSaved", function(status, err)
@@ -185,6 +192,9 @@ end
 M.onInit = onInit
 M.onClose = onClose
 M.onBJClick = listEditor.onBJClick
+-- the props' placing (per frame) and the Delete key
+M.onUpdate = listEditor.onUpdate
+M.onBJEditorDeleteKey = listEditor.onDeleteKey
 M.onBJHunterArenaChanged = onArenaChanged
 
 return M

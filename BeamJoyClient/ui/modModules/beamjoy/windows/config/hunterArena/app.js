@@ -6,7 +6,8 @@ angular.module("beamjoy").component("bjConfigHunterArena", {
         $timeout,
         $filter,
         beamjoyStore,
-        beamjoyNavGuard
+        beamjoyNavGuard,
+        beamjoyPropEditor
     ) {
         const translate = $filter("translate");
 
@@ -14,12 +15,18 @@ angular.module("beamjoy").component("bjConfigHunterArena", {
         // one long view. Split into tabs, mirroring the race editor's own already-established
         // section split (windows/config/races/editor/app.js's own SECTIONS/activeSection/
         // changeSection).
-        this.SECTIONS = ["settings", "spawns", "waypoints"];
+        this.SECTIONS = ["settings", "spawns", "waypoints", "props"];
         this.activeSection = "settings";
         this.changeSection = (event, section) => {
             event.stopPropagation();
             this.activeSection = section;
+            // the Props section's snapping button : the list editor's state, told again (no point
+            // list is shown there to have asked)
+            if (section === "props") beamjoyStore.send(this.pointListEvents.requestState);
         };
+        // the arena's props : the props editor's list and toolbar (cmps/propEditor), shared with
+        // the race editor ; read here for the Props tab's count
+        this.props = beamjoyPropEditor;
 
         // config for the shared <bj-point-list-editor>; see cmps/pointListEditor/ for what each
         // field means ; color/hasDir/defaultRadius are Lua-only rendering concerns and live in

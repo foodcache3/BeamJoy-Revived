@@ -1,12 +1,12 @@
 --- Placed props : static meshes from the game's own art (barriers, cones, signs, flags...) that an
---- activity carries in its data (`race.props` for now) and that each client spawns for itself as
+--- activity carries in its data (a race's, a Hunter, Infected or Derby arena's `props`) and that each client spawns for itself as
 --- TSStatic objects. Nothing goes through BeamMP : they're never synced, owned or knocked about,
 --- every client just builds the same objects from the same data. Solid to cars once the game's
 --- static collision is rebuilt (`be:reloadCollision`, debounced below), which is done for a running
---- race but not for the editor's preview : the editor's ground snapping raycasts the physics
+--- game but not for the editor's preview : the editor's ground snapping raycasts the physics
 --- collision, and props it can't see there can't be snapped onto by mistake.
 ---
---- Entries (see services/races.lua's sanitizeProps for the server-side checks) :
+--- Entries (see the server's services/props.lua sanitize for its checks) :
 ---   { kind = "static", shape, pos, dir, up, scale, stretch, lift, solid, group }
 ---   { kind = "line", shape, a, b, mid, count, gap, yaw, scale, followGround, heights, alt, altYaw, altLift, group }
 --- A line is saved as itself and spread out here : `count` props evenly from `a` to `b` (both ends
@@ -45,15 +45,16 @@
 --- `nightIntensity` on a light, `nightEmissive` or `child` on a mesh), so it never switches them and
 --- they never switch anything of the map's.
 ---
---- Sets : each consumer shows its props under its own key (`show(key, props, opts)`), so a race and
---- anything later (hunter arenas, passive zones) never clear each other's.
+--- Sets : each consumer shows its props under its own key (`show(key, props, opts)`), so the
+--- activity's props (SYNC below), the editor's placing ghost and anything later never clear each
+--- other's.
 
 local M = {
     -- raised from 200 (direct request) : the static collision rebuild a race's props cost is the
     -- map's own collision far more than theirs (0.201 s with 217 instances, 0.203 s with 17, logged
     -- 2026-10-08). Raised again to 1000 (direct request) : the biggest stock races ship more than
-    -- 500 (driver_training's ArdenteExperience 712, industrial's Track rally 531). Mirrored by the
-    -- server's services/races.lua MAX_PROPS
+    -- 500 (driver_training's ArdenteExperience 712, industrial's Track rally 531). A race's or an
+    -- arena's. Mirrored by the server's services/props.lua MAX
     MAX_PROPS = 1000,
 
     --- the props offered in the editors, in the prop picker's categories (`cat`), with a few English
@@ -62,12 +63,18 @@ local M = {
     --- the gap between props on a new line ; `zOffset` (mesh units, scaled) lifts a mesh whose origin
     --- isn't at its base. Those three were tuned by hand on the first props ; one without them is
     --- tuned from its measured size (tuning() below : beamjoy_propPicker measures a mesh the first
-    --- time it's previewed or armed). `collision` is the TSStatic collision type : "None" for the
-    --- decorative ones cars should drive through (tape, flags, banners) and the ones whose mesh has
-    --- no collision of its own (the guardrail post : checked against every mesh's .dae, see
+    --- time it's previewed or armed). `xOffset` (mesh units, scaled) : a mesh standing to one side of
+    --- its origin is moved that much along its own x when it's placed alone, so it's centred where
+    --- it's placed as the others are (the flip ramps : their origin is a corner). `collision` is the
+    --- TSStatic collision type : "None" for the decorative ones cars should drive through (tape,
+    --- flags) ; a mesh with no collision of its own is passable anyway (checked against its .dae, see
     --- meshHasCollision) ; `invisible` ones are drawn
     --- as a panel by the editor, since nothing of them shows in the world. A mesh under /levels/<map>/
     --- has its materials defined by that map only : ensureMaterials() brings them along elsewhere.
+    --- How its picture is made (beamjoy_propPicker), where the view from its size doesn't suit it :
+    --- `thumbTurn` (degrees) turns the camera round it (from the back of a sign to its face),
+    --- `thumbLying` pictures a mesh the preview draws lying on its back, its top toward its own +y
+    --- (its file stands it up with an axis or node rotation the preview doesn't apply, the world does).
     CATALOG = {
         -- barriers
         { id = "concreteBarrier", cat = "barriers", tags = "concrete jersey wall race", shape = "/art/shapes/race/s_concrete_race_barrier.dae", yaw = 90, length = 3.1 },
@@ -84,7 +91,6 @@ local M = {
         { id = "raceBarricadeCurveB", cat = "barriers", tags = "crowd fence metal bend", shape = "/art/shapes/race/ut_race_mesh_barricade_curve_b.DAE" },
         { id = "safetyCushion", cat = "barriers", tags = "crash impact attenuator", shape = "/art/shapes/race/rally/rally_assets/s_safety_cushion_01.dae" },
         { id = "constructionBarrier", cat = "barriers", tags = "roadworks arrows", shape = "/art/shapes/objects/constructionbarrier_arrows.dae", yaw = 0, length = 2 },
-        { id = "guardrailPost", cat = "barriers", tags = "armco post", shape = "/art/shapes/objects/guardrailpost.dae", collision = "None" },
         { id = "guardrailItaly", cat = "barriers", tags = "armco rail steel italy", shape = "/art/shapes/objects/italy_guardrails_common_section.dae" },
         { id = "tireStackAtt", cat = "barriers", tags = "tyre wall", shape = "/levels/automation_test_track/art/shapes/objects/tirestack.dae" },
         { id = "tireStackAttBlue", cat = "barriers", tags = "tyre wall", shape = "/levels/automation_test_track/art/shapes/objects/tirestack_blue.dae" },
@@ -100,7 +106,7 @@ local M = {
         { id = "spectatorTapeBig", cat = "fences", tags = "crowd ribbon", shape = "/art/shapes/race/rally/rally_assets/s_spectator_tape_big_a.dae", collision = "None" },
         { id = "spectatorGrid", cat = "fences", tags = "crowd barrier mesh", shape = "/art/shapes/race/rally/rally_assets/s_spectator_grid_a_2m.dae" },
         { id = "spectatorTarp", cat = "fences", tags = "screen sheet", shape = "/art/shapes/race/rally/rally_assets/s_spectator_tarp_4m.dae", collision = "None" },
-        { id = "metalFence", cat = "fences", tags = "mesh wire", shape = "/art/shapes/objects/s_metal_fence.dae" },
+        { id = "metalFence", cat = "fences", tags = "mesh wire", shape = "/art/shapes/objects/s_metal_fence.dae", thumbLying = true },
         { id = "scrapFence", cat = "fences", tags = "corrugated sheet", shape = "/art/shapes/objects/s_scrap_fence_35_a.dae" },
         { id = "scrapFenceLong", cat = "fences", tags = "corrugated sheet", shape = "/art/shapes/objects/s_scrap_fence_5.dae" },
         { id = "brickWall", cat = "fences", tags = "masonry", shape = "/assets/meshes/architecture/modular/architectural_elements/fences/stone/s_brick_wall_001_300x400.dae" },
@@ -111,8 +117,8 @@ local M = {
         { id = "bollard", cat = "markers", tags = "post yellow", shape = "/art/shapes/objects/bollard_yellow.dae", yaw = 0, length = 1.5 },
         { id = "steelBollard", cat = "markers", tags = "post", shape = "/art/shapes/garage_and_dealership/Clutter/si_bollard.DAE" },
         { id = "foamBlock", cat = "markers", tags = "drag strip reflector", shape = "/art/shapes/race/dragstrip/dragStrip_FoamBlockReflector.dae", yaw = 0, length = 1.6 },
-        { id = "flagMarker", cat = "markers", tags = "pole", shape = "/art/shapes/race/flagMarker.dae", collision = "None" },
-        { id = "flagMarkerOrange", cat = "markers", tags = "pole", shape = "/art/shapes/race/flagMarkerOrange.dae", collision = "None" },
+        { id = "flagMarker", cat = "markers", tags = "pole", shape = "/art/shapes/race/flagMarker.dae", collision = "None", thumbLying = true },
+        { id = "flagMarkerOrange", cat = "markers", tags = "pole", shape = "/art/shapes/race/flagMarkerOrange.dae", collision = "None", thumbLying = true },
         { id = "cornerMarker", cat = "markers", tags = "rally post", shape = "/art/shapes/race/rally/rally_assets/s_corner_marker.dae", collision = "None" },
         -- signs
         { id = "arrowSignLeft", cat = "signs", tags = "direction turn", shape = "/art/shapes/objects/race_arrowsign_1_L.dae", yaw = 0, length = 3.1 },
@@ -121,14 +127,15 @@ local M = {
         -- square, so the size-based guess couldn't tell their face from their side
         { id = "arrowBoardLeft", cat = "signs", tags = "roadworks direction", shape = "/art/shapes/objects/arrowboard_L.dae", yaw = -90 },
         { id = "arrowBoardRight", cat = "signs", tags = "roadworks direction", shape = "/art/shapes/objects/arrowboard_R.dae", yaw = -90 },
-        { id = "constructionSign", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_a.DAE", yaw = 0, length = 2.6 },
+        -- pictured from their face (direct report : the preview showed their back)
+        { id = "constructionSign", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_a.DAE", yaw = 0, length = 2.6, thumbTurn = 180 },
         { id = "constructionSignB", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_b.DAE" },
         { id = "constructionSignC", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_c.DAE" },
         { id = "signboardStart", cat = "signs", tags = "rally board", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_start.dae", collision = "None" },
         { id = "signboardFinish", cat = "signs", tags = "rally board end", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_finish.dae", collision = "None" },
         { id = "signboardStop", cat = "signs", tags = "rally board", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_stop.dae", collision = "None" },
         { id = "signboardTimeControl", cat = "signs", tags = "rally board", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_time_control.dae", collision = "None" },
-        { id = "cornerLeft", cat = "signs", tags = "rally pacenote turn", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_left.dae", collision = "None" },
+        { id = "cornerLeft", cat = "signs", tags = "rally pacenote turn", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_left.dae", collision = "None", thumbTurn = 180 },
         { id = "cornerRight", cat = "signs", tags = "rally pacenote turn", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_right.dae", collision = "None" },
         { id = "cornerStraight", cat = "signs", tags = "rally pacenote", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_straight.dae", collision = "None" },
         { id = "checkpointSign", cat = "signs", tags = "gate", shape = "/art/shapes/race/sign_checkpoint.dae" },
@@ -143,16 +150,12 @@ local M = {
         { id = "truss4", cat = "start", tags = "gantry arch gate", shape = "/art/shapes/race/rally/rally_assets/s_trusssystem_04.dae" },
         { id = "truss5", cat = "start", tags = "gantry arch gate", shape = "/art/shapes/race/rally/rally_assets/s_trusssystem_05.dae" },
         { id = "truss6", cat = "start", tags = "gantry arch gate", shape = "/art/shapes/race/rally/rally_assets/s_trusssystem_06.dae" },
-        { id = "banner", cat = "start", tags = "sponsor fence branding ngrc", shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_ngrc.dae", yaw = 0, length = 2.6, collision = "None" },
-        { id = "bannerApm", cat = "start", tags = "sponsor fence branding", shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_apm.dae", collision = "None" },
-        { id = "bannerBlastr", cat = "start", tags = "sponsor fence branding", shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_blastr.dae", collision = "None" },
-        { id = "bannerRotopad", cat = "start", tags = "sponsor fence branding", shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_rotopad.dae", collision = "None" },
         { id = "arrowFlag", cat = "start", tags = "pennant", shape = "/art/shapes/race/arrowFlag_01.dae", collision = "None" },
         { id = "arrowFlagB", cat = "start", tags = "pennant", shape = "/art/shapes/race/arrowFlag_02.dae", collision = "None" },
         { id = "flagFeather", cat = "start", tags = "banner", shape = "/art/shapes/garage_and_dealership/s_flag_floor_feather_01.dae", yaw = 0, length = 4, collision = "None" },
         { id = "flagTeardrop", cat = "start", tags = "banner", shape = "/art/shapes/garage_and_dealership/s_flag_floor_teardrop_01.dae", yaw = 0, length = 4, collision = "None" },
-        { id = "timerBoard", cat = "start", tags = "scoreboard clock drag timing", shape = "/art/shapes/race/dragstrip/timerboard.dae" },
-        { id = "timeStand", cat = "start", tags = "scoreboard drag timing", shape = "/art/shapes/race/dragstrip/s_gm_dragstrip_timestand.dae" },
+        -- its tower starts 6.86 m above its origin (its concrete footing) : stood on the ground
+        { id = "timerBoard", cat = "start", tags = "scoreboard clock drag timing", shape = "/art/shapes/race/dragstrip/timerboard.dae", zOffset = -6.86 },
         -- East Coast's rally gates (direct request). Stood on their origin, as the map places them :
         -- their concrete feet are sunk 2.30 m into the ground (the measured lift, 3.26 m, raised
         -- them out of it, and their collision mesh reaches lower still)
@@ -161,10 +164,13 @@ local M = {
         -- ramps and obstacles
         { id = "rampLarge", cat = "ramps", tags = "jump kicker", shape = "/art/shapes/objects/ramp_massive.dae" },
         { id = "crossRampHr", cat = "ramps", tags = "jump derby", shape = "/levels/hirochi_raceway/art/shapes/buildings/derby_crossramp.dae" },
-        { id = "flipRamp2x2", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_2x2_1.dae" },
-        { id = "flipRamp4x2Mild", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_mild.dae" },
-        { id = "flipRamp4x2Heavy", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_heavy.dae" },
-        { id = "flipRamp4x4", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x4.dae" },
+        -- (direct report) centred where they're placed as the other ramps are : their origin is a
+        -- corner, the ramp 2 m (4 m) to its -x. The square one pictured from the side as the others
+        -- (its box about square, the view from its size looked up its slope)
+        { id = "flipRamp2x2", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_2x2_1.dae", xOffset = 1, thumbTurn = 90 },
+        { id = "flipRamp4x2Mild", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_mild.dae", xOffset = 1 },
+        { id = "flipRamp4x2Heavy", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_heavy.dae", xOffset = 1 },
+        { id = "flipRamp4x4", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x4.dae", xOffset = 2 },
         -- scenery
         { id = "woodCrate", cat = "scenery", tags = "box", shape = "/art/shapes/objects/s_wood_crate_closed.dae", yaw = 0, length = 3 },
         { id = "crateStack", cat = "scenery", tags = "boxes", shape = "/art/shapes/garage_and_dealership/Clutter/crate_stack.DAE" },
@@ -181,13 +187,12 @@ local M = {
         { id = "lightPoleBridge", cat = "scenery", tags = "street lamp light railing", shape = "/art/shapes/objects/pole_light_bridge.dae" },
         { id = "lightPoleDouble", cat = "scenery", tags = "street lamp light twin", shape = "/art/shapes/objects/pole_light_double.dae" },
         { id = "standingLight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_standinglight_01.dae" },
-        { id = "spotlight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_spotlight_01.dae" },
+        -- raised a little (direct request) : its bracket's lowest point is 0.08 m under its origin
+        { id = "spotlight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_spotlight_01.dae", zOffset = .2 },
         { id = "foldTable", cat = "scenery", tags = "pit", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_table_01.dae" },
-        { id = "foldChair", cat = "scenery", tags = "pit seat", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_chair_01.dae", collision = "None" },
-        { id = "tireRack", cat = "scenery", tags = "tyre pit", shape = "/art/shapes/garage_and_dealership/garage/s_tire_rack.dae" },
+        { id = "foldChair", cat = "scenery", tags = "pit seat", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_chair_01.dae", collision = "None", thumbTurn = 180 },
         { id = "tireHr", cat = "scenery", tags = "tyre wheel giant", shape = "/levels/hirochi_raceway/art/shapes/buildings/hr_tire.DAE" },
         { id = "wheelbarrow", cat = "scenery", tags = "construction", shape = "/art/shapes/objects/s_wheelbarrow.dae" },
-        { id = "tarp", cat = "scenery", tags = "sheet cover", shape = "/art/shapes/objects/s_tarp_thrown_01.dae", collision = "None" },
         { id = "tree", cat = "scenery", tags = "forest beech", shape = "/assets/meshes/foliage/trees_library/beech/tree_beech_large_b.dae" },
         { id = "bush", cat = "scenery", tags = "shrub hedge beech", shape = "/assets/meshes/foliage/trees_library/beech/tree_beech_bush_a.dae", collision = "None" },
         { id = "deadTree", cat = "scenery", tags = "forest bare beech", shape = "/assets/meshes/foliage/trees_library/beech/tree_beech_dead_a.dae" },
@@ -201,7 +206,8 @@ local M = {
     --- prefabs (the drawer's Prefabs tab, direct request) : several meshes placed as one prop (see
     --- `parts` at the top of this file). The game's own layouts (its art/prefabs files : the rally
     --- gazebos, the billboards on stands), `shape` the mesh at their origin, `thumb` the mesh the
-    --- drawer pictures them by. Filled below
+    --- drawer pictures them by, `lift` (mesh units) how high they stand once placed (the entry's own
+    --- lift). Filled below
     ---@type table[]
     PREFABS = {},
     PREFAB_CATEGORIES = { "gazebos", "billboards", "fences", "pits", "scenery" },
@@ -290,6 +296,9 @@ for _, p in ipairs({
         parts = { { shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_ngrc.dae", pos = { 0, 0, 0 } } } },
     { id = "fenceBannerRotopad", cat = "fences", shape = "/art/shapes/objects/s_metal_fence.dae", thumb = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_rotopad.dae", tags = "fence banner sponsor advert rally rotopad",
         parts = { { shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_rotopad.dae", pos = { 0, 0, 0 } } } },
+    -- the game has no prefab of the APM one : laid as the other three are
+    { id = "fenceBannerApm", cat = "fences", shape = "/art/shapes/objects/s_metal_fence.dae", thumb = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_apm.dae", tags = "fence banner sponsor advert rally apm",
+        parts = { { shape = "/art/shapes/race/rally/rally_assets/s_metal_fence_branding_apm.dae", pos = { 0, 0, 0 } } } },
     { id = "wallFence2m", cat = "fences", shape = "/levels/Industrial/art/shapes/buildings/ind_mesh_fence_2m.dae", thumb = "/levels/Industrial/art/shapes/buildings/ind_conc_wall_2m.dae", tags = "wall concrete fence mesh industrial",
         parts = { { shape = "/levels/Industrial/art/shapes/buildings/ind_conc_wall_2m.dae", pos = { 0, 0, 1 } } } },
     { id = "wallFence4m", cat = "fences", shape = "/levels/Industrial/art/shapes/buildings/ind_mesh_fence_4m.dae", thumb = "/levels/Industrial/art/shapes/buildings/ind_conc_wall_4m.dae", tags = "wall concrete fence mesh industrial",
@@ -344,17 +353,24 @@ for _, p in ipairs({
             return parts
         end)() },
     -- a guardrail section with its posts, as West Coast lays them (its rails 2 m apart, a post at
-    -- each joint, 1 m either side of the rail's middle, 0.14 m behind it, 0.95 m under its origin)
-    { id = "guardrail", cat = "fences", shape = "/art/shapes/objects/guardrail1.dae", thumb = "/art/shapes/objects/guardrail1.dae", tags = "guardrail armco rail steel post barrier", length = 2,
+    -- each joint, 1 m either side of the rail's middle, 0.14 m behind it, 0.95 m under its origin).
+    -- Stood 0.5 m up (direct request : its rail, its origin at its middle, was half in the ground),
+    -- its posts' feet sunk 0.45 m
+    { id = "guardrail", cat = "fences", shape = "/art/shapes/objects/guardrail1.dae", thumb = "/art/shapes/objects/guardrail1.dae", tags = "guardrail armco rail steel post barrier", length = 2, lift = .5,
         parts = { { shape = "/art/shapes/objects/guardrailpost.dae", pos = { -1, 0.14, -0.95 } },
             { shape = "/art/shapes/objects/guardrailpost.dae", pos = { 1, 0.14, -0.95 } } } },
-    -- the asset kit's wood fence (no map lays it out) : a pole each end of its 2 m boards, three of
-    -- them on the poles' face
-    { id = "woodFence", cat = "fences", shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_root_fence_pole_001.dae", thumb = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001.dae", tags = "wood fence planks rural rail post", length = 2,
-        parts = { { shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_root_fence_pole_001.dae", pos = { 2, 0, 0 } },
-            { shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001.dae", pos = { 0, -0.08, 0.9 } },
-            { shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001_var1.dae", pos = { 0, -0.08, 0.6 } },
-            { shape = "/assets/meshes/props/assembly_kit/ak_wood_fence_001/ak_bridge_fence_board_001.dae", pos = { 0, -0.08, 0.3 } } } },
+    -- the drag strip's time display (Gridmap's) on its stand (direct request) : no map puts them
+    -- together, so it sits on the stand's top (4.51 m above the stand's origin, the display 2.12 m
+    -- high round its own), facing the same way
+    { id = "dragTimeStand", cat = "billboards", shape = "/art/shapes/race/dragstrip/s_gm_dragstrip_timestand.dae", thumb = "/art/shapes/race/dragstrip/s_gm_dragstrip_time.dae", tags = "drag strip time display board stand scoreboard timing",
+        parts = { { shape = "/art/shapes/race/dragstrip/s_gm_dragstrip_time.dae", pos = { 0, 0, 5.57 } } } },
+    -- the garage's ceiling light (direct request), off and on (LAMPS lights the lit one) : its case
+    -- and its tube share their origin, as the garage hangs them, the tube at the case's bottom and
+    -- the case's rod 2.5 m up to the ceiling
+    { id = "ceilingLightOff", cat = "scenery", shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", thumb = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", tags = "ceiling light lamp tube garage hanging off",
+        parts = { { shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_light_off.dae", pos = { 0, 0, 0 } } } },
+    { id = "ceilingLightOn", cat = "scenery", shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", thumb = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", tags = "ceiling light lamp tube garage hanging on lit",
+        parts = { { shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_light_on.dae", pos = { 0, 0, 0 } } } },
     { id = "containers2High", cat = "scenery", shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", thumb = "/levels/Industrial/art/shapes/misc/container_01_a.dae", tags = "containers shipping stack port wall",
         parts = { { shape = "/levels/Industrial/art/shapes/misc/container_01_b.dae", pos = { 0, 0, 2.61 } } } },
     { id = "containers2x2", cat = "scenery", shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", thumb = "/levels/Industrial/art/shapes/misc/container_01_a.dae", tags = "containers shipping stack port wall",
@@ -381,15 +397,16 @@ function M.getPrefab(id) return prefabById[id] end
 ---@return table? {x, y, z}
 local function xyzOf(v) return v and { x = v[1], y = v[2], z = v[3] } or nil end
 
---- a new prop of a prefab, placed nowhere yet : its own mesh and its parts (copies)
+--- a new prop of a prefab, placed nowhere yet : its own mesh and its parts (copies), its lift
 ---@param id string
----@return {shape: string, parts: table[], prefab: string}?
+---@return {shape: string, parts: table[], prefab: string, lift: number?}?
 function M.prefabEntry(id)
     local p = prefabById[id]
     if not p then return nil end
     return {
         shape = p.shape,
         prefab = p.id,
+        lift = p.lift,
         parts = table.map(p.parts, function(part)
             return { shape = part.shape, pos = xyzOf(part.pos), dir = xyzOf(part.dir), up = xyzOf(part.up) }
         end),
@@ -480,6 +497,12 @@ end
 --
 -- A copy loaded from /temp keeps its textures : a texture named by its file alone is looked for
 -- beside its material file, so it's given its source folder (372 of the stock maps' are).
+--
+-- A material's `class` is "Material" in most files and "material" in some (Automation Test Track's
+-- plasterboard, 14 of Utah's buildings') : both are materials (isMaterial). A material object whose
+-- mapTo is "unmapped_mat" maps nothing (a map's, once its level is gone) : it doesn't count as the
+-- name being mapped, and a copy borrowed under that name takes a name of its own (direct report :
+-- the barrels under a tarp had no "tarpaulin" on East Coast).
 
 local MATERIALS_TEMP_DIR = "/temp/bjPropMaterials/"
 -- folders (lower case) already looked at on this map
@@ -511,6 +534,14 @@ local SHARED_MATERIALS = {
 local sharedDone = {}
 -- the current map's mapTo names (lower case -> true), gathered on first need
 local mapped = nil
+-- borrowed copies named on their own (their name was taken), this session
+local renamed = 0
+
+---@param mat any a material file's entry
+---@return boolean
+local function isMaterial(mat)
+    return type(mat) == "table" and type(mat.class) == "string" and mat.class:lower() == "material"
+end
 -- shapes (lower case) already looked at on this map
 local materialShapes = {}
 -- shape (lower case) -> what its .dae asks for, read once a session
@@ -532,7 +563,8 @@ local function mappedNames()
             local to = mat:getField("mapTo", 0)
             if type(to) == "string" and to ~= "" and to ~= "unmapped_mat" then
                 mapped[to:lower()] = true
-            else
+            elseif to ~= "unmapped_mat" then
+                -- no mapTo : mapped by its name
                 mapped[mat:getName():lower()] = true
             end
         end
@@ -547,7 +579,7 @@ local function indexFiles(files)
     for _, file in ipairs(files) do
         local ok, data = pcall(jsonReadFile, file)
         for key, mat in pairs(ok and type(data) == "table" and data or {}) do
-            if type(mat) == "table" and mat.class == "Material" then
+            if isMaterial(mat) then
                 local to = type(mat.mapTo) == "string" and mat.mapTo ~= "" and mat.mapTo or mat.name or key
                 if type(to) == "string" and not index[to:lower()] then
                     index[to:lower()] = { file = file, key = key }
@@ -675,18 +707,21 @@ local function borrowMaterials(shape)
                     local found = type(data) == "table" and data[src.key]
                     if type(found) == "table" then
                         local mat = rebased(found, src.file:match("^(.*/)[^/]*$") or "/")
-                        local name = src.key
+                        local name = mat.name or src.key
                         if src.mapTo ~= need then
                             -- the source maps the id : a copy of its own, mapped to the name the
                             -- mesh uses
                             name = "bj_" .. m.need
-                            mat.name, mat.mapTo, mat.internalName = name, m.need, nil
                         end
-                        if not scenetree.findObject(mat.name or name) then
-                            mat.persistentId = nil
-                            add[name] = mat
-                            count = count + 1
+                        if scenetree.findObject(name) then
+                            -- the name is taken (by a material that maps nothing now, since the
+                            -- mesh's name isn't mapped) : a copy under a name of its own
+                            renamed = renamed + 1
+                            name = string.format("bj_%s_%d", m.need, renamed)
                         end
+                        mat.name, mat.mapTo, mat.internalName, mat.persistentId = name, m.need, nil, nil
+                        add[name] = mat
+                        count = count + 1
                     end
                 else
                     missing[#missing + 1] = m.need
@@ -715,7 +750,7 @@ local function ensureSharedMaterial(shape)
     local ok, err = pcall(function()
         local data = jsonReadFile(s.from)
         for _, mat in pairs(type(data) == "table" and data or {}) do
-            if type(mat) == "table" and mat.class == "Material" and mat.mapTo == s.mapTo then
+            if isMaterial(mat) and mat.mapTo == s.mapTo then
                 local copy = rebased(mat, s.from:match("^(.*/)[^/]*$") or "/")
                 local name = "bj_shared_" .. s.mapTo
                 copy.name, copy.persistentId, copy.internalName = name, nil, nil
@@ -754,7 +789,7 @@ function M.ensureFolderMaterials(dir)
             local data = jsonReadFile(file)
             local from = file:match("^(.*/)[^/]*$") or dir
             for key, mat in pairs(type(data) == "table" and data or {}) do
-                local name = type(mat) == "table" and mat.class == "Material" and (mat.name or key) or nil
+                local name = isMaterial(mat) and (mat.name or key) or nil
                 if type(name) == "string" and not scenetree.findObject(name) then
                     mat = rebased(mat, from)
                     mat.persistentId = nil
@@ -803,7 +838,7 @@ function M.catalogForUI()
             if p.cat == "gazebos" then
                 name = tr("beamjoy.props.prefabs.gazebo"):gsub("{size}", p.size == "3x6" and "3 x 6" or "3 x 3")
                     :gsub("{colour}", tr("beamjoy.props.prefabs.colour." .. p.colour))
-            elseif p.cat == "billboards" then
+            elseif p.cat == "billboards" and p.kind then
                 name = tr("beamjoy.props.prefabs.billboard." .. p.kind):gsub("{n}", tostring(p.n))
             else
                 name = tr("beamjoy.props.prefabs.name." .. p.id)
@@ -1452,6 +1487,9 @@ local LAMPS = {
         color = { .742, .881, 1 }, brightness = .22 },
     s_small_light_hanging = { spot = true, heads = { { 0, .04, -.06 } }, range = 20, inner = 80, outer = 170,
         color = { .742, .881, 1 }, brightness = .24 },
+    -- the garage's ceiling light, its lit tube (the prefab "on") : lit day and night as there
+    s_ceiling_light_light_on = { spot = true, heads = { { 0, 0, -.05 } }, range = 20, inner = 70, outer = 130,
+        color = { 1, .951, .865 }, brightness = 2, always = true },
     -- West Coast's road marker lights (the map lights its amber ones only)
     marker_light_amber = { heads = { { 0, 0, .17 } }, range = 10, color = { 1, .498, 0 }, brightness = .1 },
     marker_light_red = { heads = { { 0, 0, .14 } }, range = 10, color = { 1, .05, .02 }, brightness = .1 },
@@ -1805,37 +1843,78 @@ local function onUpdate()
     end
 end
 
--- RACES ---------------------------------------------------------------------------------------
+-- SYNC -----------------------------------------------------------------------------------------
+-- The activity's props, one set ("activity") : the race or arena being edited (a preview, no
+-- collision unless the editor's collision switch is on), else the race, Hunter, Infected or Derby
+-- game you're in or watching, from its lobby until it ends. Only one of those at a time.
 
-local raceEditor = require("ge/extensions/beamjoy/ui/raceEditor")
+local propEditor = require("ge/extensions/beamjoy/ui/propEditor")
+local SET = "activity"
 
---- a race's props : the race being edited (a preview, no collision unless the editor's collision
---- switch is on), else the race you're in or watching, from its grid until it ends. Follows the
---- same refresh hook as the race markers
-local function syncRace()
-    if raceEditor.race then
-        local signature = "editor:" .. tostring(raceEditor.propsRevision)
-        if raceEditor.testCollision then
-            -- solid as in the race (direct request) : any change to the props turns it back off
-            -- (raceEditor propsChanged), so none ever moves or goes while its collision is built
-            return M.show("race", raceEditor.race.props, { signature = signature .. ":solid" })
+--- the game you're in or watching that has props : its props and what identifies them (the game,
+--- and the arena's data as last received : an arena saved meanwhile shows its new props)
+---@return table[]? props, string? signature
+local function sessionProps()
+    local function own(list)
+        return type(list) == "table" and #list > 0 and list or nil
+    end
+    local runner = beamjoy_raceRunner
+    local session = runner and (runner.session or runner.spectatingSession)
+    if session and beamjoy_races then
+        local race = table.find(beamjoy_races.data, function(r) return r.id == session.raceId end)
+        local list = race and own(race.props)
+        if list then return list, string.format("race:%s:%s", session.id, race.id) end
+        return nil
+    end
+    runner = beamjoy_hunterRunner
+    session = runner and (runner.session or runner.spectatingSession)
+    if session then
+        local list = beamjoy_hunter and beamjoy_hunter.data and own(beamjoy_hunter.data.props)
+        if list then return list, string.format("hunter:%s:%s", session.id, tostring(list)) end
+        return nil
+    end
+    runner = beamjoy_infectedRunner
+    session = runner and (runner.session or runner.spectatingSession)
+    if session then
+        local list = beamjoy_infected and beamjoy_infected.data and own(beamjoy_infected.data.props)
+        if list then return list, string.format("infected:%s:%s", session.id, tostring(list)) end
+        return nil
+    end
+    runner = beamjoy_derbyRunner
+    session = runner and (runner.session or runner.spectatingSession)
+    if session and beamjoy_derby then
+        local arena = table.find(beamjoy_derby.data or {}, function(a) return a.id == session.arenaId end)
+        local list = arena and own(arena.props)
+        if list then return list, string.format("derby:%s:%s", session.id, tostring(list)) end
+    end
+    return nil
+end
+
+local function sync()
+    local editing = propEditor.editing()
+    if editing then
+        local signature = "editor:" .. tostring(propEditor.propsRevision)
+        if propEditor.testCollision then
+            -- solid as when played (direct request) : any edit turns it back off
+            -- (propEditor.onEdit), so none ever moves or goes while its collision is built
+            return M.show(SET, editing, { signature = signature .. ":solid" })
         end
-        -- no collision at all, not only no reload : a reload asked by anything else (the race's
+        -- no collision at all, not only no reload : a reload asked by anything else (the game's
         -- own set leaving solid props behind as the editor opens, another set) took the editor's
         -- props into the static collision, and one deleted afterwards stayed there, invisible,
         -- for cars and the editor's own ground snapping until the race was next started (direct
-        -- report). Clicks pick props by their handles (raceEditor onWorldClick), not collision
-        return M.show("race", raceEditor.race.props,
-            { signature = signature, collision = false, collisionType = "None" })
+        -- report). Clicks pick props by their handles (propEditor.pick), not collision
+        return M.show(SET, editing, { signature = signature, collision = false, collisionType = "None" })
     end
-    local session = beamjoy_raceRunner and (beamjoy_raceRunner.session or beamjoy_raceRunner.spectatingSession)
-    local race = session and beamjoy_races and
-        table.find(beamjoy_races.data, function(r) return r.id == session.raceId end)
-    if race and type(race.props) == "table" and #race.props > 0 then
-        return M.show("race", race.props, { signature = string.format("session:%s:%s", session.id, race.id) })
-    end
-    M.hide("race")
+    local list, signature = sessionProps()
+    if list then return M.show(SET, list, { signature = signature }) end
+    M.hide(SET)
 end
+
+-- games are joined, watched and left through each runner's own updates : looked at again every so
+-- often too, as well as on the hooks below (a spectated game fires none of its own)
+local SYNC_EVERY_MS = 1000
+local nextSync = 0
 
 local function cleanup()
     hideAll()
@@ -1851,8 +1930,20 @@ local function cleanup()
     end
 end
 
-M.onUpdate = onUpdate
-M.onBJRaceMarkersRefresh = syncRace
+M.onUpdate = function()
+    onUpdate()
+    local now = GetCurrentTimeMillis()
+    if now >= nextSync then
+        nextSync = now + SYNC_EVERY_MS
+        sync()
+    end
+end
+M.onBJRaceMarkersRefresh = sync
+M.onBJEditorPropsRefresh = sync
+M.onBJScenarioChanged = sync
+M.onBJHunterArenaChanged = sync
+M.onBJInfectedArenaChanged = sync
+M.onBJDerbyArenasChanged = sync
 M.onServerLeave = cleanup
 M.onClientEndMission = cleanup
 M.onExtensionUnloaded = cleanup

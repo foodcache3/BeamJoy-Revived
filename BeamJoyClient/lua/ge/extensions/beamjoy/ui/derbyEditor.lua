@@ -19,6 +19,10 @@ local M = {
     enabled = false,
     floorDepth = 10,
     defaults = {},
+    --- the arena's props (direct request : props in Derby as in races), edited by the props editor
+    --- (ui/propEditor.lua) through the list editor
+    ---@type table[]
+    props = {},
 }
 ---@type BJActivityEditorCommon?
 local parent
@@ -219,6 +223,7 @@ listEditor = pointListEditor.new({
         requestState = "BJEditorDerbyArenaRequestState",
     },
     isActive = function() return parent ~= nil and parent.activeEditor == M end,
+    props = function() return M.props end,
 })
 
 local function pushMeta()
@@ -248,6 +253,7 @@ local function load(arena, keepSelection)
     M.enabled = arena.enabled == true
     M.floorDepth = tonumber(arena.floorDepth) or 10
     M.defaults = table.clone(arena.defaults or {})
+    M.props = table.isArray(arena.props) and table.clone(arena.props) or {}
     listEditor.open({
         startPositions = arena.startPositions,
         zone = arena.zone and { arena.zone } or {},
@@ -384,6 +390,7 @@ local function onSave()
         }) or nil,
         floorDepth = M.floorDepth,
         defaults = M.defaults,
+        props = M.props,
     }
     beamjoy_communications.send("derbyArenaSave", payload)
     beamjoy_communications.addOneUseHandler("derbyArenaSaved", function(status, err, id)
@@ -416,6 +423,11 @@ end
 --- per-frame handle grab / drag, delegated from activityEditor.lua's onUpdate (the race editor's
 --- own handle polling works the same way)
 local function onUpdate()
+    -- a prop armed : the mouse is the placing's
+    if parent and parent.activeEditor == M and listEditor.onUpdate() then
+        draggingHandle = nil
+        return
+    end
     local item = parent and parent.activeEditor == M and handleZone() or nil
     if not item then
         draggingHandle = nil
@@ -471,6 +483,8 @@ M.onInit = onInit
 M.onClose = onClose
 M.onUpdate = onUpdate
 M.onBJClick = onBJClick
+-- the Delete key : the selected props
+M.onBJEditorDeleteKey = listEditor.onDeleteKey
 M.onBJDerbyArenasChanged = onArenasChanged
 
 return M

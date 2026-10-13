@@ -137,6 +137,11 @@ local function sanitizeArena(arena)
     end
     arena.floorDepth = math.clamp(tonumber(arena.floorDepth) or 10, 1, 500)
 
+    -- placed props (services/props.lua), spawned by each client for the arena's games
+    local props, propsErr = services_props.sanitize(arena.props, "An arena")
+    if not props then return propsErr end
+    arena.props = props
+
     arena.name = type(arena.name) == "string" and arena.name:trim() or ""
     if #arena.name > M.NAME_MAX then arena.name = arena.name:sub(1, M.NAME_MAX) end
     if #arena.name == 0 then return "The arena needs a name" end

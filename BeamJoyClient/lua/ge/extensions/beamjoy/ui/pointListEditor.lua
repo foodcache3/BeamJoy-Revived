@@ -85,6 +85,11 @@
 ---@field events BJPointListEditorEvents
 ---@field isActive fun(): boolean host tells us whether mutating right now is actually legitimate
 ---(mirrors every other editor's own `parent.activeEditor ~= M` guard)
+---@field props (fun(): table[]?)? the host's props, when its activity has some (direct request :
+---props in Hunter, Infected and Derby arenas) : this editor is then the props editor's host
+---(ui/propEditor.lua) while it's open. Props and points are picked by the same world clicks,
+---snapped by the same switch, and only one of them is selected at a time. The host still loads and
+---saves the props array itself, and forwards onUpdate / onDeleteKey below
 
 local ACTIVE_COLOR = BJColor(1, 1, 1, .9)
 local TEXT_BG = BJColor(0, 0, 0, .3)
@@ -119,6 +124,8 @@ end
 ---@return table instance : open(snapshot), close(), onInit(), onBJClick(clickType, data),
 ---getLists(), isDirty(), clearDirty()
 local function new(config)
+    -- the props editor, for a host with props (config.props)
+    local propEditor = config.props and require("ge/extensions/beamjoy/ui/propEditor") or nil
     local specByKey = {}
     for _, spec in ipairs(config.lists) do specByKey[spec.key] = spec end
 
@@ -155,6 +162,8 @@ local function new(config)
         beamjoy_communications_ui.send(config.events.snapMethod, state.snapMethod)
     end
     local function markDirty()
+        -- any edit turns the props' collision back off (propEditor.testCollision)
+        if propEditor then propEditor.onEdit() end
         if not state.dirty then
             state.dirty = true
             beamjoy_communications_ui.send("BJEditorDirty", true)
@@ -198,10 +207,14 @@ local function new(config)
     ---@param listKey string?
     ---@param index integer?
     local function updateGizmo(listKey, index)
-        gizmo.hide()
         local spec = listKey and specByKey[listKey]
         local item = spec and state.lists[listKey][index]
-        if not item then return end
+        if not item then
+            -- no point selected : a selected prop keeps its own gizmo
+            if not (propEditor and propEditor.activePropIndex) then gizmo.hide() end
+            return
+        end
+        gizmo.hide()
         local hasDir = spec.hasDir or item.dir ~= nil
         gizmo.show({
             pos = vec3(item.pos.x, item.pos.y, item.pos.z),
@@ -239,6 +252,8 @@ local function new(config)
             state.activeList, state.activeIndex = nil, nil
         else
             state.activeList, state.activeIndex = listKey, index
+            -- a point selected : the props' selection goes
+            if propEditor then propEditor.clearSelection() end
         end
         renderAll()
         updateGizmo(state.activeList, state.activeIndex)
@@ -262,6 +277,7 @@ local function new(config)
         end
         table.insert(state.lists[listKey], item)
         state.activeList, state.activeIndex = listKey, #state.lists[listKey]
+        if propEditor then propEditor.clearSelection() end
         renderAll()
         updateGizmo(listKey, state.activeIndex)
         pushListsUpdate()
@@ -396,8 +412,12 @@ local function new(config)
     ---@param clickType "left"|"middle"|"right"
     ---@param data onBJClickData
     local function onBJClick(clickType, data)
-        if clickType ~= "left" then return end
         if not config.isActive() then return end
+        -- a prop armed : the click is the placing's
+        if propEditor and propEditor.onBJClick(clickType) then return end
+        if clickType ~= "left" then return end
+        -- a click on the gizmo is for the gizmo
+        if gizmo.isHovered and gizmo.isHovered() then return end
 
         local camPos, rayDir = camera.mouseRay()
         if not camPos then return end
@@ -418,10 +438,38 @@ local function new(config)
             end
         end
 
+        -- the props' handles (propEditor.pick), when nearer than any point
+        local propAlong, propIndex, propPart
+        if propEditor then propAlong, propIndex, propPart = propEditor.pick(camPos, rayDir) end
+        if propAlong and (not bestAlong or propAlong < bestAlong) then
+            return propEditor.clickSelect(propIndex, propPart)
+        end
+
         if bestList and not (bestList == state.activeList and bestIndex == state.activeIndex) then
             onSelect(bestList, bestIndex)
         end
     end
+
+    --- this editor as the props editor's host (see ui/propEditor.lua) : the host's props, snapped
+    --- as the points are ; a prop selected drops the point selected (its gizmo the prop's next)
+    ---@type BJPropEditorHost?
+    local propHost = propEditor and {
+        label = "An arena",
+        getProps = config.props,
+        isActive = config.isActive,
+        markDirty = function() markDirty() end,
+        snap = function() return state.snapToGroundEnabled end,
+        groundHeightAt = function(pos) return groundHeightAt(pos, state.snapMethod) end,
+        positionDirection = function()
+            return currentPositionDirection(state.snapToGroundEnabled, state.snapMethod)
+        end,
+        onSelect = function()
+            if not state.activeList then return end
+            state.activeList, state.activeIndex = nil, nil
+            renderAll()
+            pushActive()
+        end,
+    } or nil
 
     ---@param snapshot table<string, table[]> the host's own saved data, keyed by list key
     ---@param keepSelection boolean? the same data again (it was just saved) : the selected point
@@ -438,11 +486,22 @@ local function new(config)
         renderAll()
         -- the gizmo follows the selection : back on the kept point, or hidden. It used to be left
         -- on screen with nothing selected once a save reloaded the arena
+        if propEditor then gizmo.hide() end
         updateGizmo(state.activeList, state.activeIndex)
+        -- the host's props, loaded with its points : the props' selection kept the same way (and
+        -- its gizmo shown again), a point kept taking the gizmo
+        if propEditor then
+            if propEditor.host == propHost then
+                propEditor.reset(keepSelection and not kept)
+            else
+                propEditor.attach(propHost)
+            end
+        end
         pushFullState()
     end
 
     local function close()
+        if propEditor then propEditor.detach(propHost) end
         gizmo.hide()
         shape.reset()
         for _, spec in ipairs(config.lists) do state.lists[spec.key] = {} end
@@ -488,6 +547,13 @@ local function new(config)
             pushFullState()
         end,
         getLists = function() return state.lists end,
+        -- per frame, from the host's onUpdate : true while a prop is armed (the mouse is the
+        -- placing's, the host's own handles wait)
+        onUpdate = function() return propEditor ~= nil and propEditor.onUpdate() end,
+        -- the Delete key (activityEditor's onBJEditorDeleteKey) : the selected props
+        onDeleteKey = function()
+            if propEditor and config.isActive() then propEditor.onDeleteKey() end
+        end,
         -- the selected point : list key, 1-based index (both nil when nothing is selected)
         getActive = function() return state.activeList, state.activeIndex end,
         -- redraw the world shapes (a host setting a drawExtra reads just changed)

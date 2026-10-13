@@ -17,6 +17,8 @@ local editors = Table({
 
 local function onInit()
     editors:forEach(function(editor) editor.onInit(M) end)
+    -- the props editor every editor with props hosts (ui/propEditor.lua) : its UI messages
+    require("ge/extensions/beamjoy/ui/propEditor").onInit()
     beamjoy_communications_ui.addHandler("BJCloseWindow", function(windowName)
         if windowName == "config" then
             M.onClose()

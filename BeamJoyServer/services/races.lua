@@ -171,7 +171,7 @@
 ---@field props table[]? placed props, spawned by each client for the race's participants and
 ---spectators from its grid until it ends : `{kind = "static", shape, pos, dir, up, scale}` or a line,
 ---`{kind = "line", shape, a, b, count, yaw, scale, followGround, heights}` (see the client's
----beamjoy_props). Up to MAX_PROPS, a line counting each of its props
+---beamjoy_props). Up to services_props.MAX, a line counting each of its props
 ---grid-slot placements for `grid` mode with multiple participants; index 1 is also used as the
 ---single spawn point for a solo/passive attempt. `dir` (not a quaternion) matches
 ---`BJRaceGate.dir`'s convention: simpler to write/read/round-trip than a quat, and consistent
@@ -395,6 +395,17 @@ local function normalizeGateSteps(race)
     end
 end
 
+-- a race's props : services/props.lua (shared with the arenas'), its limit (services_props.MAX)
+-- and its checks
+
+---@param v any
+---@return {x: number, y: number, z: number}?
+local function sanePoint(v) return services_props.sanePoint(v) end
+
+---@param props any
+---@return table[]? props, string? err
+local function sanitizeProps(props) return services_props.sanitize(props, "A race") end
+
 ---@param race BJRace
 ---@param existingRaces BJRace[]? defaults to M.data (the current map's own races): only ever
 ---passed explicitly by the legacy race importer below, which may be preparing a race for a
@@ -402,203 +413,6 @@ end
 ---current map's) and needs the duplicate-name check to compare against THAT map's own races, not
 ---whatever happens to be loaded in memory right now
 ---@return string? error
---- the most props a race may hold (a line counts each of its props), mirrors the client's
---- beamjoy_props.MAX_PROPS
-local MAX_PROPS = 1000
-
----@param v any
----@return {x: number, y: number, z: number}?
-local function sanePoint(v)
-    if type(v) ~= "table" then return nil end
-    local x, y, z = tonumber(v.x), tonumber(v.y), tonumber(v.z)
-    if not x or not y or not z or x ~= x or y ~= y or z ~= z or
-        math.abs(x) > 1e6 or math.abs(y) > 1e6 or math.abs(z) > 1e6 then
-        return nil
-    end
-    return { x = x, y = y, z = z }
-end
-
---- a mesh from the game's own art only (clients skip one that isn't installed), never a path
---- climbing out of it
----@param shape any
----@return boolean
-local function saneShape(shape)
-    return type(shape) == "string" and #shape <= 200 and not shape:find("..", 1, true) and
-        (shape:find("^/art/") or shape:find("^/assets/") or shape:find("^/levels/")) ~= nil and
-        (shape:lower():find("%.dae$") or shape:lower():find("%.cdae$")) ~= nil
-end
-
---- a prop's own lift (metres, mesh units) : set by the editor for a mesh it tuned itself (one
---- outside its catalog), so every player stands it at the same height
----@param v any
----@return number?
-local function saneStretch(v)
-    local p = sanePoint(v)
-    if not p then return nil end
-    return { x = math.clamp(p.x, .05, 20), y = math.clamp(p.y, .05, 20), z = math.clamp(p.z, .05, 20) }
-end
-
-local function saneLift(v)
-    local lift = tonumber(v)
-    if not lift or lift ~= lift then return nil end
-    return math.clamp(lift, -50, 50)
-end
-
---- race.props (see the client's beamjoy_props for what each entry is) : only the known fields of
---- well-formed entries are kept, malformed ones are dropped
----@param props any
----@return table[]? props, string? err
--- a prefab prop's own meshes besides its first (see the client's beamjoy/props.lua `parts`)
-local MAX_PROP_PARTS = 16
--- metres from the prop's own mesh, at most
-local MAX_PART_OFFSET = 100
-
----@param v any
----@return table[]? a prop's parts, kept as they're well-formed
-local function saneParts(v)
-    if type(v) ~= "table" then return nil end
-    local out = {}
-    for _, part in ipairs(v) do
-        if #out >= MAX_PROP_PARTS then break end
-        local pos = type(part) == "table" and sanePoint(part.pos)
-        if pos and saneShape(part.shape) and math.abs(pos.x) <= MAX_PART_OFFSET and
-            math.abs(pos.y) <= MAX_PART_OFFSET and math.abs(pos.z) <= MAX_PART_OFFSET then
-            out[#out + 1] = { shape = part.shape, pos = pos, dir = sanePoint(part.dir), up = sanePoint(part.up) }
-        end
-    end
-    return #out > 0 and out or nil
-end
-
---- a line's fixed gap between its props (metres), or none (its props spread from end to end)
----@param v any
----@return number?
-local function saneGap(v)
-    local gap = tonumber(v)
-    if not gap or gap ~= gap or gap <= 0 then return nil end
-    return math.clamp(gap, .2, 100)
-end
-
---- the editor's group a prop belongs to (props selected and moved together), or none
----@param v any
----@return integer?
-local function saneGroup(v)
-    local g = tonumber(v)
-    if not g or g ~= g or g < 1 or g > 1000000 then return nil end
-    return math.floor(g)
-end
-
----@param v any
----@return string? a prefab's id (what the editor names the prop by)
-local function sanePrefabId(v)
-    return type(v) == "string" and #v <= 40 and v:match("^[%w_]+$") and v or nil
-end
-
---- a prop's collision against its mesh's own : `false` cars drive through it, `true` solid though its
---- mesh has no collision of its own (a ground plane, a backdrop : its visible mesh then), none as its
---- mesh has it. Not `v == false and false or nil`, which is always nil (passable props were saved
---- solid)
----@param v any
----@return boolean?
-local function passable(v)
-    if v == false or v == true then return v end
-    return nil
-end
-
-local function sanitizeProps(props)
-    if props == nil then return {} end
-    if type(props) ~= "table" then return nil, "Invalid prop data" end
-    local out, total = {}, 0
-    for _, p in ipairs(props) do
-        local entry
-        if type(p) == "table" and saneShape(p.shape) then
-            local scale = math.clamp(tonumber(p.scale) or 1, .1, 10)
-            if p.kind == "line" then
-                local a, b = sanePoint(p.a), sanePoint(p.b)
-                local count = math.floor(tonumber(p.count) or 0)
-                if a and b and count >= 1 then
-                    entry = {
-                        kind = "line",
-                        shape = p.shape,
-                        a = a,
-                        b = b,
-                        -- bends the line through it (optional)
-                        mid = sanePoint(p.mid),
-                        count = count,
-                        gap = saneGap(p.gap),
-                        group = saneGroup(p.group),
-                        yaw = math.clamp(tonumber(p.yaw) or 0, -360, 360),
-                        scale = scale,
-                        followGround = p.followGround ~= false,
-                        lift = saneLift(p.lift),
-                        stretch = saneStretch(p.stretch),
-                        solid = passable(p.solid),
-                    }
-                    -- every other prop of the line another mesh (optional), turned and lifted as
-                    -- that mesh is laid down
-                    if saneShape(p.alt) and p.alt ~= p.shape then
-                        entry.alt = p.alt
-                        entry.altYaw = tonumber(p.altYaw) and math.clamp(tonumber(p.altYaw), -360, 360) or nil
-                        entry.altLift = saneLift(p.altLift)
-                    end
-                    if entry.followGround and type(p.heights) == "table" and #p.heights == count and
-                        table.every(p.heights, function(h) return tonumber(h) ~= nil end) then
-                        entry.heights = table.map(p.heights, function(h) return tonumber(h) end)
-                    end
-                    -- one tilt per prop, the ground's up under it ({x, y}, its z following), kept
-                    -- within a 45 degree slope
-                    if entry.heights and type(p.normals) == "table" and #p.normals == count and
-                        table.every(p.normals, function(n)
-                            return type(n) == "table" and tonumber(n.x) ~= nil and tonumber(n.y) ~= nil
-                        end) then
-                        entry.normals = table.map(p.normals, function(n)
-                            return { x = math.clamp(tonumber(n.x), -.7, .7), y = math.clamp(tonumber(n.y), -.7, .7) }
-                        end)
-                    end
-                    -- a mesh at either end (optional), facing out of the line
-                    local caps = 0
-                    for _, k in ipairs({ "A", "B" }) do
-                        local cap = p["cap" .. k]
-                        if saneShape(cap) then
-                            entry["cap" .. k] = cap
-                            local yaw = tonumber(p["cap" .. k .. "Yaw"])
-                            entry["cap" .. k .. "Yaw"] = yaw and math.clamp(yaw, -360, 360) or nil
-                            entry["cap" .. k .. "Lift"] = saneLift(p["cap" .. k .. "Lift"])
-                            caps = caps + 1
-                        end
-                    end
-                    entry.parts = saneParts(p.parts)
-                    entry.prefab = entry.parts and sanePrefabId(p.prefab) or nil
-                    total = total + count * (1 + (entry.parts and #entry.parts or 0)) + caps
-                end
-            else
-                local pos, dir, up = sanePoint(p.pos), sanePoint(p.dir), sanePoint(p.up)
-                if pos and dir then
-                    entry = {
-                        kind = "static",
-                        shape = p.shape,
-                        pos = pos,
-                        dir = dir,
-                        up = up or { x = 0, y = 0, z = 1 },
-                        scale = scale,
-                        lift = saneLift(p.lift),
-                        stretch = saneStretch(p.stretch),
-                        solid = passable(p.solid),
-                        group = saneGroup(p.group),
-                    }
-                    entry.parts = saneParts(p.parts)
-                    entry.prefab = entry.parts and sanePrefabId(p.prefab) or nil
-                    total = total + 1 + (entry.parts and #entry.parts or 0)
-                end
-            end
-        end
-        if entry then table.insert(out, entry) end
-    end
-    if total > MAX_PROPS then
-        return nil, string.format("A race can hold up to %d props", MAX_PROPS)
-    end
-    return out
-end
-
 local function sanitizeRace(race, existingRaces)
     existingRaces = existingRaces or M.data
     -- 40, not the old 150: matches the editor's own new maxlength (see the plan file's note on
@@ -1653,7 +1467,7 @@ end
 --- The props of a map's races (Import map races, "props only" : direct request), added to the races
 --- of the same name this server already has (e.g. imported before props came along). Gates, grid,
 --- options and times are left as they are ; a prop the race already has isn't added twice, and a
---- race only takes them up to MAX_PROPS. Same authorship rule as raceSave.
+--- race only takes them up to services_props.MAX. Same authorship rule as raceSave.
 ---@param ctxt BJSContext
 ---@param list {name: string, props: table[]}[]
 local function raceMapImportProps(ctxt, list)
@@ -1686,7 +1500,7 @@ local function raceMapImportProps(ctxt, list)
             end
             local before = #merged
             for _, p in ipairs(raw.props) do
-                if type(p) == "table" and not seen[propKey(p)] and total + propCount(p) <= MAX_PROPS then
+                if type(p) == "table" and not seen[propKey(p)] and total + propCount(p) <= services_props.MAX then
                     seen[propKey(p)] = true
                     merged[#merged + 1] = p
                     total = total + propCount(p)
@@ -1726,7 +1540,7 @@ end
 ---   deleted it keeps it deleted ; a server that already has a race of the new name keeps both as
 ---   they are. Runs before seeding, so the new name is never seeded next to the old one.
 ---   its `props` : whenever they change (the ledger keeps "<name>#props@<fingerprint>"), each
----   server adds the ones its copy doesn't have yet, once, up to MAX_PROPS, as "Props only" does ;
+---   server adds the ones its copy doesn't have yet, once, up to services_props.MAX, as "Props only" does ;
 ---   the race's own props, course and times stay. Only on the same track (its first and last
 ---   gates within 30 m of the shipped ones) : an admin's own race that happens to have the name
 ---   isn't given props for another course. Runs after seeding (a race seeded just now already
@@ -1836,7 +1650,7 @@ local function mergeBundledProps()
                         end
                         local before = #merged
                         for _, p in ipairs(race.props) do
-                            if type(p) == "table" and not seen[propKey(p)] and total + propCount(p) <= MAX_PROPS then
+                            if type(p) == "table" and not seen[propKey(p)] and total + propCount(p) <= services_props.MAX then
                                 seen[propKey(p)] = true
                                 merged[#merged + 1] = table.deepcopy(p)
                                 total = total + propCount(p)

@@ -1,4 +1,4 @@
---- What the editors' prop picker (the props drawer, ui/.../races/editor/propDrawer) needs from the
+--- What the editors' prop picker (the props drawer, ui/modModules/beamjoy/cmps/propDrawer) needs from the
 --- game : a thumbnail of each mesh, its real size, and the list of every mesh the game has.
 ---
 --- Thumbnails are rendered on demand, the way the game's own World Editor asset browser makes its
@@ -14,6 +14,14 @@
 --- it whatever fitToShape made of it (direct report : the preview's own orbit centring left props
 --- off to one side, and put the camera inside some). No grid, so a render that shows nothing is
 --- told apart and the tile keeps its placeholder.
+---
+--- A curated mesh can ask for a view of its own (beamjoy_props.CATALOG's `thumbTurn`, `thumbLying`) :
+--- turned round to its face, or, for one the preview draws lying on its back (its file stands it up
+--- with an up axis or a node rotation the preview doesn't apply, the world does : the flag markers,
+--- the metal fence ; direct report : "fallen over"), looked at from above and the picture turned
+--- upside down, which is the view of it standing from in front and a little above. At a turn of 0
+--- the camera is on the mesh's +y side (the signs' faces, on -y, came out from the back), so looking
+--- down from there its top, toward +y, is at the bottom of the picture.
 ---
 --- Made in daylight only (direct report : at night the previews were black). ShapePreview lights the
 --- mesh with the map's own sun, which is next to nothing at night, and has no light of its own to
@@ -39,8 +47,9 @@ local M = {
 local CACHE_DIR = "/temp/bjPropThumbs"
 local META_FILE = CACHE_DIR .. "/meta.json"
 -- the thumbnails : v4 since the shared meshes borrow their missing materials (those made before are
--- left unused, some pictured with "no material" ; as are the World Editor's own, one camera for all)
-local THUMB_DIR = CACHE_DIR .. "/v4"
+-- left unused, some pictured with "no material" ; as are the World Editor's own, one camera for all),
+-- v5 since some curated meshes have a view of their own
+local THUMB_DIR = CACHE_DIR .. "/v5"
 -- frames the preview is given to load and settle before it's captured (as the asset browser does)
 local SETTLE_FRAMES = 3
 -- the render the thumbnail is cut from (px), and the margin left around the mesh (of its size)
@@ -335,13 +344,18 @@ end
 
 --- the camera's turns for a mesh : across its long side and a bit off square, then the same from
 --- the other side. At a turn of 0 the preview looks along the mesh's y axis (a race barricade, 10 m
---- along y, was shown end-on)
+--- along y, was shown end-on). A curated mesh's own view (see the top of this file) : the one turn
+--- it asks for, or, lying, from above and turned upside down
 ---@param size table? beamjoy_props.meta's {x, y, z}
----@return number[]
-local function thumbYaws(size)
+---@param shape string
+---@return number[] yaws, number pitch, boolean upsideDown
+local function thumbYaws(size, shape)
+    local cat = beamjoy_props.catalogForShape(shape)
+    if cat and cat.thumbLying then return { 0 }, math.pi / 2 - THUMB_PITCH, true end
     local base = 0
     if size and tonumber(size.x) and tonumber(size.y) and size.y > size.x then base = math.pi / 2 end
-    return { base + THUMB_TURN, base + THUMB_TURN + math.pi }
+    if cat and tonumber(cat.thumbTurn) then return { base + THUMB_TURN + math.rad(cat.thumbTurn) }, THUMB_PITCH, false end
+    return { base + THUMB_TURN, base + THUMB_TURN + math.pi }, THUMB_PITCH, false
 end
 
 -- whether the game let async shader compilation be switched off (logged once)
@@ -383,7 +397,7 @@ local function newPreview(own)
     if not pcall(function() preview:setRenderState(false, false, false, false, false, false) end) then
         preview:setRenderState(false, false, false, false, false)
     end
-    preview:setCamRotation(THUMB_PITCH, job.yaws[1])
+    preview:setCamRotation(job.pitch, job.yaws[1])
     synced(function() preview:setObjectModel(job.shape) end)
     -- its full detail : left to the preview, a small tile could get a mesh's lowest level, or none
     -- (forced the way the game's own resource checker does). The largest level drawn (its size 0 or
@@ -455,7 +469,7 @@ local PROBE_FRESH_FRAMES = SETTLE_FRAMES + 1
 
 --- points the job's camera for its current view, fitted to the mesh
 local function aim()
-    job.preview:setCamRotation(THUMB_PITCH, job.yaws[job.view])
+    job.preview:setCamRotation(job.pitch, job.yaws[job.view])
     job.preview:fitToShape()
 end
 
@@ -472,7 +486,7 @@ local function cropOf(seen)
 end
 
 --- scales rows of the cut into the thumbnail until the frame's budget is spent : true once done.
---- Shrunk with 4 samples a pixel, enlarged with the nearest
+--- Shrunk with 4 samples a pixel, enlarged with the nearest ; turned upside down for a lying mesh
 ---@return boolean
 local function compose()
     local src, out, crop, bg = job.best.bitmap, job.out, job.crop, job.best.seen.bg
@@ -486,7 +500,9 @@ local function compose()
         local j = job.row
         for i = 0, n - 1 do
             local r, g, b, k = 0, 0, 0, 0
-            local cx, cy = crop.x + (i + .5) * scale, crop.y + (j + .5) * scale
+            local si, sj = i, j
+            if job.upsideDown then si, sj = n - 1 - i, n - 1 - j end
+            local cx, cy = crop.x + (si + .5) * scale, crop.y + (sj + .5) * scale
             for _, dy in ipairs(offsets) do
                 for _, dx in ipairs(offsets) do
                     local x, y = math.floor(cx + dx), math.floor(cy + dy)
@@ -518,7 +534,8 @@ local function stepJob()
             beamjoy_props.ensureMaterials(job.shape)
             local rect = RectI(0, 0, RENDER_SIZE, RENDER_SIZE)
             job.rect = rect
-            job.yaws, job.view = thumbYaws(beamjoy_props.meta[job.shape:lower()]), 1
+            job.yaws, job.pitch, job.upsideDown = thumbYaws(beamjoy_props.meta[job.shape:lower()], job.shape)
+            job.view = 1
             job.preview = newPreview()
             render()
             aim()
@@ -608,7 +625,7 @@ local function stepJob()
                 -- then a preview made anew, now, the way the first was
                 job.fresh = newPreview(true)
                 render(job.fresh)
-                job.fresh:setCamRotation(THUMB_PITCH, job.yaws[1])
+                job.fresh:setCamRotation(job.pitch, job.yaws[1])
                 job.fresh:fitToShape()
                 job.stage, job.frames = "probeFresh", PROBE_FRESH_FRAMES
                 return

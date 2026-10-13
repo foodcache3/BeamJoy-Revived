@@ -1,4 +1,4 @@
-// The race editor's props drawer (direct request) : the prop picker that replaced the editor's
+// The editors' props drawer (direct request) : the prop picker that replaced the race editor's
 // small dropdown. It slides out beside the config window, over the game view (or covers the
 // window when there's no room beside it), and folds to a slim strip while a prop is armed.
 //
@@ -12,8 +12,9 @@
 // then the tiles in view) ; the grid only builds the tiles in view, so the few thousand game
 // meshes scroll as smoothly as the curated hundred.
 //
-// Picking a tile arms it (BJEditorRaceArmProp) : the race editor's placing mode takes the mouse
-// over the world (ui/raceEditor.lua PLACING) and tells back what it's doing (BJEditorRacePlacing).
+// Picking a tile arms it (BJEditorPropsArm) : the props editor's placing mode takes the mouse
+// over the world (ui/propEditor.lua PLACING) and tells back what it's doing (BJEditorPropsPlacing).
+// Shown by the props list (cmps/propEditor) of whichever editor is open : a race's, an arena's.
 // With a placed prop in "swap" (the editor's "Swap mesh"), picking a tile gives it that mesh.
 
 const FAV_KEY = "beamjoy.propDrawer.favourites";
@@ -115,7 +116,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
         onClose: "&",
         onSwapEnd: "&",
     },
-    templateUrl: "/ui/modModules/beamjoy/windows/config/races/editor/propDrawer/app.html",
+    templateUrl: "/ui/modModules/beamjoy/cmps/propDrawer/app.html",
     controller: function ($rootScope, $scope, $element, $filter, $timeout, beamjoyStore) {
         const translate = $filter("translate");
         const T = (key) => translate("beamjoy.window.config.tabs.races.props.drawer." + key);
@@ -548,25 +549,25 @@ angular.module("beamjoy").component("bjPropDrawer", {
             // a prop's mesh can't be swapped for a whole prefab
             if (this.swap && item.prefab) return;
             if (this.swap) {
-                if (this.swap.cap) beamjoyStore.send("BJEditorRaceSetPropCap", [this.swap.index + 1, this.swap.cap, item.shape]);
-                else if (this.swap.alt) beamjoyStore.send("BJEditorRaceSetPropAlt", [this.swap.index + 1, item.shape]);
-                else beamjoyStore.send("BJEditorRaceSwapPropShape", [this.swap.index + 1, item.shape]);
+                if (this.swap.cap) beamjoyStore.send("BJEditorPropsSetCap", [this.swap.index + 1, this.swap.cap, item.shape]);
+                else if (this.swap.alt) beamjoyStore.send("BJEditorPropsSetAlt", [this.swap.index + 1, item.shape]);
+                else beamjoyStore.send("BJEditorPropsSwapShape", [this.swap.index + 1, item.shape]);
                 remember(item);
                 this.onSwapEnd();
                 return;
             }
             if (this.isArmed(item)) {
-                beamjoyStore.send("BJEditorRaceDisarmProp");
+                beamjoyStore.send("BJEditorPropsDisarm");
                 return;
             }
             this.stripExpanded = false;
-            if (item.prefab) beamjoyStore.send("BJEditorRaceArmPrefab", [item.prefab]);
-            else beamjoyStore.send("BJEditorRaceArmProp", [item.shape]);
+            if (item.prefab) beamjoyStore.send("BJEditorPropsArmPrefab", [item.prefab]);
+            else beamjoyStore.send("BJEditorPropsArm", [item.shape]);
             remember(item);
         };
-        this.disarm = () => beamjoyStore.send("BJEditorRaceDisarmProp");
+        this.disarm = () => beamjoyStore.send("BJEditorPropsDisarm");
         // Keep placing and Fixed rotation : the editor's toolbar switches now (editor/app.js), their
-        // state read back from BJEditorRacePlacing for the hints
+        // state read back from BJEditorPropsPlacing for the hints
         this.expandStrip = () => {
             this.stripExpanded = true;
             $timeout(() => {
@@ -582,7 +583,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
         };
         $scope.$on(
             "$destroy",
-            $rootScope.$on("BJEditorRacePlacing", (_, state) => {
+            $rootScope.$on("BJEditorPropsPlacing", (_, state) => {
                 const wasArmed = this.placing.armed;
                 this.placing = state && typeof state === "object" ? state : { armed: false };
                 if (!this.placing.armed) this.stripExpanded = false;
@@ -596,7 +597,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
             })
         );
 
-        // BUDGET (the race's 1000 props) : what's used, and what the prop or line under the mouse
+        // BUDGET (the race's or arena's 1000 props) : what's used, and what the prop or line under the mouse
         // would add ; amber from 90 %, red once full
         this.budget = () => {
             const max = Math.max(1, Number(this.propMax) || 1000);

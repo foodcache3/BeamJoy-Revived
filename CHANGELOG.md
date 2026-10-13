@@ -8,8 +8,40 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2675, server build 2451.
+Version 1.11.0 : client build 2678, server build 2452.
 
+- **Props list reworked** (direct request) :
+  - out of the curated list : the guardrail post, the four sponsor fences, the drag time stand, the
+    tire rack and the tarp ; out of the prefabs : the wood fence ;
+  - new prefabs : the sponsor fence with the APM banner (the other three were already there), the
+    drag strip's time board on its stand, and the garage's ceiling light, off and on, the lit one
+    casting light day and night ;
+  - the guardrail prefab stands 0.5 m higher (its rail was half in the ground), the spotlight 0.12 m
+    higher, the timing board on the ground (its tower stood 6.86 m up in the air) ;
+  - the flip ramps are centred where they're placed, as the other ramps are (their origin is a
+    corner) ;
+  - previews : the construction sign, the left pacenote board and the folding chair from their
+    front, the 2 x 2 flip ramp from the side as the other ramps, and the flag markers and the metal
+    fence standing (the preview drew them lying on their back : their files stand them up with a
+    rotation the preview doesn't apply). Every preview is made again once (new cache folder).
+  *(client)*
+- **Fix : props from other maps without some of their materials** (direct report : the barrels
+  under a tarp had no "tarpaulin" on East Coast). A material left behind by a map, mapping nothing
+  any more, counted as the material being there, and blocked a copy of the same name ; and a
+  material file's class spelt "material" (Automation Test Track's plasterboard, some of Utah's
+  buildings') wasn't read as a material. *(client)*
+
+- **Props in Hunter, Infected and Derby arenas** (direct request) : each arena editor has a Props
+  tab with everything the race editor's has (the props drawer, lines, prefabs, groups, copy and
+  paste between races and arenas, the collision switch...), saved with the arena and spawned for
+  the players in its games and those watching, from the lobby until the game ends. The race
+  editor's props became one shared editor (`ui/propEditor.lua`, `cmps/propEditor`, the drawer moved
+  to `cmps/propDrawer`) that the race and arena editors host ; a world click picks the nearest of
+  the editor's own markers and the props. The server's prop checks moved to `services/props.lua`,
+  shared by races and the three arenas' saves ; a game's own copy of its arena leaves the props
+  out (a derby game's goes to every client with each update). *(client + server)*
+- **A new gate takes the selected gate's size** (direct request) : its width and height, or the
+  last selected one's when none is, else the last gate's. *(client)*
 - **Fix : props said solid whose mesh has no collision** (direct report : the showroom's backdrops,
   a ground plane). A mesh only has collision when it carries a collision mesh, and many don't (the
   maps make those solid by their visible mesh instead). Each mesh's own is now read from its file,

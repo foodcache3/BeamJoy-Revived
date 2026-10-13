@@ -626,7 +626,7 @@ local function derbyStart(ctxt, opts)
         starterID = ctxt.senderID,
         joinable = true,
         arenaId = arena.id,
-        arenaSnapshot = table.clone(arena),
+        arenaSnapshot = services_props.withoutProps(arena),
         settings = buildSettings(arena, opts),
         state = "LOBBY",
         createdAt = ctxt.time,

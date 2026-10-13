@@ -451,14 +451,54 @@ the props drawer's Prefabs tab ; this is the part left for later.
   shared library on the server (every editor sees the same ones) would need server storage, a
   permission for adding / deleting, and syncing. Ask which before building.
 
+## Races: painted lines and swept curbs / walls
+
+**Status:** planned, not started (direct request, 2026-10-12 : "add it to the todo"). Two new kinds
+of race prop next to static props and lines, both client-side objects like the props (never synced
+through BeamMP), saved with the race, spawned by `beamjoy_props` for racers, spectators and the
+editor's preview.
+
+How the game does it (investigated 2026-10-12) :
+- **Driver Training's quick races** are generated at load : a quickrace JSON with
+  `"procedural": true` and `"luaFile": "procTrackGen"` (`levels/driver_training/quickrace/`) calls
+  the game's `lua/ge/extensions/util/procTrack.lua` (`makeGymkhana`). It makes DecalRoads for the
+  painted route (materials `tread_marks_clean` and `road_orange_markings` : no collision), TSStatic
+  barrier segments placed one by one round each corner's arc (`barriersegmentL/R.dae`), gates,
+  rings and barrel markers, BeamNGWaypoint checkpoints, all in a `GymkhanaArena` SimGroup, then one
+  `be:reloadCollision()`. The same approach as our props.
+- **Hirochi and Automation Test Track** have no MeshRoads : curbs and walls are hand-placed
+  TSStatics (the test track's curbs are big meshes modelled to fit, `curbs.dae` / `s_curbs.dae`),
+  forest items for repeated barriers, DecalRoads (about 1,500 on the test track) for paint.
+- **Track Builder** (`lua/ge/extensions/util/trackBuilder/`) sweeps a cross-section along the track
+  spline into one `ProceduralMesh` (`segmentToProceduralMesh.lua` : `createObject("ProceduralMesh")`
+  then `:createMesh(meshes)`) : `basicBorders.lua` defines curb shapes (regular, bevel...) as a few
+  cross-section points with their UV, `borderWallMesh.lua` the walls. One piece, so no joints on a
+  curve. It rebuilds collision only when you press Drive.
+
+What to build :
+- **Painted lines** : a DecalRoad along a line (its two ends and its bend, the same handles as the
+  line tool), with a material picked from a short list (white / yellow lines, kerb paint, tyre
+  marks, orange markings), its width and texture length. No collision, and they cost far less than
+  a prop : decide whether they count toward the race's 500 or have a limit of their own. To check :
+  DecalRoad's `Node` field (`"x y z width"`), `improvedSpline`, `renderPriority` / `zBias` against
+  the map's own decals, and that one made at runtime with `canSave = false` shows straight away.
+- **Swept curbs and walls** : a ProceduralMesh swept along a line, from a few cross-sections like
+  Track Builder's (a curb, a low wall, a tall wall, maybe a tyre-wall profile), following the
+  ground (the line's heights). Solid, so it joins the static collision rebuild like the props. To
+  check : the vertex / face format `createMesh` takes (read `segmentToProceduralMesh.lua` and
+  `proceduralPrimitives.lua`), materials it can use (Track Builder's `materialUtil.lua`), how long
+  a mesh one object can hold, and whether it can be changed in place while a line is dragged or
+  has to be remade.
+
 ## Races: placed props (a framework, saved with the race)
 
 **Status:** built for races (client 2615 / server 2428) : static props and the line tool in the race
 editor's Props tab, saved with the race, spawned by each client for its racers and spectators
 (`beamjoy/props.lua`, `services/races.lua`'s sanitizeProps). Not built : physics props (below :
 investigated 2026-10-09 and dropped, each one a full vehicle, too heavy at a race's prop counts),
-props for hunter / infected / derby arenas and the passive zones, preview pictures in the catalog,
-spacing in metres and curved lines. The catalog is `beamjoy_props.CATALOG` (a mesh's yaw, length
+props for the passive zones, preview pictures in the catalog, spacing in metres and curved lines.
+Hunter / Infected / Derby arenas have them too since client 2677 / server 2452 (the shared
+`ui/propEditor.lua` and `cmps/propEditor`, checked by `services/props.lua`). The catalog is `beamjoy_props.CATALOG` (a mesh's yaw, length
 and collision were read from the game's .dae files ; orientations still want a check in game).
 
 Authors place props (barriers, tire walls, cones, arches, banners, flags...) in the race editor ;

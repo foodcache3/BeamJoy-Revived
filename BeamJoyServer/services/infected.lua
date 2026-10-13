@@ -109,6 +109,11 @@ local function sanitizeArena(arena)
         return "Invalid infected spawn data"
     end
 
+    -- placed props (services/props.lua), spawned by each client for the arena's games
+    local props, propsErr = services_props.sanitize(arena.props, "An arena")
+    if not props then return propsErr end
+    arena.props = props
+
     arena.enabled = arena.enabled == true
     if arena.enabled and (#arena.survivorSpawns < M.MIN_SURVIVOR_SPAWNS or
             #arena.infectedSpawns < M.MIN_INFECTED_SPAWNS) then

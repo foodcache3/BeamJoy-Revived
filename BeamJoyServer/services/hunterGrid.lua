@@ -735,7 +735,7 @@ local function hunterStart(ctxt, opts)
         participants = Table(),
         joinOrder = {},
         rolesLocked = false,
-        arenaSnapshot = table.clone(arena),
+        arenaSnapshot = services_props.withoutProps(arena),
         -- never trusted from the normal client UI's own opts (a modified client could otherwise
         -- self-grant this): only ever true via the staff-gated "/hunter debug start" command,
         -- which is the only caller that ever sets this key at all

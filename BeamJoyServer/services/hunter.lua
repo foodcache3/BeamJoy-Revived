@@ -154,6 +154,11 @@ local function sanitizeArena(arena)
         return "Invalid respawn hub data"
     end
 
+    -- placed props (services/props.lua), spawned by each client for the arena's games
+    local props, propsErr = services_props.sanitize(arena.props, "An arena")
+    if not props then return propsErr end
+    arena.props = props
+
     arena.enabled = arena.enabled == true
     if arena.enabled and (#arena.hunterSpawns < M.MIN_HUNTER_SPAWNS or
             #arena.preySpawns < M.MIN_PREY_SPAWNS or #arena.waypoints < M.MIN_WAYPOINTS) then

@@ -3,15 +3,30 @@
 // unsaved-changes guard, the same confirmation as switching config tabs.
 angular.module("beamjoy").component("bjConfigDerbyArena", {
     templateUrl: "/ui/modModules/beamjoy/windows/config/derbyArena/app.html",
-    controller: function ($rootScope, $scope, $timeout, $filter, beamjoyStore, beamjoyNavGuard, beamjoyConfirm) {
+    controller: function (
+        $rootScope,
+        $scope,
+        $timeout,
+        $filter,
+        beamjoyStore,
+        beamjoyNavGuard,
+        beamjoyConfirm,
+        beamjoyPropEditor
+    ) {
         const translate = $filter("translate");
 
-        this.SECTIONS = ["settings", "positions"];
+        this.SECTIONS = ["settings", "positions", "props"];
         this.activeSection = "settings";
         this.changeSection = (event, section) => {
             event.stopPropagation();
             this.activeSection = section;
+            // the Props section's snapping button : the list editor's state, told again (no point
+            // list is shown there to have asked)
+            if (section === "props") beamjoyStore.send(this.pointListEvents.requestState);
         };
+        // the arena's props : the props editor's list and toolbar (cmps/propEditor), shared with
+        // the race editor ; read here for the Props tab's count
+        this.props = beamjoyPropEditor;
 
         this.pointLists = [
             { key: "startPositions", labelKey: "beamjoy.window.config.tabs.derbyArena.startPosition", min: 2 },
