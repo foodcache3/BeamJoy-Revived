@@ -134,7 +134,7 @@
                     {{'beamjoy.window.config.tabs.races.props.ends' | translate}}
                 </td>
                 <td>
-                    <div class="d-flex gap-1">
+                    <div class="d-flex gap-1 flex-wrap">
                         <button
                             class="btn"
                             ng-class="$ctrl.p.part === 'a' ? 'success' : 'neutral'"
@@ -144,11 +144,12 @@
                         </button>
                         <button
                             class="btn"
-                            ng-class="$ctrl.p.part === 'mid' ? 'success' : 'neutral'"
-                            ng-click="$ctrl.p.selectEnd($event, $index, 'mid')"
-                            title="{{'beamjoy.window.config.tabs.races.props.endMid.tooltip' | translate}}"
+                            ng-repeat="node in $ctrl.p.nodesOf(prop) track by $index"
+                            ng-class="$ctrl.p.part === 'n' + ($index + 1) ? 'success' : 'neutral'"
+                            ng-click="$ctrl.p.selectEnd($event, $ctrl.p.props.indexOf(prop), 'n' + ($index + 1))"
+                            title="{{'beamjoy.window.config.tabs.races.props.node.tooltip' | translate}}"
                         >
-                            {{'beamjoy.window.config.tabs.races.props.endMid' | translate}}
+                            {{$index + 1}}
                         </button>
                         <button
                             class="btn"
@@ -158,8 +159,23 @@
                             {{'beamjoy.window.config.tabs.races.props.endB' | translate}}
                         </button>
                         <button
+                            class="btn neutral"
+                            ng-click="$ctrl.p.addNode($event, $index)"
+                            title="{{'beamjoy.window.config.tabs.races.props.addNode.tooltip' | translate}}"
+                        >
+                            {{'beamjoy.window.config.tabs.races.props.addNode' | translate}}
+                        </button>
+                        <button
                             class="btn warning"
-                            ng-if="prop.mid"
+                            ng-if="$ctrl.p.isNodePart()"
+                            ng-click="$ctrl.p.removeNode($event, $index)"
+                            title="{{'beamjoy.window.config.tabs.races.props.removeNode.tooltip' | translate}}"
+                        >
+                            {{'beamjoy.window.config.tabs.races.props.removeNode' | translate}}
+                        </button>
+                        <button
+                            class="btn warning"
+                            ng-if="$ctrl.p.nodesOf(prop).length"
                             ng-click="$ctrl.p.straighten($event, $index)"
                             title="{{'beamjoy.window.config.tabs.races.props.straighten.tooltip' | translate}}"
                         >

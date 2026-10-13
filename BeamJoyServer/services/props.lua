@@ -32,6 +32,24 @@ local function saneShape(shape)
         (shape:lower():find("%.dae$") or shape:lower():find("%.cdae$")) ~= nil
 end
 
+-- a line's nodes, at most (mirrors the client's beamjoy_props.MAX_LINE_NODES)
+local MAX_LINE_NODES = 50
+
+--- a line's nodes (a curb's, a wall's, a painted line's too) : the points it bends through between
+--- its ends, in order, the well-formed ones kept ; none without any
+---@param v any
+---@return table[]?
+local function saneNodes(v)
+    if type(v) ~= "table" then return nil end
+    local out = {}
+    for _, n in ipairs(v) do
+        if #out >= MAX_LINE_NODES then break end
+        local point = sanePoint(n)
+        if point then out[#out + 1] = point end
+    end
+    return #out > 0 and out or nil
+end
+
 --- a prop's own lift (metres, mesh units) : set by the editor for a mesh it tuned itself (one
 --- outside its catalog), so every player stands it at the same height
 ---@param v any
@@ -133,6 +151,7 @@ local function saneSweep(p)
         a = a,
         b = b,
         mid = sanePoint(p.mid),
+        nodes = saneNodes(p.nodes),
         count = count,
         followGround = p.followGround ~= false,
         group = saneGroup(p.group),
@@ -169,6 +188,7 @@ local function sanePaint(p)
         a = a,
         b = b,
         mid = sanePoint(p.mid),
+        nodes = saneNodes(p.nodes),
         count = count,
         -- none : the paint's own
         width = width and math.clamp(width, PAINT_WIDTH_MIN, PAINT_WIDTH_MAX) or nil,
@@ -213,8 +233,9 @@ local function sanitize(props, holder)
                         shape = p.shape,
                         a = a,
                         b = b,
-                        -- bends the line through it (optional)
+                        -- bend the line through them (optional ; `mid` an older line's one bend)
                         mid = sanePoint(p.mid),
+                        nodes = saneNodes(p.nodes),
                         count = count,
                         gap = saneGap(p.gap),
                         group = saneGroup(p.group),

@@ -8,14 +8,17 @@
 ---
 --- Entries (see the server's services/props.lua sanitize for its checks) :
 ---   { kind = "static", shape, pos, dir, up, scale, stretch, lift, solid, group }
----   { kind = "line", shape, a, b, mid, count, gap, yaw, scale, followGround, heights, alt, altYaw, altLift, group }
+---   { kind = "line", shape, a, b, nodes, mid, count, gap, yaw, scale, followGround, heights, alt, altYaw, altLift, group }
 --- A line is saved as itself and spread out here : `count` props evenly from `a` to `b` (both ends
 --- included), each facing along the line turned by `yaw` degrees round its own vertical axis. With
 --- a `gap` (metres), one every `gap` from `a` instead, `count` being as many as its length takes.
 --- `group` (optional, a number) : props of the same group are selected and moved together in the
 --- editor, nothing more.
---- `mid` (optional) bends it : the line runs as a smooth curve from `a` through `mid` to `b`, its
---- props spaced evenly along the curve and each facing along it there.
+--- `nodes` (optional, a list of points) bend it (direct request : as many as the game's own spline
+--- editor takes) : the line runs as a smooth curve from `a` through each node in turn to `b`, its
+--- props spaced evenly along the curve and each facing along it there (linePath).
+--- `mid` (optional, older lines : their single bend, before nodes) : the curve from `a` through
+--- `mid` to `b` as it always was ; the editor makes it the line's first node once it's edited.
 --- Optional on both : `stretch` {x, y, z} scales a mesh unevenly (on top of `scale` : a map's own
 --- race props, imported by beamjoy/mapRaces, are often stretched barriers), `lift` stands it that
 --- much higher (mesh units), `solid = false` lets cars drive through it whatever its mesh, `true`
@@ -35,9 +38,9 @@
 --- line's end prop and facing out of the line, turned `capAYaw` / `capBYaw` degrees (its tuning
 --- yaw, plus a quarter turn each time it was turned) and lifted `capALift` / `capBLift` (mesh units).
 ---
---- Curbs and walls : `{ kind = "sweep", profile, a, b, mid, count, followGround, heights, group }`,
+--- Curbs and walls : `{ kind = "sweep", profile, a, b, nodes, mid, count, followGround, heights, group }`,
 --- a cross-section swept along a line's path into one mesh (SWEEPS below).
---- Painted lines : `{ kind = "paint", paint, a, b, mid, count, width, followGround, heights, group }`,
+--- Painted lines : `{ kind = "paint", paint, a, b, nodes, mid, count, width, followGround, heights, group }`,
 --- a decal of the game's road paint laid along a line's path (PAINTS below), never solid.
 ---
 --- Lamps : a mesh named in LAMPS (by its file name, so every map's copy of it, picked from the
@@ -957,17 +960,77 @@ end
 
 -- points a curved line's length is measured over (its props are spaced evenly along it)
 local CURVE_SAMPLES = 48
+-- points each span of a line between two of its nodes is drawn with, at least
+local SPAN_SAMPLES = 8
+-- a line's nodes, at most (mirrors the server's services/props.lua MAX_LINE_NODES)
+M.MAX_LINE_NODES = 50
 
---- a line's path : the straight segment from a to b, or the curve through `mid` (a quadratic
---- Bezier whose control point puts its halfway point exactly on `mid`)
+--- a line's nodes (see `nodes` at the top of this file), in order from `a` to `b`
+---@param line table
+---@return vec3[]
+function M.lineNodes(line)
+    local out = {}
+    if type(line.nodes) == "table" then
+        for _, n in ipairs(line.nodes) do
+            local p = v3(n)
+            if p then out[#out + 1] = p end
+        end
+    end
+    return out
+end
+
+--- the curve through a line's ends and nodes (`knots`, three at least) : each span between two of
+--- them a cubic, its way at a node along the chord from the knot before to the knot after
+--- (Catmull-Rom, scaled to the spans' lengths : a short span beside a long one doesn't loop), at an
+--- end the way a parabola through that end and its neighbour takes. A single node as far from both
+--- ends draws the very curve an older line's `mid` does
+---@param knots vec3[]
+---@param samples integer points on the whole curve, about
+---@return vec3[] points, integer[] knotAt each knot's index in the points
+local function splinePath(knots, samples)
+    local n = #knots
+    local d = {}
+    for i = 1, n - 1 do d[i] = math.max(knots[i + 1]:distance(knots[i]), 1e-3) end
+    -- each knot's way, per metre along the chord
+    local tan = {}
+    for i = 2, n - 1 do tan[i] = (knots[i + 1] - knots[i - 1]) * (1 / (d[i - 1] + d[i])) end
+    tan[1] = (knots[2] - knots[1]) * (2 / d[1]) - tan[2]
+    tan[n] = (knots[n] - knots[n - 1]) * (2 / d[n - 1]) - tan[n - 1]
+    local per = math.max(SPAN_SAMPLES, math.ceil(samples / (n - 1)))
+    local pts, knotAt = { knots[1] }, { 1 }
+    for i = 1, n - 1 do
+        local p0, p1 = knots[i], knots[i + 1]
+        local m0, m1 = tan[i] * d[i], tan[i + 1] * d[i]
+        for k = 1, per do
+            local t = k / per
+            local t2, t3 = t * t, t * t * t
+            pts[#pts + 1] = k == per and p1 or
+                p0 * (2 * t3 - 3 * t2 + 1) + m0 * (t3 - 2 * t2 + t) + p1 * (3 * t2 - 2 * t3) + m1 * (t3 - t2)
+        end
+        knotAt[i + 1] = #pts
+    end
+    return pts, knotAt
+end
+
+--- a line's path : the straight segment from a to b, the curve through its `nodes` (splinePath),
+--- or an older line's curve through `mid` (a quadratic Bezier whose control point puts its halfway
+--- point exactly on `mid`)
 ---@param line table
 ---@param samples integer? points on a curve (a straight line is its two ends)
----@return vec3[]? points
+---@return vec3[]? points, integer[]? knotAt where its ends and nodes are in the points (an older
+---line's `mid` as its one node)
 function M.linePath(line, samples)
     local a, b = v3(line.a), v3(line.b)
     if not a or not b then return nil end
+    local nodes = M.lineNodes(line)
+    if #nodes > 0 then
+        local knots = { a }
+        for _, p in ipairs(nodes) do knots[#knots + 1] = p end
+        knots[#knots + 1] = b
+        return splinePath(knots, samples or CURVE_SAMPLES)
+    end
     local mid = v3(line.mid)
-    if not mid then return { a, b } end
+    if not mid then return { a, b }, { 1, 2 } end
     local ctrl = mid * 2 - (a + b) * .5
     local n = samples or CURVE_SAMPLES
     local pts = {}
@@ -976,7 +1039,7 @@ function M.linePath(line, samples)
         local u = 1 - t
         pts[k + 1] = a * (u * u) + ctrl * (2 * u * t) + b * (t * t)
     end
-    return pts
+    return pts, { 1, math.floor(n / 2) + 1, n + 1 }
 end
 
 --- a line's length along its path (metres)
@@ -1157,6 +1220,8 @@ function M.linePlacements(line)
     for k = 2, #pts do lens[k] = lens[k - 1] + pts[k]:distance(pts[k - 1]) end
     local total = lens[#lens]
     local a, b, mid = v3(line.a), v3(line.b), v3(line.mid)
+    local hasNodes = #M.lineNodes(line) > 0
+    local bent = mid ~= nil or hasNodes
     -- each mesh's reach along the line (a line's every other prop may be its `alt` mesh)
     local reaches = {}
     do
@@ -1178,7 +1243,7 @@ function M.linePlacements(line)
         local reach = reaches[i % 2 == 0 and 2 or 1]
         local back, ahead
         if reach and reach[1] then back, ahead = reach[1], reach[2] end
-        if mid and back then
+        if bent and back then
             local from, kb = pathAt(pts, lens, s + back)
             local to = chordEnd(pts, from, kb, ahead - back)
             along = vec3(to.x - from.x, to.y - from.y, 0)
@@ -1187,7 +1252,7 @@ function M.linePlacements(line)
                 -- its origin, `back` behind its back end along the chord
                 p = vec3(from.x - along.x * back, from.y - along.y * back, p.z)
             end
-        elseif mid then
+        elseif mid and not hasNodes then
             -- the curve's own direction there (its derivative), not the sampled segment's
             local f = lens[k + 1] - lens[k] > 1e-6 and (math.max(0, math.min(total, s)) - lens[k]) / (lens[k + 1] - lens[k]) or 0
             local t = (k - 1 + f) / (#pts - 1)
@@ -1712,6 +1777,9 @@ local function sweepSignature(e)
         parts[#parts + 1] = type(p) == "table" and
             string.format("%.4f,%.4f,%.4f", tonumber(p.x) or 0, tonumber(p.y) or 0, tonumber(p.z) or 0) or "-"
     end
+    for _, p in ipairs(M.lineNodes(e)) do
+        parts[#parts + 1] = string.format("%.4f,%.4f,%.4f", p.x, p.y, p.z)
+    end
     if type(e.heights) == "table" then
         for _, h in ipairs(e.heights) do parts[#parts + 1] = string.format("%.3f", tonumber(h) or 0) end
     end
@@ -1846,7 +1914,7 @@ local function makePaint(entry)
     local paint = paintById[entry.paint]
     if not paint then return nil end
     local count = math.max(1, math.min(math.floor(tonumber(entry.count) or 1), M.PAINT_MAX_SEGMENTS))
-    local pts = M.sweepPoints({ a = entry.a, b = entry.b, mid = entry.mid, count = count,
+    local pts = M.sweepPoints({ a = entry.a, b = entry.b, mid = entry.mid, nodes = entry.nodes, count = count,
         followGround = entry.followGround, heights = entry.heights })
     if #pts < 2 then return nil end
     local width = M.paintWidth(entry)
@@ -1878,6 +1946,9 @@ local function paintSignature(e)
         local p = e[key]
         parts[#parts + 1] = type(p) == "table" and
             string.format("%.4f,%.4f,%.4f", tonumber(p.x) or 0, tonumber(p.y) or 0, tonumber(p.z) or 0) or "-"
+    end
+    for _, p in ipairs(M.lineNodes(e)) do
+        parts[#parts + 1] = string.format("%.4f,%.4f,%.4f", p.x, p.y, p.z)
     end
     if type(e.heights) == "table" then
         for _, h in ipairs(e.heights) do parts[#parts + 1] = string.format("%.3f", tonumber(h) or 0) end

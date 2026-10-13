@@ -196,31 +196,73 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
         stop(event);
         send("BJEditorPropsSetPaint", [idx + 1, id]);
     };
+    // a line's nodes (the points it bends through, beamjoy_props `nodes`), an older line's `mid` its
+    // one node
+    const isPoint = (v) => !!v && isFinite(v.x) && isFinite(v.y) && isFinite(v.z);
+    p.nodesOf = (prop) => {
+        if (prop && Array.isArray(prop.nodes) && prop.nodes.length) return prop.nodes;
+        return prop && prop.mid ? [prop.mid] : [];
+    };
+    p.isNodePart = () => typeof p.part === "string" && /^n\d+$/.test(p.part);
+    const dist = (u, v) => Math.hypot(u.x - v.x, u.y - v.y, u.z - v.z);
+    // points times weights, summed : mix(p1, w1, p2, w2...)
+    const mix = (...terms) => {
+        const out = { x: 0, y: 0, z: 0 };
+        for (let i = 0; i < terms.length; i += 2) {
+            out.x += terms[i].x * terms[i + 1];
+            out.y += terms[i].y * terms[i + 1];
+            out.z += terms[i].z * terms[i + 1];
+        }
+        return out;
+    };
+    // its path as beamjoy_props.linePath draws it : straight, through its nodes, or an older line's
+    // quadratic Bezier through `mid` halfway
+    const pathPoints = (prop) => {
+        const a = prop.a;
+        const b = prop.b;
+        const nodes = Array.isArray(prop.nodes) ? prop.nodes.filter(isPoint) : [];
+        if (nodes.length) {
+            const k = [a, ...nodes, b];
+            const n = k.length;
+            const d = [];
+            for (let i = 0; i < n - 1; i++) d[i] = Math.max(dist(k[i + 1], k[i]), 1e-3);
+            const tan = [];
+            for (let i = 1; i < n - 1; i++) {
+                const w = 1 / (d[i - 1] + d[i]);
+                tan[i] = mix(k[i + 1], w, k[i - 1], -w);
+            }
+            tan[0] = mix(k[1], 2 / d[0], k[0], -2 / d[0], tan[1], -1);
+            tan[n - 1] = mix(k[n - 1], 2 / d[n - 2], k[n - 2], -2 / d[n - 2], tan[n - 2], -1);
+            const pts = [a];
+            const per = 8;
+            for (let i = 0; i < n - 1; i++) {
+                for (let s = 1; s <= per; s++) {
+                    const t = s / per;
+                    const t2 = t * t;
+                    const t3 = t2 * t;
+                    pts.push(mix(k[i], 2 * t3 - 3 * t2 + 1, tan[i], (t3 - 2 * t2 + t) * d[i],
+                        k[i + 1], 3 * t2 - 2 * t3, tan[i + 1], (t3 - t2) * d[i]));
+                }
+            }
+            return pts;
+        }
+        const m = prop.mid;
+        if (!isPoint(m)) return [a, b];
+        const c = mix(m, 2, a, -0.5, b, -0.5);
+        const pts = [];
+        for (let s = 0; s <= 32; s++) {
+            const t = s / 32;
+            const u = 1 - t;
+            pts.push(mix(a, u * u, c, 2 * u * t, b, t * t));
+        }
+        return pts;
+    };
     // its length along its path (metres, a bent one measured along its curve)
     p.pathLength = (prop) => {
-        const a = prop && prop.a;
-        const b = prop && prop.b;
-        if (!a || !b) return 0;
-        const m = prop.mid;
-        const at = (t) => {
-            if (!m) return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
-            // the quadratic Bezier beamjoy_props.linePath draws, through `mid` halfway
-            const c = { x: m.x * 2 - (a.x + b.x) / 2, y: m.y * 2 - (a.y + b.y) / 2, z: m.z * 2 - (a.z + b.z) / 2 };
-            const u = 1 - t;
-            return {
-                x: a.x * u * u + c.x * 2 * u * t + b.x * t * t,
-                y: a.y * u * u + c.y * 2 * u * t + b.y * t * t,
-                z: a.z * u * u + c.z * 2 * u * t + b.z * t * t,
-            };
-        };
+        if (!prop || !isPoint(prop.a) || !isPoint(prop.b)) return 0;
+        const pts = pathPoints(prop);
         let total = 0;
-        let prev = at(0);
-        const steps = m ? 32 : 1;
-        for (let k = 1; k <= steps; k++) {
-            const q = at(k / steps);
-            total += Math.hypot(q.x - prev.x, q.y - prev.y, q.z - prev.z);
-            prev = q;
-        }
+        for (let k = 1; k < pts.length; k++) total += dist(pts[k], pts[k - 1]);
         return Math.round(total);
     };
 
@@ -400,6 +442,8 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
         send(name, [idx + 1]);
     };
     p.straighten = (event, idx) => action(event, "BJEditorPropsStraightenLine", idx);
+    p.addNode = (event, idx) => action(event, "BJEditorPropsAddNode", idx);
+    p.removeNode = (event, idx) => action(event, "BJEditorPropsRemoveNode", idx);
     p.splitLine = (event, idx) => action(event, "BJEditorPropsSplitLine", idx);
     p.splitPrefab = (event, idx) => action(event, "BJEditorPropsSplitPrefab", idx);
     p.deleteProp = (event, idx) => action(event, "BJEditorPropsDelete", idx);

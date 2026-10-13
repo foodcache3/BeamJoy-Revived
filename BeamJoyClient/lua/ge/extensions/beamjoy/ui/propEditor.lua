@@ -34,8 +34,8 @@ local M = {
     host = nil,
     ---@type integer? the selected prop
     activePropIndex = nil,
-    ---@type "a"|"b"|"mid"|nil which handle of the selected line the gizmo holds (an end, or its
-    ---middle : dragging that bends the line)
+    ---@type string? which handle of the selected line the gizmo holds : an end ("a", "b") or one of
+    ---its nodes ("n1", "n2"... : LINE NODES below)
     activePropPart = nil,
     --- the props selected together (direct request : multiple selection and groups), indices into
     --- the props in order, the active one among them ; moved, turned, copied and deleted as one
@@ -114,6 +114,69 @@ local function selectMode()
     return ctrl and "add" or shift and "alone" or nil
 end
 
+--- extends the selected line (LINE NODES below)
+---@return boolean
+local function altHeld()
+    local ok, held = pcall(function()
+        local io = ui_imgui.GetIO()
+        return io ~= nil and io.KeyAlt == true
+    end)
+    return ok and held == true
+end
+
+-- LINE NODES (direct request : more middle points, as the game's own spline editor takes them ;
+-- beamjoy_props.linePath draws the curve) : a line's handles are its two ends ("a", "b") and its
+-- nodes in order from a to b ("n1", "n2"...). With a line alone selected, a click on its path adds
+-- a node there, Alt+click on the ground adds an end there (its nearer end a node then), Delete takes
+-- the held node out. An older line's single bend (`mid`) is its one node, made a real one the first
+-- time it's edited
+
+-- how close (metres) a new node may come to its line's other points
+local NODE_MIN_SPACING = .3
+
+--- a line's nodes as kept ({x, y, z} tables, in order), an older line's `mid` its one node
+---@param line table
+---@return table[]
+local function lineNodes(line)
+    if type(line.nodes) == "table" and #line.nodes > 0 then return line.nodes end
+    if type(line.mid) == "table" then return { line.mid } end
+    return {}
+end
+
+--- a line's nodes to edit : an older line's `mid` made its first node
+---@param line table
+---@return table[]
+local function ensureNodes(line)
+    if type(line.nodes) ~= "table" or #line.nodes == 0 then
+        line.nodes = type(line.mid) == "table" and { line.mid } or {}
+    end
+    line.mid = nil
+    return line.nodes
+end
+
+--- a line without nodes left keeps none (straight again)
+---@param line table
+local function tidyNodes(line)
+    if type(line.nodes) == "table" and #line.nodes == 0 then line.nodes = nil end
+end
+
+--- the node a handle names ("n3" : 3), nil for an end
+---@param part string?
+---@return integer?
+local function nodeIndex(part)
+    return type(part) == "string" and tonumber(part:match("^n(%d+)$")) or nil
+end
+
+--- a line's ends and nodes in order, a to b ({x, y, z} tables)
+---@param line table
+---@return table[]
+local function lineKnots(line)
+    local out = { line.a }
+    for _, n in ipairs(lineNodes(line)) do out[#out + 1] = n end
+    out[#out + 1] = line.b
+    return out
+end
+
 -- Left Ctrl is the game's node grabber (its default "nodegrabberRender" binding) : held, it took
 -- every click (beamjoy_inputs drops clicks while it's on), so Ctrl+click never selected several
 -- props (direct report). The node grabber is off while an editor with props is open, as the world
@@ -146,7 +209,11 @@ local function drawOverlays()
     local draw = shape.layer(OVERLAY_LAYER)
     draw.reset()
     local list = active() and props() or nil
-    if not list then return end
+    if not list then
+        -- nothing to edit : the hover mark goes too (M.onUpdate stops drawing it)
+        shape.layer("propEditorHover").reset()
+        return
+    end
     if not LINE_COLOR then
         LINE_COLOR = BJColor(1, .55, .1, .8)
         ACTIVE_COLOR = BJColor(0, 1, 1, .9)
@@ -171,11 +238,10 @@ local function drawOverlays()
                 local held = isActive and M.activePropPart == part
                 draw.addSphere(pos + lift, held and .7 or .45, held and ACTIVE_COLOR or LINE_COLOR)
             end
-            -- the middle (bend) handle : on the selected line, and on any bent one
-            if isActive or p.mid then
-                local mid = p.mid and vec3(p.mid.x, p.mid.y, p.mid.z) or (a + b) * .5
-                local held = isActive and M.activePropPart == "mid"
-                draw.addSphere(mid + lift, held and .6 or .35, held and ACTIVE_COLOR or LINE_COLOR)
+            -- its nodes (LINE NODES), smaller than its ends
+            for k, n in ipairs(lineNodes(p)) do
+                local held = isActive and M.activePropPart == "n" .. k
+                draw.addSphere(vec3(n.x, n.y, n.z) + lift, held and .6 or .35, held and ACTIVE_COLOR or LINE_COLOR)
             end
         elseif (isActive or selected) and p.pos then
             draw.addSphere(vec3(p.pos.x, p.pos.y, p.pos.z) + lift, .5, ACTIVE_COLOR)
@@ -368,7 +434,8 @@ local function updateLineHeights(line)
         return
     end
     -- where its props stand : on a curve that depends on their meshes' length
-    local straight = beamjoy_props.linePlacements({ a = line.a, b = line.b, mid = line.mid, count = line.count,
+    local straight = beamjoy_props.linePlacements({ a = line.a, b = line.b, mid = line.mid, nodes = line.nodes,
+        count = line.count,
         gap = line.gap, followGround = false, shape = line.shape, alt = line.alt, yaw = line.yaw,
         altYaw = line.altYaw, scale = line.scale, stretch = line.stretch })
     line.heights = table.map(straight, function(p) return round3(groundHeightAt(p.pos)) end)
@@ -449,7 +516,7 @@ end
 --- "alone" (Shift+click) selects it without its group, to edit one of a group ; "addAlone"
 --- (Ctrl+Shift+click, direct request) adds or takes away that one prop of a group, its group left
 ---@param index integer?
----@param part "a"|"b"|"mid"|nil a line's handle (its first end by default)
+---@param part string? a line's handle (its first end by default : LINE NODES)
 ---@param mode "add"|"alone"|"addAlone"|nil
 function M.onSelectProp(index, part, mode)
     if not props() then return end
@@ -484,30 +551,45 @@ function M.onSelectProp(index, part, mode)
     end
     local chosen = M.activePropIndex and props()[M.activePropIndex]
     -- a line's handles while it's alone in the selection, the whole selection's gizmo otherwise
-    M.activePropPart = chosen and isPath(chosen) and #M.propSelection <= 1 and
-        ((part == "b" or part == "mid") and part or "a") or nil
+    local function handle()
+        if part == "b" then return "b" end
+        -- an older UI's middle : the first node
+        local k = nodeIndex(part == "mid" and "n1" or part)
+        if k and lineNodes(chosen)[k] then return "n" .. k end
+        return "a"
+    end
+    M.activePropPart = chosen and isPath(chosen) and #M.propSelection <= 1 and handle() or nil
     if chosen then hostSelects() end
     updatePropGizmo()
     pushActive()
     propsChanged()
 end
 
---- every point of a line moved by the same offset (its ends, and its middle when it's bent)
+--- every point of a line (its ends, its nodes, an older line's bend) replaced by `fn`'s
+---@param line table
+---@param fn fun(p: table): table a point {x, y, z} to its new {x, y, z}
+local function mapPathPoints(line, fn)
+    for _, key in ipairs({ "a", "b", "mid" }) do
+        if line[key] then line[key] = fn(line[key]) end
+    end
+    if type(line.nodes) == "table" then
+        local moved = {}
+        for k, p in ipairs(line.nodes) do moved[k] = fn(p) end
+        line.nodes = moved
+    end
+end
+
+--- every point of a line moved by the same offset
 ---@param line table
 ---@param delta vec3
 local function shiftLine(line, delta)
-    for _, key in ipairs({ "a", "b", "mid" }) do
-        local p = toVec(line[key])
-        if p then line[key] = xyz(p + delta) end
-    end
+    mapPathPoints(line, function(p) return xyz(toVec(p) + delta) end)
 end
 
 --- after a whole line was moved : every point of it back on the ground
 ---@param line table
 local function snapLine(line)
-    for _, key in ipairs({ "a", "b", "mid" }) do
-        if line[key] then line[key].z = groundHeightAt(toVec(line[key])) end
-    end
+    mapPathPoints(line, function(p) return { x = p.x, y = p.y, z = groundHeightAt(toVec(p)) } end)
 end
 
 --- a line edited by its handles stops following the ground with the editor's snapping off (direct
@@ -521,7 +603,7 @@ local function lineEdited(line)
     updateLineHeights(line)
 end
 
---- the points a prop stands on : a single prop's position, a line's ends and its bend
+--- the points a prop stands on : a single prop's position, a line's ends and its nodes
 ---@param prop table
 ---@return vec3[]
 local function propPoints(prop)
@@ -529,6 +611,9 @@ local function propPoints(prop)
         local out = {}
         for _, key in ipairs({ "a", "b", "mid" }) do
             if prop[key] then out[#out + 1] = toVec(prop[key]) end
+        end
+        if type(prop.nodes) == "table" then
+            for _, n in ipairs(prop.nodes) do out[#out + 1] = toVec(n) end
         end
         return out
     end
@@ -565,6 +650,11 @@ local function showSelectionGizmo()
                 if isPath(prop) then
                     for _, key in ipairs({ "a", "b", "mid" }) do
                         if was[key] then prop[key] = place(was[key]) end
+                    end
+                    if type(was.nodes) == "table" then
+                        local nodes = {}
+                        for k, n in ipairs(was.nodes) do nodes[k] = place(n) end
+                        prop.nodes = nodes
                     end
                     prop.heights, prop.normals = nil, nil
                 elseif was.pos then
@@ -618,34 +708,36 @@ updatePropGizmo = function()
     local prop = M.activePropIndex and props()[M.activePropIndex]
     if not prop then return end
     local up = vec3(0, 0, 1)
-    if isPath(prop) and M.activePropPart == "mid" then
-        -- the middle : where the curve passes halfway (the straight line's middle until it's bent)
-        local a, b = toVec(prop.a), toVec(prop.b)
+    local node = isPath(prop) and nodeIndex(M.activePropPart)
+    if node and lineNodes(prop)[node] then
+        -- a node (LINE NODES) : the line curves through it, facing from the point before to the one
+        -- after
+        local knots = lineKnots(prop)
         local whole = false
         gizmo.show({
-            pos = toVec(prop.mid) or (a + b) * .5,
-            dir = flatDir(b - a),
+            pos = toVec(knots[node + 1]),
+            dir = flatDir(toVec(knots[node + 2]) - toVec(knots[node])),
             up = up,
             scales = vec3(1, 1, 1),
         }, function(updated) ---@param updated GizmoObject
             if not active() then return end
             if ctrlHeld() then
-                -- the whole line, its bend kept (a straight one stays straight)
-                local before = toVec(prop.mid) or (toVec(prop.a) + toVec(prop.b)) * .5
-                shiftLine(prop, updated.pos - before)
+                -- the whole line, its shape kept
+                shiftLine(prop, updated.pos - toVec(lineNodes(prop)[node]))
                 whole = true
             else
-                prop.mid = xyz(updated.pos)
+                ensureNodes(prop)[node] = xyz(updated.pos)
             end
             prop.heights, prop.normals = nil, nil -- measured again once dropped
             fitLineCount(prop)
             markDirty()
             propsChanged()
         end, function()
+            local held = lineNodes(prop)[node]
             if whole and snapOn() then
                 snapLine(prop)
-            elseif prop.mid and snapOn() then
-                prop.mid.z = groundHeightAt(toVec(prop.mid))
+            elseif held and snapOn() then
+                held.z = groundHeightAt(toVec(held))
             end
             lineEdited(prop)
             pushUpdate()
@@ -654,12 +746,13 @@ updatePropGizmo = function()
         end)
     elseif isPath(prop) then
         local part = M.activePropPart == "b" and "b" or "a"
-        local other = part == "a" and "b" or "a"
+        local knots = lineKnots(prop)
         local pos = toVec(prop[part])
         local whole = false
         gizmo.show({
             pos = pos,
-            dir = flatDir(toVec(prop[other]) - pos),
+            -- facing its neighbour (the next node, the other end without one)
+            dir = flatDir(toVec(part == "a" and knots[2] or knots[#knots - 1]) - pos),
             up = up,
             scales = vec3(1, 1, 1),
         }, function(updated) ---@param updated GizmoObject
@@ -981,10 +1074,17 @@ local function onDuplicateProp(index)
             nb = vec3(nb.x, nb.y, groundHeightAt(nb))
         end
         copy.a, copy.b = xyz(na), xyz(nb)
-        if prop.mid then
-            local nm = toVec(prop.mid) + offset
-            if snapOn() then nm = vec3(nm.x, nm.y, groundHeightAt(nm)) end
-            copy.mid = xyz(nm)
+        copy.mid, copy.nodes = nil, nil
+        for _, key in ipairs({ "mid", "nodes" }) do
+            if prop[key] then
+                local was = { [key] = deepcopy(prop[key]) }
+                mapPathPoints(was, function(p)
+                    local nm = toVec(p) + offset
+                    if snapOn() then nm = vec3(nm.x, nm.y, groundHeightAt(nm)) end
+                    return xyz(nm)
+                end)
+                copy[key] = was[key]
+            end
         end
         updateLineHeights(copy)
     else
@@ -995,18 +1095,138 @@ local function onDuplicateProp(index)
     addProp(copy)
 end
 
---- a bent line goes straight again (its middle handle dropped)
+--- a bent line goes straight again (every node dropped)
 ---@param index integer
 local function onStraightenPropLine(index)
     local line = props() and props()[index]
-    if not isPath(line) or not line.mid then return end
-    line.mid = nil
+    if not isPath(line) or #lineNodes(line) == 0 then return end
+    line.mid, line.nodes = nil, nil
+    if index == M.activePropIndex and nodeIndex(M.activePropPart) then M.activePropPart = "a" end
     fitLineCount(line)
     updateLineHeights(line)
     updatePropGizmo()
     markDirty()
     pushUpdate()
+    pushActive()
     propsChanged()
+end
+
+--- a line's points changed (a node added or taken out, an end added) : measured again, the handle
+--- `part` held
+---@param index integer
+---@param part string
+local function lineReshaped(index, part)
+    local line = props()[index]
+    tidyNodes(line)
+    fitLineCount(line)
+    updateLineHeights(line)
+    M.activePropIndex, M.activePropPart = index, part
+    if #M.propSelection > 1 or not table.includes(M.propSelection, index) then M.propSelection = { index } end
+    updatePropGizmo()
+    markDirty()
+    pushUpdate()
+    pushActive()
+    propsChanged()
+end
+
+---@param line table
+---@return boolean room for one more node
+local function nodeRoom(line)
+    if #lineNodes(line) < beamjoy_props.MAX_LINE_NODES then return true end
+    toast.warn(string.format("A line can have up to %d nodes", beamjoy_props.MAX_LINE_NODES), nil, 4)
+    return false
+end
+
+--- a node added to a line at a point of its path, in its span `span` (between its point `span` and
+--- the next, beamjoy_props.linePath's knotAt) : held next
+---@param index integer
+---@param span integer
+---@param pos vec3
+local function insertNode(index, span, pos)
+    local line = props() and props()[index]
+    if not isPath(line) or not nodeRoom(line) then return end
+    local nodes = ensureNodes(line)
+    span = math.max(1, math.min(span, #nodes + 1))
+    local at = vec3(pos.x, pos.y, pos.z)
+    if snapOn() then at.z = groundHeightAt(at) end
+    table.insert(nodes, span, xyz(at))
+    lineReshaped(index, "n" .. span)
+end
+
+--- a line made longer to a point : a new end there, the end it's nearer a node now (as the game's
+--- spline editor adds a node off its spline)
+---@param index integer
+---@param pos vec3
+---@param first boolean the new end is its first
+local function extendLine(index, pos, first)
+    local line = props() and props()[index]
+    if not isPath(line) or not nodeRoom(line) then return end
+    local at = vec3(pos.x, pos.y, pos.z)
+    if snapOn() then at.z = groundHeightAt(at) end
+    local key = first and "a" or "b"
+    if toVec(line[key]):distance(at) < NODE_MIN_SPACING then return end
+    local nodes = ensureNodes(line)
+    if first then
+        table.insert(nodes, 1, line.a)
+    else
+        nodes[#nodes + 1] = line.b
+    end
+    line[key] = xyz(at)
+    lineReshaped(index, key)
+end
+
+--- a line's node taken out (its curve then runs from the point before to the one after) ; the
+--- point before held next
+---@param index integer
+---@param node integer
+local function removeNode(index, node)
+    local line = props() and props()[index]
+    if not isPath(line) or not lineNodes(line)[node] then return end
+    table.remove(ensureNodes(line), node)
+    lineReshaped(index, node > 1 and "n" .. (node - 1) or "a")
+end
+
+--- the point halfway along a line's span `span` (along its curve)
+---@param line table
+---@param span integer
+---@return vec3?
+local function spanMiddle(line, span)
+    local path, knotAt = beamjoy_props.linePath(line, 64)
+    if not path or not knotAt[span + 1] then return nil end
+    local from, to = knotAt[span], knotAt[span + 1]
+    local total = 0
+    for k = from + 1, to do total = total + path[k]:distance(path[k - 1]) end
+    local run = 0
+    for k = from + 1, to do
+        local seg = path[k]:distance(path[k - 1])
+        if run + seg >= total / 2 then
+            local f = seg > 1e-6 and (total / 2 - run) / seg or 0
+            return path[k - 1] + (path[k] - path[k - 1]) * f
+        end
+        run = run + seg
+    end
+    return path[to]
+end
+
+--- the props list's "Add node" : a node halfway along the span after the handle held (before it,
+--- for the last end)
+---@param index integer
+local function onAddPropNode(index)
+    local line = props() and props()[index]
+    if not isPath(line) then return end
+    local spans = #lineNodes(line) + 1
+    local part = index == M.activePropIndex and M.activePropPart or "a"
+    local span = part == "b" and spans or (nodeIndex(part) or 0) + 1
+    span = math.max(1, math.min(span, spans))
+    local at = spanMiddle(line, span)
+    if at then insertNode(index, span, at) end
+end
+
+--- the props list's "Remove node" : the node held
+---@param index integer
+local function onRemovePropNode(index)
+    local node = index == M.activePropIndex and nodeIndex(M.activePropPart)
+    if node then removeNode(index, node) end
 end
 
 --- a prop's place in the list taken by others, selected together (and grouped, as they were one)
@@ -1270,9 +1490,7 @@ local function groupPlacingEntries(p)
     for k, e in ipairs(g.entries) do
         local copy = deepcopy(e)
         if isPath(copy) then
-            for _, key in ipairs({ "a", "b", "mid" }) do
-                if copy[key] then copy[key] = place(copy[key]) end
-            end
+            mapPathPoints(copy, place)
             updateLineHeights(copy)
         elseif copy.pos then
             copy.pos = place(copy.pos)
@@ -1367,17 +1585,20 @@ local function placingEntry()
             return deepcopy(last.line), last.meters
         end
         local line = deepcopy(tpl.line.entry)
+        ---@param off vec3
+        local function placed(off)
+            local o = beamjoy_props.turn(off, turnBy)
+            local pt = vec3(at.x + o.x, at.y + o.y, at.z + o.z)
+            if snapOn() then pt.z = groundHeightAt(pt) end
+            return xyz(pt)
+        end
         for _, key in ipairs({ "a", "b", "mid" }) do
             local off = tpl.line.offsets[key]
-            if off then
-                local o = beamjoy_props.turn(off, turnBy)
-                local pt = vec3(at.x + o.x, at.y + o.y, at.z + o.z)
-                if snapOn() then pt.z = groundHeightAt(pt) end
-                line[key] = xyz(pt)
-            else
-                line[key] = nil
-            end
+            line[key] = off and placed(off) or nil
         end
+        line.nodes = tpl.line.offsets.nodes and table.map(tpl.line.offsets.nodes, function(off)
+            return placed(off)
+        end) or nil
         -- its props keep their turn along it (its yaw is the line's own : turning it too turned
         -- them twice, direct report). Its own "Follow the ground" kept, off with snapping off
         if not snapOn() then line.followGround = false end
@@ -1678,7 +1899,10 @@ local function onEyedropProp(index, alone)
             copy.group, copy.heights, copy.normals = nil, nil, nil
             p.template.line = {
                 entry = copy,
-                offsets = { a = a - centre, b = b - centre, mid = toVec(prop.mid) and toVec(prop.mid) - centre or nil },
+                offsets = { a = a - centre, b = b - centre, mid = toVec(prop.mid) and toVec(prop.mid) - centre or nil,
+                    nodes = type(prop.nodes) == "table" and #prop.nodes > 0 and table.map(prop.nodes, function(n)
+                        return toVec(n) - centre
+                    end) or nil },
                 rot = p.rot,
             }
         end
@@ -1805,6 +2029,9 @@ end
 
 local function onBJEditorDeleteKey()
     if not active() or not M.activePropIndex then return end
+    -- a line's node held : that node goes (as the game's spline editor does), not the line
+    local node = #M.propSelection <= 1 and nodeIndex(M.activePropPart)
+    if node and isPath(props()[M.activePropIndex]) then return removeNode(M.activePropIndex, node) end
     onDeleteSelectedProps()
 end
 
@@ -2084,17 +2311,141 @@ local function rayHitsPath(p, camPos, rayDir)
     return best
 end
 
---- the prop under the mouse ray (direct report : with props close together, the click took the
---- wrong one, the nearest handle sphere along the ray rather than what the mouse was on) : a line's
---- end or bend handle the mouse is on ; else the nearest mesh the ray goes into (a single prop, a
---- prefab's part, a line's prop or end cap) or curb, wall or painted line it passes over ; else the
---- handle at a single prop's base nearest the mouse (a mesh not measured, an invisible one)
+-- how near the mouse ray the selected line's path takes a click adding a node (metres)
+local PICK_INSERT_RADIUS = .6
+
+--- where the mouse ray passes nearest a line's path, drawn `lift` above it (drawOverlays), within
+--- `radius` of it
+---@param p table
 ---@param camPos vec3
 ---@param rayDir vec3
----@return number? t, integer? index, "a"|"b"|"mid"|nil part
+---@param lift number
+---@param radius number
+---@return number? t, vec3? at the point on the path (not lifted), integer? span the span it's in
+---(between the line's point `span` and the next : beamjoy_props.linePath's knotAt)
+local function rayNearPath(p, camPos, rayDir, lift, radius)
+    local path, knotAt = beamjoy_props.linePath(p, 64)
+    if not path then return nil end
+    local up = vec3(0, 0, lift)
+    local bestT, bestAt, bestK, bestOff
+    for k = 2, #path do
+        local a = path[k - 1] + up
+        local seg = path[k] - path[k - 1]
+        local c = seg:dot(seg)
+        if c > 1e-8 then
+            -- the closest points of the ray and the segment
+            local w = camPos - a
+            local bb, d, e = rayDir:dot(seg), rayDir:dot(w), seg:dot(w)
+            local denom = c - bb * bb
+            local u = denom > 1e-8 and math.max(0, math.min(1, (e - bb * d) / denom)) or 0
+            local q = a + seg * u
+            local t = (q - camPos):dot(rayDir)
+            local off = t > 0 and (camPos + rayDir * t):distance(q) or math.huge
+            if off <= radius and (not bestOff or off < bestOff) then
+                bestT, bestAt, bestK, bestOff = t, q - up, k - 1, off
+            end
+        end
+    end
+    if not bestT then return nil end
+    local span = 1
+    for i = 1, #knotAt - 1 do
+        if knotAt[i] <= bestK then span = i end
+    end
+    return bestT, bestAt, span
+end
+
+--- the line alone in the selection, nil otherwise
+---@return table?, integer?
+local function selectedLine()
+    if not M.activePropIndex or #M.propSelection > 1 then return nil end
+    local line = props() and props()[M.activePropIndex]
+    if not isPath(line) then return nil end
+    return line, M.activePropIndex
+end
+
+--- what a click would do to the selected line (LINE NODES) : with Alt held, an end added where the
+--- ground is under the mouse ; else, the mouse on its path (not on one of its handles), a node added
+--- there
+---@param camPos vec3
+---@param rayDir vec3
+---@return {kind: "insert"|"extend", index: integer, t: number, pos: vec3, span: integer?, first: boolean?, from: vec3?}?
+local function lineAction(camPos, rayDir)
+    if M.placing then return nil end
+    local line, index = selectedLine()
+    if not line then return nil end
+    if altHeld() then
+        local dist = castRayStatic(camPos, rayDir, PLACE_RAY_DISTANCE)
+        if not dist or dist <= 0 or dist >= PLACE_RAY_DISTANCE then return nil end
+        local hit = camPos + rayDir * dist
+        local a, b = toVec(line.a), toVec(line.b)
+        local first = hit:distance(a) < hit:distance(b)
+        return { kind = "extend", index = index, t = 0, pos = hit, first = first, from = first and a or b }
+    end
+    -- its handles are for selecting them
+    for _, k in ipairs(lineKnots(line)) do
+        local t, off = rayHitsHandle(k, PICK_HANDLE_ON, camPos, rayDir)
+        if t and off * t <= PICK_HANDLE_ON then return nil end
+    end
+    local t, at, span = rayNearPath(line, camPos, rayDir, .5, PICK_INSERT_RADIUS)
+    if not t then return nil end
+    for _, k in ipairs(lineKnots(line)) do
+        if toVec(k):distance(at) < NODE_MIN_SPACING then return nil end
+    end
+    return { kind = "insert", index = index, t = t, pos = at, span = span }
+end
+
+-- what a click would do to the selected line, shown where the mouse is (drawn over the overlays)
+local HOVER_LAYER = "propEditorHover"
+local HOVER_COLOR
+local hoverShown = false
+
+--- per frame : lineAction's mark under the mouse (a node to add on the path, the new end and its
+--- link from the line's nearer end)
+local function updateHover()
+    local action
+    if active() then
+        local io = ui_imgui.GetIO()
+        local overUI = (getCEFFocusMouse and getCEFFocusMouse() == true) or (io ~= nil and io.WantCaptureMouse == true)
+        local busy = ui_imgui.IsMouseDown(ui_imgui.MouseButton_Left) or (gizmo.isHovered and gizmo.isHovered())
+        if not overUI and not busy then
+            local camPos, rayDir = camera.mouseRay()
+            if camPos then action = lineAction(camPos, rayDir) end
+        end
+    end
+    if not action and not hoverShown then return end
+    local draw = shape.layer(HOVER_LAYER)
+    draw.reset()
+    hoverShown = action ~= nil
+    if not action then return end
+    HOVER_COLOR = HOVER_COLOR or BJColor(1, 1, 1, .85)
+    local lift = vec3(0, 0, .5)
+    if action.kind == "insert" then
+        draw.addSphere(action.pos + lift, .3, HOVER_COLOR)
+    else
+        draw.addLine(action.from + lift, .08, action.pos + lift, .08, HOVER_COLOR)
+        draw.addSphere(action.pos + lift, .45, HOVER_COLOR)
+    end
+end
+
+--- the prop under the mouse ray (direct report : with props close together, the click took the
+--- wrong one, the nearest handle sphere along the ray rather than what the mouse was on) : a line's
+--- end or node handle the mouse is on ; else the nearest mesh the ray goes into (a single prop, a
+--- prefab's part, a line's prop or end cap) or curb, wall or painted line it passes over ; else the
+--- handle at a single prop's base nearest the mouse (a mesh not measured, an invisible one). The
+--- selected line's own clicks first (LINE NODES) : Alt+click adds an end, a click on its path a
+--- node (M.clickSelect does it, `M.pickAction` saying where)
+---@param camPos vec3
+---@param rayDir vec3
+---@return number? t, integer? index, string? part a line's handle, or "insert" / "extend"
 function M.pick(camPos, rayDir)
+    M.pickAction = nil
     local list = active() and props() or nil
     if not list then return nil end
+    local action = lineAction(camPos, rayDir)
+    if action and action.kind == "extend" then
+        M.pickAction = action
+        return action.t, action.index, "extend"
+    end
     -- the handles : the one nearest the mouse on screen
     local handleT, handleOff, handleIndex, handlePart
     local baseT, baseOff, baseIndex
@@ -2108,10 +2459,8 @@ function M.pick(camPos, rayDir)
             end
             if p.a then try(p.a, "a") end
             if p.b then try(p.b, "b") end
-            -- its middle (bend) handle, drawn on the selected line or a bent one
-            local midPos = p.mid or (p.a and p.b and i == M.activePropIndex and
-                { x = (p.a.x + p.b.x) / 2, y = (p.a.y + p.b.y) / 2, z = (p.a.z + p.b.z) / 2 })
-            if midPos then try(midPos, "mid") end
+            -- its nodes
+            for k, n in ipairs(lineNodes(p)) do try(n, "n" .. k) end
         elseif p.pos then
             local t, off = rayHitsHandle(p.pos, 1.5, camPos, rayDir)
             if t and (not baseOff or off < baseOff) then
@@ -2131,8 +2480,15 @@ function M.pick(camPos, rayDir)
             if t and (not meshT or t < meshT) then meshT, meshIndex = t, i end
         end
     end
-    if handleT and (not meshT or (handleOff * handleT <= PICK_HANDLE_ON and meshT >= handleT - PICK_HANDLE_MARGIN)) then
+    local handleOn = handleT and handleOff * handleT <= PICK_HANDLE_ON
+    if handleT and (handleOn or not action) and
+        (not meshT or (handleOn and meshT >= handleT - PICK_HANDLE_MARGIN)) then
         return handleT, handleIndex, handlePart
+    end
+    -- the selected line's path : a node added there, its own props round it
+    if action and (not meshT or action.t <= meshT + PICK_HANDLE_MARGIN) then
+        M.pickAction = action
+        return action.t, action.index, "insert"
     end
     if meshT then
         -- a line hit on its props : the handle it's held by stays the one held
@@ -2145,9 +2501,18 @@ end
 --- picks one of a group alone (direct request : multiple selection and groups). A click on the
 --- handle already held does nothing : it's meant for the gizmo drawn on it
 ---@param index integer
----@param part "a"|"b"|"mid"|nil
+---@param part string? a line's handle, or "insert" / "extend" (M.pick)
 function M.clickSelect(index, part)
     local mode = selectMode()
+    local action = M.pickAction
+    M.pickAction = nil
+    if part == "insert" or part == "extend" then
+        if not mode and action and action.index == index then
+            if action.kind == "insert" then return insertNode(index, action.span, action.pos) end
+            return extendLine(index, action.pos, action.first)
+        end
+        part = nil
+    end
     if not mode and index == M.activePropIndex and part == M.activePropPart then return end
     M.onSelectProp(index, part, mode)
 end
@@ -2166,7 +2531,9 @@ end
 --- the host's own handles wait)
 ---@return boolean
 function M.onUpdate()
-    return updatePlacing()
+    local placing = updatePlacing()
+    updateHover()
+    return placing
 end
 
 --- the Delete key (forwarded by activityEditor through the host)
@@ -2234,6 +2601,8 @@ function M.detach(host)
     if not M.host or M.host ~= host then return end
     disarmProp()
     M.host = nil
+    shape.layer(HOVER_LAYER).reset()
+    hoverShown = false
     blockNodeGrabber(false)
     M.activePropIndex, M.activePropPart, M.propSelection = nil, nil, {}
     M.testCollision = false
@@ -2279,6 +2648,8 @@ local function onInit()
     ui.addHandler("BJEditorPropsDuplicate", onDuplicateProp)
     ui.addHandler("BJEditorPropsSplitLine", onSplitPropLine)
     ui.addHandler("BJEditorPropsStraightenLine", onStraightenPropLine)
+    ui.addHandler("BJEditorPropsAddNode", onAddPropNode)
+    ui.addHandler("BJEditorPropsRemoveNode", onRemovePropNode)
     ui.addHandler("BJEditorPropsTeleportTo", onTeleportToProp)
     ui.addHandler("BJEditorPropsSetToVehicle", onSetPropToVehicle)
     ui.addHandler("BJEditorPropsArm", onArmProp)

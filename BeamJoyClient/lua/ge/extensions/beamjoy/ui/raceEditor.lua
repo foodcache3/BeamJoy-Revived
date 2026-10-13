@@ -977,7 +977,8 @@ local function onWorldClick(clickType, data)
     -- menu/sidebar selection wins that conflict rather than this raycast fighting it. A hit on any
     -- other gate/start still switches selection to it, world-click included, even while something
     -- else is currently active.
-    -- props : a single one round its base, a line by either end or its middle (propEditor.pick)
+    -- props : a single one round its base, a line by its ends or nodes, the selected line's path
+    -- adding a node (propEditor.pick)
     local propT, propIndex, propPart = propEditor.pick(camPos, rayDir)
     if propT and propT < bestT then
         return propEditor.clickSelect(propIndex, propPart)

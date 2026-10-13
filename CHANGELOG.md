@@ -8,7 +8,17 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2683, server build 2456.
+Version 1.11.0 : client build 2684, server build 2457.
+
+- **New : lines bend through as many nodes as you like** (direct request : like the game's own spline
+  editor), for lines of props, curbs, walls and painted lines alike. The line runs as a smooth curve
+  through every node, its props spread evenly along it. With a line selected, click its path to add a
+  node there, Alt+click the ground to make it longer from its nearer end (that end becoming a node),
+  and Delete takes the selected node out instead of the whole line. In the props list, the line's
+  nodes are numbered between its two ends to select them, with "+ Node" (halfway to the next point),
+  "Remove node" and "Straighten" (every node out). Ctrl+drag on a node moves the whole line. A line
+  bent before keeps its exact curve ; its bend becomes its first node once it's edited. *(client +
+  server : the server keeps the nodes when a race or an arena is saved)*
 
 - **Fixed : a race's gates and start positions didn't show when it was opened** (direct report :
   they only appeared once one was selected). Opening a race, saving it as a new one or importing a
