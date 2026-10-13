@@ -11,6 +11,9 @@ angular.module("beamjoy").component("bjSlider", {
         hardMin: "<?",
         hardMax: "<?",
         step: "<?",
+        // optional finer step for a typed value (direct request : a prop's gap, size and turn typed
+        // to two decimals while the slider moves in coarser steps)
+        typeStep: "<?",
         disabled: "<?",
     },
     templateUrl: "/ui/modModules/beamjoy/cmps/slider/app.html",
@@ -121,7 +124,8 @@ angular.module("beamjoy").component("bjSlider", {
             // native range input's own drag/CEF quirks happened to produce instead of snapping to
             // the intended increment. Now snaps to the actual configured `step` (falling back to
             // the old 0.1 only when no step was given at all, matching prior behavior for those).
-            const step = this.step > 0 ? this.step : 0.1;
+            // a typed value kept to `typeStep` where there's one : a drag's is on `step` already
+            const step = this.typeStep > 0 ? this.typeStep : this.step > 0 ? this.step : 0.1;
             let value = Math.round(raw / step) * step;
             // guard against floating-point residue (e.g. 0.1 + 0.2-style drift) from the division
             // above before comparing/writing back
@@ -149,7 +153,14 @@ angular.module("beamjoy").component("bjSlider", {
             }
         );
         $scope.$watch(
-            () => ({ min: this.min, max: this.max, hardMin: this.hardMin, hardMax: this.hardMax, step: this.step }),
+            () => ({
+                min: this.min,
+                max: this.max,
+                hardMin: this.hardMin,
+                hardMax: this.hardMax,
+                step: this.step,
+                typeStep: this.typeStep,
+            }),
             () => {
                 updateNumberRange();
                 updatePercent();

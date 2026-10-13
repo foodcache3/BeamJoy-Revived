@@ -284,27 +284,29 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
     };
     // the eyedropper (direct request, in place of Duplicate) : that prop armed in the drawer, to
     // place more of it
+    // a prop of a group (or of a selection) : all of them ; Shift : that one alone
     p.eyedrop = (event, idx) => {
         stop(event);
         p.swap = null;
-        send("BJEditorPropsEyedrop", [idx + 1]);
+        send("BJEditorPropsEyedrop", [idx + 1, !!(event && event.shiftKey)]);
         p.drawerOpen = true;
     };
 
     // SELECTION (direct request : multiple selection and groups) : Ctrl+click adds a prop to the
-    // selection (or takes it out), Shift+click picks one of a group alone ; a prop of a group brings
-    // its group. The selection moves, turns, copies and deletes as one
+    // selection (or takes it out), Shift+click picks one of a group alone, Ctrl+Shift+click adds or
+    // takes out one of a group alone ; a prop of a group brings its group. The selection moves,
+    // turns, copies and deletes as one
     p.isSelected = (idx) => p.selected.includes(idx);
     p.severalSelected = () => p.selected.length > 1;
     p.selectionText = () => translate(T("selection.count")).replace("{n}", p.selected.length);
     p.selectionGrouped = () => p.selected.some((i) => p.props[i] && p.props[i].group);
+    // a plain click on the selected row unselects : Lua decides, knowing the keys even when this
+    // click doesn't carry them (direct report : Ctrl+click on the selected row cleared it all)
     p.select = (event, idx) => {
         stop(event);
-        const mode = event && event.ctrlKey ? "add" : event && event.shiftKey ? "alone" : "";
-        if (!mode && p.active === idx) {
-            send("BJEditorPropsSelect", [null]);
-            return;
-        }
+        const ctrl = !!(event && event.ctrlKey);
+        const shift = !!(event && event.shiftKey);
+        const mode = ctrl && shift ? "addAlone" : ctrl ? "add" : shift ? "alone" : "";
         send("BJEditorPropsSelect", [idx + 1, "", mode]);
     };
     p.selectEnd = (event, idx, part) => {
@@ -323,14 +325,21 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
         stop(event);
         send("BJEditorPropsUngroup");
     };
+    // the selected prop alone (picked with Shift+click) out of its group
+    p.ungroupOne = (event, idx) => {
+        stop(event);
+        if (p.active !== idx) return;
+        send("BJEditorPropsUngroup");
+    };
     p.deleteSelected = (event) => {
         stop(event);
         send("BJEditorPropsDeleteSelected");
     };
 
     // CLIPBOARD (direct request : props pasted into another race or arena) : Copy takes the
-    // selection, or every prop when nothing is selected ; Paste adds them where they were
-    p.copyTooltip = () => translate(T(p.selected.length > 0 ? "copy.selection" : "copy.all"));
+    // selection, or every prop when nothing is selected ; Paste adds them where they were. One
+    // tooltip for both (direct request : it didn't follow the selection)
+    p.copyTooltip = () => translate(T("copy.all"));
     p.pasteTooltip = () => {
         const clip = p.clipboard || {};
         if (!clip.entries) return translate(T("paste.empty"));

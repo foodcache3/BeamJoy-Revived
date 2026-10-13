@@ -88,7 +88,7 @@
         ng-if="$ctrl.mode === 'number'"
         min="{{$ctrl.numberMin}}"
         max="{{$ctrl.numberMax}}"
-        step="{{$ctrl.step}}"
+        step="{{$ctrl.typeStep || $ctrl.step}}"
         ng-disabled="$ctrl.disabled"
         ng-blur="$ctrl.toggleMode()"
         ng-keydown="$event.key === 'Enter' && $event.target.blur()"

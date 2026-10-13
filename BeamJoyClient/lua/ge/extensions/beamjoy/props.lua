@@ -33,7 +33,7 @@
 --- ground under it ; a single prop's tilt is its own `up`.
 --- `capA` / `capB` (optional, a line's) : a mesh at its first / last end, butting against the
 --- line's end prop and facing out of the line, turned `capAYaw` / `capBYaw` degrees (its tuning
---- yaw, or that and a half turn when flipped) and lifted `capALift` / `capBLift` (mesh units).
+--- yaw, plus a quarter turn each time it was turned) and lifted `capALift` / `capBLift` (mesh units).
 ---
 --- Curbs and walls : `{ kind = "sweep", profile, a, b, mid, count, followGround, heights, group }`,
 --- a cross-section swept along a line's path into one mesh (SWEEPS below).
@@ -1054,6 +1054,29 @@ local function reachAlong(shape, yaw, scales)
     end
     if ahead - back < .05 then return nil end
     return back, ahead
+end
+
+--- the gap that lays a line's props end to end, none between them (direct request : a fixed gap
+--- starts there) : its mesh's reach along the line, scaled (the two meshes' average when every
+--- other is another) ; a prefab's own length (prefabTuning). nil for a mesh not measured
+---@param line table
+---@return number?
+function M.gaplessGap(line)
+    local scales = scalesOf(line)
+    if type(line.prefab) == "string" and type(line.parts) == "table" then
+        local t = M.prefabTuning(line.prefab)
+        return t.length * (tonumber(line.scale) or 1)
+    end
+    local yaw = tonumber(line.yaw) or 0
+    local back, ahead = reachAlong(line.shape, yaw, scales)
+    if not back then return nil end
+    local span = ahead - back
+    local alt = type(line.alt) == "string" and line.alt ~= line.shape and line.alt or nil
+    if alt then
+        local altBack, altAhead = reachAlong(alt, yaw + (tonumber(line.altYaw) or 0), scales)
+        if altBack then span = (span + altAhead - altBack) / 2 end
+    end
+    return span
 end
 
 ---@param pts vec3[]

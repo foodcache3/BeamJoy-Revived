@@ -201,7 +201,7 @@
             <tr ng-if="prop.kind === 'paint'">
                 <td class="text-right">{{'beamjoy.window.config.tabs.races.props.width' | translate}}</td>
                 <td>
-                    <bj-slider ng-model="prop.width" min="0.05" max="4" hard-max="12" step="0.05"></bj-slider>
+                    <bj-slider ng-model="prop.width" min="0.05" max="4" hard-max="12" step="0.05" type-step="0.01"></bj-slider>
                 </td>
             </tr>
             <tr ng-if="prop.kind === 'line'">
@@ -313,7 +313,7 @@
             <tr ng-if="prop.kind === 'line' && prop.gap">
                 <td class="text-right">{{'beamjoy.window.config.tabs.races.props.gap' | translate}}</td>
                 <td>
-                    <bj-slider ng-model="prop.gap" min="0.5" max="20" hard-max="100" step="0.05"></bj-slider>
+                    <bj-slider ng-model="prop.gap" min="0.5" max="20" hard-max="100" step="0.05" type-step="0.01"></bj-slider>
                 </td>
             </tr>
             <tr ng-if="prop.kind === 'line' && !prop.gap">
@@ -330,13 +330,17 @@
                     {{'beamjoy.window.config.tabs.races.props.yaw' | translate}}
                 </td>
                 <td>
-                    <bj-slider ng-model="prop.yaw" min="-180" max="180" step="5"></bj-slider>
+                    <bj-slider ng-model="prop.yaw" min="-180" max="180" step="5" type-step="0.01"></bj-slider>
                 </td>
             </tr>
-            <tr ng-if="prop.kind === 'line' || prop.kind === 'sweep' || prop.kind === 'paint'">
+            <!-- a line, a curb, a painted line : its props on the ground between its ends ; a single
+                 prop (direct request) : on the ground, laid on its slope, wherever it's moved -->
+            <tr>
                 <td
                     class="text-right"
-                    title="{{'beamjoy.window.config.tabs.races.props.followGround.tooltip' | translate}}"
+                    title="{{((prop.kind === 'line' || prop.kind === 'sweep' || prop.kind === 'paint')
+                        ? 'beamjoy.window.config.tabs.races.props.followGround.tooltip'
+                        : 'beamjoy.window.config.tabs.races.props.followGround.single.tooltip') | translate}}"
                 >
                     {{'beamjoy.window.config.tabs.races.props.followGround' | translate}}
                 </td>
@@ -345,14 +349,14 @@
             <tr ng-if="prop.kind !== 'sweep' && prop.kind !== 'paint'">
                 <td class="text-right">{{'beamjoy.window.config.tabs.races.props.scale' | translate}}</td>
                 <td>
-                    <bj-slider ng-model="prop.scale" min="0.25" max="4" hard-max="10" step="0.05"></bj-slider>
+                    <bj-slider ng-model="prop.scale" min="0.25" max="4" hard-max="10" step="0.05" type-step="0.01"></bj-slider>
                 </td>
             </tr>
             <tr>
                 <td class="text-right">
                     {{'beamjoy.window.config.tabs.races.positioning' | translate}}
                 </td>
-                <td class="d-flex gap-1">
+                <td class="d-flex gap-1 flex-wrap">
                     <button
                         class="btn info"
                         ng-if="prop.kind !== 'line' && prop.kind !== 'sweep' && prop.kind !== 'paint'"
@@ -368,6 +372,14 @@
                         title="{{'beamjoy.window.config.tabs.races.props.splitPrefab.tooltip' | translate}}"
                     >
                         {{'beamjoy.window.config.tabs.races.props.splitPrefab' | translate}}
+                    </button>
+                    <button
+                        class="btn warning"
+                        ng-if="prop.group"
+                        ng-click="$ctrl.p.ungroupOne($event, $index)"
+                        title="{{'beamjoy.window.config.tabs.races.props.ungroupOne.tooltip' | translate}}"
+                    >
+                        {{'beamjoy.window.config.tabs.races.props.selection.ungroup' | translate}}
                     </button>
                     <button
                         class="btn warning"

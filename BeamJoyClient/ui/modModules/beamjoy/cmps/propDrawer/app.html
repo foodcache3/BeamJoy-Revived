@@ -1170,5 +1170,8 @@
     <span ng-if="$ctrl.placing.keepPlacing" class="pd-line">{{$ctrl.T('hints.keepOn')}}</span>
     <span ng-if="$ctrl.placing.fixedRotation" class="pd-line">{{$ctrl.T('hints.fixedOn')}}</span>
     <span ng-if="$ctrl.placing.picked" class="pd-line">{{$ctrl.T('hints.picked')}}</span>
+    <span ng-if="$ctrl.placing.group" class="pd-line">
+        {{$ctrl.T('hints.group').replace('{n}', $ctrl.placing.group)}}
+    </span>
     <span><span class="pd-kbd">{{$ctrl.T('keys.stop')}}</span>{{$ctrl.T('hints.stop')}}</span>
 </div>

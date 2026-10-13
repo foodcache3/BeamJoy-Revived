@@ -276,6 +276,8 @@ local function sanitize(props, holder)
                         stretch = saneStretch(p.stretch),
                         solid = passable(p.solid),
                         group = saneGroup(p.group),
+                        -- on the ground and laid on its tilt wherever the editor moves it
+                        followGround = p.followGround == true or nil,
                     }
                     entry.parts = saneParts(p.parts)
                     entry.prefab = entry.parts and sanePrefabId(p.prefab) or nil

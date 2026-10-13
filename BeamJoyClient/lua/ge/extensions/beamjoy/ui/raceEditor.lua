@@ -778,6 +778,9 @@ local function onOpen(raceId)
     propEditor.attach(propHost)
     pushUpdate()
     pushActive()
+    -- its gates and start positions drawn now (direct report : they only showed once one was
+    -- selected ; the props editor's own refresh doesn't redraw them)
+    extensions.hook("onBJRaceMarkersRefresh")
     M.savedRace = table.clone(M.race) -- after pushUpdate, so .distance is already computed
     beamjoy_communications_ui.send("BJEditorDirty", M.dirty)
     beamjoy_communications_ui.send("BJEditorRaceSnapToGround", M.snapToGroundEnabled)
@@ -1314,6 +1317,7 @@ local function onSaveAsNew(name)
         propEditor.reset()
         pushUpdate()
         pushActive()
+        extensions.hook("onBJRaceMarkersRefresh")
         M.savedRace = table.clone(M.race)
         beamjoy_communications_ui.send("BJEditorDirty", M.dirty)
         beamjoy_communications_ui.send("BJEditorRaceSavedAsNew", raceId)
@@ -1369,6 +1373,7 @@ local function onImportCode(race)
     markDirty()
     pushUpdate()
     pushActive()
+    extensions.hook("onBJRaceMarkersRefresh")
 end
 
 ---@param activityEditor BJActivityEditorCommon

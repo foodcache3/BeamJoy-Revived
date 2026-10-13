@@ -8,7 +8,60 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2682, server build 2455.
+Version 1.11.0 : client build 2683, server build 2456.
+
+- **Fixed : a race's gates and start positions didn't show when it was opened** (direct report :
+  they only appeared once one was selected). Opening a race, saving it as a new one or importing a
+  code now draws them at once. *(client only)*
+
+- **Fixed : "Follow the ground" came back on when a line was moved** (direct report). A line moved
+  or reshaped with snapping on keeps its own setting ; with snapping off it still stops following
+  the ground. A line copied with the eyedropper keeps its setting too. *(client only)*
+
+- **Fixed : turning an eyedropped line with the wheel turned its props twice** (direct report : the
+  props spun on their own while the line turned). They keep their turn along the line. *(client
+  only)*
+
+- **Fixed : Ctrl+click on the selected row of the props list cleared the whole selection** (direct
+  report) instead of taking that prop out. *(client only)*
+
+- **Fixed : the end cap's turn button seemed to do nothing** (direct report). It turned the cap half
+  round, which looks the same on a cap that's alike front and back ; it now turns it a quarter
+  turn each press. *(client only)*
+
+- **Fixed : clicking props close together picked the wrong one** (direct report : the mouse raycast
+  was inaccurate). A click now goes to the mesh under the mouse (the nearest one the ray meets, a
+  line's props and end caps included), or to a curb, wall or painted line passed over ; a line's end
+  or bend handle wins only when the mouse is on the drawn handle. *(client only)*
+
+- **Changed : "Fixed gap" starts with the props end to end** (direct request). Turned on, a line's
+  gap is its mesh's own length along the line (no gap between props) instead of its spacing at the
+  time. *(client only)*
+
+- **Changed : the collision button on a selection of several props** (direct request) sets them all,
+  to the opposite of the button pressed. *(client only)*
+
+- **Changed : the Copy button's tooltip** is now always "Copy all/selected props" (direct request).
+  *(client only)*
+
+- **New : Ctrl+Shift+click adds or removes one prop of a group** (direct request), in the world and
+  in the props list, without the rest of its group. Such props can be ungrouped on their own : the
+  selection's Ungroup takes out only the props selected, and a single prop of a group selected
+  (Shift+click) has its own Ungroup button. A group left with one prop stops being a group.
+  *(client only)*
+
+- **New : the eyedropper on a group** (direct request). On a prop of a group, or of a selection of
+  several, it arms copies of them all, placed together round their middle at the mouse, turned by
+  the wheel, stacked props staying stacked ; Shift+click on the eyedropper takes that prop alone.
+  The copies are a group of their own. *(client only)*
+
+- **New : "Follow the ground" for single props** (direct request). On, the prop stands on the
+  ground, laid on its slope, wherever it's moved or turned ; off, it stands straight up. A prop
+  placed with snapping on starts with it on, as do the props of a line split while it followed the
+  ground. *(client + server : the server keeps the setting when a race or an arena is saved)*
+
+- **Changed : typed values to two decimals** (direct request) for a prop's gap, size, turn and a
+  painted line's width : the slider still moves in its own steps. *(client only)*
 
 - **Fixed : the props selection bar scrolled out of sight** (direct report : "where did the option
   to make a group go?"). Group, Ungroup, Delete and Clear for several props selected sat at the top

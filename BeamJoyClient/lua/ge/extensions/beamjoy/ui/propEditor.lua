@@ -106,6 +106,14 @@ local function shiftHeld()
     return ok and held == true
 end
 
+--- what a click does to the selection, by the keys held (M.onSelectProp)
+---@return "add"|"alone"|"addAlone"|nil
+local function selectMode()
+    local ctrl, shift = ctrlHeld(), shiftHeld()
+    if ctrl and shift then return "addAlone" end
+    return ctrl and "add" or shift and "alone" or nil
+end
+
 -- Left Ctrl is the game's node grabber (its default "nodegrabberRender" binding) : held, it took
 -- every click (beamjoy_inputs drops clicks while it's on), so Ctrl+click never selected several
 -- props (direct report). The node grabber is off while an editor with props is open, as the world
@@ -422,12 +430,27 @@ local function groupOf(index)
     return out
 end
 
+--- a group left with a single prop (the others ungrouped or deleted) is no group : that prop's
+--- dropped too
+local function pruneGroups()
+    local members = {}
+    for _, p in ipairs(props() or {}) do
+        local g = tonumber(p.group)
+        if g then members[g] = (members[g] or 0) + 1 end
+    end
+    for _, p in ipairs(props() or {}) do
+        local g = tonumber(p.group)
+        if g and members[g] < 2 then p.group = nil end
+    end
+end
+
 --- selects a prop (direct request : multiple selection and groups). A prop of a group brings its
 --- group ; "add" (Ctrl+click) adds it to what's selected, or takes it away when it was in ;
---- "alone" (Shift+click) selects it without its group, to edit one of a group
+--- "alone" (Shift+click) selects it without its group, to edit one of a group ; "addAlone"
+--- (Ctrl+Shift+click, direct request) adds or takes away that one prop of a group, its group left
 ---@param index integer?
 ---@param part "a"|"b"|"mid"|nil a line's handle (its first end by default)
----@param mode "add"|"alone"|nil
+---@param mode "add"|"alone"|"addAlone"|nil
 function M.onSelectProp(index, part, mode)
     if not props() then return end
     local prop = index and props()[index]
@@ -436,8 +459,8 @@ function M.onSelectProp(index, part, mode)
     if index then disarmProp() end
     if not prop then
         M.activePropIndex, M.propSelection = nil, {}
-    elseif mode == "add" and M.activePropIndex then
-        local members = groupOf(index)
+    elseif (mode == "add" or mode == "addAlone") and M.activePropIndex then
+        local members = mode == "addAlone" and { index } or groupOf(index)
         local removing = table.includes(M.propSelection, index)
         local selection = {}
         for _, i in ipairs(M.propSelection) do
@@ -456,7 +479,7 @@ function M.onSelectProp(index, part, mode)
             M.activePropIndex = index
         end
     else
-        M.propSelection = mode == "alone" and { index } or groupOf(index)
+        M.propSelection = (mode == "alone" or mode == "addAlone") and { index } or groupOf(index)
         M.activePropIndex = index
     end
     local chosen = M.activePropIndex and props()[M.activePropIndex]
@@ -487,11 +510,13 @@ local function snapLine(line)
     end
 end
 
---- a line edited by its handles follows the ground as the editor's snapping says (direct report :
---- a line laid with snapping on still followed the ground, edited with it off), measured again
+--- a line edited by its handles stops following the ground with the editor's snapping off (direct
+--- report : a line laid with snapping on still followed the ground, edited with it off), and keeps
+--- its own "Follow the ground" with it on (direct report : turned off, it came back on at the next
+--- move) ; measured again
 ---@param line table
 local function lineEdited(line)
-    line.followGround = snapOn()
+    if not snapOn() then line.followGround = false end
     fitLineCount(line)
     updateLineHeights(line)
 end
@@ -676,10 +701,13 @@ updatePropGizmo = function()
             markDirty()
             propsChanged()
         end, function()
-            if snapOn() and gizmo.tool ~= "rotate" then
+            -- dropped on the ground with snapping on ; one following the ground (its own switch,
+            -- direct request) is on it and laid on its tilt wherever it's moved or turned to
+            local follow = prop.followGround == true
+            if gizmo.tool ~= "rotate" and (snapOn() or follow) then
                 prop.pos.z = groundHeightAt(toVec(prop.pos))
-                tiltSingle(prop)
             end
+            if follow then tiltSingle(prop) end
             pushUpdate()
             updatePropGizmo()
             propsChanged()
@@ -736,6 +764,46 @@ local function addProp(prop, unselected)
     propsChanged()
 end
 
+---@return integer a group no prop has yet
+local function newGroupId()
+    local id = 0
+    for _, p in ipairs(props()) do id = math.max(id, tonumber(p.group) or 0) end
+    return id + 1
+end
+
+--- several entries added at once (a group eyedropped, the clipboard pasted) : their groups kept
+--- together, apart from the props' own groups ; selected together unless `unselected`
+---@param list table[]
+---@param unselected boolean?
+local function addProps(list, unselected)
+    local base, groups = newGroupId() - 1, {}
+    local first = #props() + 1
+    for _, prop in ipairs(list) do
+        -- its own tables (a line's ends, its heights) : nobody else's
+        local copy = deepcopy(prop)
+        local g = tonumber(copy.group)
+        if g then
+            if not groups[g] then
+                base = base + 1
+                groups[g] = base
+            end
+            copy.group = groups[g]
+        end
+        table.insert(props(), copy)
+    end
+    if not unselected then
+        M.propSelection = {}
+        for i = first, #props() do M.propSelection[#M.propSelection + 1] = i end
+        M.activePropIndex, M.activePropPart = first, nil
+        hostSelects()
+        updatePropGizmo()
+    end
+    markDirty()
+    pushUpdate()
+    if not unselected then pushActive() end
+    propsChanged()
+end
+
 ---@param index integer
 ---@param partial table scale / count / yaw / followGround / gap (metres) / fixedGap (on : a gap
 ---of the line's own spacing now ; off : its count kept) / width (a painted line's, metres)
@@ -743,7 +811,20 @@ local function onSetProp(index, partial)
     local prop = props() and props()[index]
     if not prop or type(partial) ~= "table" then return end
     if partial.scale ~= nil and not isSwept(prop) then
-        prop.scale = math.max(.1, math.min(tonumber(partial.scale) or 1, 10))
+        prop.scale = round2(math.max(.1, math.min(tonumber(partial.scale) or 1, 10)))
+    end
+    -- a single prop (a prefab too) following the ground (direct request) : on it, laid on its
+    -- tilt ; off, stood straight up again, its heading kept
+    if not isPath(prop) and partial.followGround ~= nil and prop.pos and prop.dir then
+        prop.followGround = partial.followGround == true
+        if prop.followGround then
+            prop.pos.z = groundHeightAt(toVec(prop.pos))
+            tiltSingle(prop)
+        else
+            prop.dir = xyz(flatDir(toVec(prop.dir)))
+            prop.up = { x = 0, y = 0, z = 1 }
+        end
+        updatePropGizmo()
     end
     if prop.kind == "paint" and tonumber(partial.width) then
         prop.width = round2(math.max(beamjoy_props.PAINT_WIDTH_MIN,
@@ -757,16 +838,21 @@ local function onSetProp(index, partial)
     if prop.kind == "line" then
         if partial.fixedGap ~= nil then
             if partial.fixedGap == true and not prop.gap then
-                local count = math.max(1, tonumber(prop.count) or 1)
-                local spacing = count > 1 and beamjoy_props.lineLength(prop) / (count - 1) or
-                    beamjoy_props.tuning(prop.shape).length * (prop.scale or 1)
+                -- its props end to end, no gap between them (direct request) ; for a mesh not
+                -- measured, the line's own spacing now
+                local spacing = beamjoy_props.gaplessGap(prop)
+                if not spacing then
+                    local count = math.max(1, tonumber(prop.count) or 1)
+                    spacing = count > 1 and beamjoy_props.lineLength(prop) / (count - 1) or
+                        beamjoy_props.tuning(prop.shape).length * (prop.scale or 1)
+                end
                 prop.gap = math.max(GAP_MIN, math.min(round2(spacing), GAP_MAX))
             elseif partial.fixedGap == false then
                 prop.gap = nil
             end
         end
         if partial.gap ~= nil and prop.gap and tonumber(partial.gap) then
-            prop.gap = math.max(GAP_MIN, math.min(tonumber(partial.gap), GAP_MAX))
+            prop.gap = round2(math.max(GAP_MIN, math.min(tonumber(partial.gap), GAP_MAX)))
         end
         if partial.count ~= nil and not prop.gap then
             local others = beamjoy_props.total(props()) - beamjoy_props.weight(prop)
@@ -776,7 +862,7 @@ local function onSetProp(index, partial)
                 math.floor((beamjoy_props.MAX_PROPS - others) / each)))
         end
         if partial.yaw ~= nil then
-            prop.yaw = ((tonumber(partial.yaw) or 0) + 180) % 360 - 180
+            prop.yaw = round2(((tonumber(partial.yaw) or 0) + 180) % 360 - 180)
         end
         if partial.followGround ~= nil then prop.followGround = partial.followGround == true end
         fitLineCount(prop)
@@ -790,20 +876,31 @@ end
 --- cars hit the prop, or drive through it (direct request), whatever its mesh : one with no
 --- collision of its own gets its visible mesh's (beamjoy_props collisionOf). The editor's own
 --- preview is only solid while its collision switch is on (M.testCollision) : this shows there and
---- in the race
+--- in the race. A prop of a selection of several : the whole selection set so (direct request),
+--- whatever each was
 ---@param index integer
 ---@param solid boolean
 local function onSetPropSolid(index, solid)
-    local prop = props() and props()[index]
-    -- a curb or a wall is always solid (beamjoy_props SWEEPS), a painted line never
-    if not prop or isSwept(prop) then return end
-    -- kept only where it differs from its meshes' own ; not `cond and x or nil`, which is never false
+    if not props() or not props()[index] then return end
+    local targets = (#M.propSelection > 1 and table.includes(M.propSelection, index)) and M.propSelection or
+        { index }
     local want = solid == true
-    if want == beamjoy_props.solidByDefault(prop) then
-        prop.solid = nil
-    else
-        prop.solid = want
+    local any = false
+    for _, i in ipairs(targets) do
+        local prop = props()[i]
+        -- a curb or a wall is always solid (beamjoy_props SWEEPS), a painted line never
+        if prop and not isSwept(prop) then
+            -- kept only where it differs from its meshes' own ; not `cond and x or nil`, which is
+            -- never false
+            if want == beamjoy_props.solidByDefault(prop) then
+                prop.solid = nil
+            else
+                prop.solid = want
+            end
+            any = true
+        end
     end
+    if not any then return end
     markDirty()
     pushUpdate()
     propsChanged()
@@ -813,6 +910,7 @@ end
 local function onDeleteProp(index)
     if not props() or not props()[index] then return end
     table.remove(props(), index)
+    pruneGroups()
     M.activePropIndex, M.activePropPart, M.propSelection = nil, nil, {}
     gizmo.hide()
     markDirty()
@@ -828,6 +926,7 @@ local function onDeleteSelectedProps()
     for _, i in ipairs(doomed) do
         if props()[i] then table.remove(props(), i) end
     end
+    pruneGroups()
     M.activePropIndex, M.activePropPart, M.propSelection = nil, nil, {}
     gizmo.hide()
     markDirty()
@@ -845,18 +944,21 @@ local function onGroupProps()
     for _, i in ipairs(M.propSelection) do
         if props()[i] then props()[i].group = id + 1 end
     end
+    pruneGroups()
     markDirty()
     pushUpdate()
     pushActive()
     propsChanged()
 end
 
---- the selected props leave their groups (they stay selected)
+--- the selected props leave their groups (they stay selected) : a whole group, or some of it
+--- picked alone (Shift+click, Ctrl+Shift+click ; direct request)
 local function onUngroupProps()
     if not props() then return end
     for _, i in ipairs(M.propSelection) do
         if props()[i] then props()[i].group = nil end
     end
+    pruneGroups()
     markDirty()
     pushUpdate()
     pushActive()
@@ -928,13 +1030,6 @@ local function replaceProp(index, singles, group)
     propsChanged()
 end
 
----@return integer a group no prop has yet
-local function newGroupId()
-    local id = 0
-    for _, p in ipairs(props()) do id = math.max(id, tonumber(p.group) or 0) end
-    return id + 1
-end
-
 --- a line becomes its props, one by one, each where it was (a line of prefabs, its prefabs)
 ---@param index integer
 local function onSplitPropLine(index)
@@ -955,6 +1050,8 @@ local function onSplitPropLine(index)
             solid = line.solid,
             parts = not other and type(line.parts) == "table" and table.clone(line.parts) or nil,
             prefab = not other and line.prefab or nil,
+            -- on the ground as the line was
+            followGround = line.followGround ~= false or nil,
         }
     end)
     -- its end caps, where they were
@@ -969,6 +1066,7 @@ local function onSplitPropLine(index)
             lift = c.lift,
             stretch = line.stretch and table.clone(line.stretch) or nil,
             solid = line.solid,
+            followGround = line.followGround ~= false or nil,
         }
     end
     replaceProp(index, singles, tonumber(line.group))
@@ -1028,6 +1126,10 @@ local function onSetPropToVehicle(index)
     prop.pos = xyz(at)
     prop.dir = xyz(singleDir(facing, beamjoy_props.tuning(prop.shape).yaw))
     prop.up = { x = 0, y = 0, z = 1 }
+    if prop.followGround == true then
+        prop.pos.z = groundHeightAt(at)
+        tiltSingle(prop)
+    end
     updatePropGizmo()
     markDirty()
     pushUpdate()
@@ -1138,6 +1240,53 @@ local function sweepPlacingEntry(p)
     return sweep, beamjoy_props.lineLength(sweep)
 end
 
+--- what a release would place with a group eyedropped (armGroup) : its copies, their middle at the
+--- mouse, turned round it by the wheel, as high above what the mouse is on as their middle stood
+--- above the ground (stacked props stay stacked). Their lines measured on the ground again only
+--- once the mouse or the turn moved (the ghost asks every frame)
+---@param p table M.placing
+---@return table[]? entries
+local function groupPlacingEntries(p)
+    local g = p.group
+    local at = p.drag and p.drag.a or p.hit
+    if not at then return nil end
+    local turnBy = p.rot % 360
+    local last = g.last
+    if last and last.at:distance(at) < .02 and last.turnBy == turnBy and last.snap == snapOn() then
+        p.capped = last.capped
+        if last.capped then return nil end
+        return deepcopy(last.entries)
+    end
+    g.lift = g.lift or g.centre.z - groundHeightAt(g.centre)
+    local target = vec3(at.x, at.y, at.z + g.lift)
+    local function place(v)
+        local o = beamjoy_props.turn(toVec(v) - g.centre, turnBy)
+        return xyz(target + o)
+    end
+    local function turned(v)
+        return v and xyz(beamjoy_props.turn(toVec(v), turnBy)) or nil
+    end
+    local entries = {}
+    for k, e in ipairs(g.entries) do
+        local copy = deepcopy(e)
+        if isPath(copy) then
+            for _, key in ipairs({ "a", "b", "mid" }) do
+                if copy[key] then copy[key] = place(copy[key]) end
+            end
+            updateLineHeights(copy)
+        elseif copy.pos then
+            copy.pos = place(copy.pos)
+            copy.dir = turned(copy.dir)
+            copy.up = turned(copy.up)
+        end
+        entries[k] = copy
+    end
+    p.capped = beamjoy_props.total(entries) > beamjoy_props.MAX_PROPS - beamjoy_props.total(props())
+    g.last = { at = vec3(at), turnBy = turnBy, snap = snapOn(), capped = p.capped, entries = entries }
+    if p.capped then return nil end
+    return deepcopy(entries)
+end
+
 --- what a release would place now : one entry (a single prop or a line), with the line's length.
 --- A prefab is laid in a line too (direct request), one every its own length, the gap fixed so a
 --- longer line takes more of them (a guardrail stays one rail). What the eyedropper picked up
@@ -1147,6 +1296,8 @@ local function placingEntry()
     local p = M.placing
     -- the line being dragged holds fewer props than its length asks for : the props are nearly full
     p.capped = false
+    -- a group eyedropped : a list of entries
+    if p.group then return groupPlacingEntries(p), 0 end
     if p.sweep or p.paint then return sweepPlacingEntry(p) end
     local tpl = p.template or {}
     local scale = tonumber(tpl.scale) or 1
@@ -1227,8 +1378,9 @@ local function placingEntry()
                 line[key] = nil
             end
         end
-        line.yaw = wrapYaw((tonumber(line.yaw) or 0) + turnBy)
-        line.followGround = snapOn()
+        -- its props keep their turn along it (its yaw is the line's own : turning it too turned
+        -- them twice, direct report). Its own "Follow the ground" kept, off with snapping off
+        if not snapOn() then line.followGround = false end
         local room = math.floor((beamjoy_props.MAX_PROPS - beamjoy_props.total(props())))
         p.capped = beamjoy_props.weight(line) > room
         local meters = 0
@@ -1251,7 +1403,8 @@ local function placingEntry()
         prefab.scale = scale
         prefab.stretch = tpl.stretch
         prefab.solid = tpl.solid
-        -- laid on the ground's tilt, snapping on
+        -- laid on the ground's tilt, snapping on, and following it from then on
+        prefab.followGround = snapOn() or nil
         if snapOn() then tiltSingle(prefab) end
         return prefab, 0
     end
@@ -1276,6 +1429,7 @@ local function placingEntry()
         solid = tpl.solid,
         lift = lift,
     }
+    single.followGround = snapOn() or nil
     if snapOn() then tiltSingle(single) end
     return single, 0
 end
@@ -1312,8 +1466,10 @@ local function pushPlacing(entry, meters)
         prefab = p.prefab,
         sweep = p.sweep,
         paint = p.paint,
-        dragging = p.drag ~= nil,
-        count = entry and beamjoy_props.weight(entry) or 0,
+        -- a group eyedropped is placed where the click went down, not dragged
+        dragging = p.drag ~= nil and not p.group,
+        -- a group : its entries listed
+        count = entry and (entry[1] and beamjoy_props.total(entry) or beamjoy_props.weight(entry)) or 0,
         meters = math.floor((meters or 0) + .5),
         rot = p.rot,
         spacing = round2(p.spacing),
@@ -1322,8 +1478,10 @@ local function pushPlacing(entry, meters)
         keepPlacing = M.keepPlacing,
         fixedRotation = M.fixedRotation,
         picked = p.template ~= nil,
+        group = p.group and #p.group.entries or nil,
     } or { armed = false }
-    local key = p and string.format("%s|%s|%s|%s|%s|%d|%d|%d|%.2f|%s|%s|%s|%s|%s", tostring(p.shape),
+    local key = p and string.format("%s|%s|%s|%s|%s|%s|%d|%d|%d|%.2f|%s|%s|%s|%s|%s", tostring(state.group),
+        tostring(p.shape),
         tostring(p.prefab), tostring(p.sweep), tostring(p.paint),
         tostring(state.dragging), state.count,
         state.meters, state.rot, state.spacing, tostring(state.overWorld), tostring(state.capped),
@@ -1443,13 +1601,52 @@ local function onSetSweepProfile(index, id)
     propsChanged()
 end
 
+--- the eyedropper on a group or a selection of several (direct request) : copies of them all armed,
+--- placed together where they stood round their middle, at the mouse, turned by the wheel
+---@param members integer[]
+local function armGroup(members)
+    local entries, sum, n = {}, vec3(0, 0, 0), 0
+    for _, i in ipairs(members) do
+        local prop = props()[i]
+        if prop then
+            local copy = deepcopy(prop)
+            copy.heights, copy.normals = nil, nil
+            entries[#entries + 1] = copy
+            for _, p in ipairs(propPoints(prop)) do sum, n = sum + p, n + 1 end
+        end
+    end
+    if n == 0 then return end
+    if not propBudget(beamjoy_props.total(entries)) then return disarmProp() end
+    for _, e in ipairs(entries) do
+        if e.shape then beamjoy_propPicker.measure(e.shape) end
+    end
+    local first = entries[1]
+    M.placing = {
+        -- what the drawer shows armed : the first of them
+        shape = first.shape,
+        rot = 0,
+        spacing = 1,
+        group = { entries = entries, centre = sum * (1 / n) },
+    }
+    unselectForPlacing()
+    pushPlacing()
+end
+
 --- the eyedropper (direct request, in place of Duplicate) : a placed prop's mesh or prefab armed,
 --- with what makes it that prop (its scale, collision, a line's other mesh and fixed gap, its turn
---- along a line). A single prop's own heading too while Fixed rotation is on
+--- along a line). A single prop's own heading too while Fixed rotation is on. A prop of a group,
+--- or of a selection of several : all of them (armGroup), unless `alone` (Shift+click)
 ---@param index integer
-local function onEyedropProp(index)
+---@param alone boolean?
+local function onEyedropProp(index, alone)
     local prop = props() and props()[index]
     if not prop then return end
+    -- Shift on the eyedropper, as the UI's click or the game sees it
+    if alone ~= true and not shiftHeld() then
+        local members = (#M.propSelection > 1 and table.includes(M.propSelection, index)) and
+            table.clone(M.propSelection) or groupOf(index)
+        if #members > 1 then return armGroup(members) end
+    end
     -- a curb or a wall : its profile armed ; a painted line : its paint, at its width
     if prop.kind == "sweep" then return onArmSweep(prop.profile) end
     if prop.kind == "paint" then return onArmPaint(prop.paint, prop.width) end
@@ -1499,17 +1696,20 @@ end
 local function placeNow()
     local entry = placingEntry()
     M.placing.drag = nil
-    if not entry or not propBudget(beamjoy_props.weight(entry)) then return end
+    if not entry then return end
+    -- a group eyedropped : its entries
+    local many = entry[1] ~= nil
+    if not propBudget(many and beamjoy_props.total(entry) or beamjoy_props.weight(entry)) then return end
     local io = ui_imgui.GetIO()
     -- the drawer's "Keep placing" (on until turned off), or Ctrl held for this one (direct request :
     -- Shift turns the props while dragging)
     local keepArmed = M.keepPlacing or (io ~= nil and io.KeyCtrl == true)
     if keepArmed then
-        addProp(entry, true)
+        if many then addProps(entry, true) else addProp(entry, true) end
         if beamjoy_props.total(props()) >= beamjoy_props.MAX_PROPS then disarmProp() end
     else
         disarmProp()
-        addProp(entry)
+        if many then addProps(entry) else addProp(entry) end
     end
 end
 
@@ -1563,7 +1763,7 @@ updatePlacing = function()
             -- turns them a degree at a time
             local shift = io ~= nil and io.KeyShift == true
             local fine = ctrlHeld()
-            if p.drag and not shift and not fine then
+            if p.drag and not p.group and not shift and not fine then
                 -- wheel up : more props on the line (closer together), down : fewer (direct request)
                 p.spacing = math.max(PLACE_SPACING_MIN, math.min(p.spacing * (wheel > 0 and 1 / 1.1 or 1.1),
                     PLACE_SPACING_MAX))
@@ -1587,8 +1787,9 @@ updatePlacing = function()
     local entry, meters
     if p.hit or p.drag then entry, meters = placingEntry() end
     if entry then
-        beamjoy_props.show(GHOST_SET, { entry }, { collision = false, collisionType = "None" })
-        drawGhostPanels(entry)
+        local list = entry[1] and entry or { entry }
+        beamjoy_props.show(GHOST_SET, list, { collision = false, collisionType = "None" })
+        for _, e in ipairs(list) do drawGhostPanels(e) end
     else
         beamjoy_props.hide(GHOST_SET)
     end
@@ -1684,30 +1885,7 @@ local function onPasteProps()
     lastPaste = now
     log("I", "beamjoy_propEditor", string.format("pasting %d entries into %d", #clipboard.props, #props()))
     disarmProp()
-    local base, groups = newGroupId() - 1, {}
-    local first = #props() + 1
-    for _, prop in ipairs(clipboard.props) do
-        -- its own tables (a line's ends, its heights) : not the clipboard's, nor the next paste's
-        local copy = deepcopy(prop)
-        local g = tonumber(copy.group)
-        if g then
-            if not groups[g] then
-                base = base + 1
-                groups[g] = base
-            end
-            copy.group = groups[g]
-        end
-        table.insert(props(), copy)
-    end
-    M.propSelection = {}
-    for i = first, #props() do M.propSelection[#M.propSelection + 1] = i end
-    M.activePropIndex, M.activePropPart = first, nil
-    hostSelects()
-    updatePropGizmo()
-    markDirty()
-    pushUpdate()
-    pushActive()
-    propsChanged()
+    addProps(clipboard.props)
 end
 
 --- a placed prop takes another mesh (the drawer's "Swap mesh"), kept where it is and turned by the
@@ -1793,14 +1971,15 @@ local function onSetPropCap(index, which, shape)
     propsChanged()
 end
 
---- a line's end cap turned half round (a mesh made facing the other way)
+--- a line's end cap turned a quarter round, still butting against the line's end (direct report :
+--- turned half round, a cap the same front and back looked untouched, as if the button did nothing)
 ---@param index integer
 ---@param which "a"|"b"
 local function onFlipPropCap(index, which)
     local prop = props() and props()[index]
     local k = which == "a" and "A" or which == "b" and "B" or nil
     if not prop or prop.kind ~= "line" or not k or not prop["cap" .. k] then return end
-    local yaw = wrapYaw((tonumber(prop["cap" .. k .. "Yaw"]) or 0) + 180)
+    local yaw = wrapYaw((tonumber(prop["cap" .. k .. "Yaw"]) or 0) + 90)
     prop["cap" .. k .. "Yaw"] = yaw ~= 0 and yaw or nil
     markDirty()
     pushUpdate()
@@ -1817,47 +1996,149 @@ end
 ---@param radius number
 ---@param camPos vec3
 ---@param rayDir vec3
----@return number? t distance along the ray to the closest approach, only if within radius
+---@return number? t distance along the ray to the closest approach, only if within radius, number?
+---off how far off the ray it passes for its distance (how near the mouse it looks on screen)
 local function rayHitsHandle(pos, radius, camPos, rayDir)
     -- the handles are drawn half a metre above the ground (drawOverlays)
     local p = vec3(pos.x, pos.y, pos.z) + vec3(0, 0, .5)
     local t = (p - camPos):dot(rayDir)
     if t <= 0 then return nil end
-    if (camPos + rayDir * t):distance(p) <= radius then return t end
+    local off = (camPos + rayDir * t):distance(p)
+    if off <= radius then return t, off / t end
     return nil
 end
 
---- the prop under the mouse ray : a single one round its base, a line by either end or its middle
+-- a mesh's box is grown this much (metres) for a click : a thin one (a pole, a sign) still takes it
+local PICK_BOX_PAD = .1
+-- a line's handle wins over a mesh the mouse is also on when the mouse is on the sphere drawn
+-- (within this of its middle, metres ; drawOverlays) and the mesh isn't PICK_HANDLE_MARGIN nearer :
+-- the end prop's own mesh stands round its handle. Further off, the mesh wins
+local PICK_HANDLE_ON = .7
+local PICK_HANDLE_MARGIN = 2
+-- how near the mouse ray a curb, a wall or a painted line's path takes a click (metres)
+local PICK_PATH_RADIUS = .8
+
+--- where the mouse ray enters a placed mesh's box (beamjoy_props.expand's entry, the mesh measured)
+---@param e table
+---@param camPos vec3
+---@param rayDir vec3
+---@return number? t
+local function rayHitsMesh(e, camPos, rayDir)
+    local m = type(e.shape) == "string" and beamjoy_props.meta[e.shape:lower()] or nil
+    if not m or m.minX == nil or m.minZ == nil or not m.z then return nil end
+    -- its axes as quatFromDir sets them : y its dir, x dir x up, z x x dir
+    local y = e.dir:normalized()
+    local x = y:cross(e.up)
+    if x:length() < 1e-6 then return nil end
+    x = x:normalized()
+    local z = x:cross(y):normalized()
+    local s = e.scales or vec3(e.scale, e.scale, e.scale)
+    local o = camPos - e.pos
+    local tmin, tmax = 0, math.huge
+    for _, slab in ipairs({ { x, m.minX * s.x, m.maxX * s.x }, { y, m.minY * s.y, m.maxY * s.y },
+        { z, m.minZ * s.z, (m.minZ + m.z) * s.z } }) do
+        local axis = slab[1]
+        local lo = math.min(slab[2], slab[3]) - PICK_BOX_PAD
+        local hi = math.max(slab[2], slab[3]) + PICK_BOX_PAD
+        local oo, dd = o:dot(axis), rayDir:dot(axis)
+        if math.abs(dd) < 1e-8 then
+            if oo < lo or oo > hi then return nil end
+        else
+            local t1, t2 = (lo - oo) / dd, (hi - oo) / dd
+            if t1 > t2 then t1, t2 = t2, t1 end
+            tmin, tmax = math.max(tmin, t1), math.min(tmax, t2)
+            if tmin > tmax then return nil end
+        end
+    end
+    return tmin
+end
+
+--- where the mouse ray passes within PICK_PATH_RADIUS of a curb's, a wall's or a painted line's
+--- path (it has no meshes of its own to hit)
+---@param p table
+---@param camPos vec3
+---@param rayDir vec3
+---@return number? t
+local function rayHitsPath(p, camPos, rayDir)
+    local path = beamjoy_props.linePath(p, 16)
+    if not path then return nil end
+    local best
+    for k = 2, #path do
+        local a, b = path[k - 1] + vec3(0, 0, .2), path[k] + vec3(0, 0, .2)
+        local seg = b - a
+        local len2 = seg:dot(seg)
+        if len2 > 1e-8 then
+            -- the closest points of the ray and the segment
+            local w = camPos - a
+            local bb, c = rayDir:dot(seg), seg:dot(seg)
+            local d, e = rayDir:dot(w), seg:dot(w)
+            local denom = c - bb * bb
+            local u = denom > 1e-8 and math.max(0, math.min(1, (e - bb * d) / denom)) or 0
+            local q = a + seg * u
+            local t = (q - camPos):dot(rayDir)
+            if t > 0 and (camPos + rayDir * t):distance(q) <= PICK_PATH_RADIUS and (not best or t < best) then
+                best = t
+            end
+        end
+    end
+    return best
+end
+
+--- the prop under the mouse ray (direct report : with props close together, the click took the
+--- wrong one, the nearest handle sphere along the ray rather than what the mouse was on) : a line's
+--- end or bend handle the mouse is on ; else the nearest mesh the ray goes into (a single prop, a
+--- prefab's part, a line's prop or end cap) or curb, wall or painted line it passes over ; else the
+--- handle at a single prop's base nearest the mouse (a mesh not measured, an invisible one)
 ---@param camPos vec3
 ---@param rayDir vec3
 ---@return number? t, integer? index, "a"|"b"|"mid"|nil part
 function M.pick(camPos, rayDir)
     local list = active() and props() or nil
     if not list then return nil end
-    local bestT, bestIndex, bestPart
+    -- the handles : the one nearest the mouse on screen
+    local handleT, handleOff, handleIndex, handlePart
+    local baseT, baseOff, baseIndex
     for i, p in ipairs(list) do
         if isPath(p) then
-            for _, part in ipairs({ "a", "b" }) do
-                local t = p[part] and rayHitsHandle(p[part], 1.2, camPos, rayDir)
-                if t and (not bestT or t < bestT) then
-                    bestT, bestIndex, bestPart = t, i, part
+            local function try(pos, part)
+                local t, off = rayHitsHandle(pos, 1.2, camPos, rayDir)
+                if t and (not handleOff or off < handleOff) then
+                    handleT, handleOff, handleIndex, handlePart = t, off, i, part
                 end
             end
+            if p.a then try(p.a, "a") end
+            if p.b then try(p.b, "b") end
             -- its middle (bend) handle, drawn on the selected line or a bent one
             local midPos = p.mid or (p.a and p.b and i == M.activePropIndex and
                 { x = (p.a.x + p.b.x) / 2, y = (p.a.y + p.b.y) / 2, z = (p.a.z + p.b.z) / 2 })
-            local tm = midPos and rayHitsHandle(midPos, 1.2, camPos, rayDir)
-            if tm and (not bestT or tm < bestT) then
-                bestT, bestIndex, bestPart = tm, i, "mid"
-            end
+            if midPos then try(midPos, "mid") end
         elseif p.pos then
-            local t = rayHitsHandle(p.pos, 1.5, camPos, rayDir)
-            if t and (not bestT or t < bestT) then
-                bestT, bestIndex, bestPart = t, i, nil
+            local t, off = rayHitsHandle(p.pos, 1.5, camPos, rayDir)
+            if t and (not baseOff or off < baseOff) then
+                baseT, baseOff, baseIndex = t, off, i
             end
         end
     end
-    return bestT, bestIndex, bestPart
+    -- the meshes and paths : the nearest one the ray meets
+    local meshT, meshIndex
+    for _, e in ipairs(beamjoy_props.expand(list)) do
+        local t = rayHitsMesh(e, camPos, rayDir)
+        if t and (not meshT or t < meshT) then meshT, meshIndex = t, e.entry end
+    end
+    for i, p in ipairs(list) do
+        if isSwept(p) then
+            local t = rayHitsPath(p, camPos, rayDir)
+            if t and (not meshT or t < meshT) then meshT, meshIndex = t, i end
+        end
+    end
+    if handleT and (not meshT or (handleOff * handleT <= PICK_HANDLE_ON and meshT >= handleT - PICK_HANDLE_MARGIN)) then
+        return handleT, handleIndex, handlePart
+    end
+    if meshT then
+        -- a line hit on its props : the handle it's held by stays the one held
+        return meshT, meshIndex, meshIndex == M.activePropIndex and M.activePropPart or nil
+    end
+    return baseT, baseIndex, nil
 end
 
 --- a prop clicked in the world : Ctrl+click adds it to the selection (or takes it out), Shift+click
@@ -1866,7 +2147,7 @@ end
 ---@param index integer
 ---@param part "a"|"b"|"mid"|nil
 function M.clickSelect(index, part)
-    local mode = ctrlHeld() and "add" or shiftHeld() and "alone" or nil
+    local mode = selectMode()
     if not mode and index == M.activePropIndex and part == M.activePropPart then return end
     M.onSelectProp(index, part, mode)
 end
@@ -1972,8 +2253,14 @@ local function onInit()
     end)
     ui.addHandler("BJEditorPropsSelect", function(index, part, mode)
         -- a row's click : the keys as the game sees them too, should the UI's click not carry them
-        if mode ~= "add" and mode ~= "alone" and (part == nil or part == "") then
-            mode = index and (ctrlHeld() and "add" or shiftHeld() and "alone") or nil
+        if mode ~= "add" and mode ~= "alone" and mode ~= "addAlone" and (part == nil or part == "") then
+            mode = index and selectMode() or nil
+        end
+        -- a plain click on the selected row unselects. Decided here, with the keys known (direct
+        -- report : the UI's click didn't carry Ctrl, so Ctrl+click on the selected row cleared the
+        -- whole selection instead of taking that row out)
+        if index and not mode and (part == nil or part == "") and index == M.activePropIndex then
+            index = nil
         end
         M.onSelectProp(index, part, mode)
     end)
