@@ -8,7 +8,21 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2681, server build 2455.
+Version 1.11.0 : client build 2682, server build 2455.
+
+- **Fixed : the props selection bar scrolled out of sight** (direct report : "where did the option
+  to make a group go?"). Group, Ungroup, Delete and Clear for several props selected sat at the top
+  of the props list, and selecting a prop far down scrolled the list away from it. The bar now
+  stays pinned to the top of the props panel. *(client only)*
+
+- **Fixed : pasting props doubled them** (direct report : 357 props copied, 714 pasted into a race
+  that had none). A Paste arriving again within 0.4 s of the last is dropped and logged
+  (`beamjoy_propEditor` in beamng.log), and pasted props no longer share their positions with the
+  originals or the clipboard. *(client only)*
+
+- **Fixed : the props drawer's tabs wrapped** ("Curbs & walls", "All game meshes" on two lines,
+  spilling out of their buttons). Each tab is now as wide as its label, on one line ; a drawer too
+  narrow for them all scrolls them sideways. *(client only)*
 
 - **New : painted lines in the props editor** (direct request, from the TODO). The props drawer has
   a new "Paint" tab with the game's own road paint : white and yellow lines, white dashed (long or

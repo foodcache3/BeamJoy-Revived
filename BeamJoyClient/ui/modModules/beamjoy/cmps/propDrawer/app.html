@@ -288,9 +288,18 @@
         padding: 0.2em;
         border-radius: 0.35em;
         background: rgba(0, 0, 0, 0.35);
+        /* a narrow drawer scrolls its tabs rather than wrapping them */
+        overflow-x: auto;
+        scrollbar-width: none;
     }
+    .pd-seg::-webkit-scrollbar {
+        display: none;
+    }
+    /* each tab as wide as its label, the room left shared out : one line each */
     .pd-seg button {
-        flex: 1;
+        flex: 1 0 auto;
+        padding: 0 0.7em;
+        white-space: nowrap;
         height: 2.1em;
         border: none;
         border-radius: 0.3em;

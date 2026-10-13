@@ -4,6 +4,17 @@
     }
     bj-prop-editor .prop-row {
         transition: background-color 0.2s ease-in-out;
+        /* a row scrolled into view (selected in the world) lands below the selection bar */
+        scroll-margin-top: 3em;
+    }
+    /* the selection's bar stays on top of the host's scrolling panel (direct report : with a row
+       far down selected, the list had scrolled it out of sight and Group seemed gone) */
+    bj-prop-editor .prop-selection-bar {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: rgba(28, 30, 36, 0.96);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
     }
     bj-prop-editor .prop-row:hover {
         background-color: rgba(0, 0, 0, 0.15);
@@ -24,7 +35,7 @@
 </style>
 
 <!-- several props selected (Ctrl+click, a group) : what's done to them all -->
-<div class="d-flex gap-1 align-center p-1 px-2" ng-if="$ctrl.p.severalSelected()">
+<div class="prop-selection-bar d-flex gap-1 align-center p-1 px-2" ng-if="$ctrl.p.severalSelected()">
     <span class="flex-grow-1">{{$ctrl.p.selectionText()}}</span>
     <button
         class="btn success"

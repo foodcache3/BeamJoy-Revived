@@ -1613,9 +1613,13 @@ end
 -- the map they were copied on only, where they stand.
 
 local CLIPBOARD_FILE = "/temp/bjPropClipboard.json"
+-- a Paste arriving again this soon after the last is the same press (direct report : 357 props
+-- copied, 714 pasted into a race that had none, the second half selected) : dropped, and logged
+local PASTE_REPEAT_MS = 400
 ---@type {map: string?, props: table[]}?
 local clipboard = nil
 local clipboardRead = false
+local lastPaste = -math.huge
 
 ---@return string? the map being played, lower case
 local function currentMap()
@@ -1648,10 +1652,10 @@ local function onCopyProps()
     local copied = {}
     if #M.propSelection > 0 then
         for _, i in ipairs(M.propSelection) do
-            if props()[i] then copied[#copied + 1] = table.clone(props()[i]) end
+            if props()[i] then copied[#copied + 1] = deepcopy(props()[i]) end
         end
     else
-        for _, prop in ipairs(props()) do copied[#copied + 1] = table.clone(prop) end
+        for _, prop in ipairs(props()) do copied[#copied + 1] = deepcopy(prop) end
     end
     if #copied == 0 then return end
     clipboardRead = true
@@ -1670,12 +1674,21 @@ local function onPasteProps()
         toast.warn("Those props were copied on another map", nil, 4)
         return
     end
+    local now = GetCurrentTimeMillis()
+    if now - lastPaste < PASTE_REPEAT_MS then
+        log("W", "beamjoy_propEditor", string.format("a second Paste %d ms after the first dropped",
+            now - lastPaste))
+        return
+    end
     if not propBudget(beamjoy_props.total(clipboard.props)) then return end
+    lastPaste = now
+    log("I", "beamjoy_propEditor", string.format("pasting %d entries into %d", #clipboard.props, #props()))
     disarmProp()
     local base, groups = newGroupId() - 1, {}
     local first = #props() + 1
     for _, prop in ipairs(clipboard.props) do
-        local copy = table.clone(prop)
+        -- its own tables (a line's ends, its heights) : not the clipboard's, nor the next paste's
+        local copy = deepcopy(prop)
         local g = tonumber(copy.group)
         if g then
             if not groups[g] then
