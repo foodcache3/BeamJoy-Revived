@@ -35,6 +35,9 @@
 --- line's end prop and facing out of the line, turned `capAYaw` / `capBYaw` degrees (its tuning
 --- yaw, or that and a half turn when flipped) and lifted `capALift` / `capBLift` (mesh units).
 ---
+--- Curbs and walls : `{ kind = "sweep", profile, a, b, mid, count, followGround, heights, group }`,
+--- a cross-section swept along a line's path into one mesh (SWEEPS below).
+---
 --- Lamps : a mesh named in LAMPS (by its file name, so every map's copy of it, picked from the
 --- catalog or from any map's meshes) casts light, through a light of its own at each of its lamp
 --- heads, turned and scaled with it. On at night only, as the map's own lamps are
@@ -223,6 +226,13 @@ local M = {
     -- ms of a frame spent creating props : a race's whole set at once froze the game for a frame
     -- (110 ms measured, 2026-10-08), so they come in a few per frame (at least one a frame)
     SPAWN_BUDGET_MS = 3,
+
+    -- a curb's or a wall's segments (SWEEPS below), at most : about one a metre, so 400 m in one
+    -- piece. Mirrored by the server's services/props.lua
+    SWEEP_MAX_SEGMENTS = 400,
+    -- a curb or a wall counts as one prop every this many segments (metres) toward MAX_PROPS : one
+    -- object, but its mesh and collision grow with it. Mirrored by the server and the props list
+    SWEEP_WEIGHT_SEGMENTS = 20,
 }
 
 -- the rally gazebos (art/prefabs/p_rally_gazebo_mod_<colour>_3x3 / _3x6) : a 3 x 3 m frame and its
@@ -828,6 +838,8 @@ function M.catalogForUI()
             }
         end
     end
+    -- the curbs and walls : the drawer's Curbs & walls tab (SWEEPS)
+    for _, s in ipairs(M.sweepsForUI()) do out[#out + 1] = s end
     -- the prefabs : the drawer's Prefabs tab, named here (their names are built from parts)
     local tr = function(key) return beamjoy_lang and beamjoy_lang.translate(key) or key end
     for _, p in ipairs(M.PREFABS) do
@@ -911,6 +923,10 @@ end
 ---@param entry table
 ---@return integer
 function M.weight(entry)
+    -- a curb or a wall : one object, weighed by its length (one per SWEEP_WEIGHT_SEGMENTS metres)
+    if entry.kind == "sweep" then
+        return math.max(1, math.ceil((tonumber(entry.count) or 1) / M.SWEEP_WEIGHT_SEGMENTS))
+    end
     -- each prop and every part of it
     local each = 1 + (type(entry.parts) == "table" and #entry.parts or 0)
     if entry.kind ~= "line" then return each end
@@ -1277,10 +1293,12 @@ local function meshesOf(e)
     return out
 end
 
---- cars hit an entry when nothing is said of it : one of its meshes is solid as it comes
+--- cars hit an entry when nothing is said of it : one of its meshes is solid as it comes (a curb
+--- or a wall always is : see SWEEPS)
 ---@param e table
 ---@return boolean
 function M.solidByDefault(e)
+    if e.kind == "sweep" then return true end
     for _, s in ipairs(meshesOf(e)) do
         if solidMesh(s) then return true end
     end
@@ -1291,6 +1309,7 @@ end
 ---@param e table
 ---@return boolean
 function M.isSolid(e)
+    if e.kind == "sweep" then return true end
     if e.solid == false or e.solid == true then return e.solid end
     return M.solidByDefault(e)
 end
@@ -1386,6 +1405,307 @@ function M.expand(props)
     return out
 end
 
+-- SWEEPS (curbs and walls, direct request) ------------------------------------------------------
+-- A cross-section swept along a line's path into one ProceduralMesh, as the game's Track Builder
+-- makes its borders and walls (util/trackBuilder/segmentToProceduralMesh.lua) : one piece, so no
+-- joints on a bend, and one object for a whole run of kerb. An entry :
+--   { kind = "sweep", profile, a, b, mid, count, followGround, heights, group }
+-- `profile` one of M.SWEEPS (a client without it skips the entry) ; `a`, `b`, `mid` its path, as a
+-- line's ; `count` the segments it's cut into (about one a metre, set by the editor : sweepCount),
+-- the profile stood square to the path at each of their `count + 1` ends ; `heights` (one per end,
+-- measured by the editor) is what makes it follow the ground, as a line's.
+--
+-- A profile is a closed outline across the path (x to its right, z up, metres, counterclockwise
+-- seen from behind), reaching SKIRT under the ground so a slope across the path never shows under
+-- it. A painted one changes material every `stripe` metres (about : a stripe is a whole number of
+-- segments). Its materials are made here at runtime, as the game's own core.lua makes Track
+-- Builder's : a plain colour over the game's white texture, or its concrete-like track base.
+--
+-- A ProceduralMesh has no collision switch (its only field is its material) : it's solid once the
+-- static collision is rebuilt. The editor's preview and the placing ghost mustn't be, so they're
+-- taken out of the scene for every rebuild done here and made again right after (reloadCollision).
+
+local SKIRT = -.4
+local WHITE_MAP = "core/art/white.color.dds"
+local BASE_MAP = "core/art/trackBuilder/track_editor_base_d.dds"
+-- the materials' colours (linear, as the engine takes them) and, for the drawer's swatches, CSS
+local SWEEP_COLOURS = {
+    red = { colour = "0.62 0.03 0.02 1", map = WHITE_MAP, css = "#c8211b" },
+    white = { colour = "0.9 0.9 0.88 1", map = WHITE_MAP, css = "#eeeeea" },
+    blue = { colour = "0.03 0.12 0.55 1", map = WHITE_MAP, css = "#1f4fc0" },
+    yellow = { colour = "0.92 0.62 0.02 1", map = WHITE_MAP, css = "#f2c418" },
+    concrete = { colour = "0.85 0.85 0.82 1", map = BASE_MAP, css = "#a9a9a4" },
+}
+-- a jersey barrier's outline : its foot, the shallow slope, the steep face, its top
+local JERSEY = { { -.3, SKIRT }, { .3, SKIRT }, { .3, .08 }, { .19, .33 }, { .1, .81 }, { -.1, .81 },
+    { -.19, .33 }, { -.3, .08 } }
+
+M.SWEEPS = {
+    -- a raised kerb, bevelled on both sides
+    { id = "curb", cat = "curbs", tags = "kerb rumble strip red white", stripe = 1, colours = { "red", "white" },
+        ground = "RUMBLE_STRIP",
+        outline = { { -.5, SKIRT }, { .5, SKIRT }, { .5, 0 }, { .32, .06 }, { -.32, .06 }, { -.5, 0 } } },
+    { id = "curbBlue", cat = "curbs", tags = "kerb rumble strip blue white", stripe = 1, colours = { "blue", "white" },
+        ground = "RUMBLE_STRIP",
+        outline = { { -.5, SKIRT }, { .5, SKIRT }, { .5, 0 }, { .32, .06 }, { -.32, .06 }, { -.5, 0 } } },
+    -- painted on the track, barely raised
+    { id = "curbFlat", cat = "curbs", tags = "kerb painted flat red white", stripe = 1, colours = { "red", "white" },
+        ground = "ASPHALT",
+        outline = { { -.6, SKIRT }, { .6, SKIRT }, { .6, .015 }, { .55, .025 }, { -.55, .025 }, { -.6, .015 } } },
+    -- a sausage kerb : a rounded hump that unsettles a car cutting a chicane
+    { id = "sausage", cat = "curbs", tags = "kerb hump chicane yellow", colours = { "yellow" }, ground = "RUMBLE_STRIP",
+        outline = { { -.18, SKIRT }, { .18, SKIRT }, { .18, 0 }, { .14, .08 }, { .06, .13 }, { -.06, .13 },
+            { -.14, .08 }, { -.18, 0 } } },
+    { id = "barrier", cat = "walls", tags = "concrete jersey barrier low wall", colours = { "concrete" },
+        ground = "ASPHALT", outline = JERSEY },
+    { id = "barrierStriped", cat = "walls", tags = "concrete jersey barrier low wall painted red white", stripe = 2,
+        colours = { "red", "white" }, ground = "ASPHALT", outline = JERSEY },
+    { id = "wall", cat = "walls", tags = "concrete wall tall pit", colours = { "concrete" }, ground = "ASPHALT",
+        outline = { { -.2, SKIRT }, { .2, SKIRT }, { .2, 1.45 }, { .15, 1.5 }, { -.15, 1.5 }, { -.2, 1.45 } } },
+}
+M.SWEEP_CATEGORIES = { "curbs", "walls" }
+
+local sweepById = {}
+for _, s in ipairs(M.SWEEPS) do sweepById[s.id] = s end
+
+---@param id string
+---@return table?
+function M.getSweep(id) return type(id) == "string" and sweepById[id] or nil end
+
+-- metres a segment, about
+local SWEEP_STEP = 1
+-- texture repeat (metres) along and across the concrete-like base map
+local SWEEP_UV_METRES = 2
+
+--- how many segments a sweep's path is cut into : about one a metre
+---@param entry table
+---@return integer
+function M.sweepCount(entry)
+    return math.max(1, math.min(math.ceil(M.lineLength(entry) / SWEEP_STEP - 1e-6), M.SWEEP_MAX_SEGMENTS))
+end
+
+---@param entry table
+---@return integer
+local function sweepSegments(entry)
+    return math.max(1, math.min(math.floor(tonumber(entry.count) or 1), M.SWEEP_MAX_SEGMENTS))
+end
+
+--- where a sweep's profile stands : `count + 1` points evenly along its path, each with the path's
+--- flat way there. On its `heights` when it follows the ground (unless `bare` : where the editor
+--- measures them), else at the path's own height
+---@param entry table
+---@param bare boolean?
+---@return {pos: vec3, way: vec3}[]
+function M.sweepPoints(entry, bare)
+    local count = sweepSegments(entry)
+    local pts = M.linePath(entry, math.max(CURVE_SAMPLES, count * 2))
+    if not pts then return {} end
+    local lens = { 0 }
+    for k = 2, #pts do lens[k] = lens[k - 1] + pts[k]:distance(pts[k - 1]) end
+    local total = lens[#lens]
+    local heights = not bare and entry.followGround ~= false and type(entry.heights) == "table" and
+        #entry.heights == count + 1 and entry.heights or nil
+    local out = {}
+    for i = 0, count do
+        local p = pathAt(pts, lens, total * i / count)
+        if heights and tonumber(heights[i + 1]) then p = vec3(p.x, p.y, heights[i + 1]) end
+        out[i + 1] = { pos = p }
+    end
+    -- the way at each : from the point before to the point after (at an end, its neighbour)
+    local whole = vec3(pts[#pts].x - pts[1].x, pts[#pts].y - pts[1].y, 0)
+    if whole:length() < 1e-4 then whole = vec3(0, 1, 0) end
+    for i = 1, #out do
+        local from, to = out[math.max(1, i - 1)].pos, out[math.min(#out, i + 1)].pos
+        local way = vec3(to.x - from.x, to.y - from.y, 0)
+        out[i].way = (way:length() > 1e-4 and way or whole):normalized()
+    end
+    return out
+end
+
+--- a sweep's material for one of its colours (made the first time it's needed ; the ground model
+--- is the profile's : a kerb rumbles)
+---@param colour string
+---@param ground string
+---@return string the material's name
+local function sweepMaterial(colour, ground)
+    local name = string.format("bj_sweep_%s_%s", colour, ground:lower())
+    if scenetree.findObject(name) then return name end
+    local spec = SWEEP_COLOURS[colour] or SWEEP_COLOURS.concrete
+    local mat = createObject("Material")
+    mat.mapTo = name
+    mat.canSave = false
+    mat:setField("diffuseColor", 0, spec.colour)
+    mat:setField("colorMap", 0, spec.map)
+    mat:setField("specularPower", 0, "8")
+    mat:setField("specular", 0, "0.1 0.1 0.1 1")
+    -- seen from either side whatever way its faces wind (its normals are its own)
+    mat:setField("doubleSided", 0, "1")
+    mat:setField("translucentBlendOp", 0, "None")
+    mat:setField("materialTag0", 0, "beamng")
+    mat:setField("groundType", 0, ground)
+    mat:registerObject(name)
+    return name
+end
+
+--- a sweep's meshes, as ProceduralMesh:createMesh takes one detail level : one submesh per
+--- material, its faces { v, n, u } indexing its verts, normals and uvs from 0. Laid out from its
+--- first point (the object stands there), so the vertex positions keep their precision
+---@param entry table
+---@return table[]? submeshes, vec3? origin
+function M.sweepMeshes(entry)
+    local profile = sweepById[entry.profile]
+    if not profile then return nil end
+    local pts = M.sweepPoints(entry)
+    if #pts < 2 then return nil end
+    local origin = pts[1].pos
+    local outline = profile.outline
+    local n = #outline
+    local up = vec3(0, 0, 1)
+
+    -- length along the path at each point (the textures' v), and the segments a stripe takes
+    local along = { 0 }
+    for i = 2, #pts do along[i] = along[i - 1] + pts[i].pos:distance(pts[i - 1].pos) end
+    local segLen = math.max(1e-3, along[#along] / (#pts - 1))
+    local per = profile.stripe and math.max(1, math.floor(profile.stripe / segLen + .5)) or math.huge
+    -- the outline's length round to each corner (the textures' u)
+    local round = { 0 }
+    for j = 1, n do
+        local o0, o1 = outline[j], outline[j % n + 1]
+        round[j + 1] = round[j] + math.sqrt((o1[1] - o0[1]) ^ 2 + (o1[2] - o0[2]) ^ 2)
+    end
+
+    local subs, order = {}, {}
+    local function sub(colour)
+        if not subs[colour] then
+            subs[colour] = { verts = {}, normals = {}, uvs = {}, faces = {},
+                material = sweepMaterial(colour, profile.ground or "ASPHALT") }
+            order[#order + 1] = colour
+        end
+        return subs[colour]
+    end
+    ---@param s table
+    ---@param pos vec3
+    ---@param normal vec3
+    ---@param u number
+    ---@param v number
+    ---@return integer its index (from 0)
+    local function vert(s, pos, normal, u, v)
+        local k = #s.verts
+        s.verts[k + 1] = { x = pos.x, y = pos.y, z = pos.z }
+        s.normals[k + 1] = { x = normal.x, y = normal.y, z = normal.z }
+        s.uvs[k + 1] = { u = u, v = v }
+        return k
+    end
+    local function tri(s, a, b, c)
+        local f = s.faces
+        f[#f + 1] = { v = a, n = a, u = a }
+        f[#f + 1] = { v = b, n = b, u = b }
+        f[#f + 1] = { v = c, n = c, u = c }
+    end
+    ---@param p table a point
+    ---@param o number[] an outline corner
+    ---@return vec3
+    local function at(p, o)
+        local right = vec3(p.way.y, -p.way.x, 0)
+        return p.pos - origin + right * o[1] + up * o[2]
+    end
+
+    local colours = profile.colours
+    for i = 1, #pts - 1 do
+        local s = sub(colours[(math.floor((i - 1) / per) % #colours) + 1])
+        local p0, p1 = pts[i], pts[i + 1]
+        local r0, r1 = vec3(p0.way.y, -p0.way.x, 0), vec3(p1.way.y, -p1.way.x, 0)
+        local v0, v1 = along[i] / SWEEP_UV_METRES, along[i + 1] / SWEEP_UV_METRES
+        for j = 1, n do
+            local o0, o1 = outline[j], outline[j % n + 1]
+            local dx, dz = o1[1] - o0[1], o1[2] - o0[2]
+            local len = math.sqrt(dx * dx + dz * dz)
+            if len > 1e-6 then
+                -- the edge's outward normal (a counterclockwise outline : (dz, -dx))
+                local nx, nz = dz / len, -dx / len
+                local n0, n1 = r0 * nx + up * nz, r1 * nx + up * nz
+                local u0, u1 = round[j] / SWEEP_UV_METRES, round[j + 1] / SWEEP_UV_METRES
+                local a = vert(s, at(p0, o0), n0, u0, v0)
+                local b = vert(s, at(p0, o1), n0, u1, v0)
+                local c = vert(s, at(p1, o1), n1, u1, v1)
+                local d = vert(s, at(p1, o0), n1, u0, v1)
+                -- wound as the game's own procedural meshes are (util/trackBuilder/
+                -- proceduralPrimitives.lua : clockwise seen from the side they face)
+                tri(s, a, b, c)
+                tri(s, a, c, d)
+            end
+        end
+    end
+
+    -- its two ends closed : a fan round the outline's middle (every profile is convex enough)
+    local cx, cz = 0, 0
+    for _, o in ipairs(outline) do cx, cz = cx + o[1], cz + o[2] end
+    local centre = { cx / n, cz / n }
+    for _, which in ipairs({ 1, #pts }) do
+        local p = pts[which]
+        local first = which == 1
+        local segment = first and 0 or #pts - 2
+        local s = sub(colours[(math.floor(segment / per) % #colours) + 1])
+        local normal = first and -p.way or p.way
+        local mid = vert(s, at(p, centre), normal, 0, 0)
+        local corners = {}
+        for j = 1, n do
+            corners[j] = vert(s, at(p, outline[j]), normal, (outline[j][1] - centre[1]) / SWEEP_UV_METRES,
+                (outline[j][2] - centre[2]) / SWEEP_UV_METRES)
+        end
+        for j = 1, n do
+            local k = j % n + 1
+            if first then tri(s, mid, corners[k], corners[j]) else tri(s, mid, corners[j], corners[k]) end
+        end
+    end
+
+    local out = {}
+    for _, colour in ipairs(order) do out[#out + 1] = subs[colour] end
+    return out, origin
+end
+
+--- what a sweep's mesh is made from, to tell when it has to be made again
+---@param e table
+---@return string
+local function sweepSignature(e)
+    local parts = { tostring(e.profile), tostring(e.count), tostring(e.followGround ~= false) }
+    for _, key in ipairs({ "a", "b", "mid" }) do
+        local p = e[key]
+        parts[#parts + 1] = type(p) == "table" and
+            string.format("%.4f,%.4f,%.4f", tonumber(p.x) or 0, tonumber(p.y) or 0, tonumber(p.z) or 0) or "-"
+    end
+    if type(e.heights) == "table" then
+        for _, h in ipairs(e.heights) do parts[#parts + 1] = string.format("%.3f", tonumber(h) or 0) end
+    end
+    return table.concat(parts, "|")
+end
+
+--- the drawer's Curbs & walls tab : each profile with its name, category and colours
+---@return table[]
+function M.sweepsForUI()
+    local tr = function(key) return beamjoy_lang and beamjoy_lang.translate(key) or key end
+    return table.map(M.SWEEPS, function(s)
+        local top = 0
+        for _, o in ipairs(s.outline) do top = math.max(top, o[2]) end
+        local width = 0
+        for _, o in ipairs(s.outline) do width = math.max(width, math.abs(o[1]) * 2) end
+        return {
+            id = s.id,
+            sweep = s.id,
+            name = tr("beamjoy.props.sweeps.name." .. s.id),
+            cat = s.cat,
+            tags = s.tags,
+            solid = true,
+            stripe = s.stripe,
+            swatch = table.map(s.colours, function(c) return (SWEEP_COLOURS[c] or SWEEP_COLOURS.concrete).css end),
+            -- the drawer pictures it by its outline
+            outline = s.outline,
+            height = math.floor(top * 100 + .5) / 100,
+            width = math.floor(width * 100 + .5) / 100,
+        }
+    end)
+end
+
 -- OBJECTS -------------------------------------------------------------------------------------
 
 local collisionReloadAt = nil
@@ -1398,9 +1718,27 @@ end
 ---@return boolean
 local function anyPending()
     for _, set in pairs(M.sets) do
-        if next(set.pending) then return true end
+        if next(set.pending) or next(set.sweepPending) then return true end
     end
     return false
+end
+
+--- the static collision rebuilt now. A set that mustn't be solid (the editor's preview, the placing
+--- ghost) has its curbs and walls taken out of the scene first and made again right after : a
+--- ProceduralMesh can't be told to stay out of it (see SWEEPS)
+local function reloadCollision()
+    for _, set in pairs(M.sets) do
+        if not set.collision then
+            for i, s in pairs(set.sweeps) do
+                if s.obj then
+                    if simObjectExists(s.obj) then s.obj:delete() end
+                    s.obj = nil
+                    set.sweepPending[i] = true
+                end
+            end
+        end
+    end
+    be:reloadCollision()
 end
 
 local function group()
@@ -1730,6 +2068,38 @@ local function deleteObject(obj)
     if obj and simObjectExists(obj) then obj:delete() end
 end
 
+--- a curb's or a wall's mesh made (again) on its object, stood at its first point
+---@param obj table a ProceduralMesh
+---@param entry table
+---@return boolean
+local function buildSweep(obj, entry)
+    local ok, meshes, origin = pcall(M.sweepMeshes, entry)
+    if not ok then
+        LogWarn("beamjoy_props: a curb or a wall couldn't be built: " .. tostring(meshes))
+        return false
+    end
+    if not meshes or #meshes == 0 then return false end
+    obj:createMesh({ meshes })
+    obj:setPosition(origin)
+    return true
+end
+
+---@param entry table a sweep entry
+---@return table? obj
+local function spawnSweep(entry)
+    if not M.getSweep(entry.profile) then return nil end
+    local obj = createObject("ProceduralMesh")
+    obj.canSave = false
+    obj:registerObject("")
+    if not simObjectExists(obj) then return nil end
+    group():addObject(obj)
+    if not buildSweep(obj, entry) then
+        obj:delete()
+        return nil
+    end
+    return obj
+end
+
 ---@param a table expand() entry
 ---@param b table expand() entry
 ---@return boolean same mesh in the same place
@@ -1753,7 +2123,7 @@ function M.show(key, props, opts)
     opts = opts or {}
     local set = M.sets[key]
     if set and opts.signature and set.signature == opts.signature then return end
-    set = set or { objects = {}, entries = {}, collision = false, pending = {} }
+    set = set or { objects = {}, entries = {}, collision = false, pending = {}, sweeps = {}, sweepPending = {} }
     M.sets[key] = set
     local collision = opts.collision ~= false
 
@@ -1784,16 +2154,50 @@ function M.show(key, props, opts)
         changed = true
     end
 
-    if set.collision and not collision then
-        -- solid props going (the editor's collision switch off for an edit) : rebuilt now, not
-        -- once things settle, or the gizmo's snapping and cars meet their old collision while the
-        -- edit goes on. Their objects are already deleted, the new ones aren't solid
-        be:reloadCollision()
-    elseif (changed and collision) or collision ~= set.collision then
-        scheduleCollisionReload()
+    -- the curbs and walls (SWEEPS) : one object each, by the entry's place in the list, its mesh
+    -- made again only when something of it changed (in place on its object : no new object while
+    -- an end is dragged). New ones are created in onUpdate, with the props
+    local kept = {}
+    for i, e in ipairs(type(props) == "table" and props or {}) do
+        if type(e) == "table" and e.kind == "sweep" and M.getSweep(e.profile) then
+            kept[i] = true
+            local sig = sweepSignature(e)
+            local s = set.sweeps[i]
+            if not s or s.sig ~= sig then
+                local obj = s and s.obj
+                if obj and simObjectExists(obj) and buildSweep(obj, e) then
+                    set.sweeps[i] = { obj = obj, sig = sig, entry = e }
+                else
+                    if obj and simObjectExists(obj) then obj:delete() end
+                    set.sweeps[i] = { sig = sig, entry = e }
+                    set.sweepPending[i] = true
+                end
+                changed = true
+            else
+                s.entry = e
+            end
+        end
     end
+    for i, s in pairs(set.sweeps) do
+        if not kept[i] then
+            if s.obj and simObjectExists(s.obj) then s.obj:delete() end
+            set.sweeps[i], set.sweepPending[i] = nil, nil
+            changed = true
+        end
+    end
+
+    local wasSolid = set.collision
     set.collision = collision
     set.signature = opts.signature
+    if wasSolid and not collision then
+        -- solid props going (the editor's collision switch off for an edit) : rebuilt now, not
+        -- once things settle, or the gizmo's snapping and cars meet their old collision while the
+        -- edit goes on. Their objects are already deleted, the new ones aren't solid (its curbs
+        -- and walls are taken out for the rebuild)
+        reloadCollision()
+    elseif (changed and collision) or collision ~= wasSolid then
+        scheduleCollisionReload()
+    end
 end
 
 ---@param key string
@@ -1801,7 +2205,12 @@ function M.hide(key)
     local set = M.sets[key]
     if not set then return end
     for _, obj in pairs(set.objects) do deleteObject(obj) end
-    if set.collision and #set.entries > 0 then scheduleCollisionReload() end
+    local sweeps = false
+    for _, s in pairs(set.sweeps) do
+        if s.obj and simObjectExists(s.obj) then s.obj:delete() end
+        sweeps = true
+    end
+    if set.collision and (#set.entries > 0 or sweeps) then scheduleCollisionReload() end
     M.sets[key] = nil
 end
 
@@ -1822,6 +2231,13 @@ local function spawnPending()
             if p and not set.objects[i] then set.objects[i] = spawn(p) end
             spawned = spawned + 1
         end
+        for i in pairs(set.sweepPending) do
+            if spawned > 0 and (os.clock() - started) * 1000 >= M.SPAWN_BUDGET_MS then return true end
+            set.sweepPending[i] = nil
+            local s = set.sweeps[i]
+            if s and not s.obj then s.obj = spawnSweep(s.entry) end
+            spawned = spawned + 1
+        end
     end
     return false
 end
@@ -1839,7 +2255,7 @@ local function onUpdate()
     end
     if collisionReloadAt and GetCurrentTimeMillis() >= collisionReloadAt then
         collisionReloadAt = nil
-        be:reloadCollision()
+        reloadCollision()
     end
 end
 
@@ -1926,7 +2342,7 @@ local function cleanup()
     materialDirs, materialShapes, mapped, sharedDone = {}, {}, nil, {}
     if collisionReloadAt then
         collisionReloadAt = nil
-        if be then be:reloadCollision() end
+        if be then reloadCollision() end
     end
 end
 

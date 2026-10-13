@@ -515,6 +515,20 @@
         height: 2.6em;
         opacity: 0.35;
     }
+    /* a curb's or a wall's picture : its outline as seen along it, its paint in a band under it */
+    .pd-thumb .pd-profile {
+        width: 88%;
+        height: 72%;
+        margin-bottom: 0.7em;
+    }
+    .pd-thumb .pd-profile-band {
+        position: absolute;
+        left: 8%;
+        right: 8%;
+        bottom: 0.35em;
+        height: 0.45em;
+        border-radius: 0.2em;
+    }
     .pd-rendering {
         position: absolute;
         inset: 0;
@@ -820,6 +834,15 @@
         >
             {{$ctrl.T('tabs.prefabs')}} <span class="pd-n">{{$ctrl.tabCounts.prefabs}}</span>
         </button>
+        <button
+            role="tab"
+            ng-if="$ctrl.sweeps.length > 0 && !$ctrl.swap"
+            ng-class="{on: $ctrl.tab === 'sweeps'}"
+            ng-click="$ctrl.setTab('sweeps')"
+            title="{{$ctrl.T('tabs.sweeps.tooltip')}}"
+        >
+            {{$ctrl.T('tabs.sweeps')}} <span class="pd-n">{{$ctrl.tabCounts.sweeps}}</span>
+        </button>
         <button role="tab" ng-class="{on: $ctrl.tab === 'all'}" ng-click="$ctrl.setTab('all')">
             {{$ctrl.T('tabs.all')}}
             <span class="pd-n" ng-if="$ctrl.tabCounts.all !== null">{{$ctrl.tabCounts.all}}</span>
@@ -835,20 +858,20 @@
     <div class="pd-body">
         <nav class="pd-rail">
             <button
-                ng-if="$ctrl.tab !== 'prefabs'"
+                ng-if="$ctrl.meshTab()"
                 ng-class="{on: $ctrl.category[$ctrl.tab] === 'favourites'}"
                 ng-click="$ctrl.setCategory('favourites')"
             >
                 <span>{{$ctrl.T('rail.favourites')}}</span><span class="pd-n">{{$ctrl.counts.favourites}}</span>
             </button>
             <button
-                ng-if="$ctrl.tab !== 'prefabs'"
+                ng-if="$ctrl.meshTab()"
                 ng-class="{on: $ctrl.category[$ctrl.tab] === 'recent'}"
                 ng-click="$ctrl.setCategory('recent')"
             >
                 <span>{{$ctrl.T('rail.recent')}}</span><span class="pd-n">{{$ctrl.counts.recent}}</span>
             </button>
-            <hr ng-if="$ctrl.tab !== 'prefabs'" />
+            <hr ng-if="$ctrl.meshTab()" />
             <button ng-class="{on: $ctrl.category[$ctrl.tab] === 'all'}" ng-click="$ctrl.setCategory('all')">
                 <span>{{$ctrl.T('rail.all')}}</span><span class="pd-n">{{$ctrl.counts.all}}</span>
             </button>
@@ -906,6 +929,11 @@
                             ng-mouseleave="$ctrl.leave(v.item)"
                         >
                             <span class="pd-thumb">
+                                <svg class="pd-profile" ng-if="v.item.sweep" viewBox="0 0 100 60" preserveAspectRatio="xMidYMid meet">
+                                    <line x1="0" x2="100" ng-attr-y1="{{$ctrl.sweepPicture(v.item).ground}}" ng-attr-y2="{{$ctrl.sweepPicture(v.item).ground}}" stroke="#6b7280" stroke-width="1.2"></line>
+                                    <polygon ng-attr-points="{{$ctrl.sweepPicture(v.item).points}}" ng-attr-fill="{{$ctrl.sweepPicture(v.item).fill}}" stroke="#e5e7eb" stroke-width="0.8" stroke-linejoin="round"></polygon>
+                                </svg>
+                                <span class="pd-profile-band" ng-if="v.item.sweep" ng-style="$ctrl.sweepPicture(v.item).band"></span>
                                 <img
                                     ng-if="$ctrl.thumbOf(v.item).url"
                                     ng-src="{{$ctrl.thumbOf(v.item).url}}"
@@ -914,7 +942,7 @@
                                 />
                                 <svg
                                     class="pd-ph"
-                                    ng-if="!$ctrl.thumbOf(v.item).url"
+                                    ng-if="!v.item.sweep && !$ctrl.thumbOf(v.item).url"
                                     title="{{$ctrl.thumbOf(v.item).deferred ? $ctrl.T('thumbNight') : ''}}"
                                     viewBox="0 0 24 24"
                                     fill="none"
@@ -941,7 +969,7 @@
                         </button>
                         <button
                             class="pd-star"
-                            ng-if="!v.item.prefab"
+                            ng-if="!v.item.prefab && !v.item.sweep"
                             ng-class="{on: $ctrl.isFavourite(v.item)}"
                             ng-click="$ctrl.toggleFavourite($event, v.item)"
                             title="{{$ctrl.isFavourite(v.item) ? $ctrl.T('unstar') : $ctrl.T('star')}}"
@@ -978,6 +1006,11 @@
     <!-- the preview docks here when there's no room beside the drawer -->
     <div class="pd-dock" ng-if="$ctrl.pos.dock && $ctrl.previewItem()">
         <span class="pd-thumb">
+            <svg class="pd-profile" ng-if="$ctrl.previewItem().sweep" viewBox="0 0 100 60" preserveAspectRatio="xMidYMid meet">
+                                    <line x1="0" x2="100" ng-attr-y1="{{$ctrl.sweepPicture($ctrl.previewItem()).ground}}" ng-attr-y2="{{$ctrl.sweepPicture($ctrl.previewItem()).ground}}" stroke="#6b7280" stroke-width="1.2"></line>
+                                    <polygon ng-attr-points="{{$ctrl.sweepPicture($ctrl.previewItem()).points}}" ng-attr-fill="{{$ctrl.sweepPicture($ctrl.previewItem()).fill}}" stroke="#e5e7eb" stroke-width="0.8" stroke-linejoin="round"></polygon>
+                                </svg>
+                                <span class="pd-profile-band" ng-if="$ctrl.previewItem().sweep" ng-style="$ctrl.sweepPicture($ctrl.previewItem()).band"></span>
             <img ng-if="$ctrl.thumbOf($ctrl.previewItem()).url" ng-src="{{$ctrl.thumbOf($ctrl.previewItem()).url}}" alt="" />
         </span>
         <div class="pd-dock-text">
@@ -995,6 +1028,11 @@
     ng-style="$ctrl.pos.strip"
 >
     <span class="pd-thumb">
+        <svg class="pd-profile" ng-if="$ctrl.armedItem().sweep" viewBox="0 0 100 60" preserveAspectRatio="xMidYMid meet">
+                                    <line x1="0" x2="100" ng-attr-y1="{{$ctrl.sweepPicture($ctrl.armedItem()).ground}}" ng-attr-y2="{{$ctrl.sweepPicture($ctrl.armedItem()).ground}}" stroke="#6b7280" stroke-width="1.2"></line>
+                                    <polygon ng-attr-points="{{$ctrl.sweepPicture($ctrl.armedItem()).points}}" ng-attr-fill="{{$ctrl.sweepPicture($ctrl.armedItem()).fill}}" stroke="#e5e7eb" stroke-width="0.8" stroke-linejoin="round"></polygon>
+                                </svg>
+                                <span class="pd-profile-band" ng-if="$ctrl.armedItem().sweep" ng-style="$ctrl.sweepPicture($ctrl.armedItem()).band"></span>
         <img ng-if="$ctrl.thumbOf($ctrl.armedItem()).url" ng-src="{{$ctrl.thumbOf($ctrl.armedItem()).url}}" alt="" />
     </span>
     <small>{{$ctrl.T('placing')}}<br />{{$ctrl.armedItem().name}}</small>
@@ -1038,6 +1076,11 @@
     ng-style="$ctrl.pos.preview"
 >
     <span class="pd-thumb">
+        <svg class="pd-profile" ng-if="$ctrl.hovered.sweep" viewBox="0 0 100 60" preserveAspectRatio="xMidYMid meet">
+                                    <line x1="0" x2="100" ng-attr-y1="{{$ctrl.sweepPicture($ctrl.hovered).ground}}" ng-attr-y2="{{$ctrl.sweepPicture($ctrl.hovered).ground}}" stroke="#6b7280" stroke-width="1.2"></line>
+                                    <polygon ng-attr-points="{{$ctrl.sweepPicture($ctrl.hovered).points}}" ng-attr-fill="{{$ctrl.sweepPicture($ctrl.hovered).fill}}" stroke="#e5e7eb" stroke-width="0.8" stroke-linejoin="round"></polygon>
+                                </svg>
+                                <span class="pd-profile-band" ng-if="$ctrl.hovered.sweep" ng-style="$ctrl.sweepPicture($ctrl.hovered).band"></span>
         <img ng-if="$ctrl.thumbOf($ctrl.hovered).url" ng-src="{{$ctrl.thumbOf($ctrl.hovered).url}}" alt="" />
         <span class="pd-rendering" ng-if="$ctrl.thumbOf($ctrl.hovered) && !$ctrl.thumbOf($ctrl.hovered).done"></span>
         <span class="pd-chip map" ng-if="$ctrl.hovered.map">{{$ctrl.T('thisMap')}}</span>
@@ -1063,7 +1106,9 @@
     <div class="pd-tags" ng-if="$ctrl.hovered.tags">
         <span ng-repeat="tag in $ctrl.hovered.tags.split(' ') track by $index" ng-if="tag">{{tag}}</span>
     </div>
-    <div class="pd-how">{{$ctrl.swap ? $ctrl.T('preview.howSwap') : $ctrl.T('preview.how')}}</div>
+    <div class="pd-how">
+        {{$ctrl.swap ? $ctrl.T('preview.howSwap') : $ctrl.hovered.sweep ? $ctrl.T('preview.howSweep') : $ctrl.T('preview.how')}}
+    </div>
 </aside>
 
 <div class="pd-hints" ng-if="$ctrl.open && $ctrl.placing.armed">

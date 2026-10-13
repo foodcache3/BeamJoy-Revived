@@ -104,6 +104,47 @@ local function passable(v)
     return nil
 end
 
+-- a curb's or a wall's segments, at most, and how many count as one prop toward MAX (mirrors the
+-- client's beamjoy_props.SWEEP_MAX_SEGMENTS / SWEEP_WEIGHT_SEGMENTS)
+local MAX_SWEEP_SEGMENTS = 400
+local SWEEP_WEIGHT_SEGMENTS = 20
+
+---@param h any
+---@return boolean
+local function saneHeight(h)
+    local n = tonumber(h)
+    return n ~= nil and n == n and math.abs(n) <= 1e6
+end
+
+--- a curb or a wall (see the client's beamjoy_props SWEEPS) : a profile swept along a line's path.
+--- The profile is only checked for its form : a client that doesn't know it skips the entry
+---@param p table
+---@return table? entry, integer? weight
+local function saneSweep(p)
+    local a, b = sanePoint(p.a), sanePoint(p.b)
+    local count = math.floor(tonumber(p.count) or 0)
+    if not a or not b or count < 1 or count > MAX_SWEEP_SEGMENTS or type(p.profile) ~= "string" or
+        #p.profile > 40 or not p.profile:match("^[%w_]+$") then
+        return nil
+    end
+    local entry = {
+        kind = "sweep",
+        profile = p.profile,
+        a = a,
+        b = b,
+        mid = sanePoint(p.mid),
+        count = count,
+        followGround = p.followGround ~= false,
+        group = saneGroup(p.group),
+    }
+    -- the ground's height at each end of its segments
+    if entry.followGround and type(p.heights) == "table" and #p.heights == count + 1 and
+        table.every(p.heights, saneHeight) then
+        entry.heights = table.map(p.heights, function(h) return tonumber(h) end)
+    end
+    return entry, math.max(1, math.ceil(count / SWEEP_WEIGHT_SEGMENTS))
+end
+
 --- an activity's props (a race's, an arena's ; see the client's beamjoy_props for what each entry
 --- is) : only the known fields of well-formed entries are kept, malformed ones are dropped
 ---@param props any
@@ -115,7 +156,11 @@ local function sanitize(props, holder)
     local out, total = {}, 0
     for _, p in ipairs(props) do
         local entry
-        if type(p) == "table" and saneShape(p.shape) then
+        if type(p) == "table" and p.kind == "sweep" then
+            local weight
+            entry, weight = saneSweep(p)
+            if entry then total = total + weight end
+        elseif type(p) == "table" and saneShape(p.shape) then
             local scale = math.clamp(tonumber(p.scale) or 1, .1, 10)
             if p.kind == "line" then
                 local a, b = sanePoint(p.a), sanePoint(p.b)

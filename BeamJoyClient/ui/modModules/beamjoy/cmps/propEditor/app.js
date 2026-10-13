@@ -14,6 +14,9 @@
 
 // the props' fields edited in the list (everything else about a prop is set Lua-side)
 const PROP_FIELDS = ["scale", "count", "yaw", "followGround", "gap"];
+// a curb or a wall (beamjoy_props SWEEPS) counts as one prop every this many segments (metres) :
+// beamjoy_props.SWEEP_WEIGHT_SEGMENTS
+const SWEEP_WEIGHT_SEGMENTS = 20;
 // the placing switches, kept on this PC (under the drawer's former keys)
 const KEEP_KEY = "beamjoy.propDrawer.keepPlacing";
 const FIXED_KEY = "beamjoy.propDrawer.fixedRotation";
@@ -74,6 +77,7 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
 
     const countOf = (list) =>
         list.reduce((n, prop) => {
+            if (prop.kind === "sweep") return n + Math.max(1, Math.ceil((Number(prop.count) || 1) / SWEEP_WEIGHT_SEGMENTS));
             const each = 1 + (Array.isArray(prop.parts) ? prop.parts.length : 0);
             const caps = prop.kind === "line" ? (prop.capA ? 1 : 0) + (prop.capB ? 1 : 0) : 0;
             return n + (prop.kind === "line" ? Math.max(1, Number(prop.count) || 1) : 1) * each + caps;
@@ -150,11 +154,16 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
     // the catalog's name for a prop's mesh, else the mesh's file name, readable (a game mesh from
     // the drawer's "All game meshes", or one no longer offered)
     p.label = (prop) => {
+        // a curb or a wall : its profile's name (the drawer's Curbs & walls tab)
+        if (prop && prop.kind === "sweep") {
+            const sweep = p.catalog.find((c) => c.sweep === prop.profile);
+            return sweep ? sweep.name : String(prop.profile || "");
+        }
         // a prefab : its own name (the drawer's Prefabs tab)
         const prefab = prop && prop.prefab && p.catalog.find((c) => c.prefab === prop.prefab);
         if (prefab) return prefab.name;
         const shape = String((prop && prop.shape) || "");
-        const entry = p.catalog.find((c) => !c.prefab && c.shape.toLowerCase() === shape.toLowerCase());
+        const entry = p.catalog.find((c) => !c.prefab && !c.sweep && c.shape.toLowerCase() === shape.toLowerCase());
         if (entry) return entry.label;
         const words = shape
             .split("/")
@@ -165,6 +174,40 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
             .filter((w) => w);
         const name = words.join(" ");
         return name ? name.charAt(0).toUpperCase() + name.slice(1) : shape;
+    };
+
+    // CURBS AND WALLS (beamjoy_props SWEEPS) : their profiles, to give a placed one another
+    p.sweeps = () => p.catalog.filter((c) => c.sweep);
+    p.setProfile = (event, idx, id) => {
+        stop(event);
+        send("BJEditorPropsSetProfile", [idx + 1, id]);
+    };
+    // its length along its path (metres, a bent one measured along its curve)
+    p.pathLength = (prop) => {
+        const a = prop && prop.a;
+        const b = prop && prop.b;
+        if (!a || !b) return 0;
+        const m = prop.mid;
+        const at = (t) => {
+            if (!m) return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
+            // the quadratic Bezier beamjoy_props.linePath draws, through `mid` halfway
+            const c = { x: m.x * 2 - (a.x + b.x) / 2, y: m.y * 2 - (a.y + b.y) / 2, z: m.z * 2 - (a.z + b.z) / 2 };
+            const u = 1 - t;
+            return {
+                x: a.x * u * u + c.x * 2 * u * t + b.x * t * t,
+                y: a.y * u * u + c.y * 2 * u * t + b.y * t * t,
+                z: a.z * u * u + c.z * 2 * u * t + b.z * t * t,
+            };
+        };
+        let total = 0;
+        let prev = at(0);
+        const steps = m ? 32 : 1;
+        for (let k = 1; k <= steps; k++) {
+            const q = at(k / steps);
+            total += Math.hypot(q.x - prev.x, q.y - prev.y, q.z - prev.z);
+            prev = q;
+        }
+        return Math.round(total);
     };
 
     // DRAWER
@@ -319,7 +362,8 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
     // cars hit it, or drive through it (direct request)
     p.toggleSolid = (event, idx) => {
         stop(event);
-        if (!p.props[idx]) return;
+        // a curb or a wall is always solid
+        if (!p.props[idx] || p.props[idx].kind === "sweep") return;
         send("BJEditorPropsSetSolid", [idx + 1, !p.isSolid(idx)]);
     };
     // a line's fixed gap (direct request : guardrails chained on a line) : on, a longer line takes

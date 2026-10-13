@@ -8,7 +8,20 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2679, server build 2453.
+Version 1.11.0 : client build 2680, server build 2454.
+
+- **New : curbs and walls in the props editor** (direct request, from the TODO). The props drawer
+  has a new "Curbs & walls" tab : red and white or blue and white raised curbs, a painted flat
+  curb, a yellow sausage curb, a concrete jersey barrier (plain or painted red and white) and a
+  1.5 m concrete wall. Drag along the ground to lay one (a click lays a 10 m one across your view)
+  ; it's edited like a line of props : its two ends and its middle handle (bending it), Ctrl to
+  move it whole, the gizmo for a selection, copy and paste, groups. Each is one piece swept along
+  its path, following the ground (measured about every metre), painted ones striped about every
+  metre (2 m on the barrier), so a bend has no joints and a whole run of kerb is one object. Its
+  profile can be changed from the props list. Always solid once played (curbs rumble) ; never in
+  the editor's preview unless the collision switch is on. Up to 400 m each ; one counts as one
+  prop every 20 m toward the 1000. *(client + server : the server keeps them when a race or an
+  arena is saved)*
 
 - **New : Config > General > Freeroam > "Ghost players outside games"** (direct request : players
   in freeroam kept getting in racers' way). On, every player not in a race, Hunter, Infected or

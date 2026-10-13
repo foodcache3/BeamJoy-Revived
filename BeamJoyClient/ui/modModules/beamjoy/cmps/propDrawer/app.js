@@ -14,6 +14,8 @@
 //
 // Picking a tile arms it (BJEditorPropsArm) : the props editor's placing mode takes the mouse
 // over the world (ui/propEditor.lua PLACING) and tells back what it's doing (BJEditorPropsPlacing).
+// The Curbs & walls tab (beamjoy_props SWEEPS, in the same message) : profiles swept along a line
+// dragged on the ground, pictured by their outline and paint (BJEditorPropsArmSweep).
 // Shown by the props list (cmps/propEditor) of whichever editor is open : a race's, an arena's.
 // With a placed prop in "swap" (the editor's "Swap mesh"), picking a tile gives it that mesh.
 
@@ -125,9 +127,11 @@ angular.module("beamjoy").component("bjPropDrawer", {
         this.CATEGORIES = ["barriers", "fences", "markers", "signs", "start", "ramps", "scenery", "utility"];
         this.GROUPS = ["art", "assets", "map"];
         this.PREFAB_CATEGORIES = ["gazebos", "billboards", "fences", "pits", "scenery"];
+        this.SWEEP_CATEGORIES = ["curbs", "walls"];
         this.tab = "curated";
-        this.category = { curated: "all", all: "all", prefabs: "all" };
+        this.category = { curated: "all", all: "all", prefabs: "all", sweeps: "all" };
         this.prefabs = [];
+        this.sweeps = [];
         this.query = "";
         this.curated = [];
         this.meshes = null; // the game's meshes, once indexed
@@ -164,9 +168,12 @@ angular.module("beamjoy").component("bjPropDrawer", {
         // ITEMS ------------------------------------------------------------------------------
 
         const finish = (item) => {
-            item.catName = !item.cat
-                ? ""
-                : translate((item.prefab ? "beamjoy.props.prefabs.categories." : "beamjoy.props.categories.") + item.cat);
+            const catKey = item.sweep
+                ? "beamjoy.props.sweeps.categories."
+                : item.prefab
+                  ? "beamjoy.props.prefabs.categories."
+                  : "beamjoy.props.categories.";
+            item.catName = !item.cat ? "" : translate(catKey + item.cat);
             item.hay = `${item.name} ${item.tags} ${item.catName} ${fileWords(item.shape).join(" ")}`.toLowerCase();
             return item;
         };
@@ -192,7 +199,27 @@ angular.module("beamjoy").component("bjPropDrawer", {
                     if (c.size) this.sizes[item.thumbKey] = c.size;
                     return item;
                 });
-            this.curated = all.filter((c) => !c.prefab).map((c) => {
+            // a curb or a wall : no mesh, pictured by its outline (sweepPicture)
+            this.sweeps = all
+                .filter((c) => c.sweep)
+                .map((c) =>
+                    finish({
+                        key: "sweep:" + c.sweep,
+                        sweep: c.sweep,
+                        shape: "",
+                        name: c.name || c.sweep,
+                        cat: c.cat,
+                        tags: c.tags || "",
+                        solid: true,
+                        curated: true,
+                        swatch: Array.isArray(c.swatch) ? c.swatch : [],
+                        outline: Array.isArray(c.outline) ? c.outline : [],
+                        stripe: c.stripe,
+                        width: c.width,
+                        height: c.height,
+                    })
+                );
+            this.curated = all.filter((c) => !c.prefab && !c.sweep).map((c) => {
                 const name = translate(c.label);
                 const item = finish({
                     key: keyOf(c.shape),
@@ -246,6 +273,9 @@ angular.module("beamjoy").component("bjPropDrawer", {
             if (this.tab === "prefabs") {
                 return cat === "all" ? this.prefabs : this.prefabs.filter((i) => i.cat === cat);
             }
+            if (this.tab === "sweeps") {
+                return cat === "all" ? this.sweeps : this.sweeps.filter((i) => i.cat === cat);
+            }
             if (cat === "favourites") return this.favourites.map(entryFor);
             if (cat === "recent") return this.recent.map(entryFor);
             if (this.tab === "curated") {
@@ -257,12 +287,13 @@ angular.module("beamjoy").component("bjPropDrawer", {
         // every count shown (the rail's and the two tabs') is of what the search matches (direct
         // request)
         this.counts = {};
-        this.tabCounts = { curated: 0, all: null, prefabs: 0 };
+        this.tabCounts = { curated: 0, all: null, prefabs: 0, sweeps: 0 };
         const countRail = () => {
             const words = tokens();
             const match = (i) => matches(i, words);
             const curated = this.curated.filter(match);
             const prefabs = this.prefabs.filter(match);
+            const sweeps = this.sweeps.filter(match);
             const meshes = this.meshes ? allMeshes().filter(match) : null;
             const counts = {
                 favourites: this.favourites.map(entryFor).filter(match).length,
@@ -272,6 +303,10 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 counts.all = prefabs.length;
                 this.PREFAB_CATEGORIES.forEach((c) => (counts[c] = 0));
                 prefabs.forEach((i) => (counts[i.cat] = (counts[i.cat] || 0) + 1));
+            } else if (this.tab === "sweeps") {
+                counts.all = sweeps.length;
+                this.SWEEP_CATEGORIES.forEach((c) => (counts[c] = 0));
+                sweeps.forEach((i) => (counts[i.cat] = (counts[i.cat] || 0) + 1));
             } else if (this.tab === "curated") {
                 counts.all = curated.length;
                 this.CATEGORIES.forEach((c) => (counts[c] = 0));
@@ -282,17 +317,27 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 (meshes || []).forEach((i) => (counts[i.group] = (counts[i.group] || 0) + 1));
             }
             this.counts = counts;
-            this.tabCounts = { curated: curated.length, all: meshes ? meshes.length : null, prefabs: prefabs.length };
+            this.tabCounts = {
+                curated: curated.length,
+                all: meshes ? meshes.length : null,
+                prefabs: prefabs.length,
+                sweeps: sweeps.length,
+            };
         };
         this.railItems = () =>
-            this.tab === "prefabs"
+            this.tab === "sweeps"
+                ? this.SWEEP_CATEGORIES
+                : this.tab === "prefabs"
                 ? this.PREFAB_CATEGORIES
                 : this.tab === "curated"
                 ? this.CATEGORIES
                 : this.otherMaps
                 ? this.GROUPS.concat(["others"])
                 : this.GROUPS;
+        // Favourites and Recent are of meshes : not on the prefabs' and the curbs' tabs
+        this.meshTab = () => this.tab !== "prefabs" && this.tab !== "sweeps";
         this.railName = (id) => {
+            if (this.tab === "sweeps") return translate("beamjoy.props.sweeps.categories." + id);
             if (this.tab === "prefabs") return translate("beamjoy.props.prefabs.categories." + id);
             return this.tab === "curated" ? translate("beamjoy.props.categories." + id) : T("groups." + id);
         };
@@ -361,7 +406,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
 
         // FAVOURITES / RECENT --------------------------------------------------------------
 
-        this.isFavourite = (item) => !item.prefab && this.favourites.some((s) => keyOf(s) === item.key);
+        this.isFavourite = (item) => !item.prefab && !item.sweep && this.favourites.some((s) => keyOf(s) === item.key);
         this.toggleFavourite = (event, item) => {
             event.stopPropagation();
             this.favourites = this.isFavourite(item)
@@ -372,8 +417,8 @@ angular.module("beamjoy").component("bjPropDrawer", {
             else countRail();
         };
         const remember = (item) => {
-            // Recent and Favourites are of meshes ; prefabs have their own tab
-            if (item.prefab) return;
+            // Recent and Favourites are of meshes ; prefabs and curbs have their own tabs
+            if (item.prefab || item.sweep) return;
             this.recent = [item.shape].concat(this.recent.filter((s) => keyOf(s) !== item.key)).slice(0, RECENT_MAX);
             writeList(RECENT_KEY, this.recent);
             countRail();
@@ -441,7 +486,8 @@ angular.module("beamjoy").component("bjPropDrawer", {
             const seen = new Set();
             const add = (item) => {
                 const key = item && (item.thumbKey || item.key);
-                if (!item || seen.has(key)) return;
+                // a curb or a wall is pictured by its outline, not rendered
+                if (!item || item.sweep || seen.has(key)) return;
                 seen.add(key);
                 const t = this.thumbs[key];
                 if (!t || !t.done) {
@@ -502,15 +548,51 @@ angular.module("beamjoy").component("bjPropDrawer", {
             return !(s && s.col === false);
         };
         this.tileSize = (item) => {
+            if (item && item.sweep) return `${fmt(item.height)} m`;
             if (item && item.prefab) return T("prefab.parts").replace("{n}", item.parts);
             const s = this.sizeOf(item);
             if (s) return `${fmt(Math.max(s.x, s.y))} m`;
             return item.length ? `${fmt(item.length)} m` : "";
         };
         this.dims = (item) => {
+            if (item && item.sweep) return T("sweep.dims").replace("{w}", fmt(item.width)).replace("{h}", fmt(item.height));
             if (item && item.prefab) return T("prefab.parts").replace("{n}", item.parts);
             const s = this.sizeOf(item);
             return s ? `${fmt(s.x)} × ${fmt(s.y)} × ${fmt(s.z)} m` : T("preview.unmeasured");
+        };
+
+        // a curb's or a wall's picture : its outline above the ground (and a little below), as
+        // seen along it, filled with its first paint ; the stripes of a painted one beside it
+        const sweepPictures = {};
+        this.sweepPicture = (item) => {
+            if (!item || !item.sweep) return null;
+            if (sweepPictures[item.key]) return sweepPictures[item.key];
+            const pts = item.outline
+                .filter((o) => Array.isArray(o) && o.length >= 2)
+                .map((o) => [Number(o[0]) || 0, Math.max(-0.08, Number(o[1]) || 0)]);
+            const xs = pts.map((o) => o[0]);
+            const zs = pts.map((o) => o[1]);
+            const minX = Math.min(...xs, 0);
+            const maxX = Math.max(...xs, 0);
+            const minZ = Math.min(...zs, 0);
+            const maxZ = Math.max(...zs, 0.05);
+            // fitted in a 100 x 60 box, its proportions kept, standing on the ground line
+            const scale = Math.min(84 / Math.max(0.01, maxX - minX), 44 / Math.max(0.01, maxZ - minZ));
+            const ground = 52;
+            const points = pts
+                .map((o) => `${(50 + (o[0] - (minX + maxX) / 2) * scale).toFixed(1)},${(ground - o[1] * scale).toFixed(1)}`)
+                .join(" ");
+            const swatch = item.swatch.length > 0 ? item.swatch : ["#a9a9a4"];
+            const stops = item.stripe && swatch.length > 1
+                ? swatch.map((c, i) => `${c} ${(i * 100) / swatch.length}% ${((i + 1) * 100) / swatch.length}%`).join(", ")
+                : `${swatch[0]} 0% 100%`;
+            sweepPictures[item.key] = {
+                points,
+                fill: swatch[0],
+                ground,
+                band: { background: `repeating-linear-gradient(90deg, ${stops})`, "background-size": "2.4em 100%" },
+            };
+            return sweepPictures[item.key];
         };
 
         // MESH INDEX -------------------------------------------------------------------------
@@ -543,11 +625,15 @@ angular.module("beamjoy").component("bjPropDrawer", {
 
         this.isArmed = (item) =>
             this.placing.armed &&
-            (item.prefab ? this.placing.prefab === item.prefab : !this.placing.prefab && keyOf(this.placing.shape) === item.key);
+            (item.sweep
+                ? this.placing.sweep === item.sweep
+                : item.prefab
+                  ? this.placing.prefab === item.prefab
+                  : !this.placing.prefab && !this.placing.sweep && keyOf(this.placing.shape) === item.key);
         this.pick = (item) => {
             if (!item) return;
-            // a prop's mesh can't be swapped for a whole prefab
-            if (this.swap && item.prefab) return;
+            // a prop's mesh can't be swapped for a whole prefab, nor a curb
+            if (this.swap && (item.prefab || item.sweep)) return;
             if (this.swap) {
                 if (this.swap.cap) beamjoyStore.send("BJEditorPropsSetCap", [this.swap.index + 1, this.swap.cap, item.shape]);
                 else if (this.swap.alt) beamjoyStore.send("BJEditorPropsSetAlt", [this.swap.index + 1, item.shape]);
@@ -561,7 +647,8 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 return;
             }
             this.stripExpanded = false;
-            if (item.prefab) beamjoyStore.send("BJEditorPropsArmPrefab", [item.prefab]);
+            if (item.sweep) beamjoyStore.send("BJEditorPropsArmSweep", [item.sweep]);
+            else if (item.prefab) beamjoyStore.send("BJEditorPropsArmPrefab", [item.prefab]);
             else beamjoyStore.send("BJEditorPropsArm", [item.shape]);
             remember(item);
         };
@@ -578,6 +665,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
         this.folded = () => this.placing.armed && !this.stripExpanded && !this.swap;
         this.armedItem = () => {
             if (!this.placing.armed) return null;
+            if (this.placing.sweep) return this.sweeps.find((i) => i.sweep === this.placing.sweep) || null;
             if (this.placing.prefab) return this.prefabs.find((i) => i.prefab === this.placing.prefab) || null;
             return entryFor(this.placing.shape);
         };

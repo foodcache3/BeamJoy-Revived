@@ -453,10 +453,26 @@ the props drawer's Prefabs tab ; this is the part left for later.
 
 ## Races: painted lines and swept curbs / walls
 
-**Status:** planned, not started (direct request, 2026-10-12 : "add it to the todo"). Two new kinds
+**Status:** swept curbs and walls built (client 2680 / server 2454, 2026-10-13 : "start working on
+the curbs and walls"), not yet checked in game ; painted lines not started. Two new kinds
 of race prop next to static props and lines, both client-side objects like the props (never synced
 through BeamMP), saved with the race, spawned by `beamjoy_props` for racers, spectators and the
 editor's preview.
+
+Built (`beamjoy/props.lua` SWEEPS, `ui/propEditor.lua`, the drawer's Curbs & walls tab,
+`services/props.lua` saneSweep) : `{ kind = "sweep", profile, a, b, mid, count, followGround,
+heights, group }`, one ProceduralMesh per entry (createMesh takes `{ { submesh, ... } }`, each
+`{ verts, normals, uvs, faces = {{v, n, u}} (0-based), material }`), one submesh per paint colour,
+runtime Materials made like core.lua's Track Builder ones. 7 profiles. Re-made in place on its
+object while an end is dragged. A ProceduralMesh has no collision field (only `material`), so the
+editor's preview and the ghost are deleted before every static collision rebuild done by
+beamjoy_props and made again after.
+**Check in game** : that a runtime ProceduralMesh only becomes solid on `be:reloadCollision` (if
+createMesh makes it solid at once, the editor's preview is solid too) ; the stripes' colours and
+the concrete texture's look ; the rumble ground model on curbs ; the faces' winding (the materials
+are double-sided meanwhile).
+Left for later : a profile's side (a kerb sloped toward the track only), tilting with the ground
+across the path (it's sunk 0.4 m instead), a tyre-wall profile, eyedropping a whole sweep.
 
 How the game does it (investigated 2026-10-12) :
 - **Driver Training's quick races** are generated at load : a quickrace JSON with
