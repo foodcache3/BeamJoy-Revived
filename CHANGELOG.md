@@ -8,7 +8,14 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2684, server build 2457.
+Version 1.11.0 : client build 2686, server build 2457.
+
+- **Fix : painted lines now show on maps without a terrain** (direct report : nothing at all on
+  Mondello Park, a map that's one big mesh). There, the game builds a decal road all right but never
+  draws it, whatever its settings (tested in game). On such a map a painted line is now a thin flat
+  mesh in the same paint, 2 cm over the ground, never solid : cars don't feel it. Maps with a terrain
+  keep their decals, whose points now also start 2 m over the ground for the ray the game casts down
+  to lay them over a mesh road (as its own Road Architect does). *(client)*
 
 - **New : lines bend through as many nodes as you like** (direct request : like the game's own spline
   editor), for lines of props, curbs, walls and painted lines alike. The line runs as a smooth curve

@@ -1828,11 +1828,25 @@ end
 -- roads, a bridge), out of the AI's road network (`drivability` -1), never saved with the map, and
 -- under nothing of the map's own paint but over its asphalt (a low `renderPriority` draws last).
 -- No collision : never in the static collision, nothing to rebuild for it.
+--
+-- A map without a terrain (direct report : Mondello Park, one big mesh) builds a decal road all
+-- right but never draws it (a test in game : its geometry made, on the surface, not one stripe
+-- seen whatever its settings). There, a painted line is a thin flat mesh instead (a ProceduralMesh,
+-- as a curb's) in the same paint, just over the ground : a mesh is always in the static collision
+-- once it's rebuilt, so it's taken out before every rebuild and made again right after
+-- (reloadCollision), as the editor's curbs are.
 
 -- metres a segment, about (a node at each end : the decal's own spline smooths between them)
 local PAINT_STEP = 2
 -- drawn after (over) the map's own decal roads, a tyre mark under a painted line
 local PAINT_PRIORITY, MARK_PRIORITY = 1, 2
+-- metres its nodes are raised : over objects, a decal road finds the surface by a ray cast down
+-- from each node, so one on (or a hair under) a mesh road could find nothing (the game's Road
+-- Architect raises its own by 4.2 m). Enough to clear a mesh road measured on the terrain under
+-- it, low enough not to land on what's overhead
+local PAINT_RAY_LIFT = 2
+-- metres the flat mesh of a map without a terrain stands over the ground (over it, not in it)
+local PAINT_MESH_LIFT = .02
 
 -- `texLength` : metres of road one repeat of its texture covers ; `aspect` instead : that many
 -- times its width (a pattern that keeps its proportions, the checkers square). `look` pictures it
@@ -1907,9 +1921,72 @@ function M.paintWidth(entry)
     return math.max(M.PAINT_WIDTH_MIN, math.min(w, M.PAINT_WIDTH_MAX))
 end
 
---- a painted line's decal made : nil when its paint isn't known or its path is too short
+-- whether the map has a terrain (PAINTS above : decals only show on one), until it's left
+local terrainKnown = nil
+
+---@return boolean
+local function mapHasTerrain()
+    if terrainKnown == nil then
+        local ok, list = pcall(scenetree.findClassObjects, "TerrainBlock")
+        terrainKnown = not ok or (type(list) == "table" and next(list) ~= nil)
+    end
+    return terrainKnown
+end
+
+--- a painted line's flat mesh, for a map without a terrain : a strip its width wide along its
+--- points, just over them, its texture as the decal lays it (across its width, a repeat every
+--- `texLength` metres along)
+---@param paint table
+---@param pts {pos: vec3, way: vec3}[]
+---@param width number
+---@param texLength number
+---@return table? obj a ProceduralMesh
+local function makePaintMesh(paint, pts, width, texLength)
+    local origin = pts[1].pos
+    local up = vec3(0, 0, 1)
+    local s = { verts = {}, normals = {}, uvs = {}, faces = {}, material = paint.material }
+    local along = 0
+    for i, p in ipairs(pts) do
+        if i > 1 then along = along + p.pos:distance(pts[i - 1].pos) end
+        local right = vec3(p.way.y, -p.way.x, 0) * (width / 2)
+        local at = p.pos - origin + up * PAINT_MESH_LIFT
+        for j, side in ipairs({ at + right, at - right }) do
+            s.verts[#s.verts + 1] = { x = side.x, y = side.y, z = side.z }
+            s.normals[#s.normals + 1] = { x = 0, y = 0, z = 1 }
+            s.uvs[#s.uvs + 1] = { u = j - 1, v = along / texLength }
+        end
+    end
+    local function tri(a, b, c)
+        for _, v in ipairs({ a, b, c }) do s.faces[#s.faces + 1] = { v = v, n = v, u = v } end
+    end
+    for i = 0, #pts - 2 do
+        -- right then left at a point, the next point's left then right : wound as a curb's top
+        -- (sweepMeshes), seen from above. One side only : a translucent paint drawn twice over
+        -- itself would come out darker
+        local a, b, c, d = i * 2, i * 2 + 1, i * 2 + 3, i * 2 + 2
+        tri(a, b, c)
+        tri(a, c, d)
+    end
+    local obj = createObject("ProceduralMesh")
+    obj.canSave = false
+    obj:registerObject("")
+    if not simObjectExists(obj) then return nil end
+    local ok, err = pcall(function()
+        obj:createMesh({ { s } })
+        obj:setPosition(origin)
+    end)
+    if not ok then
+        LogWarn("beamjoy_props: a painted line couldn't be built: " .. tostring(err))
+        obj:delete()
+        return nil
+    end
+    return obj
+end
+
+--- a painted line's decal made (on a map without a terrain, its flat mesh) : nil when its paint
+--- isn't known or its path is too short
 ---@param entry table
----@return table? obj a DecalRoad
+---@return table? obj a DecalRoad or a ProceduralMesh
 local function makePaint(entry)
     local paint = paintById[entry.paint]
     if not paint then return nil end
@@ -1919,6 +1996,7 @@ local function makePaint(entry)
     if #pts < 2 then return nil end
     local width = M.paintWidth(entry)
     local texLength = paint.aspect and width * paint.aspect or paint.texLength or 5
+    if not mapHasTerrain() then return makePaintMesh(paint, pts, width, math.max(.1, texLength)) end
     local road = createObject("DecalRoad")
     road.canSave = false
     road:setField("material", 0, paint.material)
@@ -1929,7 +2007,7 @@ local function makePaint(entry)
     road:setField("drivability", 0, "-1")
     road:setField("startEndFade", 0, "0 0")
     for _, p in ipairs(pts) do
-        road:setField("Node", 0, string.format("%f %f %f %f", p.pos.x, p.pos.y, p.pos.z, width))
+        road:setField("Node", 0, string.format("%f %f %f %f", p.pos.x, p.pos.y, p.pos.z + PAINT_RAY_LIFT, width))
     end
     road:registerObject("")
     if not simObjectExists(road) then return nil end
@@ -1994,17 +2072,17 @@ end
 
 --- the static collision rebuilt now. A set that mustn't be solid (the editor's preview, the placing
 --- ghost) has its curbs and walls taken out of the scene first and made again right after : a
---- ProceduralMesh can't be told to stay out of it (see SWEEPS)
+--- ProceduralMesh can't be told to stay out of it (see SWEEPS). So does every painted line drawn
+--- as a mesh (a map without a terrain, see PAINTS), in any set : paint is never solid
 local function reloadCollision()
     for _, set in pairs(M.sets) do
-        if not set.collision then
-            for i, s in pairs(set.sweeps) do
-                -- a painted line (PAINTS) has no collision : it stays
-                if s.obj and s.solid then
-                    if simObjectExists(s.obj) then s.obj:delete() end
-                    s.obj = nil
-                    set.sweepPending[i] = true
-                end
+        for i, s in pairs(set.sweeps) do
+            -- a painted line's decal has no collision : it stays
+            local mesh = s.obj and simObjectExists(s.obj) and s.obj:getClassName() == "ProceduralMesh"
+            if s.obj and ((s.solid and not set.collision) or (not s.solid and mesh)) then
+                if simObjectExists(s.obj) then s.obj:delete() end
+                s.obj = nil
+                set.sweepPending[i] = true
             end
         end
     end
@@ -2620,8 +2698,9 @@ local function cleanup()
     -- any lamp whose prop went some other way
     for _, l in pairs(lamps) do deleteLights(l) end
     lamps, lampsNight = {}, nil
-    -- a new map, its own materials : looked at again
+    -- a new map, its own materials and its terrain : looked at again
     materialDirs, materialShapes, mapped, sharedDone = {}, {}, nil, {}
+    terrainKnown = nil
     if collisionReloadAt then
         collisionReloadAt = nil
         if be then reloadCollision() end
