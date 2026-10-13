@@ -529,6 +529,22 @@
         height: 0.45em;
         border-radius: 0.2em;
     }
+    .pd-thumb .pd-paint {
+        position: absolute;
+        left: 6%;
+        right: 6%;
+        top: 22%;
+        bottom: 22%;
+        border-radius: 0.3em;
+        background: linear-gradient(180deg, #3a3d42, #2f3236);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+        overflow: hidden;
+    }
+    .pd-paint-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+    }
     .pd-rendering {
         position: absolute;
         inset: 0;
@@ -843,6 +859,15 @@
         >
             {{$ctrl.T('tabs.sweeps')}} <span class="pd-n">{{$ctrl.tabCounts.sweeps}}</span>
         </button>
+        <button
+            role="tab"
+            ng-if="$ctrl.paints.length > 0 && !$ctrl.swap"
+            ng-class="{on: $ctrl.tab === 'paints'}"
+            ng-click="$ctrl.setTab('paints')"
+            title="{{$ctrl.T('tabs.paints.tooltip')}}"
+        >
+            {{$ctrl.T('tabs.paints')}} <span class="pd-n">{{$ctrl.tabCounts.paints}}</span>
+        </button>
         <button role="tab" ng-class="{on: $ctrl.tab === 'all'}" ng-click="$ctrl.setTab('all')">
             {{$ctrl.T('tabs.all')}}
             <span class="pd-n" ng-if="$ctrl.tabCounts.all !== null">{{$ctrl.tabCounts.all}}</span>
@@ -934,6 +959,7 @@
                                     <polygon ng-attr-points="{{$ctrl.sweepPicture(v.item).points}}" ng-attr-fill="{{$ctrl.sweepPicture(v.item).fill}}" stroke="#e5e7eb" stroke-width="0.8" stroke-linejoin="round"></polygon>
                                 </svg>
                                 <span class="pd-profile-band" ng-if="v.item.sweep" ng-style="$ctrl.sweepPicture(v.item).band"></span>
+                                <span class="pd-paint" ng-if="v.item.paint"><span class="pd-paint-line" ng-style="$ctrl.paintPicture(v.item).line"></span></span>
                                 <img
                                     ng-if="$ctrl.thumbOf(v.item).url"
                                     ng-src="{{$ctrl.thumbOf(v.item).url}}"
@@ -942,7 +968,7 @@
                                 />
                                 <svg
                                     class="pd-ph"
-                                    ng-if="!v.item.sweep && !$ctrl.thumbOf(v.item).url"
+                                    ng-if="!v.item.path && !$ctrl.thumbOf(v.item).url"
                                     title="{{$ctrl.thumbOf(v.item).deferred ? $ctrl.T('thumbNight') : ''}}"
                                     viewBox="0 0 24 24"
                                     fill="none"
@@ -969,7 +995,7 @@
                         </button>
                         <button
                             class="pd-star"
-                            ng-if="!v.item.prefab && !v.item.sweep"
+                            ng-if="!v.item.prefab && !v.item.path"
                             ng-class="{on: $ctrl.isFavourite(v.item)}"
                             ng-click="$ctrl.toggleFavourite($event, v.item)"
                             title="{{$ctrl.isFavourite(v.item) ? $ctrl.T('unstar') : $ctrl.T('star')}}"
@@ -1011,6 +1037,7 @@
                                     <polygon ng-attr-points="{{$ctrl.sweepPicture($ctrl.previewItem()).points}}" ng-attr-fill="{{$ctrl.sweepPicture($ctrl.previewItem()).fill}}" stroke="#e5e7eb" stroke-width="0.8" stroke-linejoin="round"></polygon>
                                 </svg>
                                 <span class="pd-profile-band" ng-if="$ctrl.previewItem().sweep" ng-style="$ctrl.sweepPicture($ctrl.previewItem()).band"></span>
+            <span class="pd-paint" ng-if="$ctrl.previewItem().paint"><span class="pd-paint-line" ng-style="$ctrl.paintPicture($ctrl.previewItem()).line"></span></span>
             <img ng-if="$ctrl.thumbOf($ctrl.previewItem()).url" ng-src="{{$ctrl.thumbOf($ctrl.previewItem()).url}}" alt="" />
         </span>
         <div class="pd-dock-text">
@@ -1033,6 +1060,7 @@
                                     <polygon ng-attr-points="{{$ctrl.sweepPicture($ctrl.armedItem()).points}}" ng-attr-fill="{{$ctrl.sweepPicture($ctrl.armedItem()).fill}}" stroke="#e5e7eb" stroke-width="0.8" stroke-linejoin="round"></polygon>
                                 </svg>
                                 <span class="pd-profile-band" ng-if="$ctrl.armedItem().sweep" ng-style="$ctrl.sweepPicture($ctrl.armedItem()).band"></span>
+        <span class="pd-paint" ng-if="$ctrl.armedItem().paint"><span class="pd-paint-line" ng-style="$ctrl.paintPicture($ctrl.armedItem()).line"></span></span>
         <img ng-if="$ctrl.thumbOf($ctrl.armedItem()).url" ng-src="{{$ctrl.thumbOf($ctrl.armedItem()).url}}" alt="" />
     </span>
     <small>{{$ctrl.T('placing')}}<br />{{$ctrl.armedItem().name}}</small>
@@ -1081,6 +1109,7 @@
                                     <polygon ng-attr-points="{{$ctrl.sweepPicture($ctrl.hovered).points}}" ng-attr-fill="{{$ctrl.sweepPicture($ctrl.hovered).fill}}" stroke="#e5e7eb" stroke-width="0.8" stroke-linejoin="round"></polygon>
                                 </svg>
                                 <span class="pd-profile-band" ng-if="$ctrl.hovered.sweep" ng-style="$ctrl.sweepPicture($ctrl.hovered).band"></span>
+        <span class="pd-paint" ng-if="$ctrl.hovered.paint"><span class="pd-paint-line" ng-style="$ctrl.paintPicture($ctrl.hovered).line"></span></span>
         <img ng-if="$ctrl.thumbOf($ctrl.hovered).url" ng-src="{{$ctrl.thumbOf($ctrl.hovered).url}}" alt="" />
         <span class="pd-rendering" ng-if="$ctrl.thumbOf($ctrl.hovered) && !$ctrl.thumbOf($ctrl.hovered).done"></span>
         <span class="pd-chip map" ng-if="$ctrl.hovered.map">{{$ctrl.T('thisMap')}}</span>
@@ -1107,7 +1136,7 @@
         <span ng-repeat="tag in $ctrl.hovered.tags.split(' ') track by $index" ng-if="tag">{{tag}}</span>
     </div>
     <div class="pd-how">
-        {{$ctrl.swap ? $ctrl.T('preview.howSwap') : $ctrl.hovered.sweep ? $ctrl.T('preview.howSweep') : $ctrl.T('preview.how')}}
+        {{$ctrl.swap ? $ctrl.T('preview.howSwap') : $ctrl.hovered.sweep ? $ctrl.T('preview.howSweep') : $ctrl.hovered.paint ? $ctrl.T('preview.howPaint') : $ctrl.T('preview.how')}}
     </div>
 </aside>
 

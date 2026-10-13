@@ -69,7 +69,7 @@
             <span ng-if="prop.kind === 'line'" class="small opacity-70">
                 ({{'beamjoy.window.config.tabs.races.props.line' | translate}}, {{prop.count}})
             </span>
-            <span ng-if="prop.kind === 'sweep'" class="small opacity-70">
+            <span ng-if="prop.kind === 'sweep' || prop.kind === 'paint'" class="small opacity-70">
                 ({{$ctrl.p.pathLength(prop)}} m)
             </span>
             <span
@@ -83,7 +83,7 @@
         <button
             class="btn"
             ng-class="$ctrl.p.isSolid($index) ? 'info' : 'neutral'"
-            ng-disabled="prop.kind === 'sweep'"
+            ng-disabled="prop.kind === 'sweep' || prop.kind === 'paint'"
             ng-click="$ctrl.p.toggleSolid($event, $index)"
             title="{{(!$ctrl.p.isSolid($index)
                 ? 'beamjoy.window.config.tabs.races.props.solid.off'
@@ -115,7 +115,7 @@
     </div>
     <div class="prop-detail px-2 pb-2" ng-if="$index === $ctrl.p.active && !$ctrl.p.severalSelected()">
         <table class="w-100">
-            <tr ng-if="prop.kind === 'line' || prop.kind === 'sweep'">
+            <tr ng-if="prop.kind === 'line' || prop.kind === 'sweep' || prop.kind === 'paint'">
                 <td
                     class="text-right"
                     title="{{'beamjoy.window.config.tabs.races.props.ends.tooltip' | translate}}"
@@ -170,6 +170,27 @@
                             {{s.name}}
                         </button>
                     </div>
+                </td>
+            </tr>
+            <tr ng-if="prop.kind === 'paint'">
+                <td class="text-right">{{'beamjoy.window.config.tabs.races.props.paint' | translate}}</td>
+                <td>
+                    <div class="d-flex gap-1 flex-wrap">
+                        <button
+                            class="btn"
+                            ng-repeat="s in $ctrl.p.paints() track by s.paint"
+                            ng-class="prop.paint === s.paint ? 'success' : 'neutral'"
+                            ng-click="$ctrl.p.setPaint($event, $ctrl.p.props.indexOf(prop), s.paint)"
+                        >
+                            {{s.name}}
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            <tr ng-if="prop.kind === 'paint'">
+                <td class="text-right">{{'beamjoy.window.config.tabs.races.props.width' | translate}}</td>
+                <td>
+                    <bj-slider ng-model="prop.width" min="0.05" max="4" hard-max="12" step="0.05"></bj-slider>
                 </td>
             </tr>
             <tr ng-if="prop.kind === 'line'">
@@ -301,7 +322,7 @@
                     <bj-slider ng-model="prop.yaw" min="-180" max="180" step="5"></bj-slider>
                 </td>
             </tr>
-            <tr ng-if="prop.kind === 'line' || prop.kind === 'sweep'">
+            <tr ng-if="prop.kind === 'line' || prop.kind === 'sweep' || prop.kind === 'paint'">
                 <td
                     class="text-right"
                     title="{{'beamjoy.window.config.tabs.races.props.followGround.tooltip' | translate}}"
@@ -310,7 +331,7 @@
                 </td>
                 <td><bj-toggle ng-model="prop.followGround"></bj-toggle></td>
             </tr>
-            <tr ng-if="prop.kind !== 'sweep'">
+            <tr ng-if="prop.kind !== 'sweep' && prop.kind !== 'paint'">
                 <td class="text-right">{{'beamjoy.window.config.tabs.races.props.scale' | translate}}</td>
                 <td>
                     <bj-slider ng-model="prop.scale" min="0.25" max="4" hard-max="10" step="0.05"></bj-slider>
@@ -323,7 +344,7 @@
                 <td class="d-flex gap-1">
                     <button
                         class="btn info"
-                        ng-if="prop.kind !== 'line' && prop.kind !== 'sweep'"
+                        ng-if="prop.kind !== 'line' && prop.kind !== 'sweep' && prop.kind !== 'paint'"
                         ng-click="$ctrl.p.setToVehicle($event, $index)"
                         title="{{'beamjoy.window.config.tabs.races.props.setToVehicle' | translate}}"
                     >
@@ -347,7 +368,7 @@
                     </button>
                     <button
                         class="btn"
-                        ng-if="!prop.parts && prop.kind !== 'sweep'"
+                        ng-if="!prop.parts && prop.kind !== 'sweep' && prop.kind !== 'paint'"
                         ng-class="$ctrl.p.isSwapPick($index) ? 'primary' : 'neutral'"
                         ng-click="$ctrl.p.swapMesh($event, $index)"
                         title="{{'beamjoy.window.config.tabs.races.props.swap.tooltip' | translate}}"

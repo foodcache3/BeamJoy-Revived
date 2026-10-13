@@ -8,7 +8,18 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2680, server build 2454.
+Version 1.11.0 : client build 2681, server build 2455.
+
+- **New : painted lines in the props editor** (direct request, from the TODO). The props drawer has
+  a new "Paint" tab with the game's own road paint : white and yellow lines, white dashed (long or
+  short dashes), double yellow, yellow and black stripes, chevrons, zebra stripes ; for races a
+  checkered line, a chalk line and spray paint (white, orange, green) ; and tyre marks (a
+  rubbered-in racing line, dirt tyre tracks). Laid and edited like the curbs : drag along the
+  ground (a click lays a 10 m one), its two ends and its middle handle, following the ground. Its
+  paint and its width can be changed from the props list. Painted on the ground and on the map's
+  own roads and bridges, over the map's paint ; never solid, left out of the AI's roads. Up to
+  400 m each ; one counts as one prop every 40 m toward the 1000. *(client + server : the server
+  keeps them when a race or an arena is saved)*
 
 - **New : curbs and walls in the props editor** (direct request, from the TODO). The props drawer
   has a new "Curbs & walls" tab : red and white or blue and white raised curbs, a painted flat

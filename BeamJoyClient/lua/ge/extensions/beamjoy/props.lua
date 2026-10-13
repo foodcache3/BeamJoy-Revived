@@ -37,6 +37,8 @@
 ---
 --- Curbs and walls : `{ kind = "sweep", profile, a, b, mid, count, followGround, heights, group }`,
 --- a cross-section swept along a line's path into one mesh (SWEEPS below).
+--- Painted lines : `{ kind = "paint", paint, a, b, mid, count, width, followGround, heights, group }`,
+--- a decal of the game's road paint laid along a line's path (PAINTS below), never solid.
 ---
 --- Lamps : a mesh named in LAMPS (by its file name, so every map's copy of it, picked from the
 --- catalog or from any map's meshes) casts light, through a light of its own at each of its lamp
@@ -233,6 +235,13 @@ local M = {
     -- a curb or a wall counts as one prop every this many segments (metres) toward MAX_PROPS : one
     -- object, but its mesh and collision grow with it. Mirrored by the server and the props list
     SWEEP_WEIGHT_SEGMENTS = 20,
+    -- a painted line's segments (PAINTS below), at most : about one every 2 m, so 400 m in one
+    -- piece. It weighs as a curb does, one prop every SWEEP_WEIGHT_SEGMENTS segments (so every
+    -- 40 m : a decal costs far less than a mesh). Mirrored by the server's services/props.lua
+    PAINT_MAX_SEGMENTS = 200,
+    -- a painted line's width (metres), within these. Mirrored by the server and the props list
+    PAINT_WIDTH_MIN = .05,
+    PAINT_WIDTH_MAX = 12,
 }
 
 -- the rally gazebos (art/prefabs/p_rally_gazebo_mod_<colour>_3x3 / _3x6) : a 3 x 3 m frame and its
@@ -840,6 +849,8 @@ function M.catalogForUI()
     end
     -- the curbs and walls : the drawer's Curbs & walls tab (SWEEPS)
     for _, s in ipairs(M.sweepsForUI()) do out[#out + 1] = s end
+    -- the painted lines : the drawer's Paint tab (PAINTS)
+    for _, s in ipairs(M.paintsForUI()) do out[#out + 1] = s end
     -- the prefabs : the drawer's Prefabs tab, named here (their names are built from parts)
     local tr = function(key) return beamjoy_lang and beamjoy_lang.translate(key) or key end
     for _, p in ipairs(M.PREFABS) do
@@ -923,8 +934,9 @@ end
 ---@param entry table
 ---@return integer
 function M.weight(entry)
-    -- a curb or a wall : one object, weighed by its length (one per SWEEP_WEIGHT_SEGMENTS metres)
-    if entry.kind == "sweep" then
+    -- a curb, a wall or a painted line : one object, weighed by its length (one per
+    -- SWEEP_WEIGHT_SEGMENTS segments)
+    if entry.kind == "sweep" or entry.kind == "paint" then
         return math.max(1, math.ceil((tonumber(entry.count) or 1) / M.SWEEP_WEIGHT_SEGMENTS))
     end
     -- each prop and every part of it
@@ -1299,6 +1311,7 @@ end
 ---@return boolean
 function M.solidByDefault(e)
     if e.kind == "sweep" then return true end
+    if e.kind == "paint" then return false end
     for _, s in ipairs(meshesOf(e)) do
         if solidMesh(s) then return true end
     end
@@ -1310,6 +1323,8 @@ end
 ---@return boolean
 function M.isSolid(e)
     if e.kind == "sweep" then return true end
+    -- a painted line : a decal, nothing to hit
+    if e.kind == "paint" then return false end
     if e.solid == false or e.solid == true then return e.solid end
     return M.solidByDefault(e)
 end
@@ -1706,6 +1721,166 @@ function M.sweepsForUI()
     end)
 end
 
+-- PAINTS (painted lines, direct request) --------------------------------------------------------
+-- One DecalRoad along a line's path, made as the game's own procedural tracks make their painted
+-- route (util/procTrack.lua : its fields set, its nodes given as "x y z width", then registered).
+-- An entry :
+--   { kind = "paint", paint, a, b, mid, count, width, followGround, heights, group }
+-- `paint` one of M.PAINTS (a client without it skips the entry) ; `a`, `b`, `mid` its path, as a
+-- line's ; `count` the segments it's cut into (about one every PAINT_STEP metres, set by the
+-- editor : paintCount), a node at each of their `count + 1` ends (sweepPoints, as a curb's) ;
+-- `width` metres (the paint's own when none) ; `heights` its nodes' ground heights, as a curb's.
+--
+-- Only the game's own materials that every map has : the common road paint
+-- (art/shapes/common/decalroads) and the race paint (art/shapes/race), whose textures are all in
+-- the shared /assets (a map's copies are links to them). Drawn over objects too (a map's mesh
+-- roads, a bridge), out of the AI's road network (`drivability` -1), never saved with the map, and
+-- under nothing of the map's own paint but over its asphalt (a low `renderPriority` draws last).
+-- No collision : never in the static collision, nothing to rebuild for it.
+
+-- metres a segment, about (a node at each end : the decal's own spline smooths between them)
+local PAINT_STEP = 2
+-- drawn after (over) the map's own decal roads, a tyre mark under a painted line
+local PAINT_PRIORITY, MARK_PRIORITY = 1, 2
+
+-- `texLength` : metres of road one repeat of its texture covers ; `aspect` instead : that many
+-- times its width (a pattern that keeps its proportions, the checkers square). `look` pictures it
+-- in the drawer : a pattern its CSS draws (propDrawer paintPicture) and its colours
+M.PAINTS = {
+    { id = "white", cat = "lines", tags = "white line edge road marking solid", material = "m_line_white",
+        width = .2, texLength = 7, look = { pattern = "solid", colours = { "#f2f2ee" } } },
+    { id = "yellow", cat = "lines", tags = "yellow line edge road marking solid", material = "m_line_yellow",
+        width = .2, texLength = 8, look = { pattern = "solid", colours = { "#efc94a" } } },
+    { id = "whiteDashed", cat = "lines", tags = "white line dashed broken road marking",
+        material = "m_line_white_discontinue", width = .2, texLength = 7,
+        look = { pattern = "dashed", colours = { "#f2f2ee" } } },
+    { id = "whiteDashedShort", cat = "lines", tags = "white line dashed short broken road marking",
+        material = "line_dashed_short", width = .2, texLength = 3,
+        look = { pattern = "dashedShort", colours = { "#f2f2ee" } } },
+    { id = "yellowDouble", cat = "lines", tags = "yellow double line centre center road marking",
+        material = "m_line_yellow_double", width = .4, texLength = 10,
+        look = { pattern = "double", colours = { "#efc94a" } } },
+    { id = "hazard", cat = "lines", tags = "yellow black hazard stripes warning", material = "line_yellowblack",
+        width = .6, texLength = 12, look = { pattern = "hazard", colours = { "#f2c418", "#1c1c1c" } } },
+    { id = "chevrons", cat = "lines", tags = "white chevrons arrows marking", material = "road_chevrons",
+        width = 1, texLength = 7, look = { pattern = "chevron", colours = { "#f2f2ee" } } },
+    { id = "zebra", cat = "lines", tags = "white zebra crossing stripes grid box", material = "crossing_white",
+        width = 3, texLength = 6, look = { pattern = "zebra", colours = { "#f2f2ee" } } },
+    { id = "checkered", cat = "race", tags = "checkered chequered start finish line flag black white",
+        material = "checkered_line", width = 1, aspect = 5, look = { pattern = "checker", colours = { "#f2f2ee" } } },
+    { id = "chalk", cat = "race", tags = "chalk line white marking", material = "ChaulkLine", width = .35,
+        texLength = 3, look = { pattern = "soft", colours = { "#efebef" } } },
+    { id = "sprayWhite", cat = "race", tags = "spray paint white marking", material = "spraypaint_mark",
+        width = .3, aspect = 4, look = { pattern = "soft", colours = { "#f7f7f7" } } },
+    { id = "sprayOrange", cat = "race", tags = "spray paint orange marking", material = "spraypaint_mark_orange",
+        width = .3, aspect = 4, look = { pattern = "soft", colours = { "#ff8100" } } },
+    { id = "sprayGreen", cat = "race", tags = "spray paint green marking", material = "spraypaint_mark_green",
+        width = .3, aspect = 4, look = { pattern = "soft", colours = { "#22b04c" } } },
+    { id = "rubber", cat = "marks", tags = "rubber racing line tyre tire marks skid asphalt",
+        material = "road_rubber_double", width = 3.5, texLength = 6, priority = MARK_PRIORITY,
+        look = { pattern = "tread", colours = { "#2a2a2a" } } },
+    { id = "dirtTracks", cat = "marks", tags = "dirt tyre tire tracks ruts gravel", material = "m_dirt_tiretracks",
+        width = 3.5, texLength = 16, priority = MARK_PRIORITY, look = { pattern = "tread", colours = { "#5b4631" } } },
+}
+M.PAINT_CATEGORIES = { "lines", "race", "marks" }
+
+local paintById = {}
+for _, s in ipairs(M.PAINTS) do paintById[s.id] = s end
+
+---@param id string
+---@return table?
+function M.getPaint(id) return type(id) == "string" and paintById[id] or nil end
+
+--- how many segments a painted line's path is cut into : about one every PAINT_STEP metres
+---@param entry table
+---@return integer
+function M.paintCount(entry)
+    return math.max(1, math.min(math.ceil(M.lineLength(entry) / PAINT_STEP - 1e-6), M.PAINT_MAX_SEGMENTS))
+end
+
+--- a curb's, a wall's or a painted line's segments for its length (sweepCount, paintCount)
+---@param entry table
+---@return integer
+function M.pathCount(entry)
+    if entry.kind == "paint" then return M.paintCount(entry) end
+    return M.sweepCount(entry)
+end
+
+--- a painted line's width (metres) : its own, else its paint's
+---@param entry table
+---@return number
+function M.paintWidth(entry)
+    local paint = paintById[entry.paint]
+    local w = tonumber(entry.width) or (paint and paint.width) or .2
+    if w ~= w then w = .2 end
+    return math.max(M.PAINT_WIDTH_MIN, math.min(w, M.PAINT_WIDTH_MAX))
+end
+
+--- a painted line's decal made : nil when its paint isn't known or its path is too short
+---@param entry table
+---@return table? obj a DecalRoad
+local function makePaint(entry)
+    local paint = paintById[entry.paint]
+    if not paint then return nil end
+    local count = math.max(1, math.min(math.floor(tonumber(entry.count) or 1), M.PAINT_MAX_SEGMENTS))
+    local pts = M.sweepPoints({ a = entry.a, b = entry.b, mid = entry.mid, count = count,
+        followGround = entry.followGround, heights = entry.heights })
+    if #pts < 2 then return nil end
+    local width = M.paintWidth(entry)
+    local texLength = paint.aspect and width * paint.aspect or paint.texLength or 5
+    local road = createObject("DecalRoad")
+    road.canSave = false
+    road:setField("material", 0, paint.material)
+    road:setField("textureLength", 0, string.format("%.3f", math.max(.1, texLength)))
+    road:setField("renderPriority", 0, tostring(paint.priority or PAINT_PRIORITY))
+    road:setField("improvedSpline", 0, "1")
+    road:setField("overObjects", 0, "1")
+    road:setField("drivability", 0, "-1")
+    road:setField("startEndFade", 0, "0 0")
+    for _, p in ipairs(pts) do
+        road:setField("Node", 0, string.format("%f %f %f %f", p.pos.x, p.pos.y, p.pos.z, width))
+    end
+    road:registerObject("")
+    if not simObjectExists(road) then return nil end
+    return road
+end
+
+--- what a painted line's decal is made from, to tell when it has to be made again
+---@param e table
+---@return string
+local function paintSignature(e)
+    local parts = { tostring(e.paint), tostring(e.count), tostring(e.followGround ~= false),
+        string.format("%.3f", M.paintWidth(e)) }
+    for _, key in ipairs({ "a", "b", "mid" }) do
+        local p = e[key]
+        parts[#parts + 1] = type(p) == "table" and
+            string.format("%.4f,%.4f,%.4f", tonumber(p.x) or 0, tonumber(p.y) or 0, tonumber(p.z) or 0) or "-"
+    end
+    if type(e.heights) == "table" then
+        for _, h in ipairs(e.heights) do parts[#parts + 1] = string.format("%.3f", tonumber(h) or 0) end
+    end
+    return table.concat(parts, "|")
+end
+
+--- the drawer's Paint tab : each paint with its name, category, width and look
+---@return table[]
+function M.paintsForUI()
+    local tr = function(key) return beamjoy_lang and beamjoy_lang.translate(key) or key end
+    return table.map(M.PAINTS, function(s)
+        return {
+            id = s.id,
+            paint = s.id,
+            name = tr("beamjoy.props.paints.name." .. s.id),
+            cat = s.cat,
+            tags = s.tags,
+            solid = false,
+            width = s.width,
+            pattern = s.look.pattern,
+            colours = s.look.colours,
+        }
+    end)
+end
+
 -- OBJECTS -------------------------------------------------------------------------------------
 
 local collisionReloadAt = nil
@@ -1730,7 +1905,8 @@ local function reloadCollision()
     for _, set in pairs(M.sets) do
         if not set.collision then
             for i, s in pairs(set.sweeps) do
-                if s.obj then
+                -- a painted line (PAINTS) has no collision : it stays
+                if s.obj and s.solid then
                     if simObjectExists(s.obj) then s.obj:delete() end
                     s.obj = nil
                     set.sweepPending[i] = true
@@ -2084,9 +2260,14 @@ local function buildSweep(obj, entry)
     return true
 end
 
----@param entry table a sweep entry
+---@param entry table a sweep or a paint entry
 ---@return table? obj
 local function spawnSweep(entry)
+    if entry.kind == "paint" then
+        local road = makePaint(entry)
+        if road then group():addObject(road) end
+        return road
+    end
     if not M.getSweep(entry.profile) then return nil end
     local obj = createObject("ProceduralMesh")
     obj.canSave = false
@@ -2154,25 +2335,32 @@ function M.show(key, props, opts)
         changed = true
     end
 
-    -- the curbs and walls (SWEEPS) : one object each, by the entry's place in the list, its mesh
-    -- made again only when something of it changed (in place on its object : no new object while
-    -- an end is dragged). New ones are created in onUpdate, with the props
+    -- the curbs and walls (SWEEPS) and the painted lines (PAINTS) : one object each, by the
+    -- entry's place in the list, made again only when something of it changed. A curb's mesh is
+    -- made again in place on its object (no new object while an end is dragged) ; a painted line's
+    -- decal is made anew at once (cheap, and an end dragged keeps up with the mouse). New ones are
+    -- created in onUpdate, with the props. Only the curbs and walls change the static collision
     local kept = {}
     for i, e in ipairs(type(props) == "table" and props or {}) do
-        if type(e) == "table" and e.kind == "sweep" and M.getSweep(e.profile) then
+        local kind = type(e) == "table" and (
+            (e.kind == "sweep" and M.getSweep(e.profile) and "sweep") or
+            (e.kind == "paint" and M.getPaint(e.paint) and "paint")) or nil
+        if kind then
             kept[i] = true
-            local sig = sweepSignature(e)
+            local solid = kind == "sweep"
+            local sig = kind .. ":" .. (solid and sweepSignature(e) or paintSignature(e))
             local s = set.sweeps[i]
             if not s or s.sig ~= sig then
                 local obj = s and s.obj
-                if obj and simObjectExists(obj) and buildSweep(obj, e) then
-                    set.sweeps[i] = { obj = obj, sig = sig, entry = e }
+                if solid and s and s.solid and obj and simObjectExists(obj) and buildSweep(obj, e) then
+                    set.sweeps[i] = { obj = obj, sig = sig, entry = e, solid = true }
                 else
                     if obj and simObjectExists(obj) then obj:delete() end
-                    set.sweeps[i] = { sig = sig, entry = e }
-                    set.sweepPending[i] = true
+                    local made = not solid and obj and spawnSweep(e) or nil
+                    set.sweeps[i] = { obj = made, sig = sig, entry = e, solid = solid }
+                    if not made then set.sweepPending[i] = true end
                 end
-                changed = true
+                if solid or (s and s.solid) then changed = true end
             else
                 s.entry = e
             end
@@ -2182,7 +2370,7 @@ function M.show(key, props, opts)
         if not kept[i] then
             if s.obj and simObjectExists(s.obj) then s.obj:delete() end
             set.sweeps[i], set.sweepPending[i] = nil, nil
-            changed = true
+            if s.solid then changed = true end
         end
     end
 
@@ -2208,7 +2396,7 @@ function M.hide(key)
     local sweeps = false
     for _, s in pairs(set.sweeps) do
         if s.obj and simObjectExists(s.obj) then s.obj:delete() end
-        sweeps = true
+        sweeps = sweeps or s.solid == true
     end
     if set.collision and (#set.entries > 0 or sweeps) then scheduleCollisionReload() end
     M.sets[key] = nil

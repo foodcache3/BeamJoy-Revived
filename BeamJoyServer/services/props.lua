@@ -145,6 +145,44 @@ local function saneSweep(p)
     return entry, math.max(1, math.ceil(count / SWEEP_WEIGHT_SEGMENTS))
 end
 
+-- a painted line's segments, at most, and its width's bounds (metres) (mirrors the client's
+-- beamjoy_props.PAINT_MAX_SEGMENTS / PAINT_WIDTH_MIN / PAINT_WIDTH_MAX). It weighs as a curb does
+local MAX_PAINT_SEGMENTS = 200
+local PAINT_WIDTH_MIN, PAINT_WIDTH_MAX = .05, 12
+
+--- a painted line (see the client's beamjoy_props PAINTS) : a decal of road paint along a line's
+--- path. The paint is only checked for its form : a client that doesn't know it skips the entry
+---@param p table
+---@return table? entry, integer? weight
+local function sanePaint(p)
+    local a, b = sanePoint(p.a), sanePoint(p.b)
+    local count = math.floor(tonumber(p.count) or 0)
+    if not a or not b or count < 1 or count > MAX_PAINT_SEGMENTS or type(p.paint) ~= "string" or
+        #p.paint > 40 or not p.paint:match("^[%w_]+$") then
+        return nil
+    end
+    local width = tonumber(p.width)
+    if width and width ~= width then width = nil end
+    local entry = {
+        kind = "paint",
+        paint = p.paint,
+        a = a,
+        b = b,
+        mid = sanePoint(p.mid),
+        count = count,
+        -- none : the paint's own
+        width = width and math.clamp(width, PAINT_WIDTH_MIN, PAINT_WIDTH_MAX) or nil,
+        followGround = p.followGround ~= false,
+        group = saneGroup(p.group),
+    }
+    -- the ground's height at each end of its segments
+    if entry.followGround and type(p.heights) == "table" and #p.heights == count + 1 and
+        table.every(p.heights, saneHeight) then
+        entry.heights = table.map(p.heights, function(h) return tonumber(h) end)
+    end
+    return entry, math.max(1, math.ceil(count / SWEEP_WEIGHT_SEGMENTS))
+end
+
 --- an activity's props (a race's, an arena's ; see the client's beamjoy_props for what each entry
 --- is) : only the known fields of well-formed entries are kept, malformed ones are dropped
 ---@param props any
@@ -159,6 +197,10 @@ local function sanitize(props, holder)
         if type(p) == "table" and p.kind == "sweep" then
             local weight
             entry, weight = saneSweep(p)
+            if entry then total = total + weight end
+        elseif type(p) == "table" and p.kind == "paint" then
+            local weight
+            entry, weight = sanePaint(p)
             if entry then total = total + weight end
         elseif type(p) == "table" and saneShape(p.shape) then
             local scale = math.clamp(tonumber(p.scale) or 1, .1, 10)

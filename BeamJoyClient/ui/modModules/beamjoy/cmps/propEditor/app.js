@@ -13,9 +13,9 @@
 // else goes through Lua's own actions.
 
 // the props' fields edited in the list (everything else about a prop is set Lua-side)
-const PROP_FIELDS = ["scale", "count", "yaw", "followGround", "gap"];
-// a curb or a wall (beamjoy_props SWEEPS) counts as one prop every this many segments (metres) :
-// beamjoy_props.SWEEP_WEIGHT_SEGMENTS
+const PROP_FIELDS = ["scale", "count", "yaw", "followGround", "gap", "width"];
+// a curb or a wall (beamjoy_props SWEEPS) counts as one prop every this many segments (metres), a
+// painted line (PAINTS) too (its segments 2 m) : beamjoy_props.SWEEP_WEIGHT_SEGMENTS
 const SWEEP_WEIGHT_SEGMENTS = 20;
 // the placing switches, kept on this PC (under the drawer's former keys)
 const KEEP_KEY = "beamjoy.propDrawer.keepPlacing";
@@ -77,7 +77,8 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
 
     const countOf = (list) =>
         list.reduce((n, prop) => {
-            if (prop.kind === "sweep") return n + Math.max(1, Math.ceil((Number(prop.count) || 1) / SWEEP_WEIGHT_SEGMENTS));
+            if (prop.kind === "sweep" || prop.kind === "paint")
+                return n + Math.max(1, Math.ceil((Number(prop.count) || 1) / SWEEP_WEIGHT_SEGMENTS));
             const each = 1 + (Array.isArray(prop.parts) ? prop.parts.length : 0);
             const caps = prop.kind === "line" ? (prop.capA ? 1 : 0) + (prop.capB ? 1 : 0) : 0;
             return n + (prop.kind === "line" ? Math.max(1, Number(prop.count) || 1) : 1) * each + caps;
@@ -159,11 +160,18 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
             const sweep = p.catalog.find((c) => c.sweep === prop.profile);
             return sweep ? sweep.name : String(prop.profile || "");
         }
+        // a painted line : its paint's name (the drawer's Paint tab)
+        if (prop && prop.kind === "paint") {
+            const paint = p.catalog.find((c) => c.paint === prop.paint);
+            return paint ? paint.name : String(prop.paint || "");
+        }
         // a prefab : its own name (the drawer's Prefabs tab)
         const prefab = prop && prop.prefab && p.catalog.find((c) => c.prefab === prop.prefab);
         if (prefab) return prefab.name;
         const shape = String((prop && prop.shape) || "");
-        const entry = p.catalog.find((c) => !c.prefab && !c.sweep && c.shape.toLowerCase() === shape.toLowerCase());
+        const entry = p.catalog.find(
+            (c) => !c.prefab && !c.sweep && !c.paint && c.shape.toLowerCase() === shape.toLowerCase()
+        );
         if (entry) return entry.label;
         const words = shape
             .split("/")
@@ -181,6 +189,12 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
     p.setProfile = (event, idx, id) => {
         stop(event);
         send("BJEditorPropsSetProfile", [idx + 1, id]);
+    };
+    // PAINTED LINES (beamjoy_props PAINTS) : their paints, to give a placed one another
+    p.paints = () => p.catalog.filter((c) => c.paint);
+    p.setPaint = (event, idx, id) => {
+        stop(event);
+        send("BJEditorPropsSetPaint", [idx + 1, id]);
     };
     // its length along its path (metres, a bent one measured along its curve)
     p.pathLength = (prop) => {
@@ -362,8 +376,8 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
     // cars hit it, or drive through it (direct request)
     p.toggleSolid = (event, idx) => {
         stop(event);
-        // a curb or a wall is always solid
-        if (!p.props[idx] || p.props[idx].kind === "sweep") return;
+        // a curb or a wall is always solid, a painted line never
+        if (!p.props[idx] || p.props[idx].kind === "sweep" || p.props[idx].kind === "paint") return;
         send("BJEditorPropsSetSolid", [idx + 1, !p.isSolid(idx)]);
     };
     // a line's fixed gap (direct request : guardrails chained on a line) : on, a longer line takes

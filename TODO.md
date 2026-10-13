@@ -454,7 +454,8 @@ the props drawer's Prefabs tab ; this is the part left for later.
 ## Races: painted lines and swept curbs / walls
 
 **Status:** swept curbs and walls built (client 2680 / server 2454, 2026-10-13 : "start working on
-the curbs and walls"), not yet checked in game ; painted lines not started. Two new kinds
+the curbs and walls"), painted lines built (client 2681 / server 2455, 2026-10-13 : "now please do
+the painted lines"), neither checked in game yet. Two new kinds
 of race prop next to static props and lines, both client-side objects like the props (never synced
 through BeamMP), saved with the race, spawned by `beamjoy_props` for racers, spectators and the
 editor's preview.
@@ -474,6 +475,23 @@ are double-sided meanwhile).
 Left for later : a profile's side (a kerb sloped toward the track only), tilting with the ground
 across the path (it's sunk 0.4 m instead), a tyre-wall profile, eyedropping a whole sweep.
 
+Painted lines built (`beamjoy/props.lua` PAINTS, the drawer's Paint tab, `services/props.lua`
+sanePaint) : `{ kind = "paint", paint, a, b, mid, count, width, followGround, heights, group }`, one
+DecalRoad per entry made as procTrack.lua makes its route (fields, `Node` "x y z width" per node,
+then registerObject), a node every 2 m (at most 200), `improvedSpline`, `overObjects`,
+`drivability` -1, `renderPriority` 1 (tyre marks 2). Made anew whenever it changes (no in-place
+node editing). 15 paints, all game materials every map has (art/shapes/common/decalroads and
+art/shapes/race, their textures links to /assets) ; m_tread_marks_clean left out (its texture is
+only in Johnson Valley's zip). Weighs one prop every 20 segments (40 m), like a curb.
+Texture length is the paint's own (fixed metres, or a multiple of the width for the checkers and
+spray paint), not editable.
+**Check in game** : that a runtime DecalRoad shows at once ; that renderPriority 1 draws over the
+map's own lines and asphalt (lower is drawn later, as procTrack's orange markings over its tread
+marks) ; overObjects on a map's mesh roads (and whether it then also paints over our curbs and
+props) ; each paint's look and texture length (the checkers square at width × 5, the dashes'
+spacing) ; the common materials' textures on a map other than their own (Johnson Valley's, West
+Coast's : links to /assets, should be fine).
+
 How the game does it (investigated 2026-10-12) :
 - **Driver Training's quick races** are generated at load : a quickrace JSON with
   `"procedural": true` and `"luaFile": "procTrackGen"` (`levels/driver_training/quickrace/`) calls
@@ -491,7 +509,7 @@ How the game does it (investigated 2026-10-12) :
   cross-section points with their UV, `borderWallMesh.lua` the walls. One piece, so no joints on a
   curve. It rebuilds collision only when you press Drive.
 
-What to build :
+What was planned (both now built, above) :
 - **Painted lines** : a DecalRoad along a line (its two ends and its bend, the same handles as the
   line tool), with a material picked from a short list (white / yellow lines, kerb paint, tyre
   marks, orange markings), its width and texture length. No collision, and they cost far less than

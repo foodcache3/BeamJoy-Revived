@@ -151,7 +151,7 @@ local function drawOverlays()
     for i, p in ipairs(list) do
         local selected = several and table.includes(selection, i)
         local isActive = i == M.activePropIndex and not several
-        if (p.kind == "line" or p.kind == "sweep") and p.a and p.b then
+        if (p.kind == "line" or p.kind == "sweep" or p.kind == "paint") and p.a and p.b then
             local a, b = vec3(p.a.x, p.a.y, p.a.z), vec3(p.b.x, p.b.y, p.b.z)
             local lineColor = (isActive or selected) and ACTIVE_COLOR or LINE_COLOR
             -- its path : a bent line as a few segments along its curve
@@ -249,12 +249,19 @@ local function xyz(v) return { x = v.x, y = v.y, z = v.z } end
 ---@return vec3?
 local function toVec(v) return v and vec3(v.x, v.y, v.z) or nil end
 
---- a prop laid along a path by its two ends (and its bend) : a line of props, or a curb or a wall
---- (beamjoy_props SWEEPS), edited by the same handles
+--- a prop laid along a path by its two ends (and its bend) : a line of props, a curb or a wall
+--- (beamjoy_props SWEEPS) or a painted line (PAINTS), edited by the same handles
 ---@param prop table?
 ---@return boolean
 local function isPath(prop)
-    return prop ~= nil and (prop.kind == "line" or prop.kind == "sweep")
+    return prop ~= nil and (prop.kind == "line" or prop.kind == "sweep" or prop.kind == "paint")
+end
+
+--- one object along its path (a curb, a wall, a painted line), cut in segments by its length
+---@param prop table?
+---@return boolean
+local function isSwept(prop)
+    return prop ~= nil and (prop.kind == "sweep" or prop.kind == "paint")
 end
 
 ---@param dir vec3?
@@ -344,8 +351,8 @@ local function updateLineHeights(line)
         line.heights, line.normals = nil, nil
         return
     end
-    -- a curb or a wall : the ground's height at each end of its segments
-    if line.kind == "sweep" then
+    -- a curb, a wall or a painted line : the ground's height at each end of its segments
+    if isSwept(line) then
         line.normals = nil
         line.heights = table.map(beamjoy_props.sweepPoints(line, true), function(p)
             return round3(groundHeightAt(p.pos))
@@ -384,12 +391,13 @@ local GAP_MIN, GAP_MAX = .2, 100
 --- its length takes, within the props' limit : fitted again whenever its length changes
 ---@param line table a line of the props
 local function fitLineCount(line)
-    -- a curb or a wall : cut about every metre, within the props' limit (it weighs one prop every
-    -- beamjoy_props.SWEEP_WEIGHT_SEGMENTS segments ; past that, its segments get longer)
-    if line.kind == "sweep" then
+    -- a curb or a wall : cut about every metre (a painted line every 2), within the props' limit
+    -- (it weighs one prop every beamjoy_props.SWEEP_WEIGHT_SEGMENTS segments ; past that, its
+    -- segments get longer)
+    if isSwept(line) then
         local others = beamjoy_props.total(props()) - beamjoy_props.weight(line)
         local room = math.max(1, beamjoy_props.MAX_PROPS - others) * beamjoy_props.SWEEP_WEIGHT_SEGMENTS
-        line.count = math.max(1, math.min(beamjoy_props.sweepCount(line), room))
+        line.count = math.max(1, math.min(beamjoy_props.pathCount(line), room))
         return
     end
     local gap = tonumber(line.gap)
@@ -730,14 +738,18 @@ end
 
 ---@param index integer
 ---@param partial table scale / count / yaw / followGround / gap (metres) / fixedGap (on : a gap
----of the line's own spacing now ; off : its count kept)
+---of the line's own spacing now ; off : its count kept) / width (a painted line's, metres)
 local function onSetProp(index, partial)
     local prop = props() and props()[index]
     if not prop or type(partial) ~= "table" then return end
-    if partial.scale ~= nil and prop.kind ~= "sweep" then
+    if partial.scale ~= nil and not isSwept(prop) then
         prop.scale = math.max(.1, math.min(tonumber(partial.scale) or 1, 10))
     end
-    if prop.kind == "sweep" then
+    if prop.kind == "paint" and tonumber(partial.width) then
+        prop.width = round2(math.max(beamjoy_props.PAINT_WIDTH_MIN,
+            math.min(tonumber(partial.width), beamjoy_props.PAINT_WIDTH_MAX)))
+    end
+    if isSwept(prop) then
         if partial.followGround ~= nil then prop.followGround = partial.followGround == true end
         fitLineCount(prop)
         updateLineHeights(prop)
@@ -783,8 +795,8 @@ end
 ---@param solid boolean
 local function onSetPropSolid(index, solid)
     local prop = props() and props()[index]
-    -- a curb or a wall is always solid (beamjoy_props SWEEPS)
-    if not prop or prop.kind == "sweep" then return end
+    -- a curb or a wall is always solid (beamjoy_props SWEEPS), a painted line never
+    if not prop or isSwept(prop) then return end
     -- kept only where it differs from its meshes' own ; not `cond and x or nil`, which is never false
     local want = solid == true
     if want == beamjoy_props.solidByDefault(prop) then
@@ -1085,12 +1097,12 @@ local function placingTuning(p)
     return beamjoy_props.tuning(p.shape)
 end
 
--- a curb or a wall placed with a click (no drag) : this long, across your view
+-- a curb, a wall or a painted line placed with a click (no drag) : this long, across your view
 local SWEEP_CLICK_LENGTH = 10
 
---- what a release would place with a curb or a wall armed : one along the line dragged, or (a
---- click) one SWEEP_CLICK_LENGTH long across your view, turned by the wheel. Within the props'
---- limit : a long one past it has longer segments, none is placed once the props are full
+--- what a release would place with a curb, a wall or a paint armed : one along the line dragged,
+--- or (a click) one SWEEP_CLICK_LENGTH long across your view, turned by the wheel. Within the
+--- props' limit : a long one past it has longer segments, none is placed once the props are full
 ---@param p table M.placing
 ---@return table? entry, number meters
 local function sweepPlacingEntry(p)
@@ -1109,9 +1121,16 @@ local function sweepPlacingEntry(p)
             b.z = groundHeightAt(b)
         end
     end
-    local sweep = { kind = "sweep", profile = p.sweep, a = xyz(a), b = xyz(b), followGround = snapOn() }
+    local sweep
+    if p.paint then
+        -- its width : the one eyedropped, else the paint's own
+        local width = tonumber(p.width) or beamjoy_props.getPaint(p.paint).width
+        sweep = { kind = "paint", paint = p.paint, a = xyz(a), b = xyz(b), width = width, followGround = snapOn() }
+    else
+        sweep = { kind = "sweep", profile = p.sweep, a = xyz(a), b = xyz(b), followGround = snapOn() }
+    end
     local room = (beamjoy_props.MAX_PROPS - beamjoy_props.total(props())) * beamjoy_props.SWEEP_WEIGHT_SEGMENTS
-    local wanted = beamjoy_props.sweepCount(sweep)
+    local wanted = beamjoy_props.pathCount(sweep)
     p.capped = wanted > room
     if room < 1 then return nil, 0 end
     sweep.count = math.min(wanted, room)
@@ -1128,7 +1147,7 @@ local function placingEntry()
     local p = M.placing
     -- the line being dragged holds fewer props than its length asks for : the props are nearly full
     p.capped = false
-    if p.sweep then return sweepPlacingEntry(p) end
+    if p.sweep or p.paint then return sweepPlacingEntry(p) end
     local tpl = p.template or {}
     local scale = tonumber(tpl.scale) or 1
     local prefab = p.prefab and beamjoy_props.prefabEntry(p.prefab)
@@ -1292,6 +1311,7 @@ local function pushPlacing(entry, meters)
         shape = p.shape,
         prefab = p.prefab,
         sweep = p.sweep,
+        paint = p.paint,
         dragging = p.drag ~= nil,
         count = entry and beamjoy_props.weight(entry) or 0,
         meters = math.floor((meters or 0) + .5),
@@ -1303,8 +1323,8 @@ local function pushPlacing(entry, meters)
         fixedRotation = M.fixedRotation,
         picked = p.template ~= nil,
     } or { armed = false }
-    local key = p and string.format("%s|%s|%s|%s|%d|%d|%d|%.2f|%s|%s|%s|%s|%s", tostring(p.shape),
-        tostring(p.prefab), tostring(p.sweep),
+    local key = p and string.format("%s|%s|%s|%s|%s|%d|%d|%d|%.2f|%s|%s|%s|%s|%s", tostring(p.shape),
+        tostring(p.prefab), tostring(p.sweep), tostring(p.paint),
         tostring(state.dragging), state.count,
         state.meters, state.rot, state.spacing, tostring(state.overWorld), tostring(state.capped),
         tostring(state.keepPlacing), tostring(state.fixedRotation), tostring(state.picked)) or "off"
@@ -1382,6 +1402,34 @@ local function onArmSweep(id)
     pushPlacing()
 end
 
+--- the drawer's Paint tab arms a paint (beamjoy_props PAINTS) : dragged along the ground like a
+--- curb, or clicked for a short straight one
+---@param id string
+---@param width number? the eyedropped line's width (metres), else the paint's own
+local function onArmPaint(id, width)
+    if not active() or not beamjoy_props.getPaint(id) then return end
+    if not propBudget(1) then return disarmProp() end
+    local rot = M.placing and M.placing.paint == id and M.placing.rot or 0
+    M.placing = { paint = id, width = tonumber(width), rot = rot, spacing = 1 }
+    unselectForPlacing()
+    pushPlacing()
+end
+
+--- a placed painted line takes another paint, its path kept, at the new paint's own width (a
+--- white line made a zebra crossing is wide)
+---@param index integer
+---@param id string
+local function onSetPaint(index, id)
+    local prop = props() and props()[index]
+    local paint = beamjoy_props.getPaint(id)
+    if not prop or prop.kind ~= "paint" or prop.paint == id or not paint then return end
+    prop.paint = id
+    prop.width = paint.width
+    markDirty()
+    pushUpdate()
+    propsChanged()
+end
+
 --- a placed curb or wall takes another profile (a kerb painted blue, a low wall made a tall one),
 --- its path kept
 ---@param index integer
@@ -1402,8 +1450,9 @@ end
 local function onEyedropProp(index)
     local prop = props() and props()[index]
     if not prop then return end
-    -- a curb or a wall : its profile armed
+    -- a curb or a wall : its profile armed ; a painted line : its paint, at its width
     if prop.kind == "sweep" then return onArmSweep(prop.profile) end
+    if prop.kind == "paint" then return onArmPaint(prop.paint, prop.width) end
     if type(prop.prefab) == "string" and type(prop.parts) == "table" and beamjoy_props.getPrefab(prop.prefab) then
         onArmPrefab(prop.prefab)
     else
@@ -1654,7 +1703,7 @@ end
 ---@param shape string
 local function onSwapPropShape(index, shape)
     local prop = props() and props()[index]
-    if not prop or prop.kind == "sweep" or prop.shape == shape or not beamjoy_propPicker.isPlaceable(shape) then
+    if not prop or isSwept(prop) or prop.shape == shape or not beamjoy_propPicker.isPlaceable(shape) then
         return
     end
     beamjoy_propPicker.measure(prop.shape)
@@ -1936,6 +1985,8 @@ local function onInit()
     ui.addHandler("BJEditorPropsArmPrefab", onArmPrefab)
     ui.addHandler("BJEditorPropsArmSweep", onArmSweep)
     ui.addHandler("BJEditorPropsSetProfile", onSetSweepProfile)
+    ui.addHandler("BJEditorPropsArmPaint", onArmPaint)
+    ui.addHandler("BJEditorPropsSetPaint", onSetPaint)
     ui.addHandler("BJEditorPropsDisarm", function() disarmProp() end)
     ui.addHandler("BJEditorPropsSwapShape", onSwapPropShape)
     ui.addHandler("BJEditorPropsSetAlt", onSetPropAlt)
