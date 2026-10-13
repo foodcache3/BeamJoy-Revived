@@ -13,7 +13,7 @@
 ---@field DiscordChatHookLang string?
 ---@field Broadcasts {enabled: boolean, delay: integer, messages: table<string, string>[]}
 ---@field Whitelist table?
----@field Freeroam {TeleportDelay: integer, CollisionsMode: "forced"|"disabled"|"ghosts", RespawnGhostTimeoutEnabled: boolean, RespawnGhostTimeout: integer, RespawnGhostDistance: integer, RefuelDuration: integer, RepairDuration: integer, PreserveEnergyOnRefuel: boolean, StrictBusStops: boolean, PreserveFuelOnReset: boolean, EmergencyRefuelCooldown: integer, PlayerPursuits: boolean, RaceRuns: boolean}
+---@field Freeroam {TeleportDelay: integer, CollisionsMode: "forced"|"disabled"|"ghosts", RespawnGhostTimeoutEnabled: boolean, RespawnGhostTimeout: integer, RespawnGhostDistance: integer, RefuelDuration: integer, RepairDuration: integer, PreserveEnergyOnRefuel: boolean, StrictBusStops: boolean, PreserveFuelOnReset: boolean, EmergencyRefuelCooldown: integer, PlayerPursuits: boolean, RaceRuns: boolean, GhostNonRacers: boolean}
 ---CollisionsMode : "forced" = collisions always on, ghosting never happens ; "disabled" = every
 ---player vehicle permanently ghosted (free-for-all, no vehicle-vehicle collision at all) ;
 ---"ghosts" (default) = respawn protection: a vehicle briefly ghosts on spawn/reset, only
@@ -147,6 +147,9 @@ local M = {
             PlayerPursuits = true,
             -- races flagged "Run from freeroam" start when driven through (services/raceFreeroam.lua)
             RaceRuns = true,
+            -- every player not in a race, Hunter, Infected or Derby is ghosted (vehicles.lua's
+            -- "nonRacer" reason), so nobody in freeroam can drive into a game (direct report)
+            GhostNonRacers = false,
         },
         Deliveries = {
             MinRouteDistance = 500,
@@ -406,6 +409,7 @@ local function sanitizeConfigValue(key, value)
         if value.EmergencyRefuelCooldown == nil then value.EmergencyRefuelCooldown = M.data.Freeroam.EmergencyRefuelCooldown end
         if value.PlayerPursuits == nil then value.PlayerPursuits = M.data.Freeroam.PlayerPursuits ~= false end
         if value.RaceRuns == nil then value.RaceRuns = M.data.Freeroam.RaceRuns ~= false end
+        if value.GhostNonRacers == nil then value.GhostNonRacers = M.data.Freeroam.GhostNonRacers == true end
         if type(value.TeleportDelay) ~= "number" then
             return nil, "TeleportDelay must be a number"
         elseif value.CollisionsMode ~= "forced" and value.CollisionsMode ~= "disabled" and
@@ -434,6 +438,8 @@ local function sanitizeConfigValue(key, value)
             return nil, "PlayerPursuits must be a boolean"
         elseif type(value.RaceRuns) ~= "boolean" then
             return nil, "RaceRuns must be a boolean"
+        elseif type(value.GhostNonRacers) ~= "boolean" then
+            return nil, "GhostNonRacers must be a boolean"
         end
     elseif key == "Deliveries" then
         if type(value) ~= "table" then return nil, "Value must be a table" end

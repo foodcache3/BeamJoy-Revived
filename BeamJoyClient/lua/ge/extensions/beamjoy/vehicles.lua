@@ -422,6 +422,21 @@ end
 
 local lastCollisionsMode = nil
 
+--- in a race, Hunter, Infected or Derby, as a player (lobby to end), not watching one
+---@return boolean
+local function inGame()
+    for _, runner in ipairs({ beamjoy_raceRunner, beamjoy_hunterRunner, beamjoy_infectedRunner,
+        beamjoy_derbyRunner }) do
+        if runner and runner.session then return true end
+    end
+    return false
+end
+
+--- true while Freeroam.GhostNonRacers ghosts this player's cars (not in a game) : every car then
+--- looks solid here, as with CollisionsMode "disabled" (a ghost hits nothing, so the see-through
+--- look tells this player nothing). A player in a game still sees the ghosts see-through
+M.ghostedOutsideGame = false
+
 ---@param ctxt TickContext
 local function onServerTick(ctxt)
     if not ctxt.self then return LogWarn("Vehicle server tick => self not initialized") end
@@ -450,11 +465,21 @@ local function onServerTick(ctxt)
             end)
         end
     end
+    -- Freeroam.GhostNonRacers (direct report : "non-racers are able to interfere with racers") :
+    -- a car ghosted in BeamNG hits no car at all, so ghosting everyone outside a game is what keeps
+    -- them off the players in one. Its own reason, beside CollisionsMode : "forced" doesn't clear it
+    local ghostOutside = beamjoy_config.data.Freeroam and beamjoy_config.data.Freeroam.GhostNonRacers == true
+        and not inGame() or false
+    if ghostOutside ~= M.ghostedOutsideGame then
+        M.ghostedOutsideGame = ghostOutside
+        M.reapplyDisplayAlpha()
+    end
     ctxt.self.vehicles:map(function(v)
         return M.vehicles[v.vid]
     end):filter(function(v) ---@param v BJVehicle
         return not v.isAi and v.jbeam ~= M.WALKING
     end):forEach(function(v) ---@param v BJVehicle
+        M.setGhostReason(v.vid, "nonRacer", ghostOutside)
         if collisionsMode == "forced" then
             -- the comment above already claimed this clears respawn protection too, but the code
             -- never actually did. A vehicle mid-way through its post-spawn/reset "ghosts" timer
@@ -1186,6 +1211,7 @@ local function computeDisplayAlpha(vid, isGhosted)
     -- as a rendering bug, not useful information. Per direct request.
     local freeroam = beamjoy_config.data.Freeroam
     if freeroam and freeroam.CollisionsMode == "disabled" then return 1 end
+    if M.ghostedOutsideGame then return 1 end
     if M.soloGhostVisualReversed then
         -- real bug, found from a live report ("ghosting doesn't seem to apply to traffic") : this
         -- used to check mpVeh.isLocal, which is BeamMP's own "not owned by a remote player" flag,

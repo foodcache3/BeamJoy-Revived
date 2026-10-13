@@ -8,7 +8,14 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2678, server build 2452.
+Version 1.11.0 : client build 2679, server build 2453.
+
+- **New : Config > General > Freeroam > "Ghost players outside games"** (direct request : players
+  in freeroam kept getting in racers' way). On, every player not in a race, Hunter, Infected or
+  Derby (from its lobby to its end) drives as a ghost : they hit no car, so they can't hit the
+  players in a game, nor each other. Spectators are ghosted too. Players in a game see the ghosts
+  see-through ; outside games every car looks solid (as with collisions disabled). Off by default.
+  Traffic isn't ghosted. *(client + server)*
 
 - **Props list reworked** (direct request) :
   - out of the curated list : the guardrail post, the four sponsor fences, the drag time stand, the

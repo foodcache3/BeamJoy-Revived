@@ -808,6 +808,8 @@
     "beamjoy.window.config.tabs.general.freeroam.preserveFuelOnReset": "Preserve fuel on reset",
     "beamjoy.window.config.tabs.general.freeroam.playerPursuits": "Police chases between players",
     "beamjoy.window.config.tabs.general.freeroam.raceRuns": "Passive races",
+    "beamjoy.window.config.tabs.general.freeroam.ghostNonRacers": "Ghost players outside games",
+    "beamjoy.window.config.tabs.general.freeroam.ghostNonRacers.tooltip": "Every player not in a race, Hunter, Infected or Derby drives as a ghost, so nobody in freeroam can hit the players in a game (or each other). Players in a game see the ghosts see-through ; outside games, every car looks solid.",
     "beamjoy.window.config.tabs.general.freeroam.raceRuns.tooltip": "Races set to \"Passive\" start when a player drives through their start gate in freeroam, no lobby. Off : those races only run from their lobby.",
     "beamjoy.window.config.tabs.general.freeroam.playerPursuits.tooltip": "A player driving a police car in freeroam can chase other players who break the law near them, using the game's own police rules. Players can still opt out in their own settings.",
     "beamjoy.window.config.tabs.general.freeroam.preserveFuelOnReset.tooltip": "When on, resetting your vehicle (Ctrl+R) keeps its fuel/energy level as it was instead of BeamNG's own reset refilling every tank back to full.",
