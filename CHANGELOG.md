@@ -8,12 +8,23 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2689, server build 2457.
+Version 1.11.0 : client build 2697, server build 2457.
 
-- **New : raised curbs that aren't flat** (direct request) : the Curbs & walls tab has raised curb
-  blocks (concrete, or red and white) with a groove at each joint, and a red and white sawtooth curb
-  whose every metre ramps up, runs flat and ramps down. A curb's shape can now change along its
-  length, not only across it. *(client)*
+- **Fixed : a curb's edge sank into ground that isn't level** (direct report) : a curb or a wall
+  was stood at the ground's height under the middle of its line only, so on a cambered road its
+  low edge went under. The editor now measures the ground across its whole width and stands each
+  point on the highest found (no more than 30 cm above its middle). Curbs already placed are
+  measured again once moved or reshaped. *(client)*
+
+- **New : a raised sawtooth curb** (direct request, from screenshots) : the Curbs & walls tab has a
+  red and white sawtooth curb. It's a row of raised blocks a metre long, each
+  ramping up from almost the ground to 7 cm along the line (from its first point to its last), then
+  dropping steeply to the next block's foot. Its top slopes across its whole width, from the
+  ground at the road's edge up to its outer edge, which is bevelled, so each comes in two : left
+  and right, for the side of the road it goes on (draw the line the way cars go). A curb's shape
+  can now change
+  along its length, not only across it. The grooved curb blocks of build 2689 were the wrong shape
+  and are gone ; any already placed no longer show. *(client)*
 
 - **New : a line's ends and nodes can be clicked and dragged** (direct request) : keep the mouse
   button down on an end or a node, or right after clicking the path to add a node or Alt+clicking to

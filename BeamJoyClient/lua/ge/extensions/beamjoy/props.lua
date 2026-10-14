@@ -1547,11 +1547,14 @@ local SWEEP_COLOURS = {
 -- a jersey barrier's outline : its foot, the shallow slope, the steep face, its top
 local JERSEY = { { -.3, SKIRT }, { .3, SKIRT }, { .3, .08 }, { .19, .33 }, { .1, .81 }, { -.1, .81 },
     { -.19, .33 }, { -.3, .08 } }
--- reliefs : kerb blocks, a groove at each joint ; a sawtooth, a ramp up and down each stripe
-local BLOCKS = { { 0, .45 }, { .05, 1 }, { .95, 1 }, { 1, .45 } }
-local TEETH = { { 0, .12 }, { .35, 1 }, { .65, 1 }, { 1, .12 } }
-local BLOCK = { { -.45, SKIRT }, { .45, SKIRT }, { .45, 0 }, { .4, .1 }, { .36, .12 }, { -.36, .12 }, { -.4, .1 },
-    { -.45, 0 } }
+-- a sawtooth kerb's relief (direct request, from screenshots) : each block a long ramp up from
+-- almost the ground along the path (from its first point to its last), then a short, steep
+-- bevelled drop to the next one's foot. Its top slopes across its whole width (direct request),
+-- from the ground at the road's edge up to its outer edge, bevelled down there : one for a road to
+-- the path's right, one for a road to its left
+local TEETH = { { 0, .1 }, { .9, 1 }, { 1, .1 } }
+local TOOTH_ROAD_RIGHT = { { -.6, SKIRT }, { .6, SKIRT }, { .6, 0 }, { -.52, .07 }, { -.6, 0 } }
+local TOOTH_ROAD_LEFT = { { -.6, SKIRT }, { .6, SKIRT }, { .6, 0 }, { .52, .07 }, { -.6, 0 } }
 
 M.SWEEPS = {
     -- a raised kerb, bevelled on both sides
@@ -1565,15 +1568,15 @@ M.SWEEPS = {
     { id = "curbFlat", cat = "curbs", tags = "kerb painted flat red white", stripe = 1, colours = { "red", "white" },
         ground = "ASPHALT",
         outline = { { -.6, SKIRT }, { .6, SKIRT }, { .6, .015 }, { .55, .025 }, { -.55, .025 }, { -.6, .015 } } },
-    -- raised kerb blocks with a groove between each, as on many real tracks (direct request)
-    { id = "curbBlock", cat = "curbs", tags = "kerb raised block concrete grooved", stripe = 1,
-        colours = { "concrete" }, ground = "RUMBLE_STRIP", relief = BLOCKS, outline = BLOCK },
-    { id = "curbBlockStriped", cat = "curbs", tags = "kerb raised block grooved red white", stripe = 1,
-        colours = { "red", "white" }, ground = "RUMBLE_STRIP", relief = BLOCKS, outline = BLOCK },
-    -- a sawtooth kerb : each stripe a ramp up, a flat top and a ramp down
-    { id = "curbSawtooth", cat = "curbs", tags = "kerb raised sawtooth teeth ramp red white", stripe = 1,
-        colours = { "red", "white" }, ground = "RUMBLE_STRIP", relief = TEETH,
-        outline = { { -.45, SKIRT }, { .45, SKIRT }, { .45, 0 }, { .36, .09 }, { -.36, .09 }, { -.45, 0 } } },
+    -- a sawtooth kerb : raised blocks, each a ramp up and a steep drop (TEETH), for a road on
+    -- either side of its path. Named for the side of the road it goes on, drawn the way cars go
+    -- (direct request) : the road to its right ("curbSawtooth") is the road's left side
+    { id = "curbSawtooth", cat = "curbs", tags = "kerb raised sawtooth teeth ramp block red white right",
+        stripe = 1, colours = { "red", "white" }, ground = "RUMBLE_STRIP", relief = TEETH,
+        outline = TOOTH_ROAD_RIGHT },
+    { id = "curbSawtoothLeft", cat = "curbs", tags = "kerb raised sawtooth teeth ramp block red white left",
+        stripe = 1, colours = { "red", "white" }, ground = "RUMBLE_STRIP", relief = TEETH,
+        outline = TOOTH_ROAD_LEFT },
     -- a sausage kerb : a rounded hump that unsettles a car cutting a chicane
     { id = "sausage", cat = "curbs", tags = "kerb hump chicane yellow", colours = { "yellow" }, ground = "RUMBLE_STRIP",
         outline = { { -.18, SKIRT }, { .18, SKIRT }, { .18, 0 }, { .14, .08 }, { .06, .13 }, { -.06, .13 },

@@ -416,6 +416,28 @@ local function tiltSingle(prop)
     prop.dir = xyz(d)
 end
 
+-- a curb or a wall stands level across its path : each of its heights is lifted to the highest
+-- ground found across its width (direct report : on ground not quite level, one edge of a sawtooth
+-- curb went under it), at most this much above the ground under its middle (a probe landing on
+-- something tall beside it)
+local SWEEP_MAX_LIFT = .3
+
+--- the ground's height under a curb's or a wall's point : the highest across its width
+---@param p table a point (beamjoy_props.sweepPoints)
+---@param halfWidth number
+---@return number
+local function sweepGroundAt(p, halfWidth)
+    local h = groundHeightAt(p.pos)
+    if halfWidth <= 0 then return h end
+    local right = vec3(p.way.y, -p.way.x, 0)
+    local top = h
+    for _, f in ipairs({ -1, -.5, .5, 1 }) do
+        local side = groundHeightAt(p.pos + right * (halfWidth * f))
+        if side and side > top and side <= h + SWEEP_MAX_LIFT then top = side end
+    end
+    return top
+end
+
 --- a line's ground heights and tilts, one per prop (beamjoy_props.linePlacements), measured here
 --- so a running game never has to : the editor's preview isn't in the static collision (see
 --- beamjoy_props), so the probes can't land on the line's own props
@@ -428,8 +450,17 @@ local function updateLineHeights(line)
     -- a curb, a wall or a painted line : the ground's height at each end of its segments
     if isSwept(line) then
         line.normals = nil
+        -- a curb's or a wall's footprint : its outline's widest at the ground (a painted line lies
+        -- flat on it, measured under its middle)
+        local halfWidth = 0
+        local profile = line.kind == "sweep" and beamjoy_props.getSweep(line.profile)
+        if profile then
+            for _, o in ipairs(profile.outline) do
+                if o[2] >= 0 then halfWidth = math.max(halfWidth, math.abs(o[1])) end
+            end
+        end
         line.heights = table.map(beamjoy_props.sweepPoints(line, true), function(p)
-            return round3(groundHeightAt(p.pos))
+            return round3(sweepGroundAt(p, halfWidth))
         end)
         return
     end
