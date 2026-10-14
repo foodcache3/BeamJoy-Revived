@@ -8,7 +8,12 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2688, server build 2457.
+Version 1.11.0 : client build 2689, server build 2457.
+
+- **New : raised curbs that aren't flat** (direct request) : the Curbs & walls tab has raised curb
+  blocks (concrete, or red and white) with a groove at each joint, and a red and white sawtooth curb
+  whose every metre ramps up, runs flat and ramps down. A curb's shape can now change along its
+  length, not only across it. *(client)*
 
 - **New : a line's ends and nodes can be clicked and dragged** (direct request) : keep the mouse
   button down on an end or a node, or right after clicking the path to add a node or Alt+clicking to

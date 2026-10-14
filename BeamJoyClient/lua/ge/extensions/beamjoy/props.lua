@@ -1524,6 +1524,11 @@ end
 -- segments). Its materials are made here at runtime, as the game's own core.lua makes Track
 -- Builder's : a plain colour over the game's white texture, or its concrete-like track base.
 --
+-- A profile may have a `relief` (direct request : curbs that aren't flat) : the height of its
+-- raised part (the outline above the ground, scaled) along each stripe, as { t, scale } corners
+-- from t = 0 to 1 (the same scale at both, or the stripes wouldn't meet). Each segment is cut again
+-- at those corners, and its faces lit by their own slope.
+--
 -- A ProceduralMesh has no collision switch (its only field is its material) : it's solid once the
 -- static collision is rebuilt. The editor's preview and the placing ghost mustn't be, so they're
 -- taken out of the scene for every rebuild done here and made again right after (reloadCollision).
@@ -1542,6 +1547,11 @@ local SWEEP_COLOURS = {
 -- a jersey barrier's outline : its foot, the shallow slope, the steep face, its top
 local JERSEY = { { -.3, SKIRT }, { .3, SKIRT }, { .3, .08 }, { .19, .33 }, { .1, .81 }, { -.1, .81 },
     { -.19, .33 }, { -.3, .08 } }
+-- reliefs : kerb blocks, a groove at each joint ; a sawtooth, a ramp up and down each stripe
+local BLOCKS = { { 0, .45 }, { .05, 1 }, { .95, 1 }, { 1, .45 } }
+local TEETH = { { 0, .12 }, { .35, 1 }, { .65, 1 }, { 1, .12 } }
+local BLOCK = { { -.45, SKIRT }, { .45, SKIRT }, { .45, 0 }, { .4, .1 }, { .36, .12 }, { -.36, .12 }, { -.4, .1 },
+    { -.45, 0 } }
 
 M.SWEEPS = {
     -- a raised kerb, bevelled on both sides
@@ -1555,6 +1565,15 @@ M.SWEEPS = {
     { id = "curbFlat", cat = "curbs", tags = "kerb painted flat red white", stripe = 1, colours = { "red", "white" },
         ground = "ASPHALT",
         outline = { { -.6, SKIRT }, { .6, SKIRT }, { .6, .015 }, { .55, .025 }, { -.55, .025 }, { -.6, .015 } } },
+    -- raised kerb blocks with a groove between each, as on many real tracks (direct request)
+    { id = "curbBlock", cat = "curbs", tags = "kerb raised block concrete grooved", stripe = 1,
+        colours = { "concrete" }, ground = "RUMBLE_STRIP", relief = BLOCKS, outline = BLOCK },
+    { id = "curbBlockStriped", cat = "curbs", tags = "kerb raised block grooved red white", stripe = 1,
+        colours = { "red", "white" }, ground = "RUMBLE_STRIP", relief = BLOCKS, outline = BLOCK },
+    -- a sawtooth kerb : each stripe a ramp up, a flat top and a ramp down
+    { id = "curbSawtooth", cat = "curbs", tags = "kerb raised sawtooth teeth ramp red white", stripe = 1,
+        colours = { "red", "white" }, ground = "RUMBLE_STRIP", relief = TEETH,
+        outline = { { -.45, SKIRT }, { .45, SKIRT }, { .45, 0 }, { .36, .09 }, { -.36, .09 }, { -.45, 0 } } },
     -- a sausage kerb : a rounded hump that unsettles a car cutting a chicane
     { id = "sausage", cat = "curbs", tags = "kerb hump chicane yellow", colours = { "yellow" }, ground = "RUMBLE_STRIP",
         outline = { { -.18, SKIRT }, { .18, SKIRT }, { .18, 0 }, { .14, .08 }, { .06, .13 }, { -.06, .13 },
@@ -1707,35 +1726,85 @@ function M.sweepMeshes(entry)
     end
     ---@param p table a point
     ---@param o number[] an outline corner
+    ---@param scale number? its raised part's height there (a relief), 1 when none
     ---@return vec3
-    local function at(p, o)
+    local function at(p, o, scale)
         local right = vec3(p.way.y, -p.way.x, 0)
-        return p.pos - origin + right * o[1] + up * o[2]
+        local z = o[2] > 0 and o[2] * (scale or 1) or o[2]
+        return p.pos - origin + right * o[1] + up * z
+    end
+
+    -- a relief's scale `t` along a stripe (0 to 1)
+    local relief = profile.stripe and profile.relief or nil
+    local function reliefAt(t)
+        for k = 2, #relief do
+            local k0, k1 = relief[k - 1], relief[k]
+            if t <= k1[1] + 1e-9 then
+                local span = k1[1] - k0[1]
+                local f = span > 1e-9 and math.max(0, math.min(1, (t - k0[1]) / span)) or 1
+                return k0[2] + (k1[2] - k0[2]) * f
+            end
+        end
+        return relief[#relief][2]
     end
 
     local colours = profile.colours
+    local capScale = { 1, 1 }
     for i = 1, #pts - 1 do
         local s = sub(colours[(math.floor((i - 1) / per) % #colours) + 1])
         local p0, p1 = pts[i], pts[i + 1]
-        local r0, r1 = vec3(p0.way.y, -p0.way.x, 0), vec3(p1.way.y, -p1.way.x, 0)
-        local v0, v1 = along[i] / SWEEP_UV_METRES, along[i + 1] / SWEEP_UV_METRES
-        for j = 1, n do
-            local o0, o1 = outline[j], outline[j % n + 1]
-            local dx, dz = o1[1] - o0[1], o1[2] - o0[2]
-            local len = math.sqrt(dx * dx + dz * dz)
-            if len > 1e-6 then
-                -- the edge's outward normal (a counterclockwise outline : (dz, -dx))
-                local nx, nz = dz / len, -dx / len
-                local n0, n1 = r0 * nx + up * nz, r1 * nx + up * nz
-                local u0, u1 = round[j] / SWEEP_UV_METRES, round[j + 1] / SWEEP_UV_METRES
-                local a = vert(s, at(p0, o0), n0, u0, v0)
-                local b = vert(s, at(p0, o1), n0, u1, v0)
-                local c = vert(s, at(p1, o1), n1, u1, v1)
-                local d = vert(s, at(p1, o0), n1, u0, v1)
-                -- wound as the game's own procedural meshes are (util/trackBuilder/
-                -- proceduralPrimitives.lua : clockwise seen from the side they face)
-                tri(s, a, b, c)
-                tri(s, a, c, d)
+        -- where the segment is cut : its ends, and a relief's corners within it (its share of
+        -- its stripe from t0)
+        local cuts = { { f = 0 }, { f = 1 } }
+        local t0 = relief and ((i - 1) % per) / per or 0
+        if relief then
+            for _, key in ipairs(relief) do
+                local f = (key[1] - t0) * per
+                if f > 1e-4 and f < 1 - 1e-4 then cuts[#cuts + 1] = { f = f } end
+            end
+            table.sort(cuts, function(x, y) return x.f < y.f end)
+        end
+        for _, c in ipairs(cuts) do
+            local way = p0.way * (1 - c.f) + p1.way * c.f
+            c.pos = p0.pos * (1 - c.f) + p1.pos * c.f
+            c.way = way:length() > 1e-4 and way:normalized() or p0.way
+            c.v = (along[i] + (along[i + 1] - along[i]) * c.f) / SWEEP_UV_METRES
+            c.scale = relief and reliefAt(t0 + c.f / per) or 1
+        end
+        if i == 1 then capScale[1] = cuts[1].scale end
+        if i == #pts - 1 then capScale[2] = cuts[#cuts].scale end
+        for q = 1, #cuts - 1 do
+            local c0, c1 = cuts[q], cuts[q + 1]
+            local r0, r1 = vec3(c0.way.y, -c0.way.x, 0), vec3(c1.way.y, -c1.way.x, 0)
+            for j = 1, n do
+                local o0, o1 = outline[j], outline[j % n + 1]
+                local dx, dz = o1[1] - o0[1], o1[2] - o0[2]
+                local len = math.sqrt(dx * dx + dz * dz)
+                if len > 1e-6 then
+                    -- the edge's outward normal (a counterclockwise outline : (dz, -dx))
+                    local nx, nz = dz / len, -dx / len
+                    local n0, n1 = r0 * nx + up * nz, r1 * nx + up * nz
+                    local A, B = at(c0, o0, c0.scale), at(c0, o1, c0.scale)
+                    local C, D = at(c1, o1, c1.scale), at(c1, o0, c1.scale)
+                    if relief then
+                        -- the face's own normal, its slope along the path in it, turned outward
+                        local g = (B - A):cross(D - A)
+                        if g:length() > 1e-9 then
+                            g = g:normalized()
+                            if g:dot(n0) < 0 then g = -g end
+                            n0, n1 = g, g
+                        end
+                    end
+                    local u0, u1 = round[j] / SWEEP_UV_METRES, round[j + 1] / SWEEP_UV_METRES
+                    local a = vert(s, A, n0, u0, c0.v)
+                    local b = vert(s, B, n0, u1, c0.v)
+                    local c = vert(s, C, n1, u1, c1.v)
+                    local d = vert(s, D, n1, u0, c1.v)
+                    -- wound as the game's own procedural meshes are (util/trackBuilder/
+                    -- proceduralPrimitives.lua : clockwise seen from the side they face)
+                    tri(s, a, b, c)
+                    tri(s, a, c, d)
+                end
             end
         end
     end
@@ -1750,10 +1819,11 @@ function M.sweepMeshes(entry)
         local segment = first and 0 or #pts - 2
         local s = sub(colours[(math.floor(segment / per) % #colours) + 1])
         local normal = first and -p.way or p.way
-        local mid = vert(s, at(p, centre), normal, 0, 0)
+        local scale = capScale[first and 1 or 2]
+        local mid = vert(s, at(p, centre, scale), normal, 0, 0)
         local corners = {}
         for j = 1, n do
-            corners[j] = vert(s, at(p, outline[j]), normal, (outline[j][1] - centre[1]) / SWEEP_UV_METRES,
+            corners[j] = vert(s, at(p, outline[j], scale), normal, (outline[j][1] - centre[1]) / SWEEP_UV_METRES,
                 (outline[j][2] - centre[2]) / SWEEP_UV_METRES)
         end
         for j = 1, n do
