@@ -1160,6 +1160,7 @@ end
 ---@param index integer
 ---@param pos vec3
 ---@param first boolean the new end is its first
+---@return string? key the end made ("a" / "b")
 local function extendLine(index, pos, first)
     local line = props() and props()[index]
     if not isPath(line) or not nodeRoom(line) then return end
@@ -1175,6 +1176,7 @@ local function extendLine(index, pos, first)
     end
     line[key] = xyz(at)
     lineReshaped(index, key)
+    return key
 end
 
 --- a line's node taken out (its curve then runs from the point before to the one after) ; the
@@ -2396,25 +2398,47 @@ local function lineAction(camPos, rayDir)
     return { kind = "insert", index = index, t = t, pos = at, span = span }
 end
 
--- a node added by a click follows the mouse while the button stays down (direct request), as the
--- game's spline editor does : over the ground with snapping on, else level at its own height ; the
--- gizmo comes back on it once let go
----@type {index: integer, node: integer, moved: boolean}?
-local nodeDrag = nil
+-- a line's handle clicked follows the mouse while the button stays down (direct request), as the
+-- game's spline editor does : a node or an end just added, or one already there (its ends too,
+-- direct request). Over the ground with snapping on, else level at its own height ; the gizmo comes
+-- back on it once let go, and a plain click leaves it where it was
+---@type {index: integer, part: string, moved: boolean}?
+local handleDrag = nil
 
---- per frame while a node added is held ; false when none is
+--- a line's handle (its end "a" / "b", its node "n<k>") as it stands
+---@param line table
+---@param part string
+---@return table? point
+local function handlePoint(line, part)
+    local node = nodeIndex(part)
+    if node then return lineNodes(line)[node] end
+    if part == "a" or part == "b" then return line[part] end
+    return nil
+end
+
+--- the button went down on a line's handle : it follows the mouse until let go
+---@param index integer
+---@param part string?
+local function startHandleDrag(index, part)
+    local line = props() and props()[index]
+    if not part or not isPath(line) or not handlePoint(line, part) then return end
+    handleDrag = { index = index, part = part, moved = false }
+    gizmo.hide()
+end
+
+--- per frame while a line's handle is held ; false when none is
 ---@return boolean
-local function updateNodeDrag()
-    local d = nodeDrag
+local function updateHandleDrag()
+    local d = handleDrag
     if not d then return false end
     local line = active() and props() and props()[d.index]
-    local held = isPath(line) and lineNodes(line)[d.node]
+    local held = isPath(line) and handlePoint(line, d.part)
     if not held then
-        nodeDrag = nil
+        handleDrag = nil
         return false
     end
     if not ui_imgui.IsMouseDown(ui_imgui.MouseButton_Left) then
-        nodeDrag = nil
+        handleDrag = nil
         if d.moved then
             if snapOn() then held.z = groundHeightAt(toVec(held)) end
             lineEdited(line)
@@ -2424,7 +2448,6 @@ local function updateNodeDrag()
         updatePropGizmo()
         return true
     end
-    -- a plain click (the mouse hardly moved) leaves the node where it was added
     if not d.moved and not ui_imgui.IsMouseDragging(ui_imgui.MouseButton_Left) then return true end
     local camPos, rayDir = camera.mouseRay()
     if not camPos then return true end
@@ -2438,7 +2461,7 @@ local function updateNodeDrag()
     end
     if not at then return true end
     d.moved = true
-    lineNodes(line)[d.node] = xyz(at)
+    held.x, held.y, held.z = at.x, at.y, at.z
     line.heights, line.normals = nil, nil -- measured again once let go
     fitLineCount(line)
     markDirty()
@@ -2491,6 +2514,8 @@ end
 ---@return number? t, integer? index, string? part a line's handle, or "insert" / "extend"
 function M.pick(camPos, rayDir)
     M.pickAction = nil
+    -- the click is on a line's handle itself (not its props, which also give the handle held)
+    M.pickHandle = false
     local list = active() and props() or nil
     if not list then return nil end
     local action = lineAction(camPos, rayDir)
@@ -2535,6 +2560,7 @@ function M.pick(camPos, rayDir)
     local handleOn = handleT and handleOff * handleT <= PICK_HANDLE_ON
     if handleT and (handleOn or not action) and
         (not meshT or (handleOn and meshT >= handleT - PICK_HANDLE_MARGIN)) then
+        M.pickHandle = handlePart ~= nil
         return handleT, handleIndex, handlePart
     end
     -- the selected line's path : a node added there, its own props round it
@@ -2557,23 +2583,31 @@ end
 function M.clickSelect(index, part)
     local mode = selectMode()
     local action = M.pickAction
-    M.pickAction = nil
+    local onHandle = M.pickHandle == true
+    M.pickAction, M.pickHandle = nil, false
     if part == "insert" or part == "extend" then
         if not mode and action and action.index == index then
             if action.kind == "insert" then
                 local node = insertNode(index, action.span, action.pos)
-                if node then
-                    nodeDrag = { index = index, node = node, moved = false }
-                    gizmo.hide()
-                end
+                if node then startHandleDrag(index, "n" .. node) end
                 return
             end
-            return extendLine(index, action.pos, action.first)
+            local key = extendLine(index, action.pos, action.first)
+            if key then startHandleDrag(index, key) end
+            return
         end
         part = nil
     end
-    if not mode and index == M.activePropIndex and part == M.activePropPart then return end
+    if not mode and index == M.activePropIndex and part == M.activePropPart then
+        if onHandle then startHandleDrag(index, part) end
+        return
+    end
     M.onSelectProp(index, part, mode)
+    -- a line's end or node, alone selected : held, it's dragged
+    if onHandle and not mode and index == M.activePropIndex and part and part == M.activePropPart and
+        #M.propSelection <= 1 then
+        startHandleDrag(index, part)
+    end
 end
 
 --- a world click while a prop is armed is the placing's own (it reads the mouse every frame), a
@@ -2590,7 +2624,7 @@ end
 --- the host's own handles wait)
 ---@return boolean
 function M.onUpdate()
-    if updateNodeDrag() then return true end
+    if updateHandleDrag() then return true end
     local placing = updatePlacing()
     updateHover()
     return placing
@@ -2629,7 +2663,7 @@ end
 ---@param keepSelection boolean?
 function M.reset(keepSelection)
     disarmProp()
-    nodeDrag = nil
+    handleDrag = nil
     local list = props() or {}
     local kept = keepSelection and M.activePropIndex and list[M.activePropIndex] ~= nil
     if kept then
@@ -2661,7 +2695,7 @@ end
 function M.detach(host)
     if not M.host or M.host ~= host then return end
     disarmProp()
-    nodeDrag = nil
+    handleDrag = nil
     M.host = nil
     shape.layer(HOVER_LAYER).reset()
     hoverShown = false

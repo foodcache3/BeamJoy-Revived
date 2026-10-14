@@ -8,12 +8,13 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2687, server build 2457.
+Version 1.11.0 : client build 2688, server build 2457.
 
-- **New : a node added by clicking a line can be dragged straight away** (direct request) : keep the
-  mouse button down after the click and the new node follows the mouse until it's let go, on lines
-  of props, curbs, walls and painted lines alike. Over the ground with snapping on, level at its own
-  height otherwise ; a plain click still leaves it where it was added. *(client)*
+- **New : a line's ends and nodes can be clicked and dragged** (direct request) : keep the mouse
+  button down on an end or a node, or right after clicking the path to add a node or Alt+clicking to
+  add an end, and it follows the mouse until it's let go, on lines of props, curbs, walls and
+  painted lines alike. Over the ground with snapping on, level at its own height otherwise ; a plain
+  click still only selects it (or leaves the new one where it was added). *(client)*
 
 - **Fixed : the promote/demote buttons' tooltip kept the rank it showed first** (direct report).
   Every title in the UI is turned into BeamJoy's own tooltip once ; a title that changed afterwards
