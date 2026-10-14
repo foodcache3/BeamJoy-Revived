@@ -1142,6 +1142,7 @@ end
 ---@param index integer
 ---@param span integer
 ---@param pos vec3
+---@return integer? node the node added
 local function insertNode(index, span, pos)
     local line = props() and props()[index]
     if not isPath(line) or not nodeRoom(line) then return end
@@ -1151,6 +1152,7 @@ local function insertNode(index, span, pos)
     if snapOn() then at.z = groundHeightAt(at) end
     table.insert(nodes, span, xyz(at))
     lineReshaped(index, "n" .. span)
+    return span
 end
 
 --- a line made longer to a point : a new end there, the end it's nearer a node now (as the game's
@@ -2394,6 +2396,56 @@ local function lineAction(camPos, rayDir)
     return { kind = "insert", index = index, t = t, pos = at, span = span }
 end
 
+-- a node added by a click follows the mouse while the button stays down (direct request), as the
+-- game's spline editor does : over the ground with snapping on, else level at its own height ; the
+-- gizmo comes back on it once let go
+---@type {index: integer, node: integer, moved: boolean}?
+local nodeDrag = nil
+
+--- per frame while a node added is held ; false when none is
+---@return boolean
+local function updateNodeDrag()
+    local d = nodeDrag
+    if not d then return false end
+    local line = active() and props() and props()[d.index]
+    local held = isPath(line) and lineNodes(line)[d.node]
+    if not held then
+        nodeDrag = nil
+        return false
+    end
+    if not ui_imgui.IsMouseDown(ui_imgui.MouseButton_Left) then
+        nodeDrag = nil
+        if d.moved then
+            if snapOn() then held.z = groundHeightAt(toVec(held)) end
+            lineEdited(line)
+            pushUpdate()
+            propsChanged()
+        end
+        updatePropGizmo()
+        return true
+    end
+    -- a plain click (the mouse hardly moved) leaves the node where it was added
+    if not d.moved and not ui_imgui.IsMouseDragging(ui_imgui.MouseButton_Left) then return true end
+    local camPos, rayDir = camera.mouseRay()
+    if not camPos then return true end
+    local at
+    if snapOn() then
+        local dist = castRayStatic(camPos, rayDir, PLACE_RAY_DISTANCE)
+        if dist and dist > 0 and dist < PLACE_RAY_DISTANCE then at = camPos + rayDir * dist end
+    elseif math.abs(rayDir.z) > 1e-4 then
+        local t = (held.z - camPos.z) / rayDir.z
+        if t > 0 and t < PLACE_RAY_DISTANCE then at = camPos + rayDir * t end
+    end
+    if not at then return true end
+    d.moved = true
+    lineNodes(line)[d.node] = xyz(at)
+    line.heights, line.normals = nil, nil -- measured again once let go
+    fitLineCount(line)
+    markDirty()
+    propsChanged()
+    return true
+end
+
 -- what a click would do to the selected line, shown where the mouse is (drawn over the overlays)
 local HOVER_LAYER = "propEditorHover"
 local HOVER_COLOR
@@ -2508,7 +2560,14 @@ function M.clickSelect(index, part)
     M.pickAction = nil
     if part == "insert" or part == "extend" then
         if not mode and action and action.index == index then
-            if action.kind == "insert" then return insertNode(index, action.span, action.pos) end
+            if action.kind == "insert" then
+                local node = insertNode(index, action.span, action.pos)
+                if node then
+                    nodeDrag = { index = index, node = node, moved = false }
+                    gizmo.hide()
+                end
+                return
+            end
             return extendLine(index, action.pos, action.first)
         end
         part = nil
@@ -2531,6 +2590,7 @@ end
 --- the host's own handles wait)
 ---@return boolean
 function M.onUpdate()
+    if updateNodeDrag() then return true end
     local placing = updatePlacing()
     updateHover()
     return placing
@@ -2569,6 +2629,7 @@ end
 ---@param keepSelection boolean?
 function M.reset(keepSelection)
     disarmProp()
+    nodeDrag = nil
     local list = props() or {}
     local kept = keepSelection and M.activePropIndex and list[M.activePropIndex] ~= nil
     if kept then
@@ -2600,6 +2661,7 @@ end
 function M.detach(host)
     if not M.host or M.host ~= host then return end
     disarmProp()
+    nodeDrag = nil
     M.host = nil
     shape.layer(HOVER_LAYER).reset()
     hoverShown = false

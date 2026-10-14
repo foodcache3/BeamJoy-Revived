@@ -4,8 +4,7 @@
 // below) without touching any of that element's own directives.
 //
 // getText is a function (not a plain string) so the directive's own usage can keep reading a live,
-// possibly-changing `attrs.tooltip` value, while the auto-conversion below can just close over its
-// fixed captured title string.
+// possibly-changing `attrs.tooltip` value, and the auto-conversion below its element's latest title.
 function bindTooltip(domEl, getText) {
     let tooltipEl;
 
@@ -72,10 +71,13 @@ angular
         // elements not yet retrofitted, so a repeat MutationObserver pass doesn't rebind the same
         // element's tooltip listeners over and over
         const processed = new WeakSet();
+        // each element's latest title. Angular's interpolation writes the attribute back whenever
+        // its value changes (direct report : a player's promote/demote button kept the rank it
+        // showed first), so a title set again is taken again, the listeners kept
+        const titles = new WeakMap();
 
         function processTitles() {
             document.querySelectorAll("[title]").forEach((el) => {
-                if (processed.has(el)) return;
                 const title = el.getAttribute("title");
                 if (!title) return;
                 // this MutationObserver fires, and re-scans the ENTIRE document (not just the
@@ -96,6 +98,8 @@ angular
                 // triggers this scan and picks it up correctly once it has settled.
                 if (title.includes("{{")) return;
                 el.removeAttribute("title");
+                titles.set(el, title);
+                if (processed.has(el)) return;
                 processed.add(el);
                 // plain DOM listener wiring (bindTooltip above), NOT $compile(el)($rootScope):
                 // this element is almost always already Angular-compiled with its own scope-bound
@@ -109,7 +113,7 @@ angular
                 // toast, any other row rendering), it kept re-breaking it moments after every
                 // Angular-driven re-render happened to briefly get it right. Wiring the tooltip's
                 // hover/click listeners directly can't touch anything else on the element at all.
-                bindTooltip(el, () => title);
+                bindTooltip(el, () => titles.get(el));
             });
         }
 
@@ -119,7 +123,12 @@ angular
         const observer = new MutationObserver(() => {
             $timeout(processTitles, 0);
         });
-        observer.observe(document.body, { childList: true, subtree: true });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["title"],
+        });
 
         $rootScope.$on("BJUnload", () => {
             // can arrive twice : remove whatever is still there

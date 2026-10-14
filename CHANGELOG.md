@@ -8,7 +8,19 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2686, server build 2457.
+Version 1.11.0 : client build 2687, server build 2457.
+
+- **New : a node added by clicking a line can be dragged straight away** (direct request) : keep the
+  mouse button down after the click and the new node follows the mouse until it's let go, on lines
+  of props, curbs, walls and painted lines alike. Over the ground with snapping on, level at its own
+  height otherwise ; a plain click still leaves it where it was added. *(client)*
+
+- **Fixed : the promote/demote buttons' tooltip kept the rank it showed first** (direct report).
+  Every title in the UI is turned into BeamJoy's own tooltip once ; a title that changed afterwards
+  was never read again. Changed titles are now taken again, for every tooltip of the kind. *(client)*
+
+- **Fixed : nametags didn't show a nickname** (direct report). A player's tag text was built once
+  and kept ; it's now built again whenever that player's data comes from the server. *(client)*
 
 - **Fix : painted lines now show on maps without a terrain** (direct report : nothing at all on
   Mondello Park, a map that's one big mesh). There, the game builds a decal road all right but never

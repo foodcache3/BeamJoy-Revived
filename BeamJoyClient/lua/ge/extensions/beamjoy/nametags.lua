@@ -149,6 +149,13 @@ local function onNametagsSettingsChanged()
     end)
 end
 
+--- a player's data came again (direct report : a nickname chosen didn't reach the nametags, the
+--- tag built with the raw name before it was kept) : their tag is built again next draw
+---@param player table
+local function onBJUpdatePlayer(player)
+    if player and player.playerName then M.tagNames[player.playerName] = nil end
+end
+
 ---@param mpVeh BJVehicle
 ---@param orig vec3
 local function drawNametag(mpVeh, orig)
@@ -418,6 +425,7 @@ end
 M.onInit = onInit
 M.onSlowUpdate = onSlowUpdate
 M.onNametagsSettingsChanged = onNametagsSettingsChanged
+M.onBJUpdatePlayer = onBJUpdatePlayer
 M.onUpdate = onUpdate
 
 return M
