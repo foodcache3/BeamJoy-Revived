@@ -102,6 +102,17 @@ local function getIdentityKey(playerID)
     return player.identityNickname or player.playerName
 end
 
+--- what kind of name getIdentityKey gives for this player, saved with their leaderboard times
+--- (the plugin API passes it on : a website showing only nicknamed players, direct request)
+---@param playerID integer
+---@return "nickname"|"guest"|"beammp"|nil
+local function getIdentityKind(playerID)
+    local player = services_players.players:find(function(p) return p.playerID == playerID end)
+    if not player then return nil end
+    if player.identityNickname then return "nickname" end
+    return player.guest and "guest" or "beammp"
+end
+
 ---@param ctxt BJSContext
 ---@param command BJChatCommand
 local function chatUsage(ctxt, command)
@@ -286,6 +297,7 @@ M.login = login
 M.setNickname = setNickname
 M.chatNickname = chatNickname
 M.getIdentityKey = getIdentityKey
+M.getIdentityKind = getIdentityKind
 
 M.chatLogin = chatLogin
 M.consoleSetStaffPassword = consoleSetStaffPassword

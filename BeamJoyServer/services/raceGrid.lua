@@ -441,6 +441,17 @@ local function snapshotIdentity(p)
     p.nickname = player.identityNickname
 end
 
+--- what kind of name a participant's leaderboard key is (services_identity.getIdentityKind), for
+--- one still connected or one away (their snapshotIdentity copy)
+---@param p BJRaceParticipant
+---@return "nickname"|"guest"|"beammp"
+local function participantIdentityKind(p)
+    local kind = services_identity.getIdentityKind(p.playerID)
+    if kind then return kind end
+    if p.nickname then return "nickname" end
+    return p.guest and "guest" or "beammp"
+end
+
 --- participants who disconnected mid-race wait under keys like these instead of their player ID.
 --- Real bug (direct report) : BeamMP reuses a freed player ID, so a racer coming back often gets
 --- the same one ; the rejoin saw "already in this race" (their own waiting entry) and did
@@ -1100,10 +1111,13 @@ local function beginRace(sessionId)
     pushSessionUpdate(session)
 end
 
+--- a finished race's results, fastest first (disqualified, then the ones who didn't finish, last),
+--- for Discord and the plugin API
 ---@param session BJRaceSession
-local function postToDiscord(session)
+---@return table? info, table[] results
+local function buildResults(session)
     local race = getRace(session)
-    if not race or not services_discord then return end
+    if not race then return nil, {} end
     local board = services_races.getLeaderboard(session.raceId, math.huge)
     local info = {
         raceName = race.name or "?",
@@ -1113,12 +1127,14 @@ local function postToDiscord(session)
     }
     local results = {}
     session.participants:forEach(function(p)
-        if p.playerID < 0 then return end -- racedebug ghosts
+        -- racedebug's ghost. Not any negative id : a racer who left mid-race waits under one (see
+        -- nextAwayKey), and still has a result once retired
+        if p.playerID == -1000 then return end
         -- a copy : Real bug (direct report) : filled in place, the participant's own discordResult
         -- took order = math.huge for anyone who didn't finish, went out with the session's last
         -- update as "inf" (not JSON), and no client could read that update
         local r = table.clone(p.discordResult or { counted = false })
-        r.playerName = services_identity.getIdentityKey(p.playerID) or p.playerName
+        r.playerName = services_identity.getIdentityKey(p.playerID) or p.nickname or p.playerName
         r.vehicle = p.vehicleModel
         r.dnf = not p.finished or p.disqualified == true
         r.disqualified = p.disqualified == true
@@ -1126,6 +1142,7 @@ local function postToDiscord(session)
         r.totalMs = p.finished and raceTimeMs(p) or nil
         r.bestLapMs = #p.lapTimes > 0 and math.min(table.unpack(p.lapTimes)) or nil
         r.order = p.finishOrder or math.huge
+        r.identity = participantIdentityKind(p)
         if r.counted then
             for _, entry in ipairs(board) do
                 if entry.playerName == r.playerName then r.rank = entry.rank end
@@ -1134,10 +1151,6 @@ local function postToDiscord(session)
         end
         table.insert(results, r)
     end)
-    if #results == 0 then return end
-    if #results == 1 then
-        return services_discord.onRaceFinish(info, results[1])
-    end
     table.sort(results, function(a, b)
         if a.disqualified ~= b.disqualified then return not a.disqualified end
         if a.dnf ~= b.dnf then return not a.dnf end
@@ -1145,18 +1158,17 @@ local function postToDiscord(session)
         if a.totalMs and b.totalMs and a.totalMs ~= b.totalMs then return a.totalMs < b.totalMs end
         return a.order < b.order
     end)
-    services_discord.onRaceStandings(info, results)
+    return info, results
 end
 
-local function checkSessionComplete(session)
-    -- a disconnected racer is neither finished nor out : the race waits for their grace period
-    if session.participants:every(function(p) return p.finished or p.dnf end) then
-        session.state = "FINISHED"
-        pcall(postToDiscord, session)
-        pushSessionUpdate(session)
-        utils_async.delayTask(function() removeSession(session) end,
-            10, "BJRaceGrid-" .. session.id .. "-cleanup")
+---@param info table
+---@param results table[]
+local function postToDiscord(info, results)
+    if not services_discord or #results == 0 then return end
+    if #results == 1 then
+        return services_discord.onRaceFinish(info, results[1])
     end
+    services_discord.onRaceStandings(info, results)
 end
 
 --- shared by finishParticipant and raceDNF. A retiring or auto-DNF'd participant's own best
@@ -1200,7 +1212,7 @@ local function trySubmitTime(session, participant, timeMs)
     local previous = race and race.leaderboard and race.leaderboard[key]
     local previousMs = previous and previous.time
     participant.isNewPB, participant.isNewRecord = services_races.submitTime(
-        session.raceId, key, participant.vehicleModel or "", timeMs)
+        session.raceId, key, participant.vehicleModel or "", timeMs, nil, participantIdentityKind(participant))
     if participant.isNewPB then
         -- kept to put back if staff disqualify this run (raceStaffAction)
         participant.leaderboardKey = key
@@ -1212,6 +1224,41 @@ local function trySubmitTime(session, participant, timeMs)
         isNewRecord = participant.isNewRecord,
         previousMs = previousMs,
     }
+end
+
+local function checkSessionComplete(session)
+    -- a disconnected racer is neither finished nor out : the race waits for their grace period,
+    -- but only while someone else is still racing. Real bug (direct report) : one racer left
+    -- mid-race and, once everyone still there had finished, the race went on for the rest of the
+    -- grace period with nobody in it. Once the last one here is done, those away are retired. (The
+    -- last one still racing dropping out themselves is still waited for : nothing calls this then,
+    -- see onPlayerDisconnect)
+    local present, racing = false, false
+    session.participants:forEach(function(p)
+        if p.disconnected then return end
+        present = true
+        if not (p.finished or p.dnf) then racing = true end
+    end)
+    if present and not racing then
+        session.participants:forEach(function(p)
+            if not p.disconnected then return end
+            utils_async.removeTask(rejoinTaskKey(session.id, p.playerName))
+            p.disconnected, p.rejoinBy, p.rejoinSecondsLeft = nil, nil, nil
+            p.dnf = true
+            if p.bestLapMs then trySubmitTime(session, p, p.bestLapMs) end
+        end)
+    end
+    if session.participants:every(function(p) return p.finished or p.dnf end) then
+        session.state = "FINISHED"
+        local built, info, results = pcall(buildResults, session)
+        if built and info then
+            pcall(postToDiscord, info, results)
+            if services_api then pcall(services_api.raceFinished, session, info, results) end
+        end
+        pushSessionUpdate(session)
+        utils_async.delayTask(function() removeSession(session) end,
+            10, "BJRaceGrid-" .. session.id .. "-cleanup")
+    end
 end
 
 ---@param session BJRaceSession

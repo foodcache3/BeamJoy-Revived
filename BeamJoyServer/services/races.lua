@@ -398,6 +398,13 @@ end
 -- a race's props : services/props.lua (shared with the arenas'), its limit (services_props.MAX)
 -- and its checks
 
+--- the plugin API (services/api.lua) : a map's races changed (added, edited, deleted, imported),
+--- for a plugin keeping a copy of them to fetch them again
+---@param mapName string
+local function notifyRacesChanged(mapName)
+    if services_api then services_api.racesChanged(mapName) end
+end
+
 ---@param v any
 ---@return {x: number, y: number, z: number}?
 local function sanePoint(v) return services_props.sanePoint(v) end
@@ -1011,6 +1018,7 @@ local function raceLegacyImportConfirm(ctxt, selection)
                         else
                             dao_activity.save(mapName, M.ACTIVITY_TYPE, targetList)
                         end
+                        notifyRacesChanged(mapName)
                     end
                 end
             end
@@ -1063,8 +1071,11 @@ local function loadData()
     end)
 end
 
-local function saveData()
+---@param timesOnly boolean? only a leaderboard time changed (the plugin API tells plugins about
+---those itself, see submitTime)
+local function saveData(timesOnly)
     dao_activity.save(services_core.getCurrentMap(), M.ACTIVITY_TYPE, M.data)
+    if not timesOnly then notifyRacesChanged(services_core.getCurrentMap()) end
 end
 
 --- auto-imports any of this mod's own bundled default races that haven't been seeded into a
@@ -1729,11 +1740,14 @@ end
 ---@param model string
 ---@param time integer best lap time (ms)
 ---@param board string? "grid" (default) or "freeroam"
+---@param identity string? what `playerName` is : "nickname", "guest" or "beammp"
+---(services_identity.getIdentityKind), kept with the entry for the plugin API (a website showing
+---only nicknamed players, direct request). Entries saved before it have none
 ---@return boolean isNewPB, boolean isNewRecord
-local function submitTime(raceId, playerName, model, time, board)
+local function submitTime(raceId, playerName, model, time, board, identity)
     local race = M.getById(raceId)
     if not race then return false, false end
-    local _, field = boardField(board)
+    local boardName, field = boardField(board)
     race[field] = race[field] or {}
     local entries = race[field]
 
@@ -1754,8 +1768,10 @@ local function submitTime(raceId, playerName, model, time, board)
             if otherName ~= playerName and entry.time < existing.time then fromRank = fromRank + 1 end
         end
     end
-    entries[playerName] = { time = time, model = model, date = GetCurrentTime(), fromRank = fromRank }
-    saveData()
+    entries[playerName] = { time = time, model = model, date = GetCurrentTime(), fromRank = fromRank,
+        identity = identity }
+    saveData(true)
+    if services_api then services_api.leaderboardChanged(raceId, boardName, "pb", playerName) end
     return true, time < previousBest
 end
 
@@ -1768,13 +1784,14 @@ local function restoreEntry(raceId, playerName, previous)
     local race = M.getById(raceId)
     if not race or not race.leaderboard then return end
     race.leaderboard[playerName] = previous
-    saveData()
+    saveData(true)
+    if services_api then services_api.leaderboardChanged(raceId, "grid", "restored", playerName) end
 end
 
 --- every entry, fastest first, ranked
 ---@param race table
 ---@param board string? "grid" (default) or "freeroam"
----@return {playerName: string, time: integer, model: string, date: integer, rank: integer, fromRank: integer?}[]
+---@return {playerName: string, time: integer, model: string, date: integer, rank: integer, fromRank: integer?, identity: string?}[]
 local function sortedEntries(race, board)
     local _, field = boardField(board)
     local list = {}
@@ -1785,6 +1802,7 @@ local function sortedEntries(race, board)
             model = entry.model,
             date = entry.date,
             fromRank = entry.fromRank,
+            identity = entry.identity,
         })
     end
     table.sort(list, function(a, b)

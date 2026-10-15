@@ -199,6 +199,34 @@
                     </div>
                 </td>
             </tr>
+            <tr ng-if="prop.kind === 'sweep' && $ctrl.p.handleWidth && $ctrl.p.handleWidth.index === $ctrl.p.props.indexOf(prop)">
+                <td
+                    class="text-right"
+                    title="{{'beamjoy.window.config.tabs.races.props.handleWidth.tooltip' | translate}}"
+                >
+                    {{'beamjoy.window.config.tabs.races.props.handleWidth' | translate}}
+                </td>
+                <td>
+                    <div class="d-flex gap-1 align-items-center">
+                        <bj-slider
+                            class="flex-grow-1"
+                            ng-model="$ctrl.p.handleWidth.metres"
+                            min="$ctrl.p.handleWidth.min"
+                            max="$ctrl.p.handleWidth.max"
+                            hard-max="$ctrl.p.handleWidth.hardMax"
+                            step="0.05"
+                            type-step="0.01"
+                        ></bj-slider>
+                        <button
+                            class="btn neutral"
+                            ng-click="$ctrl.p.resetHandleWidth($event)"
+                            title="{{'beamjoy.window.config.tabs.races.props.handleWidth.reset.tooltip' | translate}}"
+                        >
+                            {{'beamjoy.window.config.tabs.races.props.handleWidth.reset' | translate}}
+                        </button>
+                    </div>
+                </td>
+            </tr>
             <tr ng-if="prop.kind === 'paint'">
                 <td class="text-right">{{'beamjoy.window.config.tabs.races.props.paint' | translate}}</td>
                 <td>

@@ -68,6 +68,10 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
         // the props solid as when played, to drive into them (direct request). Lua turns it back off
         // at the next edit, since the game's collision only follows them on a rebuild
         testCollision: false,
+        // the selected curb's or wall's end or node, its width (metres) as its slider edits it
+        // (direct request : a curb resized at one node). `synced` the value Lua last said, so only
+        // a change made here is sent
+        handleWidth: null,
         keepPlacing: readSwitch(KEEP_KEY),
         fixedRotation: readSwitch(FIXED_KEY),
     };
@@ -106,6 +110,7 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
         }
         previous = angular.copy(p.props);
         p.total = countOf(p.props);
+        refreshHandleWidth();
     });
     $rootScope.$on("BJEditorPropsSolid", (_, list) => {
         p.solid = Array.isArray(list) ? list : [];
@@ -114,9 +119,11 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
         p.active = active && active.index ? active.index - 1 : null;
         p.part = (active && active.part) || null;
         p.selected = active && Array.isArray(active.selected) ? active.selected.map((i) => Number(i) - 1) : [];
+        refreshHandleWidth();
     });
     $rootScope.$on("BJEditorPropCatalog", (_, catalog) => {
         p.catalog = Array.isArray(catalog) ? catalog : [];
+        refreshHandleWidth();
     });
     $rootScope.$on("BJEditorPropsClipboard", (_, state) => {
         p.clipboard = state && typeof state === "object" ? state : { entries: 0, count: 0 };
@@ -204,6 +211,61 @@ angular.module("beamjoy").factory("beamjoyPropEditor", function ($rootScope, $fi
         return prop && prop.mid ? [prop.mid] : [];
     };
     p.isNodePart = () => typeof p.part === "string" && /^n\d+$/.test(p.part);
+    // A CURB'S WIDTH AT AN END OR A NODE (direct request) : the point's `w`, its profile's own
+    // width times it (beamjoy_props.SWEEP_WIDTH_MIN / MAX), shown and set in metres
+    const WIDTH_MIN = 0.25;
+    const WIDTH_MAX = 4;
+    const round2 = (v) => Math.round(v * 100) / 100;
+    const handlePoint = (prop, part) => {
+        if (!prop || typeof part !== "string") return null;
+        if (part === "a" || part === "b") return prop[part] || null;
+        const m = /^n(\d+)$/.exec(part);
+        return m ? p.nodesOf(prop)[Number(m[1]) - 1] || null : null;
+    };
+    // its profile's own width (the drawer's catalog : beamjoy_props.sweepsForUI)
+    const sweepBase = (prop) => {
+        const sweep = prop && prop.kind === "sweep" ? p.catalog.find((c) => c.sweep === prop.profile) : null;
+        return sweep && Number(sweep.width) > 0 ? Number(sweep.width) : null;
+    };
+    function refreshHandleWidth() {
+        const prop = p.active !== null ? p.props[p.active] : null;
+        const point = handlePoint(prop, p.part);
+        const base = sweepBase(prop);
+        if (!point || !base || p.severalSelected()) {
+            p.handleWidth = null;
+            return;
+        }
+        const w = Math.min(Math.max(Number(point.w) || 1, WIDTH_MIN), WIDTH_MAX);
+        const metres = round2(base * w);
+        const was = p.handleWidth;
+        // a slider moved here and not sent yet keeps its value
+        const editing = was && was.index === p.active && was.part === p.part && Number(was.metres) !== was.synced;
+        p.handleWidth = {
+            index: p.active,
+            part: p.part,
+            base,
+            min: round2(base * WIDTH_MIN),
+            max: round2(base * 3),
+            hardMax: round2(base * WIDTH_MAX),
+            metres: editing ? was.metres : metres,
+            synced: metres,
+        };
+    }
+    // the slider's value, sent (the list debounces it)
+    p.sendHandleWidth = () => {
+        const h = p.handleWidth;
+        if (!h || !(Number(h.metres) > 0) || Number(h.metres) === h.synced) return;
+        h.synced = Number(h.metres);
+        send("BJEditorPropsSetHandleWidth", [h.index + 1, h.part, Number(h.metres) / h.base]);
+    };
+    p.resetHandleWidth = (event) => {
+        stop(event);
+        const h = p.handleWidth;
+        if (!h) return;
+        h.metres = round2(h.base);
+        h.synced = h.metres;
+        send("BJEditorPropsSetHandleWidth", [h.index + 1, h.part, 1]);
+    };
     const dist = (u, v) => Math.hypot(u.x - v.x, u.y - v.y, u.z - v.z);
     // points times weights, summed : mix(p1, w1, p2, w2...)
     const mix = (...terms) => {
@@ -484,6 +546,18 @@ angular.module("beamjoy").component("bjPropEditor", {
             })
         );
 
+        let widthTimeout = null;
+        $scope.$watch(
+            () => (p.handleWidth ? p.handleWidth.metres : null),
+            () => {
+                if (widthTimeout) $timeout.cancel(widthTimeout);
+                widthTimeout = $timeout(() => {
+                    widthTimeout = null;
+                    p.sendHandleWidth();
+                }, DIFF_DEBOUNCE_MS);
+            }
+        );
+
         let diffTimeout = null;
         $scope.$watch(
             () => p.props,
@@ -502,6 +576,10 @@ angular.module("beamjoy").component("bjPropEditor", {
             if (diffTimeout) {
                 $timeout.cancel(diffTimeout);
                 p.diff();
+            }
+            if (widthTimeout) {
+                $timeout.cancel(widthTimeout);
+                p.sendHandleWidth();
             }
             // the drawer belongs to the props panel
             p.closeDrawer();

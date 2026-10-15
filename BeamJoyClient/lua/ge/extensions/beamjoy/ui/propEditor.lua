@@ -323,6 +323,16 @@ local function xyz(v) return { x = v.x, y = v.y, z = v.z } end
 ---@return vec3?
 local function toVec(v) return v and vec3(v.x, v.y, v.z) or nil end
 
+--- a line's point remade (moved, turned, copied) keeps the width it had (a curb's `w`, see
+--- beamjoy_props SWEEPS)
+---@param point table the new {x, y, z}
+---@param from table? the point it was
+---@return table point
+local function keepWidth(point, from)
+    if type(from) == "table" then point.w = from.w end
+    return point
+end
+
 --- a prop laid along a path by its two ends (and its bend) : a line of props, a curb or a wall
 --- (beamjoy_props SWEEPS) or a painted line (PAINTS), edited by the same handles
 ---@param prop table?
@@ -460,7 +470,7 @@ local function updateLineHeights(line)
             end
         end
         line.heights = table.map(beamjoy_props.sweepPoints(line, true), function(p)
-            return round3(sweepGroundAt(p, halfWidth))
+            return round3(sweepGroundAt(p, halfWidth * (p.w or 1)))
         end)
         return
     end
@@ -601,11 +611,11 @@ end
 ---@param fn fun(p: table): table a point {x, y, z} to its new {x, y, z}
 local function mapPathPoints(line, fn)
     for _, key in ipairs({ "a", "b", "mid" }) do
-        if line[key] then line[key] = fn(line[key]) end
+        if line[key] then line[key] = keepWidth(fn(line[key]), line[key]) end
     end
     if type(line.nodes) == "table" then
         local moved = {}
-        for k, p in ipairs(line.nodes) do moved[k] = fn(p) end
+        for k, p in ipairs(line.nodes) do moved[k] = keepWidth(fn(p), p) end
         line.nodes = moved
     end
 end
@@ -680,11 +690,11 @@ local function showSelectionGizmo()
             if prop then
                 if isPath(prop) then
                     for _, key in ipairs({ "a", "b", "mid" }) do
-                        if was[key] then prop[key] = place(was[key]) end
+                        if was[key] then prop[key] = keepWidth(place(was[key]), was[key]) end
                     end
                     if type(was.nodes) == "table" then
                         local nodes = {}
-                        for k, n in ipairs(was.nodes) do nodes[k] = place(n) end
+                        for k, n in ipairs(was.nodes) do nodes[k] = keepWidth(place(n), n) end
                         prop.nodes = nodes
                     end
                     prop.heights, prop.normals = nil, nil
@@ -757,7 +767,8 @@ updatePropGizmo = function()
                 shiftLine(prop, updated.pos - toVec(lineNodes(prop)[node]))
                 whole = true
             else
-                ensureNodes(prop)[node] = xyz(updated.pos)
+                local nodes = ensureNodes(prop)
+                nodes[node] = keepWidth(xyz(updated.pos), nodes[node])
             end
             prop.heights, prop.normals = nil, nil -- measured again once dropped
             fitLineCount(prop)
@@ -794,7 +805,7 @@ updatePropGizmo = function()
                 shiftLine(prop, updated.pos - toVec(prop[part]))
                 whole = true
             else
-                prop[part] = xyz(updated.pos)
+                prop[part] = keepWidth(xyz(updated.pos), prop[part])
             end
             prop.heights, prop.normals = nil, nil -- straight while dragging, measured again once dropped
             fitLineCount(prop)
@@ -1104,7 +1115,7 @@ local function onDuplicateProp(index)
             na = vec3(na.x, na.y, groundHeightAt(na))
             nb = vec3(nb.x, nb.y, groundHeightAt(nb))
         end
-        copy.a, copy.b = xyz(na), xyz(nb)
+        copy.a, copy.b = keepWidth(xyz(na), prop.a), keepWidth(xyz(nb), prop.b)
         copy.mid, copy.nodes = nil, nil
         for _, key in ipairs({ "mid", "nodes" }) do
             if prop[key] then
@@ -1181,7 +1192,19 @@ local function insertNode(index, span, pos)
     span = math.max(1, math.min(span, #nodes + 1))
     local at = vec3(pos.x, pos.y, pos.z)
     if snapOn() then at.z = groundHeightAt(at) end
-    table.insert(nodes, span, xyz(at))
+    -- a curb's width there (its ends' and nodes', eased between them), so adding it changes nothing
+    local w
+    if line.kind == "sweep" then
+        local best
+        for _, sp in ipairs(beamjoy_props.sweepPoints(line, true)) do
+            local d = vec3(sp.pos.x - at.x, sp.pos.y - at.y, 0):length()
+            if not best or d < best then best, w = d, sp.w end
+        end
+        w = w and math.abs(w - 1) > 1e-3 and round3(w) or nil
+    end
+    local node = xyz(at)
+    node.w = w
+    table.insert(nodes, span, node)
     lineReshaped(index, "n" .. span)
     return span
 end
@@ -1205,7 +1228,7 @@ local function extendLine(index, pos, first)
     else
         nodes[#nodes + 1] = line.b
     end
-    line[key] = xyz(at)
+    line[key] = keepWidth(xyz(at), first and nodes[1] or nodes[#nodes])
     lineReshaped(index, key)
     return key
 end
@@ -1627,12 +1650,13 @@ local function placingEntry()
             if snapOn() then pt.z = groundHeightAt(pt) end
             return xyz(pt)
         end
+        local was = tpl.line.entry
         for _, key in ipairs({ "a", "b", "mid" }) do
             local off = tpl.line.offsets[key]
-            line[key] = off and placed(off) or nil
+            line[key] = off and keepWidth(placed(off), was[key]) or nil
         end
-        line.nodes = tpl.line.offsets.nodes and table.map(tpl.line.offsets.nodes, function(off)
-            return placed(off)
+        line.nodes = tpl.line.offsets.nodes and table.map(tpl.line.offsets.nodes, function(off, k)
+            return keepWidth(placed(off), was.nodes and was.nodes[k])
         end) or nil
         -- its props keep their turn along it (its yaw is the line's own : turning it too turned
         -- them twice, direct report). Its own "Follow the ground" kept, off with snapping off
@@ -1852,6 +1876,29 @@ local function onSetSweepProfile(index, id)
     local prop = props() and props()[index]
     if not prop or prop.kind ~= "sweep" or prop.profile == id or not beamjoy_props.getSweep(id) then return end
     prop.profile = id
+    updateLineHeights(prop)
+    markDirty()
+    pushUpdate()
+    propsChanged()
+end
+
+--- a curb's or a wall's end or node made wider or narrower (direct request) : its `w`, the
+--- profile's own width times it (beamjoy_props SWEEPS) ; 1 drops it
+---@param index integer
+---@param part string "a", "b" or "n<k>"
+---@param w number
+local function onSetHandleWidth(index, part, w)
+    local line = props() and props()[index]
+    w = tonumber(w)
+    if not line or line.kind ~= "sweep" or not w or w ~= w then return end
+    local node = nodeIndex(part)
+    local point = node and lineNodes(line)[node] or ((part == "a" or part == "b") and line[part]) or nil
+    if type(point) ~= "table" then return end
+    w = math.max(beamjoy_props.SWEEP_WIDTH_MIN, math.min(w, beamjoy_props.SWEEP_WIDTH_MAX))
+    w = math.abs(w - 1) > 1e-3 and round3(w) or nil
+    if point.w == w then return end
+    point.w = w
+    updateLineHeights(line)
     markDirty()
     pushUpdate()
     propsChanged()
@@ -2783,6 +2830,7 @@ local function onInit()
     ui.addHandler("BJEditorPropsArmPrefab", onArmPrefab)
     ui.addHandler("BJEditorPropsArmSweep", onArmSweep)
     ui.addHandler("BJEditorPropsSetProfile", onSetSweepProfile)
+    ui.addHandler("BJEditorPropsSetHandleWidth", onSetHandleWidth)
     ui.addHandler("BJEditorPropsArmPaint", onArmPaint)
     ui.addHandler("BJEditorPropsSetPaint", onSetPaint)
     ui.addHandler("BJEditorPropsDisarm", function() disarmProp() end)

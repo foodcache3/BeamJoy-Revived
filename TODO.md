@@ -584,3 +584,77 @@ Editor (a Props section in the race editor, `ui/raceEditor.lua` + its Angular si
   moving an end or changing the count respaces it ; "Split into props" turns it into single props
   to adjust one by one. The count counts toward the race's prop cap. Maybe later : spacing in
   metres instead of a count, and a curved line (a middle handle).
+
+## Plugin API: other server plugins reading BeamJoy data (leaderboard website, Discord bot)
+
+**Status:** step 1 (the API) built in server 2460, not yet tried on a live server : `services/api.lua`,
+`BeamJoyServer/api/` (README, helper, example export plugin ; inside BeamJoy's own folder so it
+ships to servers with the release, user's call, and plugins load the helper from there). The `identity` marking is in. Next : the
+user's own sync plugin (the website's kind still open), then the bot. Direct request : let
+people's own BeamMP server plugins read
+BeamJoy data (statistics, races, leaderboards, weather...). The user's own first use : a plugin
+that syncs race leaderboards to a website. **Read-only for now** (user's choice) ; writes later,
+only once a real use for one comes up.
+
+**How plugins talk.** Every folder in `Resources/Server` is its own plugin in its own Lua state :
+none can see another's variables or call its functions. They only exchange events
+(`MP.TriggerGlobalEvent` / `MP.RegisterEvent`), as `BeamJoyServerHooks` already does. A third
+party's plugin is its own folder beside `BeamJoyServer` (e.g. `Resources/Server/BJLeaderboardSync/`),
+untouched by BeamJoy updates.
+
+**BeamJoy side : a new `services/api.lua`.**
+- Requests : a plugin fires `BJAPI_request` with `{id, method, params}` ; BeamJoy answers with
+  `BJAPI_response` `{id, result | error}`. Request/reply by id, like BeamJoy's own client protocol
+  (calls between plugins are asynchronous anyway ; BeamMP's own futures need polling).
+- Events : BeamJoy fires `BJAPI_<name>` with a payload.
+- Payloads are JSON strings with a version (`v: 1`), in a **public shape of their own**, never the
+  internal tables (those keep changing : identity keys, legacy race formats, gate steps...).
+- A registry : `services_api.register("races.leaderboard", fn)`, `services_api.emit(name, payload)`.
+- Methods, first set : `server.info`, `maps.current`, `races.list`, `races.leaderboard` (any map,
+  `grid` or `freeroam` board), `players.online`, `environment.get`.
+- Events, first set : `leaderboardChanged` (from `services_races.submitTime` and `restoreEntry`),
+  `raceFinished` (from the results `raceGrid.lua`'s `postToDiscord` already builds, so Discord
+  becomes just another consumer), `mapChanged`.
+- Ship a drop-in `BeamJoyAPI.lua` helper for plugin authors (`BJ.on(event, fn)`,
+  `BJ.call(method, params, callback)`) and an `API.md`.
+- Phase 0 first : a quick spike with two test plugins on BeamMP 3.9+ (argument types across
+  states, ordering, whether a plugin's own global event reaches itself).
+
+**Data traps the API should hide.**
+- Races are per map, and only the current map's are in memory (`services_races.data`) : another
+  map's leaderboard comes from disk (`dao_activity.get(map, "races")`).
+- Two boards per race : `leaderboard` (grid) and `freeroamLeaderboard`.
+- A leaderboard can get worse, not only better : a staff disqualification puts the replaced entry
+  back (`restoreEntry`). So `leaderboardChanged` carries the race's board, not just "new PB".
+- Entry keys are display names (nickname if logged in, else the BeamMP name) : not stable ids.
+- Entry dates look off by the server's UTC offset : `GetCurrentTime()` is
+  `os.time(os.date("!*t"))`, which reads a UTC table as local time. Not confirmed on a live
+  server ; the API should send real Unix timestamps whatever the cause.
+
+**Only nicknamed players on the website (user's choice).** Entries don't record whether their key
+is a nickname or a BeamMP name (`getIdentityKey` falls back to the BeamMP name, login being
+optional), so they can't be told apart today. Plan : `submitTime` also saves
+`identity = "nickname" | "beammp"`, the API passes it on, and the consumer filters (the API stays
+general). Entries saved before that are unmarked : leave them off until that player sets a new PB
+(simplest, never wrong), or a one-time console command guessing from the player records (a
+nickname can equal someone's BeamMP name, so only a guess).
+
+**The user's sync plugin (`BJLeaderboardSync`, a separate plugin).** On start, every map's and
+race's board uploaded in full (catching up on anything missed while it was down) ; on
+`leaderboardChanged`, that race's board. Keeps `identity == "nickname"` entries only. Sends with
+`curl` (no HTTP in BeamMP's Lua ; `services/discord.lua` does the same) and a secret token from
+its own `config.json`. **Open question :** what the website is. A backend that can take uploads
+(POST with the token), or a static site on the same machine (the plugin writes a JSON file it
+serves).
+
+**Discord bot (later, same API).** BeamJoy already posts to Discord without a bot (webhooks in
+`services/discord.lua`, and `onScriptMessage` for the ChatHook plugin). A real bot (slash
+commands : `/leaderboard`, `/online`, `/weather`) is its own program (discord.js / discord.py) :
+a bot needs a permanent connection to Discord, which BeamMP's Lua can't hold. It reads BeamJoy
+data through a bridge, preferably **the website's own read endpoint** (one pipeline for both, and
+it keeps working while the game server restarts) ; or snapshot JSON files a bridge plugin writes,
+when the bot runs on the server's machine and there's no website. Bot commands acting on the
+server (weather from Discord...) are writes : out of scope for now.
+
+**Order :** the API (with the `identity` marking) → the website sync plugin → the website's read
+endpoint → a bot on that endpoint. Each step works on its own.

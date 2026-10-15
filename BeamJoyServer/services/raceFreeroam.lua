@@ -188,7 +188,8 @@ local function raceFreeroamFinish(ctxt, raceId, gateIndex, elapsedMs, model)
     local key = services_identity.getIdentityKey(ctxt.senderID) or ctxt.sender.playerName
     local previous = race.freeroamLeaderboard and race.freeroamLeaderboard[key]
     local isNewPB, isNewRecord = services_races.submitTime(race.id, key,
-        type(model) == "string" and model:sub(1, 64) or "", elapsedMs, "freeroam")
+        type(model) == "string" and model:sub(1, 64) or "", elapsedMs, "freeroam",
+        services_identity.getIdentityKind(ctxt.senderID))
     local all = services_races.sortedEntries(race, "freeroam")
     local mine = table.find(all, function(e) return e.playerName == key end)
     communications_tx.sendToPlayer(ctxt.senderID, "raceFreeroamResult", race.id, {

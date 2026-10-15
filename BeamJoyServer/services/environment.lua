@@ -554,6 +554,7 @@ M.onPlayerDisconnect = onPlayerDisconnect
 M.onSlowUpdate = onSlowUpdate
 M.onMapChanged = onMapChanged
 
+M.currentToD = currentToD
 M.changeSimSpeed = changeSimSpeed
 M.changeSimPause = changeSimPause
 M.changeEnv = changeEnv

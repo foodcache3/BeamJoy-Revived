@@ -8,7 +8,38 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2697, server build 2457.
+Version 1.11.0 : client build 2698, server build 2460.
+
+- **New : a plugin API** (direct request : your own server plugins reading BeamJoy's data, e.g. a
+  website kept in sync with the race leaderboards, or a Discord bot). A plugin in its own folder in
+  `Resources/Server` can ask BeamJoy for its races, leaderboards (any map, grid and freeroam
+  boards), maps, online players and time/weather, and hear about new times, races changed, races
+  finished, map changes and players joining/leaving. Read-only. Everything is documented in
+  `BeamJoyServer/api/README.md`, with a helper library plugins load straight from BeamJoy's folder
+  (`BeamJoyServer/api/BeamJoyAPI.lua`, so it always matches the BeamJoy installed) and an example
+  plugin that exports every map's leaderboards to JSON files
+  (`BeamJoyServer/api/example/BJLeaderboardExport`, to copy into `Resources/Server`).
+  Leaderboard times now also record whether they were set under a BeamJoy nickname, a BeamMP
+  name or a guest name, so a website can show only nicknamed players ; times saved before this
+  are "unknown". *(server only)*
+
+- **Fixed : a racer who left mid-race was missing from the race's Discord results** once retired
+  : they were taken for the debug ghost (any negative player id), and they're now listed as not
+  finished. *(server only)*
+
+- **Fixed : a race never ended after a racer left mid-race** (direct report). A racer who
+  disconnects keeps their place for the rejoin grace period, and the race waited for them to the
+  end of it even once everyone still there had finished. Now, when the last racer still on the
+  server finishes or retires, anyone still away is retired and the race ends. The last racer still
+  going dropping out themselves is still waited for, as before. *(server only)*
+
+- **New : a curb or a wall can be made wider or narrower at any end or node** (direct request) :
+  select one (its button in the props list, or click it in the world) and set **Width here** under
+  the profile, in metres, from a quarter of the profile's own width to four times it ; **Reset**
+  puts it back. Between two ends or nodes the width eases from one to the other. A node added on
+  the path takes the width the curb already had there, and a line made longer keeps its end's
+  width. The ground under it is measured as wide as it is. *(client and server : the server keeps
+  each point's width, so it needs this server build too, or saved widths are lost)*
 
 - **Fixed : a curb's edge sank into ground that isn't level** (direct report) : a curb or a wall
   was stood at the ground's height under the middle of its line only, so on a cambered road its

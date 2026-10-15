@@ -1529,6 +1529,11 @@ end
 -- from t = 0 to 1 (the same scale at both, or the stripes wouldn't meet). Each segment is cut again
 -- at those corners, and its faces lit by their own slope.
 --
+-- Its ends and nodes may each have a width (`w` on the point, direct request : a curb resized at
+-- one node) : the profile's own times it, from SWEEP_WIDTH_MIN to SWEEP_WIDTH_MAX, none for 1. The
+-- outline is widened (only across, its height kept) by it there, eased from one to the next along
+-- the path between them.
+--
 -- A ProceduralMesh has no collision switch (its only field is its material) : it's solid once the
 -- static collision is rebuilt. The editor's preview and the placing ghost mustn't be, so they're
 -- taken out of the scene for every rebuild done here and made again right after (reloadCollision).
@@ -1597,6 +1602,36 @@ for _, s in ipairs(M.SWEEPS) do sweepById[s.id] = s end
 ---@return table?
 function M.getSweep(id) return type(id) == "string" and sweepById[id] or nil end
 
+-- an end's or a node's width (its `w`), the profile's own times it, within these (mirrored by the
+-- server's services/props.lua)
+M.SWEEP_WIDTH_MIN, M.SWEEP_WIDTH_MAX = .25, 4
+
+--- an end's or a node's width (its `w`) : 1 without one
+---@param point table?
+---@return number
+function M.handleWidth(point)
+    local w = type(point) == "table" and tonumber(point.w)
+    if not w or w ~= w then return 1 end
+    return math.max(M.SWEEP_WIDTH_MIN, math.min(w, M.SWEEP_WIDTH_MAX))
+end
+
+--- a line's ends and nodes as it keeps them (their `w` with them), in its path's order : as
+--- M.linePath takes them (the nodes it can read, else an older line's `mid`)
+---@param line table
+---@return table[]
+local function sweepKnots(line)
+    local knots = { line.a }
+    if type(line.nodes) == "table" and #M.lineNodes(line) > 0 then
+        for _, n in ipairs(line.nodes) do
+            if v3(n) then knots[#knots + 1] = n end
+        end
+    elseif v3(line.mid) then
+        knots[#knots + 1] = line.mid
+    end
+    knots[#knots + 1] = line.b
+    return knots
+end
+
 -- metres a segment, about
 local SWEEP_STEP = 1
 -- texture repeat (metres) along and across the concrete-like base map
@@ -1620,21 +1655,41 @@ end
 --- measures them), else at the path's own height
 ---@param entry table
 ---@param bare boolean?
----@return {pos: vec3, way: vec3}[]
+---@return {pos: vec3, way: vec3, w: number}[] w its width there (M.handleWidth's, eased between them)
 function M.sweepPoints(entry, bare)
     local count = sweepSegments(entry)
-    local pts = M.linePath(entry, math.max(CURVE_SAMPLES, count * 2))
+    local pts, knotAt = M.linePath(entry, math.max(CURVE_SAMPLES, count * 2))
     if not pts then return {} end
     local lens = { 0 }
     for k = 2, #pts do lens[k] = lens[k - 1] + pts[k]:distance(pts[k - 1]) end
     local total = lens[#lens]
     local heights = not bare and entry.followGround ~= false and type(entry.heights) == "table" and
         #entry.heights == count + 1 and entry.heights or nil
+    -- its ends' and nodes' widths, and how far along the path each stands
+    local knots = sweepKnots(entry)
+    local widths, at = {}, {}
+    for k, knot in ipairs(knots) do
+        widths[k] = M.handleWidth(knot)
+        at[k] = knotAt and knotAt[k] and lens[knotAt[k]] or total * (k - 1) / math.max(1, #knots - 1)
+    end
+    ---@param d number metres along the path
+    ---@return number
+    local function widthAt(d)
+        for k = 2, #knots do
+            if d <= at[k] + 1e-6 or k == #knots then
+                local span = at[k] - at[k - 1]
+                local f = span > 1e-6 and math.max(0, math.min(1, (d - at[k - 1]) / span)) or 1
+                f = f * f * (3 - 2 * f)
+                return widths[k - 1] + (widths[k] - widths[k - 1]) * f
+            end
+        end
+        return widths[1]
+    end
     local out = {}
     for i = 0, count do
         local p = pathAt(pts, lens, total * i / count)
         if heights and tonumber(heights[i + 1]) then p = vec3(p.x, p.y, heights[i + 1]) end
-        out[i + 1] = { pos = p }
+        out[i + 1] = { pos = p, w = widthAt(total * i / count) }
     end
     -- the way at each : from the point before to the point after (at an end, its neighbour)
     local whole = vec3(pts[#pts].x - pts[1].x, pts[#pts].y - pts[1].y, 0)
@@ -1734,8 +1789,12 @@ function M.sweepMeshes(entry)
     local function at(p, o, scale)
         local right = vec3(p.way.y, -p.way.x, 0)
         local z = o[2] > 0 and o[2] * (scale or 1) or o[2]
-        return p.pos - origin + right * o[1] + up * z
+        return p.pos - origin + right * (o[1] * (p.w or 1)) + up * z
     end
+    -- a width changing along it (its ends' and nodes', see SWEEPS) : its faces lit by their own
+    -- slope, as a relief's
+    local widened = false
+    for _, p in ipairs(pts) do widened = widened or math.abs((p.w or 1) - 1) > 1e-4 end
 
     -- a relief's scale `t` along a stripe (0 to 1)
     local relief = profile.stripe and profile.relief or nil
@@ -1770,6 +1829,7 @@ function M.sweepMeshes(entry)
         for _, c in ipairs(cuts) do
             local way = p0.way * (1 - c.f) + p1.way * c.f
             c.pos = p0.pos * (1 - c.f) + p1.pos * c.f
+            c.w = (p0.w or 1) * (1 - c.f) + (p1.w or 1) * c.f
             c.way = way:length() > 1e-4 and way:normalized() or p0.way
             c.v = (along[i] + (along[i + 1] - along[i]) * c.f) / SWEEP_UV_METRES
             c.scale = relief and reliefAt(t0 + c.f / per) or 1
@@ -1789,7 +1849,7 @@ function M.sweepMeshes(entry)
                     local n0, n1 = r0 * nx + up * nz, r1 * nx + up * nz
                     local A, B = at(c0, o0, c0.scale), at(c0, o1, c0.scale)
                     local C, D = at(c1, o1, c1.scale), at(c1, o0, c1.scale)
-                    if relief then
+                    if relief or widened then
                         -- the face's own normal, its slope along the path in it, turned outward
                         local g = (B - A):cross(D - A)
                         if g:length() > 1e-9 then
@@ -1850,6 +1910,7 @@ local function sweepSignature(e)
         parts[#parts + 1] = type(p) == "table" and
             string.format("%.4f,%.4f,%.4f", tonumber(p.x) or 0, tonumber(p.y) or 0, tonumber(p.z) or 0) or "-"
     end
+    for _, p in ipairs(sweepKnots(e)) do parts[#parts + 1] = string.format("%.3f", M.handleWidth(p)) end
     for _, p in ipairs(M.lineNodes(e)) do
         parts[#parts + 1] = string.format("%.4f,%.4f,%.4f", p.x, p.y, p.z)
     end

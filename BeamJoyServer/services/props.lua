@@ -22,6 +22,25 @@ local function sanePoint(v)
     return { x = x, y = y, z = z }
 end
 
+-- a curb's or a wall's end or node may have a width (its `w`, its profile's own times it, direct
+-- request : a curb resized at one node), within these (mirrors the client's
+-- beamjoy_props.SWEEP_WIDTH_MIN / SWEEP_WIDTH_MAX) ; none for 1
+local SWEEP_WIDTH_MIN, SWEEP_WIDTH_MAX = .25, 4
+
+--- a sane point given the width its source had
+---@param point table? sanePoint's
+---@param src any what it was made from
+---@return table? point
+local function withWidth(point, src)
+    if not point or type(src) ~= "table" then return point end
+    local w = tonumber(src.w)
+    if w and w == w then
+        w = math.clamp(w, SWEEP_WIDTH_MIN, SWEEP_WIDTH_MAX)
+        if math.abs(w - 1) > 1e-3 then point.w = w end
+    end
+    return point
+end
+
 --- a mesh from the game's own art only (clients skip one that isn't installed), never a path
 --- climbing out of it
 ---@param shape any
@@ -38,13 +57,15 @@ local MAX_LINE_NODES = 50
 --- a line's nodes (a curb's, a wall's, a painted line's too) : the points it bends through between
 --- its ends, in order, the well-formed ones kept ; none without any
 ---@param v any
+---@param widths boolean? each keeps its width (a curb's, a wall's)
 ---@return table[]?
-local function saneNodes(v)
+local function saneNodes(v, widths)
     if type(v) ~= "table" then return nil end
     local out = {}
     for _, n in ipairs(v) do
         if #out >= MAX_LINE_NODES then break end
         local point = sanePoint(n)
+        if point and widths then point = withWidth(point, n) end
         if point then out[#out + 1] = point end
     end
     return #out > 0 and out or nil
@@ -139,7 +160,7 @@ end
 ---@param p table
 ---@return table? entry, integer? weight
 local function saneSweep(p)
-    local a, b = sanePoint(p.a), sanePoint(p.b)
+    local a, b = withWidth(sanePoint(p.a), p.a), withWidth(sanePoint(p.b), p.b)
     local count = math.floor(tonumber(p.count) or 0)
     if not a or not b or count < 1 or count > MAX_SWEEP_SEGMENTS or type(p.profile) ~= "string" or
         #p.profile > 40 or not p.profile:match("^[%w_]+$") then
@@ -150,8 +171,8 @@ local function saneSweep(p)
         profile = p.profile,
         a = a,
         b = b,
-        mid = sanePoint(p.mid),
-        nodes = saneNodes(p.nodes),
+        mid = withWidth(sanePoint(p.mid), p.mid),
+        nodes = saneNodes(p.nodes, true),
         count = count,
         followGround = p.followGround ~= false,
         group = saneGroup(p.group),
