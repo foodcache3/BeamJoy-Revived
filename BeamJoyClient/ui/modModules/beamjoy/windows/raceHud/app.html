@@ -561,7 +561,7 @@
     <svg class="flag" width="15" height="11" viewBox="0 0 15 11" aria-hidden="true"><g transform="skewX(-10) translate(2 0)"><rect x="0" y="0" width="13" height="11" fill="#ebebeb"></rect><rect x="0" y="0" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="6.5" y="0" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="3.25" y="3.67" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="9.75" y="3.67" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="0" y="7.34" width="3.25" height="3.66" fill="#2a2d33"></rect><rect x="6.5" y="7.34" width="3.25" height="3.66" fill="#2a2d33"></rect></g></svg>
 </script>
 
-<section id="beamjoy-race-hud" ng-if="$ctrl.active && $ctrl.layout !== 'off'" ng-class="[$ctrl.layout, {focused: $ctrl.focused}]" aria-label="{{$ctrl.v.raceName}}">
+<section id="beamjoy-race-hud" ng-if="$ctrl.active && $ctrl.layout !== 'off' && !$ctrl.pluginHidden" ng-class="[$ctrl.layout, {focused: $ctrl.focused}]" aria-label="{{$ctrl.v.raceName}}">
 
     <!-- STANDARD -->
     <div ng-if="$ctrl.layout === 'standard'">

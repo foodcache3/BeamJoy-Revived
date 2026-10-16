@@ -8,7 +8,32 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2699, server build 2461.
+Version 1.11.0 : client build 2700, server build 2462.
+
+- **New : plugins can take part in races, show overlays and set the time and weather** (direct
+  request : modular plugins on top of BeamJoy). The plugin API (`BeamJoyServer/api/README.md`)
+  grows past reading :
+  - **Hooks**, questions BeamJoy asks plugins before it goes on : `raceReady` (a plugin can
+    refuse a racer's ready-up ; the racer sees "Checking…", then the reason, in the lobby and as a
+    message) and `gridOrder` (a plugin decides the order cars start in). A plugin that doesn't
+    answer in time is left out ; one that misses 3 times in a row is dropped, so a removed plugin
+    can't hold races up.
+  - **Race events with server times** : a lobby opening, the countdown (with the grid and when the
+    light goes green), the green light, every lap (with its sectors), a racer finishing, a racer
+    out (retired, disconnected or disqualified), a race closed without a result. A finished
+    race's results now carry every racer's laps and sector times.
+  - **Calls** : `race.setGridOrder`, `race.unready` (with a reason the racer sees),
+    `races.sessions` (the races being run), `environment.set` (time, day/night cycle, date,
+    weather), `hud.message` (a line across BeamJoy's HUD), and `EnvironmentChanged` when time or
+    weather changes.
+  - **Activity overlays** : a plugin shows players an overlay where the race HUD goes, either in
+    the race HUD's own look (it sends the values : title, position, gaps, lap, a running timer,
+    sectors, standings with your own row highlighted...) or laid out its own way (blocks of text,
+    rows, timers, bars, tables). It can hide BeamJoy's race HUD while it's up. Plain text only,
+    checked on the server ; players who join later get them too.
+  - The helper gets `BJ.hook`, and a second example plugin, `api/example/BJRaceControl`, uses all
+    of it : no ready-up for guests without a nickname, fastest leaderboard time at the front of
+    the grid, and a live timing overlay that turns into the results.
 
 - **Changed : nicknames are for guests only** (direct request : BeamMP accounts are back). A player
   logged in to a BeamMP account keeps their account name everywhere (nametag, player list,

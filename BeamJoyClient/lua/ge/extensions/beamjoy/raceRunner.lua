@@ -1576,6 +1576,9 @@ local function pushSessionStatus()
                 ready = p.ready,
                 vehicleModel = p.vehicleModel,
                 gridSlot = p.gridSlot,
+                -- a server plugin checking their ready-up, or why it refused it
+                readyChecking = p.readyChecking,
+                readyBlockReason = p.readyBlockReason,
             }
         end),
         laps = M.session.settings.laps,
@@ -1587,6 +1590,8 @@ local function pushSessionStatus()
             #(restriction.pool or {}) or nil,
         vehicleRestrictionPoolLabel = restriction and restriction.mode == "pool" and restriction.label or nil,
         ready = participant.ready,
+        readyChecking = participant.readyChecking,
+        readyBlockReason = participant.readyBlockReason,
         isStarter = starter and starter.playerName == participant.playerName,
         -- the lobby panel marks the leader with a crown
         starterID = M.session.starterID,

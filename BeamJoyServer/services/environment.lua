@@ -130,6 +130,14 @@ local function broadcastEnv()
         { environment = buildEnvPayload() })
 end
 
+--- tells the plugin API's plugins (EnvironmentChanged) who changed something
+---@param ctxt BJSContext?
+local function notifyApi(ctxt)
+    if not services_api then return end
+    local by = ctxt and (ctxt.apiSource or (ctxt.sender and ctxt.sender.playerName)) or "server"
+    pcall(services_api.environmentChanged, by)
+end
+
 local function isLeapYear(y)
     return (y % 4 == 0 and y % 100 ~= 0) or y % 400 == 0
 end
@@ -216,6 +224,7 @@ local function onMapChanged(oldMapName, newMapName)
     M.data.weather = nil
     dao_environment.save(M.data)
     broadcastEnv()
+    notifyApi()
 end
 
 ---@param playerID integer
@@ -265,6 +274,7 @@ local function changeSimSpeed(ctxt, newSpeed)
         M.data.simSpeed = newSpeed
         dao_environment.save(M.data)
         broadcastEnv()
+        notifyApi(ctxt)
     end
 end
 
@@ -281,6 +291,7 @@ local function changeSimPause(ctxt, pauseState)
         M.data.simPause = pauseState
         dao_environment.save(M.data)
         broadcastEnv()
+        notifyApi(ctxt)
     end
 end
 
@@ -388,6 +399,7 @@ local function changeEnv(ctxt, payload)
         M.data.ToDEpochAt = realtimeClock:get() -- fresh epoch under the NEW settings (or explicit ToD)
         dao_environment.save(M.data)
         broadcastEnv()
+        notifyApi(ctxt)
     end
 end
 

@@ -585,16 +585,46 @@ Editor (a Props section in the race editor, `ui/raceEditor.lua` + its Angular si
   to adjust one by one. The count counts toward the race's prop cap. Maybe later : spacing in
   metres instead of a count, and a curved line (a middle handle).
 
-## Plugin API: other server plugins reading BeamJoy data (leaderboard website, Discord bot)
+## Plugin API: other server plugins working with BeamJoy (leaderboard website, Discord bot, modular plugins)
 
-**Status:** step 1 (the API) built in server 2460, not yet tried on a live server : `services/api.lua`,
+**Step 2, modular plugins : built in client 2700 / server 2462, not yet tried live.** Direct request
+("allow for the installation of modular plugins") : hooks (`raceReady` with a reason the racer
+sees, `gridOrder`), race events with server times (grid opened, countdown with the grid and green
+time, green light, lap with sectors, finished, out, closed), results with every lap and sector,
+`race.setGridOrder`, `race.unready`, `races.sessions`, `environment.set` + `EnvironmentChanged`,
+`hud.message`, and activity overlays (`overlay.show/hide/clear` : the race HUD's look with the
+plugin's values, or the plugin's own blocks ; can hide the race HUD). "HUD layout" means the
+activity overlays like the race one (user's clarification). Server : `services/api.lua`,
+`services/pluginOverlay.lua`, hooks wired in `services/raceGrid.lua`. Client :
+`beamjoy/pluginOverlays.lua`, `windows/pluginOverlays`, the lobby's "Checking…" / reason box.
+Example : `api/example/BJRaceControl`. To check live : BeamMP's cross-plugin events and `dofile`
+(still unconfirmed on a real server), overlays' look in game, the race HUD hiding.
+
+**Worth adding next (suggested, not asked for yet) :**
+- More hooks : `raceStart` (rules for a league night : laps, vehicles), `raceJoin` (entry lists,
+  licences), `raceResult` (before a time goes on the leaderboard), `environmentChange` (lock the
+  weather during an event).
+- Race control for plugins : `race.start` (scheduled events : open a lobby for given players),
+  `race.cancel`, `race.penalty` / `race.disqualify` (stewarding from a plugin or a Discord bot).
+- The other activities' events and sessions (hunter, infected, derby, drag, drift, deliveries),
+  the same way as races ; `hides` for their HUDs too.
+- Per-player storage for plugins (`players.data.get/set`, namespaced per plugin, in BeamJoy's
+  player records) and player stats (`players.get` : group, first seen, races, wins...).
+- Chat : `chat.send` through BeamJoy (mutes, languages), a `ChatMessage` event, plugin chat
+  commands registered with BeamJoy's permission groups.
+- `notice.show` : BeamJoy's notification stack (with a Join button) for a plugin's own activity.
+- Buttons on overlays (a click comes back to the plugin as an event).
+- Who may write : an allowlist in BeamJoy's config of the plugins allowed to use the hooks and
+  write methods (today any plugin on the server can ; plugins are the server owner's own).
+
+**Step 1 status:** the API built in server 2460, not yet tried on a live server : `services/api.lua`,
 `BeamJoyServer/api/` (README, helper, example export plugin ; inside BeamJoy's own folder so it
 ships to servers with the release, user's call, and plugins load the helper from there). The `identity` marking is in. Next : the
 user's own sync plugin (the website's kind still open), then the bot. Direct request : let
 people's own BeamMP server plugins read
 BeamJoy data (statistics, races, leaderboards, weather...). The user's own first use : a plugin
-that syncs race leaderboards to a website. **Read-only for now** (user's choice) ; writes later,
-only once a real use for one comes up.
+that syncs race leaderboards to a website. Read-only at first (user's choice) ; the race,
+environment and overlay writes came with step 2.
 
 **How plugins talk.** Every folder in `Resources/Server` is its own plugin in its own Lua state :
 none can see another's variables or call its functions. They only exchange events

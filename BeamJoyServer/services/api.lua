@@ -1,17 +1,21 @@
---- The plugin API (direct request : other server plugins reading BeamJoy's data, e.g. a website
---- kept in sync with the race leaderboards). Read-only for now.
+--- The plugin API (direct request : other server plugins working with BeamJoy, e.g. a website kept
+--- in sync with the race leaderboards, a Discord bot, or a plugin of its own adding to the races).
 ---
 --- Every BeamMP server plugin (each folder in Resources/Server) runs in its own Lua state : none can
 --- see another's variables or call its functions, they only exchange events. So :
 --- - a request : a plugin fires `BJAPI_Request` with a JSON string `{id, method, params, from}` ;
 ---   the answer goes out to every plugin as `BJAPI_Response` `{v, id, to, ok, result | error}`
 --- - an event : BeamJoy fires `BJAPI_<Name>` with a JSON string `{v, event, instance, data}`
+--- - a hook : BeamJoy asks the plugins registered for it (`BJAPI_Hook`, an event like any other)
+---   and waits a moment for their answers (`hooks.answer`, a request like any other) before it
+---   goes on : a ready-up a plugin can refuse, the order cars start in
 --- Payloads are a public shape of their own (API_VERSION), never BeamJoy's internal tables, which
---- keep changing. The reference, and the helper library plugins use : PluginAPI/ in the repository.
+--- keep changing. The reference : api/README.md ; the helper plugins use : api/BeamJoyAPI.lua.
 
 local M = {
     dependencies = { "services_core", "services_maps", "services_races", "services_players",
-        "services_identity", "services_permissions", "services_environment", "dao_activity" },
+        "services_identity", "services_permissions", "services_environment", "services_clockSync",
+        "dao_activity" },
 
     API_VERSION = 1,
     --- this server run's own id : a plugin seeing another knows BeamJoy started again
@@ -19,15 +23,36 @@ local M = {
     readySent = false,
     ---@type table<string, true> maps whose races changed since the last tick (sent together)
     pendingRacesChanged = {},
-    ---@type table<string, fun(params: table): any, string?, string?>
+    ---@type table<string, true>? who changed the environment since the last tick (sent together)
+    pendingEnvironmentChanged = nil,
+    ---@type table<string, fun(params: table, ctx: {plugin: string?}): any, string?, string?>
     methods = {},
+
+    ---@type table<string, {plugin: string, timeoutMs: integer, misses: integer}[]> hook -> the
+    ---plugins answering it, in the order they registered (the first one to refuse or decide wins)
+    hooks = {},
+    ---@type table<string, table> hookId -> the question waiting for answers
+    pendingHooks = {},
+    hookCounter = 0,
 }
 
 local REQUEST_EVENT = "BJAPI_Request"
 local RESPONSE_EVENT = "BJAPI_Response"
-local EVENTS = { "Ready", "LeaderboardChanged", "RacesChanged", "RaceFinished", "MapChanged",
-    "PlayerJoined", "PlayerLeft" }
+local EVENTS = { "Ready", "LeaderboardChanged", "RacesChanged", "MapChanged", "PlayerJoined", "PlayerLeft",
+    "RaceGridOpened", "RaceCountdown", "RaceGreenLight", "RacerLap", "RacerFinished", "RacerOut",
+    "RaceFinished", "RaceClosed", "EnvironmentChanged", "Hook" }
 local LEADERBOARD_LIMIT_DEFAULT = 100
+
+--- the questions BeamJoy asks plugins (see raceGrid.lua)
+local HOOKS = {
+    raceReady = true, -- a racer readies up : a plugin may refuse, with a reason
+    gridOrder = true, -- the grid is about to be placed : a plugin may give the order
+}
+local HOOK_TIMEOUT_DEFAULT_MS = 2000
+local HOOK_TIMEOUT_MAX_MS = 10000
+--- unanswered questions in a row before a plugin's hook is dropped (a plugin removed or broken
+--- mustn't hold every ready-up up for its timeout forever)
+local HOOK_MAX_MISSES = 3
 
 ---@param name string
 ---@param data table
@@ -48,6 +73,22 @@ local function unixTime(t)
     t = tonumber(t)
     if not t then return nil end
     return math.floor(t - (GetCurrentTime() - os.time()))
+end
+
+-- the shared clock (services_clockSync, milliseconds, the one the race's green light is set on)
+-- against real Unix time : taken together once, so a moment on that clock converts to Unix
+-- milliseconds (right to about a second, os.time's own precision ; the time between two moments
+-- is exact)
+local unixBaseMs, clockBaseMs
+
+---@param clockMs integer? a moment on services_clockSync's clock (default : now)
+---@return {unixMs: integer, clockMs: integer}
+local function stamp(clockMs)
+    clockMs = clockMs or services_clockSync.nowMs()
+    if not unixBaseMs then
+        unixBaseMs, clockBaseMs = os.time() * 1000, services_clockSync.nowMs()
+    end
+    return { unixMs = math.floor(unixBaseMs + (clockMs - clockBaseMs)), clockMs = clockMs }
 end
 
 --- a param left out, or sent as JSON null (the parser's own marker for it, an empty table)
@@ -156,9 +197,11 @@ end
 local function serverInfo()
     local map = services_core.getCurrentMap()
     local mapData = services_maps.data and services_maps.data[map]
-    local methods = {}
+    local methods, hooks = {}, {}
     for name in pairs(M.methods) do methods[#methods + 1] = name end
+    for name in pairs(HOOKS) do hooks[#hooks + 1] = name end
     table.sort(methods)
+    table.sort(hooks)
     return {
         api = M.API_VERSION,
         instance = M.instance,
@@ -167,11 +210,151 @@ local function serverInfo()
         players = playerCount(),
         methods = methods,
         events = EVENTS,
+        hooks = hooks,
     }
 end
 
 -- ---------------------------------------------------------------------------------------------
--- methods : each takes its params table and returns its result, or nil, an error code and why
+-- races being run (services/raceGrid.lua's sessions), in the API's own shape
+
+---@param lapSectors table<integer, integer>? sector -> its time, ms
+---@return integer[] the sectors' times in order, as far as they're timed
+local function sectorsOf(lapSectors)
+    local out = {}
+    if type(lapSectors) ~= "table" then return out end
+    local i = 1
+    while lapSectors[i] do
+        out[i] = lapSectors[i]
+        i = i + 1
+    end
+    return out
+end
+
+--- every completed lap of a racer : {lap, timeMs, sectorsMs[]}
+---@param p table BJRaceParticipant
+local function lapsOf(p)
+    local laps = {}
+    for i, t in ipairs(p.lapTimes or {}) do
+        laps[i] = { lap = i, timeMs = t, sectorsMs = sectorsOf(p.lapSectorHistory and p.lapSectorHistory[i]) }
+    end
+    return laps
+end
+
+--- one racer, as plugins see them. `id` is their player ID while connected ; nil while they're
+--- away (disconnected mid-race, waiting under a key of their own)
+---@param p table BJRaceParticipant
+---@return table
+local function racerOut(p)
+    local info = services_raceGrid.racerInfo(p)
+    local best = p.bestLapMs
+    if not best and p.lapTimes and #p.lapTimes > 0 then best = math.min(table.unpack(p.lapTimes)) end
+    return {
+        id = p.playerID >= 0 and p.playerID or nil,
+        name = info.name,
+        identity = info.identity,
+        away = p.disconnected == true,
+        vehicle = p.vehicleModel,
+        ready = p.ready == true,
+        readyChecking = p.readyChecking == true,
+        readyBlock = p.readyBlockReason and { reason = p.readyBlockReason, by = p.readyBlockBy } or nil,
+        gridPosition = p.gridPosition,
+        lap = p.currentLap,
+        finished = p.finished == true,
+        dnf = p.dnf == true,
+        disqualified = p.disqualified == true,
+        penaltyMs = (p.penaltyMs or 0) > 0 and p.penaltyMs or nil,
+        bestLapMs = best,
+    }
+end
+
+---@param session table BJRaceSession
+---@return table
+local function sessionBase(session)
+    local race = services_races.getById(session.raceId)
+    return {
+        sessionId = session.id,
+        raceId = session.raceId,
+        raceName = race and race.name or "?",
+        map = services_core.getCurrentMap(),
+    }
+end
+
+---@param session table BJRaceSession
+---@return table
+local function sessionOut(session)
+    local out = sessionBase(session)
+    local race = services_races.getById(session.raceId)
+    out.state = session.state
+    out.joinable = session.joinable == true
+    out.private = session.private == true
+    out.laps = session.settings and session.settings.laps or 1
+    out.placementMode = session.settings and session.settings.placementMode
+    out.gridSlots = race and race.startPositions and #race.startPositions or 0
+    out.greenAt = session.goAtMs and stamp(session.goAtMs) or nil
+    local starter = session.participants[session.starterID]
+    out.starter = starter and services_raceGrid.racerInfo(starter).name or nil
+    out.racers = {}
+    for i, p in ipairs(services_raceGrid.computeLeaderboard(session)) do
+        local r = racerOut(p)
+        if session.state == "RACE" or session.state == "FINISHED" then r.position = i end
+        out.racers[i] = r
+    end
+    return out
+end
+
+--- a racer's time on this race's grid leaderboard, if they have one
+---@param session table BJRaceSession
+---@param name string their leaderboard name
+---@return integer?
+local function leaderboardMs(session, name)
+    local race = services_races.getById(session.raceId)
+    local entry = race and race.leaderboard and race.leaderboard[name]
+    return entry and tonumber(entry.time) or nil
+end
+
+--- the raceReady hook's question : who's readying up, in what, for which race
+---@param session table BJRaceSession
+---@param p table BJRaceParticipant
+---@return table
+function M.readyHookData(session, p)
+    local racer = racerOut(p)
+    racer.leaderboardMs = leaderboardMs(session, racer.name)
+    return { session = sessionOut(session), racer = racer }
+end
+
+--- the gridOrder hook's question : the racers, and the order BeamJoy would place them in
+---@param session table BJRaceSession
+---@param grid {p: table, slot: integer}[] BeamJoy's own grid
+---@return table
+function M.gridOrderHookData(session, grid)
+    local racers, defaultOrder = {}, {}
+    for i, e in ipairs(grid) do
+        local r = racerOut(e.p)
+        r.leaderboardMs = leaderboardMs(session, r.name)
+        r.joinIndex = e.p.joinIndex
+        racers[i] = r
+        defaultOrder[i] = e.p.playerID
+    end
+    return { session = sessionOut(session), racers = racers, defaultOrder = defaultOrder }
+end
+
+---@param sessionId any
+---@return table? session
+local function findSession(sessionId)
+    if type(sessionId) ~= "string" or not services_raceGrid then return nil end
+    return services_raceGrid.sessions[sessionId]
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- methods : each takes its params table and who's asking, and returns its result, or nil, an
+-- error code and why
+
+---@param ctx {plugin: string?}
+---@return string? plugin, string? error
+local function pluginOf(ctx)
+    if ctx.plugin then return ctx.plugin end
+    return nil, "this method needs your plugin's name in the request's `from` (the helper sends it)"
+end
 
 M.methods["server.info"] = function()
     return serverInfo()
@@ -234,6 +417,48 @@ M.methods["races.leaderboards"] = function(params)
     return { map = map, races = races }
 end
 
+M.methods["races.sessions"] = function()
+    local list = {}
+    if services_raceGrid then
+        services_raceGrid.sessions:forEach(function(s) list[#list + 1] = sessionOut(s) end)
+    end
+    table.sort(list, function(a, b) return a.sessionId < b.sessionId end)
+    return { sessions = list }
+end
+
+M.methods["race.setGridOrder"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local session = findSession(params.sessionId)
+    if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
+    if type(params.order) ~= "table" then
+        return nil, "badParams", "order must be a list of player IDs, first on the grid first"
+    end
+    local order = {}
+    for _, id in ipairs(params.order) do
+        id = tonumber(id)
+        if not id then return nil, "badParams", "order must be a list of player IDs" end
+        order[#order + 1] = math.floor(id)
+    end
+    local ok, why = services_raceGrid.pluginSetGridOrder(session, order, plugin)
+    if not ok then return nil, "refused", why end
+    return { sessionId = session.id, order = order }
+end
+
+M.methods["race.unready"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local playerID = tonumber(params.playerId)
+    if not playerID then return nil, "badParams", "playerId is needed" end
+    local reason = params.reason
+    if absent(reason) then reason = nil end
+    if reason ~= nil and type(reason) ~= "string" then return nil, "badParams", "reason must be text" end
+    if reason then reason = reason:sub(1, 200) end
+    local ok, why = services_raceGrid.pluginUnready(math.floor(playerID), reason, plugin)
+    if not ok then return nil, "refused", why end
+    return { playerId = playerID }
+end
+
 M.methods["players.online"] = function()
     local players = {}
     services_players.players:forEach(function(p)
@@ -251,7 +476,7 @@ M.methods["players.online"] = function()
     return { players = players }
 end
 
-M.methods["environment.get"] = function()
+local function environmentOut()
     local env = services_environment.data
     local tod = services_environment.currentToD()
     -- the game's time of day : 0 is noon, .5 midnight
@@ -272,6 +497,223 @@ M.methods["environment.get"] = function()
         -- and units), nil while the map's own weather plays
         weather = env.weatherSync and env.weather or nil,
     }
+end
+
+M.methods["environment.get"] = function()
+    return environmentOut()
+end
+
+--- time and weather, as staff set them in BeamJoy's environment panel. Only the fields sent change
+M.methods["environment.set"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local payload = {}
+    if not absent(params.clock) then
+        local h, m = tostring(params.clock):match("^(%d%d?):(%d%d)$")
+        h, m = tonumber(h), tonumber(m)
+        if not h or h > 23 or m > 59 then return nil, "badParams", "clock must be \"HH:MM\"" end
+        -- the game's scale : 0 is noon
+        payload.ToD = ((h * 60 + m) / 1440 - .5) % 1
+    elseif not absent(params.timeOfDay) then
+        local tod = tonumber(params.timeOfDay)
+        if not tod then return nil, "badParams", "timeOfDay must be a number (0 is noon, .5 midnight)" end
+        payload.ToD = tod % 1
+    end
+    for _, key in ipairs({ "timeSync", "dayNightCycle", "weatherSync" }) do
+        if not absent(params[key]) then
+            if type(params[key]) ~= "boolean" then return nil, "badParams", key .. " must be true or false" end
+            payload[key] = params[key]
+        end
+    end
+    if not absent(params.dayLengthS) then
+        if not tonumber(params.dayLengthS) then return nil, "badParams", "dayLengthS must be a number" end
+        payload.dayLength = tonumber(params.dayLengthS)
+    end
+    if not absent(params.date) then
+        local d = params.date
+        if type(d) ~= "table" or not tonumber(d.year) or not tonumber(d.month) or not tonumber(d.day) then
+            return nil, "badParams", "date must be {year, month, day}"
+        end
+        payload.year, payload.month, payload.day = d.year, d.month, d.day
+    end
+    if not absent(params.weather) then
+        if type(params.weather) ~= "table" then return nil, "badParams", "weather must be an object" end
+        payload.weather = params.weather
+    end
+    if next(payload) == nil then return nil, "badParams", "nothing to change" end
+    local ctxt = InitContext()
+    ctxt.apiSource = "plugin:" .. plugin
+    services_environment.changeEnv(ctxt, payload)
+    return environmentOut()
+end
+
+M.methods["overlay.show"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local ok, why = services_pluginOverlay.show(plugin, params)
+    if not ok then return nil, "badParams", why end
+    return { id = params.id }
+end
+
+M.methods["overlay.hide"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local ok, why = services_pluginOverlay.hide(plugin, params)
+    if not ok then return nil, "badParams", why end
+    return { id = params.id }
+end
+
+M.methods["overlay.clear"] = function(_, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    return { removed = services_pluginOverlay.clear(plugin) }
+end
+
+--- the line of text across BeamJoy's own HUD (the one "X started a race" used to use)
+M.methods["hud.message"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    if type(params.text) ~= "string" or #params.text == 0 then return nil, "badParams", "text is needed" end
+    local ok, why = services_pluginOverlay.message(params)
+    if not ok then return nil, "badParams", why end
+    return {}
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- hooks : BeamJoy asks, the plugins registered for that question answer, BeamJoy goes on with
+-- their answers once they've all answered or the time's up
+
+---@param name string
+---@return boolean whether any plugin answers this hook (when none does, BeamJoy doesn't wait)
+local function hasHook(name)
+    return M.hooks[name] ~= nil and #M.hooks[name] > 0
+end
+
+---@param id string
+---@param timedOut boolean
+local function finishHook(id, timedOut)
+    local q = M.pendingHooks[id]
+    if not q then return end
+    M.pendingHooks[id] = nil
+    local answers = {}
+    for _, plugin in ipairs(q.plugins) do
+        local answer = q.answers[plugin]
+        local reg = table.find(M.hooks[q.name] or {}, function(r) return r.plugin == plugin end)
+        if answer then
+            answers[#answers + 1] = { plugin = plugin, answer = answer }
+            if reg then reg.misses = 0 end
+        elseif reg then
+            reg.misses = reg.misses + 1
+            LogWarn(string.format("[BJ api] %s didn't answer the %s hook in time", plugin, q.name))
+            if reg.misses >= HOOK_MAX_MISSES then
+                M.hooks[q.name] = table.filter(M.hooks[q.name], function(r) return r ~= reg end)
+                LogWarn(string.format("[BJ api] %s missed the %s hook %d times in a row : dropped (it registers again to come back)",
+                    plugin, q.name, HOOK_MAX_MISSES))
+            end
+        end
+    end
+    local ok, err = pcall(q.done, answers, timedOut)
+    if not ok then LogError(string.format("[BJ api] the %s hook's result failed : %s", q.name, tostring(err))) end
+end
+
+--- asks the plugins registered for `name`, then calls `done(answers)` : {plugin, answer}[] in
+--- registration order (the ones that answered). Right away (no wait) when nobody's registered
+---@param name string
+---@param data table
+---@param done fun(answers: {plugin: string, answer: table}[], timedOut: boolean)
+local function runHook(name, data, done)
+    if not hasHook(name) then return done({}, false) end
+    M.hookCounter = M.hookCounter + 1
+    local id = string.format("%s-%d", name, M.hookCounter)
+    local plugins, timeout = {}, 0
+    for _, r in ipairs(M.hooks[name]) do
+        plugins[#plugins + 1] = r.plugin
+        timeout = math.max(timeout, r.timeoutMs)
+    end
+    M.pendingHooks[id] = {
+        name = name,
+        plugins = plugins,
+        answers = {},
+        deadline = services_clockSync.nowMs() + timeout,
+        done = done,
+    }
+    emit("Hook", { hookId = id, hook = name, plugins = plugins, timeoutMs = timeout, data = data })
+end
+
+M.methods["hooks.register"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    if not HOOKS[params.hook] then
+        local names = {}
+        for n in pairs(HOOKS) do names[#names + 1] = n end
+        table.sort(names)
+        return nil, "badParams", "hook must be one of : " .. table.concat(names, ", ")
+    end
+    local timeout = HOOK_TIMEOUT_DEFAULT_MS
+    if not absent(params.timeoutMs) then
+        timeout = tonumber(params.timeoutMs)
+        if not timeout then return nil, "badParams", "timeoutMs must be a number" end
+        timeout = math.clamp(math.floor(timeout), 100, HOOK_TIMEOUT_MAX_MS)
+    end
+    M.hooks[params.hook] = M.hooks[params.hook] or {}
+    local reg = table.find(M.hooks[params.hook], function(r) return r.plugin == plugin end)
+    if reg then
+        reg.timeoutMs, reg.misses = timeout, 0
+    else
+        table.insert(M.hooks[params.hook], { plugin = plugin, timeoutMs = timeout, misses = 0 })
+        LogInfo(string.format("[BJ api] %s answers the %s hook", plugin, params.hook))
+    end
+    return { hook = params.hook, timeoutMs = timeout }
+end
+
+M.methods["hooks.unregister"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    if M.hooks[params.hook] then
+        M.hooks[params.hook] = table.filter(M.hooks[params.hook], function(r) return r.plugin ~= plugin end)
+    end
+    return { hook = params.hook }
+end
+
+M.methods["hooks.answer"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local q = M.pendingHooks[params.hookId]
+    if not q then return nil, "notFound", "no question " .. tostring(params.hookId) .. " waiting (answered too late?)" end
+    if not table.includes(q.plugins, plugin) then return nil, "refused", "this question wasn't asked to " .. plugin end
+    q.answers[plugin] = params
+    for _, p in ipairs(q.plugins) do
+        if not q.answers[p] then return {} end
+    end
+    finishHook(params.hookId, false)
+    return {}
+end
+
+--- the first refusal among a raceReady hook's answers
+---@param answers {plugin: string, answer: table}[]
+---@return {reason: string, by: string}?
+local function firstBlock(answers)
+    for _, a in ipairs(answers) do
+        if a.answer.allow == false then
+            local reason = type(a.answer.reason) == "string" and a.answer.reason:sub(1, 200) or ""
+            return { reason = reason, by = a.plugin }
+        end
+    end
+end
+
+--- the first grid order among a gridOrder hook's answers
+---@param answers {plugin: string, answer: table}[]
+---@return integer[]?, string? plugin
+local function firstOrder(answers)
+    for _, a in ipairs(answers) do
+        if type(a.answer.order) == "table" and #a.answer.order > 0 then
+            local order = {}
+            for _, id in ipairs(a.answer.order) do
+                if tonumber(id) then order[#order + 1] = math.floor(tonumber(id)) end
+            end
+            if #order > 0 then return order, a.plugin end
+        end
+    end
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -300,7 +742,10 @@ local function onRequest(raw)
             " (server.info lists them)" })
     end
     local params = type(req.params) == "table" and req.params or {}
-    local ran, result, code, why = pcall(method, params)
+    local ctx = {
+        plugin = type(req.from) == "string" and req.from:find("^[%w_%-]+$") and #req.from <= 64 and req.from or nil,
+    }
+    local ran, result, code, why = pcall(method, params, ctx)
     if not ran then
         LogError(string.format("[BJ api] %s failed : %s", req.method, tostring(result)))
         return respond(false, { code = "internal", message = tostring(result) })
@@ -341,6 +786,100 @@ function M.racesChanged(map)
     if type(map) == "string" then M.pendingRacesChanged[map] = true end
 end
 
+--- time, weather or the sim changed (services_environment) : sent on the next tick, once
+---@param by string who : a player's name, "plugin:<name>", or "server"
+function M.environmentChanged(by)
+    M.pendingEnvironmentChanged = M.pendingEnvironmentChanged or {}
+    M.pendingEnvironmentChanged[by or "server"] = true
+end
+
+--- a lobby opened
+---@param session table BJRaceSession
+function M.raceGridOpened(session)
+    emit("RaceGridOpened", sessionOut(session))
+end
+
+--- the grid is placed and the countdown runs : the order, and when the light goes green
+---@param session table BJRaceSession
+---@param grid table[] BJRaceParticipant, in grid order
+---@param orderedBy string? the plugin that gave the order, if one did
+function M.raceCountdown(session, grid, orderedBy)
+    local data = sessionBase(session)
+    data.at = stamp()
+    data.greenAt = stamp(session.goAtMs)
+    data.countdownS = session.settings.countdown
+    data.orderedBy = orderedBy
+    data.grid = {}
+    for i, p in ipairs(grid) do
+        local r = racerOut(p)
+        r.gridPosition = i
+        data.grid[i] = r
+    end
+    emit("RaceCountdown", data)
+end
+
+---@param session table BJRaceSession
+function M.raceGreenLight(session)
+    local data = sessionBase(session)
+    data.at = stamp()
+    data.greenAt = stamp(session.goAtMs)
+    data.laps = session.settings.laps or 1
+    data.racers = {}
+    session.participants:forEach(function(p) data.racers[#data.racers + 1] = racerOut(p) end)
+    emit("RaceGreenLight", data)
+end
+
+--- a racer completed a lap (their last one included : RacerFinished follows)
+---@param session table BJRaceSession
+---@param p table BJRaceParticipant
+function M.racerLap(session, p)
+    local data = sessionBase(session)
+    data.at = stamp()
+    data.racer = racerOut(p)
+    local lap = #p.lapTimes
+    data.lap = lap
+    data.lapMs = p.lapTimes[lap]
+    data.sectorsMs = sectorsOf(p.lapSectorHistory and p.lapSectorHistory[lap])
+    local raceMs = 0
+    for _, t in ipairs(p.lapTimes) do raceMs = raceMs + t end
+    data.raceMs = raceMs
+    data.bestLap = p.bestLapMs == data.lapMs
+    for i, other in ipairs(services_raceGrid.computeLeaderboard(session)) do
+        if other == p then data.position = i end
+    end
+    emit("RacerLap", data)
+end
+
+---@param session table BJRaceSession
+---@param p table BJRaceParticipant
+function M.racerFinished(session, p)
+    local data = sessionBase(session)
+    data.at = stamp()
+    data.racer = racerOut(p)
+    data.finishOrder = p.finishOrder
+    local raceMs = 0
+    for _, t in ipairs(p.lapTimes or {}) do raceMs = raceMs + t end
+    data.raceMs = raceMs
+    data.totalMs = raceMs + (p.penaltyMs or 0)
+    data.laps = lapsOf(p)
+    data.newPB = p.isNewPB == true
+    data.newRecord = p.isNewRecord == true
+    emit("RacerFinished", data)
+end
+
+--- a racer stopped without finishing, or was disqualified
+---@param session table BJRaceSession
+---@param p table BJRaceParticipant
+---@param reason "retired"|"disconnected"|"disqualified"
+function M.racerOut(session, p, reason)
+    local data = sessionBase(session)
+    data.at = stamp()
+    data.racer = racerOut(p)
+    data.reason = reason
+    data.laps = lapsOf(p)
+    emit("RacerOut", data)
+end
+
 --- a grid race ended (raceGrid.lua's checkSessionComplete)
 ---@param session table BJRaceSession
 ---@param info table raceGrid's buildResults info
@@ -351,8 +890,10 @@ function M.raceFinished(session, info, results)
     for _, r in ipairs(results) do
         local finished = r.totalMs ~= nil and not r.dnf
         if finished then position = position + 1 end
+        local p = r.participant or {}
         out[#out + 1] = {
             position = finished and position or nil,
+            id = p.playerID and p.playerID >= 0 and p.playerID or nil,
             name = r.playerName,
             identity = r.identity or "unknown",
             vehicle = r.vehicle,
@@ -364,19 +905,30 @@ function M.raceFinished(session, info, results)
             newPB = r.isNewPB == true,
             newRecord = r.isNewRecord == true,
             leaderboardRank = r.rank,
+            laps = lapsOf(p),
+            bestSectorsMs = sectorsOf(p.bestSectorMs),
         }
     end
-    emit("RaceFinished", {
-        map = services_core.getCurrentMap(),
-        raceId = session.raceId,
-        raceName = info.raceName,
-        laps = info.laps,
-        results = out,
-    })
+    local data = sessionBase(session)
+    data.raceName = info.raceName
+    data.laps = info.laps
+    data.at = stamp()
+    data.greenAt = session.goAtMs and stamp(session.goAtMs) or nil
+    data.results = out
+    emit("RaceFinished", data)
+end
+
+--- a session ended without finishing : cancelled, everyone left, nobody ready in time
+---@param session table BJRaceSession
+function M.raceClosed(session)
+    local data = sessionBase(session)
+    data.at = stamp()
+    data.state = session.state
+    emit("RaceClosed", data)
 end
 
 -- ---------------------------------------------------------------------------------------------
--- hooks
+-- hooks (BeamJoy's own lifecycle)
 
 local function onInit()
     M.instance = UUID()
@@ -389,6 +941,7 @@ local function onUpdate()
     -- BeamJoy is here
     if not M.readySent then
         M.readySent = true
+        stamp() -- the Unix / shared clock pairing, from here on
         emit("Ready", serverInfo())
         LogInfo(string.format("[BJ api] plugin API ready (v%d)", M.API_VERSION))
     end
@@ -396,6 +949,23 @@ local function onUpdate()
         local maps = M.pendingRacesChanged
         M.pendingRacesChanged = {}
         for map in pairs(maps) do emit("RacesChanged", { map = map }) end
+    end
+    if M.pendingEnvironmentChanged then
+        local by = {}
+        for name in pairs(M.pendingEnvironmentChanged) do by[#by + 1] = name end
+        table.sort(by)
+        M.pendingEnvironmentChanged = nil
+        local data = environmentOut()
+        data.by = by
+        emit("EnvironmentChanged", data)
+    end
+    if next(M.pendingHooks) then
+        local now = services_clockSync.nowMs()
+        local late = {}
+        for id, q in pairs(M.pendingHooks) do
+            if now >= q.deadline then late[#late + 1] = id end
+        end
+        for _, id in ipairs(late) do finishHook(id, true) end
     end
 end
 
@@ -425,5 +995,11 @@ M.onPlayerJoin = onPlayerJoin
 M.onPlayerDisconnect = onPlayerDisconnect
 
 M.emit = emit
+M.stamp = stamp
+M.hasHook = hasHook
+M.runHook = runHook
+M.firstBlock = firstBlock
+M.firstOrder = firstOrder
+M.sessionOut = sessionOut
 
 return M

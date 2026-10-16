@@ -91,6 +91,12 @@
 ---@field guest boolean? joined on a BeamMP guest account (kept up to date while connected)
 ---@field nickname string? their BeamJoy nickname (services/identity.lua), kept up to date while
 ---connected : a guest who comes back on a new guest name is recognised by it
+---@field readyChecking boolean? readying up, while the plugins answering the plugin API's
+---raceReady hook are asked (requestReady)
+---@field readyBlockReason string? why a plugin refused their last ready-up (or unreadied them),
+---shown to them in the lobby ; cleared once they're ready
+---@field readyBlockBy string? the plugin that refused
+---@field gridPosition integer? their place on the grid, 1 first, set when the countdown begins
 
 ---@class BJRaceSessionSettings host-configurable at start time, seeded from BJRaceDefaults
 ---@field laps integer?
@@ -190,6 +196,11 @@
 ---@field joinCounter integer? monotonic source of BJRaceParticipant.joinIndex (see
 ---addParticipant); never decremented on leave
 ---@field participants tablelib<integer, BJRaceParticipant> index playerID
+---@field placing boolean? the plugins answering the gridOrder hook are being asked : the lobby
+---is held (no joining, no ready changes) until they've answered (beginCountdown)
+---@field pluginGridOrder integer[]? player IDs, first on the grid first, from a plugin's
+---race.setGridOrder ; used unless a gridOrder hook answer gives another
+---@field pluginGridOrderBy string? that plugin
 ---@field allReadyAt integer? GetCurrentTime() of the moment every current participant most
 ---recently became ready together, cleared again the instant that's no longer true (someone leaves
 ---unready, joins unready, un-readies via vehicle-change). gridReadySecondsLeft and the actual
@@ -215,6 +226,15 @@ local M = {
 
 -- forward-declared : onPlayerDisconnect schedules the grace period's end with it
 local rejoinTaskKey
+
+--- tells the plugin API (services/api.lua) about something in a race. A failure there is logged,
+--- never allowed to break the race itself
+---@param name string the services_api function
+local function apiEvent(name, ...)
+    if not services_api or not services_api[name] then return end
+    local ok, err = pcall(services_api[name], ...)
+    if not ok then LogError(string.format("[BJ raceGrid] plugin API %s failed : %s", name, tostring(err))) end
+end
 
 -- how early (ms, on the shared clock) a gate crossing may arrive while the server itself is still
 -- in COUNTDOWN : a synced client starts on its own at goAtMs, but the server only notices on its
@@ -450,6 +470,14 @@ local function participantIdentityKind(p)
     if kind then return kind end
     if p.nickname then return "nickname" end
     return p.guest and "guest" or "beammp"
+end
+
+--- who a participant is, as the plugin API shows them : their leaderboard name, and its kind
+---@param p BJRaceParticipant
+---@return {name: string, identity: string}
+local function racerInfo(p)
+    return { name = services_identity.getIdentityKey(p.playerID) or p.nickname or p.playerName,
+        identity = participantIdentityKind(p) }
 end
 
 --- participants who disconnected mid-race wait under keys like these instead of their player ID.
@@ -701,6 +729,10 @@ end
 
 ---@param session BJRaceSession
 local function removeSession(session)
+    -- a finished race was already reported (RaceFinished) ; anything else ended early
+    if session.state ~= "FINISHED" and M.sessions[session.id] == session then
+        apiEvent("raceClosed", session)
+    end
     utils_async.removeTask("BJRaceGrid-" .. session.id .. "-readyTimeout")
     utils_async.removeTask("BJRaceGrid-" .. session.id .. "-gridTimeout")
     utils_async.removeTask("BJRaceGrid-" .. session.id .. "-countdown")
@@ -1009,14 +1041,12 @@ local function addParticipant(session, playerID, playerName)
     }
 end
 
---- begins the pre-race countdown. Assigns start positions per the session's placementMode,
---- freezes the field, schedules the actual race start
+--- the grid in BeamJoy's own order (the session's placementMode) : participants by slot
 ---@param session BJRaceSession
-local function beginCountdown(session)
-    local race = getRace(session)
-    if not race then return removeSession(session) end
-
-    session.state = "COUNTDOWN"
+---@param race BJRace
+---@return {p: BJRaceParticipant, slot: integer}[]
+local function defaultGrid(session, race)
+    local grid = {}
     local mode = session.settings.placementMode
     if mode == services_races.PLACEMENT_MODES.MANUAL then
         -- gridSlot is the authoritative assignment (auto-seeded on join, rearranged by the host
@@ -1030,7 +1060,7 @@ local function beginCountdown(session)
             local slot = p.gridSlot
             if slot and race.startPositions[slot] and not taken[slot] then
                 taken[slot] = true
-                p.startPosition = race.startPositions[slot]
+                grid[#grid + 1] = { p = p, slot = slot }
             else
                 table.insert(unassigned, p)
             end
@@ -1042,8 +1072,12 @@ local function beginCountdown(session)
                 nextFree = nextFree + 1
             end
             taken[nextFree] = true
-            p.startPosition = race.startPositions[nextFree]
+            grid[#grid + 1] = { p = p, slot = nextFree }
         end
+        table.sort(grid, function(a, b)
+            if a.slot ~= b.slot then return a.slot < b.slot end
+            return (a.p.joinIndex or 0) < (b.p.joinIndex or 0)
+        end)
     else
         -- "deterministic" : lobby join order, starter first. This replaces the old implicit
         -- behavior, which iterated session.participants (keyed by playerID) with pairs() and was
@@ -1063,10 +1097,47 @@ local function beginCountdown(session)
                 participants[i], participants[j] = participants[j], participants[i]
             end
         end
-        table.forEach(participants, function(p, i)
-            local slot = race.startPositions[((i - 1) % #race.startPositions) + 1]
-            p.startPosition = slot
-        end)
+        for i, p in ipairs(participants) do grid[i] = { p = p, slot = i } end
+    end
+    return grid
+end
+
+--- a plugin's order (player IDs, first on the grid first) over BeamJoy's own grid : the racers it
+--- names, in its order, then anyone it left out, in BeamJoy's order ; slots from the front, no gaps
+---@param grid {p: BJRaceParticipant, slot: integer}[]
+---@param order integer[]?
+---@return {p: BJRaceParticipant, slot: integer}[]
+local function applyGridOrder(grid, order)
+    if type(order) ~= "table" or #order == 0 then return grid end
+    local byID, used, ordered = {}, {}, {}
+    for _, e in ipairs(grid) do byID[e.p.playerID] = e end
+    for _, id in ipairs(order) do
+        local e = byID[id]
+        if e and not used[e] then
+            used[e] = true
+            ordered[#ordered + 1] = e.p
+        end
+    end
+    for _, e in ipairs(grid) do
+        if not used[e] then ordered[#ordered + 1] = e.p end
+    end
+    local out = {}
+    for i, p in ipairs(ordered) do out[i] = { p = p, slot = i } end
+    return out
+end
+
+--- places the grid, freezes the field, schedules the actual race start
+---@param session BJRaceSession
+---@param race BJRace
+---@param grid {p: BJRaceParticipant, slot: integer}[]
+---@param orderedBy string? the plugin whose order this is
+local function startCountdown(session, race, grid, orderedBy)
+    session.state = "COUNTDOWN"
+    local placed = {}
+    for i, e in ipairs(grid) do
+        e.p.startPosition = race.startPositions[((e.slot - 1) % #race.startPositions) + 1]
+        e.p.gridPosition = i
+        placed[i] = e.p
     end
 
     -- the green light on the shared clock (see goAtMs). Polled every server tick rather than
@@ -1078,6 +1149,43 @@ local function beginCountdown(session)
     end, function() M.beginRace(session.id) end, "BJRaceGrid-" .. session.id .. "-countdown")
     pushSessionUpdate(session)
     pushOpenSessionsList()
+    apiEvent("raceCountdown", session, placed, orderedBy)
+end
+
+--- begins the pre-race countdown : start positions per the session's placementMode, or a
+--- plugin's order (race.setGridOrder, or an answer to the gridOrder hook, asked first)
+---@param session BJRaceSession
+local function beginCountdown(session)
+    if session.state ~= "GRID" or session.placing then return end
+    local race = getRace(session)
+    if not race then return removeSession(session) end
+    local grid = defaultGrid(session, race)
+    -- a solo start has no order to decide
+    if session.participants:length() <= 1 or not (services_api and services_api.hasHook("gridOrder")) then
+        return startCountdown(session, race, applyGridOrder(grid, session.pluginGridOrder),
+            session.pluginGridOrder and session.pluginGridOrderBy or nil)
+    end
+    local okData, data = pcall(services_api.gridOrderHookData, session, grid)
+    if not okData then
+        LogError("[BJ raceGrid] the gridOrder hook's question failed : " .. tostring(data))
+        return startCountdown(session, race, applyGridOrder(grid, session.pluginGridOrder),
+            session.pluginGridOrder and session.pluginGridOrderBy or nil)
+    end
+    -- held while the plugins are asked : no joining, no ready changes (raceJoin / raceReady)
+    session.placing = true
+    services_api.runHook("gridOrder", data, function(answers)
+        session.placing = nil
+        if M.sessions[session.id] ~= session or session.state ~= "GRID" then return end
+        -- anyone who left meanwhile is off the grid
+        local still = {}
+        for _, e in ipairs(grid) do
+            if session.participants[e.p.playerID] == e.p then still[#still + 1] = e end
+        end
+        if #still == 0 then return removeSession(session) end
+        local order, by = services_api.firstOrder(answers)
+        if not order then order, by = session.pluginGridOrder, session.pluginGridOrderBy end
+        startCountdown(session, race, applyGridOrder(still, order), order and by or nil)
+    end)
 end
 
 ---@param sessionId string
@@ -1109,6 +1217,7 @@ local function beginRace(sessionId)
         p.lastProgressTime = GetCurrentTime()
     end)
     pushSessionUpdate(session)
+    apiEvent("raceGreenLight", session)
 end
 
 --- a finished race's results, fastest first (disqualified, then the ones who didn't finish, last),
@@ -1143,6 +1252,7 @@ local function buildResults(session)
         r.bestLapMs = #p.lapTimes > 0 and math.min(table.unpack(p.lapTimes)) or nil
         r.order = p.finishOrder or math.huge
         r.identity = participantIdentityKind(p)
+        r.participant = p
         if r.counted then
             for _, entry in ipairs(board) do
                 if entry.playerName == r.playerName then r.rank = entry.rank end
@@ -1246,6 +1356,7 @@ local function checkSessionComplete(session)
             p.disconnected, p.rejoinBy, p.rejoinSecondsLeft = nil, nil, nil
             p.dnf = true
             if p.bestLapMs then trySubmitTime(session, p, p.bestLapMs) end
+            apiEvent("racerOut", session, p, "disconnected")
         end)
     end
     if session.participants:every(function(p) return p.finished or p.dnf end) then
@@ -1269,6 +1380,7 @@ local function finishParticipant(session, participant)
     participant.finishOrder = session.finishCounter
     local bestLap = math.min(table.unpack(participant.lapTimes))
     trySubmitTime(session, participant, bestLap)
+    apiEvent("racerFinished", session, participant)
     checkSessionComplete(session)
 end
 
@@ -1347,15 +1459,112 @@ onGridTimeout = function(sessionId)
     beginCountdown(s)
 end
 
---- the leader starts the race now with everyone who's ready (and is marked ready themselves)
+--- tells a racer a plugin refused their ready-up, or unreadied them
+---@param p BJRaceParticipant
+---@param key string "race.readyBlocked" / "race.unreadied" (+ "NoReason" when there's none)
+---@param reason string?
+local function tellReadyBlocked(p, key, reason)
+    local player = services_players.players:find(function(pl) return pl.playerID == p.playerID end)
+    if not player then return end
+    local text
+    if reason and #reason > 0 then
+        -- string.var substitutes with gsub, where a "%" in the reason would be read as a capture
+        text = services_lang.get(key, player.lang):var({ reason = (reason:gsub("%%", "%%%%")) })
+    else
+        text = services_lang.get(key .. "NoReason", player.lang)
+    end
+    communications_tx.sendToPlayer(p.playerID, "toast", "warning", text)
+end
+
+--- a racer readying up : the plugins answering the plugin API's raceReady hook may refuse, with a
+--- reason the racer sees in the lobby (direct request). The racer shows as "checking" while
+--- they're asked, then `onAllowed(session, participant)` ; at once when no plugin answers it
+---@param session BJRaceSession
+---@param participant BJRaceParticipant
+---@param onAllowed fun(session: BJRaceSession, participant: BJRaceParticipant)
+local function requestReady(session, participant, onAllowed)
+    if not (services_api and services_api.hasHook("raceReady")) then
+        participant.readyBlockReason, participant.readyBlockBy = nil, nil
+        return onAllowed(session, participant)
+    end
+    local okData, data = pcall(services_api.readyHookData, session, participant)
+    if not okData then
+        LogError("[BJ raceGrid] the raceReady hook's question failed : " .. tostring(data))
+        return onAllowed(session, participant)
+    end
+    participant.readyChecking = true
+    local sessionId, playerID = session.id, participant.playerID
+    services_api.runHook("raceReady", data, function(answers)
+        local s = M.sessions[sessionId]
+        local p = s and s.participants[playerID]
+        -- unreadied, gone, or the lobby moved on meanwhile : the answer is moot
+        if not p or not p.readyChecking or s.state ~= "GRID" then return end
+        p.readyChecking = nil
+        local block = services_api.firstBlock(answers)
+        if block then
+            p.ready = false
+            p.readyBlockReason, p.readyBlockBy = block.reason, block.by
+            tellReadyBlocked(p, "race.readyBlocked", block.reason)
+            updateAllReadyState(s)
+            return pushSessionUpdate(s)
+        end
+        p.readyBlockReason, p.readyBlockBy = nil, nil
+        onAllowed(s, p)
+    end)
+    if participant.readyChecking and M.sessions[sessionId] then pushSessionUpdate(session) end
+end
+
+--- the plugin API's race.unready : a plugin takes a racer in a lobby back to not ready, with a
+--- reason they see (their car no longer qualifies, they still owe an entry fee...)
+---@param playerID integer
+---@param reason string?
+---@param plugin string
+---@return boolean ok, string? why not
+local function pluginUnready(playerID, reason, plugin)
+    local session = findSessionByParticipant(playerID)
+    if not session then return false, "that player isn't in a race lobby" end
+    if session.state ~= "GRID" then return false, "their race has already started" end
+    if session.placing then return false, "their grid is being placed" end
+    local p = session.participants[playerID]
+    local wasReady = p.ready or p.readyChecking
+    p.ready = false
+    p.readyChecking = nil
+    p.readyBlockReason = reason
+    p.readyBlockBy = reason and plugin or nil
+    if wasReady or reason then tellReadyBlocked(p, "race.unreadied", reason) end
+    updateAllReadyState(session)
+    pushSessionUpdate(session)
+    return true
+end
+
+--- the plugin API's race.setGridOrder : the order cars start in, set while the lobby is open
+---@param session BJRaceSession
+---@param order integer[] player IDs, first on the grid first
+---@param plugin string
+---@return boolean ok, string? why not
+local function pluginSetGridOrder(session, order, plugin)
+    if session.state ~= "GRID" or session.placing then return false, "that grid is already placed" end
+    session.pluginGridOrder, session.pluginGridOrderBy = order, plugin
+    return true
+end
+
+--- the leader starts the race now with everyone who's ready (and is marked ready themselves,
+--- through the same ready check as anyone)
 ---@param ctxt BJSContext
 ---@param sessionId string
 local function raceStartNow(ctxt, sessionId)
     if not ctxt.sender then return end
     local session = M.sessions[sessionId]
     if not session or session.state ~= "GRID" or session.starterID ~= ctxt.senderID then return end
+    if session.placing then return end
     local leader = session.participants[ctxt.senderID]
-    if leader then leader.ready = true end
+    if leader and not leader.ready then
+        if leader.readyChecking then return end
+        return requestReady(session, leader, function(s, p)
+            p.ready = true
+            onGridTimeout(s.id)
+        end)
+    end
     onGridTimeout(session.id)
 end
 
@@ -1437,6 +1646,7 @@ local function raceStart(ctxt, raceId, opts)
 
     pushSessionUpdate(session)
     pushOpenSessionsList()
+    apiEvent("raceGridOpened", session)
     if session.joinable then
         -- the leader's crew comes along (services/crews.lua)
         services_crews.pullIn(ctxt.senderID, "race", session.id)
@@ -1450,6 +1660,8 @@ local function raceJoin(ctxt, sessionId)
     if not ctxt.sender then return end
     local session = M.sessions[sessionId]
     if not session or session.state ~= "GRID" or not session.joinable then return end
+    -- the grid's being placed (the gridOrder hook) : about to start
+    if session.placing then return end
     if session.participants[ctxt.senderID] then return end
     -- private lobbies take invited players only
     if session.private and not (services_lobbyInvites and
@@ -1601,7 +1813,11 @@ local function raceUpdateSettings(ctxt, sessionId, opts)
         end
     end
 
-    session.participants:forEach(function(p) p.ready = false end)
+    -- new rules : a plugin's earlier refusal is moot too
+    session.participants:forEach(function(p)
+        p.ready, p.readyChecking = false, nil
+        p.readyBlockReason, p.readyBlockBy = nil, nil
+    end)
     updateAllReadyState(session)
     session.participants:forEach(function(_, playerID)
         if playerID ~= ctxt.senderID then
@@ -1625,22 +1841,33 @@ local function raceReady(ctxt, sessionId, ready, model)
     if not session or session.state ~= "GRID" then return end
     local participant = session.participants[ctxt.senderID]
     if not participant then return end
+    -- the grid's being placed (the gridOrder hook) : it goes with who's ready now
+    if session.placing then return end
 
-    participant.ready = ready == true
-    if participant.ready and type(model) == "string" and model ~= "" then
-        participant.vehicleModel = model
-    end
-    if participant.ready then
-        tryStartFromGrid(session)
-    else
+    if ready ~= true then
+        participant.ready = false
+        -- an answer from the ready check still on its way is moot (requestReady)
+        participant.readyChecking = nil
         -- manually un-readying doesn't call tryStartFromGrid (nothing to start), but still needs
         -- to clear session.allReadyAt/its scheduled start the same way un-readying via a vehicle
         -- change already does (unreadyOnVehicleChange) - see updateAllReadyState's own doc comment
         updateAllReadyState(session)
+        return pushSessionUpdate(session)
     end
-    if M.sessions[sessionId] then -- session may have just been consumed by tryStartFromGrid
-        pushSessionUpdate(session)
+    if type(model) == "string" and model ~= "" then
+        participant.vehicleModel = model
     end
+    if participant.readyChecking then return end
+    local function becameReady(s, p)
+        p.ready = true
+        tryStartFromGrid(s)
+        if M.sessions[s.id] then -- session may have just been consumed by tryStartFromGrid
+            pushSessionUpdate(s)
+        end
+    end
+    if participant.ready then return becameReady(session, participant) end
+    -- plugins may refuse (the plugin API's raceReady hook)
+    requestReady(session, participant, becameReady)
 end
 
 --- "manual" placement mode's lobby-time slot assignment: the starter (or staff) moves any
@@ -1687,8 +1914,9 @@ local function unreadyOnVehicleChange(playerID)
     local session = findSessionByParticipant(playerID)
     if not session or session.state ~= "GRID" then return end
     local participant = session.participants[playerID]
-    if not participant or not participant.ready then return end
+    if not participant or not (participant.ready or participant.readyChecking) then return end
     participant.ready = false
+    participant.readyChecking = nil
     -- clears session.allReadyAt (and the scheduled start it was driving) the instant this breaks
     -- the ready-floor - see updateAllReadyState's own doc comment
     updateAllReadyState(session)
@@ -1881,6 +2109,7 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         participant.lapSectors = {}
         participant.currentSector = 1
         participant.sectorStartMs = 0
+        apiEvent("racerLap", session, participant)
 
         if participant.currentLap >= (session.settings.laps or 1) then
             finishParticipant(session, participant)
@@ -1909,6 +2138,7 @@ local function raceDNF(ctxt, sessionId)
     if participant.bestLapMs then
         trySubmitTime(session, participant, participant.bestLapMs)
     end
+    apiEvent("racerOut", session, participant, "retired")
     checkSessionComplete(session)
     -- checkSessionComplete already pushes (and transitions to FINISHED) if this was the last
     -- still-active participant, same as finishParticipant's own identical pattern just below it.
@@ -1986,6 +2216,7 @@ local function raceStaffAction(ctxt, sessionId, targetID, action, seconds)
             if p.discordResult then p.discordResult.counted = false end
         end
         tell("race.staff.disqualified", { name = staffName })
+        apiEvent("racerOut", session, p, "disqualified")
         LogInfo(string.format("raceGrid: %s disqualified %s (session %s)", staffName, targetName, session.id))
     elseif action == "reinstate" then
         if not p.disqualified then return end
@@ -2198,6 +2429,7 @@ local function expireRejoin(sessionId, playerName)
     if participant.bestLapMs then
         trySubmitTime(session, participant, participant.bestLapMs)
     end
+    apiEvent("racerOut", session, participant, "disconnected")
     checkSessionComplete(session)
     if session.state ~= "FINISHED" then
         pushSessionUpdate(session)
@@ -2301,6 +2533,7 @@ local function onPlayerDisconnect(playerID)
             if participant.bestLapMs then
                 trySubmitTime(session, participant, participant.bestLapMs)
             end
+            apiEvent("racerOut", session, participant, "disconnected")
             checkSessionComplete(session)
             -- same redundant-double-push cleanup already applied to raceDNF/raceLeave. Only push
             -- again here if checkSessionComplete didn't already do so itself (it pushes once, on
@@ -2338,6 +2571,9 @@ M.findSessionByParticipant = findSessionByParticipant
 M.summarize = summarize
 M.beginRace = beginRace
 M.computeLeaderboard = computeLeaderboard
+M.racerInfo = racerInfo
+M.pluginUnready = pluginUnready
+M.pluginSetGridOrder = pluginSetGridOrder
 M.chatRace = chatRace
 
 return M

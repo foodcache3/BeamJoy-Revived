@@ -205,6 +205,11 @@ angular.module("beamjoy").component("bjRaceHud", {
             return v;
         };
 
+        // a server plugin's own overlay standing in for this one (windows/pluginOverlays,
+        // `hides: ["race"]`) : hidden while it's up
+        this.pluginHidden = false;
+        $rootScope.$on("BJPluginHides", (_, hides) => (this.pluginHidden = !!(hides && hides.race)));
+
         $rootScope.$on("BJRaceHud", (_, data) => {
             this.active = !!data.active;
             this.v = this.active ? build(data) : null;

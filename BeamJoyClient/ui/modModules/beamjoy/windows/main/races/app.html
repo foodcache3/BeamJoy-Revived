@@ -187,9 +187,9 @@
                     ng-change="$ctrl.setGridSlot(slot.player, value)"
                     title="{{'beamjoy.window.main.tabs.races.gridSlot.tooltip' | translate}}"
                 ></bj-select>
-                <span class="bjr-chip" ng-if="$ctrl.status.state === 'GRID'"
-                    ng-style="slot.ready ? {background: 'rgba(73, 182, 114, 0.16)', color: '#73eb9d'} : {}">
-                    {{(slot.ready ? 'beamjoy.window.main.tabs.races.ready' : 'beamjoy.window.main.tabs.races.unready') | translate}}
+                <span class="bjr-chip" ng-if="$ctrl.status.state === 'GRID'" title="{{slot.player.readyBlockReason || ''}}"
+                    ng-style="slot.ready ? {background: 'rgba(73, 182, 114, 0.16)', color: '#73eb9d'} : (slot.player.readyBlockReason ? {background: 'rgba(255, 110, 100, 0.16)', color: '#ff9a8f'} : {})">
+                    {{(slot.player.readyChecking ? 'beamjoy.window.main.tabs.races.readyChecking' : slot.ready ? 'beamjoy.window.main.tabs.races.ready' : slot.player.readyBlockReason ? 'beamjoy.window.main.tabs.races.readyBlocked' : 'beamjoy.window.main.tabs.races.unready') | translate}}
                 </span>
             </span>
             <span class="bjr-chip" ng-if="slot.open" style="background: transparent">{{'beamjoy.window.main.tabs.races.open' | translate}}</span>
@@ -198,12 +198,19 @@
 
     <bj-lobby-invite ng-if="$ctrl.inviting" kind="race" on-back="$ctrl.setInviting(false)"></bj-lobby-invite>
 
+    <!-- a server plugin refused your ready-up (or unreadied you) : why -->
+    <div role="status" ng-if="$ctrl.status.state === 'GRID' && $ctrl.status.readyBlockReason && !$ctrl.status.ready && !$ctrl.inviting"
+        style="display: flex; flex-direction: column; gap: 0.2em; margin: 0.5em 0; padding: 0.55em 0.75em; border-radius: 0.375em; background: rgba(255, 110, 100, 0.12); box-shadow: inset 3px 0 0 #ff6e64; font-size: 0.85em">
+        <b style="color: #ff9a8f">{{'beamjoy.window.main.tabs.races.readyBlockedTitle' | translate}}</b>
+        <span>{{$ctrl.status.readyBlockReason}}</span>
+    </div>
+
     <p class="note" ng-if="$ctrl.status.state === 'GRID' && $ctrl.status.joinable && !$ctrl.inviting">{{'beamjoy.window.main.tabs.races.lobbyNote' | translate}}</p>
 
     <div class="controls" ng-if="!$ctrl.inviting" aria-label="{{'beamjoy.delivery.controls' | translate}}">
         <button type="button" class="bjr-btn primary" data-pad-a data-pad-ready ng-if="$ctrl.status.state === 'GRID'"
-            ng-click="$ctrl.setReady($event, !$ctrl.status.ready)">
-            {{($ctrl.status.ready ? 'beamjoy.window.main.tabs.races.imNotReady' : 'beamjoy.window.main.tabs.races.imReady') | translate}}
+            ng-disabled="$ctrl.status.readyChecking" ng-click="$ctrl.setReady($event, !$ctrl.status.ready)">
+            {{($ctrl.status.readyChecking ? 'beamjoy.window.main.tabs.races.readyChecking' : $ctrl.status.ready ? 'beamjoy.window.main.tabs.races.imNotReady' : 'beamjoy.window.main.tabs.races.imReady') | translate}}
         </button>
         <button type="button" class="bjr-btn" data-pad-y ng-if="$ctrl.status.state === 'GRID' && $ctrl.status.joinable"
             ng-disabled="!$ctrl.status.isStarter" ng-click="$ctrl.startNow($event)">

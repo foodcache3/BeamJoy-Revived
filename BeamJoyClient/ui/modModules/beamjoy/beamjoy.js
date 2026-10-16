@@ -70,6 +70,7 @@ await import(`/ui/modModules/beamjoy/windows/kickVote/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceInfo/live/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceInfo/results/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceLeaderboard/app.js`);
+await import(`/ui/modModules/beamjoy/windows/pluginOverlays/app.js`);
 await import(`/ui/modModules/beamjoy/windows/infectedInfo/results/app.js`);
 await import(`/ui/modModules/beamjoy/windows/derbyInfo/results/app.js`);
 
@@ -96,6 +97,7 @@ beamjoyModule.component("beamjoy", {
                         <bj-config></bj-config>
                         <bj-race-countdown></bj-race-countdown>
                         <bj-race-hud></bj-race-hud>
+                        <bj-plugin-overlays></bj-plugin-overlays>
                         <bj-hunter-countdown></bj-hunter-countdown>
                         <bj-hunter-hud></bj-hunter-hud>
                         <bj-infected-countdown></bj-infected-countdown>

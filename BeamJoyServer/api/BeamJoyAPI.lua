@@ -28,6 +28,14 @@ through events), so every call takes a callback : callback(true, result) or call
 {code, message}). A call with no answer after `timeout` seconds (default 10) gets
 callback(false, {code = "timeout"}).
 
+Hooks are BeamJoy's questions (a racer readying up, the grid's order) : BJ.hook(name, fn) answers
+one, with whatever fn returns :
+
+    BJ.hook("raceReady", function(q)
+        if q.racer.identity == "guest" then return { allow = false, reason = "Pick a nickname first" } end
+        return { allow = true }
+    end)
+
 Public domain JSON code below : json.lua by Tyler Neylon, as BeamJoy itself ships it.
 ]]
 
@@ -296,6 +304,8 @@ local pending = {}  -- id -> {callback, deadline}
 local queued = {}   -- calls made before BeamJoy was up
 local handlers = {} -- event name -> {fn...}
 local readyFns = {}
+local hooks = {}    -- hook name -> {fn, timeoutMs}
+local hookEventRegistered = false
 local counter = 0
 local lastPing = 0
 local PING_EVERY = 10
@@ -311,9 +321,19 @@ local function send(method, params, callback)
     }))
 end
 
+--- tells BeamJoy this plugin answers a hook (again after BeamJoy restarts : it forgets)
+local function registerHook(name)
+    local h = hooks[name]
+    if not h then return end
+    send("hooks.register", { hook = name, timeoutMs = h.timeoutMs }, function(ok, err)
+        if not ok then print("[BeamJoyAPI] couldn't register the " .. name .. " hook : " .. tostring(err.message)) end
+    end)
+end
+
 local function becomeReady(info)
     if BJ.ready and info.instance == BJ.instance then return end
     BJ.ready, BJ.instance, BJ.info = true, info.instance, info
+    for name in pairs(hooks) do registerHook(name) end
     for _, fn in ipairs(readyFns) do
         local ok, err = pcall(fn, info)
         if not ok then print("[BeamJoyAPI] an onReady callback failed : " .. tostring(err)) end
@@ -353,6 +373,37 @@ function _G.__BJAPI_onReady(raw)
     if msg and type(msg.data) == "table" then becomeReady(msg.data) end
 end
 
+--- a question from BeamJoy : asked to the plugins in its `plugins` list, answered once
+function _G.__BJAPI_onHook(raw)
+    local msg = decode(raw)
+    local q = msg and msg.data
+    if type(q) ~= "table" or type(q.hookId) ~= "string" then return end
+    local h = hooks[q.hook]
+    if not h then return end
+    local asked = false
+    for _, name in ipairs(q.plugins or {}) do
+        if name == BJ.name then asked = true end
+    end
+    if not asked then return end
+    local answered = false
+    local function answer(result)
+        if answered then return end
+        answered = true
+        local params = {}
+        if type(result) == "table" then
+            for k, v in pairs(result) do params[k] = v end
+        end
+        params.hookId = q.hookId
+        send("hooks.answer", params, nil)
+    end
+    local ok, result = pcall(h.fn, q.data, answer)
+    if not ok then
+        print("[BeamJoyAPI] the " .. tostring(q.hook) .. " hook failed : " .. tostring(result))
+        return answer({}) -- BeamJoy goes on as if this plugin had no opinion
+    end
+    if result ~= nil then answer(result) end
+end
+
 function _G.__BJAPI_onTick()
     local t = now()
     for id, call in pairs(pending) do
@@ -380,6 +431,31 @@ function BJ.init(pluginName)
     -- BeamJoy may already be running (it then answers), or start after this plugin (it then
     -- sends BJAPI_Ready)
     ping()
+end
+
+--- answers one of BeamJoy's hooks : `fn(question, answer)` returns its answer (a table), or
+--- returns nothing and calls `answer(table)` itself later (within the hook's time : `timeoutMs`,
+--- default 2000, at most 10000). An error in fn answers with nothing
+---@param name string "raceReady" or "gridOrder"
+---@param fn function
+---@param opts {timeoutMs: integer?}?
+function BJ.hook(name, fn, opts)
+    assert(BJ.name, "call BeamJoyAPI.init first")
+    assert(type(name) == "string" and type(fn) == "function", "BeamJoyAPI.hook needs a hook name and a function")
+    hooks[name] = { fn = fn, timeoutMs = opts and opts.timeoutMs or nil }
+    if not hookEventRegistered then
+        hookEventRegistered = true
+        MP.RegisterEvent("BJAPI_Hook", "__BJAPI_onHook")
+    end
+    if BJ.ready then registerHook(name) end
+end
+
+--- stops answering a hook
+---@param name string
+function BJ.unhook(name)
+    if not hooks[name] then return end
+    hooks[name] = nil
+    if BJ.ready then send("hooks.unregister", { hook = name }, nil) end
 end
 
 --- runs `fn(info)` once BeamJoy is up (server.info's result), and again if it starts again

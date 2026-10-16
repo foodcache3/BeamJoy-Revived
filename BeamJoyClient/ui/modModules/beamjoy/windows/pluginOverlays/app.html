@@ -1,0 +1,291 @@
+<style>
+    /* fixed + viewport units, like the race HUD (its parent <beamjoy> has no size of its own).
+       One stack per corner/edge ; the race HUD's own tokens (windows/raceHud/app.html) */
+    .bj-pov-stack {
+        position: fixed;
+        z-index: 4;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6em;
+        pointer-events: none;
+    }
+    .bj-pov-stack.top-right { top: 2vh; right: 1vw; align-items: flex-end; }
+    .bj-pov-stack.top-left { top: 2vh; left: 1vw; align-items: flex-start; }
+    .bj-pov-stack.bottom-right { bottom: 2vh; right: 1vw; align-items: flex-end; flex-direction: column-reverse; }
+    .bj-pov-stack.bottom-left { bottom: 2vh; left: 1vw; align-items: flex-start; flex-direction: column-reverse; }
+    .bj-pov-stack.top { top: 2vh; left: 50%; transform: translateX(-50%); align-items: center; }
+    .bj-pov-stack.bottom { bottom: 12vh; left: 50%; transform: translateX(-50%); align-items: center; flex-direction: column-reverse; }
+    .bj-pov-stack.left { top: 50%; left: 1vw; transform: translateY(-50%); align-items: flex-start; }
+    .bj-pov-stack.right { top: 50%; right: 1vw; transform: translateY(-50%); align-items: flex-end; }
+
+    .bj-pov {
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        width: 20em;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        color: #ebebeb;
+        background: rgba(10, 11, 14, 0.84);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 0.5em;
+        font-variant-numeric: tabular-nums;
+        overflow: hidden;
+    }
+    .bj-pov .ov,
+    .bj-pov .timer,
+    .bj-pov .disp {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        line-height: 1;
+    }
+    .bj-pov .muted { color: #a7aebf; }
+    .bj-pov .flag { flex-shrink: 0; }
+
+    .bj-pov .plate {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 2em;
+        height: 1.375em;
+        padding: 0 0.3em;
+        box-sizing: border-box;
+        transform: skewX(-10deg);
+        background: #282b33;
+        border-radius: 2px;
+    }
+    .bj-pov .plate > span {
+        transform: skewX(10deg);
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        font-size: 0.8125em;
+        white-space: nowrap;
+    }
+    .bj-pov .plate.p1 { background: #c24b00; color: #fff; }
+    .bj-pov .plate.hero { min-width: 4.6em; height: 3.25em; background: #ff6600; color: #fff; }
+    .bj-pov .plate.hero > span { font-weight: 900; font-size: 1.875em; }
+    .bj-pov .pen {
+        flex-shrink: 0;
+        padding: 0.05em 0.35em;
+        border-radius: 3px;
+        background: #d63b3b;
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.78em;
+        white-space: nowrap;
+    }
+
+    .bj-pov .std-head { display: flex; flex-direction: column; gap: 0.3em; padding: 0.75em 1em 0.6em; }
+    .bj-pov .eyebrow {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 900;
+        font-style: italic;
+        font-size: 0.75em;
+        line-height: 1;
+        color: #ff8955;
+    }
+    .bj-pov .std-head h2 {
+        margin: 0;
+        overflow: hidden;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-style: italic;
+        font-size: 1.25em;
+        line-height: 1.2;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .bj-pov .std-body { display: flex; flex-direction: column; gap: 0.65em; padding: 0 0.75em 0.85em; }
+    .bj-pov .herobox {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+        column-gap: 0.9em;
+        padding: 0.75em 0.9em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0 0.375em 0.375em 0;
+    }
+    .bj-pov .posblk { display: flex; flex-direction: column; align-items: center; gap: 0.3em; font-size: 0.75em; }
+    .bj-pov .posblk .plate.hero { font-size: 1.333em; }
+    .bj-pov .gaps {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5em;
+        padding-left: 0.9em;
+        border-left: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .bj-pov .gap { display: grid; grid-template-columns: 0.75em auto minmax(0, 1fr); align-items: center; column-gap: 0.5em; }
+    .bj-pov .gap .num { font-family: "Overpass", "Noto Sans", sans-serif; font-weight: 800; font-style: italic; line-height: 1; font-size: 1.45em; }
+    .bj-pov .gap .num small { margin-left: 1px; font-size: 0.6em; font-weight: 700; color: #a7aebf; }
+    .bj-pov .gap .num.soft { color: #c8cedc; }
+    .bj-pov .gap .nm { overflow: hidden; font-size: 0.75em; color: #979dad; text-overflow: ellipsis; white-space: nowrap; }
+    .bj-pov .lapline { display: flex; align-items: baseline; justify-content: space-between; gap: 0.6em; }
+    .bj-pov .lapline .big { font-size: 1.125em; }
+    .bj-pov .lapline .big small { font-size: 0.72em; color: #a7aebf; }
+    .bj-pov .lapline .clock { display: flex; align-items: baseline; gap: 0.45em; margin-left: auto; }
+    .bj-pov .lapline .timer { font-size: 1.125em; }
+    .bj-pov .delta { padding: 0.2em 0.45em; border-radius: 3px; font-size: 0.8em; font-family: "Overpass", "Noto Sans", sans-serif; font-weight: 800; font-style: italic; line-height: 1; }
+    .bj-pov .delta.faster { background: rgba(73, 182, 114, 0.18); color: #73eb9d; }
+    .bj-pov .delta.slower { background: rgba(255, 110, 100, 0.16); color: #ff9a8f; }
+    .bj-pov .delta.neutral { background: rgba(255, 255, 255, 0.08); color: #c8cedc; }
+    .bj-pov .secs { display: flex; gap: 2px; }
+    .bj-pov .sec { flex: 1; min-width: 3px; height: 0.5em; transform: skewX(-10deg); border-radius: 1px; background: rgba(255, 255, 255, 0.08); }
+    .bj-pov .sec.done { background: #6b7180; }
+    .bj-pov .sec.best { background: #ba68f8; }
+    .bj-pov .sec.live { background: rgba(255, 102, 0, 0.55); }
+    .bj-pov .laps { display: flex; justify-content: space-between; font-size: 0.75em; color: #a7aebf; }
+    .bj-pov .laps .pb { color: #73eb9d; }
+    .bj-pov .prog { height: 3px; background: rgba(255, 255, 255, 0.08); }
+    .bj-pov .prog > div { height: 100%; background: #ff6600; }
+    .bj-pov .row {
+        display: flex;
+        align-items: center;
+        gap: 0.6em;
+        padding: 0.35em 0.5em;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        font-size: 0.85em;
+    }
+    .bj-pov .row.you,
+    .bj-pov .ctable tr.you { background: rgba(255, 102, 0, 0.1); box-shadow: inset 3px 0 0 #ff6600; }
+    .bj-pov .row.out { color: #979dad; }
+    .bj-pov .row .nm { flex: 1; min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+    .bj-pov .row .g { color: #a7aebf; white-space: nowrap; }
+    .bj-pov .fastest {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.5em 0.75em;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(186, 104, 248, 0.1);
+        font-size: 0.78em;
+    }
+    .bj-pov .fastest .bar { width: 4px; height: 1.2em; transform: skewX(-10deg); background: #ba68f8; border-radius: 1px; }
+    .bj-pov .fastest b { font-weight: 600; }
+    .bj-pov .fastest .t { margin-left: auto; font-weight: 700; color: #ba68f8; }
+
+    /* CUSTOM : the plugin's own blocks */
+    .bj-pov.custom { gap: 0.45em; padding: 0.75em 0.9em; width: 18em; }
+    .bj-pov .sz-s { font-size: 0.75em; }
+    .bj-pov .sz-m { font-size: 0.9em; }
+    .bj-pov .sz-l { font-size: 1.2em; }
+    .bj-pov .sz-xl { font-size: 1.8em; }
+    .bj-pov .ctext { overflow-wrap: anywhere; }
+    .bj-pov .ctext.bold { font-weight: 700; }
+    .bj-pov .ctext.italic { font-style: italic; }
+    .bj-pov .crow { display: flex; align-items: baseline; gap: 0.6em; }
+    .bj-pov .crow > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bj-pov .crow > .grow { flex: 1; }
+    .bj-pov .crow > .bold { font-weight: 700; }
+    .bj-pov .cdiv { height: 1px; margin: 0.15em 0; border: 0; background: rgba(255, 255, 255, 0.08); }
+    .bj-pov .cplate { display: flex; align-items: center; gap: 0.6em; }
+    .bj-pov .cplate .plate { height: auto; padding: 0.3em 0.65em; background: #ff6600; color: #fff; }
+    .bj-pov .cplate .plate > span { font-weight: 900; font-size: 1.25em; line-height: 1.1; }
+    .bj-pov .ctable { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+    .bj-pov .ctable th { padding: 0 0.4em 0.25em; font-size: 0.85em; font-weight: 600; color: #a7aebf; text-align: left; }
+    .bj-pov .ctable td {
+        max-width: 12em;
+        padding: 0.3em 0.4em;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .bj-pov .ctable td.bold { font-weight: 700; }
+</style>
+
+<!-- the chequered flag, at the plates' slant (the race HUD's own) -->
+<script type="text/ng-template" id="bjPovFlag.html">
+    <svg class="flag" width="15" height="11" viewBox="0 0 15 11" aria-hidden="true"><g transform="skewX(-10) translate(2 0)"><rect x="0" y="0" width="13" height="11" fill="#ebebeb"></rect><rect x="0" y="0" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="6.5" y="0" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="3.25" y="3.67" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="9.75" y="3.67" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="0" y="7.34" width="3.25" height="3.66" fill="#2a2d33"></rect><rect x="6.5" y="7.34" width="3.25" height="3.66" fill="#2a2d33"></rect></g></svg>
+</script>
+
+<div class="bj-pov-stack" ng-repeat="pos in $ctrl.positions track by pos" ng-class="pos" ng-if="$ctrl.groups[pos].length > 0">
+    <section class="bj-pov" ng-repeat="o in $ctrl.groups[pos] track by o.key" ng-class="o.layout === 'custom' ? 'custom' : 'default'"
+        ng-style="o._style" aria-label="{{o.title || o.key}}">
+
+        <!-- DEFAULT : the race HUD's look -->
+        <div ng-if="o.layout !== 'custom'" style="display: contents">
+            <header class="std-head" ng-if="o.eyebrow || o.title">
+                <span class="eyebrow" ng-if="o.eyebrow">{{o.eyebrow}}</span>
+                <h2 ng-if="o.title">{{o.title}}</h2>
+            </header>
+            <div class="std-body" ng-style="!(o.eyebrow || o.title) ? {'padding-top': '0.75em'} : {}">
+                <div class="herobox" ng-if="o.plate">
+                    <div class="posblk">
+                        <div class="plate hero" ng-style="o.plate._style"><span>{{o.plate.text}}</span></div>
+                        <span class="muted" ng-if="o.plate.sub">{{o.plate.sub}}</span>
+                    </div>
+                    <div class="gaps" ng-if="o.lines.length > 0">
+                        <div class="gap" ng-repeat="l in o.lines track by $index">
+                            <svg ng-if="l.arrow === 'up'" width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><polygon points="6,0 12,10 0,10" fill="#ff8955"></polygon></svg>
+                            <svg ng-if="l.arrow === 'down'" width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><polygon points="0,0 12,0 6,10" fill="#6b7180"></polygon></svg>
+                            <span ng-if="!l.arrow"></span>
+                            <span class="num" ng-class="{soft: l.soft}">{{l.value}}<small ng-if="l.unit">{{l.unit}}</small></span>
+                            <span class="nm">{{l.label}}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="lapline" ng-if="o.progress || o.timer || o.delta">
+                    <span class="ov big" ng-if="o.progress">{{o.progress.text}}<small ng-if="o.progress.of">{{o.progress.of}}</small></span>
+                    <span class="clock">
+                        <span class="timer" role="timer" ng-if="o.timer">{{$ctrl.timerText(o.timer, o)}}</span>
+                        <span class="delta" ng-if="o.delta" ng-class="o.delta.kind">{{o.delta.text}}</span>
+                    </span>
+                </div>
+                <div class="secs" ng-if="o.segments.length > 0" aria-hidden="true">
+                    <div class="sec" ng-repeat="s in o.segments track by $index" ng-class="s"></div>
+                </div>
+                <div class="laps" ng-if="o.info">
+                    <span>{{o.info.left}}</span>
+                    <span class="pb">{{o.info.right}}</span>
+                </div>
+                <div class="prog" ng-if="o._bar" aria-hidden="true"><div ng-style="o._bar"></div></div>
+                <div ng-if="o.rows.length > 0">
+                    <div class="row" ng-repeat="r in o.rows track by $index" ng-class="{you: r._you, out: r.out}">
+                        <span class="plate" ng-if="r.pos" ng-class="{p1: r.pos === '1'}"><span>{{r.pos}}</span></span>
+                        <span class="nm" ng-style="r._style">{{r.name}}</span>
+                        <span ng-if="r.flag" ng-include="'bjPovFlag.html'"></span>
+                        <span class="pen" ng-if="r.pen">{{r.pen}}</span>
+                        <span class="g" ng-if="r.value">{{r.value}}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="fastest" ng-if="o.footer">
+                <span class="bar" aria-hidden="true"></span>
+                <span>{{o.footer.label}} <b ng-if="o.footer.name">{{o.footer.name}}</b></span>
+                <span class="t" ng-if="o.footer.value">{{o.footer.value}}</span>
+            </div>
+        </div>
+
+        <!-- CUSTOM : the plugin's blocks, in order -->
+        <div ng-if="o.layout === 'custom'" ng-repeat="b in o.blocks track by $index" ng-switch="b.type">
+            <div ng-switch-when="text" class="ctext" ng-class="['sz-' + (b.size || 'm'), {bold: b.bold, italic: b.italic, disp: b.display}]"
+                ng-style="b._style">{{b.text}}</div>
+            <div ng-switch-when="row" class="crow">
+                <span ng-repeat="c in b.cells track by $index" ng-class="['sz-' + (c.size || 'm'), {grow: c.grow, bold: c.bold}]"
+                    ng-style="c._style">{{c.text}}</span>
+            </div>
+            <div ng-switch-when="timer" class="timer" ng-class="'sz-' + (b.size || 'l')" ng-style="b._style" role="timer">{{$ctrl.timerText(b, o)}}</div>
+            <div ng-switch-when="bar" class="prog" aria-hidden="true"><div ng-style="b._fill"></div></div>
+            <div ng-switch-when="segments" class="secs" aria-hidden="true">
+                <div class="sec" ng-repeat="s in b.items track by $index" ng-class="s"></div>
+            </div>
+            <hr ng-switch-when="divider" class="cdiv">
+            <div ng-switch-when="plate" class="cplate">
+                <div class="plate" ng-style="b._plate"><span>{{b.text}}</span></div>
+                <span class="muted" ng-if="b.sub">{{b.sub}}</span>
+            </div>
+            <table ng-switch-when="table" class="ctable">
+                <thead ng-if="b.columns.length > 0">
+                    <tr><th ng-repeat="c in b.columns track by $index" ng-style="c.align ? {'text-align': c.align} : {}">{{c.label}}</th></tr>
+                </thead>
+                <tbody>
+                    <tr ng-repeat="r in b.rows track by $index" ng-class="{you: r._you}" ng-style="r._style">
+                        <td ng-repeat="c in r.cells track by $index" ng-class="{bold: c.bold}" ng-style="c._style">{{c.text}}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
