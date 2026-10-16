@@ -105,6 +105,8 @@ angular.module("beamjoy").component("bjRaceLeaderboard", {
                 key: `r${e.rank}`,
                 rank: e.rank,
                 name: e.playerName,
+                // server plugins' labels on the run (cmps/pluginOptions bj-plugin-fields)
+                fields: Array.isArray(e.fields) && e.fields.length > 0 ? e.fields : null,
                 vehicle: e.model || "",
                 time: f.time(e.time),
                 gap: e.rank === 1 || !rec ? "" : `+${f.gap(e.time - rec.time)}`,
@@ -143,6 +145,7 @@ angular.module("beamjoy").component("bjRaceLeaderboard", {
             this.driversText = f.fill("beamjoy.leaderboard.drivers", { n: this.players });
             this.recordCard = record() ? {
                 name: record().playerName,
+                fields: Array.isArray(record().fields) && record().fields.length > 0 ? record().fields : null,
                 line: [record().model, f.ago(record().date)].filter((x) => x).join(", "),
                 time: f.time(record().time),
             } : null;
@@ -175,7 +178,8 @@ angular.module("beamjoy").component("bjRaceLeaderboard", {
                         : "beamjoy.leaderboard.race.newBestUp", { n: from - me.rank });
                 } else fresh = f.fill("beamjoy.leaderboard.race.newBest", {});
             }
-            return { rank: me.rank, time: f.time(me.time), toNext, fresh };
+            return { rank: me.rank, time: f.time(me.time), toNext, fresh,
+                fields: Array.isArray(me.fields) && me.fields.length > 0 ? me.fields : null };
         };
 
         this.setNear = (near) => {

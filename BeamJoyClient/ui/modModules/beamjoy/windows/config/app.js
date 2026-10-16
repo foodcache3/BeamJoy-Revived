@@ -11,6 +11,7 @@ await import(`/ui/modModules/beamjoy/windows/config/permissions/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/maps/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/core/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/database/app.js`);
+await import(`/ui/modModules/beamjoy/windows/config/plugins/app.js`);
 
 angular.module("beamjoy").component("bjConfig", {
     templateUrl: "/ui/modModules/beamjoy/windows/config/app.html",
@@ -19,7 +20,8 @@ angular.module("beamjoy").component("bjConfig", {
         beamjoyStore,
         $timeout,
         beamjoyWindowRect,
-        beamjoyNavGuard
+        beamjoyNavGuard,
+        beamjoyPluginUi
     ) {
         this.visible = false;
         // routed through the shared nav guard : the currently-mounted race editor (if any) may
@@ -211,8 +213,41 @@ angular.module("beamjoy").component("bjConfig", {
                 .sort((a, b) => a.order - b.order);
             if (tabListChanged) onTabListUpdated();
         };
-        this.$onInit = () => {
+        // server plugins' own tabs (the plugin API's config.register, windows/config/plugins), after
+        // BeamJoy's, for staff holding EditPluginConfig. A plugin's name only ever holds letters,
+        // digits, _ and - (the server checks it) : checked again before it goes in a template
+        const PLUGIN_NAME = /^[\w-]{1,64}$/;
+        const syncPluginTabs = () => {
+            const wanted = {};
+            beamjoyPluginUi.state.config.forEach((t, i) => {
+                if (!PLUGIN_NAME.test(t.plugin || "")) return;
+                const id = `plugin_${t.plugin}`;
+                wanted[id] = true;
+                if (!this.tabsData[id]) {
+                    this.tabsData[id] = {
+                        id,
+                        order: 100 + i,
+                        title: t.title || t.plugin,
+                        visible: false,
+                        closable: false,
+                        template: `<bj-config-plugin plugin="${t.plugin}"></bj-config-plugin>`,
+                        permissions: ["EditPluginConfig"],
+                    };
+                } else {
+                    this.tabsData[id].title = t.title || t.plugin;
+                    this.tabsData[id].order = 100 + i;
+                }
+            });
+            Object.keys(this.tabsData).forEach((id) => {
+                if (id.startsWith("plugin_") && !wanted[id]) delete this.tabsData[id];
+            });
             updateTabs();
+            onTabListUpdated();
+        };
+        $rootScope.$on("BJPluginUiChanged", syncPluginTabs);
+
+        this.$onInit = () => {
+            syncPluginTabs();
             this.activeTabIndex = this.tabs.length > 0 ? 0 : -1;
             this.activeTabId = this.tabs.length > 0 ? this.tabs[this.activeTabIndex].id : null;
         };

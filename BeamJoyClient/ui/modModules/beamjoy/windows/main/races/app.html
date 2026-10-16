@@ -397,6 +397,10 @@
                 </div>
             </div>
 
+            <!-- server plugins' own options (cmps/pluginOptions) -->
+            <bj-plugin-options ng-if="$ctrl.pluginStartSections.length > 0" sections="$ctrl.pluginStartSections"
+                holder="$ctrl.startOptions" layout="fields"></bj-plugin-options>
+
             <button type="button" class="advanced-toggle" ng-click="$ctrl.toggleAdvanced()" aria-expanded="{{$ctrl.showAdvanced}}">
                 {{'beamjoy.window.main.tabs.races.advanced' | translate}} {{$ctrl.showAdvanced ? '▲' : '▼'}}
             </button>

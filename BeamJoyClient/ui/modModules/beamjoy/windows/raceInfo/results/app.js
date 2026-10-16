@@ -54,6 +54,7 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
             const done = sel.totalMs !== null;
             return {
                 name: nameOf(sel),
+                fields: Array.isArray(sel.fields) && sel.fields.length > 0 ? sel.fields : null,
                 summary,
                 pen,
                 raceTime: pen && done ? clock(sel.totalMs) : "",
@@ -101,6 +102,8 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
                 name: nameOf(p),
                 pen: penOf(p),
                 car: p.vehicleModel || "",
+                // server plugins' labels on this racer (cmps/pluginOptions bj-plugin-fields)
+                fields: Array.isArray(p.fields) && p.fields.length > 0 ? p.fields : null,
                 total: p.totalMs !== null
                     ? clock(p.totalMs)
                     : translate(p.disqualified ? "beamjoy.raceInfo.disqualified" : p.dnf ? "beamjoy.raceInfo.retired" : "beamjoy.raceInfo.racing"),

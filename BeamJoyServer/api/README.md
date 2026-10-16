@@ -11,11 +11,15 @@ Lets your own BeamMP server plugins work with BeamJoy:
 - **Show** players an activity overlay where the race HUD goes, in BeamJoy's own look or laid out
   your way, and a line of text across BeamJoy's HUD.
 - **Set** the time and weather.
+- **Add to BeamJoy's windows**: sections of options in the race start menu and the race editor
+  (a race class, league rules), labels on results and leaderboard entries (the class, points, a
+  team), and a tab of your plugin's settings in the config window.
 
 Typical uses: a website kept in sync with the leaderboards, a Discord bot, live timing, a
-championship or league plugin, an entry list, a game mode of your own.
+championship or league plugin, race classes, an entry list, a game mode of your own.
 
-API version 1. Nothing here can change leaderboards or race results.
+API version 1. Plugins can label leaderboard entries and results, but never change a time or a
+result.
 
 ## How it works
 
@@ -85,6 +89,12 @@ end
   answer)` returns its answer (a table), or returns nothing and calls `answer(table)` later.
   `opts.timeoutMs` is how long BeamJoy waits for it (default 2000, at most 10000). `BJ.unhook(name)`
   stops.
+- `BJ.raceOptions(sections)`: your options in the race start menu and race editor (see
+  [Race options](#race-options)). Registered again by itself whenever BeamJoy restarts.
+- `BJ.configTab(tab, onChange)`: your tab in the config window (see [Config tabs](#config-tabs)).
+  `onChange(values, changed, by)` gets the values once registered (`changed` and `by` nil then),
+  and again whenever someone saves the tab. `BJ.onConfigAction(fn)`: `fn(action, by)` when one of
+  its buttons is clicked.
 - `BJ.json`: the JSON encoder/decoder the helper uses (`BJ.json.stringify`, `BJ.json.parse`).
 
 Two complete example plugins. To try one, copy its folder into `Resources/Server/`, next to
@@ -95,14 +105,18 @@ Two complete example plugins. To try one, copy its folder into `Resources/Server
 - `example/BJRaceControl/` uses the hooks, race events and overlays: guests without a nickname
   can't ready up, the fastest leaderboard time starts in front, and racers get a live timing
   overlay that turns into the results.
+- `example/BJClasses/` adds race classes: a class picked in the race editor and the start menu,
+  the cars of each class set in a config tab, cars outside the class refused at ready-up, the
+  class and league points shown on results and leaderboard entries.
 
 ## Methods
 
 Every `map` param is optional and defaults to the map the server is on. Another map's data is
 read from BeamJoy's saved files.
 
-Methods that change something (`race.*`, `environment.set`, `overlay.*`, `hud.message`, `hooks.*`)
-need your plugin's name in the request's `from`. The helper always sends it.
+Methods that change something (`race.*`, `environment.set`, `overlay.*`, `hud.message`, `hooks.*`,
+`raceOptions.*`, `results.setFields`, `leaderboard.setFields`, `config.*`) need your plugin's name
+in the request's `from`. The helper always sends it.
 
 ### `server.info`
 → `{api, instance, beamjoy: {version, build}, map: {name, label}, players, methods[], events[]}`
@@ -123,6 +137,7 @@ need your plugin's name in the request's `from`. The helper always sends it.
 | `gates` | how many gates |
 | `freeroam` | whether it can also be run from freeroam |
 | `vehicleRestriction` | `"free"`, `"single"` or `"pool"` |
+| `options` | plugins' [race options](#race-options) as set for this race in the editor: `{plugin: {option: value}}` |
 | `times` | `{grid, freeroam}` : how many players have a time on each board |
 | `records` | `{grid, freeroam}` : each board's best entry, if any |
 
@@ -141,13 +156,16 @@ Every race of a map, with both boards in full (or only `board` when given). Made
 ### `races.sessions`
 → `{sessions: [session]}` : the races being run right now, lobbies included.
 
-A session is `{sessionId, raceId, raceName, map, state, joinable, private, laps, placementMode,
-gridSlots, greenAt?, starter, racers: [racer]}`.
+A session is `{sessionId, raceId, raceName, map, options, state, joinable, private, laps,
+placementMode, gridSlots, greenAt?, starter, racers: [racer]}`.
 
 - `state` is `"GRID"` (the lobby), `"COUNTDOWN"`, `"RACE"` or `"FINISHED"`.
 - `racers` come in standings order. Each racer is `{id, name, identity, away, vehicle, ready,
   readyChecking, readyBlock?, gridPosition?, position?, lap, finished, dnf, disqualified,
-  penaltyMs?, bestLapMs?}`.
+  penaltyMs?, bestLapMs?, fields}`.
+- `options` is the plugins' [race options](#race-options) for this race: `{plugin: {option:
+  value}}`, every option of every plugin running, filled in. Every race event carries it too.
+- `fields` is the racer's [labels](#fields) (a list, maybe empty).
 - `id` is the racer's player ID ; it's left out while they're `away` (disconnected mid-race, inside
   their rejoin time).
 - `readyBlock` is `{reason, by}` when a plugin refused their last ready-up.
@@ -163,6 +181,28 @@ to the `gridOrder` hook, if a plugin gives one, comes first. → `{sessionId, or
 Takes a racer in a lobby back to not ready. They see `reason` in the lobby and as a message (their
 car no longer qualifies, an entry they haven't paid...). → `{playerId}`. Error `refused` when
 they're not in a lobby.
+
+### `raceOptions.register` `{sections}` / `raceOptions.unregister`
+Your sections of options in the race start menu and race editor (replacing any you registered
+before). See [Race options](#race-options). → `{sections}`
+
+### `results.setFields` `{sessionId, playerId, fields, replace?}`
+Labels on a racer's result in a race being run, shown in the game's results and in the race
+events. When that race already put their time on the leaderboard, the entry gets them too. See
+[Fields](#fields). → `{sessionId, playerId}`
+
+### `leaderboard.setFields` `{raceId, name, fields, board?, replace?}`
+Labels on a leaderboard entry of the current map's race (`name` is the entry's name, `board`
+`"grid"` by default). See [Fields](#fields). → `{raceId, board, name}` ; `LeaderboardChanged`
+follows with `change.kind` `"fields"`.
+
+### `config.register` `{title, sections}` / `config.unregister`
+Your tab in the config window. See [Config tabs](#config-tabs). → `{values}`
+
+### `config.get` / `config.set` `{values}`
+Your config tab's values (the stored ones, your defaults for the rest, secrets included) ;
+`config.set` changes the ones given. → `{values}` (and `changed`, the options `config.set`
+changed ; `ConfigChanged` follows with `by` `"plugin:<name>"`)
 
 ### `players.online`
 → `{players: [{id, name, displayName, nickname, guest, group, staff}]}`
@@ -198,7 +238,7 @@ list of player IDs ; everyone when left out.
 
 ### Leaderboard entries
 
-`{rank, name, timeMs, model, date, identity}`
+`{rank, name, timeMs, model, date, identity, fields}`
 
 | Field | |
 |---|---|
@@ -208,6 +248,7 @@ list of player IDs ; everyone when left out.
 | `model` | the vehicle's model, like `"etk800"`, if known |
 | `date` | Unix time, in seconds |
 | `identity` | what `name` is (below) |
+| `fields` | plugins' [labels](#fields) on the run that set it (a list, maybe empty) |
 
 `identity` is one of these (racers in the race events and `races.sessions` have it too):
 - `"nickname"`: a guest's BeamJoy nickname.
@@ -250,19 +291,25 @@ Names are display names, not permanent IDs: a guest can change their nickname.
 | `RacerFinished` | `{sessionId, raceId, raceName, map, at, racer, finishOrder, raceMs, totalMs, laps, newPB, newRecord}` |
 | `RacerOut` | `{sessionId, raceId, raceName, map, at, racer, reason, laps}` |
 | `RaceClosed` | `{sessionId, raceId, raceName, map, at, state}` |
+| `ConfigChanged` | `{plugin, values, changed, by}` : a plugin's config tab was saved |
+| `ConfigAction` | `{plugin, action, by: {id, name}}` : a button on a plugin's config tab was clicked |
+
+Every race event (`RaceGridOpened` to `RaceClosed`) also carries `options`: the plugins' [race
+options](#race-options) for that race.
 
 **`LeaderboardChanged`** carries the race's whole board, so you can replace your copy of that
 board. `change.kind` is:
 - `"pb"`: a new personal best.
 - `"restored"`: staff disqualified a run, and the time it had replaced came back. A leaderboard
   can get worse, not only better.
+- `"fields"`: a plugin changed an entry's [labels](#fields) ; the times are as they were.
 
 **`RacesChanged`** means a map's races were added, edited, deleted or imported. **Editing a race
 clears its times.** Fetch the map again (`races.leaderboards`).
 
 **`RaceFinished`** is `{sessionId, raceId, raceName, map, laps, at, greenAt, results}`. Results
 come in finishing order. Each result is
-`{position, id, name, identity, vehicle, finished, disqualified, totalMs, bestLapMs, penaltyMs, newPB, newRecord, leaderboardRank, laps, bestSectorsMs}`.
+`{position, id, name, identity, vehicle, finished, disqualified, totalMs, bestLapMs, penaltyMs, newPB, newRecord, leaderboardRank, fields, laps, bestSectorsMs}`.
 Racers who didn't finish, or were disqualified, come last and have no `position`.
 
 **Laps and sectors**: `laps` is `[{lap, timeMs, sectorsMs}]`, every lap the racer completed ;
@@ -288,6 +335,10 @@ or nobody was ready in time. `state` is where it was. A finished race sends `Rac
 **`EnvironmentChanged`**: `by` lists who changed it since the last one (player names,
 `"plugin:<name>"`, or `"server"` for BeamJoy itself, e.g. on a map change). It isn't sent for the
 clock simply moving on.
+
+**`ConfigChanged`** and **`ConfigAction`** go to every plugin like any event ; `plugin` says whose
+tab it was (`BJ.configTab` and `BJ.onConfigAction` only pass on your own). `values` holds secret
+options too, for that plugin.
 
 **`PlayerJoined`** fires before a guest picks a nickname. Use `players.online` when you need
 nicknames.
@@ -369,6 +420,97 @@ accent?, blocks}`. Up to 40 blocks:
 | `{type = "segments", items}` | like the default layout's |
 | `{type = "table", columns?, rows}` | `columns` up to 6 `{label, align?}` ; `rows` up to 30 `{cells, playerId?, you?, color?}` |
 | `{type = "divider"}` | a line |
+
+## Race options
+
+Sections of your own settings in the race start menu and the race editor, drawn by BeamJoy like
+its own: a race class, league rules, anything your plugin needs to know about a race.
+
+```lua
+BJ.raceOptions({
+    { id = "league", title = "League", note = "Set by the league plugin", options = {
+        { id = "class", type = "select", label = "Class", choices = { "GT", "Touring", "Street" },
+          default = "Street", field = true },
+        { id = "points", type = "toggle", label = "League points", where = "editor", default = true },
+        { id = "fuel", type = "number", label = "Fuel", min = 10, max = 100, step = 10, unit = "%", where = "start" },
+    } },
+})
+```
+
+- In the **race editor**, the values are the race's own (saved with it ; editing a race still
+  clears its times). In the **start menu**, the starter can change them for that race, starting
+  from the race's own. The values chosen come with the race: `options[yourPlugin][optionId]` in
+  `races.sessions`, every race event and every hook question.
+- `where`: `"both"` (default), `"editor"` (set per race, the start menu can't change it) or
+  `"start"` (chosen at each start only).
+- `field = true`: the option's value shows on every racer's result and goes on their leaderboard
+  entry with their time, like a [field](#fields) (a toggle shows its label while on).
+- Up to 4 sections, 16 options each. Option ids are yours across your sections.
+- A race keeps its values for a plugin that isn't running (restarting, or removed for a while).
+  BeamJoy only uses the options of the plugins running now.
+
+**Options** (race options and config tabs alike):
+
+| Option | |
+|---|---|
+| `{id, type = "toggle", label, default?}` | on / off |
+| `{id, type = "select", label, choices, default?}` | `choices` up to 24, `"GT"` or `{value, label}` ; 5 or fewer show as buttons, more as a dropdown |
+| `{id, type = "number", label, min, max, step?, unit?, default?}` | a slider |
+| `{id, type = "text", label, maxLength?, placeholder?, default?}` | up to 500 characters (100 by default) |
+| `{id, type = "button", label, confirm?}` | config tabs only: a click sends `ConfigAction` ; `confirm` asks first |
+
+Every option can have a `tooltip`. `id` is a word: a letter, then letters, digits, `_` or `-`.
+
+## Fields
+
+Labels on a racer's result and their leaderboard entry: `"GT"`, `"25 pts"`, `"Team Red"`. They
+show as small tags beside the name, in the game's results and leaderboards, and come with the API
+(`fields` on results, racers and leaderboard entries).
+
+A leaderboard keeps **one entry per player per race**, their best time, and fields don't change
+that: they describe the run that set the time. A new best replaces the entry, fields included
+(with the new run's own). To show a class's best times, read the entries with that class.
+
+```lua
+BJ.call("results.setFields", { sessionId = id, playerId = racer.id, fields = {
+    { key = "points", label = "Points", value = "25 pts", color = "accent" },
+} })
+```
+
+- `fields` is a list of `{key, value, label?, color?, showLabel?}`, or `{key = value}` /
+  `{key = {value, label?, ...}}`. Up to 8 per plugin on one result or entry.
+- A field's tag shows `value` ; `showLabel = true` shows `label value`. Hovering shows both.
+- Your fields are merged into the ones you set before (`replace = true` replaces them all). A
+  field sent with an empty value is removed. Other plugins' fields are never touched.
+- `color` as for [overlays](#overlays).
+- Setting a racer's fields before their time goes on the leaderboard puts them on the entry with
+  it ; after (on `RacerFinished`, say), the entry gets them too.
+
+## Config tabs
+
+A tab of your plugin's settings in BeamJoy's config window, for staff holding the
+`EditPluginConfig` permission (admins, unless changed in the Permissions tab). BeamJoy stores the
+values (in `BeamJoyData/db/pluginConfig.json`), so your plugin needs no settings file.
+
+```lua
+BJ.configTab({ title = "Website", sections = {
+    { id = "site", title = "Website", options = {
+        { id = "url", type = "text", label = "Address", placeholder = "https://..." },
+        { id = "key", type = "text", label = "API key", secret = true },
+        { id = "sync", type = "button", label = "Sync now" },
+    } },
+} }, function(values, changed, by)
+    siteUrl, apiKey = values.url, values.key
+end)
+BJ.onConfigAction(function(action, by)
+    if action == "sync" then syncEverything() end
+end)
+```
+
+- Up to 8 sections, 40 options in all ; the [options](#race-options) as above.
+- `secret = true` on a text option: its value never goes to a player's game. The tab shows
+  whether one is set, and leaving it empty keeps it.
+- Saving sends `ConfigChanged` (with every value) ; values only change for options your tab has.
 
 ## Times
 

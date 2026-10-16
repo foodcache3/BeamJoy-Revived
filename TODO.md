@@ -587,6 +587,18 @@ Editor (a Props section in the race editor, `ui/raceEditor.lua` + its Angular si
 
 ## Plugin API: other server plugins working with BeamJoy (leaderboard website, Discord bot, modular plugins)
 
+**Step 3, plugins in BeamJoy's windows : built in client 2701 / server 2463, not yet tried live.**
+Direct request : plugins add "categories and options" to the race start menu and the race editor,
+"extra labels or fields to results or leaderboards without worrying about multiple entries", and
+tabs of their own to the config window. Server : `services/pluginUi.lua` (definitions, checks,
+config values in `pluginConfig.json`), wired into `races.lua` (race defaults, entry fields),
+`raceGrid.lua` (session values, racer fields), `api.lua` (`raceOptions.*`, `results.setFields`,
+`leaderboard.setFields`, `config.*`, `ConfigChanged`, `ConfigAction`). Permission
+`EditPluginConfig`. Client : `beamjoy/pluginUi.lua`, `cmps/pluginOptions` (the options, the field
+tags), `windows/config/plugins`. Example : `api/example/BJClasses`. To check live : the options'
+look in the start menu, editor and config window, the editor not marking a race edited on open,
+the tags in the results and leaderboard windows.
+
 **Step 2, modular plugins : built in client 2700 / server 2462, not yet tried live.** Direct request
 ("allow for the installation of modular plugins") : hooks (`raceReady` with a reason the racer
 sees, `gridOrder`), race events with server times (grid opened, countdown with the grid and green
@@ -613,7 +625,9 @@ Example : `api/example/BJRaceControl`. To check live : BeamMP's cross-plugin eve
 - Chat : `chat.send` through BeamJoy (mutes, languages), a `ChatMessage` event, plugin chat
   commands registered with BeamJoy's permission groups.
 - `notice.show` : BeamJoy's notification stack (with a Join button) for a plugin's own activity.
-- Buttons on overlays (a click comes back to the plugin as an event).
+- Buttons on overlays (a click comes back to the plugin as an event). (Config tabs have buttons
+  since step 3.)
+- Leaderboard views by a field (only the GT entries, say) in the game's leaderboard window.
 - Who may write : an allowlist in BeamJoy's config of the plugins allowed to use the hooks and
   write methods (today any plugin on the server can ; plugins are the server owner's own).
 

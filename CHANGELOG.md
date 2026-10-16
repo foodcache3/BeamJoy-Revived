@@ -8,7 +8,27 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2700, server build 2462.
+Version 1.11.0 : client build 2701, server build 2463.
+
+- **New : plugins can add options to races, labels to results and leaderboards, and tabs to the
+  config window** (direct request : "a way for plugins to add categories and options", in the race
+  editor too). Through the plugin API (`BeamJoyServer/api/README.md`) :
+  - **Race options** : a plugin adds sections of settings (toggles, choices, sliders, text) to the
+    race start menu and the race editor, drawn like BeamJoy's own. The editor sets a race's values,
+    the start menu can change them for one race (or not, per option). The values chosen come with
+    the race to every plugin (race events, hooks, `races.sessions`), and show in the lobby's race
+    details.
+  - **Fields** : a plugin puts labels on a racer's result and their leaderboard entry ("GT",
+    "25 pts", "Team Red"), shown as small tags beside the name in the results and leaderboards. A
+    leaderboard still keeps one entry per player : the labels describe the run that set the time.
+    A race option can be shown as a label by itself (a race's class).
+  - **Config tabs** : a plugin gets a tab of its own settings in the config window (new
+    permission `EditPluginConfig`, admins by default). BeamJoy stores the values ; secret ones (an
+    API key) never reach a player's game ; buttons send the plugin a click.
+  - The helper gets `BJ.raceOptions`, `BJ.configTab` and `BJ.onConfigAction`, and a third example
+    plugin, `api/example/BJClasses`, uses all of it : race classes, the cars of each class set in
+    its config tab, other cars refused at ready-up, the class and league points on results and
+    leaderboard entries.
 
 - **New : plugins can take part in races, show overlays and set the time and weather** (direct
   request : modular plugins on top of BeamJoy). The plugin API (`BeamJoyServer/api/README.md`)

@@ -22,6 +22,8 @@ BJ_PERMISSIONS = {
     FreezePlayers = "FreezePlayers",
     EnginePlayers = "EnginePlayers",
     SetConfig = "SetConfig",
+    -- the config window's tabs added by server plugins (services/pluginUi.lua)
+    EditPluginConfig = "EditPluginConfig",
     Ban = "Ban",
     DatabasePlayers = "DatabasePlayers",
     SetEnvironment = "SetEnvironment",
@@ -67,6 +69,7 @@ local M = {
         SwitchMap = "mod",
 
         SetConfig = "admin",
+        EditPluginConfig = "admin",
         Ban = "admin",
         DatabasePlayers = "admin",
         SetEnvironment = "admin",

@@ -1053,5 +1053,15 @@
                 </table>
             </accordion-content>
         </bj-accordion>
+
+        <!-- server plugins' own race options (cmps/pluginOptions) : this race's values -->
+        <bj-accordion id="race-editor-settings-plugins" no-border-bottom="true" ng-if="$ctrl.pluginEditorSections.length > 0">
+            <accordion-title>
+                <h5>{{'beamjoy.window.config.tabs.races.sections.plugins' | translate}}</h5>
+            </accordion-title>
+            <accordion-content>
+                <bj-plugin-options sections="$ctrl.pluginEditorSections" holder="$ctrl.race.defaults" layout="table"></bj-plugin-options>
+            </accordion-content>
+        </bj-accordion>
     </div>
 </div>

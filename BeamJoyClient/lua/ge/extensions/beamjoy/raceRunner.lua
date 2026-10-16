@@ -1354,6 +1354,8 @@ local function pushRaceInfo()
                     lapsDiff = p.leaderLapsDiff,
                     aheadGapMs = p.aheadGapMs,
                     aheadLapsDiff = p.aheadLapsDiff,
+                    -- server plugins' labels on this racer (services/pluginUi.lua)
+                    fields = p.fields,
                 }
             end)
         end)(),
@@ -1583,6 +1585,8 @@ local function pushSessionStatus()
         end),
         laps = M.session.settings.laps,
         respawnStrategy = M.session.settings.respawnStrategy,
+        -- server plugins' own options for this race (services/pluginUi.lua)
+        pluginValues = M.session.settings.plugins,
         placementMode = M.session.settings.placementMode,
         vehicleRestrictionMode = restriction and restriction.mode or "free",
         vehicleRestrictionLabel = restriction and restriction.mode == "single" and restriction.label or nil,

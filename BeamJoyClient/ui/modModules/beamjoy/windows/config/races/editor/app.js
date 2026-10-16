@@ -154,7 +154,8 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         beamjoyStore,
         beamjoyConfirm,
         beamjoyNavGuard,
-        beamjoyPropEditor
+        beamjoyPropEditor,
+        beamjoyPluginUi
     ) {
         const translate = $filter("translate");
         // the race's props : the props editor's list and toolbar (cmps/propEditor), shared with the
@@ -208,6 +209,11 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             beamjoyStore.permissions.isStaff() ||
             this.race.author === beamjoyStore.players.self.playerName;
 
+        // server plugins' own race options (cmps/pluginOptions), in the Settings section
+        this.pluginEditorSections = beamjoyPluginUi.state.editorSections;
+        $scope.$on("$destroy", $rootScope.$on("BJPluginUiChanged", () => {
+            this.pluginEditorSections = beamjoyPluginUi.state.editorSections;
+        }));
         this.race = null;
         this.activeGate = null; // 0-indexed, for ng-repeat/track-by convenience
         this.activeStart = null;

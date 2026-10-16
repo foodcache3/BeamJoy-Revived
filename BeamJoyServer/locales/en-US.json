@@ -266,6 +266,7 @@
     "crew.removed": "You were removed from {crew}",
     "crew.noRoom": "{name} started something without room for you",
     "race.settingsChanged": "The leader changed the race settings. Ready up again when you're set",
+    "pluginConfig.saved": "{name} settings saved",
     "race.readyBlocked": "You can't ready up : {reason}",
     "race.readyBlockedNoReason": "You can't ready up yet",
     "race.unreadied": "You're not ready anymore : {reason}",

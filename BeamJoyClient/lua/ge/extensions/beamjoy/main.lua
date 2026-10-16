@@ -42,7 +42,7 @@ local M = {
         "beamjoy_busLines", "beamjoy_busRun",
         "beamjoy_deliveryPoints", "beamjoy_delivery", "beamjoy_deliveryPool",
         "beamjoy_crews", "beamjoy_notices", "beamjoy_mainNav", "beamjoy_vehicleInteractions",
-        "beamjoy_pluginOverlays" },
+        "beamjoy_pluginOverlays", "beamjoy_pluginUi" },
 
     world_ready = false,
     client_ready = false,

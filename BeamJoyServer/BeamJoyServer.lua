@@ -56,7 +56,7 @@ local M = {
         "services_busLines", "services_busRuns", "services_dragStrips", "services_driftZones",
         "services_deliveryPoints", "services_deliveries", "services_lobbyInvites", "services_crews",
         "services_vehicleInteractions", "services_playerPursuit",
-        "services_identity", "services_discord", "services_updater", "services_api", "services_pluginOverlay",
+        "services_identity", "services_discord", "services_updater", "services_api", "services_pluginOverlay", "services_pluginUi",
         "communications_rx", "communications_tx" },
 }
 

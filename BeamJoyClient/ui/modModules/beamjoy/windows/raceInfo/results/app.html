@@ -448,7 +448,7 @@
             <button type="button" class="cl" ng-repeat="p in $ctrl.v.rows track by p.playerName" ng-class="p.rowCls"
                 aria-pressed="{{p.selected}}" ng-click="$ctrl.selectPlayer(p.playerName)">
                 <span style="display: flex; justify-content: center"><span class="plate" ng-class="p.plateCls"><span>{{p.pos}}</span></span></span>
-                <span class="who"><b>{{p.name}}</b><small ng-if="p.car">{{p.car}}</small></span>
+                <span class="who"><b>{{p.name}}<bj-plugin-fields ng-if="p.fields" fields="p.fields"></bj-plugin-fields></b><small ng-if="p.car">{{p.car}}</small></span>
                 <span class="r">{{p.total}}<span class="pen" ng-if="p.pen">+{{p.pen}}s</span></span>
                 <span class="r">{{p.gap}}</span>
                 <span class="r" ng-class="p.bestCls">{{p.best}}</span>
@@ -458,7 +458,7 @@
 
     <div class="card" ng-if="$ctrl.v.sel">
         <div class="card-head">
-            <h3>{{$ctrl.v.sel.name}}</h3>
+            <h3>{{$ctrl.v.sel.name}}<bj-plugin-fields ng-if="$ctrl.v.sel.fields" fields="$ctrl.v.sel.fields"></bj-plugin-fields></h3>
             <span>{{$ctrl.v.sel.summary}}</span>
         </div>
         <div class="lp ideal" ng-if="$ctrl.v.ideal">

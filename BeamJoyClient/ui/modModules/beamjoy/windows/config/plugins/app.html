@@ -1,0 +1,18 @@
+<div class="p-1" ng-if="$ctrl.tab">
+    <p class="opacity-70 small" style="margin-bottom: 0.5em">
+        {{'beamjoy.pluginOptions.configNote' | translate}} <b>{{$ctrl.plugin}}</b>
+    </p>
+    <p class="opacity-70" ng-if="!$ctrl.loaded">{{'beamjoy.pluginOptions.loading' | translate}}</p>
+    <div ng-if="$ctrl.loaded">
+        <bj-plugin-options sections="$ctrl.tab.sections" holder="$ctrl.holder" layout="table" secrets="$ctrl.secrets"
+            on-action="$ctrl.action(option)"></bj-plugin-options>
+        <div class="d-flex gap-1" style="justify-content: flex-end; margin-top: 0.75em">
+            <span class="opacity-70 small" style="align-self: center" ng-if="$ctrl.dirty()">{{$ctrl.unsavedNote()}}</span>
+            <button type="button" class="btn w-fitcontent" ng-disabled="!$ctrl.dirty()" ng-class="{disabled: !$ctrl.dirty()}"
+                ng-click="$ctrl.reset()">{{'beamjoy.common.cancel' | translate}}</button>
+            <button type="button" class="btn success w-fitcontent" ng-disabled="!$ctrl.dirty()" ng-class="{disabled: !$ctrl.dirty()}"
+                ng-click="$ctrl.save()">{{'beamjoy.common.save' | translate}}</button>
+        </div>
+    </div>
+</div>
+<p class="p-1 opacity-70" ng-if="!$ctrl.tab">{{'beamjoy.pluginOptions.gone' | translate}}</p>

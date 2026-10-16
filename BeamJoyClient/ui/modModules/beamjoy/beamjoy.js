@@ -28,6 +28,7 @@ await import(`/ui/modModules/beamjoy/cmps/icon/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/toggle/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/slider/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/select/app.js`);
+await import(`/ui/modModules/beamjoy/cmps/pluginOptions/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/colorPicker/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/window/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/tabs/app.js`);

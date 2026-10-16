@@ -470,5 +470,8 @@ M.hide = hide
 M.clear = clear
 M.message = message
 M.visibleTo = visibleTo
+-- the same checks, for services/pluginUi.lua
+M.cleanText = text
+M.cleanColor = color
 
 return M

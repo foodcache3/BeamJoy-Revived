@@ -10,7 +10,8 @@ angular.module("beamjoy").component("bjMainRaces", {
         beamjoyInfoPanel,
         beamjoyConfirm,
         $scope,
-        beamjoyNow
+        beamjoyNow,
+        beamjoyPluginUi
     ) {
         const translate = $filter("translate");
         this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint", "flipupright", "lastroad"];
@@ -81,6 +82,11 @@ angular.module("beamjoy").component("bjMainRaces", {
             openPendingStart();
         }));
         $scope.$on("$destroy", $rootScope.$on("BJOpenActivityStart", openPendingStart));
+        // server plugins' own options in the start form (cmps/pluginOptions)
+        this.pluginStartSections = beamjoyPluginUi.state.startSections;
+        $scope.$on("$destroy", $rootScope.$on("BJPluginUiChanged", () => {
+            this.pluginStartSections = beamjoyPluginUi.state.startSections;
+        }));
         this.sessions = [];
         $rootScope.$on("BJRaceOpenSessions", (_, sessions) => {
             this.sessions = sessions || [];
@@ -246,6 +252,8 @@ angular.module("beamjoy").component("bjMainRaces", {
                         this.status.respawnStrategy
                 )}`,
                 vehicleLine,
+                // server plugins' own options for this race ("Class: GT3")
+                ...beamjoyPluginUi.describe(this.status.pluginValues),
             ].join("\n");
         };
 
@@ -336,6 +344,8 @@ angular.module("beamjoy").component("bjMainRaces", {
                 // only meaningful while vehicleRestrictionMode above isn't "free"; see
                 // BJRaceDefaults.allowTuning's own doc for what this actually gates
                 allowTuning: d.allowTuning !== false,
+                // server plugins' own options : the race's values to start from
+                plugins: angular.copy(d.plugins && typeof d.plugins === "object" ? d.plugins : {}),
             };
         };
 

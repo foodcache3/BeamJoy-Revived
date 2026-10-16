@@ -495,7 +495,7 @@ end
 -- track with hundreds of gates it was most of every session update, and it was only ever read to
 -- work out the gaps between racers, which the server now does itself (gapBetween below)
 local PAYLOAD_DROPPED_FIELDS = { gateTimes = true, bestLapGateTimes = true, leaderboardKey = true, replacedEntry = true,
-    lastResetPenaltyMs = true }
+    lastResetPenaltyMs = true, pluginFields = true }
 
 --- the copy of a participant that goes out in session updates : shallow (nothing in a payload
 --- is modified after it's built), without the per-gate tables, plus a `displayName`
@@ -630,6 +630,9 @@ local function buildSessionPayload(session, slim)
     payload.participants = {}
     for i, p in ipairs(ordered) do
         local row = payloadParticipant(p)
+        -- plugins' labels on this racer (services/pluginUi.lua), as shown
+        local fields = services_pluginUi.racerFields(session, p)
+        row.fields = fields and services_pluginUi.fieldList(fields) or nil
         if i > 1 then
             row.aheadGapMs, row.aheadLapsDiff = gapBetween(ordered[i - 1], p, totalGates)
             row.leaderGapMs, row.leaderLapsDiff = gapBetween(p.finished and leader or racingLeader, p, totalGates)
@@ -987,6 +990,8 @@ local function buildSettings(race, overrides)
         waypointBeams = waypointBeams,
         allowTuning = allowTuning,
         randomizeVehiclePool = randomizeVehiclePool,
+        -- server plugins' own options (services/pluginUi.lua) : plugin -> option -> value
+        plugins = services_pluginUi.sessionValues(defaults.plugins, overrides.plugins),
     }
     if settings.laps then
         settings.laps = math.max(1, math.floor(settings.laps))
@@ -1252,6 +1257,7 @@ local function buildResults(session)
         r.bestLapMs = #p.lapTimes > 0 and math.min(table.unpack(p.lapTimes)) or nil
         r.order = p.finishOrder or math.huge
         r.identity = participantIdentityKind(p)
+        r.fields = services_pluginUi.fieldList(services_pluginUi.racerFields(session, p))
         r.participant = p
         if r.counted then
             for _, entry in ipairs(board) do
@@ -1322,7 +1328,8 @@ local function trySubmitTime(session, participant, timeMs)
     local previous = race and race.leaderboard and race.leaderboard[key]
     local previousMs = previous and previous.time
     participant.isNewPB, participant.isNewRecord = services_races.submitTime(
-        session.raceId, key, participant.vehicleModel or "", timeMs, nil, participantIdentityKind(participant))
+        session.raceId, key, participant.vehicleModel or "", timeMs, nil, participantIdentityKind(participant),
+        services_pluginUi.racerFields(session, participant))
     if participant.isNewPB then
         -- kept to put back if staff disqualify this run (raceStaffAction)
         participant.leaderboardKey = key
@@ -1545,6 +1552,25 @@ end
 local function pluginSetGridOrder(session, order, plugin)
     if session.state ~= "GRID" or session.placing then return false, "that grid is already placed" end
     session.pluginGridOrder, session.pluginGridOrderBy = order, plugin
+    return true
+end
+
+--- the plugin API's results.setFields : a plugin's labels on a racer, shown with their result.
+--- When this race already put their time on the leaderboard, the entry gets them too
+---@param session BJRaceSession
+---@param playerID integer
+---@param plugin string
+---@param fields table key -> field, or false to remove (services_pluginUi.fieldsOf)
+---@param replace boolean?
+---@return boolean ok, string? why not
+local function pluginSetFields(session, playerID, plugin, fields, replace)
+    local p = session.participants[playerID]
+    if not p then return false, "that player isn't in this race" end
+    p.pluginFields = services_pluginUi.applyFields(p.pluginFields, plugin, fields, replace)
+    if p.leaderboardKey and p.isNewPB then
+        services_races.setEntryFields(session.raceId, "grid", p.leaderboardKey, plugin, fields, replace)
+    end
+    pushSessionUpdate(session)
     return true
 end
 
@@ -2574,6 +2600,7 @@ M.computeLeaderboard = computeLeaderboard
 M.racerInfo = racerInfo
 M.pluginUnready = pluginUnready
 M.pluginSetGridOrder = pluginSetGridOrder
+M.pluginSetFields = pluginSetFields
 M.chatRace = chatRace
 
 return M

@@ -55,7 +55,7 @@
         <span class="lbx-plate big rec"><span>1</span></span>
         <div class="who">
             <span class="lbl">{{'beamjoy.leaderboard.race.record' | translate}}</span>
-            <b>{{$ctrl.recordCard.name}}</b>
+            <b>{{$ctrl.recordCard.name}}<bj-plugin-fields ng-if="$ctrl.recordCard.fields" fields="$ctrl.recordCard.fields"></bj-plugin-fields></b>
             <small>{{$ctrl.recordCard.line}}</small>
         </div>
         <span class="lbx-big" style="color: #ba68f8">{{$ctrl.recordCard.time}}</span>
@@ -66,6 +66,7 @@
             <span class="lbl">{{'beamjoy.leaderboard.race.yourBest' | translate}}</span>
             <b>
                 {{$ctrl.selfEntry.playerName}}
+                <bj-plugin-fields ng-if="$ctrl.meCard.fields" fields="$ctrl.meCard.fields"></bj-plugin-fields>
                 <span class="lbx-chip ok" ng-if="$ctrl.meCard.fresh">{{$ctrl.meCard.fresh}}</span>
             </b>
             <small>{{$ctrl.meCard.toNext}}</small>
@@ -95,7 +96,7 @@
         <span class="lbx-cut" ng-if="r.cut">{{r.text}}</span>
         <div class="rlb-grid lbx-row rlb-row" ng-if="!r.cut" ng-class="r.cls">
             <span class="lbx-pos"><span class="lbx-plate" ng-class="r.plateCls"><span>{{r.rank}}</span></span></span>
-            <span class="lbx-name">{{r.name}}</span>
+            <span class="lbx-name">{{r.name}}<bj-plugin-fields ng-if="r.fields" fields="r.fields"></bj-plugin-fields></span>
             <span class="lbx-dim">{{r.vehicle}}</span>
             <span class="lbx-r" ng-class="r.timeCls">{{r.time}}</span>
             <span class="lbx-r lbx-muted">{{r.gap}}</span>
@@ -105,7 +106,7 @@
 </div>
 <div class="rlb-grid lbx-row me lbx-pinned" ng-if="$ctrl.selfRow && !$ctrl.selfVisible">
     <span class="lbx-pos"><span class="lbx-plate" ng-class="$ctrl.selfRow.plateCls"><span>{{$ctrl.selfRow.rank}}</span></span></span>
-    <span class="lbx-name">{{$ctrl.selfRow.name}}</span>
+    <span class="lbx-name">{{$ctrl.selfRow.name}}<bj-plugin-fields ng-if="$ctrl.selfRow.fields" fields="$ctrl.selfRow.fields"></bj-plugin-fields></span>
     <span class="lbx-dim">{{$ctrl.selfRow.vehicle}}</span>
     <span class="lbx-r" ng-class="$ctrl.selfRow.timeCls">{{$ctrl.selfRow.time}}</span>
     <span class="lbx-r lbx-muted">{{$ctrl.selfRow.gap}}</span>

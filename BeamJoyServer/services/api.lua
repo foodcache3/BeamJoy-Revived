@@ -40,7 +40,7 @@ local REQUEST_EVENT = "BJAPI_Request"
 local RESPONSE_EVENT = "BJAPI_Response"
 local EVENTS = { "Ready", "LeaderboardChanged", "RacesChanged", "MapChanged", "PlayerJoined", "PlayerLeft",
     "RaceGridOpened", "RaceCountdown", "RaceGreenLight", "RacerLap", "RacerFinished", "RacerOut",
-    "RaceFinished", "RaceClosed", "EnvironmentChanged", "Hook" }
+    "RaceFinished", "RaceClosed", "EnvironmentChanged", "ConfigChanged", "ConfigAction", "Hook" }
 local LEADERBOARD_LIMIT_DEFAULT = 100
 
 --- the questions BeamJoy asks plugins (see raceGrid.lua)
@@ -154,6 +154,8 @@ local function entryOut(e)
         date = unixTime(e.date),
         -- "nickname", "guest", "beammp", or "unknown" for a time saved before BeamJoy kept it
         identity = e.identity or "unknown",
+        -- plugins' labels on the run that set it (services/pluginUi.lua)
+        fields = e.fields or {},
     }
 end
 
@@ -182,6 +184,8 @@ local function raceOut(race)
         gates = type(race.gates) == "table" and #race.gates or 0,
         freeroam = race.freeroam == true,
         vehicleRestriction = race.vehicleRestrictionMode or "free",
+        -- plugins' own race options as set for this race in the editor : plugin -> option -> value
+        options = race.defaults and type(race.defaults.plugins) == "table" and race.defaults.plugins or {},
         times = { grid = #grid, freeroam = #freeroam },
         records = {
             grid = grid[1] and entryOut(grid[1]) or nil,
@@ -243,8 +247,9 @@ end
 --- one racer, as plugins see them. `id` is their player ID while connected ; nil while they're
 --- away (disconnected mid-race, waiting under a key of their own)
 ---@param p table BJRaceParticipant
+---@param session table? BJRaceSession, for their fields
 ---@return table
-local function racerOut(p)
+local function racerOut(p, session)
     local info = services_raceGrid.racerInfo(p)
     local best = p.bestLapMs
     if not best and p.lapTimes and #p.lapTimes > 0 then best = math.min(table.unpack(p.lapTimes)) end
@@ -264,6 +269,8 @@ local function racerOut(p)
         disqualified = p.disqualified == true,
         penaltyMs = (p.penaltyMs or 0) > 0 and p.penaltyMs or nil,
         bestLapMs = best,
+        -- plugins' labels on them (results.setFields, and race options marked `field`)
+        fields = session and services_pluginUi.fieldList(services_pluginUi.racerFields(session, p)) or {},
     }
 end
 
@@ -276,6 +283,8 @@ local function sessionBase(session)
         raceId = session.raceId,
         raceName = race and race.name or "?",
         map = services_core.getCurrentMap(),
+        -- plugins' own race options for this race (services/pluginUi.lua) : plugin -> option -> value
+        options = session.settings and session.settings.plugins or {},
     }
 end
 
@@ -295,7 +304,7 @@ local function sessionOut(session)
     out.starter = starter and services_raceGrid.racerInfo(starter).name or nil
     out.racers = {}
     for i, p in ipairs(services_raceGrid.computeLeaderboard(session)) do
-        local r = racerOut(p)
+        local r = racerOut(p, session)
         if session.state == "RACE" or session.state == "FINISHED" then r.position = i end
         out.racers[i] = r
     end
@@ -317,7 +326,7 @@ end
 ---@param p table BJRaceParticipant
 ---@return table
 function M.readyHookData(session, p)
-    local racer = racerOut(p)
+    local racer = racerOut(p, session)
     racer.leaderboardMs = leaderboardMs(session, racer.name)
     return { session = sessionOut(session), racer = racer }
 end
@@ -329,7 +338,7 @@ end
 function M.gridOrderHookData(session, grid)
     local racers, defaultOrder = {}, {}
     for i, e in ipairs(grid) do
-        local r = racerOut(e.p)
+        local r = racerOut(e.p, session)
         r.leaderboardMs = leaderboardMs(session, r.name)
         r.joinIndex = e.p.joinIndex
         racers[i] = r
@@ -580,6 +589,100 @@ M.methods["hud.message"] = function(params, ctx)
 end
 
 -- ---------------------------------------------------------------------------------------------
+-- plugins' own options, fields and config tabs (services/pluginUi.lua)
+
+--- sections of options in the race start menu and the race editor
+M.methods["raceOptions.register"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local ok, why = services_pluginUi.registerRaceOptions(plugin, params)
+    if not ok then return nil, "badParams", why end
+    return { sections = #params.sections }
+end
+
+M.methods["raceOptions.unregister"] = function(_, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    services_pluginUi.unregisterRaceOptions(plugin)
+    return {}
+end
+
+--- labels on a racer's result in a race being run (and on the leaderboard entry it set, if it did)
+M.methods["results.setFields"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local session = findSession(params.sessionId)
+    if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
+    local playerID = tonumber(params.playerId)
+    if not playerID then return nil, "badParams", "playerId is needed" end
+    local fields, why = services_pluginUi.fieldsOf(params.fields)
+    if not fields then return nil, "badParams", why end
+    local ok, notFound = services_raceGrid.pluginSetFields(session, math.floor(playerID), plugin, fields,
+        params.replace == true)
+    if not ok then return nil, "notFound", notFound end
+    return { sessionId = session.id, playerId = playerID }
+end
+
+--- labels on a leaderboard entry, on the current map
+M.methods["leaderboard.setFields"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    if not absent(params.map) and params.map ~= services_core.getCurrentMap() then
+        return nil, "refused", "only the current map's leaderboards can be changed"
+    end
+    local board, boardErr = boardParam(params, "grid")
+    if not board then return nil, "badParams", boardErr end
+    local raceId = tonumber(params.raceId)
+    if not raceId then return nil, "badParams", "raceId is needed" end
+    if type(params.name) ~= "string" then return nil, "badParams", "name (the entry's name) is needed" end
+    local fields, why = services_pluginUi.fieldsOf(params.fields)
+    if not fields then return nil, "badParams", why end
+    if not services_races.setEntryFields(raceId, board, params.name, plugin, fields, params.replace == true) then
+        return nil, "notFound", string.format("no %s entry for %s on race %s", board, params.name, raceId)
+    end
+    return { raceId = raceId, board = board, name = params.name }
+end
+
+--- a tab of the plugin's own settings in BeamJoy's config window (stored by BeamJoy)
+M.methods["config.register"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local ok, why = services_pluginUi.registerConfigTab(plugin, params)
+    if not ok then return nil, "badParams", why end
+    return { values = services_pluginUi.configOf(plugin) }
+end
+
+M.methods["config.unregister"] = function(_, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    services_pluginUi.unregisterConfigTab(plugin)
+    return {}
+end
+
+--- the plugin's own config values (its defaults where none are stored)
+M.methods["config.get"] = function(_, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    return { values = services_pluginUi.configOf(plugin) }
+end
+
+--- sets the plugin's own config values (the ones its tab describes)
+M.methods["config.set"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    if not services_pluginUi.configTabs[plugin] then
+        return nil, "refused", "register a config tab first (config.register)"
+    end
+    if type(params.values) ~= "table" then return nil, "badParams", "values must be an object" end
+    local changed = services_pluginUi.setConfig(plugin, params.values)
+    local keys = {}
+    for k in pairs(changed) do keys[#keys + 1] = k end
+    table.sort(keys)
+    if #keys > 0 then M.configChanged(plugin, services_pluginUi.configOf(plugin), keys, "plugin:" .. plugin) end
+    return { values = services_pluginUi.configOf(plugin), changed = keys }
+end
+
+-- ---------------------------------------------------------------------------------------------
 -- hooks : BeamJoy asks, the plugins registered for that question answer, BeamJoy goes on with
 -- their answers once they've all answered or the time's up
 
@@ -811,7 +914,7 @@ function M.raceCountdown(session, grid, orderedBy)
     data.orderedBy = orderedBy
     data.grid = {}
     for i, p in ipairs(grid) do
-        local r = racerOut(p)
+        local r = racerOut(p, session)
         r.gridPosition = i
         data.grid[i] = r
     end
@@ -825,7 +928,7 @@ function M.raceGreenLight(session)
     data.greenAt = stamp(session.goAtMs)
     data.laps = session.settings.laps or 1
     data.racers = {}
-    session.participants:forEach(function(p) data.racers[#data.racers + 1] = racerOut(p) end)
+    session.participants:forEach(function(p) data.racers[#data.racers + 1] = racerOut(p, session) end)
     emit("RaceGreenLight", data)
 end
 
@@ -835,7 +938,7 @@ end
 function M.racerLap(session, p)
     local data = sessionBase(session)
     data.at = stamp()
-    data.racer = racerOut(p)
+    data.racer = racerOut(p, session)
     local lap = #p.lapTimes
     data.lap = lap
     data.lapMs = p.lapTimes[lap]
@@ -855,7 +958,7 @@ end
 function M.racerFinished(session, p)
     local data = sessionBase(session)
     data.at = stamp()
-    data.racer = racerOut(p)
+    data.racer = racerOut(p, session)
     data.finishOrder = p.finishOrder
     local raceMs = 0
     for _, t in ipairs(p.lapTimes or {}) do raceMs = raceMs + t end
@@ -874,7 +977,7 @@ end
 function M.racerOut(session, p, reason)
     local data = sessionBase(session)
     data.at = stamp()
-    data.racer = racerOut(p)
+    data.racer = racerOut(p, session)
     data.reason = reason
     data.laps = lapsOf(p)
     emit("RacerOut", data)
@@ -905,6 +1008,7 @@ function M.raceFinished(session, info, results)
             newPB = r.isNewPB == true,
             newRecord = r.isNewRecord == true,
             leaderboardRank = r.rank,
+            fields = r.fields or {},
             laps = lapsOf(p),
             bestSectorsMs = sectorsOf(p.bestSectorMs),
         }
@@ -916,6 +1020,24 @@ function M.raceFinished(session, info, results)
     data.greenAt = session.goAtMs and stamp(session.goAtMs) or nil
     data.results = out
     emit("RaceFinished", data)
+end
+
+--- a plugin's config tab was saved (or the plugin set its values) : its values, and which changed.
+--- Goes to every plugin like any event ; `plugin` says whose
+---@param plugin string
+---@param values table
+---@param changed string[]
+---@param by string a player's name, or "plugin:<name>"
+function M.configChanged(plugin, values, changed, by)
+    emit("ConfigChanged", { plugin = plugin, values = values, changed = changed, by = by })
+end
+
+--- a button on a plugin's config tab was clicked
+---@param plugin string
+---@param action string the button's id
+---@param by {id: integer, name: string}
+function M.configAction(plugin, action, by)
+    emit("ConfigAction", { plugin = plugin, action = action, by = by })
 end
 
 --- a session ended without finishing : cancelled, everyone left, nobody ready in time

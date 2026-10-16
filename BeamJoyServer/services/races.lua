@@ -523,6 +523,12 @@ local function sanitizeRace(race, existingRaces)
     if race.defaults.laps ~= nil then
         race.defaults.laps = math.max(1, math.floor(tonumber(race.defaults.laps) or 1))
     end
+    -- server plugins' own race options (services/pluginUi.lua), checked against the plugins running
+    if services_pluginUi then
+        race.defaults.plugins = services_pluginUi.raceDefaults(race.defaults.plugins)
+    elseif type(race.defaults.plugins) ~= "table" then
+        race.defaults.plugins = nil
+    end
 
     local duplicate = table.find(existingRaces, function(r)
         return r.id ~= race.id and r.name:lower() == race.name:trim():lower()
@@ -1743,8 +1749,10 @@ end
 ---@param identity string? what `playerName` is : "nickname", "guest" or "beammp"
 ---(services_identity.getIdentityKind), kept with the entry for the plugin API (a website showing
 ---only nicknamed players, direct request). Entries saved before it have none
+---@param fields table? plugin -> key -> field (services/pluginUi.lua) : the run's labels, kept
+---with the entry
 ---@return boolean isNewPB, boolean isNewRecord
-local function submitTime(raceId, playerName, model, time, board, identity)
+local function submitTime(raceId, playerName, model, time, board, identity, fields)
     local race = M.getById(raceId)
     if not race then return false, false end
     local boardName, field = boardField(board)
@@ -1769,7 +1777,7 @@ local function submitTime(raceId, playerName, model, time, board, identity)
         end
     end
     entries[playerName] = { time = time, model = model, date = GetCurrentTime(), fromRank = fromRank,
-        identity = identity }
+        identity = identity, fields = fields }
     saveData(true)
     if services_api then services_api.leaderboardChanged(raceId, boardName, "pb", playerName) end
     return true, time < previousBest
@@ -1788,10 +1796,31 @@ local function restoreEntry(raceId, playerName, previous)
     if services_api then services_api.leaderboardChanged(raceId, "grid", "restored", playerName) end
 end
 
+--- a plugin's labels on one leaderboard entry (the plugin API's leaderboard.setFields, or a
+--- racer's fields set after the time they came with went on the board) : its own replace what it
+--- had there, or are merged in
+---@param raceId integer
+---@param board string? "grid" (default) or "freeroam"
+---@param playerName string the entry's name
+---@param plugin string
+---@param fields table key -> field, or false to remove (services_pluginUi.fieldsOf)
+---@param replace boolean?
+---@return boolean found
+local function setEntryFields(raceId, board, playerName, plugin, fields, replace)
+    local race = M.getById(raceId)
+    local boardName, field = boardField(board)
+    local entry = race and race[field] and race[field][playerName]
+    if not entry then return false end
+    entry.fields = services_pluginUi.applyFields(entry.fields, plugin, fields, replace)
+    saveData(true)
+    if services_api then services_api.leaderboardChanged(raceId, boardName, "fields", playerName) end
+    return true
+end
+
 --- every entry, fastest first, ranked
 ---@param race table
 ---@param board string? "grid" (default) or "freeroam"
----@return {playerName: string, time: integer, model: string, date: integer, rank: integer, fromRank: integer?, identity: string?}[]
+---@return {playerName: string, time: integer, model: string, date: integer, rank: integer, fromRank: integer?, identity: string?, fields: table[]?}[]
 local function sortedEntries(race, board)
     local _, field = boardField(board)
     local list = {}
@@ -1803,6 +1832,8 @@ local function sortedEntries(race, board)
             date = entry.date,
             fromRank = entry.fromRank,
             identity = entry.identity,
+            -- plugins' labels, as a list in the order they're shown (nil : none)
+            fields = entry.fields and services_pluginUi and services_pluginUi.fieldList(entry.fields) or nil,
         })
     end
     table.sort(list, function(a, b)
@@ -1910,6 +1941,7 @@ M.getById = getById
 M.sortedEntries = sortedEntries
 M.submitTime = submitTime
 M.restoreEntry = restoreEntry
+M.setEntryFields = setEntryFields
 M.getLeaderboard = getLeaderboard
 M.onRaceLeaderboardRequest = onRaceLeaderboardRequest
 M.onRaceLeaderboardSummaryRequest = onRaceLeaderboardSummaryRequest

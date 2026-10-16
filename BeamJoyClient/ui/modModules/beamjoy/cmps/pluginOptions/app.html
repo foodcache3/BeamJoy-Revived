@@ -1,0 +1,72 @@
+<style>
+    bj-plugin-options .pluginopt-note {
+        opacity: 0.7;
+        font-size: 0.85em;
+        margin: 0.2em 0 0.4em;
+    }
+    bj-plugin-options .pluginopt-from {
+        opacity: 0.55;
+        font-size: 0.8em;
+        font-weight: normal;
+        margin-left: 0.4em;
+    }
+    bj-plugin-options input.pluginopt-text {
+        width: 100%;
+        min-width: 8em;
+    }
+    bj-plugin-options table h5 {
+        margin: 0.6em 0 0.2em;
+    }
+</style>
+
+<!-- the start menu's look -->
+<div ng-if="$ctrl.layout !== 'table'">
+    <div ng-repeat="s in $ctrl.sections track by s.key">
+        <h4 title="{{s.plugin}}">{{s.title}}</h4>
+        <p class="pluginopt-note" ng-if="s.note">{{s.note}}</p>
+        <div ng-repeat="o in s.options track by o.id" ng-class="o.type === 'toggle' ? 'bjr-toggle-row' : 'bjr-field'">
+            <span ng-class="{name: o.type !== 'toggle'}" title="{{o.tooltip || ''}}">{{o.label}}</span>
+            <bj-toggle ng-if="o.type === 'toggle'" ng-model="$ctrl.view[s.plugin][o.id]"></bj-toggle>
+            <div class="bjr-seg" ng-if="o.type === 'select' && o.seg">
+                <button type="button" ng-repeat="c in o.choices track by c.value"
+                    ng-class="{on: $ctrl.view[s.plugin][o.id] === c.value}" ng-click="$ctrl.pick(s, o, c.value)">{{c.label}}</button>
+            </div>
+            <bj-select ng-if="o.type === 'select' && !o.seg" ng-model="$ctrl.view[s.plugin][o.id]" options="o.selectOptions"></bj-select>
+            <bj-slider ng-if="o.type === 'number'" ng-model="$ctrl.view[s.plugin][o.id]" min="o.min" max="o.max" hard-min="o.min" hard-max="o.max" step="o.step"></bj-slider>
+            <input ng-if="o.type === 'text'" type="text" class="pluginopt-text" ng-model="$ctrl.view[s.plugin][o.id]"
+                maxlength="{{o.maxLength}}" placeholder="{{o.placeholder || ''}}" />
+        </div>
+    </div>
+</div>
+
+<!-- the race editor's and config window's look -->
+<table class="w-100" ng-if="$ctrl.layout === 'table'">
+    <tbody ng-repeat="s in $ctrl.sections track by s.key">
+        <tr>
+            <td colspan="2">
+                <h5>{{s.title}}<span class="pluginopt-from">{{s.plugin}}</span></h5>
+                <p class="pluginopt-note" ng-if="s.note">{{s.note}}</p>
+            </td>
+        </tr>
+        <tr ng-repeat="o in s.options track by o.id">
+            <td class="text-right" title="{{o.tooltip || ''}}">{{o.type === 'button' ? '' : o.label}}</td>
+            <td>
+                <bj-toggle ng-if="o.type === 'toggle'" ng-model="$ctrl.view[s.plugin][o.id]"></bj-toggle>
+                <div class="d-flex flex-wrap gap-1" ng-if="o.type === 'select' && o.seg">
+                    <button type="button" class="btn w-fitcontent" ng-repeat="c in o.choices track by c.value"
+                        ng-class="{success: $ctrl.view[s.plugin][o.id] === c.value}" ng-click="$ctrl.pick(s, o, c.value)">{{c.label}}</button>
+                </div>
+                <bj-select ng-if="o.type === 'select' && !o.seg" ng-model="$ctrl.view[s.plugin][o.id]" options="o.selectOptions"></bj-select>
+                <bj-slider ng-if="o.type === 'number'" ng-model="$ctrl.view[s.plugin][o.id]" min="o.min" max="o.max" hard-min="o.min" hard-max="o.max" step="o.step"></bj-slider>
+                <input ng-if="o.type === 'text' && !o.secret" type="text" class="pluginopt-text" ng-model="$ctrl.view[s.plugin][o.id]"
+                    maxlength="{{o.maxLength}}" placeholder="{{o.placeholder || ''}}" />
+                <!-- a secret is never sent here : left empty, the one stored stays -->
+                <input ng-if="o.type === 'text' && o.secret" type="password" class="pluginopt-text" ng-model="$ctrl.view[s.plugin][o.id]"
+                    maxlength="{{o.maxLength}}" autocomplete="off"
+                    placeholder="{{($ctrl.isSecretSet(s, o) ? 'beamjoy.pluginOptions.secretSet' : 'beamjoy.pluginOptions.secretEmpty') | translate}}" />
+                <button type="button" class="btn w-fitcontent" ng-if="o.type === 'button'" title="{{o.tooltip || ''}}"
+                    ng-click="$ctrl.click(s, o)">{{o.label}}</button>
+            </td>
+        </tr>
+    </tbody>
+</table>

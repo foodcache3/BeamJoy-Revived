@@ -36,6 +36,17 @@ one, with whatever fn returns :
         return { allow = true }
     end)
 
+Plugins can add to BeamJoy's own windows too : options in the race start menu and race editor
+(BJ.raceOptions), a tab in the config window (BJ.configTab), labels on results and leaderboard
+entries (the results.setFields and leaderboard.setFields methods) :
+
+    BJ.raceOptions({ { id = "league", title = "League", options = {
+        { id = "class", type = "select", label = "Class", choices = { "GT3", "GT4", "Street" }, field = true },
+    } } })
+    BJ.configTab({ title = "League", sections = { { id = "main", title = "Website", options = {
+        { id = "url", type = "text", label = "Address" },
+    } } } }, function(values) print("website : " .. values.url) end)
+
 Public domain JSON code below : json.lua by Tyler Neylon, as BeamJoy itself ships it.
 ]]
 
@@ -306,6 +317,8 @@ local handlers = {} -- event name -> {fn...}
 local readyFns = {}
 local hooks = {}    -- hook name -> {fn, timeoutMs}
 local hookEventRegistered = false
+local raceOptions = nil -- what BJ.raceOptions registered (again after BeamJoy restarts)
+local configTab = nil   -- what BJ.configTab registered, and its callback
 local counter = 0
 local lastPing = 0
 local PING_EVERY = 10
@@ -330,10 +343,30 @@ local function registerHook(name)
     end)
 end
 
+local function registerRaceOptions()
+    if not raceOptions then return end
+    send("raceOptions.register", { sections = raceOptions }, function(ok, err)
+        if not ok then print("[BeamJoyAPI] couldn't add the race options : " .. tostring(err.message)) end
+    end)
+end
+
+local function registerConfigTab()
+    if not configTab then return end
+    send("config.register", configTab.tab, function(ok, result)
+        if not ok then return print("[BeamJoyAPI] couldn't add the config tab : " .. tostring(result.message)) end
+        if configTab.onChange then
+            local done, err = pcall(configTab.onChange, result.values, nil, nil)
+            if not done then print("[BeamJoyAPI] the config callback failed : " .. tostring(err)) end
+        end
+    end)
+end
+
 local function becomeReady(info)
     if BJ.ready and info.instance == BJ.instance then return end
     BJ.ready, BJ.instance, BJ.info = true, info.instance, info
     for name in pairs(hooks) do registerHook(name) end
+    registerRaceOptions()
+    registerConfigTab()
     for _, fn in ipairs(readyFns) do
         local ok, err = pcall(fn, info)
         if not ok then print("[BeamJoyAPI] an onReady callback failed : " .. tostring(err)) end
@@ -497,6 +530,47 @@ function BJ.on(event, fn)
         MP.RegisterEvent("BJAPI_" .. event, global)
     end
     table.insert(handlers[event], fn)
+end
+
+--- adds sections of options to BeamJoy's race start menu and race editor (again whenever BeamJoy
+--- starts again). Replaces the ones this plugin added before. Each option : {id, type = "toggle" |
+--- "select" | "number" | "text", label, default, ...} ; `where` = "both" (default), "start" or
+--- "editor" ; `field = true` shows its value on results and leaderboard entries. The values chosen
+--- come with the race : `options[yourPlugin][optionId]` in race events and hooks
+---@param sections table[] {id, title, note?, options}
+function BJ.raceOptions(sections)
+    assert(BJ.name, "call BeamJoyAPI.init first")
+    raceOptions = sections
+    if BJ.ready then registerRaceOptions() end
+end
+
+--- adds a tab of this plugin's settings to BeamJoy's config window, for staff with
+--- EditPluginConfig. BeamJoy stores the values ; `onChange(values, changed, by)` gets them once
+--- registered (changed and by nil then) and whenever someone saves the tab. Options as in
+--- BJ.raceOptions, plus `secret = true` on a text (never sent to a game) and type "button" (a
+--- click comes to BJ.onConfigAction)
+---@param tab {title: string, sections: table[]}
+---@param onChange function?
+function BJ.configTab(tab, onChange)
+    assert(BJ.name, "call BeamJoyAPI.init first")
+    local first = configTab == nil
+    configTab = { tab = tab, onChange = onChange }
+    if first then
+        BJ.on("ConfigChanged", function(data)
+            if data.plugin ~= BJ.name or not configTab.onChange then return end
+            configTab.onChange(data.values, data.changed, data.by)
+        end)
+    end
+    if BJ.ready then registerConfigTab() end
+end
+
+--- runs `fn(action, by)` when someone clicks one of this plugin's config tab buttons (`action` :
+--- the button's id ; `by` : {id, name})
+---@param fn function
+function BJ.onConfigAction(fn)
+    BJ.on("ConfigAction", function(data)
+        if data.plugin == BJ.name then fn(data.action, data.by) end
+    end)
 end
 
 return BJ
