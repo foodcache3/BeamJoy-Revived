@@ -8,7 +8,20 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2701, server build 2464.
+Version 1.11.0 : client build 2702, server build 2465.
+
+- **New : plugins can add pages to the main window** (direct request : plugins adding "their own
+  tabs to the main hud and sidebar hud"). A page is a button on the side rail opening its own
+  panel, a tab in the full window, or both, with the plugin's title and one of BeamJoy's icons.
+  Plugins describe it in blocks and BeamJoy draws it in its own look, as plain text : headings,
+  text, tables (your row highlighted), plates, timers, bars, and input fields and buttons players
+  use. A click goes back to the plugin with the fields' values (checked), and opening a page tells
+  it too, so it can show each player their own version (their place in a league). Pages can be
+  for staff only, or for some players. A few at most (4 on the rail, 6 tabs), and each page says
+  which plugin it comes from. Works with the controller like BeamJoy's own panels. Through the
+  plugin API (`pages.register`, `pages.update`, `pages.unregister`, events `PageOpened` and
+  `PageAction` ; the helper's `BJ.page`, `BJ.updatePage`, `BJ.onPageOpened`, `BJ.onPageAction`) ;
+  the BJClasses example gets a League page.
 
 - **Security : the plugin API only answers server plugins.** A player's game can fire any server
   event, the API's included. Such requests already came to nothing (BeamMP puts the player's ID

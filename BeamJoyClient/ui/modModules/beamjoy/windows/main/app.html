@@ -177,6 +177,13 @@
         font-weight: 600;
         font-variant-numeric: tabular-nums;
     }
+    /* a plugin page's label : its own words, cut to the rail's width */
+    .bjr-rail .rail-item span.label.page {
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
     .bjr-rail .rail-badge {
         position: absolute;
         top: 0.2em;
@@ -850,6 +857,14 @@
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"></path></svg>
             <span class="label">{{'beamjoy.window.main.rail.setup' | translate}}</span>
         </button>
+        <!-- the server's plugins' pages (cmps/pluginPage) -->
+        <button type="button" class="rail-item" ng-repeat="pg in $ctrl.railPages track by pg.panel"
+            ng-class="{active: $ctrl.panel === pg.panel || ($ctrl.full && $ctrl.fullTab === pg.panel)}"
+            ng-click="$ctrl.clickPage(pg)" data-rail="{{pg.panel}}" bjr-pad-cursor="{{$ctrl.railPad(pg.panel)}}"
+            aria-label="{{pg.title}}" title="{{pg.title}}">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path ng-attr-d="{{pg.iconPath}}"></path></svg>
+            <span class="label page">{{pg.label || pg.title}}</span>
+        </button>
 
         <div class="rail-sep"></div>
         <button type="button" class="rail-item" ng-class="{active: $ctrl.full}"
@@ -873,8 +888,8 @@
         </button>
     </nav>
 
-    <section class="bjr-panel" ng-if="$ctrl.panel && !$ctrl.full" ng-style="$ctrl.panelStyle()" ng-class="{wide: $ctrl.panel === 'play' || $ctrl.panel === 'settings', dimmed: $ctrl.dimmed()}"
-        aria-label="{{('beamjoy.window.main.panels.' + $ctrl.panel) | translate}}">
+    <section class="bjr-panel" ng-if="$ctrl.panel && !$ctrl.full" ng-style="$ctrl.panelStyle()" ng-class="{wide: $ctrl.panelWide(), dimmed: $ctrl.dimmed()}"
+        aria-label="{{$ctrl.panelTitle()}}">
         <header>
             <div>
                 <span class="eyebrow">
@@ -884,12 +899,12 @@
                         <polygon points="41,80 56,80 64.8,38 49.8,38" fill="#1c1f26"></polygon>
                         <polygon points="64,80 79,80 91.6,20 76.6,20" fill="#1c1f26"></polygon>
                     </svg>
-                    <span class="bjr-word">BeamJoy</span>
+                    <span class="bjr-word">{{$ctrl.panelFrom()}}</span>
                 </span>
-                <h2 class="bjr-title">{{('beamjoy.window.main.panels.' + $ctrl.panel) | translate}}</h2>
+                <h2 class="bjr-title">{{$ctrl.panelTitle()}}</h2>
             </div>
             <span style="display: flex; gap: 0.2em">
-                <button type="button" class="bjr-icon-btn" ng-if="$ctrl.panel !== 'vote'" ng-click="$ctrl.openFull()"
+                <button type="button" class="bjr-icon-btn" ng-if="$ctrl.canOpenFull()" ng-click="$ctrl.openFull()"
                     aria-label="{{'beamjoy.window.main.rail.fullLong' | translate}}" title="{{'beamjoy.window.main.rail.fullLong' | translate}}">
                     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5h4v4M13.5 2.5L9 7M6.5 13.5h-4v-4M2.5 13.5L7 9"></path></svg>
                 </button>
@@ -906,6 +921,7 @@
             <bj-players-list ng-if="$ctrl.panel === 'players'"></bj-players-list>
             <bj-main-vote ng-if="$ctrl.panel === 'vote'"></bj-main-vote>
             <bj-main-settings ng-if="$ctrl.panel === 'settings'"></bj-main-settings>
+            <bj-plugin-page ng-if="$ctrl.isPage($ctrl.panel)" page="$ctrl.pageOf($ctrl.panel)"></bj-plugin-page>
         </div>
         <footer class="pad-hints" ng-if="$ctrl.pad" aria-label="{{'beamjoy.window.main.pad.label' | translate}}">
             <span><span class="key">D-pad</span>{{'beamjoy.window.main.pad.move' | translate}}</span>
@@ -939,7 +955,7 @@
                 <nav class="full-tabs" aria-label="{{'beamjoy.window.main.rail.sections' | translate}}">
                     <button type="button" class="full-tab" ng-repeat="tab in $ctrl.FULL_TABS" ng-class="{active: $ctrl.fullTab === tab}"
                         ng-click="$ctrl.setFullTab(tab)" aria-current="{{$ctrl.fullTab === tab ? 'page' : 'false'}}">
-                        {{('beamjoy.window.main.full.tabs.' + tab) | translate}}<span class="count" ng-if="tab === 'players'">{{$ctrl.playerCount()}}</span>
+                        {{$ctrl.tabLabel(tab)}}<span class="count" ng-if="tab === 'players'">{{$ctrl.playerCount()}}</span>
                     </button>
                 </nav>
             </div>
@@ -973,6 +989,7 @@
             <bj-players-list ng-if="$ctrl.fullTab === 'players'" full="true" moderation="true"></bj-players-list>
             <bj-main-leaderboards ng-if="$ctrl.fullTab === 'leaderboards'"></bj-main-leaderboards>
             <bj-main-settings ng-if="$ctrl.fullTab === 'settings'"></bj-main-settings>
+            <bj-plugin-page ng-if="$ctrl.isPage($ctrl.fullTab)" page="$ctrl.pageOf($ctrl.fullTab)" style="max-width: 52em"></bj-plugin-page>
         </div>
         <footer class="pad-hints" ng-if="$ctrl.pad" aria-label="{{'beamjoy.window.main.pad.label' | translate}}">
             <span><span class="key">LB RB</span>{{'beamjoy.window.main.pad.tabs' | translate}}</span>

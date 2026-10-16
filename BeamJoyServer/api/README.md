@@ -13,7 +13,9 @@ Lets your own BeamMP server plugins work with BeamJoy:
 - **Set** the time and weather.
 - **Add to BeamJoy's windows**: sections of options in the race start menu and the race editor
   (a race class, league rules), labels on results and leaderboard entries (the class, points, a
-  team), and a tab of your plugin's settings in the config window.
+  team), a tab of your plugin's settings in the config window, and pages of your own in the main
+  window (a button on its side rail, a tab in the full window) with buttons and fields players
+  use.
 
 Typical uses: a website kept in sync with the leaderboards, a Discord bot, live timing, a
 championship or league plugin, race classes, an entry list, a game mode of your own.
@@ -95,6 +97,11 @@ end
   `onChange(values, changed, by)` gets the values once registered (`changed` and `by` nil then),
   and again whenever someone saves the tab. `BJ.onConfigAction(fn)`: `fn(action, by)` when one of
   its buttons is clicked.
+- `BJ.page(page)`: a page in the main window (see [Pages](#pages)), registered again by itself
+  whenever BeamJoy restarts. `BJ.updatePage(id, blocks, players?, callback?)` changes its content
+  (everyone's, or those players' own), `BJ.removePage(id?)` takes it away.
+  `BJ.onPageOpened(fn)`: `fn(pageId, by)` when a player opens it ; `BJ.onPageAction(fn)`:
+  `fn(pageId, action, values, by)` when they click one of its buttons.
 - `BJ.json`: the JSON encoder/decoder the helper uses (`BJ.json.stringify`, `BJ.json.parse`).
 
 Two complete example plugins. To try one, copy its folder into `Resources/Server/`, next to
@@ -107,7 +114,8 @@ Two complete example plugins. To try one, copy its folder into `Resources/Server
   overlay that turns into the results.
 - `example/BJClasses/` adds race classes: a class picked in the race editor and the start menu,
   the cars of each class set in a config tab, cars outside the class refused at ready-up, the
-  class and league points shown on results and leaderboard entries.
+  class and league points shown on results and leaderboard entries, and a League page in the main
+  window with the standings (each player's own place, a class to pick).
 
 ## Methods
 
@@ -115,8 +123,8 @@ Every `map` param is optional and defaults to the map the server is on. Another 
 read from BeamJoy's saved files.
 
 Methods that change something (`race.*`, `environment.set`, `overlay.*`, `hud.message`, `hooks.*`,
-`raceOptions.*`, `results.setFields`, `leaderboard.setFields`, `config.*`) need your plugin's name
-in the request's `from`. The helper always sends it.
+`raceOptions.*`, `results.setFields`, `leaderboard.setFields`, `config.*`, `pages.*`) need your
+plugin's name in the request's `from`. The helper always sends it.
 
 ### `server.info`
 → `{api, instance, beamjoy: {version, build}, map: {name, label}, players, methods[], events[]}`
@@ -203,6 +211,10 @@ Your tab in the config window. See [Config tabs](#config-tabs). → `{values}`
 Your config tab's values (the stored ones, your defaults for the rest, secrets included) ;
 `config.set` changes the ones given. → `{values}` (and `changed`, the options `config.set`
 changed ; `ConfigChanged` follows with `by` `"plugin:<name>"`)
+
+### `pages.register` `{id, title, ...}` / `pages.update` `{id, blocks, players?}` / `pages.unregister` `{id?}`
+A page of yours in the main window, its content, and taking it (or, without `id`, all of yours)
+away. See [Pages](#pages). → `{id}` (`pages.unregister` without `id`: `{removed}`)
 
 ### `players.online`
 → `{players: [{id, name, displayName, nickname, guest, group, staff}]}`
@@ -293,6 +305,8 @@ Names are display names, not permanent IDs: a guest can change their nickname.
 | `RaceClosed` | `{sessionId, raceId, raceName, map, at, state}` |
 | `ConfigChanged` | `{plugin, values, changed, by}` : a plugin's config tab was saved |
 | `ConfigAction` | `{plugin, action, by: {id, name}}` : a button on a plugin's config tab was clicked |
+| `PageOpened` | `{plugin, page, by: {id, name}}` : a player opened a plugin's [page](#pages) |
+| `PageAction` | `{plugin, page, action, values, by: {id, name}}` : a button on a plugin's page was clicked |
 
 Every race event (`RaceGridOpened` to `RaceClosed`) also carries `options`: the plugins' [race
 options](#race-options) for that race.
@@ -339,6 +353,10 @@ clock simply moving on.
 **`ConfigChanged`** and **`ConfigAction`** go to every plugin like any event ; `plugin` says whose
 tab it was (`BJ.configTab` and `BJ.onConfigAction` only pass on your own). `values` holds secret
 options too, for that plugin.
+
+**`PageOpened`** and **`PageAction`** go to every plugin too (`BJ.onPageOpened` and
+`BJ.onPageAction` only pass on your own). `values` are the page's fields as that player set them,
+checked against the fields they were shown.
 
 **`PlayerJoined`** fires before a guest picks a nickname. Use `players.online` when you need
 nicknames.
@@ -512,6 +530,65 @@ end)
   whether one is set, and leaving it empty keeps it.
 - Saving sends `ConfigChanged` (with every value) ; values only change for options your tab has.
 
+## Pages
+
+A page of your own in BeamJoy's main window: a button on its side rail opening a panel, a tab in
+the full window, or both. You describe it in blocks, BeamJoy draws it in its own look: standings,
+an entry list, a player's league card, a few buttons and choices.
+
+```lua
+BJ.page({ id = "league", title = "League", icon = "trophy", blocks = {
+    { type = "heading", text = "Standings", sub = "This season" },
+    { type = "field", control = "select", id = "class", label = "Class", choices = { "All", "GT" }, default = "All" },
+    { type = "buttons", items = { { id = "show", label = "Show", style = "primary" } } },
+    { type = "table", columns = { { label = "#" }, { label = "Driver" }, { label = "Points", align = "right" } },
+      rows = { { cells = { "1", "Bob", "25" }, playerId = 3 } } },
+} })
+BJ.onPageOpened(function(pageId, by)
+    -- their own version : their place, their stats
+    BJ.updatePage("league", myBlocksFor(by.name), { by.id })
+end)
+BJ.onPageAction(function(pageId, action, values, by)
+    if action == "show" then BJ.updatePage("league", myBlocksFor(by.name, values.class), { by.id }) end
+end)
+```
+
+`pages.register {id, title, label?, icon?, where?, order?, wide?, staffOnly?, players?, blocks}`
+adds a page, or replaces yours with the same `id`:
+
+- `id`: a word (a letter, then letters, digits, `_` or `-`). A plugin can have 4 pages.
+- `title`: the panel's title and the tab's name (32 characters). `label`: the word under the rail
+  button (10, the title cut by default).
+- `icon`: one of `plug` (the default), `trophy`, `flag`, `chart`, `car`, `info`, `star`,
+  `calendar`, `users`, `globe`, `chat`, `list`, `clock`, `map`, `shield`, `bolt`, `heart`,
+  `gauge`.
+- `where`: `"both"` (default), `"rail"` (a panel only) or `"full"` (a full window tab only). The
+  rail shows 4 plugin pages at most, the full window 6, in `order` (lowest first, then the order
+  they were added).
+- `wide = true`: a wider panel. `staffOnly = true`: staff only (it follows promotions within a
+  second). `players`: only those player IDs.
+- `blocks`: the content everyone sees.
+
+`pages.update {id, blocks, players?}` changes the content: everyone's, or with `players`, those
+players' own (they see it instead of everyone's until the page is removed or they leave).
+`players` without `blocks` puts them back on everyone's. Players' screens follow straight away ;
+`PageOpened` is the moment to give a player their own.
+
+**Blocks**, top to bottom, up to 60 (32 KB once encoded): all of the [overlays'](#overlays) custom
+blocks (`text`, `row`, `timer`, `plate`, `bar`, `segments`, `table`, `divider` ; a table row with
+your `playerId` is highlighted for you), and:
+
+| Block | |
+|---|---|
+| `{type = "heading", text, sub?}` | a section title ; `sub`, a line of smaller text under it |
+| `{type = "field", control, id, label, ...}` | an input: `control` is an [option](#race-options)'s type (`toggle`, `select`, `number`, `text`) with its settings (`choices`, `min`, `max`, `default`...). Up to 12 per page |
+| `{type = "buttons", items}` | up to 4 buttons in a row, `{id, label, style?, confirm?, disabled?, tooltip?}` ; `style` `"primary"`, `"secondary"` (default) or `"danger"` ; `confirm` asks first. Up to 16 per page |
+
+A click sends you `PageAction` with the button's `id` and the page's fields as that player set
+them. What a player picked stays while you update the page, as long as it still fits. Clicks and
+page openings faster than a person would make them are dropped. The page shows that it comes from
+your plugin.
+
 ## Times
 
 Moments in the race events (`at`, `greenAt`) are `{unixMs, clockMs}`:
@@ -543,7 +620,7 @@ it for the leaderboards.
   doesn't add to what a plugin can do there, and doesn't sandbox it either: `from` is the name a
   plugin gives, not a checked one.
 - **Nothing reaches players' games as code.** Everything a plugin shows (messages, overlays,
-  options, labels, config tabs) is plain text drawn by BeamJoy: HTML shows as typed, scripts
+  options, labels, config tabs, pages) is plain text drawn by BeamJoy: HTML shows as typed, scripts
   never run, colors are BeamJoy's names or hex codes. Players' games only ever run BeamJoy's own
   code; to run code there, a client mod (a zip in `Resources/Client`) is needed, and every player
   downloads it like BeamJoy.
@@ -553,7 +630,10 @@ it for the leaderboards.
   events. Without the helper, ignore anything that isn't a string in your own handlers.
 - **What players send is checked on the server.** Race option values are checked against the
   plugin's definitions (types, choices, ranges, lengths) ; config tabs need the
-  `EditPluginConfig` permission to read, save or click.
+  `EditPluginConfig` permission to read, save or click. A page's click only counts for a button on
+  the page that player sees (a staff page's buttons don't work for anyone else), its values are
+  checked against that page's fields, and clicks or page openings faster than a person would make
+  them are dropped.
 - **Secrets stay on the server.** `secret` config options are never sent to a game, defaults
   included ; they are kept in `BeamJoyData/db/pluginConfig.json` in plain text, like any
   server setting, so protect the server's files.

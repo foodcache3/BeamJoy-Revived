@@ -1,0 +1,130 @@
+<style>
+    /* a plugin's page, in the main window's look (windows/main's .bjr tokens) */
+    bj-plugin-page { display: block; }
+    .bj-ppage { display: flex; flex-direction: column; gap: 0.6em; font-variant-numeric: tabular-nums; }
+    .bj-ppage .sz-s { font-size: 0.75em; }
+    .bj-ppage .sz-m { font-size: 0.9em; }
+    .bj-ppage .sz-l { font-size: 1.2em; }
+    .bj-ppage .sz-xl { font-size: 1.8em; }
+    .bj-ppage .disp,
+    .bj-ppage .timer {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        line-height: 1;
+    }
+    .bj-ppage .phead h3 { margin: 0; font-size: 1em; font-weight: 600; color: var(--bjr-soft, #c8cedc); }
+    .bj-ppage .phead p { margin: 0.2em 0 0; font-size: 0.82em; color: var(--bjr-muted, #a7aebf); }
+    .bj-ppage .ctext { overflow-wrap: anywhere; white-space: pre-line; }
+    .bj-ppage .ctext.bold { font-weight: 700; }
+    .bj-ppage .ctext.italic { font-style: italic; }
+    .bj-ppage .crow { display: flex; align-items: baseline; gap: 0.6em; }
+    .bj-ppage .crow > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bj-ppage .crow > .grow { flex: 1; }
+    .bj-ppage .crow > .bold { font-weight: 700; }
+    .bj-ppage .cdiv { height: 1px; margin: 0.15em 0; border: 0; background: var(--bjr-line, rgba(255, 255, 255, 0.08)); }
+    .bj-ppage .prog { height: 4px; background: rgba(255, 255, 255, 0.08); border-radius: 2px; overflow: hidden; }
+    .bj-ppage .prog > div { height: 100%; background: #ff6600; }
+    .bj-ppage .secs { display: flex; gap: 2px; }
+    .bj-ppage .sec { flex: 1; min-width: 3px; height: 0.5em; transform: skewX(-10deg); border-radius: 1px; background: rgba(255, 255, 255, 0.08); }
+    .bj-ppage .sec.done { background: #6b7180; }
+    .bj-ppage .sec.best { background: #ba68f8; }
+    .bj-ppage .sec.live { background: rgba(255, 102, 0, 0.55); }
+    .bj-ppage .cplate { display: flex; align-items: center; gap: 0.7em; }
+    .bj-ppage .cplate .plate {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 2.4em;
+        padding: 0.3em 0.65em;
+        transform: skewX(-10deg);
+        background: #ff6600;
+        border-radius: 2px;
+        color: #fff;
+    }
+    .bj-ppage .cplate .plate > span {
+        transform: skewX(10deg);
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 900;
+        font-style: italic;
+        font-size: 1.25em;
+        line-height: 1.1;
+        white-space: nowrap;
+    }
+    .bj-ppage .cplate .sub { font-size: 0.85em; color: var(--bjr-muted, #a7aebf); }
+    .bj-ppage .ctable { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+    .bj-ppage .ctable th { padding: 0 0.4em 0.3em; font-size: 0.85em; font-weight: 600; color: var(--bjr-muted, #a7aebf); text-align: left; }
+    .bj-ppage .ctable td {
+        max-width: 14em;
+        padding: 0.35em 0.4em;
+        border-top: 1px solid rgba(255, 255, 255, 0.07);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .bj-ppage .ctable td.bold { font-weight: 700; }
+    .bj-ppage .ctable tr.you { background: rgba(255, 102, 0, 0.1); box-shadow: inset 3px 0 0 #ff6600; }
+    .bj-ppage .cbuttons { display: flex; flex-wrap: wrap; gap: 0.4em; }
+    .bj-ppage input.ptext { width: 100%; box-sizing: border-box; }
+    .bj-ppage .pfrom { margin-top: 0.4em; font-size: 0.72em; color: var(--bjr-muted, #a7aebf); opacity: 0.8; }
+</style>
+
+<div class="bj-ppage">
+    <p class="bjr-muted" ng-if="$ctrl.blocks.length === 0">{{'beamjoy.window.main.plugin.empty' | translate}}</p>
+
+    <div ng-repeat="b in $ctrl.blocks track by $index" ng-switch="b.type">
+        <div ng-switch-when="heading" class="phead">
+            <h3>{{b.text}}</h3>
+            <p ng-if="b.sub">{{b.sub}}</p>
+        </div>
+        <div ng-switch-when="text" class="ctext" ng-class="['sz-' + (b.size || 'm'), {bold: b.bold, italic: b.italic, disp: b.display}]"
+            ng-style="b._style">{{b.text}}</div>
+        <div ng-switch-when="row" class="crow">
+            <span ng-repeat="c in b.cells track by $index" ng-class="['sz-' + (c.size || 'm'), {grow: c.grow, bold: c.bold}]"
+                ng-style="c._style">{{c.text}}</span>
+        </div>
+        <div ng-switch-when="timer" class="timer" ng-class="'sz-' + (b.size || 'l')" ng-style="b._style" role="timer">{{$ctrl.timerText(b)}}</div>
+        <div ng-switch-when="bar" class="prog" aria-hidden="true"><div ng-style="b._fill"></div></div>
+        <div ng-switch-when="segments" class="secs" aria-hidden="true">
+            <div class="sec" ng-repeat="s in b.items track by $index" ng-class="s"></div>
+        </div>
+        <hr ng-switch-when="divider" class="cdiv">
+        <div ng-switch-when="plate" class="cplate">
+            <div class="plate" ng-style="b._plate"><span>{{b.text}}</span></div>
+            <span class="sub" ng-if="b.sub">{{b.sub}}</span>
+        </div>
+        <table ng-switch-when="table" class="ctable">
+            <thead ng-if="b.columns.length > 0">
+                <tr><th ng-repeat="c in b.columns track by $index" ng-style="c.align ? {'text-align': c.align} : {}">{{c.label}}</th></tr>
+            </thead>
+            <tbody>
+                <tr ng-repeat="r in b.rows track by $index" ng-class="{you: r._you}" ng-style="r._style">
+                    <td ng-repeat="c in r.cells track by $index" ng-class="{bold: c.bold}" ng-style="c._style">{{c.text}}</td>
+                </tr>
+            </tbody>
+        </table>
+        <div ng-switch-when="field" ng-class="b.option.type === 'toggle' ? 'bjr-toggle-row' : 'bjr-field'">
+            <span ng-class="{name: b.option.type !== 'toggle'}" title="{{b.option.tooltip || ''}}">{{b.option.label}}</span>
+            <bj-toggle ng-if="b.option.type === 'toggle'" ng-model="$ctrl.values[b.option.id]"></bj-toggle>
+            <div class="bjr-seg" ng-if="b.option.type === 'select' && b.option.seg">
+                <button type="button" ng-repeat="c in b.option.choices track by c.value"
+                    ng-class="{on: $ctrl.values[b.option.id] === c.value}" ng-click="$ctrl.pick(b.option, c.value)">{{c.label}}</button>
+            </div>
+            <bj-select ng-if="b.option.type === 'select' && !b.option.seg" ng-model="$ctrl.values[b.option.id]" options="b.option.selectOptions"></bj-select>
+            <bj-slider ng-if="b.option.type === 'number'" ng-model="$ctrl.values[b.option.id]" min="b.option.min" max="b.option.max"
+                hard-min="b.option.min" hard-max="b.option.max" step="b.option.step"></bj-slider>
+            <input ng-if="b.option.type === 'text'" type="text" class="ptext" ng-model="$ctrl.values[b.option.id]"
+                maxlength="{{b.option.maxLength}}" placeholder="{{b.option.placeholder || ''}}" />
+        </div>
+        <div ng-switch-when="buttons" class="cbuttons">
+            <button type="button" class="bjr-btn" ng-repeat="item in b.items track by item.id"
+                ng-class="{primary: item.style === 'primary', danger: item.style === 'danger'}"
+                ng-disabled="item.disabled || $ctrl.busy[item.id]" title="{{item.tooltip || ''}}"
+                ng-click="$ctrl.click(item)">{{item.label}}</button>
+        </div>
+    </div>
+
+    <!-- where it comes from : a server plugin, not BeamJoy itself -->
+    <p class="pfrom">{{'beamjoy.window.main.plugin.from' | translate}} {{$ctrl.page.plugin}}</p>
+</div>

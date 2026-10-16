@@ -10,6 +10,9 @@ the API that add to BeamJoy's own windows. Meant to be read, then copied and cha
 - Ready check : a car that isn't in the race's class can't ready up, with the reason shown.
 - Fields : league points on each finisher's result, and on their leaderboard entry when the race
   set it (25, 18, 15...).
+- Page : a "League" page in the main window (a rail button and a tab in the full window) with the
+  standings since the server started. Opening it gives each player their own version (their
+  place), and a class picked there with "Show" narrows it down for them.
 
 Install : copy this whole folder into Resources/Server/ (next to BeamJoyServer), restart the
 server, then fill in the cars in the config window's Classes tab.
@@ -29,6 +32,10 @@ local function log(msg) print("[" .. NAME .. "] " .. msg) end
 
 --- the config tab's values (BeamJoy keeps them ; they come with every change)
 local config = {}
+--- league points since the server started : class -> player name -> points
+local standings = {}
+--- players with their own League page : player ID -> {name, class} (the class picked, or "all")
+local viewers = {}
 
 --- "ETK 800 Series, Sunburst" -> { ["etk 800 series"] = true, sunburst = true }
 local function carList(text)
@@ -45,6 +52,59 @@ local function classLabel(value)
         if c.value == value then return c.label end
     end
     return value
+end
+
+--- the League page's blocks : the standings for a class (or "all"), with `you` (a name) marked
+local function leagueBlocks(class, you)
+    local totals = {}
+    for c, names in pairs(standings) do
+        if class == "all" or class == c then
+            for name, points in pairs(names) do totals[name] = (totals[name] or 0) + points end
+        end
+    end
+    local list = {}
+    for name, points in pairs(totals) do list[#list + 1] = { name = name, points = points } end
+    table.sort(list, function(a, b)
+        if a.points ~= b.points then return a.points > b.points end
+        return a.name < b.name
+    end)
+
+    local choices = { { value = "all", label = "All" } }
+    for _, c in ipairs(CLASSES) do choices[#choices + 1] = c end
+    local blocks = {
+        { type = "heading", text = "Standings", sub = class == "all" and "Every class, since the server started"
+            or (classLabel(class) .. " class, since the server started") },
+        { type = "field", control = "select", id = "class", label = "Class", choices = choices, default = class },
+        { type = "buttons", items = { { id = "show", label = "Show", style = "primary" } } },
+        { type = "divider" },
+    }
+    if #list == 0 then
+        blocks[#blocks + 1] = { type = "text", text = "No points yet : finish a race with League points on.",
+            color = "muted" }
+        return blocks
+    end
+    if you then
+        for i, row in ipairs(list) do
+            if row.name == you then
+                blocks[#blocks + 1] = { type = "plate", text = tostring(i), sub = row.points .. " pts : your place" }
+            end
+        end
+    end
+    local rows = {}
+    for i, row in ipairs(list) do
+        if i > 20 then break end
+        rows[#rows + 1] = { cells = { tostring(i), row.name, { text = row.points .. " pts", align = "right" } },
+            you = row.name == you or nil }
+    end
+    blocks[#blocks + 1] = { type = "table", columns = { { label = "#" }, { label = "Driver" },
+        { label = "Points", align = "right" } }, rows = rows }
+    return blocks
+end
+
+--- the League page as one player sees it (their own content)
+local function showLeague(id)
+    local v = viewers[id]
+    if v then BJ.updatePage("league", leagueBlocks(v.class, v.name), { id }) end
 end
 
 function onInit()
@@ -99,12 +159,33 @@ function onInit()
         return { allow = true }
     end)
 
+    -- the League page : a rail button and a full window tab ; everyone's content is the
+    -- standings, each player gets their own once they open it
+    BJ.page({ id = "league", title = "League", icon = "trophy", blocks = leagueBlocks("all") })
+    BJ.onPageOpened(function(pageId, by)
+        if pageId ~= "league" then return end
+        viewers[by.id] = viewers[by.id] or { name = by.name, class = "all" }
+        showLeague(by.id)
+    end)
+    BJ.onPageAction(function(pageId, action, values, by)
+        if pageId ~= "league" or action ~= "show" then return end
+        viewers[by.id] = { name = by.name, class = values.class }
+        showLeague(by.id)
+    end)
+    BJ.on("PlayerLeft", function(data) viewers[data.id] = nil end)
+
     -- league points, on the result (and the leaderboard entry, when this run set it)
     BJ.on("RacerFinished", function(data)
         -- every race event carries the race's options
         local mine = data.options and data.options[NAME] or {}
         if mine.points == false or not data.racer.id then return end
         local points = POINTS[data.finishOrder] or 0
+        -- the standings, and the League page for everyone (and whoever has their own)
+        local class = mine.class or "street"
+        standings[class] = standings[class] or {}
+        standings[class][data.racer.name] = (standings[class][data.racer.name] or 0) + points
+        BJ.updatePage("league", leagueBlocks("all"))
+        for id in pairs(viewers) do showLeague(id) end
         BJ.call("results.setFields", {
             sessionId = data.sessionId,
             playerId = data.racer.id,

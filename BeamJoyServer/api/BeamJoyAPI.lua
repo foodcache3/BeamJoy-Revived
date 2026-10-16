@@ -37,8 +37,9 @@ one, with whatever fn returns :
     end)
 
 Plugins can add to BeamJoy's own windows too : options in the race start menu and race editor
-(BJ.raceOptions), a tab in the config window (BJ.configTab), labels on results and leaderboard
-entries (the results.setFields and leaderboard.setFields methods) :
+(BJ.raceOptions), a tab in the config window (BJ.configTab), pages in the main window and its rail
+(BJ.page), labels on results and leaderboard entries (the results.setFields and
+leaderboard.setFields methods) :
 
     BJ.raceOptions({ { id = "league", title = "League", options = {
         { id = "class", type = "select", label = "Class", choices = { "GT3", "GT4", "Street" }, field = true },
@@ -46,6 +47,11 @@ entries (the results.setFields and leaderboard.setFields methods) :
     BJ.configTab({ title = "League", sections = { { id = "main", title = "Website", options = {
         { id = "url", type = "text", label = "Address" },
     } } } }, function(values) print("website : " .. values.url) end)
+    BJ.page({ id = "league", title = "League", icon = "trophy", blocks = {
+        { type = "heading", text = "Standings" },
+        { type = "buttons", items = { { id = "refresh", label = "Refresh" } } },
+    } })
+    BJ.onPageAction(function(page, action, values, by) print(by.name .. " clicked " .. action) end)
 
 Public domain JSON code below : json.lua by Tyler Neylon, as BeamJoy itself ships it.
 ]]
@@ -319,6 +325,8 @@ local hooks = {}    -- hook name -> {fn, timeoutMs}
 local hookEventRegistered = false
 local raceOptions = nil -- what BJ.raceOptions registered (again after BeamJoy restarts)
 local configTab = nil   -- what BJ.configTab registered, and its callback
+local pages = {}        -- id -> what BJ.page registered (with BJ.updatePage's latest blocks)
+local pageOrder = {}    -- their ids, in the order they were first registered
 local counter = 0
 local lastPing = 0
 local PING_EVERY = 10
@@ -361,12 +369,21 @@ local function registerConfigTab()
     end)
 end
 
+local function registerPage(pageId)
+    local page = pages[pageId]
+    if not page then return end
+    send("pages.register", page, function(ok, err)
+        if not ok then print("[BeamJoyAPI] couldn't add the " .. pageId .. " page : " .. tostring(err.message)) end
+    end)
+end
+
 local function becomeReady(info)
     if BJ.ready and info.instance == BJ.instance then return end
     BJ.ready, BJ.instance, BJ.info = true, info.instance, info
     for name in pairs(hooks) do registerHook(name) end
     registerRaceOptions()
     registerConfigTab()
+    for _, pageId in ipairs(pageOrder) do registerPage(pageId) end
     for _, fn in ipairs(readyFns) do
         local ok, err = pcall(fn, info)
         if not ok then print("[BeamJoyAPI] an onReady callback failed : " .. tostring(err)) end
@@ -573,6 +590,63 @@ end
 function BJ.onConfigAction(fn)
     BJ.on("ConfigAction", function(data)
         if data.plugin == BJ.name then fn(data.action, data.by) end
+    end)
+end
+
+--- adds a page to BeamJoy's main window (again whenever BeamJoy starts again), or replaces this
+--- plugin's page with the same id : `{id, title, label?, icon?, where = "both" | "rail" | "full",
+--- order?, wide?, staffOnly?, players?, blocks}`. See README.md's Pages for the blocks
+---@param page table
+function BJ.page(page)
+    assert(BJ.name, "call BeamJoyAPI.init first")
+    assert(type(page) == "table" and type(page.id) == "string", "BeamJoyAPI.page needs {id, title, ...}")
+    local copy = {}
+    for k, v in pairs(page) do copy[k] = v end
+    if not pages[copy.id] then pageOrder[#pageOrder + 1] = copy.id end
+    pages[copy.id] = copy
+    if BJ.ready then registerPage(copy.id) end
+end
+
+--- a page's content : everyone's (`players` nil), or the content of the players given (a list of
+--- player IDs) ; `blocks` nil with `players` puts those players back on everyone's content
+---@param pageId string
+---@param blocks table[]?
+---@param players integer[]?
+---@param callback function? callback(ok, result)
+function BJ.updatePage(pageId, blocks, players, callback)
+    if players == nil and pages[pageId] then pages[pageId].blocks = blocks end
+    BJ.call("pages.update", { id = pageId, blocks = blocks, players = players }, callback)
+end
+
+--- takes a page away (all of this plugin's when `pageId` is nil)
+---@param pageId string?
+function BJ.removePage(pageId)
+    if pageId then
+        pages[pageId] = nil
+        for i, id in ipairs(pageOrder) do
+            if id == pageId then table.remove(pageOrder, i) break end
+        end
+    else
+        pages, pageOrder = {}, {}
+    end
+    BJ.call("pages.unregister", { id = pageId }, nil)
+end
+
+--- runs `fn(pageId, by)` when a player opens one of this plugin's pages (`by` : {id, name}) : the
+--- moment to give them their own content (BJ.updatePage with players = { by.id })
+---@param fn function
+function BJ.onPageOpened(fn)
+    BJ.on("PageOpened", function(data)
+        if data.plugin == BJ.name then fn(data.page, data.by) end
+    end)
+end
+
+--- runs `fn(pageId, action, values, by)` when a player clicks a button on one of this plugin's
+--- pages (`action` : the button's id ; `values` : the page's fields as that player set them)
+---@param fn function
+function BJ.onPageAction(fn)
+    BJ.on("PageAction", function(data)
+        if data.plugin == BJ.name then fn(data.page, data.action, data.values or {}, data.by) end
     end)
 end
 

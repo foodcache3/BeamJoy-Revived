@@ -587,6 +587,15 @@ Editor (a Props section in the race editor, `ui/raceEditor.lua` + its Angular si
 
 ## Plugin API: other server plugins working with BeamJoy (leaderboard website, Discord bot, modular plugins)
 
+**Step 4, plugin pages in the main window : built in client 2702 / server 2465, not yet tried live.**
+Direct request : plugins adding "their own tabs to the main hud and sidebar hud". Server :
+`services/pluginPages.lua` (pages, checks, each player's view kept in sync, clicks and opens rate
+limited), `api.lua` (`pages.*`, `PageOpened`, `PageAction`). Client : `beamjoy/pluginPages.lua`,
+`cmps/pluginPage` (draws a page), `windows/main` (rail buttons, panels, full window tabs, the
+controller). Example : BJClasses' League page. To check live : the rail with a page or two (its
+height, the label cut), a page panel and tab, the fields and buttons, the controller on a page,
+per-player content arriving on opening.
+
 **Step 3, plugins in BeamJoy's windows : built in client 2701 / server 2463, not yet tried live.**
 Direct request : plugins add "categories and options" to the race start menu and the race editor,
 "extra labels or fields to results or leaderboards without worrying about multiple entries", and

@@ -132,6 +132,8 @@
     "beamjoy.notices.kind.crew": "crew",
     "beamjoy.window.main.rail.crew": "Crew",
     "beamjoy.window.main.panels.crew": "Crew",
+    "beamjoy.window.main.plugin.empty": "Nothing here yet.",
+    "beamjoy.window.main.plugin.from": "Added by the server plugin",
     "beamjoy.window.main.full.tabs.crew": "Crew",
     "beamjoy.crew.intro": "A crew is up to 8 players who play together. When your crew's leader opens a race, hunt, infected game or convoy, everyone in the crew who's free joins it.",
     "beamjoy.crew.nameLabel": "Crew name",

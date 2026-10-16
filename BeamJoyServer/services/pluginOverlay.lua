@@ -470,8 +470,17 @@ M.hide = hide
 M.clear = clear
 M.message = message
 M.visibleTo = visibleTo
--- the same checks, for services/pluginUi.lua
+-- the same checks, for services/pluginUi.lua and services/pluginPages.lua
 M.cleanText = text
 M.cleanColor = color
+--- one of the custom layout's blocks, checked (nil when it isn't one)
+---@param b any
+---@return table?
+M.cleanBlock = function(b)
+    if type(b) ~= "table" or type(b.type) ~= "string" or not BLOCKS[b.type] then return nil end
+    local out = BLOCKS[b.type](b)
+    if out then out.type = b.type end
+    return out
+end
 
 return M

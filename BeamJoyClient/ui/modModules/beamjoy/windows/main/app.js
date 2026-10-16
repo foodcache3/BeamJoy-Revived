@@ -21,7 +21,8 @@ await import(`/ui/modModules/beamjoy/windows/main/crew/app.js`);
 // rail's own Hide button closes it.
 angular.module("beamjoy").component("bjMain", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/app.html",
-    controller: function ($rootScope, $scope, $element, $timeout, beamjoyStore, beamjoyNow, beamjoyDelivery, beamjoyCrew) {
+    controller: function ($rootScope, $scope, $element, $timeout, $filter, beamjoyStore, beamjoyNow, beamjoyDelivery, beamjoyCrew) {
+        const translate = $filter("translate");
         this.visible = false;
         this.closable = false;
         // null or one of PANELS : the small panel open beside the rail
@@ -29,6 +30,99 @@ angular.module("beamjoy").component("bjMain", {
         this.full = false;
         this.fullTab = "home";
         this.FULL_TABS = ["home", "activities", "crew", "players", "leaderboards", "settings"];
+        const BASE_TABS = this.FULL_TABS.slice();
+
+        // PLUGIN PAGES -----------------------------------------------------------------------
+        // Pages from the server's plugins (the plugin API's pages.* : beamjoy/pluginPages.lua
+        // hands them over, cmps/pluginPage draws them). A page is a rail button opening its own
+        // panel, a tab of the full window (before Settings), or both ; its panel / tab id is
+        // "p:<plugin>/<page>". A few at most, so the rail stays a rail
+        const MAX_RAIL_PAGES = 4;
+        const MAX_FULL_PAGES = 6;
+        // the icons a plugin can name, in the rail's own stroke style (any other name : the plug)
+        const PAGE_ICONS = {
+            plug: "M8 3v5M14 3v5M6 8h10v3a5 5 0 01-10 0zM11 16v3",
+            trophy: "M7 4h8v4a4 4 0 01-8 0zM7 5.5H4.5a2.5 2.5 0 002.7 3M15 5.5h2.5a2.5 2.5 0 01-2.7 3M11 12v3M8 18h6M9 15h4v3H9z",
+            flag: "M5 20V3M5 4h11l-2.5 4L16 12H5",
+            chart: "M4 18V4M4 18h14M8 15v-4M12 15V7M16 15v-6",
+            car: "M4 15v-3.5L6 7h10l2 4.5V15zM4 15v2M18 15v2M4 11.5h14",
+            info: "M11 3a8 8 0 110 16 8 8 0 010-16zM11 10v5M11 7v.01",
+            star: "M11 3l2.5 5.2 5.5.8-4 3.9.9 5.6L11 15.8l-4.9 2.7.9-5.6-4-3.9 5.5-.8z",
+            calendar: "M4 6h14v12H4zM4 10h14M8 4v4M14 4v4",
+            users: "M8 4.5a3 3 0 110 6 3 3 0 010-6zM2.5 18c.7-3 2.8-4.6 5.5-4.6s4.8 1.6 5.5 4.6M15.5 6a2.4 2.4 0 110 4.8M14 13.6c.5-.2 1-.2 1.5-.2 2.2 0 3.6 1.4 4.2 4.1",
+            globe: "M11 3a8 8 0 110 16 8 8 0 010-16zM3 11h16M11 3c2.5 2.5 2.5 13.5 0 16M11 3c-2.5 2.5-2.5 13.5 0 16",
+            chat: "M4 5h14v9H9l-4 3.5V14H4z",
+            list: "M8 6h10M8 11h10M8 16h10M4 6h.01M4 11h.01M4 16h.01",
+            clock: "M11 3a8 8 0 110 16 8 8 0 010-16zM11 7v4l3 2",
+            map: "M3 6l5-2 6 2 5-2v12l-5 2-6-2-5 2zM8 4v12M14 6v12",
+            shield: "M11 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z",
+            bolt: "M12 2L5 12h5l-1 8 7-10h-5z",
+            heart: "M11 18s-7-4.3-7-9a4 4 0 017-2.6A4 4 0 0118 9c0 4.7-7 9-7 9z",
+            gauge: "M4 15a7 7 0 1114 0M11 15l4-5",
+        };
+        this.pages = [];
+        this.railPages = [];
+        this.fullPages = [];
+        this.isPage = (id) => typeof id === "string" && id.startsWith("p:");
+        this.pageOf = (id) => (this.isPage(id) ? this.pages.find((p) => p.panel === id) || null : null);
+        $rootScope.$on("BJPluginPages", (_, data) => {
+            $rootScope.$applyAsync(() => {
+                const now = Date.now();
+                const list = (Array.isArray(data) ? data : data && typeof data === "object" ? Object.values(data) : [])
+                    .filter((e) => e && e.page && typeof e.page.key === "string")
+                    .map((e) =>
+                        Object.assign({}, e.page, {
+                            _anchor: now - (e.ageMs || 0),
+                            panel: `p:${e.page.key}`,
+                            iconPath: PAGE_ICONS[e.page.icon] || PAGE_ICONS.plug,
+                        })
+                    );
+                // by the plugins' order, then as they came
+                list.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.seq || 0) - (b.seq || 0));
+                this.pages = list;
+                this.railPages = list.filter((p) => p.where !== "full").slice(0, MAX_RAIL_PAGES);
+                this.fullPages = list.filter((p) => p.where !== "rail").slice(0, MAX_FULL_PAGES);
+                this.FULL_TABS = BASE_TABS.slice(0, -1).concat(this.fullPages.map((p) => p.panel), ["settings"]);
+                // a page that went away while open
+                if (this.isPage(this.panel) && !this.railPages.some((p) => p.panel === this.panel)) this.panel = null;
+                if (this.isPage(this.fullTab) && !this.FULL_TABS.includes(this.fullTab)) this.fullTab = "home";
+            });
+        });
+        // what the panel and the tabs say : a page's own title, or BeamJoy's
+        this.panelTitle = () => {
+            const page = this.pageOf(this.panel);
+            if (page) return page.title;
+            return this.panel ? translate(`beamjoy.window.main.panels.${this.panel}`) : "";
+        };
+        this.panelFrom = () => {
+            const page = this.pageOf(this.panel);
+            return page ? page.plugin : "BeamJoy";
+        };
+        this.panelWide = () => {
+            const page = this.pageOf(this.panel);
+            return page ? !!page.wide : this.panel === "play" || this.panel === "settings";
+        };
+        // a page only on the rail has no full window tab to open
+        this.canOpenFull = () => {
+            const page = this.pageOf(this.panel);
+            return page ? page.where !== "rail" : this.panel !== "vote";
+        };
+        this.tabLabel = (tab) => {
+            const page = this.pageOf(tab);
+            return page ? page.title : translate(`beamjoy.window.main.full.tabs.${tab}`);
+        };
+        this.clickPage = (page) => {
+            if (this.full && page.where !== "rail") this.setFullTab(page.panel);
+            else this.togglePanel(page.panel);
+        };
+        // opening a page tells its plugin (it may fill it in for you then)
+        $scope.$watch(
+            () => (this.visible ? (this.full ? this.fullTab : this.panel) : null),
+            (id) => {
+                const page = this.pageOf(id);
+                if (page) beamjoyStore.send("BJPluginPageOpened", [page.plugin, page.id]);
+            }
+        );
 
         $rootScope.$on("BJUpdateWindowSettings", (_, data) => {
             const el = data["beamjoy-main"];
@@ -68,14 +162,18 @@ angular.module("beamjoy").component("bjMain", {
             this.panel = null;
             this.full = true;
         };
-        // shrinking goes back to the panel matching the tab you were on
+        // shrinking goes back to the panel matching the tab you were on (a page's own, when it has one)
         this.shrink = () => {
             const back = { home: "now", activities: "play", crew: "crew", players: "players", leaderboards: "now", settings: "settings" };
+            const page = this.pageOf(this.fullTab);
             this.full = false;
-            this.panel = back[this.fullTab] || "now";
+            this.panel = page ? (page.where !== "full" ? page.panel : "now") : back[this.fullTab] || "now";
         };
-        this.fullFor = (panel) =>
-            ({ now: "home", play: "activities", crew: "crew", players: "players", settings: "settings" })[panel] || "home";
+        this.fullFor = (panel) => {
+            const page = this.pageOf(panel);
+            if (page) return page.where !== "rail" ? page.panel : "home";
+            return ({ now: "home", play: "activities", crew: "crew", players: "players", settings: "settings" })[panel] || "home";
+        };
         this.setFullTab = (tab) => (this.fullTab = tab);
 
         // other components ask for a panel (Happening now's "Start an activity", an activity
@@ -169,6 +267,7 @@ angular.module("beamjoy").component("bjMain", {
         this.$onInit = () => {
             beamjoyNow.refresh();
             beamjoyStore.send("BJMainPadRequest");
+            beamjoyStore.send("BJPluginPagesRequest");
         };
 
         // CONTROLLER -------------------------------------------------------------------------
@@ -469,7 +568,7 @@ angular.module("beamjoy").component("bjMain", {
             enterContent();
         };
         const railPress = (id) => {
-            if (PANEL_IDS.includes(id)) openPanel(id);
+            if (PANEL_IDS.includes(id) || this.pageOf(id)) openPanel(id);
             else if (id === "full") toggleFull();
             else if (id === "fuel") this.fuelAction();
             else if (id === "hide") this.hide();
@@ -721,7 +820,6 @@ angular.module("beamjoy").component("bjMain", {
 
         // where the rail and its panel are, for the notification stack (windows/notices) : it sits
         // beside them, never on top of the panel you're using
-        const PANEL_WIDTH_EM = { play: 28, settings: 28 };
         $scope.$watch(() => {
             const r = this.railRect();
             return [this.visible, this.panel, this.full, Math.round(r.left), Math.round(r.top), window.innerWidth].join("|");
@@ -731,7 +829,7 @@ angular.module("beamjoy").component("bjMain", {
                 full: !!this.full,
                 side: this.side(),
                 railRect: this.railRect(),
-                panelEm: this.visible && this.panel && !this.full ? PANEL_WIDTH_EM[this.panel] || 22 : 0,
+                panelEm: this.visible && this.panel && !this.full ? (this.panelWide() ? 28 : 22) : 0,
             };
         });
 

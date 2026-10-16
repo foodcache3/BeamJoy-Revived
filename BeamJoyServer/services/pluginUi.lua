@@ -72,7 +72,7 @@ local function choice(c)
 end
 
 ---@param o any an option as a plugin describes it
----@param where "race"|"config"
+---@param where "race"|"config"|"page" (a field on a plugin's page : services/pluginPages.lua)
 ---@return table? option, string? why not
 local function option(o, where)
     if type(o) ~= "table" then return nil, "an option must be an object" end
@@ -669,6 +669,9 @@ M.registerConfigTab = registerConfigTab
 M.unregisterConfigTab = unregisterConfigTab
 M.configOf = configOf
 M.setConfig = setConfig
+-- the same checks, for the fields on plugins' pages (services/pluginPages.lua)
+M.cleanOption = option
+M.valueFor = valueFor
 M.onConfigValuesRequest = onConfigValuesRequest
 M.onConfigSave = onConfigSave
 M.onConfigAction = onConfigAction

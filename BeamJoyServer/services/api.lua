@@ -40,7 +40,8 @@ local REQUEST_EVENT = "BJAPI_Request"
 local RESPONSE_EVENT = "BJAPI_Response"
 local EVENTS = { "Ready", "LeaderboardChanged", "RacesChanged", "MapChanged", "PlayerJoined", "PlayerLeft",
     "RaceGridOpened", "RaceCountdown", "RaceGreenLight", "RacerLap", "RacerFinished", "RacerOut",
-    "RaceFinished", "RaceClosed", "EnvironmentChanged", "ConfigChanged", "ConfigAction", "Hook" }
+    "RaceFinished", "RaceClosed", "EnvironmentChanged", "ConfigChanged", "ConfigAction", "PageOpened",
+    "PageAction", "Hook" }
 local LEADERBOARD_LIMIT_DEFAULT = 100
 
 --- the questions BeamJoy asks plugins (see raceGrid.lua)
@@ -683,6 +684,36 @@ M.methods["config.set"] = function(params, ctx)
 end
 
 -- ---------------------------------------------------------------------------------------------
+-- plugins' own pages in the main window (services/pluginPages.lua)
+
+--- a page : a rail button with its side panel, a tab in the full window, or both
+M.methods["pages.register"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local ok, why = services_pluginPages.register(plugin, params)
+    if not ok then return nil, "badParams", why end
+    return { id = params.id }
+end
+
+--- a page's content : everyone's, or the players given their own
+M.methods["pages.update"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local ok, why, code = services_pluginPages.update(plugin, params)
+    if not ok then return nil, code or "badParams", why end
+    return { id = params.id }
+end
+
+--- one page, or (no id) every page of the plugin's
+M.methods["pages.unregister"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    if params.id == nil then return { removed = services_pluginPages.clear(plugin) } end
+    services_pluginPages.unregister(plugin, params.id)
+    return { id = params.id }
+end
+
+-- ---------------------------------------------------------------------------------------------
 -- hooks : BeamJoy asks, the plugins registered for that question answer, BeamJoy goes on with
 -- their answers once they've all answered or the time's up
 
@@ -1047,6 +1078,24 @@ end
 ---@param by {id: integer, name: string}
 function M.configAction(plugin, action, by)
     emit("ConfigAction", { plugin = plugin, action = action, by = by })
+end
+
+--- a player opened one of a plugin's pages (its side panel or its tab)
+---@param plugin string
+---@param page string the page's id
+---@param by {id: integer, name: string}
+function M.pageOpened(plugin, page, by)
+    emit("PageOpened", { plugin = plugin, page = page, by = by })
+end
+
+--- a button on a plugin's page was clicked
+---@param plugin string
+---@param page string the page's id
+---@param action string the button's id
+---@param values table the page's fields, as that player set them (checked)
+---@param by {id: integer, name: string}
+function M.pageAction(plugin, page, action, values, by)
+    emit("PageAction", { plugin = plugin, page = page, action = action, values = values, by = by })
 end
 
 --- a session ended without finishing : cancelled, everyone left, nobody ready in time

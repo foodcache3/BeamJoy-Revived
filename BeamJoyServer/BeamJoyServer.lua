@@ -57,6 +57,7 @@ local M = {
         "services_deliveryPoints", "services_deliveries", "services_lobbyInvites", "services_crews",
         "services_vehicleInteractions", "services_playerPursuit",
         "services_identity", "services_discord", "services_updater", "services_api", "services_pluginOverlay", "services_pluginUi",
+        "services_pluginPages",
         "communications_rx", "communications_tx" },
 }
 
