@@ -824,6 +824,15 @@ end
 
 ---@param raw any
 local function onRequest(raw)
+    -- a player's game can trigger any server event too (TriggerServerEvent) : BeamMP then passes
+    -- the sender's ID first, a number. Only plugins (TriggerGlobalEvent) pass the JSON alone
+    if type(raw) ~= "string" then
+        if type(raw) == "number" then
+            LogWarn(string.format("[BJ api] %s (player %d) sent a plugin API request from their game, ignored",
+                tostring(MP.GetPlayerName(raw)), raw))
+        end
+        return
+    end
     local parsed, req = pcall(utils_json.parse, raw)
     if not parsed or type(req) ~= "table" or (type(req.id) ~= "string" and type(req.id) ~= "number") then
         return LogWarn("[BJ api] a plugin sent a request that isn't valid (JSON with an id), ignored")

@@ -383,7 +383,10 @@ local function ping()
     end)
 end
 
+--- BeamJoy's messages are JSON strings. A player's game can trigger these events too
+--- (TriggerServerEvent), but BeamMP then passes the sender's ID first, a number : ignored
 local function decode(raw)
+    if type(raw) ~= "string" then return end
     local ok, msg = pcall(json.parse, raw)
     if ok and type(msg) == "table" then return msg end
 end

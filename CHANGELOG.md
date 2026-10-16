@@ -8,7 +8,14 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2701, server build 2463.
+Version 1.11.0 : client build 2701, server build 2464.
+
+- **Security : the plugin API only answers server plugins.** A player's game can fire any server
+  event, the API's included. Such requests already came to nothing (BeamMP puts the player's ID
+  where the JSON goes), but only by luck : BeamJoy now refuses them on purpose and logs the player
+  who tried, and the helper ignores them on BeamJoy's events too. The API's README has a new
+  Security section : what plugins can and can't do, what reaches players' games (plain text only,
+  never HTML or scripts), secrets, players' data.
 
 - **New : plugins can add options to races, labels to results and leaderboards, and tabs to the
   config window** (direct request : "a way for plugins to add categories and options", in the race

@@ -533,4 +533,30 @@ it for the leaderboards.
 - Without the helper: fire `BJAPI_Request` with a JSON string, register `BJAPI_Response`, and
   match your `id`. BeamJoy sends `BJAPI_Ready` once it has loaded. If your plugin starts after
   BeamJoy, it won't see that event, so send `server.info` yourself at start and treat the answer
-  as "ready".
+  as "ready". Check that your handlers get a string (see [Security](#security)).
+
+## Security
+
+- **Server plugins are trusted.** A plugin in `Resources/Server` runs with the server's full
+  rights: it can read every file, BeamJoy's database included, and kick or message anyone,
+  with or without this API. Only install plugins you trust (read them, they're plain Lua). The API
+  doesn't add to what a plugin can do there, and doesn't sandbox it either: `from` is the name a
+  plugin gives, not a checked one.
+- **Nothing reaches players' games as code.** Everything a plugin shows (messages, overlays,
+  options, labels, config tabs) is plain text drawn by BeamJoy: HTML shows as typed, scripts
+  never run, colors are BeamJoy's names or hex codes. Players' games only ever run BeamJoy's own
+  code; to run code there, a client mod (a zip in `Resources/Client`) is needed, and every player
+  downloads it like BeamJoy.
+- **Players can't use the API.** A player's game can fire any server event, `BJAPI_Request`
+  included, but BeamMP then passes the player's ID first (a number) where a plugin passes the
+  JSON string: BeamJoy ignores those (and logs who tried), and so does the helper on BeamJoy's
+  events. Without the helper, ignore anything that isn't a string in your own handlers.
+- **What players send is checked on the server.** Race option values are checked against the
+  plugin's definitions (types, choices, ranges, lengths) ; config tabs need the
+  `EditPluginConfig` permission to read, save or click.
+- **Secrets stay on the server.** `secret` config options are never sent to a game, defaults
+  included ; they are kept in `BeamJoyData/db/pluginConfig.json` in plain text, like any
+  server setting, so protect the server's files.
+- **Players' data.** Plugins get players' names, in-game IDs, groups and identity (`beammp`, `nickname`,
+  `guest`), never IP addresses. A plugin that sends data elsewhere (a website, Discord) should say
+  so, and use `https://`.
