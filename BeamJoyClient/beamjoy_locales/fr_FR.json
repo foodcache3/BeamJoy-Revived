@@ -670,7 +670,7 @@
     // NEW (auto-translated)
     "beamjoy.cmps.colorPicker.clear": "Effacer la couleur",
     "beamjoy.window.login.title": "Choisissez un pseudo",
-    "beamjoy.window.login.message": "En attendant le retour des comptes BeamMP, ceci est utilisé pour votre étiquette de nom et vos entrées au classement des courses. Vous pouvez ignorer cette étape et jouer en invité, mais vos temps ne seront pas enregistrés sous un nom fixe.",
+    "beamjoy.window.login.message": "Vous jouez en invité, et les noms d'invité changent à chaque redémarrage du launcher. Choisissez un pseudo pour votre étiquette de nom et vos entrées au classement des courses. Vous pouvez ignorer cette étape, mais vos temps ne seront pas enregistrés sous un nom fixe. Connectez-vous à un compte BeamMP pour utiliser plutôt le nom de votre compte.",
     "beamjoy.window.login.placeholder": "Pseudo",
     "beamjoy.window.login.skip": "Continuer en tant qu'invité",
     "beamjoy.window.login.continue": "Continuer",

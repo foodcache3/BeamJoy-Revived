@@ -671,7 +671,7 @@
     // NEW (auto-translated)
     "beamjoy.cmps.colorPicker.clear": "色をクリア",
     "beamjoy.window.login.title": "ニックネームを選択",
-    "beamjoy.window.login.message": "BeamMPアカウントが復旧するまで、これはネームタグとレースランキングの表示に使われます。スキップしてゲストとしてプレイすることもできますが、その場合ランキングタイムは固定の名前で保存されません。",
+    "beamjoy.window.login.message": "ゲストとしてプレイしています。ゲスト名はランチャーを再起動するたびに変わります。ネームタグとレースランキングに使うニックネームを選んでください。スキップもできますが、その場合ランキングタイムは固定の名前で保存されません。BeamMPアカウントでログインすると、アカウント名が使われます。",
     "beamjoy.window.login.placeholder": "ニックネーム",
     "beamjoy.window.login.skip": "ゲストとして続ける",
     "beamjoy.window.login.continue": "続ける",

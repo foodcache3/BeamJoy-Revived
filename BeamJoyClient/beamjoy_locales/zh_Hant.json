@@ -670,7 +670,7 @@
     // NEW (auto-translated)
     "beamjoy.cmps.colorPicker.clear": "清除顏色",
     "beamjoy.window.login.title": "選擇暱稱",
-    "beamjoy.window.login.message": "在 BeamMP 帳號系統恢復之前，此暱稱將用於你的名牌和比賽排行榜項目。你可以跳過並以訪客身份遊玩，但排行榜成績將不會以固定名稱保存。",
+    "beamjoy.window.login.message": "你正以訪客身份遊玩，訪客名稱在每次重新啟動啟動器時都會改變。請選擇一個暱稱，用於你的名牌和比賽排行榜項目。你可以跳過，但排行榜成績將不會以固定名稱保存。登入 BeamMP 帳號即可使用你的帳號名稱。",
     "beamjoy.window.login.placeholder": "暱稱",
     "beamjoy.window.login.skip": "以訪客身份繼續",
     "beamjoy.window.login.continue": "繼續",

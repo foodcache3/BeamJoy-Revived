@@ -670,7 +670,7 @@
     // NEW (auto-translated)
     "beamjoy.cmps.colorPicker.clear": "Wyczyść kolor",
     "beamjoy.window.login.title": "Wybierz pseudonim",
-    "beamjoy.window.login.message": "Dopóki konta BeamMP nie wrócą, jest to używane jako Twoja etykieta i wpisy w tabeli wyników wyścigów. Możesz to pominąć i grać jako gość, ale Twoje czasy nie będą zapisywane pod stałą nazwą.",
+    "beamjoy.window.login.message": "Grasz jako gość, a nazwy gości zmieniają się przy każdym ponownym uruchomieniu launchera. Wybierz pseudonim dla swojej etykiety i wpisów w tabeli wyników wyścigów. Możesz to pominąć, ale Twoje czasy nie będą zapisywane pod stałą nazwą. Zaloguj się na konto BeamMP, aby używać nazwy swojego konta.",
     "beamjoy.window.login.placeholder": "Pseudonim",
     "beamjoy.window.login.skip": "Kontynuuj jako gość",
     "beamjoy.window.login.continue": "Kontynuuj",

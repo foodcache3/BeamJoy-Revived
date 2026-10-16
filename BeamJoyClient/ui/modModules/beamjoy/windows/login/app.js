@@ -1,4 +1,5 @@
-// Nickname "login" workaround, shown before the rest of the mod's UI unlocks (see
+// Nickname for guests (a BeamMP account keeps its own name), shown before the rest of the mod's
+// UI unlocks (see
 // communications/ui.lua's own onUIReady/proceedAfterLogin gating for the full story). Purely a
 // display identity from here on (nametags, player roster, race leaderboard rows - see
 // services/identity.lua's own doc comment server-side) : explicitly NOT password-protected, NOT

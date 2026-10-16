@@ -1,6 +1,9 @@
---- Two independent, unrelated stopgaps for while BeamMP's own account system isn't reliable:
+--- Two independent, unrelated features:
 ---
---- 1) A player-chosen "nickname" (see communications/ui.lua's own onUIReady gating client-side,
+--- 1) A nickname for GUESTS only (BeamMP accounts are back : a player logged in to one keeps
+---    their account name, which is already stable). A guest's BeamMP name changes every time
+---    their launcher restarts, so the nickname is what keeps their nametag and leaderboard
+---    times under one name. (see communications/ui.lua's own onUIReady gating client-side,
 ---    windows/login on the Angular side) used as this player's DISPLAY identity everywhere this
 ---    mod's own UI shows a name (nametags.lua's own tag text, the player roster, race leaderboard
 ---    rows - see getIdentityKey for leaderboard, and players.lua's onBJRequestCache's own new
@@ -52,8 +55,10 @@ end
 --- sets the sender's nickname (the login prompt, the "Change nickname" button, /nickname)
 ---@param ctxt BJSContext
 ---@param nickname any
----@return boolean ok, string result the nickname, or why not : "invalidNickname" / "nicknameTaken"
+---@return boolean ok, string result the nickname, or why not : "notGuest" / "invalidNickname" / "nicknameTaken"
 local function setNickname(ctxt, nickname)
+    -- guests only : an account's own name is already stable (direct request, accounts are back)
+    if not ctxt.sender.guest then return false, "notGuest" end
     local clean = sanitizeNickname(nickname)
     if not clean then return false, "invalidNickname" end
     local collision = services_players.players:any(function(p)
@@ -79,6 +84,14 @@ local function setNickname(ctxt, nickname)
     -- e.g. a guest back on a new guest name, recognised by their nickname (raceGrid.lua raceRejoin)
     extensions.hook("onBJIdentityChanged", ctxt)
     return true, clean
+end
+
+--- the client asks before showing the nickname prompt : only guests get it (its caches, which
+--- carry the same flag, only come after the prompt)
+---@param ctxt BJSContext
+local function identityCheck(ctxt)
+    if not ctxt.sender then return end
+    communications_tx.sendToPlayer(ctxt.senderID, "identityGuest", ctxt.sender.guest == true)
 end
 
 ---@param ctxt BJSContext
@@ -236,9 +249,10 @@ local function chatNickname(ctxt, args, command)
             services_lang.get("chat.command.nickname.success", ctxt.sender.lang)
             :var({ nickname = (result:gsub("%%", "%%%%")) }))
     end
+    local key = ({ notGuest = "chat.command.nickname.notGuest",
+        nicknameTaken = "chat.command.nickname.taken" })[result] or "chat.command.nickname.invalid"
     services_chat.directSend(ctxt.senderID,
-        services_lang.get(result == "nicknameTaken" and "chat.command.nickname.taken" or
-            "chat.command.nickname.invalid", ctxt.sender.lang)
+        services_lang.get(key, ctxt.sender.lang)
         :var({ min = M.NICKNAME_MIN, max = M.NICKNAME_MAX }),
         services_chat.COLORS.ERROR)
 end
@@ -273,6 +287,7 @@ end
 
 local function onInit()
     communications_rx.addHandler("identityLogin", login)
+    communications_rx.addHandler("identityCheck", identityCheck)
 
     services_consoleCommands.register("staffpassword", "commands.bjstaffpassword.args",
         "commands.bjstaffpassword.desc", M.consoleSetStaffPassword)
@@ -284,7 +299,7 @@ local function onInit()
     -- commands registered with no permission gate
     services_chatCommands.addCommand("login", "chat.command.login.desc", M.chatLogin,
         { commandKey = "chat.command.login.command" })
-    -- anyone, like the login prompt itself
+    -- no permission : guests only, checked in setNickname (an account player gets told why)
     services_chatCommands.addCommand("nickname", "chat.command.nickname.desc", M.chatNickname,
         { commandKey = "chat.command.nickname.command" })
     services_chatCommands.addCommand("nick", "chat.command.nickname.desc", M.chatNickname,

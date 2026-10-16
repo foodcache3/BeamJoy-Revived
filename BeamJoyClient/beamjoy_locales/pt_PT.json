@@ -671,7 +671,7 @@
     // NEW (auto-translated)
     "beamjoy.cmps.colorPicker.clear": "Limpar cor",
     "beamjoy.window.login.title": "Escolhe uma alcunha",
-    "beamjoy.window.login.message": "Até as contas BeamMP voltarem, isto é usado para a tua etiqueta de nome e entradas na tabela de classificação. Podes saltar isto e jogar como convidado, mas os teus tempos não serão guardados com um nome fixo.",
+    "beamjoy.window.login.message": "Estás a jogar como convidado, e os nomes de convidado mudam sempre que o launcher é reiniciado. Escolhe uma alcunha para a tua etiqueta de nome e entradas na tabela de classificação. Podes saltar isto, mas os teus tempos não serão guardados com um nome fixo. Inicia sessão numa conta BeamMP para usares o nome da tua conta.",
     "beamjoy.window.login.placeholder": "Alcunha",
     "beamjoy.window.login.skip": "Continuar como convidado",
     "beamjoy.window.login.continue": "Continuar",

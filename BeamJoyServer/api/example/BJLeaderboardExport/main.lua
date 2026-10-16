@@ -2,7 +2,8 @@
 BJLeaderboardExport : an example plugin for BeamJoy's plugin API.
 
 Keeps one JSON file per map, export/<map>.json in this plugin's folder, with every race's
-leaderboards (only nicknamed players : see NICKNAMES_ONLY), written again whenever a time changes.
+leaderboards (BeamMP accounts and nicknamed guests : see HIDE_GUESTS), written again whenever a
+time changes.
 A website can read those files, or this plugin can be the start of one that uploads them.
 
 Install : copy this whole folder into Resources/Server/ (next to BeamJoyServer), restart the
@@ -17,9 +18,12 @@ local folder = here:match("^(.*)/[^/]*$") or "."
 -- matching the BeamJoy installed
 local BJ = dofile((folder:match("^(.*)/[^/]+$") or "..") .. "/BeamJoyServer/api/BeamJoyAPI.lua")
 
---- leave out the times of players who never picked a BeamJoy nickname (BeamMP names, guests, and
---- times saved before BeamJoy recorded which kind of name it was)
-local NICKNAMES_ONLY = true
+--- leave out the times of guests who never picked a BeamJoy nickname (their name changes every time
+--- they restart their launcher), and times saved before BeamJoy recorded which kind of name it was
+local HIDE_GUESTS = true
+
+--- the kinds of names kept when HIDE_GUESTS is on : BeamMP accounts and nicknamed guests
+local KEPT = { beammp = true, nickname = true }
 
 local exportFolder = folder .. "/export"
 
@@ -32,7 +36,7 @@ local function log(msg) print("[BJLeaderboardExport] " .. msg) end
 local function keep(entries)
     local out = {}
     for _, e in ipairs(entries or {}) do
-        if not NICKNAMES_ONLY or e.identity == "nickname" then
+        if not HIDE_GUESTS or KEPT[e.identity] then
             out[#out + 1] = {
                 rank = #out + 1,
                 name = e.name,

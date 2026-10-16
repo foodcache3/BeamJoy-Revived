@@ -35,8 +35,11 @@ local M = {
         config = false,
     },
 
-    -- true from the moment the UI is ready until the player has either logged in with a nickname
-    -- or explicitly skipped ; see onUIReady/proceedAfterLogin/onLoginRequestState below
+    -- true from the moment the UI is ready until the server said whether this player is a guest
+    -- (only guests get the nickname prompt) ; see onUIReady/onIdentityGuest below
+    loginChecking = false,
+    -- true from the moment a guest's prompt is up until the player has either logged in with a
+    -- nickname or explicitly skipped ; see onIdentityGuest/proceedAfterLogin/onLoginRequestState
     loginPending = false,
 
     -- Real, confirmed bug: onBJClientReady's own `reloadUI()` (1s after every connect - see its own
@@ -113,20 +116,48 @@ end
 -- a player who just never interacts with it shouldn't be stuck on the loading screen forever
 -- either. Proceeds exactly as if "continue as guest" was pressed if nothing resolved it in time.
 local LOGIN_TIMEOUT_MS = 45000
+-- no answer to the guest check this soon (an older server) : shown like before, to everyone
+local IDENTITY_CHECK_TIMEOUT_MS = 5000
 
---- Nickname login workaround (see services/identity.lua's own doc comment for the full,
---- server-side story) : shown before any of the above proceeds, so a chosen nickname is already
---- known before onPlayerReady/the welcome message/other players ever see this connection. Purely
---- a display convenience, not a requirement - windows/login has its own "continue as guest" skip.
+--- the prompt itself, once this player is known to be a guest
+local function showLoginPrompt()
+    M.loginChecking = false
+    M.loginPending = true
+    M.send("BJLoginShow")
+end
+
+--- Nickname for guests (see services/identity.lua's own doc comment for the full, server-side
+--- story) : shown before any of the above proceeds, so a chosen nickname is already known before
+--- onPlayerReady/the welcome message/other players ever see this connection. Purely a display
+--- convenience, not a requirement - windows/login has its own "continue as guest" skip. A player
+--- logged in to a BeamMP account keeps their account name and never sees it : the server is asked
+--- first (identityCheck), since this player's own record only arrives with the caches, after.
 local function onUIReady()
     beamjoy_lang.initLang()
-    M.loginPending = true
+    M.loginPending = false
+    M.loginChecking = true
+    beamjoy_communications.send("identityCheck")
     async.delayTask(function()
-        if M.loginPending then
+        if M.loginChecking then showLoginPrompt() end
+    end, IDENTITY_CHECK_TIMEOUT_MS, "BJIdentityCheckTimeout")
+    async.delayTask(function()
+        if M.loginChecking or M.loginPending then
+            M.loginChecking = false
             M.loginPending = false
             proceedAfterLogin()
         end
     end, LOGIN_TIMEOUT_MS, "BJLoginTimeout")
+end
+
+--- the server's answer to identityCheck
+---@param guest boolean
+local function onIdentityGuest(guest)
+    if not M.loginChecking then return end
+    async.removeTask("BJIdentityCheckTimeout")
+    if guest then return showLoginPrompt() end
+    M.loginChecking = false
+    async.removeTask("BJLoginTimeout")
+    proceedAfterLogin()
 end
 
 --- windows/login's own $onInit calls this on mount rather than relying solely on the one-time
@@ -177,6 +208,7 @@ local function onInit()
     M.addHandler("BJLoginSubmit", onLoginSubmit)
     M.addHandler("BJLoginSkip", onLoginSkip)
     beamjoy_communications.addHandler("identityLoginResult", onLoginResult)
+    beamjoy_communications.addHandler("identityGuest", onIdentityGuest)
 
     M.addHandler("BJRequestIntroPanelData", M.getIntroPanelData)
     M.addHandler("BJSaveIntroPanelData", M.saveIntroPanelData)

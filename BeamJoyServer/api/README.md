@@ -73,7 +73,7 @@ end
 - `BJ.json`: the JSON encoder/decoder the helper uses (`BJ.json.stringify`, `BJ.json.parse`).
 
 `example/BJLeaderboardExport/` is a complete plugin. It writes every map's leaderboards
-(nicknamed players only) to `export/<map>.json` and rewrites them whenever a time changes. To try
+(BeamMP accounts and nicknamed guests only) to `export/<map>.json` and rewrites them whenever a time changes. To try
 it, copy that folder into `Resources/Server/`, next to `BeamJoyServer`, and restart the server.
 
 ## Methods
@@ -119,7 +119,8 @@ Every race of a map, with both boards in full (or only `board` when given). Made
 → `{players: [{id, name, displayName, nickname, guest, group, staff}]}`
 
 - `name` is the BeamMP name.
-- `nickname` is the BeamJoy nickname, if the player picked one.
+- `nickname` is the BeamJoy nickname, if the player picked one. Only guests can: a player
+  logged in to a BeamMP account keeps their account name.
 
 ### `environment.get`
 → `{timeOfDay, clock, timeSync, dayNightCycle, dayLengthS, date, simSpeed, simPause, gravity, gravitySync, weatherSync, weather}`
@@ -135,21 +136,22 @@ Every race of a map, with both boards in full (or only `board` when given). Made
 | Field | |
 |---|---|
 | `rank` | 1 is the fastest |
-| `name` | the BeamJoy nickname if the player had picked one when they set the time, otherwise the BeamMP name |
+| `name` | the BeamMP account name, or for a guest, the BeamJoy nickname if they had picked one when they set the time (otherwise their guest name) |
 | `timeMs` | best lap time, in milliseconds |
 | `model` | the vehicle's model, like `"etk800"`, if known |
 | `date` | Unix time, in seconds |
 | `identity` | what `name` is (below) |
 
 `identity` is one of:
-- `"nickname"`: a BeamJoy nickname.
+- `"nickname"`: a guest's BeamJoy nickname.
 - `"beammp"`: a BeamMP account name.
 - `"guest"`: a BeamMP guest name. These change every time the guest restarts their launcher.
 - `"unknown"`: the time was saved before BeamJoy started recording this.
 
-To show only nicknamed players, keep the `"nickname"` entries and number them again yourself.
+To leave out guests without a nickname, keep the `"beammp"` and `"nickname"` entries and number
+them again yourself.
 
-Names are display names, not permanent IDs: a player can change their nickname.
+Names are display names, not permanent IDs: a guest can change their nickname.
 
 ### Errors
 
@@ -186,7 +188,7 @@ clears its times.** Fetch the map again (`races.leaderboards`).
 `{position, name, identity, vehicle, finished, disqualified, totalMs, bestLapMs, penaltyMs, newPB, newRecord, leaderboardRank}`.
 Racers who didn't finish, or were disqualified, come last and have no `position`.
 
-**`PlayerJoined`** fires before the player picks a nickname. Use `players.online` when you need
+**`PlayerJoined`** fires before a guest picks a nickname. Use `players.online` when you need
 nicknames.
 
 ## Notes

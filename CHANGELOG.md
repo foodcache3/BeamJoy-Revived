@@ -8,7 +8,16 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2698, server build 2460.
+Version 1.11.0 : client build 2699, server build 2461.
+
+- **Changed : nicknames are for guests only** (direct request : BeamMP accounts are back). A player
+  logged in to a BeamMP account keeps their account name everywhere (nametag, player list,
+  leaderboards) and no longer gets the nickname prompt on joining ; the **Change nickname** button
+  only shows for guests, and `/nickname` tells an account player why it doesn't apply. Guests still
+  get the prompt, since their BeamMP name changes every time their launcher restarts. The prompt's
+  text now says so, in every language. The client asks the server whether it's a guest before
+  showing the prompt ; a server that doesn't answer within 5 s (an older one) gets the prompt
+  shown as before. Times an account player set under a nickname stay under that nickname.
 
 - **New : a plugin API** (direct request : your own server plugins reading BeamJoy's data, e.g. a
   website kept in sync with the race leaderboards, or a Discord bot). A plugin in its own folder in
@@ -19,9 +28,9 @@ Version 1.11.0 : client build 2698, server build 2460.
   (`BeamJoyServer/api/BeamJoyAPI.lua`, so it always matches the BeamJoy installed) and an example
   plugin that exports every map's leaderboards to JSON files
   (`BeamJoyServer/api/example/BJLeaderboardExport`, to copy into `Resources/Server`).
-  Leaderboard times now also record whether they were set under a BeamJoy nickname, a BeamMP
-  name or a guest name, so a website can show only nicknamed players ; times saved before this
-  are "unknown". *(server only)*
+  Leaderboard times now also record whether they were set under a BeamMP account name, a guest's
+  BeamJoy nickname or a plain guest name, so a website can leave out guests without a nickname (the
+  example plugin does) ; times saved before this are "unknown". *(server only)*
 
 - **Fixed : a racer who left mid-race was missing from the race's Discord results** once retired
   : they were taken for the debug ghost (any negative player id), and they're now listed as not

@@ -71,7 +71,7 @@
     <button type="button" class="bjr-btn" ng-if="$ctrl.canVote()" ng-click="$ctrl.startVote()">
         {{'beamjoy.window.main.panels.vote' | translate}}
     </button>
-    <button type="button" class="bjr-btn" ng-click="$ctrl.changeNickname()">
+    <button type="button" class="bjr-btn" ng-if="$ctrl.isGuest()" ng-click="$ctrl.changeNickname()">
         {{'beamjoy.window.main.you.changeNickname' | translate}}
     </button>
     <button type="button" class="bjr-btn" ng-if="$ctrl.welcomeEnabled" ng-click="$ctrl.welcome()">

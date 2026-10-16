@@ -671,7 +671,7 @@
     // NEW (auto-translated)
     "beamjoy.cmps.colorPicker.clear": "Borrar color",
     "beamjoy.window.login.title": "Elige un apodo",
-    "beamjoy.window.login.message": "Hasta que las cuentas de BeamMP vuelvan, esto se usa para tu etiqueta de nombre y las entradas de la clasificación de carreras. Puedes omitirlo y jugar como invitado, pero tus tiempos no se guardarán bajo un nombre constante.",
+    "beamjoy.window.login.message": "Estás jugando como invitado, y los nombres de invitado cambian cada vez que se reinicia el launcher. Elige un apodo para tu etiqueta de nombre y las entradas de la clasificación de carreras. Puedes omitirlo, pero tus tiempos no se guardarán bajo un nombre constante. Inicia sesión con una cuenta de BeamMP para usar el nombre de tu cuenta.",
     "beamjoy.window.login.placeholder": "Apodo",
     "beamjoy.window.login.skip": "Continuar como invitado",
     "beamjoy.window.login.continue": "Continuar",

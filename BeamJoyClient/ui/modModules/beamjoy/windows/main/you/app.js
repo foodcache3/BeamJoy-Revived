@@ -1,5 +1,6 @@
 // Full window > Home > "You" column : the car you're in (with the low fuel button), your delivery
-// standings, your police chase counts, and personal shortcuts (nametags, start a vote, change nickname, welcome screen).
+// standings, your police chase counts, and personal shortcuts (nametags, start a vote, change nickname
+// for guests, welcome screen).
 angular.module("beamjoy").component("bjMainYou", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/you/app.html",
     controller: function ($rootScope, $scope, $filter, $interval, beamjoyStore) {
@@ -62,6 +63,8 @@ angular.module("beamjoy").component("bjMainYou", {
             beamjoyStore.permissions.hasAllPermissions(undefined, "VoteKick");
         this.startVote = () => $rootScope.$broadcast("BJMainOpenPanel", "vote");
         this.changeNickname = () => $rootScope.$broadcast("BJLoginShow", { change: true });
+        // guests only : a BeamMP account keeps its own name (services/identity.lua)
+        this.isGuest = () => !!(beamjoyStore.players.self && beamjoyStore.players.self.guest);
         this.welcome = () => beamjoyStore.send("BJOpenIntroPanel");
         // only when the host has the welcome screen turned on (Config > Welcome screen)
         this.welcomeEnabled = false;

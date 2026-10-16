@@ -626,12 +626,14 @@ untouched by BeamJoy updates.
 - Two boards per race : `leaderboard` (grid) and `freeroamLeaderboard`.
 - A leaderboard can get worse, not only better : a staff disqualification puts the replaced entry
   back (`restoreEntry`). So `leaderboardChanged` carries the race's board, not just "new PB".
-- Entry keys are display names (nickname if logged in, else the BeamMP name) : not stable ids.
+- Entry keys are display names (the BeamMP account name, or a guest's nickname / guest name) : not
+  stable ids. Since 2461 only guests can pick a nickname (accounts are back).
 - Entry dates look off by the server's UTC offset : `GetCurrentTime()` is
   `os.time(os.date("!*t"))`, which reads a UTC table as local time. Not confirmed on a live
   server ; the API should send real Unix timestamps whatever the cause.
 
-**Only nicknamed players on the website (user's choice).** Entries don't record whether their key
+**Only nicknamed/logged-in players on the website (user's choice) : done in 2460/2461, kept as
+notes.** Website keeps `"beammp"` (accounts) and `"nickname"` (nicknamed guests) entries. Entries don't record whether their key
 is a nickname or a BeamMP name (`getIdentityKey` falls back to the BeamMP name, login being
 optional), so they can't be told apart today. Plan : `submitTime` also saves
 `identity = "nickname" | "beammp"`, the API passes it on, and the consumer filters (the API stays
@@ -641,7 +643,7 @@ nickname can equal someone's BeamMP name, so only a guess).
 
 **The user's sync plugin (`BJLeaderboardSync`, a separate plugin).** On start, every map's and
 race's board uploaded in full (catching up on anything missed while it was down) ; on
-`leaderboardChanged`, that race's board. Keeps `identity == "nickname"` entries only. Sends with
+`leaderboardChanged`, that race's board. Keeps `"beammp"` and `"nickname"` entries only. Sends with
 `curl` (no HTTP in BeamMP's Lua ; `services/discord.lua` does the same) and a secret token from
 its own `config.json`. **Open question :** what the website is. A backend that can take uploads
 (POST with the token), or a static site on the same machine (the plugin writes a JSON file it

@@ -671,7 +671,7 @@
     // NEW (auto-translated)
     "beamjoy.cmps.colorPicker.clear": "Farbe löschen",
     "beamjoy.window.login.title": "Spitznamen wählen",
-    "beamjoy.window.login.message": "Solange BeamMP-Accounts nicht verfügbar sind, wird dies für dein Namensschild und Rennranglisteneinträge verwendet. Du kannst dies überspringen und als Gast spielen, aber deine Ranglistenzeiten werden dann nicht unter einem festen Namen gespeichert.",
+    "beamjoy.window.login.message": "Du spielst als Gast, und Gastnamen ändern sich bei jedem Neustart des Launchers. Wähle einen Spitznamen für dein Namensschild und deine Rennranglisteneinträge. Du kannst dies überspringen, aber deine Ranglistenzeiten werden dann nicht unter einem festen Namen gespeichert. Melde dich mit einem BeamMP-Account an, um stattdessen deinen Accountnamen zu verwenden.",
     "beamjoy.window.login.placeholder": "Spitzname",
     "beamjoy.window.login.skip": "Als Gast fortfahren",
     "beamjoy.window.login.continue": "Weiter",

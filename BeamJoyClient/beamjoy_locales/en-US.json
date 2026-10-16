@@ -73,12 +73,13 @@
     // LOGIN WINDOW (nickname workaround, shown before the rest of the UI - see
     // communications/ui.lua's own onUIReady/proceedAfterLogin)
     "beamjoy.window.login.title": "Choose a nickname",
-    "beamjoy.window.login.message": "Until BeamMP accounts are back, this is used for your nametag and race leaderboard entries. You can skip this and play as a guest, but your leaderboard times won't be saved under a consistent name.",
+    "beamjoy.window.login.message": "You're playing as a guest, and guest names change every time the launcher restarts. Pick a nickname for your nametag and race leaderboard entries. You can skip this, but your leaderboard times won't be saved under a consistent name. Log in to a BeamMP account to use your account name instead.",
     "beamjoy.window.login.placeholder": "Nickname",
     "beamjoy.window.login.skip": "Continue as guest",
     "beamjoy.window.login.continue": "Continue",
     "beamjoy.window.login.error.invalidNickname": "That nickname isn't valid (2-24 characters, no { or })",
     "beamjoy.window.login.error.nicknameTaken": "Someone else is currently using that nickname",
+    "beamjoy.window.login.error.notGuest": "Nicknames are only for guests : you're logged in to a BeamMP account, so your account name is used",
     "beamjoy.window.login.error.unknown": "Something went wrong, try again",
 
     // MAIN WINDOW
