@@ -8,7 +8,29 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2707, server build 2467.
+Version 1.11.0 : client build 2709, server build 2467.
+
+- **Fix (2709) : the Focus control couldn't reach the drag strip's Open timeslip** (direct report).
+  Once a run is over, the Focus control gives the drag overlay the pad, its Open timeslip button
+  under the cursor : A opens the timeslip, B lets go. The timeslip now takes the pad itself while
+  it's open (B only closed it when something else happened to hold the menu inputs) : left / right
+  between Open leaderboard and Close, A presses, B closes.
+
+- **Fix (2708) : painted lines** (direct report : "the chevrons and yellow and black stripes paint
+  look very different from their previews", the tyre marks "stop abruptly with no clean end", the
+  rubbered-in racing line "takes 100% cpu usage when placing/moving it").
+  - Yellow and black stripes : the game's `line_yellowblack` is really a double yellow line with
+    reflectors, and the game has no yellow and black stripes. They're now the mod's own paint
+    (`art/beamjoy/paints`, made from the game's slanted stripes, so worn as they are), its material
+    loaded the first time it's used.
+  - Chevrons : the game's texture is one V a square, stretched 7 m long before ; now a V every
+    width. Their drawer picture shows V's.
+  - New **Slanted stripes** paint (the game's own, the white 45-degree hatching of a track edge).
+  - Rubbered-in racing line and dirt tyre tracks fade in and out over 4 m at their ends (a quarter
+    of the line when it's shorter).
+  - A painted line being dragged or placed is made again at most 8 times a second instead of every
+    frame (a wide decal over objects costs a lot to make), its last position made as soon as the
+    drag stops.
 
 - **Fix (2707) : a ghosted car's build photo came out see-through** (direct request : "the
   ghosting visual should also be disabled for the photo"). While the photo is taken, the car shows

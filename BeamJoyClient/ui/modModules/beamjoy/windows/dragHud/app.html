@@ -273,6 +273,10 @@
     #beamjoy-drag-hud .dh-btn:hover {
         background: #ff7a22;
     }
+    /* the pad's cursor (the Focus control), same marker the other run HUDs use */
+    #beamjoy-drag-hud .dh-btn.cursor {
+        box-shadow: 0 0 0 2px #ffbca0;
+    }
     #beamjoy-drag-hud .dh-btn:focus-visible {
         outline: 2px solid #ffbca0;
         outline-offset: 2px;
@@ -341,7 +345,7 @@
             <div class="dh-outcome" ng-if="!!($ctrl.outcome())">{{$ctrl.outcome()}}</div>
             <div class="dh-result" ng-class="$ctrl.resultLine().cls">{{$ctrl.resultLine().text}}</div>
         </div>
-        <button type="button" class="dh-btn" ng-click="$ctrl.openTimeslip()">{{'beamjoy.drag.openTimeslip' | translate}}</button>
+        <button type="button" class="dh-btn" ng-class="{cursor: $ctrl.focused}" ng-click="$ctrl.openTimeslip()">{{'beamjoy.drag.openTimeslip' | translate}}</button>
         <div class="dh-hint">{{'beamjoy.drag.leaveHint' | translate}}</div>
     </div>
     <div class="dh-end dh-line" ng-if="$ctrl.h.state === 'dq'">

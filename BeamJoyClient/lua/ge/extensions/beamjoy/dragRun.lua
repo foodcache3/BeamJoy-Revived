@@ -383,14 +383,19 @@ local function pushSlip()
     beamjoy_communications_ui.send("BJDragTimeslip", { open = M.timeslipOpen and M.slip ~= nil, slip = M.slip })
 end
 
+--- the timeslip has the pad while it's open (its buttons, B to close : windows/dragTimeslip)
+local NAV_OWNER = "dragTimeslip"
+
 local function openTimeslip()
     if not M.slip then return end
     M.timeslipOpen = true
+    if beamjoy_uiNav then beamjoy_uiNav.acquire(NAV_OWNER) end
     pushSlip()
 end
 
 local function closeTimeslip()
     M.timeslipOpen = false
+    if beamjoy_uiNav then beamjoy_uiNav.release(NAV_OWNER) end
     pushSlip()
 end
 
@@ -503,5 +508,9 @@ end
 
 M.onInit = onInit
 M.onUpdate = onUpdate
+-- left the server with the timeslip open : it lets go of the pad
+M.onServerLeave = function()
+    if M.timeslipOpen then closeTimeslip() end
+end
 
 return M

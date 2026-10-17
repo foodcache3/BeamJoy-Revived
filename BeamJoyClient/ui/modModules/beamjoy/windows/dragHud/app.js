@@ -44,7 +44,7 @@ angular.module("beamjoy").factory("beamjoyDragFormat", function ($filter) {
 
 angular.module("beamjoy").component("bjDragHud", {
     templateUrl: "/ui/modModules/beamjoy/windows/dragHud/app.html",
-    controller: function ($rootScope, $scope, beamjoyStore, beamjoyDragFormat) {
+    controller: function ($rootScope, $scope, beamjoyStore, beamjoyDelivery, beamjoyDragFormat) {
         const f = beamjoyDragFormat;
         this.h = { active: false };
         this.live = { elapsed: 0, speed: 0 };
@@ -207,5 +207,32 @@ angular.module("beamjoy").component("bjDragHud", {
         this.playersText = () => f.fill("beamjoy.drag.ofDrivers", { n: (this.board() && this.board().players) || 0 });
 
         this.openTimeslip = () => beamjoyStore.send("BJDragTimeslipOpen");
+
+        // FOCUS : once a run is over, the Focus control (beamjoy/mainNav.lua) gives this overlay
+        // the pad, its Open timeslip button under the cursor : A opens the timeslip (which takes the
+        // pad itself), B or the control again lets go. Same as the bus and delivery HUDs
+        this.focused = false;
+        $rootScope.$on("BJDragHudFocus", (_, data) => {
+            $scope.$applyAsync(() => {
+                this.focused = !!(data && data.active);
+                beamjoyDelivery.setNavOwner("dragHud", this.focused);
+            });
+        });
+        const isRising = beamjoyDelivery.pressTracker();
+        const offNav = $rootScope.$on("UINavigation", (_, name, value) => {
+            const rising = isRising(name, value);
+            if (!this.focused || !rising || beamjoyDelivery.otherNavOwner("dragHud")) return;
+            $scope.$applyAsync(() => {
+                if (name === "ok") {
+                    // the timeslip takes the pad first, so the menu inputs never go back to driving
+                    this.openTimeslip();
+                    beamjoyStore.send("BJDragHudRelease");
+                } else if (name === "back") beamjoyStore.send("BJDragHudRelease");
+            });
+        });
+        $scope.$on("$destroy", () => {
+            offNav();
+            beamjoyDelivery.setNavOwner("dragHud", false);
+        });
     },
 });

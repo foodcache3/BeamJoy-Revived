@@ -657,7 +657,10 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 }),
                 double: band(30, `linear-gradient(180deg, ${a} 0 35%, transparent 35% 65%, ${a} 65% 100%)`),
                 hazard: band(34, `repeating-linear-gradient(45deg, ${a} 0 0.45em, ${b} 0.45em 0.9em)`),
-                chevron: band(44, `repeating-linear-gradient(60deg, ${a} 0 0.3em, transparent 0.3em 1.2em)`),
+                // slanted stripes, as the game's (45 degrees)
+                slash: band(44, `repeating-linear-gradient(45deg, ${a} 0 0.4em, transparent 0.4em 1em)`),
+                // V's along the line : its two halves slanted opposite ways, meeting in the middle
+                chevron: band(44, `repeating-linear-gradient(45deg, ${a} 0 0.25em, transparent 0.25em 1em) top / 100% 50% no-repeat, repeating-linear-gradient(135deg, ${a} 0 0.25em, transparent 0.25em 1em) bottom / 100% 50% no-repeat`),
                 zebra: band(80, `repeating-linear-gradient(90deg, ${a} 0 0.55em, transparent 0.55em 1.1em)`),
                 checker: band(
                     40,

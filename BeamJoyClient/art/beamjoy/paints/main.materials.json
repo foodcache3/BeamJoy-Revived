@@ -1,0 +1,26 @@
+{
+  "bjs_paint_hazard": {
+    "name": "bjs_paint_hazard",
+    "mapTo": "bjs_paint_hazard",
+    "class": "Material",
+    "persistentId": "6b1e3f0a-8c2d-4f55-9a7e-3d4c2b1a0f91",
+    "Stages": [
+      {
+        "baseColorMap": "/art/beamjoy/paints/t_bjs_hazard_b.color.png",
+        "opacityMap": "/art/beamjoy/paints/t_bjs_hazard_o.data.png",
+        "roughnessFactor": 0.65
+      },
+      {},
+      {},
+      {}
+    ],
+    "annotation": "SOLID_LINE",
+    "castShadows": false,
+    "materialTag0": "RoadAndPath",
+    "materialTag1": "beamng",
+    "specularStrength0": "0",
+    "translucent": true,
+    "translucentZWrite": true,
+    "version": 1.5
+  }
+}

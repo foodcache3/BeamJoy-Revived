@@ -1958,7 +1958,11 @@ end
 --
 -- Only the game's own materials that every map has : the common road paint
 -- (art/shapes/common/decalroads) and the race paint (art/shapes/race), whose textures are all in
--- the shared /assets (a map's copies are links to them). Drawn over objects too (a map's mesh
+-- the shared /assets (a map's copies are links to them). The game has no yellow and black stripes
+-- (its "line_yellowblack" is a double yellow line with reflectors), so that one is the mod's own
+-- (art/beamjoy/paints, made from the game's slanted stripes) : its material file is loaded when it's
+-- first needed (`file`), a mod the server sends being mounted after the game loaded art/ at its
+-- start. Drawn over objects too (a map's mesh
 -- roads, a bridge), out of the AI's road network (`drivability` -1), never saved with the map, and
 -- under nothing of the map's own paint but over its asphalt (a low `renderPriority` draws last).
 -- No collision : never in the static collision, nothing to rebuild for it.
@@ -1981,10 +1985,18 @@ local PAINT_PRIORITY, MARK_PRIORITY = 1, 2
 local PAINT_RAY_LIFT = 2
 -- metres the flat mesh of a map without a terrain stands over the ground (over it, not in it)
 local PAINT_MESH_LIFT = .02
+-- ms between two makings of a painted line while an end of it is dragged (or it's being placed) :
+-- a decal road is made anew each time, which a wide one over objects (the rubbered-in racing line)
+-- pays dearly for, so not every frame (direct report : 100% CPU while moving one). The last
+-- position is made once the drag stops (catchUpPaints)
+local PAINT_REBUILD_MS = 125
 
 -- `texLength` : metres of road one repeat of its texture covers ; `aspect` instead : that many
--- times its width (a pattern that keeps its proportions, the checkers square). `look` pictures it
--- in the drawer : a pattern its CSS draws (propDrawer paintPicture) and its colours
+-- times its width (a pattern that keeps its proportions, the checkers square, the chevrons and the
+-- stripes at their angle). `fade` : metres it fades in and out over at its ends (a tyre mark, not
+-- a cut-off end), at most a quarter of its length. `file` : the mod's own material file, loaded
+-- when needed. `look` pictures it in the drawer : a pattern its CSS draws (propDrawer
+-- paintPicture) and its colours
 M.PAINTS = {
     { id = "white", cat = "lines", tags = "white line edge road marking solid", material = "m_line_white",
         width = .2, texLength = 7, look = { pattern = "solid", colours = { "#f2f2ee" } } },
@@ -1999,10 +2011,14 @@ M.PAINTS = {
     { id = "yellowDouble", cat = "lines", tags = "yellow double line centre center road marking",
         material = "m_line_yellow_double", width = .4, texLength = 10,
         look = { pattern = "double", colours = { "#efc94a" } } },
-    { id = "hazard", cat = "lines", tags = "yellow black hazard stripes warning", material = "line_yellowblack",
-        width = .6, texLength = 12, look = { pattern = "hazard", colours = { "#f2c418", "#1c1c1c" } } },
-    { id = "chevrons", cat = "lines", tags = "white chevrons arrows marking", material = "road_chevrons",
-        width = 1, texLength = 7, look = { pattern = "chevron", colours = { "#f2f2ee" } } },
+    { id = "hazard", cat = "lines", tags = "yellow black hazard stripes warning slanted diagonal",
+        material = "bjs_paint_hazard", file = "/art/beamjoy/paints/main.materials.json", width = .6, aspect = 2,
+        look = { pattern = "hazard", colours = { "#f2c418", "#1c1c1c" } } },
+    { id = "slashes", cat = "lines", tags = "white slanted diagonal stripes hatching slashes track edge kerb",
+        material = "italy_road_markings_zebra_diagonal", width = 1.5, aspect = 2,
+        look = { pattern = "slash", colours = { "#f2f2ee" } } },
+    { id = "chevrons", cat = "lines", tags = "white chevrons arrows v marking", material = "road_chevrons",
+        width = 1, aspect = 1, look = { pattern = "chevron", colours = { "#f2f2ee" } } },
     { id = "zebra", cat = "lines", tags = "white zebra crossing stripes grid box", material = "crossing_white",
         width = 3, texLength = 6, look = { pattern = "zebra", colours = { "#f2f2ee" } } },
     { id = "checkered", cat = "race", tags = "checkered chequered start finish line flag black white",
@@ -2016,10 +2032,11 @@ M.PAINTS = {
     { id = "sprayGreen", cat = "race", tags = "spray paint green marking", material = "spraypaint_mark_green",
         width = .3, aspect = 4, look = { pattern = "soft", colours = { "#22b04c" } } },
     { id = "rubber", cat = "marks", tags = "rubber racing line tyre tire marks skid asphalt",
-        material = "road_rubber_double", width = 3.5, texLength = 6, priority = MARK_PRIORITY,
+        material = "road_rubber_double", width = 3.5, texLength = 6, priority = MARK_PRIORITY, fade = 4,
         look = { pattern = "tread", colours = { "#2a2a2a" } } },
     { id = "dirtTracks", cat = "marks", tags = "dirt tyre tire tracks ruts gravel", material = "m_dirt_tiretracks",
-        width = 3.5, texLength = 16, priority = MARK_PRIORITY, look = { pattern = "tread", colours = { "#5b4631" } } },
+        width = 3.5, texLength = 16, priority = MARK_PRIORITY, fade = 4,
+        look = { pattern = "tread", colours = { "#5b4631" } } },
 }
 M.PAINT_CATEGORIES = { "lines", "race", "marks" }
 
@@ -2117,6 +2134,25 @@ local function makePaintMesh(paint, pts, width, texLength)
     return obj
 end
 
+--- the mod's own paint material (PAINTS `file`) loaded, if it isn't yet
+---@param paint table
+local function ensurePaintMaterial(paint)
+    if not paint.file or scenetree.findObject(paint.material) then return end
+    local ok, err = pcall(loadJsonMaterialsFile, paint.file)
+    if not ok then LogWarn("beamjoy_props: " .. paint.file .. " couldn't be loaded: " .. tostring(err)) end
+end
+
+--- metres a painted line fades in and out over at its ends (PAINTS `fade`)
+---@param paint table
+---@param pts {pos: vec3}[]
+---@return number
+local function paintFade(paint, pts)
+    if not paint.fade then return 0 end
+    local length = 0
+    for i = 2, #pts do length = length + pts[i].pos:distance(pts[i - 1].pos) end
+    return math.min(paint.fade, length / 4)
+end
+
 --- a painted line's decal made (on a map without a terrain, its flat mesh) : nil when its paint
 --- isn't known or its path is too short
 ---@param entry table
@@ -2130,6 +2166,7 @@ local function makePaint(entry)
     if #pts < 2 then return nil end
     local width = M.paintWidth(entry)
     local texLength = paint.aspect and width * paint.aspect or paint.texLength or 5
+    ensurePaintMaterial(paint)
     if not mapHasTerrain() then return makePaintMesh(paint, pts, width, math.max(.1, texLength)) end
     local road = createObject("DecalRoad")
     road.canSave = false
@@ -2139,7 +2176,8 @@ local function makePaint(entry)
     road:setField("improvedSpline", 0, "1")
     road:setField("overObjects", 0, "1")
     road:setField("drivability", 0, "-1")
-    road:setField("startEndFade", 0, "0 0")
+    local fade = paintFade(paint, pts)
+    road:setField("startEndFade", 0, string.format("%.2f %.2f", fade, fade))
     for _, p in ipairs(pts) do
         road:setField("Node", 0, string.format("%f %f %f %f", p.pos.x, p.pos.y, p.pos.z + PAINT_RAY_LIFT, width))
     end
@@ -2658,17 +2696,23 @@ function M.show(key, props, opts)
             local s = set.sweeps[i]
             if not s or s.sig ~= sig then
                 local obj = s and s.obj
-                if solid and s and s.solid and obj and simObjectExists(obj) and buildSweep(obj, e) then
+                local now = GetCurrentTimeMillis()
+                if not solid and s and not s.solid and obj and simObjectExists(obj) and s.builtAt and
+                    now - s.builtAt < PAINT_REBUILD_MS then
+                    -- made a moment ago (an end being dragged) : its decal stays as it is until
+                    -- PAINT_REBUILD_MS have passed, then this one is made (catchUpPaints)
+                    s.entry, s.wantSig = e, sig
+                elseif solid and s and s.solid and obj and simObjectExists(obj) and buildSweep(obj, e) then
                     set.sweeps[i] = { obj = obj, sig = sig, entry = e, solid = true }
                 else
                     if obj and simObjectExists(obj) then obj:delete() end
                     local made = not solid and obj and spawnSweep(e) or nil
-                    set.sweeps[i] = { obj = made, sig = sig, entry = e, solid = solid }
+                    set.sweeps[i] = { obj = made, sig = sig, entry = e, solid = solid, builtAt = made and now or nil }
                     if not made then set.sweepPending[i] = true end
                 end
                 if solid or (s and s.solid) then changed = true end
             else
-                s.entry = e
+                s.entry, s.wantSig = e, nil
             end
         end
     end
@@ -2736,10 +2780,30 @@ local function spawnPending()
     return false
 end
 
+--- painted lines whose newest path waits (show : one dragged made a moment ago) made now, once
+--- PAINT_REBUILD_MS have passed since their last making
+local function catchUpPaints()
+    local now
+    for _, set in pairs(M.sets) do
+        for i, s in pairs(set.sweeps) do
+            if s.wantSig then
+                now = now or GetCurrentTimeMillis()
+                if not s.builtAt or now - s.builtAt >= PAINT_REBUILD_MS then
+                    if s.obj and simObjectExists(s.obj) then s.obj:delete() end
+                    s.obj = spawnSweep(s.entry)
+                    s.sig, s.wantSig, s.builtAt = s.wantSig, nil, now
+                    if not s.obj then set.sweepPending[i] = true end
+                end
+            end
+        end
+    end
+end
+
 --- props come in a few per frame ; then the static collision catches up with them (debounced, see
 --- scheduleCollisionReload : it waits for the last prop)
 local function onUpdate()
     updateLamps()
+    catchUpPaints()
     if anyPending() then
         if spawnPending() then
             if collisionReloadAt then scheduleCollisionReload() end

@@ -17,8 +17,11 @@ angular.module("beamjoy").component("bjDragTimeslip", {
 
         $rootScope.$on("BJDragTimeslip", (_, data) => {
             $scope.$applyAsync(() => {
+                const wasOpen = this.open;
                 this.open = !!(data && data.open && data.slip);
                 this.s = (data && data.slip) || this.s;
+                // the pad's cursor starts on Close
+                if (this.open && !wasOpen) this.cursor = 1;
                 cache = null;
                 memo = {};
                 beamjoyDelivery.setNavOwner("dragTimeslip", this.open);
@@ -196,12 +199,19 @@ angular.module("beamjoy").component("bjDragTimeslip", {
             this.close();
         };
 
+        // the pad : left / right between Open leaderboard (0) and Close (1), A presses, B closes
+        this.cursor = 1;
         const isRising = beamjoyDelivery.pressTracker();
         const offNav = $rootScope.$on("UINavigation", (_, name, value) => {
             const rising = isRising(name, value);
             if (!this.open || !rising) return;
             $scope.$applyAsync(() => {
-                if (name === "back") this.close();
+                if (name === "focus_l" || name === "focus_u") this.cursor = 0;
+                else if (name === "focus_r" || name === "focus_d") this.cursor = 1;
+                else if (name === "ok") {
+                    if (this.cursor === 0) this.openLeaderboard();
+                    else this.close();
+                } else if (name === "back") this.close();
             });
         });
         $scope.$on("$destroy", () => {

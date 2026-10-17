@@ -607,6 +607,11 @@ Presets tab. To check live :
 - photos (2705) : a build added gets its photo (row in the editor, then the tile in another
   player's selector once it's fetched), "Retake photo" in and out of the build, the game's UI
   only blinking while it's taken, a build made before 2705 keeping the model's picture until retaken ;
+- drag (2709) : after a run, the Focus control lights Open timeslip, A opens it, B lets go ; in the
+  timeslip left / right / A work and B closes it, and the pad drives again once it's closed ;
+- paints (2708) : yellow and black stripes look like the drawer's (and load on a map other than the
+  first one), chevrons are V's, slanted stripes show, the rubber and dirt marks fade at their ends,
+  dragging the rubber line no longer pins a CPU core ;
 - photos (2706, 2707) : a new photo shows in the editor row (it was blocked as "unsafe:"), a retaken
   one replaces the old after saving, a ghosted car comes out solid in the photo and goes back to
   see-through right after.

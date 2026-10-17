@@ -79,6 +79,17 @@ local HUDS = {
         event = "BJDeliveryHudFocus",
         active = function() return beamjoy_delivery ~= nil and beamjoy_delivery.job ~= nil end,
     },
+    -- the drag strip overlay once a run is over : its Open timeslip button (direct report : the
+    -- Focus control couldn't reach it). Not while the timeslip is open, it has the pad then
+    {
+        key = "dragHud",
+        event = "BJDragHudFocus",
+        active = function()
+            local d = beamjoy_dragRun
+            return d ~= nil and d.run ~= nil and d.run.finished == true and not d.run.dq
+                and d.slip ~= nil and not d.timeslipOpen
+        end,
+    },
 }
 
 ---@return table? the HUD the Focus control should hand the pad to right now
@@ -319,6 +330,7 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJRaceHudRelease", function() setHudFocus(nil) end)
     beamjoy_communications_ui.addHandler("BJBusHudRelease", function() setHudFocus(nil) end)
     beamjoy_communications_ui.addHandler("BJDeliveryHudRelease", function() setHudFocus(nil) end)
+    beamjoy_communications_ui.addHandler("BJDragHudRelease", function() setHudFocus(nil) end)
     beamjoy_communications_ui.addHandler("BJMapVoteRelease", function() setHudFocus(nil) end)
     beamjoy_communications_ui.addHandler("BJKickVoteRelease", function() setHudFocus(nil) end)
     -- the info overlay (race info, leaderboards) : driven by the pad while it's open

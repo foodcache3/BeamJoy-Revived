@@ -56,6 +56,10 @@
         align-items: center;
         justify-content: center;
     }
+    /* the pad's cursor */
+    #beamjoy-drag-slip .ts-btn.cursor {
+        box-shadow: 0 0 0 2px #ffbca0;
+    }
     #beamjoy-drag-slip button:focus-visible {
         outline: 2px solid #ffbca0;
         outline-offset: 2px;
@@ -304,8 +308,8 @@
             <h1>{{'beamjoy.drag.slip.title' | translate}}</h1>
             <div class="ts-sub">{{$ctrl.s.strip}}</div>
         </div>
-        <button type="button" class="ts-btn" ng-click="$ctrl.openLeaderboard()">{{'beamjoy.drag.slip.openLeaderboard' | translate}}</button>
-        <button type="button" class="ts-btn icon" ng-click="$ctrl.close()" aria-label="{{'beamjoy.drag.slip.close' | translate}}">
+        <button type="button" class="ts-btn" ng-class="{cursor: $ctrl.cursor === 0}" ng-click="$ctrl.openLeaderboard()">{{'beamjoy.drag.slip.openLeaderboard' | translate}}</button>
+        <button type="button" class="ts-btn icon" ng-class="{cursor: $ctrl.cursor === 1}" ng-click="$ctrl.close()" aria-label="{{'beamjoy.drag.slip.close' | translate}}">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"></path></svg>
         </button>
     </header>
