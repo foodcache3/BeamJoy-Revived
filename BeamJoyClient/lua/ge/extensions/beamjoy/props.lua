@@ -1960,9 +1960,10 @@ end
 -- (art/shapes/common/decalroads) and the race paint (art/shapes/race), whose textures are all in
 -- the shared /assets (a map's copies are links to them). The game has no yellow and black stripes
 -- (its "line_yellowblack" is a double yellow line with reflectors), so that one is the mod's own
--- (art/beamjoy/paints, made from the game's slanted stripes) : its material file is loaded when it's
--- first needed (`file`), a mod the server sends being mounted after the game loaded art/ at its
--- start. Drawn over objects too (a map's mesh
+-- (art/beamjoy/paints, made from the game's slanted stripes), and so are the two rubbers (the
+-- game's textures, without the dynamic reflections that made them slow to show when made anew) :
+-- their material file is loaded when it's first needed (`file`), a mod the server sends being
+-- mounted after the game loaded art/ at its start. Drawn over objects too (a map's mesh
 -- roads, a bridge), out of the AI's road network (`drivability` -1), never saved with the map, and
 -- under nothing of the map's own paint but over its asphalt (a low `renderPriority` draws last).
 -- No collision : never in the static collision, nothing to rebuild for it.
@@ -1985,11 +1986,14 @@ local PAINT_PRIORITY, MARK_PRIORITY = 1, 2
 local PAINT_RAY_LIFT = 2
 -- metres the flat mesh of a map without a terrain stands over the ground (over it, not in it)
 local PAINT_MESH_LIFT = .02
--- ms between two makings of a painted line while an end of it is dragged (or it's being placed) :
--- a decal road is made anew each time, which a wide one over objects (the rubbered-in racing line)
--- pays dearly for, so not every frame (direct report : 100% CPU while moving one). The last
--- position is made once the drag stops (catchUpPaints)
-local PAINT_REBUILD_MS = 125
+-- a painted line whose end is dragged (or that's being placed) is made anew every frame : a decal
+-- road reshaped on its object (its nodes moved, regenerate) only shows its new shape once the
+-- changes stop (direct report, 2710 : no line followed the mouse), a new one at once. The game's
+-- rubber materials, which took long to show anew (their dynamic reflections), are the mod's own
+-- copies without them (art/beamjoy/paints). One that still takes PAINT_SLOW_MS or more to make
+-- (ms, a wide one over many objects) is made at most every PAINT_REBUILD_MS, its last position
+-- once the drag stops (catchUpPaints)
+local PAINT_REBUILD_MS, PAINT_SLOW_MS = 125, 12
 
 -- `texLength` : metres of road one repeat of its texture covers ; `aspect` instead : that many
 -- times its width (a pattern that keeps its proportions, the checkers square, the chevrons and the
@@ -2032,8 +2036,15 @@ M.PAINTS = {
     { id = "sprayGreen", cat = "race", tags = "spray paint green marking", material = "spraypaint_mark_green",
         width = .3, aspect = 4, look = { pattern = "soft", colours = { "#22b04c" } } },
     { id = "rubber", cat = "marks", tags = "rubber racing line tyre tire marks skid asphalt",
-        material = "road_rubber_double", width = 3.5, texLength = 6, priority = MARK_PRIORITY, fade = 4,
+        material = "bjs_paint_rubber", file = "/art/beamjoy/paints/main.materials.json",
+        width = 3.5, texLength = 6, priority = MARK_PRIORITY, fade = 4,
         look = { pattern = "tread", colours = { "#2a2a2a" } } },
+    -- one wide dark band, the race tracks' own (art/shapes/race) : the maps lay it about 4 times as
+    -- long as it's wide (Hirochi 4.5 m wide, 18 m long) and fade it over many metres
+    { id = "trackRubber", cat = "marks", tags = "track rubber heavy dark racing line tyre tire marks asphalt",
+        material = "bjs_paint_track_rubber", file = "/art/beamjoy/paints/main.materials.json",
+        width = 4, aspect = 4, priority = MARK_PRIORITY, fade = 8,
+        look = { pattern = "band", colours = { "#1e1e1e" } } },
     { id = "dirtTracks", cat = "marks", tags = "dirt tyre tire tracks ruts gravel", material = "m_dirt_tiretracks",
         width = 3.5, texLength = 16, priority = MARK_PRIORITY, fade = 4,
         look = { pattern = "tread", colours = { "#5b4631" } } },
@@ -2091,8 +2102,9 @@ end
 ---@param pts {pos: vec3, way: vec3}[]
 ---@param width number
 ---@param texLength number
+---@param obj table? its object, to make it again on (reshapePaint) ; nil : a new one
 ---@return table? obj a ProceduralMesh
-local function makePaintMesh(paint, pts, width, texLength)
+local function makePaintMesh(paint, pts, width, texLength, obj)
     local origin = pts[1].pos
     local up = vec3(0, 0, 1)
     local s = { verts = {}, normals = {}, uvs = {}, faces = {}, material = paint.material }
@@ -2118,17 +2130,20 @@ local function makePaintMesh(paint, pts, width, texLength)
         tri(a, b, c)
         tri(a, c, d)
     end
-    local obj = createObject("ProceduralMesh")
-    obj.canSave = false
-    obj:registerObject("")
-    if not simObjectExists(obj) then return nil end
+    local made = not obj
+    if made then
+        obj = createObject("ProceduralMesh")
+        obj.canSave = false
+        obj:registerObject("")
+        if not simObjectExists(obj) then return nil end
+    end
     local ok, err = pcall(function()
         obj:createMesh({ { s } })
         obj:setPosition(origin)
     end)
     if not ok then
         LogWarn("beamjoy_props: a painted line couldn't be built: " .. tostring(err))
-        obj:delete()
+        if made then obj:delete() end
         return nil
     end
     return obj
@@ -2153,11 +2168,11 @@ local function paintFade(paint, pts)
     return math.min(paint.fade, length / 4)
 end
 
---- a painted line's decal made (on a map without a terrain, its flat mesh) : nil when its paint
---- isn't known or its path is too short
+--- where a painted line goes : its paint, its points, its width and its texture's length ; nil
+--- when its paint isn't known or its path is too short
 ---@param entry table
----@return table? obj a DecalRoad or a ProceduralMesh
-local function makePaint(entry)
+---@return table? paint, {pos: vec3, way: vec3}[] pts, number width, number texLength
+local function paintLayout(entry)
     local paint = paintById[entry.paint]
     if not paint then return nil end
     local count = math.max(1, math.min(math.floor(tonumber(entry.count) or 1), M.PAINT_MAX_SEGMENTS))
@@ -2165,13 +2180,23 @@ local function makePaint(entry)
         followGround = entry.followGround, heights = entry.heights })
     if #pts < 2 then return nil end
     local width = M.paintWidth(entry)
-    local texLength = paint.aspect and width * paint.aspect or paint.texLength or 5
+    local texLength = math.max(.1, paint.aspect and width * paint.aspect or paint.texLength or 5)
+    return paint, pts, width, texLength
+end
+
+--- a painted line's decal made (on a map without a terrain, its flat mesh) : nil when its paint
+--- isn't known or its path is too short
+---@param entry table
+---@return table? obj a DecalRoad or a ProceduralMesh
+local function makePaint(entry)
+    local paint, pts, width, texLength = paintLayout(entry)
+    if not paint then return nil end
     ensurePaintMaterial(paint)
-    if not mapHasTerrain() then return makePaintMesh(paint, pts, width, math.max(.1, texLength)) end
+    if not mapHasTerrain() then return makePaintMesh(paint, pts, width, texLength) end
     local road = createObject("DecalRoad")
     road.canSave = false
     road:setField("material", 0, paint.material)
-    road:setField("textureLength", 0, string.format("%.3f", math.max(.1, texLength)))
+    road:setField("textureLength", 0, string.format("%.3f", texLength))
     road:setField("renderPriority", 0, tostring(paint.priority or PAINT_PRIORITY))
     road:setField("improvedSpline", 0, "1")
     road:setField("overObjects", 0, "1")
@@ -2184,6 +2209,22 @@ local function makePaint(entry)
     road:registerObject("")
     if not simObjectExists(road) then return nil end
     return road
+end
+
+--- a painted line (the same paint) made again on its object : only its flat mesh (a map without a
+--- terrain), made again at once like a curb's. Never a decal road : reshaped, it only shows its new
+--- shape once the changes stop (see PAINT_REBUILD_MS), so it's made anew. False : made anew
+---@param obj table a DecalRoad or a ProceduralMesh
+---@param entry table
+---@return boolean
+local function reshapePaint(obj, entry)
+    local paint, pts, width, texLength = paintLayout(entry)
+    if not paint or mapHasTerrain() or not simObjectExists(obj) or obj:getClassName() ~= "ProceduralMesh" then
+        return false
+    end
+    local ok, done = pcall(makePaintMesh, paint, pts, width, texLength, obj)
+    if not ok then LogWarn("beamjoy_props: a painted line couldn't be reshaped: " .. tostring(done)) end
+    return ok and done ~= nil
 end
 
 --- what a painted line's decal is made from, to tell when it has to be made again
@@ -2625,6 +2666,21 @@ local function spawnSweep(entry)
     return obj
 end
 
+--- a painted line made again (an end dragged) : its flat mesh reshaped on its object, its decal
+--- made anew. How long it took tells whether the next drag steps wait (show)
+---@param s table its set.sweeps slot
+---@param e table
+---@param sig string
+local function remakePaint(s, e, sig)
+    local started = os.clock()
+    if not (s.obj and s.paint == e.paint and reshapePaint(s.obj, e)) then
+        if s.obj and simObjectExists(s.obj) then s.obj:delete() end
+        s.obj = spawnSweep(e)
+    end
+    s.entry, s.sig, s.wantSig, s.paint = e, sig, nil, e.paint
+    s.builtAt, s.cost = GetCurrentTimeMillis(), (os.clock() - started) * 1000
+end
+
 ---@param a table expand() entry
 ---@param b table expand() entry
 ---@return boolean same mesh in the same place
@@ -2681,9 +2737,10 @@ function M.show(key, props, opts)
 
     -- the curbs and walls (SWEEPS) and the painted lines (PAINTS) : one object each, by the
     -- entry's place in the list, made again only when something of it changed. A curb's mesh is
-    -- made again in place on its object (no new object while an end is dragged) ; a painted line's
-    -- decal is made anew at once (cheap, and an end dragged keeps up with the mouse). New ones are
-    -- created in onUpdate, with the props. Only the curbs and walls change the static collision
+    -- made again in place on its object (no new object while an end is dragged), and a painted
+    -- line made again (remakePaint) at once, so an end dragged keeps up with the mouse. New
+    -- ones are created in onUpdate, with the props. Only the curbs and walls change the static
+    -- collision
     local kept = {}
     for i, e in ipairs(type(props) == "table" and props or {}) do
         local kind = type(e) == "table" and (
@@ -2696,18 +2753,23 @@ function M.show(key, props, opts)
             local s = set.sweeps[i]
             if not s or s.sig ~= sig then
                 local obj = s and s.obj
-                local now = GetCurrentTimeMillis()
-                if not solid and s and not s.solid and obj and simObjectExists(obj) and s.builtAt and
-                    now - s.builtAt < PAINT_REBUILD_MS then
-                    -- made a moment ago (an end being dragged) : its decal stays as it is until
-                    -- PAINT_REBUILD_MS have passed, then this one is made (catchUpPaints)
-                    s.entry, s.wantSig = e, sig
+                if not solid and s and not s.solid and obj and simObjectExists(obj) then
+                    if (s.cost or 0) >= PAINT_SLOW_MS and s.builtAt and
+                        GetCurrentTimeMillis() - s.builtAt < PAINT_REBUILD_MS then
+                        -- slow to make and made a moment ago : its decal stays as it is until
+                        -- PAINT_REBUILD_MS have passed, then this one is made (catchUpPaints)
+                        s.entry, s.wantSig = e, sig
+                    else
+                        remakePaint(s, e, sig)
+                        if not s.obj then set.sweepPending[i] = true end
+                    end
                 elseif solid and s and s.solid and obj and simObjectExists(obj) and buildSweep(obj, e) then
                     set.sweeps[i] = { obj = obj, sig = sig, entry = e, solid = true }
                 else
                     if obj and simObjectExists(obj) then obj:delete() end
                     local made = not solid and obj and spawnSweep(e) or nil
-                    set.sweeps[i] = { obj = made, sig = sig, entry = e, solid = solid, builtAt = made and now or nil }
+                    set.sweeps[i] = { obj = made, sig = sig, entry = e, solid = solid,
+                        paint = not solid and e.paint or nil }
                     if not made then set.sweepPending[i] = true end
                 end
                 if solid or (s and s.solid) then changed = true end
@@ -2780,8 +2842,8 @@ local function spawnPending()
     return false
 end
 
---- painted lines whose newest path waits (show : one dragged made a moment ago) made now, once
---- PAINT_REBUILD_MS have passed since their last making
+--- painted lines whose newest path waits (show : a slow one dragged, made a moment ago) made now,
+--- once PAINT_REBUILD_MS have passed since their last making
 local function catchUpPaints()
     local now
     for _, set in pairs(M.sets) do
@@ -2789,9 +2851,7 @@ local function catchUpPaints()
             if s.wantSig then
                 now = now or GetCurrentTimeMillis()
                 if not s.builtAt or now - s.builtAt >= PAINT_REBUILD_MS then
-                    if s.obj and simObjectExists(s.obj) then s.obj:delete() end
-                    s.obj = spawnSweep(s.entry)
-                    s.sig, s.wantSig, s.builtAt = s.wantSig, nil, now
+                    remakePaint(s, s.entry, s.wantSig)
                     if not s.obj then set.sweepPending[i] = true end
                 end
             end

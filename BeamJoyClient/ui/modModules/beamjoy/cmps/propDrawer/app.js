@@ -667,6 +667,10 @@ angular.module("beamjoy").component("bjPropDrawer", {
                     `conic-gradient(${a} 0 25%, transparent 0 50%, ${a} 0 75%, transparent 0) 0 0 / 1.2em 50%`
                 ),
                 soft: band(18, a, { "box-shadow": `0 0 0.35em 0.15em ${a}`, opacity: 0.85 }),
+                // one wide band, soft at its sides
+                band: band(70, `linear-gradient(180deg, transparent 0, ${a} 24% 76%, transparent 100%)`, {
+                    opacity: 0.9,
+                }),
                 tread: band(64, `linear-gradient(180deg, transparent 0 8%, ${a} 18% 38%, transparent 46% 54%, ${a} 62% 82%, transparent 92%)`, {
                     opacity: 0.9,
                 }),

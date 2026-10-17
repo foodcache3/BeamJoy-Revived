@@ -61,6 +61,46 @@ BJS's synced date should follow it (currently written only on change, so it does
 if not, implement rollover in `envClock.advance` (count midnights crossed since the epoch,
 advance the synced date; the per-date segment cache already supports a date that moves).
 
+## Join loading time: the sidebar and weather take 7-10 s after the UI reload
+
+**Status:** investigated, not started. The user asked to add this to the plan.
+
+Direct report : after the join's UI reload, the sidebar and the weather sync come much later than a
+month ago. The UI reload itself is unchanged (about 4 s in the build 2495 logs and now). The gap is
+the join caches : from the client's `clientConnection` to `sendCache` arriving took 0.06 s in build
+2495, and 7-10 s in every 2703/2707 log (Nucleus Player1/Player2). The sidebar
+(`communications/ui.lua` proceedAfterLogin waits on `beamjoy_cache.loaded`) and the weather both
+wait on that one message (`services/cache.lua` requestCaches : every service's `onBJRequestCache`
+in one `sendCache`).
+
+Why (West Coast, measured from the server's db) : the join caches are about 90 parts of 20 KB, and
+the paced sender (`communications/tx.lua`) sends one part per 100 ms tick, so about 9 s.
+- **Race props.** `caches.races` is 1.35 MB as sent, and 80% of that is the props of all 57 races
+  (4,086 props, about 225 bytes each). Without props it's 0.28 MB. A race's props are only needed
+  when it's run, watched or edited.
+- **Shared builds and presets** (`caches.vehiclePresets`, `caches.vehicleBuilds`) : about 370 KB.
+  The build photos are already sent on request only.
+- **The pacing sends half what it meant to.** SEND_BUDGET 40000 bytes per tick, but a 20 KB part
+  grows to about 23 KB once wrapped and escaped (`{id, part, data}` as JSON), so only one part fits
+  per tick : about 230 KB/s, not the 400 KB/s its comment says.
+
+The plan :
+1. **Race props on request.** The races cache carries a prop count instead of `props`, and the
+   client asks for a race's props when it needs them : a race it's in or watching (props.lua
+   sessionProps, which reads `beamjoy_races.data`), the race editor opening a race (its own copy,
+   windows/config/races/editor), sharing / export (raceShareExportCode), and anything else that reads
+   `race.props` (mapRaces' import keeps the map's own props). A save sends the race's new props to
+   no one, the next request gets them. About 9 s to 3.5 s on West Coast.
+2. **Small caches first.** The join's caches in two messages : settings, players, environment and
+   the other small ones first (the sidebar and the weather from that one), then the big lists
+   (races, vehicle presets, vehicle builds). Check what reads those lists at load and copes with
+   them arriving a few seconds later.
+3. **The pacing as intended** : two parts per tick (a budget that fits two wrapped parts), about
+   460 KB/s. It's the guard against the BeamMP launcher's "zlib uncompress() failed" crash on big
+   bursts (27 packets at once), so test it with a few players joining at once.
+
+All three : the sidebar and weather within about a second, the full caches in 1-2 s.
+
 ## Freeroam / Bus lines — later phases
 
 Phase 0-2 (energy stations, garages, bus lines) are shipped — see CHANGELOG. Scope for what's next:
@@ -607,6 +647,10 @@ Presets tab. To check live :
 - photos (2705) : a build added gets its photo (row in the editor, then the tile in another
   player's selector once it's fetched), "Retake photo" in and out of the build, the game's UI
   only blinking while it's taken, a build made before 2705 keeping the model's picture until retaken ;
+- paints (2712) : every line (the placing ghost and a dragged node) follows the mouse smoothly,
+  the rubbers too, with no CPU spike ; both rubbers still look as before (on another map too) ;
+- paints (2711) : Track rubber shows as one wide dark band (on a map other than West Coast too),
+  its drawer picture too ;
 - drag (2709) : after a run, the Focus control lights Open timeslip, A opens it, B lets go ; in the
   timeslip left / right / A work and B closes it, and the pad drives again once it's closed ;
 - paints (2708) : yellow and black stripes look like the drawer's (and load on a map other than the

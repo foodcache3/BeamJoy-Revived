@@ -22,5 +22,69 @@
     "translucent": true,
     "translucentZWrite": true,
     "version": 1.5
+  },
+  "bjs_paint_rubber": {
+    "name": "bjs_paint_rubber",
+    "mapTo": "bjs_paint_rubber",
+    "class": "Material",
+    "persistentId": "e3cead1d-74d8-4022-98bf-53e7e40a1745",
+    "Stages": [
+      {
+        "baseColorFactor": [
+          0.165811002,
+          0.165809005,
+          0.165809005,
+          1
+        ],
+        "opacityFactor": 1.20000005,
+        "opacityMap": "/assets/materials/decalroad/treadmark/road_rubber_double/t_asphalt_rubber_double_o.data.png",
+        "roughnessFactor": 0.801999986,
+        "roughnessMap": "/assets/materials/decalroad/treadmark/m_asphalt_rubber/t_asphalt_rubber_r.data.png"
+      },
+      {},
+      {},
+      {}
+    ],
+    "alphaRef": 150,
+    "annotation": "ASPHALT",
+    "castShadows": false,
+    "materialTag0": "RoadAndPath",
+    "materialTag1": "beamng",
+    "translucent": true,
+    "translucentZWrite": true,
+    "version": 1.5
+  },
+  "bjs_paint_track_rubber": {
+    "name": "bjs_paint_track_rubber",
+    "mapTo": "bjs_paint_track_rubber",
+    "class": "Material",
+    "persistentId": "afb0ecb2-509e-4144-9d1e-6e2fd4eda6f0",
+    "Stages": [
+      {
+        "baseColorFactor": [
+          0.165811002,
+          0.165809005,
+          0.165809005,
+          1
+        ],
+        "baseColorMap": "/assets/materials/decalroad/treadmark/track_rubber/tiregroove1_d.dds",
+        "opacityFactor": 0.800000012,
+        "opacityMap": "/assets/materials/decalroad/treadmark/m_asphalt_rubber/t_asphalt_rubber_o.data.png",
+        "roughnessFactor": 0.59144485,
+        "roughnessMap": "/assets/materials/decalroad/treadmark/m_asphalt_rubber/t_asphalt_rubber_r.data.png"
+      },
+      {},
+      {},
+      {}
+    ],
+    "alphaRef": 80,
+    "annotation": "ASPHALT",
+    "castShadows": false,
+    "materialTag0": "RoadAndPath",
+    "materialTag1": "beamng",
+    "specularStrength0": "0",
+    "translucent": true,
+    "translucentZWrite": true,
+    "version": 1.5
   }
 }

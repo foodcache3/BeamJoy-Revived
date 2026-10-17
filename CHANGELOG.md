@@ -8,7 +8,24 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2709, server build 2467.
+Version 1.11.0 : client build 2712, server build 2467.
+
+- **Fix (2712) : painted lines follow the mouse again** (direct report, 2710 : "none of the lines
+  are updating their position when you are about to place unless you stop moving the mouse"). A
+  decal reshaped in place only shows its new shape once the changes stop, so 2710's reshaping is
+  undone : a line being placed or dragged is made anew every frame, as before 2708. The two rubbers
+  (the rubbered-in racing line, Track rubber) are now the mod's own copies of the game's materials,
+  the same textures without the dynamic reflections that made a new one slow to show and costly.
+
+- **New paint (2711) : Track rubber** (marks), the race tracks' own heavy rubber : one wide dark
+  band, 4 m wide by default, fading in and out over 8 m at its ends.
+
+- **Fix (2710, undone by 2712) : dragging a painted line** (direct report : the rubbered-in racing line still only
+  showed once the mouse stopped, and the zebra crossing, smooth before, became jumpy). A dragged or
+  placed line is now reshaped on its decal (its nodes replaced, as the game's Road Architect does)
+  instead of a new decal made each time : the rubber's material, unlike the others, was costly to
+  set up anew. Back to every frame, as before 2708 ; only a line that still takes 12 ms or more to
+  make waits between drag steps (8 a second).
 
 - **Fix (2709) : the Focus control couldn't reach the drag strip's Open timeslip** (direct report).
   Once a run is over, the Focus control gives the drag overlay the pad, its Open timeslip button
