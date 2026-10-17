@@ -8,7 +8,20 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2705, server build 2467.
+Version 1.11.0 : client build 2707, server build 2467.
+
+- **Fix (2707) : a ghosted car's build photo came out see-through** (direct request : "the
+  ghosting visual should also be disabled for the photo"). While the photo is taken, the car shows
+  solid (`beamjoy_vehicles.setPhotoSubject`, checked first in `computeDisplayAlpha`, so anything
+  that reapplies the transparency meanwhile keeps it solid too), and its real look comes back as
+  soon as the shot is done or times out. Only the look : its ghost state (collisions) isn't touched.
+
+- **Fix (2706) : a new build photo didn't show in the preset editor** (reported with the CEF log
+  line "Resource cancel URL=unsafe:data:image/jpeg;base64,..."). The game's UI only lets an `<img>`
+  load http/ftp/file/local addresses (its `imgSrcSanitizationWhitelist`), so Angular turned the
+  photo's `data:` address into `unsafe:` and CEF cancelled it. The photo is now drawn as the box's
+  background, which that filter doesn't touch. A saved build's photo file is asked for with its hash
+  (`bjs_<id>.jpg?v=<hash>`), so a retaken photo isn't the old one from CEF's cache.
 
 - **New : shared builds get a real photo in the vehicle selector** (direct request : "wasn't there
   supposed to be photos with the configs? it just shows the default vehicle"). Adding a custom car

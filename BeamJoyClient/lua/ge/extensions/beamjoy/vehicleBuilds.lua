@@ -327,9 +327,11 @@ end
 local function listForUI()
     local out = {}
     for _, b in ipairs(M.data) do
+        -- photo : its hash once this game holds it (the editor shows it, the hash keeping CEF's cache honest)
+        local held = type(b.photo) == "string" and M.photos ~= nil and
+            M.photos["/vehicles/" .. tostring(b.model) .. "/bjs_" .. tostring(b.id) .. ".jpg"] == b.photo
         table.insert(out, { id = b.id, model = b.model, name = b.name, author = b.author, modelLabel = b.modelLabel,
-            photo = type(b.photo) == "string" and M.photos ~= nil and
-                M.photos["/vehicles/" .. tostring(b.model) .. "/bjs_" .. tostring(b.id) .. ".jpg"] == b.photo })
+            photo = held and b.photo or nil })
     end
     return out
 end
@@ -354,7 +356,8 @@ end
 --- camera (util/screenshotCreator.lua's frameVehicle and takeThumbnailScreenshot, what its "Save
 --- configuration" preview uses). That camera is a separate view : the player's own camera, the
 --- car and the physics aren't touched (unlike the screenshot creator's batch work, which respawns
---- cars and speeds physics up). The game's UI hides for a moment while it's taken.
+--- cars and speeds physics up). The game's UI hides for a moment while it's taken, and a ghosted
+--- car shows solid for it (beamjoy_vehicles.setPhotoSubject : only the look, not its collisions).
 ---@param veh NGVehicle
 ---@param callback fun(photo: string?) the JPEG as base64, nil when it couldn't be taken
 local function takePhoto(veh, callback)
@@ -377,10 +380,13 @@ local function takePhoto(veh, callback)
     end
     pcall(function() FS:directoryCreate(PHOTO_DIR, true) end)
     local path = string.format("%s/buildPhoto%d.jpg", PHOTO_DIR, math.random(100000, 999999))
+    -- a ghosted car is see-through : solid for the shot, its real look back after
+    local setSubject = beamjoy_vehicles and beamjoy_vehicles.setPhotoSubject
     local pending = { path = path, ticks = 0 }
     pending.finish = function(success)
         if M.pendingPhoto ~= pending then return end
         M.pendingPhoto = nil
+        if setSubject then pcall(setSubject, nil) end
         local data = success and readBinary(path) or nil
         pcall(function() FS:removeFile(path) end)
         local photo = data and #data > 0 and data:sub(1, 3) == "\255\216\255" and b64encode(data) or nil
@@ -388,6 +394,7 @@ local function takePhoto(veh, callback)
         callback(photo)
     end
     M.pendingPhoto = pending
+    if setSubject then pcall(setSubject, veh:getID()) end
     local ok = pcall(creator.takeThumbnailScreenshot, path,
         { pos = pos, rot = rot, fov = PHOTO_FOV, screenshotDelay = 0.2 },
         function(success) pending.finish(success == true) end, "beamjoyBuild")

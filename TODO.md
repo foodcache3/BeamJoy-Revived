@@ -606,7 +606,10 @@ Presets tab. To check live :
 - the selector's first open after builds arrive (the cache is cleared, then warmed again) ;
 - photos (2705) : a build added gets its photo (row in the editor, then the tile in another
   player's selector once it's fetched), "Retake photo" in and out of the build, the game's UI
-  only blinking while it's taken, a build made before 2705 keeping the model's picture until retaken.
+  only blinking while it's taken, a build made before 2705 keeping the model's picture until retaken ;
+- photos (2706, 2707) : a new photo shows in the editor row (it was blocked as "unsafe:"), a retaken
+  one replaces the old after saving, a ghosted car comes out solid in the photo and goes back to
+  see-through right after.
 
 Later, if wanted : players submitting builds for staff to approve (a separate permission), "Save this car" on another player's car, and the server making a preset
 pack zip from favourite builds (sent by BeamMP like any mod, so players keep them

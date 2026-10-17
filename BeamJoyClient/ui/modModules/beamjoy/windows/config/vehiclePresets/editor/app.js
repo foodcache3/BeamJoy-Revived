@@ -115,11 +115,18 @@ angular.module("beamjoy").component("bjConfigVehiclePresetsEditor", {
             return null;
         };
         // its photo : a new one, not saved yet, else the one this game holds for the build
+        // (the hash in the path : a retaken photo isn't the old one from CEF's cache)
         this.photoSrc = (entry) => {
             if (entry.photo) return "data:image/jpeg;base64," + entry.photo;
             if (entry.buildId === undefined) return null;
             const build = this.builds.find((b) => b.id === entry.buildId);
-            return build && build.photo ? `/vehicles/${build.model}/bjs_${build.id}.jpg` : null;
+            return build && build.photo ? `/vehicles/${build.model}/bjs_${build.id}.jpg?v=${build.photo}` : null;
+        };
+        // drawn as a background : the game's UI only lets <img> load http/file/local
+        // addresses, a data: photo would be turned into "unsafe:" and cancelled
+        this.photoStyle = (entry) => {
+            const src = this.photoSrc(entry);
+            return src ? { "background-image": `url("${src}")` } : {};
         };
         // a new photo of the car you're in, when it's this build
         this.retakePhoto = (event, entry, index) => {

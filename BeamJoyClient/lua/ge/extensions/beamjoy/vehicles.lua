@@ -1196,6 +1196,10 @@ M.ghostReasons = {}
 --- (correctly, per the real synced ghost flag) translucent one, exactly as before.
 M.soloGhostVisualReversed = false
 
+--- the car whose build photo is being taken, shown solid meanwhile (see setPhotoSubject)
+---@type integer?
+M.photoVID = nil
+
 ---@param vid integer
 ---@param isGhosted boolean the vehicle's own real ghost/collision state, as already known by the
 ---caller (M.ghostReasons only ever tracks reasons for locally-owned vehicles, never a remote
@@ -1204,6 +1208,8 @@ M.soloGhostVisualReversed = false
 local function computeDisplayAlpha(vid, isGhosted)
     -- Settings > Visual > Disable ghost transparency : everything solid, only the look changes
     if beamjoy_markerSettings and beamjoy_markerSettings.opaqueGhosts then return 1 end
+    -- a car having its build photo taken : solid for the shot (see setPhotoSubject)
+    if M.photoVID ~= nil and vid == M.photoVID then return 1 end
     -- CollisionsMode == "disabled" ghosts literally every vehicle, permanently, for as long as
     -- it's set. The translucency visual exists to flag a TEMPORARY, situational ghost (respawn
     -- protection, a safe zone, a race countdown), which stops meaning anything once it's just the
@@ -1245,6 +1251,23 @@ local function reapplyDisplayAlpha()
             mpVeh.veh:setMeshAlpha(computeDisplayAlpha(mpVeh.vid, mpVeh.veh.ghost == "1"), "")
         end
     end)
+end
+
+--- the car whose build photo is being taken (vehicleBuilds.takePhoto) : shown solid while it is,
+--- so a ghosted car's photo isn't see-through ; nil when it's done, its real look back. Only the
+--- look : its ghost (collisions) state isn't touched
+---@param vid integer?
+local function setPhotoSubject(vid)
+    local previous = M.photoVID
+    M.photoVID = vid
+    local function apply(id)
+        local veh = id and be:getObjectByID(id)
+        if veh then
+            veh:setMeshAlpha(computeDisplayAlpha(id, veh.ghost == "1"), "")
+        end
+    end
+    if previous ~= vid then apply(previous) end
+    apply(vid)
 end
 
 ---@param vid integer
@@ -1670,6 +1693,7 @@ M.applyRespawnProtection = applyRespawnProtection
 M.computeDisplayAlpha = computeDisplayAlpha
 M.setSoloGhostVisualReversed = setSoloGhostVisualReversed
 M.reapplyDisplayAlpha = reapplyDisplayAlpha
+M.setPhotoSubject = setPhotoSubject
 M.getAttachedTrailers = getAttachedTrailers
 M.getFullConfig = getFullConfig
 M.isPolice = isPolice

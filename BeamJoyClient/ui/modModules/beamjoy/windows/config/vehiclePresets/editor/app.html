@@ -27,16 +27,14 @@
         aspect-ratio: 500 / 281;
         border-radius: 3px;
         background: rgba(0, 0, 0, 0.3);
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
         overflow: hidden;
         display: flex;
         align-items: center;
         justify-content: center;
         text-align: center;
-    }
-    bj-config-vehicle-presets-editor .build-photo img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
     }
 </style>
 
@@ -75,8 +73,7 @@
     >
         <span class="flex-grow-1" ng-if="!$ctrl.isBuild(entry)">{{entry.label}}</span>
         <!-- a shared build : its photo and name are what everyone sees in the vehicle selector -->
-        <div class="build-photo" ng-if="$ctrl.isBuild(entry)">
-            <img ng-if="$ctrl.photoSrc(entry)" ng-src="{{$ctrl.photoSrc(entry)}}" alt="" />
+        <div class="build-photo" ng-if="$ctrl.isBuild(entry)" ng-style="$ctrl.photoStyle(entry)">
             <span ng-if="!$ctrl.photoSrc(entry)" class="small opacity-70">
                 {{'beamjoy.window.config.tabs.vehiclePresets.noPhoto' | translate}}
             </span>
