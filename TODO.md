@@ -587,7 +587,8 @@ Editor (a Props section in the race editor, `ui/raceEditor.lua` + its Angular si
 
 ## Vehicle presets: shared builds (custom vehicles for everyone)
 
-**Built in client 2703 / server 2466, not yet tried live.** Direct request : players' custom
+**Built in client 2703 / server 2466 ; first live try (2703) : a personal save was added as a
+plain entry (the game's Save writes an info file too), fixed in 2704, to try again.** Direct request : players' custom
 vehicles in vehicle presets, available to everyone in the vehicle selector, managed in the Vehicle
 Presets tab with its permission. Server : `services/vehiclePresets.lua` (builds checked, named,
 deduplicated, dropped when unused), `dao/vehicleBuilds.lua` (`vehicleBuilds.json`). Client :
@@ -602,10 +603,12 @@ Presets tab. To check live :
   the next join ;
 - a part from a repo mod refused with its name ; parts from the server's own mods accepted (is
   `mods/multiplayer/` always where BeamMP puts them?) ;
-- the selector's first open after builds arrive (the cache is cleared, then warmed again).
+- the selector's first open after builds arrive (the cache is cleared, then warmed again) ;
+- photos (2705) : a build added gets its photo (row in the editor, then the tile in another
+  player's selector once it's fetched), "Retake photo" in and out of the build, the game's UI
+  only blinking while it's taken, a build made before 2705 keeping the model's picture until retaken.
 
-Later, if wanted : players submitting builds for staff to approve (a separate permission), a real
-picture of the build, "Save this car" on another player's car, and the server making a preset
+Later, if wanted : players submitting builds for staff to approve (a separate permission), "Save this car" on another player's car, and the server making a preset
 pack zip from favourite builds (sent by BeamMP like any mod, so players keep them
 after leaving).
 

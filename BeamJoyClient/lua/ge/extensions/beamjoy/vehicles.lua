@@ -1537,19 +1537,25 @@ end
 --- purely local to their own profile, never bundled or distributed anywhere. The pool mode
 --- vehicle restriction (a joining participant PICKS a config from the native selector, so it has
 --- to actually exist for them) needs to tell these apart, or a host could add a personal preset
---- that's silently invisible to everyone else. Same signal the installed game's own vehicle
---- selector already uses to classify a config's "Source" as Custom vs BeamNG-Official/Mod (see
---- core/vehicles.lua : every config gets an `infoFilename` if (and only if) it ships an
---- `info_<name>.json` sidecar alongside the .pc: a personal save never does, since it's a raw
---- dump with no such metadata file).
+--- that's silently invisible to everyone else. Where the .pc really lives tells them apart : the
+--- game's own folder, or a mod this server sends (BeamMP keeps those in mods/multiplayer). Real
+--- bug, seen live : this used to go by the config having an info_<name>.json, but the game's own
+--- "Save" writes one next to a personal .pc too, so a personal save was added to a preset as a
+--- plain entry nobody else had, instead of a shared build.
 ---@param model string
 ---@param configKey string
----@return boolean true if this config ships with the base game or a mod (guaranteed present for
----anyone who has the model) ; false if it's a personal, local-only save
+---@return boolean true if this config ships with the base game or a mod this server sends
+---(present for everyone here) ; false for a personal save or a mod only this player has
 local function isConfigShareable(model, configKey)
     local modelData = core_vehicles.getModel(model)
     local config = modelData and modelData.configs and modelData.configs[configKey]
-    return config ~= nil and config.infoFilename ~= nil
+    if not config or type(config.pcFilename) ~= "string" then return false end
+    local ok, real = pcall(function() return FS:getFileRealPath(config.pcFilename) end)
+    if not ok or type(real) ~= "string" or real == "" then return false end
+    real = real:gsub("\\", "/"):lower()
+    local game = tostring(FS:getGamePath() or ""):gsub("\\", "/"):lower()
+    if #game > 0 and real:sub(1, #game) == game then return true end
+    return real:find("/mods/multiplayer/", 1, true) ~= nil
 end
 
 --- BeamMP's full id for a vehicle, "<ownerID>-<vehicleID>", the same on every player's game.

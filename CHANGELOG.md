@@ -8,7 +8,31 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2703, server build 2466.
+Version 1.11.0 : client build 2705, server build 2467.
+
+- **New : shared builds get a real photo in the vehicle selector** (direct request : "wasn't there
+  supposed to be photos with the configs? it just shows the default vehicle"). Adding a custom car
+  in Config > Vehicle Presets now takes a photo of it where it stands, with the game's own
+  thumbnail framing and camera (the same steps its "Save configuration" preview uses : a separate
+  camera view, so the player's own camera, the car and the physics aren't touched ; the game's UI
+  hides for a moment while it's taken). Each build row in the editor shows its photo, with "Retake
+  photo" (when you're in that build : park it somewhere nicer and take it again), saved with the
+  preset. The server keeps the photos apart from the builds (`vehicleBuildPhotos.json`) and each
+  player's game asks for a photo it doesn't have yet, once, writing it as the build's tile picture
+  (the model's own picture stands in until it arrives, and for builds made before this). Photos are
+  checked on the server (a JPEG, at most 200,000 characters of base64) and dropped with their build.
+  Real bug caught while testing it : the server's JSON writer turns a table keyed "5", "7" into a
+  list of nulls, which would have lost every photo on save ; they're stored as a list of
+  {id, data}.
+
+- **Fix : a personal saved configuration added to a vehicle preset as a plain entry, not a shared
+  build** (seen live : an FCV saved in the game showed as "Cherrier FCV (2020) - ?", with no
+  "Shared build" tag or name box, and never reached the vehicle selector). The game's own Save now
+  writes an info file next to a personal .pc, and BeamJoy took "has an info file" to mean "a
+  factory or mod configuration". It now goes by where the .pc really is : the game's own folder or
+  a mod this server sends is a normal entry, anything else (a personal save, a mod only you have)
+  is captured as a shared build. A personal save's name box starts with the name it was saved
+  under. A preset that already got such an entry : remove it and add the car again.
 
 - **New : custom vehicles in vehicle presets, in everyone's vehicle selector** (direct request :
   players' custom vehicles in vehicle presets, available to all players in the vehicle selector).

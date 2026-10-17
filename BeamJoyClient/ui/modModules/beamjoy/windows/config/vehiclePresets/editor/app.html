@@ -21,6 +21,23 @@
     bj-config-vehicle-presets-editor .build-problem {
         color: #ff8a80;
     }
+    bj-config-vehicle-presets-editor .build-photo {
+        flex-shrink: 0;
+        width: 8em;
+        aspect-ratio: 500 / 281;
+        border-radius: 3px;
+        background: rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
+    bj-config-vehicle-presets-editor .build-photo img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
 </style>
 
 <div ng-if="$ctrl.preset" class="d-flex flex-column gap-1">
@@ -57,7 +74,13 @@
         ng-repeat="entry in $ctrl.preset.entries track by $index"
     >
         <span class="flex-grow-1" ng-if="!$ctrl.isBuild(entry)">{{entry.label}}</span>
-        <!-- a shared build : its name is what everyone sees in the vehicle selector -->
+        <!-- a shared build : its photo and name are what everyone sees in the vehicle selector -->
+        <div class="build-photo" ng-if="$ctrl.isBuild(entry)">
+            <img ng-if="$ctrl.photoSrc(entry)" ng-src="{{$ctrl.photoSrc(entry)}}" alt="" />
+            <span ng-if="!$ctrl.photoSrc(entry)" class="small opacity-70">
+                {{'beamjoy.window.config.tabs.vehiclePresets.noPhoto' | translate}}
+            </span>
+        </div>
         <div class="build-row flex-grow-1 d-flex flex-column gap-1" ng-if="$ctrl.isBuild(entry)">
             <div class="d-flex align-center gap-1">
                 <span class="build-tag" title="{{'beamjoy.window.config.tabs.vehiclePresets.sharedBuild.tooltip' | translate}}">
@@ -76,6 +99,13 @@
             <span class="small opacity-70" ng-if="$ctrl.renamesElsewhere(entry)">
                 {{'beamjoy.window.config.tabs.vehiclePresets.renamesElsewhere' | translate}}
             </span>
+            <button
+                class="btn info w-fitcontent small"
+                ng-click="$ctrl.retakePhoto($event, entry, $index)"
+                title="{{'beamjoy.window.config.tabs.vehiclePresets.retakePhoto.tooltip' | translate}}"
+            >
+                {{'beamjoy.window.config.tabs.vehiclePresets.retakePhoto' | translate}}
+            </button>
         </div>
         <button
             class="btn danger"

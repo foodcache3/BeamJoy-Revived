@@ -15,7 +15,7 @@ angular.module("beamjoy").component("bjConfigVehiclePresetsEditor", {
         // in-world gizmo): a preset is plain data, so this just edits a local copy and sends the
         // whole thing on Save, same shape as the maps config tab.
         this.allPresets = [];
-        // the server's shared builds : {id, model, name, author}, for names already taken
+        // the server's shared builds : {id, model, name, author, photo}, for names already taken
         this.builds = [];
         let original = null;
 
@@ -48,6 +48,14 @@ angular.module("beamjoy").component("bjConfigVehiclePresetsEditor", {
         $rootScope.$on("BJVehiclePresetCapturedVehicle", (_, identity) => {
             if (!this.preset) return;
             this.preset.entries.push(identity);
+        });
+        // a retaken photo : still the same entry at that place
+        $rootScope.$on("BJVehiclePresetPhoto", (_, data) => {
+            if (!this.preset || !data) return;
+            const entry = this.preset.entries[data.index];
+            if (!entry || !this.isBuild(entry) || entry.model !== data.model) return;
+            if (data.buildId !== undefined && data.buildId !== null && entry.buildId !== data.buildId) return;
+            entry.photo = data.photo;
         });
 
         this.$onInit = () => {
@@ -106,6 +114,22 @@ angular.module("beamjoy").component("bjConfigVehiclePresetsEditor", {
             if (twin) return translate("beamjoy.window.config.tabs.vehiclePresets.buildNameTwice");
             return null;
         };
+        // its photo : a new one, not saved yet, else the one this game holds for the build
+        this.photoSrc = (entry) => {
+            if (entry.photo) return "data:image/jpeg;base64," + entry.photo;
+            if (entry.buildId === undefined) return null;
+            const build = this.builds.find((b) => b.id === entry.buildId);
+            return build && build.photo ? `/vehicles/${build.model}/bjs_${build.id}.jpg` : null;
+        };
+        // a new photo of the car you're in, when it's this build
+        this.retakePhoto = (event, entry, index) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJVehiclePresetRetakePhoto", [
+                { model: entry.model, buildId: entry.buildId, pc: entry.pc },
+                index,
+            ]);
+        };
+
         // renaming a build renames it in every preset that has it
         this.renamesElsewhere = (entry) => {
             if (entry.buildId === undefined) return false;

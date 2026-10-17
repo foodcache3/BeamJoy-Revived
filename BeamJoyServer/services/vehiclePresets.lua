@@ -66,20 +66,27 @@
 ---@field hash string the parts, tuning and paints : the same build added twice is one build
 ---@field pc {parts: table<string, string>, vars: table<string, number>, paints: table[], mainPartName: string?}
 ---the .pc file's content
+---@field photo string? its photo's hash (the photo itself : M.photos, sent to a player who asks)
 
 local BUILD_NAME_MIN, BUILD_NAME_MAX = 3, 32
 local MAX_BUILDS = 200
 local MAX_PARTS, MAX_VARS = 2000, 600
 local MAX_BUILD_BYTES = 96000
+-- a 500x281 JPEG as base64 (the game's own thumbnail size) is far smaller
+local MAX_PHOTO_CHARS = 200000
 
 local M = {
-    dependencies = { "dao_vehiclePresets", "dao_vehicleBuilds", "services_permissions" },
+    dependencies = { "dao_vehiclePresets", "dao_vehicleBuilds", "dao_vehicleBuildPhotos", "services_permissions" },
 
     ---@type BJVehiclePreset[]
     data = {},
     ---@type BJVehicleBuild[]
     builds = {},
     nextBuildId = 1,
+    --- build id -> its photo, a JPEG as base64
+    ---@type table<integer, string>
+    photos = {},
+    photosChanged = false,
 }
 
 local function finite(n)
@@ -196,6 +203,16 @@ local function canonical(v)
     return "{" .. table.concat(out, ",") .. "}"
 end
 
+--- a build's photo as the editor sent it : a JPEG as base64, not too big
+---@param photo any
+---@return string?
+local function cleanPhoto(photo)
+    if type(photo) ~= "string" or #photo < 100 or #photo > MAX_PHOTO_CHARS then return nil end
+    -- base64 of a JPEG's first bytes (FF D8 FF)
+    if photo:sub(1, 4) ~= "/9j/" or not photo:match("^[%w%+/]+=*$") then return nil end
+    return photo
+end
+
 ---@param model string
 ---@param pc table
 ---@return string
@@ -218,13 +235,21 @@ end
 
 --- Works out the preset's shared builds before anything changes : new ones (`pc`, just captured),
 --- renamed ones (`buildId` with another `name`), the same build captured again (reused, name and
---- all). Names are unique per model across every build. Rewrites each such entry to point at its
---- build ; returns what to create and rename, or why it can't be saved.
+--- all), new photos (`photo`). Names are unique per model across every build. Rewrites each such
+--- entry to point at its build ; returns what to create, rename and photograph, or why it can't be
+--- saved.
 ---@param preset table
 ---@param author string
----@return {creates: table[], renames: table<integer, string>}? plan, string? error
+---@return {creates: table[], renames: table<integer, string>, photos: table<integer, string>}? plan, string? error
 local function planBuilds(preset, author)
-    local plan = { creates = {}, renames = {} }
+    local plan = { creates = {}, renames = {}, photos = {} }
+    ---@return string? error
+    local function photoOf(e)
+        if e.photo == nil then return nil end
+        local photo = cleanPhoto(e.photo)
+        if not photo then return nil, "Invalid build photo" end
+        return photo
+    end
     -- every name in use once this save is done : "<model>|<name key>" -> build id (or create)
     local names = {}
     for _, b in ipairs(M.builds) do names[b.model .. "|" .. nameKey(b.name)] = b end
@@ -247,6 +272,9 @@ local function planBuilds(preset, author)
             local build = getBuild(tonumber(e.buildId) or -1)
             if not build or build.model ~= e.model then return nil, "A shared build in this preset no longer exists" end
             e.buildId = build.id
+            local photo, photoErr = photoOf(e)
+            if photoErr then return nil, photoErr end
+            if photo then plan.photos[build.id] = photo end
             local name = cleanLine(e.name) or build.name
             if name ~= build.name then
                 local len = charCount(name)
@@ -269,11 +297,16 @@ local function planBuilds(preset, author)
             if not validModel(e.model) then return nil, "Invalid vehicle" end
             local pc, err = cleanPc(e.pc)
             if not pc then return nil, err end
+            local photo, photoErr = photoOf(e)
+            if photoErr then return nil, photoErr end
             local hash = buildHash(e.model, pc)
             local existing = byHash[hash]
             if existing then
-                -- the same build : reuse it, its file and its name
+                -- the same build : reuse it, its file and its name (and the newer photo)
                 e.buildId = existing.id or existing
+                if photo then
+                    if existing.id then plan.photos[existing.id] = photo else existing.photoData = photo end
+                end
             else
                 local name = cleanLine(e.name) or ""
                 local len = charCount(name)
@@ -283,7 +316,7 @@ local function planBuilds(preset, author)
                 local modelLabel = cleanLine(e.modelLabel) or e.model
                 if charCount(modelLabel) == nil or #modelLabel == 0 or #modelLabel > 96 then modelLabel = e.model end
                 local create = { model = e.model, modelLabel = modelLabel, name = name, author = author,
-                    hash = hash, pc = pc }
+                    hash = hash, pc = pc, photoData = photo }
                 local claimErr = claim(e.model, name, create)
                 if claimErr then return nil, claimErr end
                 local encoded = utils_json.stringifyRaw(pc) or ""
@@ -333,6 +366,8 @@ local function sanitizePreset(preset, author)
     -- legitimate, common capture (a vehicle with no runtime tuning overrides: see vehicles.lua's
     -- own getFullConfig, which defaults it the same way).
     table.forEach(preset.entries, function(e)
+        -- only a shared build has a photo
+        if e.buildId == nil and e.pc == nil then e.photo = nil end
         if type(e.parts) ~= "table" or table.length(e.parts) == 0 then
             e.parts = nil
         end
@@ -351,19 +386,34 @@ local function sanitizePreset(preset, author)
     return nil, plan
 end
 
---- applies a checked plan : new builds get their ids, renamed ones their names, and every
---- build entry (in every preset) its config key and label
+---@param build BJVehicleBuild
+---@param photo string
+local function setPhoto(build, photo)
+    M.photos[build.id] = photo
+    build.photo = tostring(utils_sha.sha256(photo)):sub(1, 16)
+    M.photosChanged = true
+end
+
+--- applies a checked plan : new builds get their ids, renamed ones their names, new photos, and
+--- every build entry (in every preset) its config key and label
 ---@param preset BJVehiclePreset
----@param plan {creates: table[], renames: table<integer, string>}
+---@param plan {creates: table[], renames: table<integer, string>, photos: table<integer, string>}
 local function commitBuilds(preset, plan)
     for _, create in ipairs(plan.creates) do
         create.id = M.nextBuildId
         M.nextBuildId = M.nextBuildId + 1
+        local photo = create.photoData
+        create.photoData = nil
         table.insert(M.builds, create)
+        if photo then setPhoto(create, photo) end
     end
     for id, name in pairs(plan.renames) do
         local build = getBuild(id)
         if build then build.name = name end
+    end
+    for id, photo in pairs(plan.photos) do
+        local build = getBuild(id)
+        if build then setPhoto(build, photo) end
     end
     -- the editor's own entries : the build's id (a create is a table until now), nothing else of
     -- the build kept in the preset ; the same build twice in one preset is once
@@ -371,6 +421,7 @@ local function commitBuilds(preset, plan)
     preset.entries = table.filter(preset.entries, function(e)
         if e.buildId == nil then return true end
         if type(e.buildId) == "table" then e.buildId = e.buildId.id end
+        e.photo = nil
         if seen[e.buildId] then return false end
         seen[e.buildId] = true
         e.pc = nil
@@ -405,6 +456,13 @@ local function dropUnusedBuilds()
         end
     end
     M.builds = table.filter(M.builds, function(b) return used[b.id] == true end):values()
+    for id in pairs(M.photos) do
+        local build = getBuild(id)
+        if not build or not build.photo then
+            M.photos[id] = nil
+            M.photosChanged = true
+        end
+    end
 end
 
 local function loadData()
@@ -415,12 +473,31 @@ local function loadData()
     for _, b in ipairs(M.builds) do
         if b.id >= M.nextBuildId then M.nextBuildId = b.id + 1 end
     end
+    -- stored as a list : the JSON writer takes a table keyed 1..n as a list, gaps and all
+    M.photos = {}
+    local stored = dao_vehicleBuildPhotos.get()
+    for _, p in ipairs(type(stored) == "table" and stored or {}) do
+        if type(p) == "table" and tonumber(p.id) and type(p.data) == "string" then
+            M.photos[tonumber(p.id)] = p.data
+        end
+    end
+    -- a photo the file lost : the build goes without
+    for _, b in ipairs(M.builds) do
+        if b.photo and not M.photos[b.id] then b.photo = nil end
+    end
     refreshBuildEntries()
 end
 
 local function saveData()
     dao_vehiclePresets.save(M.data)
     dao_vehicleBuilds.save({ nextId = M.nextBuildId, builds = M.builds })
+    -- the photos' file is the big one : written when it changed
+    if M.photosChanged then
+        local list = {}
+        for id, data in pairs(M.photos) do table.insert(list, { id = id, data = data }) end
+        dao_vehicleBuildPhotos.save(list)
+        M.photosChanged = false
+    end
 end
 
 ---@param caches table
@@ -440,6 +517,17 @@ local function broadcastCaches()
         M.onBJRequestCache(caches)
         communications_tx.sendToPlayer(p.playerID, "sendCache", caches)
     end)
+end
+
+--- a player's game asks for a build's photo it doesn't have (each photo once, see the client's
+--- beamjoy/vehicleBuilds.lua) : any player, like the builds themselves
+---@param ctxt BJSContext
+---@param buildId any
+local function sendPhoto(ctxt, buildId)
+    local build = getBuild(tonumber(buildId) or -1)
+    local photo = build and build.photo and M.photos[build.id]
+    if not photo or not ctxt.sender then return end
+    communications_tx.sendToPlayer(ctxt.senderID, "vehicleBuildPhoto", build.id, build.photo, photo)
 end
 
 ---@param presetId integer
@@ -523,6 +611,7 @@ end
 local function onInit()
     communications_rx.addHandler("vehiclePresetSave", M.presetSave)
     communications_rx.addHandler("vehiclePresetDelete", M.presetDelete)
+    communications_rx.addHandler("vehicleBuildPhoto", M.sendPhoto)
 end
 
 -- loaded in onPreInit, not onInit : services_races' own onInit (loadData) resolves
@@ -541,5 +630,6 @@ M.getById = getById
 M.getBuild = getBuild
 M.presetSave = presetSave
 M.presetDelete = presetDelete
+M.sendPhoto = sendPhoto
 
 return M

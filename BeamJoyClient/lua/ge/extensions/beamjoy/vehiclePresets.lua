@@ -15,6 +15,7 @@ local function onInit()
     beamjoy_communications.addHandler("sendCache", M.retrieveCache)
     beamjoy_communications_ui.addHandler("BJVehiclePresetListRequest", M.pushListToUI)
     beamjoy_communications_ui.addHandler("BJVehiclePresetCaptureVehicle", M.onCaptureVehicle)
+    beamjoy_communications_ui.addHandler("BJVehiclePresetRetakePhoto", M.onRetakePhoto)
 end
 
 local function pushListToUI()
@@ -53,7 +54,8 @@ end
 --- - a base game or mod configuration (every player has its file) : {model, config, label, parts, vars}
 --- - one of this server's shared builds, picked from the selector : that build ({buildId, name})
 --- - anything else (a custom setup, a personal saved config) : a new shared build, with its .pc
----   content (`pc`) and a name to give it in the editor. The server keeps it and every player's
+---   content (`pc`), a photo of it (`photo`, see beamjoy/vehicleBuilds.lua's takePhoto) and a
+---   name to give it in the editor. The server keeps it and every player's
 ---   game writes it as a file (see beamjoy/vehicleBuilds.lua), so it's a real, pickable tile for
 ---   everyone. Refused when it uses parts from a mod the server doesn't send.
 --- `parts`/`vars`, what a joining participant's equipped vehicle actually gets matched against
@@ -126,7 +128,40 @@ local function onCaptureVehicle(existingEntries)
         end) then
         return
     end
-    beamjoy_communications_ui.send("BJVehiclePresetCapturedVehicle", entry)
+    -- its photo, then the editor gets it (with none if it couldn't be taken : "Retake photo")
+    beamjoy_vehicleBuilds.takePhoto(mpVeh.veh, function(photo)
+        entry.photo = photo
+        beamjoy_communications_ui.send("BJVehiclePresetCapturedVehicle", entry)
+    end)
+end
+
+--- "Retake photo" on a shared build in the editor : a new photo, when the car you're in is that
+--- build (the photo is taken where it stands)
+---@param entry table the editor's entry : {model, buildId?, pc?}
+---@param index integer its place in the editor's list
+local function onRetakePhoto(entry, index)
+    local mpVeh = beamjoy_vehicles.getCurrentOwn()
+    if type(entry) ~= "table" or type(entry.model) ~= "string" then return end
+    local pc = type(entry.pc) == "table" and entry.pc or nil
+    if not pc and entry.buildId ~= nil then
+        local build = beamjoy_vehicleBuilds.getById(tonumber(entry.buildId))
+        pc = build and build.pc
+    end
+    if not mpVeh or not pc or not beamjoy_vehicleBuilds.isThisBuild(mpVeh.veh, entry.model, pc) then
+        toast.warn(beamjoy_lang.translate("beamjoy.vehicleBuilds.photoWrongCar",
+            "Get in this build to take its photo"), nil, 5)
+        return
+    end
+    beamjoy_vehicleBuilds.takePhoto(mpVeh.veh, function(photo)
+        if not photo then
+            toast.warn(beamjoy_lang.translate("beamjoy.vehicleBuilds.photoFailed",
+                "Couldn't take the photo, try again"), nil, 5)
+            return
+        end
+        beamjoy_communications_ui.send("BJVehiclePresetPhoto", {
+            index = index, model = entry.model, buildId = entry.buildId, photo = photo,
+        })
+    end)
 end
 
 M.onInit = onInit
@@ -137,5 +172,6 @@ M.getById = getById
 M.save = save
 M.delete = delete
 M.onCaptureVehicle = onCaptureVehicle
+M.onRetakePhoto = onRetakePhoto
 
 return M
