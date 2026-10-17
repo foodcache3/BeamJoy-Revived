@@ -42,7 +42,7 @@ local M = {
     dependencies = { "utils_async", "utils_sha", "utils_json", "utils_toml",
         "dao_main", "dao_core", "dao_config", "dao_groups", "dao_players",
         "dao_permissions", "dao_groups", "dao_environment", "dao_activity", "dao_bundled",
-        "dao_maps", "dao_vehiclePresets",
+        "dao_maps", "dao_vehiclePresets", "dao_vehicleBuilds",
         "services_core", "services_lang", "services_config", "services_groups",
         "services_players", "services_vehicles", "services_chat", "services_cache",
         "services_permissions", "services_traffic", "services_consoleCommands",

@@ -1835,6 +1835,12 @@ M.onExtensionUnloaded = restoreSpawnQueue
 M.onPreExit = restoreSpawnQueue
 M.onBJRequestRestrictions = onBJRequestRestrictions
 M.onBJRequestCanSpawnVehicle = onBJRequestCanSpawnVehicle
+-- the pool this activity hands vehicles from right now : beamjoy/vehicleBuilds.lua shows a hidden
+-- shared build of it in the vehicle selector meanwhile
+M.onBJActiveVehiclePools = function(pools)
+    local pool = activeVehiclePool()
+    if pool then table.insert(pools, pool) end
+end
 M.onBJVehicleInstantiated = onBJVehicleInstantiated
 M.isHuntLocked = isHuntLocked
 M.onVehicleResetted = onVehicleResetted

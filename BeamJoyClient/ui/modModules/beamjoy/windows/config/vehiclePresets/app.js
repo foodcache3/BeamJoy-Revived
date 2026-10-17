@@ -20,6 +20,7 @@ angular.module("beamjoy").component("bjConfigVehiclePresets", {
         this.$onInit = () => {
             beamjoyStore.send("BJVehiclePresetListRequest");
         };
+        this.buildCount = (preset) => (preset.entries || []).filter((e) => e.buildId !== undefined).length;
 
         // null = browsing the list ; "new" or an existing preset's id = editor panel open
         this.editingId = null;

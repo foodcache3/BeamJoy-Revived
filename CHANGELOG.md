@@ -8,7 +8,25 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2702, server build 2465.
+Version 1.11.0 : client build 2703, server build 2466.
+
+- **New : custom vehicles in vehicle presets, in everyone's vehicle selector** (direct request :
+  players' custom vehicles in vehicle presets, available to all players in the vehicle selector).
+  In Config > Vehicle Presets, "Add current vehicle" now also takes a custom setup or a personal
+  saved configuration, which used to be refused because other players don't have its file. It
+  becomes a **shared build** : you name it, the server keeps its parts, tuning and paint, and every
+  player's game writes it as a real configuration file (`vehicles/<model>/bjs_<id>.pc` with its
+  info file and the model's picture), so it's a normal tile in the vehicle selector, named
+  "<name> (<who added it>)", and races, derby and hunter can use it in their vehicle pools like
+  any factory config. The files belong to the server : removed when leaving it, and leftovers from
+  a crash are cleared on the next join. A preset can keep its builds out of the selector ("Show its
+  shared builds in everyone's vehicle selector", on by default) : they then only show while an
+  activity uses the preset as its pool. Build names are unique per vehicle (case and spaces
+  ignored), checked as you type and by the server ; the same build added again (or to another
+  preset) is one build, and renaming it renames it everywhere. A build using parts from a mod the
+  server doesn't send is refused, naming the mod. Builds no preset uses any more are deleted.
+  Staff only, through the existing EditVehiclePresets permission. The picture is the model's own :
+  the game's thumbnail tool takes over the camera and physics, not safe in multiplayer.
 
 - **New : plugins can add pages to the main window** (direct request : plugins adding "their own
   tabs to the main hud and sidebar hud"). A page is a button on the side rail opening its own

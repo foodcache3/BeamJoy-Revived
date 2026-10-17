@@ -8,6 +8,19 @@
     bj-config-vehicle-presets-editor .opacity-70 {
         opacity: 0.7;
     }
+    bj-config-vehicle-presets-editor .build-row input {
+        min-width: 10em;
+    }
+    bj-config-vehicle-presets-editor .build-tag {
+        flex-shrink: 0;
+        padding: 0.1em 0.5em;
+        border-radius: 3px;
+        background: rgba(255, 102, 0, 0.25);
+        font-size: 0.8em;
+    }
+    bj-config-vehicle-presets-editor .build-problem {
+        color: #ff8a80;
+    }
 </style>
 
 <div ng-if="$ctrl.preset" class="d-flex flex-column gap-1">
@@ -32,13 +45,38 @@
         </button>
     </div>
 
+    <label class="d-flex align-center gap-1" title="{{'beamjoy.window.config.tabs.vehiclePresets.showInSelector.tooltip' | translate}}">
+        <bj-toggle ng-model="$ctrl.preset.showInSelector"></bj-toggle>
+        <span>{{'beamjoy.window.config.tabs.vehiclePresets.showInSelector' | translate}}</span>
+    </label>
+
     <h5>{{'beamjoy.window.config.tabs.vehiclePresets.entries' | translate}}</h5>
 
     <div
         class="entry-row d-flex align-center gap-1 p-1 px-2"
         ng-repeat="entry in $ctrl.preset.entries track by $index"
     >
-        <span class="flex-grow-1">{{entry.label}}</span>
+        <span class="flex-grow-1" ng-if="!$ctrl.isBuild(entry)">{{entry.label}}</span>
+        <!-- a shared build : its name is what everyone sees in the vehicle selector -->
+        <div class="build-row flex-grow-1 d-flex flex-column gap-1" ng-if="$ctrl.isBuild(entry)">
+            <div class="d-flex align-center gap-1">
+                <span class="build-tag" title="{{'beamjoy.window.config.tabs.vehiclePresets.sharedBuild.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.vehiclePresets.sharedBuild' | translate}}
+                </span>
+                <span>{{entry.modelLabel || entry.model}}</span>
+                <input
+                    type="text"
+                    class="flex-grow-1"
+                    maxlength="{{$ctrl.BUILD_NAME_MAX}}"
+                    ng-model="entry.name"
+                    placeholder="{{'beamjoy.window.config.tabs.vehiclePresets.buildName' | translate}}"
+                />
+            </div>
+            <span class="small build-problem" ng-if="$ctrl.buildNameProblem(entry, $index)">{{$ctrl.buildNameProblem(entry, $index)}}</span>
+            <span class="small opacity-70" ng-if="$ctrl.renamesElsewhere(entry)">
+                {{'beamjoy.window.config.tabs.vehiclePresets.renamesElsewhere' | translate}}
+            </span>
+        </div>
         <button
             class="btn danger"
             ng-click="$ctrl.removeEntry($event, $index)"

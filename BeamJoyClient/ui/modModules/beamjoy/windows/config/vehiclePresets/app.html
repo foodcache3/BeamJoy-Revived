@@ -31,6 +31,13 @@
             <span class="opacity-70 small">
                 &middot; {{preset.entries.length}}
                 {{'beamjoy.window.config.tabs.vehiclePresets.vehicles' | translate}}
+                <span ng-if="$ctrl.buildCount(preset) > 0">
+                    &middot; {{$ctrl.buildCount(preset)}}
+                    {{'beamjoy.window.config.tabs.vehiclePresets.sharedBuilds' | translate}}
+                </span>
+                <span ng-if="preset.showInSelector === false">
+                    &middot; {{'beamjoy.window.config.tabs.vehiclePresets.hiddenFromSelector' | translate}}
+                </span>
                 &middot; {{'beamjoy.window.config.tabs.races.author' | translate}}:
                 {{preset.author || ('beamjoy.window.config.tabs.races.unknownAuthor' | translate)}}
             </span>

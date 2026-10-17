@@ -282,6 +282,7 @@ M.onInit = onInit
 M.onExtensionUnloaded = onUnload
 M.onPreExit = onUnload
 M.onBJClientReady = prewarm
+M.prewarm = prewarm
 M.onBJVehiclesCacheUpdate = resetCache
 M.onBJPermissionsUpdate = resetCache
 M.onBJUpdateSelf = resetCache

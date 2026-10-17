@@ -585,6 +585,30 @@ Editor (a Props section in the race editor, `ui/raceEditor.lua` + its Angular si
   to adjust one by one. The count counts toward the race's prop cap. Maybe later : spacing in
   metres instead of a count, and a curved line (a middle handle).
 
+## Vehicle presets: shared builds (custom vehicles for everyone)
+
+**Built in client 2703 / server 2466, not yet tried live.** Direct request : players' custom
+vehicles in vehicle presets, available to everyone in the vehicle selector, managed in the Vehicle
+Presets tab with its permission. Server : `services/vehiclePresets.lua` (builds checked, named,
+deduplicated, dropped when unused), `dao/vehicleBuilds.lua` (`vehicleBuilds.json`). Client :
+`beamjoy/vehicleBuilds.lua` (writes and removes the files, hides builds of hidden presets outside
+their activities, captures a build and refuses parts from mods the server doesn't send),
+`beamjoy/vehiclePresets.lua` (capture), the four runners (`onBJActiveVehiclePools`), the Vehicle
+Presets tab. To check live :
+- a custom car added, named, saved : the tile appears in another player's selector (name, author,
+  picture, paint), spawns right, and BeamMP shows it right to others ;
+- the same in a race pool, derby and hunter, with "Show in the selector" off too ;
+- leaving the server (disconnect and "Exit level") removes the files ; a killed game's files go on
+  the next join ;
+- a part from a repo mod refused with its name ; parts from the server's own mods accepted (is
+  `mods/multiplayer/` always where BeamMP puts them?) ;
+- the selector's first open after builds arrive (the cache is cleared, then warmed again).
+
+Later, if wanted : players submitting builds for staff to approve (a separate permission), a real
+picture of the build, "Save this car" on another player's car, and the server making a preset
+pack zip from favourite builds (sent by BeamMP like any mod, so players keep them
+after leaving).
+
 ## Plugin API: other server plugins working with BeamJoy (leaderboard website, Discord bot, modular plugins)
 
 **Step 4, plugin pages in the main window : built in client 2702 / server 2465, not yet tried live.**
