@@ -7,6 +7,12 @@
 --- start to the next point, from the point before to the finish). A new zone starts at your car with
 --- its finish 60 m ahead ; a new point goes after the selected one (before the finish otherwise),
 --- at your car ; points move with the gizmo. Server side : services/driftZones.lua.
+---
+--- Each point has its own width (`w`, direct request) : the zone being edited shows a handle at each
+--- end of every point's line across the route, dragged like a race gate's edges (raceEditor.lua) :
+--- the other end stays put and the point moves to the middle of its line, or with Ctrl held both
+--- ends move and the point stays. The sidebar's width slider sets every point's at once. Players
+--- call these "drift spots".
 
 local M = {}
 
@@ -17,6 +23,15 @@ local ROUTE_COLOR = BJColor(1, .85, .2, .6)
 local EDGE_COLOR = BJColor(1, .45, .1, .5)
 local DIM_COLOR = BJColor(1, 1, 1, .45)
 local TEXT_BG = BJColor(0, 0, 0, .35)
+-- a point's width handles : the posts at the ends of its line across the route (the race gates'
+-- own handle colour, raceMarkers.lua), the one being dragged white
+local HANDLE_COLOR = BJColor(0, 1, 1, .9)
+local HANDLE_DRAG_COLOR = BJColor(1, 1, 1, 1)
+local HANDLE_HEIGHT = 2
+-- metres between the mouse's ray and a post for a click to take it
+local HANDLE_HIT_TOLERANCE = .5
+-- ms between two sidebar updates while a handle is dragged
+local HANDLE_PUSH_MS = 150
 
 local DEFAULT_WIDTH = 16
 local MIN_WIDTH, MAX_WIDTH = 6, 60
@@ -39,6 +54,12 @@ local state = {
     ---@type "terrain"|"raycast"
     snapMethod = "terrain",
 }
+
+--- a width handle being dragged : the point, its side, the end that stays put (its middle with Ctrl)
+--- and the line across the route it slides along (as at the drag's start)
+---@type {point: integer, side: "left"|"right", anchor: vec3, axis: vec3, symmetric: boolean}?
+local dragging = nil
+local lastHandlePush = 0
 
 -- WIRE ------------------------------------------------------------------------------------------
 
@@ -110,6 +131,21 @@ local function flatDir(a, b)
     return d:length() > 1e-4 and d:normalized() or vec3(0, 1, 0)
 end
 
+--- a point's width : its own, else the zone's (beamjoy/driftZones.lua)
+---@param zone table
+---@param i integer
+---@return number
+local function pointWidth(zone, i)
+    return beamjoy_driftZones.pointWidth(zone, i)
+end
+
+---@param zone table
+---@param i integer
+---@return vec3 pos, vec3 dir, vec3 right its line across the route (beamjoy/driftZones.lua)
+local function pointFrame(zone, i)
+    return beamjoy_driftZones.pointFrame(zone, i)
+end
+
 -- RENDER ------------------------------------------------------------------------------------
 
 ---@param zone table
@@ -126,35 +162,42 @@ local function renderAll()
     for zi, zone in ipairs(state.zones) do
         local active = state.activeZone == zi
         local pts = zone.points
-        local half = (tonumber(zone.width) or DEFAULT_WIDTH) / 2
         if not active then
             local p = v3(pts[1])
             shape.addSphere(p + vec3(0, 0, .5), .8, DIM_COLOR)
             shape.addText(zone.name ~= "" and zone.name or beamjoy_lang.translate("beamjoy.driftZones.zone"),
                 p + vec3(0, 0, 2.5), DIM_COLOR, TEXT_BG)
         else
-            -- on the road's surface, as the zone is drawn when driven (beamjoy/driftZones.lua)
+            -- on the road's surface, as the zone is drawn when driven (beamjoy/driftZones.lua) : its
+            -- edges from the end of one point's line across the route to the next's
             for i = 2, #pts do
-                local a, b = v3(pts[i - 1]), v3(pts[i])
-                local right = flatDir(a, b):cross(vec3(0, 0, 1)) * half
+                local a, _, ra = pointFrame(zone, i - 1)
+                local b, _, rb = pointFrame(zone, i)
                 shape.addGroundLine(a, b, .2, ROUTE_COLOR)
-                shape.addGroundLine(a - right, b - right, .1, EDGE_COLOR)
-                shape.addGroundLine(a + right, b + right, .1, EDGE_COLOR)
+                shape.addGroundLine(a - ra, b - rb, .1, EDGE_COLOR)
+                shape.addGroundLine(a + ra, b + rb, .1, EDGE_COLOR)
             end
             -- the gates, across the route
-            for _, gate in ipairs({ { 1, 2, START_COLOR }, { #pts, #pts - 1, FINISH_COLOR } }) do
-                local p, other = v3(pts[gate[1]]), v3(pts[gate[2]])
-                local dir = gate[1] == 1 and flatDir(p, other) or flatDir(other, p)
-                local right = dir:cross(vec3(0, 0, 1)) * half
-                shape.addGroundLine(p - right, p + right, .25, gate[3], .05, 1.5)
-                shape.addArrow(p + vec3(0, 0, 1) + dir * 2, dir, 2, gate[3])
+            for _, gate in ipairs({ { 1, START_COLOR }, { #pts, FINISH_COLOR } }) do
+                local p, dir, right = pointFrame(zone, gate[1])
+                shape.addGroundLine(p - right, p + right, .25, gate[2], .05, 1.5)
+                shape.addArrow(p + vec3(0, 0, 1) + dir * 2, dir, 2, gate[2])
             end
             for i, pt in ipairs(pts) do
                 local selected = state.activePoint == i
                 local color = selected and ACTIVE_COLOR or i == 1 and START_COLOR or i == #pts and FINISH_COLOR or ROUTE_COLOR
-                local p = v3(pt)
+                local p, _, right = pointFrame(zone, i)
                 shape.addSphere(p + vec3(0, 0, .5), selected and .9 or .6, color)
-                shape.addText(pointLabel(zone, i), p + vec3(0, 0, 2), color, TEXT_BG)
+                shape.addText(string.format("%s  %d m", pointLabel(zone, i), math.round(pointWidth(zone, i))),
+                    p + vec3(0, 0, 2), color, TEXT_BG)
+                -- its line across the route (the gates draw their own) and a handle at each end
+                if i > 1 and i < #pts then shape.addGroundLine(p - right, p + right, .08, ROUTE_COLOR) end
+                for _, side in ipairs({ "left", "right" }) do
+                    local foot = side == "left" and p - right or p + right
+                    local held = dragging and dragging.point == i and dragging.side == side
+                    shape.addLine(foot, .25, foot + vec3(0, 0, HANDLE_HEIGHT), .25,
+                        held and HANDLE_DRAG_COLOR or HANDLE_COLOR)
+                end
             end
         end
     end
@@ -190,6 +233,147 @@ local function changed()
     pushZones()
     pushActive()
     markDirty()
+end
+
+-- WIDTH HANDLES ---------------------------------------------------------------------------------
+
+--- distance from the mouse's ray to a post (the bounded segment ab)
+---@param camPos vec3
+---@param rayDir vec3 unit
+---@param a vec3
+---@param b vec3
+---@return number
+local function rayToSegmentDistance(camPos, rayDir, a, b)
+    local seg = b - a
+    local len = seg:length()
+    if len < 1e-5 then
+        return (camPos + rayDir * math.max(0, rayDir:dot(a - camPos))):distance(a)
+    end
+    local dir = seg / len
+    local r = camPos - a
+    local bb, f, c = rayDir:dot(dir), dir:dot(r), rayDir:dot(r)
+    local denom = 1 - bb * bb
+    local t, s
+    if math.abs(denom) < 1e-5 then
+        t, s = 0, math.max(0, math.min(len, f))
+    else
+        t = math.max(0, (bb * f - c) / denom)
+        s = math.max(0, math.min(len, (f - bb * c) / denom))
+    end
+    return (camPos + rayDir * t):distance(a + dir * s)
+end
+
+--- where along a line (through `origin`, unit `dir`) the mouse's ray passes closest : the race
+--- gates' handles' own math (raceEditor.lua closestLineParam)
+---@return number u signed metres along dir from origin
+local function closestLineParam(camPos, rayDir, origin, dir)
+    local r = camPos - origin
+    local b, f, c = rayDir:dot(dir), dir:dot(r), rayDir:dot(r)
+    local denom = 1 - b * b
+    if math.abs(denom) < 1e-5 then return f end
+    if (b * f - c) / denom < 0 then return f end
+    return (f - b * c) / denom
+end
+
+--- the handle under the mouse, on the zone being edited
+---@return integer? point, "left"|"right"|nil side
+local function hitTestHandles(camPos, rayDir)
+    local zone = state.activeZone and state.zones[state.activeZone]
+    if not zone then return nil end
+    local best, bestPoint, bestSide = HANDLE_HIT_TOLERANCE, nil, nil
+    for i = 1, #zone.points do
+        local p, _, right = pointFrame(zone, i)
+        for _, side in ipairs({ "left", "right" }) do
+            local foot = side == "left" and p - right or p + right
+            local d = rayToSegmentDistance(camPos, rayDir, foot, foot + vec3(0, 0, HANDLE_HEIGHT))
+            if d < best then best, bestPoint, bestSide = d, i, side end
+        end
+    end
+    return bestPoint, bestSide
+end
+
+---@param pi integer
+---@param side "left"|"right"
+---@param symmetric boolean
+local function beginHandleDrag(pi, side, symmetric)
+    local zone = state.zones[state.activeZone]
+    local p, _, right = pointFrame(zone, pi)
+    local axis = right:normalized()
+    -- the other end stays put, or the point itself with Ctrl
+    local anchor = symmetric and p or (side == "left" and p + right or p - right)
+    dragging = { point = pi, side = side, anchor = anchor, axis = axis, symmetric = symmetric }
+    if state.activePoint ~= pi then
+        state.activePoint = pi
+        pushActive()
+    end
+    gizmo.hide()
+    renderAll()
+end
+
+---@param camPos vec3
+---@param rayDir vec3
+local function updateHandleDrag(camPos, rayDir)
+    local zone = state.activeZone and state.zones[state.activeZone]
+    local pt = zone and zone.points[dragging.point]
+    if not pt then
+        dragging = nil
+        return
+    end
+    local u = closestLineParam(camPos, rayDir, dragging.anchor, dragging.axis)
+    if dragging.side == "left" then u = -u end
+    local width = math.max(MIN_WIDTH, math.min(MAX_WIDTH, dragging.symmetric and u * 2 or u))
+    pt.w = width
+    if not dragging.symmetric then
+        -- the point to the middle of its line, the other end where it was
+        local half = dragging.axis * (width / 2)
+        local center = dragging.side == "left" and dragging.anchor - half or dragging.anchor + half
+        pt.x, pt.y = center.x, center.y
+    end
+    renderAll()
+    markDirty()
+    local now = GetCurrentTimeMillis()
+    if now - lastHandlePush > HANDLE_PUSH_MS then
+        lastHandlePush = now
+        pushZones()
+    end
+end
+
+local function endHandleDrag()
+    local zone = state.activeZone and state.zones[state.activeZone]
+    local pt = zone and dragging and zone.points[dragging.point]
+    local moved = dragging and not dragging.symmetric
+    dragging = nil
+    if pt then
+        pt.w = math.round(pt.w or pointWidth(zone, state.activePoint or 1), 1)
+        if moved and state.snapToGroundEnabled then pt.z = groundHeightAt(v3(pt)) end
+    end
+    renderAll()
+    updateGizmo()
+    pushZones()
+end
+
+--- per frame while this section is open (freeroamEditor.onUpdate) : a click on a handle starts
+--- its drag, the mouse's release ends it
+local function onUpdate()
+    if not isActive() then
+        dragging = nil
+        return
+    end
+    if dragging then
+        if not ui_imgui.IsMouseDown(ui_imgui.MouseButton_Left) then return endHandleDrag() end
+        local camPos, rayDir = camera.mouseRay()
+        if camPos then updateHandleDrag(camPos, rayDir) end
+        return
+    end
+    if not state.activeZone or not ui_imgui.IsMouseClicked(ui_imgui.MouseButton_Left) then return end
+    if (getCEFFocusMouse and getCEFFocusMouse() == true) or (gizmo.isHovered and gizmo.isHovered()) then return end
+    local camPos, rayDir = camera.mouseRay()
+    if not camPos then return end
+    local pi, side = hitTestHandles(camPos, rayDir)
+    if pi then
+        local io = ui_imgui.GetIO()
+        beginHandleDrag(pi, side, io ~= nil and io.KeyCtrl == true)
+    end
 end
 
 -- MUTATIONS ---------------------------------------------------------------------------------
@@ -258,6 +442,9 @@ local function onSetZone(zi, partial)
     if type(partial.name) == "string" then zone.name = partial.name:sub(1, MAX_NAME_LEN) end
     if partial.width ~= nil then
         zone.width = math.max(MIN_WIDTH, math.min(MAX_WIDTH, tonumber(partial.width) or zone.width))
+        -- the slider : every point's width at once
+        for _, pt in ipairs(zone.points) do pt.w = zone.width end
+        pushZones()
     end
     renderAll()
     markDirty()
@@ -275,7 +462,10 @@ local function onAddPoint(zi)
     if state.activeZone == tonumber(zi) and state.activePoint and state.activePoint < #zone.points then
         at = state.activePoint + 1
     end
-    table.insert(zone.points, at, xyz(pos))
+    -- as wide as the two points it goes between, halfway
+    local new = xyz(pos)
+    new.w = math.round((pointWidth(zone, at - 1) + pointWidth(zone, at)) / 2, 1)
+    table.insert(zone.points, at, new)
     state.activeZone, state.activePoint = tonumber(zi), at
     changed()
 end
@@ -301,7 +491,9 @@ local function onSetPointToVehicle(zi, pi)
     if not pt then return end
     local pos = currentPositionDirection()
     if not pos then return end
-    zone.points[tonumber(pi)] = xyz(pos)
+    local new = xyz(pos)
+    new.w = pt.w
+    zone.points[tonumber(pi)] = new
     changed()
 end
 
@@ -373,7 +565,7 @@ local function refresh()
             id = z.id,
             name = z.name or "",
             width = z.width or DEFAULT_WIDTH,
-            points = table.map(z.points or {}, function(p) return { x = p.x, y = p.y, z = p.z } end),
+            points = table.map(z.points or {}, function(p) return { x = p.x, y = p.y, z = p.z, w = p.w } end),
         }
     end
     if not state.activeZone or not state.zones[state.activeZone] then
@@ -392,10 +584,12 @@ end
 
 local function standDown()
     gizmo.hide()
+    dragging = nil
 end
 
 local function close()
     gizmo.hide()
+    dragging = nil
     state.zones = {}
     state.activeZone, state.activePoint = nil, nil
     state.dirty = false
@@ -408,8 +602,9 @@ local function save(onDone)
             id = z.id,
             name = z.name,
             width = math.round(tonumber(z.width) or DEFAULT_WIDTH, 1),
-            points = table.map(z.points, function(p)
-                return { x = math.round(p.x, 3), y = math.round(p.y, 3), z = math.round(p.z, 3) }
+            points = table.map(z.points, function(p, i)
+                return { x = math.round(p.x, 3), y = math.round(p.y, 3), z = math.round(p.z, 3),
+                    w = math.round(pointWidth(z, i), 1) }
             end),
         }
     end)
@@ -423,7 +618,7 @@ local function save(onDone)
         else
             refresh()
             standUp()
-            toast.error(err or "Failed to save the drift zones")
+            toast.error(err or "Failed to save the drift spots")
         end
         if onDone then onDone(status == true) end
     end, 5000)
@@ -452,6 +647,7 @@ M.standDown = standDown
 M.close = close
 M.save = save
 M.onBJClick = onBJClick
+M.onUpdate = onUpdate
 M.isDirty = function() return state.dirty end
 
 return M

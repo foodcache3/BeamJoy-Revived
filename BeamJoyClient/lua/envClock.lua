@@ -92,6 +92,34 @@ local function normalizeMinutes(minutes)
     return mod(math.floor(minutes + 0.5), MINUTES_PER_DAY)
 end
 
+--- the day's number (Julian day number, integer) : days between two dates are a subtraction
+local function dayNumber(year, month, day)
+    local a = math.floor((14 - month) / 12)
+    local y = year + 4800 - a
+    local m = month + 12 * a - 3
+    return day + math.floor((153 * m + 2) / 5) + 365 * y + math.floor(y / 4) - math.floor(y / 100) +
+        math.floor(y / 400) - 32045
+end
+
+---@param year integer?
+---@param month integer?
+---@param day integer?
+---@param n integer days to add (the midnights the clock went past, see C.advance)
+---@return integer?, integer?, integer? that date n days later (unchanged when there's no date)
+function C.addDays(year, month, day, n)
+    year, month, day, n = tonumber(year), tonumber(month), tonumber(day), math.floor(tonumber(n) or 0)
+    if not year or not month or not day or n == 0 then return year, month, day end
+    -- back from the day number (Fliegel and Van Flandern)
+    local a = dayNumber(year, month, day) + n + 32044
+    local b = math.floor((4 * a + 3) / 146097)
+    local c = a - math.floor(146097 * b / 4)
+    local d = math.floor((4 * c + 3) / 1461)
+    local e = c - math.floor(1461 * d / 4)
+    local m = math.floor((5 * e + 2) / 153)
+    return math.floor(100 * b + d - 4800 + math.floor(m / 10)), math.floor(m + 3 - 12 * math.floor(m / 10)),
+        math.floor(e - math.floor((153 * m + 2) / 5) + 1)
+end
+
 local function julianDay(year, month, day)
     local a = math.floor((14 - month) / 12)
     local y = year + 4800 - a
@@ -291,17 +319,20 @@ end
 ---@param t0 number engine time of day at the start of the elapsed window (noon = 0)
 ---@param dtSec number real seconds elapsed since t0 (negative treated as 0)
 ---@param p { dayLength: number, dayScale: number, nightScale: number, simSpeed: number, observer: table|false|nil, year: integer?, month: integer?, day: integer? }
----@return number time of day now
+---@return number time of day now, integer days the midnights gone past since t0 (the date moves on
+---by that many, C.addDays : the sky is drawn from the time AND the date, so a date left behind at
+---midnight put the moon back a day, direct report : "the moon jumps")
 --- Walks the day/night segments at each one's own rate (effectiveScale * simSpeed / dayLength,
---- the exact rate the engine free-runs at once handed nativeDayLength for that phase). The date
---- does not roll over at midnight (yet), so every cycle is identical and whole cycles are skipped
---- with a modulo up front: the walk itself never crosses more than a handful of segments, however
---- long the elapsed window. No allocations on the hot path (segments are cached), since clients
---- call this every frame.
+--- the exact rate the engine free-runs at once handed nativeDayLength for that phase). The whole
+--- window runs on the epoch date's day/night split (the server re-anchors the epoch, date and all,
+--- every minute while it plays), so every cycle is identical and whole cycles are skipped with a
+--- modulo up front: the walk itself never crosses more than a handful of segments, however long
+--- the elapsed window. No allocations on the hot path (segments are cached), since clients call
+--- this every frame.
 function C.advance(t0, dtSec, p)
     dtSec = tonumber(dtSec) or 0
     local simSpeed = tonumber(p.simSpeed) or 1
-    if dtSec <= 0 or simSpeed <= 0 then return (tonumber(t0) or 0) % 1 end
+    if dtSec <= 0 or simSpeed <= 0 then return (tonumber(t0) or 0) % 1, 0 end
 
     local dayLength = C.clampDayLength(p.dayLength)
     local dayRate = C.effectiveScale(p.dayScale, dayLength) * simSpeed / dayLength
@@ -314,6 +345,8 @@ function C.advance(t0, dtSec, p)
         cycleSec = cycleSec + (seg[2] - seg[1]) / (seg[3] and nightRate or dayRate)
     end
     local remaining = dtSec % cycleSec
+    -- each whole cycle goes past one midnight
+    local days = math.floor(dtSec / cycleSec)
 
     local u = toU(t0)
     for _ = 1, 2 * #segs + 2 do
@@ -326,9 +359,12 @@ function C.advance(t0, dtSec, p)
         end
         remaining = remaining - toEnd
         u = seg[2]
-        if u >= 1 then u = 0 end
+        if u >= 1 then
+            u = 0
+            days = days + 1
+        end
     end
-    return (u + 0.5) % 1
+    return (u + 0.5) % 1, days
 end
 
 return C

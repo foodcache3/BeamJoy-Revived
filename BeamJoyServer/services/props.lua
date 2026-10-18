@@ -335,6 +335,30 @@ local function sanitize(props, holder)
     return out
 end
 
+--- how many props a list stands for, as the client's beamjoy_props.total counts them (the race
+--- list shows it, the races cache carrying no props)
+---@param props table[]?
+---@return integer
+local function total(props)
+    local n = 0
+    for _, p in ipairs(type(props) == "table" and props or {}) do
+        if type(p) == "table" then
+            if p.kind == "sweep" or p.kind == "paint" then
+                n = n + math.max(1, math.ceil((tonumber(p.count) or 1) / SWEEP_WEIGHT_SEGMENTS))
+            else
+                local each = 1 + (type(p.parts) == "table" and #p.parts or 0)
+                if p.kind == "line" then
+                    local caps = (type(p.capA) == "string" and 1 or 0) + (type(p.capB) == "string" and 1 or 0)
+                    n = n + math.max(1, math.floor(tonumber(p.count) or 1)) * each + caps
+                else
+                    n = n + each
+                end
+            end
+        end
+    end
+    return n
+end
+
 --- a copy of an arena without its props : a game's own snapshot of its arena (hunterGrid,
 --- infectedGrid, derbyGrid) never needs them, the clients spawning them from their own copy of the
 --- arena, and a derby game's goes to every client with each of its updates
@@ -349,5 +373,6 @@ end
 M.sanePoint = sanePoint
 M.sanitize = sanitize
 M.withoutProps = withoutProps
+M.total = total
 
 return M

@@ -14,7 +14,8 @@ local M = {
         dayScale = 1,
         nightScale = 2,
         ---@type integer? synced calendar date AT ToDEpochAt ; nil until a client first reports its
-        ---level's own date (see reportObserver) or an admin sets one
+        ---level's own date (see reportObserver) or an admin sets one. Moves on a day at every
+        ---midnight the clock goes past (envClock.advance's days, see collapseToD / currentDate)
         year = nil,
         ---@type integer?
         month = nil,
@@ -100,7 +101,12 @@ local function collapseToD(observer)
     if observer == nil then observer = currentObserver() end
     local nowMs = realtimeClock:get()
     if isToDPlaying() then
-        M.data.ToD = envClock.advance(M.data.ToD, (nowMs - M.data.ToDEpochAt) / 1000, clockParams(observer))
+        local tod, days = envClock.advance(M.data.ToD, (nowMs - M.data.ToDEpochAt) / 1000, clockParams(observer))
+        M.data.ToD = tod
+        -- the midnights it went past : the date moves on with it
+        if days > 0 and M.data.year then
+            M.data.year, M.data.month, M.data.day = envClock.addDays(M.data.year, M.data.month, M.data.day, days)
+        end
     end
     M.data.ToDEpochAt = nowMs
 end
@@ -108,8 +114,17 @@ end
 ---@return number ToD, 0-1, right now
 local function currentToD()
     if not isToDPlaying() then return M.data.ToD end
-    return envClock.advance(M.data.ToD, (realtimeClock:get() - M.data.ToDEpochAt) / 1000,
+    return (envClock.advance(M.data.ToD, (realtimeClock:get() - M.data.ToDEpochAt) / 1000,
+        clockParams(currentObserver())))
+end
+
+---@return integer?, integer?, integer? the synced date right now : the epoch's, plus the midnights
+---the clock went past since (nil while no date is known)
+local function currentDate()
+    if not isToDPlaying() or not M.data.year then return M.data.year, M.data.month, M.data.day end
+    local _, days = envClock.advance(M.data.ToD, (realtimeClock:get() - M.data.ToDEpochAt) / 1000,
         clockParams(currentObserver()))
+    return envClock.addDays(M.data.year, M.data.month, M.data.day, days)
 end
 
 ---@return table a plain clone of M.data, with ToDEpochAt replaced by a fresh epochAgoMs DURATION
@@ -567,6 +582,7 @@ M.onSlowUpdate = onSlowUpdate
 M.onMapChanged = onMapChanged
 
 M.currentToD = currentToD
+M.currentDate = currentDate
 M.changeSimSpeed = changeSimSpeed
 M.changeSimPause = changeSimPause
 M.changeEnv = changeEnv

@@ -489,6 +489,7 @@ end
 local function environmentOut()
     local env = services_environment.data
     local tod = services_environment.currentToD()
+    local year, month, day = services_environment.currentDate()
     -- the game's time of day : 0 is noon, .5 midnight
     local minutes = math.floor(((tod * 24 + 12) % 24) * 60 + .5) % (24 * 60)
     return {
@@ -497,7 +498,7 @@ local function environmentOut()
         timeSync = env.timeSync == true,
         dayNightCycle = env.dayNightCycle == true,
         dayLengthS = env.dayLength,
-        date = env.year and { year = env.year, month = env.month, day = env.day } or nil,
+        date = year and { year = year, month = month, day = day } or nil,
         simSpeed = env.simSpeed,
         simPause = env.simPause == true,
         gravity = env.gravity,

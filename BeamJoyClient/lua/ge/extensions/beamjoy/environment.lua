@@ -193,11 +193,28 @@ end
 
 ---@return number ToD, 0-1, right now - computed locally from the server's own epoch, no network
 ---round-trip needed, identical on every client and the server (envClock.advance)
+---@return integer? year, integer? month, integer? day the synced date right now : the epoch's, plus
+---the midnights gone past since (envClock.addDays), as the server's own currentDate
+---@nodiscard
+local function clockNow()
+    local y, mo, d = M.data.year, M.data.month, M.data.day
+    if not isPlaying() then return M.data.ToD, y, mo, d end
+    local elapsedSec = (GetCurrentTimeMillis() - (M.data.ToDEpochAtMs or GetCurrentTimeMillis())) / 1000
+    local time, days = envClock.advance(M.data.ToD, elapsedSec, fillClockParams())
+    if days > 0 and y then y, mo, d = envClock.addDays(y, mo, d, days) end
+    return time, y, mo, d
+end
+
+---@return number ToD, 0-1, right now
 ---@nodiscard
 local function currentToD()
-    if not isPlaying() then return M.data.ToD end
-    local elapsedSec = (GetCurrentTimeMillis() - (M.data.ToDEpochAtMs or GetCurrentTimeMillis())) / 1000
-    return envClock.advance(M.data.ToD, elapsedSec, fillClockParams())
+    return (clockNow())
+end
+
+---@return integer? year, integer? month, integer? day the synced date right now
+local function currentDate()
+    local _, y, mo, d = clockNow()
+    return y, mo, d
 end
 
 ---@param time number ToD
@@ -224,6 +241,8 @@ end
 
 ---@param data {timeSync: boolean?, ToD: number, dayNightCycle: boolean?, dayLength: integer?, dayScale: number?, nightScale: number?, year: integer?, month: integer?, day: integer?, gravitySync: boolean?, gravity: number?}
 local function sendEnv(data)
+    -- the date with the time : today's, not the epoch's (a whole day back after a midnight)
+    local y, mo, d = currentDate()
     local payload = table.assign({
         timeSync = M.data.timeSync,
         -- always the live value, never the raw M.data.ToD (only accurate AT its own epoch):
@@ -234,9 +253,9 @@ local function sendEnv(data)
         dayLength = M.data.dayLength,
         dayScale = M.data.dayScale,
         nightScale = M.data.nightScale,
-        year = M.data.year,
-        month = M.data.month,
-        day = M.data.day,
+        year = y,
+        month = mo,
+        day = d,
         gravitySync = M.data.gravitySync,
         gravity = M.data.gravity,
         weatherSync = M.data.weatherSync,
@@ -263,14 +282,16 @@ local function getSetToD()
 end
 
 --- Instant write of the synced state into the engine. The date only goes out when the synced date
---- differs from what was last written - never re-pinned continuously - so BJS can't fight anything
---- the engine itself does with its own date.
+--- differs from what was last written (a new one set, or a midnight gone past) - never re-pinned
+--- continuously.
 ---@param time number
 ---@param play boolean
 ---@param dayLength number
-local function writeNative(time, play, dayLength)
+---@param y integer? the synced date now (currentDate)
+---@param mo integer?
+---@param d integer?
+local function writeNative(time, play, dayLength, y, mo, d)
     local patch = { time = time, play = play, dayLength = dayLength }
-    local y, mo, d = M.data.year, M.data.month, M.data.day
     if y and mo and d and (y ~= applied.year or mo ~= applied.month or d ~= applied.day) then
         patch.year, patch.month, patch.day = y, mo, d
         applied.year, applied.month, applied.day = y, mo, d
@@ -289,15 +310,16 @@ end
 --- (pure math, no engine reads) and writes ONLY on a transition: day<->night, play/pause, a new
 --- date, a new day length/speed. checkNativeDrift (onSlowUpdate) is the safety net.
 local function syncNative()
-    local time = currentToD()
+    -- the date too : it moves on the frame the clock goes past midnight, the time written with it
+    -- (the sky is drawn from both, a date left behind put the moon back a day)
+    local time, y, mo, d = clockNow()
     local play = isPlaying()
     local dayLength = nativeDayLengthAt(time)
-    local y, mo, d = M.data.year, M.data.month, M.data.day
     if play == applied.play and dayLength == applied.dayLength and
         (not y or (y == applied.year and mo == applied.month and d == applied.day)) then
         return
     end
-    writeNative(time, play, dayLength)
+    writeNative(time, play, dayLength, y, mo, d)
 end
 
 -- how far the engine may drift from the synced clock before checkNativeDrift snaps it back:
@@ -320,7 +342,7 @@ local function checkNativeDrift()
     if native.play ~= play or
         math.abs((tonumber(native.dayLength) or 0) - applied.dayLength) > 0.01 or
         math.abs(circularDiff(native.time, time)) > tolerance then
-        writeNative(time, play, nativeDayLengthAt(time))
+        writeNative(time, play, nativeDayLengthAt(time), currentDate())
     end
 end
 
@@ -348,18 +370,23 @@ local function captureTimeChange(patch, nowToDBefore)
         (patch.time == nil or math.abs(pickedDayLength - (applied.dayLength or 0)) > 0.01) then
         newDayLength = envClock.clampDayLength(pickedDayLength)
     end
-    local dateChanged = (patch.year ~= nil and patch.year ~= M.data.year) or
-        (patch.month ~= nil and patch.month ~= M.data.month) or
-        (patch.day ~= nil and patch.day ~= M.data.day)
+    -- against today's date, the one the engine shows (the epoch's is a day behind after a midnight)
+    local y, mo, d = currentDate()
+    local dateChanged = (patch.year ~= nil and patch.year ~= y) or
+        (patch.month ~= nil and patch.month ~= mo) or
+        (patch.day ~= nil and patch.day ~= d)
 
     if not (deliberateTime or playChanged or newDayLength or dateChanged) then return nil end
 
     if playChanged then delta.dayNightCycle = patch.play == true end
     if newDayLength then delta.dayLength = newDayLength end
+    -- the date collapses with the time (below) : a new one picked, else today's
     if dateChanged then
-        delta.year = tonumber(patch.year) or M.data.year
-        delta.month = tonumber(patch.month) or M.data.month
-        delta.day = tonumber(patch.day) or M.data.day
+        delta.year = tonumber(patch.year) or y
+        delta.month = tonumber(patch.month) or mo
+        delta.day = tonumber(patch.day) or d
+    elseif y then
+        delta.year, delta.month, delta.day = y, mo, d
     end
     -- Real, confirmed bug (direct report: pausing/unpausing "teleports the clock... sometimes a
     -- whole day cycle in less than a second", same when changing day length): the panel's play
@@ -446,7 +473,7 @@ local function interceptEnvState(state, lerpSeconds)
         if state.play ~= play then state.play = play end
         if state.dayLength ~= dayLength then state.dayLength = dayLength end
         applied.play, applied.dayLength = play, dayLength
-        local y, mo, d = M.data.year, M.data.month, M.data.day
+        local y, mo, d = currentDate()
         if y and mo and d and (state.year ~= nil or state.month ~= nil or state.day ~= nil) then
             state.year, state.month, state.day = y, mo, d
             applied.year, applied.month, applied.day = y, mo, d
@@ -489,9 +516,10 @@ local function interceptSetTimeOfDay(ToD)
     local dayLength = nativeDayLengthAt(time)
     local patch = table.clone(ToD)
     patch.time, patch.play, patch.dayLength = time, play, dayLength
-    if M.data.year and M.data.month and M.data.day then
-        patch.year, patch.month, patch.day = M.data.year, M.data.month, M.data.day
-        applied.year, applied.month, applied.day = M.data.year, M.data.month, M.data.day
+    local y, mo, d = currentDate()
+    if y and mo and d then
+        patch.year, patch.month, patch.day = y, mo, d
+        applied.year, applied.month, applied.day = y, mo, d
     end
     M.baseFunctions.core_environment.setTimeOfDay(patch)
     applied.play, applied.dayLength = play, dayLength
@@ -613,6 +641,26 @@ local function updateSimSpeed()
     end
 end
 
+-- the engine's time last frame, while the time isn't synced (rollUnsyncedDate)
+local unsyncedLastTime = nil
+
+--- Time sync off : the engine's own clock runs, and it doesn't move its date on at midnight either
+--- (direct report : "the date doesn't seem to move forwards in multiplayer or singleplayer", the
+--- moon jumping back a day). The frame its time goes past midnight (0.5, noon being 0) while it
+--- plays, its date goes on a day. Only a small step forward counts : a time picked in the panel
+--- (a jump) never moves the date
+local function rollUnsyncedDate()
+    local tod = extensions.core_environment.getTimeOfDay()
+    local time = tod and tonumber(tod.time)
+    local last = unsyncedLastTime
+    unsyncedLastTime = time
+    if not time or not last or not tod.play then return end
+    local step = circularDiff(time, last)
+    if step <= 0 or step > 0.05 or (last - 0.5) % 1 < (time - 0.5) % 1 then return end
+    local y, mo, d = envClock.addDays(tod.year, tod.month, tod.day, 1)
+    if y then getSetToD()({ year = y, month = mo, day = d }) end
+end
+
 ---@param forceToD boolean? a meaningful one-off resync (joined, or another player's change arrived)
 ---@param timeSyncDisabled boolean? timeSync was just turned off
 ---@param wasPlaying boolean? whether the clock was playing right before that
@@ -631,17 +679,16 @@ local function updateToD(forceToD, timeSyncDisabled, wasPlaying)
         return
     end
 
-    if not M.data.timeSync then return end
+    if not M.data.timeSync then return rollUnsyncedDate() end
 
     if forceToD then
         -- ease the time in via setState's lerp instead of an instant snap (see
         -- RESYNC_LERP_SECONDS); dayLength and date go in instantly beforehand - a date must never
         -- be lerped (month-end 31 -> 1 would sweep through every day in between)
-        local time = currentToD()
+        local time, y, mo, d = clockNow()
         local play = isPlaying()
         local dayLength = nativeDayLengthAt(time)
         local instant = { dayLength = dayLength }
-        local y, mo, d = M.data.year, M.data.month, M.data.day
         if y and mo and d then
             instant.year, instant.month, instant.day = y, mo, d
             applied.year, applied.month, applied.day = y, mo, d

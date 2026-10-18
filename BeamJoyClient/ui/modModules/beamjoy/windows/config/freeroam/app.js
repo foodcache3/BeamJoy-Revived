@@ -516,8 +516,10 @@ angular.module("beamjoy").component("bjConfigDragStrips", {
     },
 });
 
-// Nested: the Drift zones editor sidebar. A zone list ; the active zone expands to its corridor
-// width and its route (the start, points along the way, the finish). All state is pushed from
+// Nested: the Drift spots editor sidebar (drift zones in the code). A zone list ; the active zone
+// expands to its corridor width (every point's at once ; each point's own is dragged with its
+// handles in the world, shown on its row) and its route (the start, points along the way, the
+// finish). All state is pushed from
 // ui/driftZoneEditor.lua ; every row action is a BJEditorDriftZones* send with 1-based indices. The
 // zones run in beamjoy/driftZones.lua.
 angular.module("beamjoy").component("bjConfigDriftZones", {
@@ -575,6 +577,8 @@ angular.module("beamjoy").component("bjConfigDriftZones", {
             if (i === zone.points.length) return translate("beamjoy.driftZones.finish");
             return `${translate("beamjoy.driftZones.point")} ${i - 1}`;
         };
+        // a point's width (metres) : its own, else the zone's
+        this.pointWidth = (zone, pt) => Math.round(Number(pt.w != null ? pt.w : zone.width) || 0);
         // the route's length, start to finish ("320 m")
         this.lengthText = (zone) => {
             let m = 0;

@@ -690,9 +690,7 @@ local function setGroup(ctxt, playerName, groupName)
 
     if connected then
         -- update all player caches
-        local caches = {}
-        extensions.hook("onBJRequestCache", caches, connected.playerID)
-        communications_tx.sendToPlayer(connected.playerID, "sendCache", caches)
+        services_cache.sendAll(connected.playerID)
     end
 end
 

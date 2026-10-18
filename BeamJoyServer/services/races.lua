@@ -1247,6 +1247,24 @@ local function applyBundledCourseUpdates()
     end
 end
 
+--- a race's props, by their list : which revision they are. A save or an import gives a race a new
+--- list, so a new revision ; the boot's time in front, a client never keeping one from before a
+--- restart. Weak : a list replaced goes
+---@type table<table, string>
+local propsRevs = setmetatable({}, { __mode = "k" })
+local propsRevBoot, propsRevNext = tostring(os.time()), 0
+
+---@param props table[]?
+---@return string? nil when there are none
+local function propsRev(props)
+    if type(props) ~= "table" or #props == 0 then return nil end
+    if not propsRevs[props] then
+        propsRevNext = propsRevNext + 1
+        propsRevs[props] = propsRevBoot .. "-" .. propsRevNext
+    end
+    return propsRevs[props]
+end
+
 local function onBJRequestCache(caches)
     -- Visible to every player, not staff-gated: races are meant to be played, not just administered.
     -- Leaderboard is deliberately stripped here (see BJRace.leaderboard's own doc comment): it's
@@ -1259,8 +1277,28 @@ local function onBJRequestCache(caches)
         trimmed.leaderboardCount = table.length(r.leaderboard or {}) + table.length(r.freeroamLeaderboard or {})
         trimmed.leaderboard = nil
         trimmed.freeroamLeaderboard = nil
+        -- the props neither (direct report : the join took 7-10 s, West Coast's props 80% of its
+        -- races) : asked for when a race is run, watched or edited (raceProps). Their weight for
+        -- the race list, and their revision, telling a client whether the ones it has are current
+        trimmed.props = nil
+        trimmed.propTotal = services_props.total(r.props)
+        trimmed.propsRev = propsRev(r.props)
         return trimmed
     end)
+end
+
+--- one race's props, to the client that asks (beamjoy_races.getProps) : its id, their revision (nil
+--- for none) and the list. An unknown race (deleted meanwhile, another map's) : no list
+---@param ctxt BJSContext
+---@param raceId integer
+local function onRacePropsRequest(ctxt, raceId)
+    if not ctxt.senderID then return end
+    local race = table.find(M.data, function(r) return r.id == raceId end)
+    if not race then
+        return communications_tx.sendToPlayer(ctxt.senderID, "raceProps", raceId)
+    end
+    local props = table.isArray(race.props) and race.props or {}
+    communications_tx.sendToPlayer(ctxt.senderID, "raceProps", raceId, propsRev(props) or "", props)
 end
 
 ---@param ctxt BJSContext
@@ -1925,6 +1963,7 @@ local function onInit()
     communications_rx.addHandler("raceLegacyImportConfirm", M.raceLegacyImportConfirm)
     communications_rx.addHandler("raceMapImport", M.raceMapImport)
     communications_rx.addHandler("raceMapImportProps", M.raceMapImportProps)
+    communications_rx.addHandler("raceProps", M.onRacePropsRequest)
 
     renameBundledRaces()
     seedBundledRaces()
@@ -1935,6 +1974,7 @@ end
 
 M.onInit = onInit
 M.onBJRequestCache = onBJRequestCache
+M.onRacePropsRequest = onRacePropsRequest
 M.onMapChanged = loadData
 
 M.getById = getById

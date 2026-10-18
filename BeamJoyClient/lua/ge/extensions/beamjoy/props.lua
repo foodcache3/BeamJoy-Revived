@@ -1992,7 +1992,13 @@ local PAINT_MESH_LIFT = .02
 -- rubber materials, which took long to show anew (their dynamic reflections), are the mod's own
 -- copies without them (art/beamjoy/paints). One that still takes PAINT_SLOW_MS or more to make
 -- (ms, a wide one over many objects) is made at most every PAINT_REBUILD_MS, its last position
--- once the drag stops (catchUpPaints)
+-- once the drag stops (catchUpPaints).
+-- The new one is made before the old one goes (direct report, 2712 : only the zebra, the yellow
+-- line and the short dashes kept up with the mouse, every other paint flashed in and out). Those
+-- three are the line paints West Coast's own decal roads use most (212 short dashes, 153 zebras),
+-- the white line only 3 times and the mod's own materials never : the game draws decal roads
+-- grouped by material, and a group left empty (its last road deleted) is set up again before the
+-- next one in it shows. Our new decal now joins the group our old one keeps alive
 local PAINT_REBUILD_MS, PAINT_SLOW_MS = 125, 12
 
 -- `texLength` : metres of road one repeat of its texture covers ; `aspect` instead : that many
@@ -2667,18 +2673,48 @@ local function spawnSweep(entry)
 end
 
 --- a painted line made again (an end dragged) : its flat mesh reshaped on its object, its decal
---- made anew. How long it took tells whether the next drag steps wait (show)
+--- made anew, the new one before the old one goes (PAINTS above : a material's last decal deleted
+--- leaves the next one blank a moment). How long it took tells whether the next drag steps wait
+--- (show)
 ---@param s table its set.sweeps slot
 ---@param e table
 ---@param sig string
 local function remakePaint(s, e, sig)
     local started = os.clock()
-    if not (s.obj and s.paint == e.paint and reshapePaint(s.obj, e)) then
-        if s.obj and simObjectExists(s.obj) then s.obj:delete() end
+    local old = s.obj
+    if not (old and s.paint == e.paint and reshapePaint(old, e)) then
         s.obj = spawnSweep(e)
+        if old and simObjectExists(old) then old:delete() end
     end
     s.entry, s.sig, s.wantSig, s.paint = e, sig, nil, e.paint
     s.builtAt, s.cost = GetCurrentTimeMillis(), (os.clock() - started) * 1000
+end
+
+-- painted lines' decals taken out of a set (hidden, or gone from its list), deleted on the second
+-- update after : what takes their place (the placed line after its ghost, made in the next update)
+-- is made first (PAINTS above : a material's last decal deleted leaves the next one blank a moment)
+local retiredPaints = {}
+
+--- a set's painted line going : its decal deleted a little later (deleteRetiredPaints), its flat
+--- mesh at once (out of every set, it would be taken into the next static collision rebuild)
+---@param obj table? a DecalRoad or a ProceduralMesh
+local function retirePaint(obj)
+    if not (obj and simObjectExists(obj)) then return end
+    if obj:getClassName() ~= "DecalRoad" then return obj:delete() end
+    retiredPaints[#retiredPaints + 1] = { obj = obj, updates = 0 }
+end
+
+--- the retired decals deleted : the ones that have waited two updates, or all of them
+---@param all boolean?
+local function deleteRetiredPaints(all)
+    for i = #retiredPaints, 1, -1 do
+        local r = retiredPaints[i]
+        r.updates = r.updates + 1
+        if all or r.updates >= 2 then
+            if simObjectExists(r.obj) then r.obj:delete() end
+            table.remove(retiredPaints, i)
+        end
+    end
 end
 
 ---@param a table expand() entry
@@ -2766,8 +2802,9 @@ function M.show(key, props, opts)
                 elseif solid and s and s.solid and obj and simObjectExists(obj) and buildSweep(obj, e) then
                     set.sweeps[i] = { obj = obj, sig = sig, entry = e, solid = true }
                 else
-                    if obj and simObjectExists(obj) then obj:delete() end
+                    -- a painted line's new decal made before the old object goes (remakePaint)
                     local made = not solid and obj and spawnSweep(e) or nil
+                    if obj and simObjectExists(obj) then obj:delete() end
                     set.sweeps[i] = { obj = made, sig = sig, entry = e, solid = solid,
                         paint = not solid and e.paint or nil }
                     if not made then set.sweepPending[i] = true end
@@ -2780,9 +2817,13 @@ function M.show(key, props, opts)
     end
     for i, s in pairs(set.sweeps) do
         if not kept[i] then
-            if s.obj and simObjectExists(s.obj) then s.obj:delete() end
+            if s.solid then
+                if s.obj and simObjectExists(s.obj) then s.obj:delete() end
+                changed = true
+            else
+                retirePaint(s.obj)
+            end
             set.sweeps[i], set.sweepPending[i] = nil, nil
-            if s.solid then changed = true end
         end
     end
 
@@ -2807,7 +2848,11 @@ function M.hide(key)
     for _, obj in pairs(set.objects) do deleteObject(obj) end
     local sweeps = false
     for _, s in pairs(set.sweeps) do
-        if s.obj and simObjectExists(s.obj) then s.obj:delete() end
+        if s.solid then
+            if s.obj and simObjectExists(s.obj) then s.obj:delete() end
+        else
+            retirePaint(s.obj)
+        end
         sweeps = sweeps or s.solid == true
     end
     if set.collision and (#set.entries > 0 or sweeps) then scheduleCollisionReload() end
@@ -2862,6 +2907,7 @@ end
 --- props come in a few per frame ; then the static collision catches up with them (debounced, see
 --- scheduleCollisionReload : it waits for the last prop)
 local function onUpdate()
+    deleteRetiredPaints()
     updateLamps()
     catchUpPaints()
     if anyPending() then
@@ -2895,9 +2941,10 @@ local function sessionProps()
     local runner = beamjoy_raceRunner
     local session = runner and (runner.session or runner.spectatingSession)
     if session and beamjoy_races then
-        local race = table.find(beamjoy_races.data, function(r) return r.id == session.raceId end)
-        local list = race and own(race.props)
-        if list then return list, string.format("race:%s:%s", session.id, race.id) end
+        -- asked for from the lobby on (the races cache has none), shown once they're in
+        -- (onBJRacePropsLoaded)
+        local list = own(beamjoy_races.getProps(session.raceId))
+        if list then return list, string.format("race:%s:%s", session.id, session.raceId) end
         return nil
     end
     runner = beamjoy_hunterRunner
@@ -2952,6 +2999,7 @@ local nextSync = 0
 
 local function cleanup()
     hideAll()
+    deleteRetiredPaints(true)
     M.sets = {}
     -- any lamp whose prop went some other way
     for _, l in pairs(lamps) do deleteLights(l) end
@@ -2974,6 +3022,7 @@ M.onUpdate = function()
     end
 end
 M.onBJRaceMarkersRefresh = sync
+M.onBJRacePropsLoaded = sync
 M.onBJEditorPropsRefresh = sync
 M.onBJScenarioChanged = sync
 M.onBJHunterArenaChanged = sync

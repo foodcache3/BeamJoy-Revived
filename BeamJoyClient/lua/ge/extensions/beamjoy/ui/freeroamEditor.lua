@@ -179,9 +179,17 @@ local function onBJClick(clickType, data)
     SECTIONS[section].onBJClick(clickType, data)
 end
 
+--- per frame (activityEditor) : the open section's own, if it has one (the drift spots' width
+--- handles)
+local function onUpdate()
+    local sub = SECTIONS[section]
+    if sub and sub.onUpdate then sub.onUpdate() end
+end
+
 M.onInit = onInit
 M.onClose = onClose
 M.onBJClick = onBJClick
+M.onUpdate = onUpdate
 M.onBJFreeroamDataChanged = onDataChanged
 M.onBJBusLinesChanged = onBusLinesChanged
 M.onBJDeliveryPointsChanged = onDeliveryPointsChanged

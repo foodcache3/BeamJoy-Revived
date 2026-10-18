@@ -4,6 +4,12 @@ local M = {
     ---@type BJRace[] races for the current map
     data = {},
 
+    --- the races' props, asked for when needed (getProps) : the races cache leaves them out (direct
+    --- report : the join took 7-10 s, West Coast's props 80% of its races), each race carrying
+    --- their weight (`propTotal`) and revision (`propsRev`, nil for none) instead
+    ---@type table<integer, {rev: string, list: table[]}>
+    propsByRace = {},
+
     -- the race start marker (world and Big Map) : the game's own time-trial mission icon
     MARKER_ICON = "mission_timeTrials_triangle",
     --- the races behind this client's start markers, by marker id
@@ -24,8 +30,73 @@ local M = {
     },
 }
 
+--- raceId -> the revision asked for, its answer not in yet
+---@type table<integer, string>
+local propsAsked = {}
+--- raceId -> what waits for its props (getProps' onLoaded)
+---@type table<integer, function[]>
+local propsWaiting = {}
+
+---@param raceId integer
+---@return BJRace?
+local function raceById(raceId)
+    return table.find(M.data or {}, function(r) return r.id == raceId end)
+end
+
+--- a race's props : the list when it's here (empty for a race without any), else nil, asked for
+--- from the server, and `onLoaded(list)` called once they come (and the hook
+--- onBJRacePropsLoaded(raceId) fired for anyone else)
+---@param raceId integer
+---@param onLoaded fun(list: table[])?
+---@return table[]?
+local function getProps(raceId, onLoaded)
+    local race = raceById(raceId)
+    if not race then return nil end
+    if race.propsRev == nil then
+        -- none, or a server that still sends them in the cache
+        return type(race.props) == "table" and race.props or {}
+    end
+    local held = M.propsByRace[raceId]
+    if held and held.rev == race.propsRev then return held.list end
+    if onLoaded then
+        propsWaiting[raceId] = propsWaiting[raceId] or {}
+        table.insert(propsWaiting[raceId], onLoaded)
+    end
+    if propsAsked[raceId] ~= race.propsRev then
+        propsAsked[raceId] = race.propsRev
+        beamjoy_communications.send("raceProps", raceId)
+    end
+    return nil
+end
+
+--- the server's answer to raceProps : nil `rev` for a race it doesn't have
+---@param raceId integer
+---@param rev string?
+---@param list table[]?
+local function onPropsReceived(raceId, rev, list)
+    propsAsked[raceId] = nil
+    if type(rev) ~= "string" then
+        propsWaiting[raceId] = nil
+        return
+    end
+    list = type(list) == "table" and list or {}
+    M.propsByRace[raceId] = { rev = rev, list = list }
+    local race = raceById(raceId)
+    -- the race was saved again meanwhile, its new revision on its way in the cache : the list
+    -- kept, asked for again by the next getProps once that's in
+    if race and race.propsRev ~= nil and race.propsRev ~= rev then return end
+    local waiting = propsWaiting[raceId] or {}
+    propsWaiting[raceId] = nil
+    for _, fn in ipairs(waiting) do
+        local ok, err = pcall(fn, list)
+        if not ok then LogError("beamjoy_races: props callback: " .. tostring(err)) end
+    end
+    extensions.hook("onBJRacePropsLoaded", raceId)
+end
+
 local function onInit()
     beamjoy_communications.addHandler("sendCache", M.retrieveCache)
+    beamjoy_communications.addHandler("raceProps", onPropsReceived)
     beamjoy_communications_ui.addHandler("BJEditorRaceListRequest", M.pushListToUI)
     beamjoy_communications_ui.addHandler("BJRaceLeaderboardRequest", M.requestLeaderboard)
     beamjoy_communications.addHandler("raceLeaderboard", M.onLeaderboardReceived)
@@ -149,7 +220,7 @@ local function pushListToUI()
             distance = r.distance,
             -- the race list shows how many props a race has (direct request) : every prop a line
             -- or a prefab stands for, as the editor's prop limit counts them
-            props = beamjoy_props and beamjoy_props.total(r.props) or 0,
+            props = tonumber(r.propTotal) or (beamjoy_props and beamjoy_props.total(r.props)) or 0,
             defaults = r.defaults,
         }
     end):values())
@@ -299,6 +370,24 @@ end
 local function retrieveCache(caches)
     if caches.races then
         M.data = caches.races
+        -- props no longer current (the race saved again, deleted, another map's) : dropped
+        for raceId, held in pairs(M.propsByRace) do
+            local race = raceById(raceId)
+            if not race or race.propsRev ~= held.rev then M.propsByRace[raceId] = nil end
+        end
+        -- one still waited for : asked again for its new revision
+        for raceId in pairs(propsWaiting) do
+            local race = raceById(raceId)
+            if not race then
+                propsWaiting[raceId] = nil
+            elseif race.propsRev == nil then
+                local waiting = propsWaiting[raceId]
+                propsWaiting[raceId] = nil
+                for _, fn in ipairs(waiting) do pcall(fn, {}) end
+            elseif propsAsked[raceId] ~= race.propsRev then
+                getProps(raceId)
+            end
+        end
         extensions.hook("onBJRacesChanged")
         pushListToUI()
         refreshPOIs()
@@ -407,8 +496,13 @@ local function testFinish(name, loopable, respawnStrategy)
 end
 
 M.onInit = onInit
+M.onServerLeave = function()
+    M.propsByRace, propsAsked, propsWaiting = {}, {}, {}
+end
 
 M.retrieveCache = retrieveCache
+M.getProps = getProps
+M.onPropsReceived = onPropsReceived
 M.onBJRequestBigmapPOIs = onBJRequestBigmapPOIs
 M.onGetRawPoiListForLevel = onGetRawPoiListForLevel
 M.onActivityAcceptGatherData = onActivityAcceptGatherData

@@ -108,6 +108,9 @@
             ng-click="$ctrl.selectPoint($event, zoneIdx, pointIdx)"
         >
             <span class="flex-grow-1">{{$ctrl.pointLabel(zone, pointIdx)}}</span>
+            <span class="opacity-70 small" title="{{'beamjoy.driftZones.edit.width.tooltip' | translate}}">
+                {{$ctrl.pointWidth(zone, pt)}} m
+            </span>
             <button
                 class="btn info"
                 ng-click="$ctrl.setPointToVehicle($event, zoneIdx, pointIdx)"

@@ -9,6 +9,11 @@
 --- still going at the finish, as the game's drift spots do (gameplay/drift/freeroam/driftSpots.lua).
 --- Out of the corridor for a couple of seconds, a reset, slowing time, changing gravity or taking
 --- too long ends a run with no score. Shown in a small panel of its own (windows/driftZoneHud).
+---
+--- Called "drift spots" to players (direct request), the code keeps its zone names. Each point of the
+--- route has its own width (`w`, set by the editor's handles at the ends of its line across the
+--- route), the spot's `width` for one without : the corridor narrows and widens from point to point,
+--- and the start and finish gates are their points' width.
 
 local M = {
     ---@type table[] the current map's zones (the server's cache)
@@ -32,6 +37,8 @@ local TELEPORT_DISTANCE = 60
 local HUD_PUSH_MS = 100
 -- how long the result stays on the panel after a run
 local RESULT_SECONDS = 6
+-- metres, a point's width (kept in sync with services/driftZones.lua)
+local MIN_WIDTH, MAX_WIDTH, DEFAULT_WIDTH = 6, 60, 16
 
 local lastLy = {}
 local prevFrameMs, frameMs
@@ -66,25 +73,60 @@ local function gate(zone, which)
 end
 M.gate = gate
 
+--- a point's width (metres) : its own, else the zone's
+---@param zone table
+---@param i integer
+---@return number
+local function pointWidth(zone, i)
+    local pt = zone.points[i]
+    local w = pt and tonumber(pt.w) or tonumber(zone.width) or DEFAULT_WIDTH
+    if w ~= w then w = DEFAULT_WIDTH end
+    return math.max(MIN_WIDTH, math.min(MAX_WIDTH, w))
+end
+M.pointWidth = pointWidth
+
+--- a point's line across the route : the way the route goes there (halfway between its two
+--- segments' ways ; a gate's own way at the start and the finish) and its half width to the right
+---@param zone table
+---@param i integer
+---@return vec3 pos, vec3 dir, vec3 right
+local function pointFrame(zone, i)
+    local pts = zone.points
+    local n = #pts
+    local dir
+    if i == 1 then
+        dir = flatDir(v3(pts[1]), v3(pts[2]))
+    elseif i == n then
+        dir = flatDir(v3(pts[n - 1]), v3(pts[n]))
+    else
+        local after = flatDir(v3(pts[i]), v3(pts[i + 1]))
+        dir = flatDir(v3(pts[i - 1]), v3(pts[i])) + after
+        dir = dir:length() > 1e-3 and dir:normalized() or after
+    end
+    return v3(pts[i]), dir, dir:cross(vec3(0, 0, 1)) * (pointWidth(zone, i) / 2)
+end
+M.pointFrame = pointFrame
+
 ---@param p vec3
 ---@param a vec3
 ---@param b vec3
----@return number flat distance from p to the segment ab
+---@return number dist flat distance from p to the segment ab, number t where along it (0 to 1)
 local function segmentDistance(p, a, b)
     local abx, aby = b.x - a.x, b.y - a.y
     local len2 = abx * abx + aby * aby
     local t = len2 > 0 and math.max(0, math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / len2)) or 0
     local cx, cy = a.x + abx * t, a.y + aby * t
-    return math.sqrt((p.x - cx) ^ 2 + (p.y - cy) ^ 2)
+    return math.sqrt((p.x - cx) ^ 2 + (p.y - cy) ^ 2), t
 end
 
 ---@param zone table
 ---@param p vec3
----@return boolean within the corridor along the route
+---@return boolean within the corridor along the route : its width going from point to point
 local function inCorridor(zone, p)
-    local limit = zone.width / 2 + CORRIDOR_SLACK
     for i = 2, #zone.points do
-        if segmentDistance(p, v3(zone.points[i - 1]), v3(zone.points[i])) <= limit then return true end
+        local dist, t = segmentDistance(p, v3(zone.points[i - 1]), v3(zone.points[i]))
+        local width = pointWidth(zone, i - 1) * (1 - t) + pointWidth(zone, i) * t
+        if dist <= width / 2 + CORRIDOR_SLACK then return true end
     end
     return false
 end
@@ -260,7 +302,7 @@ local function onUpdate()
             if frameMs - run.outSince > OUT_GRACE * 1000 then return fail("beamjoy.driftZones.failed.left") end
         end
         local pos, dir = gate(run.zone, "finish")
-        if crossed("finish", pos, dir, run.zone.width, p) then return finish(car) end
+        if crossed("finish", pos, dir, pointWidth(run.zone, #run.zone.points), p) then return finish(car) end
         if frameMs - lastHud >= HUD_PUSH_MS then pushHud() end
         return
     end
@@ -268,7 +310,7 @@ local function onUpdate()
     local speed = car.veh:getVelocity():length()
     for _, zone in ipairs(M.nearby) do
         local pos, dir = gate(zone, "start")
-        if crossed("start" .. tostring(zone.id), pos, dir, zone.width, p) and speed >= MIN_START_SPEED then
+        if crossed("start" .. tostring(zone.id), pos, dir, pointWidth(zone, 1), p) and speed >= MIN_START_SPEED then
             return start(zone, car)
         end
     end
@@ -290,14 +332,13 @@ local function draw()
     local startColor = BJColor(.2, 1, .4, .85)
     local finishColor = BJColor(1, 1, 1, .9)
     local edgeColor = BJColor(1, .45, .1, .45)
-    local textColor, textBg = BJColor(1, 1, 1, .9), BJColor(0, 0, 0, .4)
+    -- no name over the start (direct request : no nametags on drift spots)
     for _, zone in ipairs(M.nearby) do
-        local half = zone.width / 2
+        local n = #zone.points
         -- every line on the road's own surface : across a cambered road its two ends sit at
         -- different heights, along a crest it bends with it
         for _, which in ipairs({ "start", "finish" }) do
-            local pos, dir = gate(zone, which)
-            local right = dir:cross(vec3(0, 0, 1)) * half
+            local pos, _, right = pointFrame(zone, which == "start" and 1 or n)
             local color = which == "start" and startColor or finishColor
             layer.addGroundLine(pos - right, pos + right, .2, color, .05, 1.5)
             for _, side in ipairs({ pos - right, pos + right }) do
@@ -305,15 +346,14 @@ local function draw()
                 layer.addLine(foot, .12, foot + vec3(0, 0, 2.5), .12, color)
             end
         end
-        -- the corridor's edges, segment by segment
-        for i = 2, #zone.points do
-            local a, b = v3(zone.points[i - 1]), v3(zone.points[i])
-            local right = flatDir(a, b):cross(vec3(0, 0, 1)) * half
-            layer.addGroundLine(a - right, b - right, .08, edgeColor)
-            layer.addGroundLine(a + right, b + right, .08, edgeColor)
+        -- the corridor's edges, from the end of one point's line across the route to the next's
+        local prevPos, _, prevRight = pointFrame(zone, 1)
+        for i = 2, n do
+            local pos, _, right = pointFrame(zone, i)
+            layer.addGroundLine(prevPos - prevRight, pos - right, .08, edgeColor)
+            layer.addGroundLine(prevPos + prevRight, pos + right, .08, edgeColor)
+            prevPos, prevRight = pos, right
         end
-        local pos = gate(zone, "start")
-        layer.addText(zone.name, pos + vec3(0, 0, 3), textColor, textBg)
     end
 end
 

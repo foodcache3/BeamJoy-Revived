@@ -65,11 +65,11 @@ end
 ---@param list any
 ---@return BJDragStrip[]? strips, string? err
 local function sanitize(list)
-    if not table.isArray(list) then return nil, "Invalid drag strip data" end
-    if #list > M.MAX_STRIPS then return nil, string.format("Up to %d drag strips per map", M.MAX_STRIPS) end
+    if not table.isArray(list) then return nil, "Invalid dragstrip data" end
+    if #list > M.MAX_STRIPS then return nil, string.format("Up to %d dragstrips per map", M.MAX_STRIPS) end
     local out = {}
     for i, s in ipairs(list) do
-        if type(s) ~= "table" then return nil, "Invalid drag strip data" end
+        if type(s) ~= "table" then return nil, "Invalid dragstrip data" end
         local lanes = {}
         for _, lane in ipairs(type(s.lanes) == "table" and s.lanes or {}) do
             local pos, dir = point(type(lane) == "table" and lane.pos), point(type(lane) == "table" and lane.dir)
@@ -80,7 +80,9 @@ local function sanitize(list)
         end
         if #lanes > 0 then
             local name = type(s.name) == "string" and s.name:trim() or ""
-            if #name == 0 then name = "Drag strip " .. i end
+            -- a default name from before they were spelt dragstrips : the new one
+            name = name:gsub("^Drag strip (%d+)$", "Dragstrip %1")
+            if #name == 0 then name = "Dragstrip " .. i end
             out[#out + 1] = {
                 id = s.id,
                 name = name:sub(1, M.MAX_NAME_LEN),

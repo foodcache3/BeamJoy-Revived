@@ -530,7 +530,7 @@ local function save(onDone)
         else
             refresh()
             standUp()
-            toast.error(err or "Failed to save the drag strips")
+            toast.error(err or "Failed to save the dragstrips")
         end
         if onDone then onDone(status == true) end
     end, 5000)

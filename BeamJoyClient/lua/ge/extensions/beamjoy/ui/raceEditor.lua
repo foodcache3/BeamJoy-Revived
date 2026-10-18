@@ -32,6 +32,9 @@ local M = {
     savedRace = nil,
     ---@type integer? id of the race being edited server-side ; nil while authoring a new race
     id = nil,
+    ---@type integer? the race opened whose props are still on their way (beamjoy_races.getProps : the
+    ---races cache has none) ; it can't be saved until they're in, a save would have dropped them
+    propsPending = nil,
     ---@type integer?
     activeGateIndex = nil,
     ---@type integer?
@@ -721,8 +724,17 @@ local function onOpen(raceId)
 
     M.id = raceId
     local existing = raceId and table.find(beamjoy_races.data, function(r) return r.id == raceId end)
+    M.propsPending = nil
     if existing then
         M.race = table.clone(existing)
+        M.race.propTotal, M.race.propsRev = nil, nil
+        local list = beamjoy_races.getProps(raceId, function(loaded) M.onPropsLoaded(raceId, loaded) end)
+        if list then
+            M.race.props = table.clone(list)
+        else
+            M.race.props = {}
+            M.propsPending = raceId
+        end
         backfillRaceDefaults(M.race)
     else
         M.id = nil
@@ -1267,8 +1279,33 @@ end
 local function onResetGate(index) onReset("gate", index) end
 local function onResetStart(index) onReset("start", index) end
 
+--- the opened race's props are in (see M.propsPending) : any added meanwhile kept after them, and
+--- what it was saved with
+---@param raceId integer
+---@param list table[]
+function M.onPropsLoaded(raceId, list)
+    if M.propsPending ~= raceId or M.id ~= raceId or not M.race then return end
+    M.propsPending = nil
+    local props = table.clone(list)
+    for _, p in ipairs(M.race.props or {}) do table.insert(props, p) end
+    M.race.props = props
+    if M.savedRace then M.savedRace.props = table.clone(list) end
+    propEditor.reset(true)
+    pushUpdate()
+    extensions.hook("onBJRaceMarkersRefresh")
+end
+
+--- a save now would drop the opened race's props, not in yet
+---@return boolean
+local function propsStillLoading()
+    if not M.propsPending then return false end
+    toast.warn("This race's props are still loading, try again in a moment", nil, 4)
+    beamjoy_races.getProps(M.propsPending)
+    return true
+end
+
 local function onSave()
-    if not M.race then return end
+    if not M.race or propsStillLoading() then return end
     local race = table.clone(M.race)
     race.id = M.id
     beamjoy_communications.send("raceSave", race)
@@ -1296,7 +1333,7 @@ end
 --- clearly tied to the name the player actually typed.
 ---@param name string
 local function onSaveAsNew(name)
-    if not M.race or not name or name == "" then return end
+    if not M.race or not name or name == "" or propsStillLoading() then return end
     local copy = table.clone(M.race)
     copy.id = nil
     copy.name = name
@@ -1349,6 +1386,7 @@ local function onImportCode(race)
     end
 
     M.id = nil
+    M.propsPending = nil
     M.race = {
         name = type(race.name) == "string" and race.name or "",
         mode = type(race.mode) == "string" and race.mode or "grid",
@@ -1416,6 +1454,7 @@ local function onClose()
         M.race = nil
         M.savedRace = nil
         M.id = nil
+        M.propsPending = nil
         M.activeGateIndex = nil
         M.activeStartIndex = nil
         M.dirty = false

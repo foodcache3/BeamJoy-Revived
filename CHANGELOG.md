@@ -8,7 +8,48 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2712, server build 2467.
+Version 1.11.0 : client build 2715, server build 2469.
+
+- **Drift spots and dragstrips (2715 / 2469)** (direct requests) :
+  - drift zones are now called **drift spots** and drag strips **dragstrips**, everywhere a player
+    reads them (the Freeroam config sections, the Big Map, the leaderboards, the drift panel, the
+    server's messages). A spot or a strip still on its old default name ("Drift zone 3", "Drag strip
+    1") takes the new one when it's next loaded or saved ;
+  - no more name floating over a drift spot's start in the world ;
+  - **a width per point** : in Config > Freeroam > Drift spots, the selected spot shows a handle at
+    each end of every point's line across the route. Drag one, as a race gate's edge : the other end
+    stays put and the point moves to the middle (with Ctrl held, both sides move and the point
+    stays). The corridor narrows and widens from point to point, and the start and finish gates are
+    their points' width. The width slider sets every point at once, each point's row shows its own,
+    and a new point takes its neighbours' width halfway. Spots from before keep their one width at
+    every point. Needs server 2469 to keep the widths (an older server drops them on save).
+- **Fix (2714) : every paint's ghost keeps up with the mouse** (direct report on 2712 : only the
+  zebra, the yellow line and the short dashes did, every other paint flashed in and out). Those
+  three are the line paints West Coast's own decal roads use most, the white line only 3 times and
+  the mod's own materials never : the game draws decal roads grouped by material, and the line's
+  old decal was deleted before its new one was made, leaving a rarely used material's group empty
+  and the new line blank a moment. The new decal is now made first, then the old one deleted. A
+  line leaving a set (the ghost when the line is placed, a line removed) keeps its decal two more
+  updates, so the placed line is already there when the ghost goes.
+- **Faster join (2713 / 2468) : the sidebar and the weather no longer wait 7-10 s after the UI
+  reload** (direct report : "it seems slower than it was about a month ago"). Everything the server
+  sends at a join went in one message, paced at one 20 KB part per 100 ms, and race props had made
+  it big (West Coast : 1.16 MB of races, 80% of it props). Now :
+  - a race's props aren't in the races cache any more (West Coast's races : 59 parts to 13). The
+    cache carries their count and a revision ; a client asks for one race's props (`raceProps`)
+    when it joins or watches that race, or opens it in the editor. The race editor can't save a
+    race while its props are still on their way (a toast says so), so a save never drops them ;
+  - the join's caches go in two messages : the small ones first (settings, players, environment...
+    the sidebar and the weather wait on that one), then races, vehicle presets and shared builds.
+  The pacing itself is unchanged (two parts per tick is still in TODO.md, it loosens the guard
+  against the launcher's zlib crash).
+- **Fix (2713 / 2468) : the date moves on at midnight** (direct report : "the date doesn't seem to
+  move forwards in multiplayer or singleplayer", the moon jumping back a day at midnight). The sky
+  is drawn from the time and the date, and nothing ever moved the date on. With time sync on, the
+  shared clock (envClock.advance) now counts the midnights it goes past : every client moves the
+  engine's date on the frame it passes midnight, and the server moves the synced date (the plugin
+  API's date too). With time sync off, the engine's own clock playing past midnight moves its date
+  on as well (a time picked in the panel doesn't).
 
 - **Fix (2712) : painted lines follow the mouse again** (direct report, 2710 : "none of the lines
   are updating their position when you are about to place unless you stop moving the mouse"). A

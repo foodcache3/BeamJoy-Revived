@@ -2,14 +2,16 @@
 --- zones, stored per map like the drag strips (`dao_activity` -> `<map>_driftzones.json`) and run by
 --- each player's own game (beamjoy/driftZones.lua), scored by the game's own drift scorer. Runs go
 --- on the same Drift boards as the game's own drift spots (services/freeroamChallenges.lua), under
---- an id that can't collide with the game's ("bj:<id>").
+--- an id that can't collide with the game's ("bj:<id>"). Called "drift spots" to players (direct
+--- request) ; the code and the saved data keep their zone names.
 
 ---@class BJDriftZone
 ---@field id integer unique per map
 ---@field name string
----@field width number metres : the corridor along the route, and the start / finish gates' width
----@field points {x: number, y: number, z: number}[] the route : the start gate, any number of points
----along the way, the finish gate (2 to MAX_POINTS)
+---@field width number metres : the width of a point without its own
+---@field points {x: number, y: number, z: number, w: number?}[] the route : the start gate, any
+---number of points along the way, the finish gate (2 to MAX_POINTS). `w` : the corridor's width at
+---that point (metres, the editor's width handles), the gates' own at the start and the finish
 
 local M = {
     dependencies = { "dao_activity", "services_core", "services_players", "services_permissions",
@@ -59,19 +61,25 @@ end
 ---@param list any
 ---@return BJDriftZone[]? zones, string? err
 local function sanitize(list)
-    if not table.isArray(list) then return nil, "Invalid drift zone data" end
-    if #list > M.MAX_ZONES then return nil, string.format("Up to %d drift zones per map", M.MAX_ZONES) end
+    if not table.isArray(list) then return nil, "Invalid drift spot data" end
+    if #list > M.MAX_ZONES then return nil, string.format("Up to %d drift spots per map", M.MAX_ZONES) end
     local out = {}
     for i, z in ipairs(list) do
-        if type(z) ~= "table" then return nil, "Invalid drift zone data" end
+        if type(z) ~= "table" then return nil, "Invalid drift spot data" end
         local points = {}
         for _, p in ipairs(type(z.points) == "table" and z.points or {}) do
             local clean = point(p)
-            if clean and #points < M.MAX_POINTS then points[#points + 1] = clean end
+            if clean and #points < M.MAX_POINTS then
+                local w = tonumber(p.w)
+                if w and w == w then clean.w = math.clamp(w, M.MIN_WIDTH, M.MAX_WIDTH) end
+                points[#points + 1] = clean
+            end
         end
         if #points >= 2 then
             local name = type(z.name) == "string" and z.name:trim() or ""
-            if #name == 0 then name = "Drift zone " .. i end
+            -- a default name from before they were called drift spots : the new one
+            name = name:gsub("^Drift zone (%d+)$", "Drift spot %1")
+            if #name == 0 then name = "Drift spot " .. i end
             out[#out + 1] = {
                 id = z.id,
                 name = name:sub(1, M.MAX_NAME_LEN),

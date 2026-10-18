@@ -43,7 +43,13 @@ client).
 
 ## Moon jump / date rollover at midnight
 
-**Status:** investigating, blocked on an engine test.
+**Status:** built in client 2713 / server 2468 (see CHANGELOG), not yet tried live. The user found
+the date never moves on, in multiplayer or single player. To check : with time sync on and a short
+day, the moon doesn't jump at midnight and the panel's date goes on a day (on every client, and
+after a rejoin) ; month and year ends ; with time sync off, the same on the engine's own clock.
+Single player without BeamJoy still doesn't move its date (the game's own behaviour).
+
+Investigation notes, kept for reference :
 
 The sky (`core/celestial.lua`) is stateless: every frame it positions the sun, moon and stars from
 the engine's current `time` + date (`whenToJD`). Nothing in the game's Lua ever advances the date
@@ -63,7 +69,12 @@ advance the synced date; the per-date segment cache already supports a date that
 
 ## Join loading time: the sidebar and weather take 7-10 s after the UI reload
 
-**Status:** investigated, not started. The user asked to add this to the plan.
+**Status:** 1 and 2 built in client 2713 / server 2468 (see CHANGELOG), not yet tried live ; 3
+not started (the user asked for the first two). To check : the sidebar and the weather come within
+a second or two of the UI reload on West Coast ; a race's props show for its racers and spectators
+(a race joined just after the join too), in the editor (a save right after opening says they're
+loading), after the race is saved again (everyone gets the new ones), and shared / exported with a
+race code ; the race list still shows each race's prop count.
 
 Direct report : after the join's UI reload, the sidebar and the weather sync come much later than a
 month ago. The UI reload itself is unchanged (about 4 s in the build 2495 logs and now). The gap is
@@ -647,6 +658,15 @@ Presets tab. To check live :
 - photos (2705) : a build added gets its photo (row in the editor, then the tile in another
   player's selector once it's fetched), "Retake photo" in and out of the build, the game's UI
   only blinking while it's taken, a build made before 2705 keeping the model's picture until retaken ;
+- join (2713) and the date at midnight (2713) : see their own sections ;
+- drift spots (2715 / 2469) : no name over a spot in the world ; "drift spots" and "dragstrips"
+  everywhere ; the handles at each end of every point's line drag that point's width (the other
+  end stays, Ctrl both sides), the corridor and the gates follow, saved and seen by others ; a run
+  leaves the spot where it's narrow, not where it's wide ; the slider sets them all ;
+- paints (2714) : every paint's ghost follows the mouse with no flashing (the white line, the
+  chevrons, the hazard stripes, both rubbers, the dirt tracks : not only the zebra, the yellow line
+  and the short dashes), on West Coast and on another map ; a dragged node too ; a placed line
+  doesn't blink as it's placed, a deleted one goes ;
 - paints (2712) : every line (the placing ghost and a dragged node) follows the mouse smoothly,
   the rubbers too, with no CPU spike ; both rubbers still look as before (on another map too) ;
 - paints (2711) : Track rubber shows as one wide dark band (on a map other than West Coast too),
