@@ -2214,14 +2214,27 @@ local function paintLayout(entry)
     return paint, pts, width, texLength
 end
 
---- a painted line's decal made (on a map without a terrain, its flat mesh) : nil when its paint
---- isn't known or its path is too short
----@param entry table
+-- paint materials whose first decal was made this map, its shaders compiled on the spot (makePaint)
+local paintMaterialsReady = {}
+
+--- runs `fn` with the game's shaders compiled on the spot (as beamjoy_propPicker's previews). The
+--- game compiles a shader it hasn't got yet in the background, and the first object set up with
+--- that material meanwhile never draws, the next ones do (direct report, 2718 on 0.40 : a paint the
+--- map doesn't use itself showed neither its ghost nor the placed line, until it was picked again,
+--- then fine). Back on at once, the game has no getter for it
+---@param fn function
+---@return any
+local function shadersOnTheSpot(fn)
+    local sync = pcall(function() Engine.Render.setAsyncShaderCompilation(false) end)
+    local ok, res = pcall(fn)
+    if sync then pcall(function() Engine.Render.setAsyncShaderCompilation(true) end) end
+    if not ok then error(res, 0) end
+    return res
+end
+
+--- a painted line's decal or flat mesh made, as makePaint
 ---@return table? obj a DecalRoad or a ProceduralMesh
-local function makePaint(entry)
-    local paint, pts, width, texLength = paintLayout(entry)
-    if not paint then return nil end
-    ensurePaintMaterial(paint)
+local function buildPaint(paint, pts, width, texLength)
     if not mapHasTerrain() then return makePaintMesh(paint, pts, width, texLength) end
     local road = createObject("DecalRoad")
     road.canSave = false
@@ -2239,6 +2252,25 @@ local function makePaint(entry)
     road:registerObject("")
     if not simObjectExists(road) then return nil end
     return road
+end
+
+--- a painted line's decal made (on a map without a terrain, its flat mesh) : nil when its paint
+--- isn't known or its path is too short. Its material's first one this map with its shaders
+--- compiled on the spot (shadersOnTheSpot) : a moment's wait the first time a paint is used, only
+--- when the game hasn't got them yet
+---@param entry table
+---@return table? obj a DecalRoad or a ProceduralMesh
+local function makePaint(entry)
+    local paint, pts, width, texLength = paintLayout(entry)
+    if not paint then return nil end
+    ensurePaintMaterial(paint)
+    if paintMaterialsReady[paint.material] then return buildPaint(paint, pts, width, texLength) end
+    local started = os.clock()
+    local obj = shadersOnTheSpot(function() return buildPaint(paint, pts, width, texLength) end)
+    paintMaterialsReady[paint.material] = obj ~= nil or nil
+    log("I", "beamjoy_props", string.format("paint %s : its first decal this map, its shaders made in %.0f ms",
+        paint.id, (os.clock() - started) * 1000))
+    return obj
 end
 
 --- a painted line (the same paint) made again on its object : only its flat mesh (a map without a
@@ -3061,6 +3093,7 @@ local function cleanup()
     -- a new map, its own materials and its terrain : looked at again
     materialDirs, materialShapes, mapped, sharedDone = {}, {}, nil, {}
     terrainKnown = nil
+    paintMaterialsReady = {}
     if collisionReloadAt then
         collisionReloadAt = nil
         if be then reloadCollision() end

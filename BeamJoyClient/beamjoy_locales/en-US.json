@@ -752,8 +752,6 @@
     "beamjoy.window.main.tabs.settings.sections.passiveRaces.title": "Passive races",
     "beamjoy.window.main.tabs.settings.sections.passiveRaces.enabled": "Take part in passive races",
     "beamjoy.window.main.tabs.settings.sections.passiveRaces.enabled.tooltip": "Driving through a passive race's start gate in freeroam starts a timed run. Turn this off to stay out of them: their start gates aren't shown or timed, and a run you're on ends. Only affects your game.",
-    "beamjoy.window.main.tabs.settings.sections.passiveRaces.waypointBeams": "Waypoint beams",
-    "beamjoy.window.main.tabs.settings.sections.passiveRaces.waypointBeams.tooltip": "Shows the tall beam over the next gate during a passive run. Off, you follow the minimap alone. Only affects your game.",
     "beamjoy.window.main.tabs.settings.sections.visual.title": "Visual",
     "beamjoy.window.main.tabs.settings.sections.visual.opaqueGhosts": "Disable ghost transparency",
     "beamjoy.window.main.tabs.settings.sections.visual.opaqueGhosts.tooltip": "Ghost vehicles, the ones you can't collide with, stay solid instead of see-through. They're still ghosts. Only affects your game.",

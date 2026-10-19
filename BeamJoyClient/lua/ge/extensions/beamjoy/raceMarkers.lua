@@ -394,8 +394,8 @@ local function markerParticipant(session)
     return own
 end
 
---- freeroam runs (beamjoy_raceFreeroam) : during a run, its next gate(s) (green, with the beam)
---- and the one after ; otherwise every nearby freeroam race's start gate, named. Both on the
+--- freeroam runs (beamjoy_raceFreeroam) : during a run, its next gate(s) (green) and the one
+--- after, on the minimap only ; otherwise every nearby freeroam race's start gate, named. Both on the
 --- minimap too
 ---@param fr table beamjoy_raceFreeroam
 ---@return boolean drew anything
@@ -416,15 +416,11 @@ local function drawFreeroam(fr)
                 for j in pairs(visibleGateSet(i, #race.gates, race.loopable, 2) or {}) do visible[j] = true end
             end
         end
-        -- no gates drawn during a passive run (direct request) : the waypoint beam and the minimap
-        -- lead the way
+        -- no gates and no waypoint beam during a passive run, whatever the race sets for its grid
+        -- races (direct requests) : the minimap leads the way
         for i in pairs(visible) do
             local g = race.gates[i]
             local role = gateRole(race, i)
-            -- the race's own setting, and the player's (Settings > Passive races)
-            if next[i] and race.defaults and race.defaults.waypointBeams ~= false and fr.waypointBeams ~= false then
-                draw.addBeam(vec3(g.pos.x, g.pos.y, g.pos.z))
-            end
             local left, right = gateEnds(g)
             table.insert(M.minimapGates, {
                 left = left,
@@ -462,8 +458,7 @@ local function computeRenderSignature()
         -- freeroam runs (beamjoy_raceFreeroam) : the run's progress, else the start gates near you
         local fr = beamjoy_raceFreeroam
         if fr and fr.run then
-            return string.format("free:run:%s:%s:%s:%s", fr.run.race.id, fr.run.last, fr.run.done,
-                tostring(fr.waypointBeams ~= false))
+            return string.format("free:run:%s:%s:%s", fr.run.race.id, fr.run.last, fr.run.done)
         elseif fr and #fr.nearby > 0 then
             return "free:near:" .. table.concat(table.map(fr.nearby, function(r) return tostring(r.id) end), ",")
         end

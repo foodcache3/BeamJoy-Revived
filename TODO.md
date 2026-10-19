@@ -659,10 +659,14 @@ Presets tab. To check live :
   player's selector once it's fetched), "Retake photo" in and out of the build, the game's UI
   only blinking while it's taken, a build made before 2705 keeping the model's picture until retaken ;
 - join (2713) and the date at midnight (2713) : see their own sections ;
-- passive race settings (2718) : Settings > Passive races : take part off, a nearby start gate
-  goes at once, driving through it starts nothing, a run going on ends (no toast) ; back on, the
-  gates come back ; beams off mid-run, the beam goes at once, the minimap still shows the next
-  gate ; both kept after a restart and on another server ;
+- passive race settings (2718 / 2719) : Settings > Passive races : take part off, a nearby start
+  gate goes at once, driving through it starts nothing, a run going on ends (no toast) ; back on,
+  the gates come back ; kept after a restart and on another server ; a passive run shows no beam
+  at all (the minimap shows the next gate), a grid race of the same race still has its beams ;
+- paint first line (2719) : fresh game, a map, the prop editor's Paint tab : pick chevrons (then
+  checkered, spray, rubber, hazard...) : the ghost shows at once (a short hitch the first time on
+  a cold shader cache at most) and follows the mouse, the placed line shows ; the log has
+  "paint <id> : its first decal this map" once per paint ; a map without a terrain (Mondello) too ;
 - prop picker previews (2718) : scroll the full mesh list (other maps' meshes too) on a fresh
   0.40 shader cache : no freeze, the previews still come (none empty, none half-drawn), the next
   ones quicker than the first ; scroll away mid-way : no stutter, the new tiles' previews start ;

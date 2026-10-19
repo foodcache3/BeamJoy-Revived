@@ -20,10 +20,9 @@ const M = {
         pursuit: {
             allowChases: true,
         },
-        // taking part in passive races, and their waypoint beam, see lua beamjoy/raceFreeroam.lua
+        // taking part in passive races, see lua beamjoy/raceFreeroam.lua
         passiveRaces: {
             enabled: true,
-            waypointBeams: true,
         },
         nametags: {
             hideNameTags: false,

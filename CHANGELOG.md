@@ -8,13 +8,23 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2718, server build 2470.
+Version 1.11.0 : client build 2719, server build 2470.
 
+- **Fix (2719) : a paint's first line never showed** (direct report on 2718 : the paints that
+  didn't follow the mouse smoothly before showed neither while being placed nor once placed, until
+  picked again from the prop picker, then fine, smooth placing too). Those are the paints the map
+  doesn't use itself : the game compiles a material's shaders in the background the first time
+  something uses it, and the object set up with it meanwhile never draws, the next ones do (what
+  the prop picker's previews met too). A paint's first line on a map is now made with its shaders
+  compiled on the spot : a moment's wait the first time a paint is used, and only when the game
+  hasn't got its shaders yet ; every line after as before.
 - **Passive races in the player settings (2718)** (direct request). Settings has a new Passive
   races section, saved on this PC for every server : "Take part in passive races" (on by
-  default ; off, their start gates aren't shown or timed for you, and a run you're on ends) and
-  "Waypoint beams" (on by default ; off, no beam over a passive run's next gate, whatever the race
-  sets : the minimap still leads). Only your own game : others still run them.
+  default ; off, their start gates aren't shown or timed for you, and a run you're on ends). Only
+  your own game : others still run them.
+  - **no waypoint beam on a passive run (2719)** (direct request : beams off for passive races
+    altogether, no toggle). The next gate is shown on the minimap only, whatever the race sets
+    for its grid races (they keep their beams). 2718's "Waypoint beams" toggle is gone.
 - **The prop picker no longer freezes while making its previews (2718)** (direct report, with the
   log : scrolling the picker froze the game up to a second at a time). Each new mesh's preview had
   its shaders compiled on the spot (so its first picture wasn't empty), holding the
