@@ -659,6 +659,14 @@ Presets tab. To check live :
   player's selector once it's fetched), "Retake photo" in and out of the build, the game's UI
   only blinking while it's taken, a build made before 2705 keeping the model's picture until retaken ;
 - join (2713) and the date at midnight (2713) : see their own sections ;
+- 0.40 (2716) : the welcome panel (Config > General > intro panel, preview ; and on joining when
+  enabled) opens with its title, image and text, its COPY button works, Continue closes it, a
+  controller can close it and drive again after ; a bus on a line : the stop display's text in its
+  usual font ; hold a door / the horn on another player's car (the trigger lights up while
+  held, the owner's car reacts) ; click a seat box on another player's stopped car (the owner
+  stays in their seat and can still drive) ; walk, pick a car in the selector (the car appears, no unicycle
+  left, no error) ; Disconnect from the server (no "could not reload extension" in the log) ; a
+  blocked replay shows as not loaded in the replay browser ;
 - drift spots (2715 / 2469) : no name over a spot in the world ; "drift spots" and "dragstrips"
   everywhere ; the handles at each end of every point's line drag that point's width (the other
   end stays, Ctrl both sides), the corridor and the gates follow, saved and seen by others ; a run

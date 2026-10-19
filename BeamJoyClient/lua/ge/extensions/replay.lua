@@ -15,9 +15,10 @@ local function loadFile(...)
         if check.reasons[1] then
             uiHelpers.toastError(check.reasons[1], 5000)
         end
-        return
+        -- the game's replay browser reads this as a failed load (an empty result counts as done)
+        return { success = false, message = check.reasons[1] }
     end
-    M.baseFunctions.core_replay.loadFile(...)
+    return M.baseFunctions.core_replay.loadFile(...)
 end
 
 local function toggleRecording(autoplayAfterStopping, ...)

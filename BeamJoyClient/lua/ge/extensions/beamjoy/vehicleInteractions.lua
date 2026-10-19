@@ -42,7 +42,7 @@ local M = {
     HOLD_TIMEOUT_MS = 5000,
     locked = false,
     --- this player's presses on other cars, by action number, until released
-    ---@type table<integer, {serverVID: string, t: integer, hit: table}>
+    ---@type table<integer, {serverVID: string, t: integer, hit: table, player: integer}>
     held = {},
     --- presses on this player's own cars from others, until released : key -> data
     ---@type table<string, {vid: integer, t: integer, actionNumber: integer, until: integer}>
@@ -113,6 +113,19 @@ local function hasTrigger(vid, t)
     return vdata ~= nil and type(vdata.triggers) == "table" and vdata.triggers[t] ~= nil
 end
 
+--- a seat's own "get in here" box (0.40's seat occupants : "enterSeat_<seat>", whose action seats
+--- the player 0 of whoever runs it). Never sent to a car's owner : run there, it would move the owner
+--- into that seat of their own car, where a passenger seat takes their driving away
+---@param vid integer
+---@param t any
+---@return boolean
+local function isSeatTrigger(vid, t)
+    local vdata = vehicleData(vid)
+    local trigger = vdata and type(vdata.triggers) == "table" and vdata.triggers[t]
+    local name = type(trigger) == "table" and (trigger.id or trigger.name)
+    return type(name) == "string" and name:find("^enterSeat_") ~= nil
+end
+
 --- BeamMP's full id for a vehicle, "<ownerID>-<vehicleID>" : BJVehicle.serverVID is only the
 --- vehicle part (each player numbers their own vehicles from 0), so on its own it doesn't say whose
 --- car it is
@@ -145,12 +158,28 @@ local function sendRequest(serverVID, t, actionNumber, value)
         own and serverKey(own) or nil)
 end
 
+--- the trigger the game highlights as held (one per player since 0.40)
+---@param vt table core_vehicleTriggers
+---@param player integer
+---@return table? hit
+local function usedTrigger(vt, player)
+    return vt.state.currentlyUsedTriggers[player]
+end
+
+---@param vt table core_vehicleTriggers
+---@param player integer
+---@param hit table?
+local function setUsedTrigger(vt, player, hit)
+    vt.state.currentlyUsedTriggers[player] = hit
+end
+
 --- stands in for core_vehicleTriggers.onActionEvent (the triggerAction0-2 keys) : a click on
 --- another player's car goes to its owner, anything else to the game as usual
 ---@param actionNumber integer
 ---@param inputValue number
+---@param player integer? the local player pressing (split screen, since 0.40)
 ---@return boolean?
-local function onActionEvent(actionNumber, inputValue)
+local function onActionEvent(actionNumber, inputValue, player)
     local vt = triggers()
     local original = M.originalOnActionEvent
     local held = M.held[actionNumber]
@@ -158,8 +187,8 @@ local function onActionEvent(actionNumber, inputValue)
         -- the release of a press sent to an owner (or a new press before it, which ends it too)
         M.held[actionNumber] = nil
         sendRequest(held.serverVID, held.t, actionNumber, 0)
-        if vt and vt.state.currentlyUsedTrigger == held.hit then
-            vt.state.currentlyUsedTrigger = nil
+        if vt and usedTrigger(vt, held.player) == held.hit then
+            setUsedTrigger(vt, held.player, nil)
         end
         if inputValue == 0 then return true end
     end
@@ -167,15 +196,16 @@ local function onActionEvent(actionNumber, inputValue)
         local hit = be:triggerRaycastClosest(vt.getTriggerRaycastDistance(), vt.state.useCursorCoordinates)
         local mpVeh = hit and hit.v and hit.t ~= nil and remoteCar(hit.v)
         local key = mpVeh and serverKey(mpVeh)
-        if key and hasTrigger(hit.v, hit.t) then
+        -- a seat box is left to the game, as on any car : it only moves this player's own view
+        if key and hasTrigger(hit.v, hit.t) and not isSeatTrigger(hit.v, hit.t) then
             sendRequest(key, hit.t, actionNumber, inputValue)
-            M.held[actionNumber] = { serverVID = key, t = hit.t, hit = hit }
+            M.held[actionNumber] = { serverVID = key, t = hit.t, hit = hit, player = player or 0 }
             -- the game's own highlight on the trigger while it's held
-            vt.state.currentlyUsedTrigger = hit
+            setUsedTrigger(vt, player or 0, hit)
             return true
         end
     end
-    if original then return original(actionNumber, inputValue) end
+    if original then return original(actionNumber, inputValue, player) end
 end
 
 local function install()
@@ -217,7 +247,7 @@ local function onVehicleTrigger(serverVID, t, actionNumber, value, requesterName
     local mpVeh = beamjoy_vehicles.vehicles:find(function(v)
         return v.isLocal and serverKey(v) == serverVID
     end)
-    if not mpVeh or not mpVeh.veh or not hasTrigger(mpVeh.vid, t) then return end
+    if not mpVeh or not mpVeh.veh or not hasTrigger(mpVeh.vid, t) or isSeatTrigger(mpVeh.vid, t) then return end
     local key = string.format("%s:%s:%s:%d", tostring(requesterName), mpVeh.vid, tostring(t), actionNumber)
 
     if value == 0 then

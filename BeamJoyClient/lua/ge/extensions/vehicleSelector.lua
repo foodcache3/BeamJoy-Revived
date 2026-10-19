@@ -92,6 +92,12 @@ local function spawnNewVehicle(model, opt)
     end
 end
 
+--- the unicycle gameplay_walk tracks as the player's own (one per player since 0.40)
+---@return integer?
+local function trackedUnicycleId()
+    return gameplay_walk.getStoredUnicycleId(0)
+end
+
 --- Picking a car while walking. A replace re-spawns the unicycle's own object as the car, which
 --- BeamMP sends as an edit of the unicycle, and BeamMP-Server destroys any edit that turns a
 --- player's unicycle into something else (TServer.cpp, the 'Oc' case: the car vanished and the game
@@ -112,7 +118,7 @@ local function spawnInsteadOfUnicycle(model, opt, unicycle)
     -- a unicycle gameplay_walk doesn't track (one picked in the selector rather than walked out
     -- on) isn't deactivated by the switch : removed here. A tracked one is left to BeamMP, whose
     -- own deletion doesn't check the object still exists
-    if veh and gameplay_walk and gameplay_walk.onSerialize().unicycleId ~= uniId then
+    if veh and gameplay_walk and trackedUnicycleId() ~= uniId then
         local leftover = getObjectByID(uniId)
         if leftover then leftover:delete() end
     end

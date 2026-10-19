@@ -8,8 +8,40 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2715, server build 2469.
+Version 1.11.0 : client build 2716, server build 2469.
 
+- **BeamNG 0.40 and BeamMP 4.23.1 (2716)** (direct request : check nothing broke). Every game
+  function and extension the mod calls or replaces was compared between 0.39.4 and 0.40 ; none was
+  removed. What did change, fixed (for 0.40 only : players are expected to update, direct request) :
+  - **the welcome panel never showed** : 0.40 removed the game's old intro popup the mod used (its
+    "introPopupTutorial" event had no listener left). It now opens in the game's new tutorial popup
+    (the title as its heading, the image, the panel's HTML over it, unchanged : checked through the
+    game's own text formatter), and the game's own close report hands the controller back ;
+  - **clicking another player's car** (its doors, its horn) : the game keeps the held trigger per
+    player since 0.40, so the mod's stand-in no longer lit the trigger up while it was held, and it
+    dropped the new player argument when handing other clicks to the game ;
+  - **0.40's seats** : every seat now has its own "get in here" box, which seats whoever runs it. The
+    mod sends a click on another player's car to its owner to run, so clicking someone's back seat
+    would have moved them into their own back seat, where a passenger can't drive. A seat box is no
+    longer sent (the game handles it as on any car : it only moves the clicker's own view), and an
+    owner never runs one sent to them ;
+  - **picking a car while walking** : the game renamed what the mod read to know the unicycle it
+    tracks, so the mod would have deleted a unicycle BeamMP was about to delete itself ;
+  - **disconnecting** : BeamMP reloads Lua after a Disconnect, and one of the mod's extensions (its
+    UI messenger) could outlive the mod's unload, so the reload logged "could not reload extension
+    after Lua reload: beamjoy_communications_ui". Everything of the mod's left is unloaded on leave ;
+  - the frame-rate check on joining no longer uses getConsoleVariable (obsolete in 0.40, a warning
+    in the console) ;
+  - **the bus's stop display font** : 0.40 moved the game's fonts into folders, so the display the
+    mod replaces pointed to a font that no longer exists ;
+  - checked and unchanged for the mod : BeamMP 4.22.6 -> 4.23.1 (every function, hook and vehicle
+    module the mod uses is the same) ; the game's police chases (moved into its traffic code, same
+    fields and rules) ; its drift spots ; its dragstrips (same data, phases and end-line hook). One
+    difference on the game's own dragstrips : 0.40 stamps each mark one physics frame earlier (when
+    it was really crossed), so a run there times slightly quicker than the same run on 0.39, and
+    leaderboard records set before the update are a hair slower. BeamJoy's own dragstrips time
+    themselves and are unaffected.
+  - a replay the mod blocks is now reported to the game's replay browser as not loaded.
 - **Drift spots and dragstrips (2715 / 2469)** (direct requests) :
   - drift zones are now called **drift spots** and drag strips **dragstrips**, everywhere a player
     reads them (the Freeroam config sections, the Big Map, the leaderboards, the drift panel, the

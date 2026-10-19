@@ -215,7 +215,6 @@ local function onInit()
     M.addHandler("BJOpenIntroPanel", M.openIntroPanel)
     M.addHandler("BJResetIntroPanelData", M.saveIntroPanelData)
     M.addHandler("BJRequestIntroPanelImagesInFolder", M.listIntroPanelImagesInFolder)
-    M.addHandler("BJIntroPanelPad", M.setIntroPanelPad)
     beamjoy_communications.addHandler("sendCache", function(caches)
         if caches.config then
             async.delayTask(M.getIntroPanelData, 0)
@@ -514,16 +513,26 @@ end
 --- and nothing here was enabling them for a popup BJS itself raised mid-freeroam.
 ---
 --- So: hold those maps open for as long as the popup is up, and let native's own popup handle the
---- presses. The Angular side watches `vueGlobalStore.__introPopupShown` (intro.js sets it) and
---- reports the close back through BJIntroPanelPad -- Lua has no way to observe the popup itself.
+--- presses. The game reports the popup closing (onIntroPopupCareerClosed, below). The cap is a
+--- safety net : a popup closed without that report (replaced by another, a UI reload) hands the
+--- pad's menu maps back anyway rather than keeping them stolen from driving.
+local INTRO_PAD_MAX_MS = 120000
 ---@param open boolean
 local function setIntroPanelPad(open)
     if not beamjoy_uiNav then return end
     if open == true then
         beamjoy_uiNav.acquire("introPanel")
+        async.delayTask(function() M.setIntroPanelPad(false) end, INTRO_PAD_MAX_MS, "BJIntroPanelPad")
     else
+        async.removeTask("BJIntroPanelPad")
         beamjoy_uiNav.release("introPanel")
     end
+end
+
+--- the game's tutorial popup was closed (0.40, ui-vue's TutorialPopupDialog, with the popup's id)
+---@param id string?
+local function onIntroPopupCareerClosed(id)
+    if id == uiHelpers.INTRO_POPUP_ID then M.setIntroPanelPad(false) end
 end
 
 ---@param title string?
@@ -533,8 +542,7 @@ local function openIntroPanel(title, content, image)
     uiHelpers.openPanel(title or beamjoy_config.data.IntroPanel.title,
         content or beamjoy_config.data.IntroPanel.content,
         image or beamjoy_config.data.IntroPanel.image)
-    -- the Angular side starts watching for the popup closing again (see setIntroPanelPad)
-    M.send("BJIntroPanelOpened")
+    M.setIntroPanelPad(true)
 end
 
 ---@param message string label or key
@@ -573,6 +581,7 @@ M.saveIntroPanelData = saveIntroPanelData
 M.listIntroPanelImagesInFolder = listIntroPanelImagesInFolder
 M.openIntroPanel = openIntroPanel
 M.setIntroPanelPad = setIntroPanelPad
+M.onIntroPopupCareerClosed = onIntroPopupCareerClosed
 M.uiBroadcast = broadcast
 
 return M

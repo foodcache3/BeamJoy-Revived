@@ -73,7 +73,10 @@ M.onWorldReadyState = function(state)
     M.world_ready = state == 2
     if M.world_ready then
         async.task(function()
-            return (tonumber(getConsoleVariable("fps::avg")) or 0) > 5
+            -- getConsoleVariable is obsolete since 0.40 (a warning each call) : the variable registry,
+            -- as the game's own core/metrics.lua reads it
+            local fps = VariableRegistry.get("$fps::avg", -1)
+            return (tonumber(fps) or 0) > 5
         end, function()
             M.client_ready = true
             extensions.hook("onBJClientReady")
@@ -102,6 +105,12 @@ M.onServerLeave = function()
         beamjoy_communications_ui.send("BJUnload")
     end
     extensions.unload("beamjoy_main")
+    -- anything of ours the unload left behind (beamjoy_communications_ui was, on 0.40) : leaving a
+    -- server reloads Lua since 0.40, which tries to load again every extension still loaded, and
+    -- ours are no longer mounted by then ("could not reload extension after Lua reload")
+    for _, name in ipairs(extensions.getLoadedExtensionsNames and extensions.getLoadedExtensionsNames(true) or {}) do
+        if name:find("^beamjoy_") then extensions.unload(name) end
+    end
 end
 
 -- Real bug: current BeamMP's leaveServer (MPCoreNetwork.lua) fires `onBeamMPServerLeave`, and

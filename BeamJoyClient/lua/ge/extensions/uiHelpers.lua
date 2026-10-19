@@ -5,6 +5,10 @@ local M = {
 
     popupCallbacks = {},
 
+    --- the welcome panel's id in the game's popup (0.40) : the game hooks onIntroPopupCareerClosed
+    --- with it when the player closes it
+    INTRO_POPUP_ID = "beamjoyIntro",
+
     TOAST_TYPES = {
         SUCCESS = "success",
         INFO = "info",
@@ -204,7 +208,9 @@ local function toastInfo(text, timeoutMs, title) toast(M.TOAST_TYPES.INFO, text,
 local function toastWarning(text, timeoutMs, title) toast(M.TOAST_TYPES.WARNING, text, timeoutMs, title) end
 local function toastError(text, timeoutMs, title) toast(M.TOAST_TYPES.ERROR, text, timeoutMs, title) end
 
---- extensions/career/modules/linearTutorial.lua:introPopup():200
+--- the game's own tutorial popup (0.40 : ui/popup.lua's openPopupEntries, shown by ui-vue's
+--- TutorialPopupDialog) : the title as its heading, the image across the panel, the content over its
+--- lower part (HTML, rendered as is)
 ---@param title string
 ---@param content string
 ---@param image? string either one of M.PANEL_IMAGES' own keys (a bundled BeamNG tutorial image,
@@ -259,23 +265,20 @@ local function openPanel(title, content, image)
             { imageURL = imageURLSafe })
     end
 
-    guihooks.trigger("introPopupTutorial", { {
+    -- 0.40 dropped the old Angular intro popup (ui/modules/introPopup, "introPopupTutorial") : nothing
+    -- listened to that event anymore, so the welcome panel never showed
+    guihooks.trigger("OpenTutorialPopup", { popups = { {
+        id = M.INTRO_POPUP_ID,
         type = "info",
-        content = string.var(
-            [[<div class="bng-splash-imageonbottom" style="background-image:url('{imageURL}');">{diagnosticImg}<h3>{title}</h3><div class="flex-grow"></div><div class="bng-splash-text">{content}</div></div>]],
-            {
-                title = escapeForVar(title),
-                diagnosticImg = escapeForVar(diagnosticImg),
-                content = content:var({
-                    player_name = MPConfig.getNickname(),
-                    server_name = GetServerInfos().name:trim(),
-                    players_count = beamjoy_players.players:length(),
-                }),
-                imageURL = imageURLSafe,
-            }),
-        flavour = "onlyOk",
         isPopup = true,
-    } })
+        title = title,
+        image = imageURL,
+        text = diagnosticImg .. content:var({
+            player_name = MPConfig.getNickname(),
+            server_name = GetServerInfos().name:trim(),
+            players_count = beamjoy_players.players:length(),
+        }),
+    } } })
 end
 
 M.onInit = onInit
