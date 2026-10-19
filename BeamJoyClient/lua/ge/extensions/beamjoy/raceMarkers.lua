@@ -421,7 +421,8 @@ local function drawFreeroam(fr)
         for i in pairs(visible) do
             local g = race.gates[i]
             local role = gateRole(race, i)
-            if next[i] and race.defaults and race.defaults.waypointBeams ~= false then
+            -- the race's own setting, and the player's (Settings > Passive races)
+            if next[i] and race.defaults and race.defaults.waypointBeams ~= false and fr.waypointBeams ~= false then
                 draw.addBeam(vec3(g.pos.x, g.pos.y, g.pos.z))
             end
             local left, right = gateEnds(g)
@@ -461,7 +462,8 @@ local function computeRenderSignature()
         -- freeroam runs (beamjoy_raceFreeroam) : the run's progress, else the start gates near you
         local fr = beamjoy_raceFreeroam
         if fr and fr.run then
-            return string.format("free:run:%s:%s:%s", fr.run.race.id, fr.run.last, fr.run.done)
+            return string.format("free:run:%s:%s:%s:%s", fr.run.race.id, fr.run.last, fr.run.done,
+                tostring(fr.waypointBeams ~= false))
         elseif fr and #fr.nearby > 0 then
             return "free:near:" .. table.concat(table.map(fr.nearby, function(r) return tostring(r.id) end), ",")
         end

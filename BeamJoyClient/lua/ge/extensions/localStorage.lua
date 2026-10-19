@@ -39,6 +39,15 @@ local M = {
             key = "beamjoy.pursuit.allow_chases",
             default = true,
         },
+        -- Settings > Passive races (beamjoy/raceFreeroam.lua) : taking part, and the waypoint beam
+        PASSIVE_RACES = {
+            key = "beamjoy.passive_races.enabled",
+            default = true,
+        },
+        PASSIVE_RACE_BEAMS = {
+            key = "beamjoy.passive_races.waypoint_beams",
+            default = true,
+        },
 
         NAMETAGS_COLOR_PLAYER_TEXT = {
             key = "beamjoy.nametags.colors.player.text",

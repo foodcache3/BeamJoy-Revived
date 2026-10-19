@@ -659,6 +659,15 @@ Presets tab. To check live :
   player's selector once it's fetched), "Retake photo" in and out of the build, the game's UI
   only blinking while it's taken, a build made before 2705 keeping the model's picture until retaken ;
 - join (2713) and the date at midnight (2713) : see their own sections ;
+- passive race settings (2718) : Settings > Passive races : take part off, a nearby start gate
+  goes at once, driving through it starts nothing, a run going on ends (no toast) ; back on, the
+  gates come back ; beams off mid-run, the beam goes at once, the minimap still shows the next
+  gate ; both kept after a restart and on another server ;
+- prop picker previews (2718) : scroll the full mesh list (other maps' meshes too) on a fresh
+  0.40 shader cache : no freeze, the previews still come (none empty, none half-drawn), the next
+  ones quicker than the first ; scroll away mid-way : no stutter, the new tiles' previews start ;
+  by night none is made (as before) ; VRAM steady (three previews at most) ; the log's "N thumbnails : ..." line gives each batch's longest frame (expected well
+  under 100 ms) ; any "a step took" line says which step was slow ;
 - lamps (2717) : at night, from the prop picker's meshes (the game's lighting folder), each lamp
   lights where its bulb is and its bulb glows : the highway and street lamp posts, the sidewalk and
   hanging lamps, the wall lantern (dim), the three floodlights (out of their glass, turned with the

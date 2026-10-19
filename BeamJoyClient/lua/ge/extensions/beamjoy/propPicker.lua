@@ -69,6 +69,23 @@ local STATS_EVERY = 20
 local THUMB_PITCH = 0.35
 local THUMB_TURN = 0.6
 local META_SAVE_DELAY_MS = 2000
+-- the mesh's shaders compiled in the background first (direct report : the drawer froze up to a
+-- second a mesh, scrolling it after 0.40 had emptied the shader cache) : its preview rendered as the
+-- game does, every frame, until it shows the mesh (a material whose shaders aren't compiled yet
+-- isn't drawn at all), the same for WARM_STILL_FRAMES, and no new shader has come meanwhile (at
+-- least WARM_MIN_FRAMES, at most WARM_MAX_FRAMES) ; only then made again with them compiled on the
+-- spot, which then has next to nothing left to compile. The game says nothing of the shaders it's
+-- still compiling : those are the signs it gives
+local WARM_MIN_FRAMES = 4
+local WARM_STILL_FRAMES = 8
+local WARM_MAX_FRAMES = 150
+-- a step of a thumbnail taking longer is logged (ms)
+local SLOW_STEP_MS = 50
+-- the next meshes waiting (this many) get their shaders compiled in the background meanwhile, each
+-- shown to a preview of its own (direct request), so they're mostly ready by their turn ; drawn
+-- again every PREFETCH_RENDER_EVERY frames while they wait
+local PREFETCH = 2
+local PREFETCH_RENDER_EVERY = 3
 
 -- shape (as asked) -> url of its thumbnail, false once it couldn't be made
 local thumbs = {}
@@ -88,7 +105,7 @@ local made = 0
 local measuredNow = {}
 -- what the last thumbnails took (direct question : how much slower framing made them), logged
 -- every STATS_EVERY : wall time, frames, and the Lua work in them
-local stats = { n = 0, ms = 0, frames = 0, work = 0 }
+local stats = { n = 0, ms = 0, frames = 0, work = 0, worst = 0 }
 
 ---@return boolean
 local function isNight()
@@ -386,19 +403,43 @@ local function render(preview)
     synced(function() (preview or job.preview):renderWorld(job.rect) end)
 end
 
+--- the shaders the game has made so far (nil when it doesn't say)
+---@return number?
+local function shadersMade()
+    local ok, n = pcall(function() return Engine.Render.getShaderGenerationCount() end)
+    return ok and tonumber(n) or nil
+end
+
 --- a preview of the job's mesh, set up for a thumbnail : no grid, its largest drawn detail level.
---- The shared one, or one of its own for an empty render's probe (a preview made anew)
+--- The shared one, or one of its own for an empty render's probe (a preview made anew). Its
+--- materials set up with their shaders compiled on the spot, or, `background`, as the game does
 ---@param own boolean?
+---@param background boolean?
 ---@return any ShapePreview
-local function newPreview(own)
+local function newPreview(own, background)
     local preview = own and ShapePreview() or sharedPreview or ShapePreview()
     if not own then sharedPreview = preview end
+    return M.setUpPreview(preview, job.shape, job.pitch, job.yaws[1], background)
+end
+
+--- sets a preview up for a thumbnail of `shape` (see newPreview)
+---@param preview any ShapePreview
+---@param shape string
+---@param pitch number
+---@param yaw number
+---@param background boolean?
+---@return any preview
+function M.setUpPreview(preview, shape, pitch, yaw, background)
     -- no grid (the sixth) : only the background around the mesh, so an empty render shows
     if not pcall(function() preview:setRenderState(false, false, false, false, false, false) end) then
         preview:setRenderState(false, false, false, false, false)
     end
-    preview:setCamRotation(job.pitch, job.yaws[1])
-    synced(function() preview:setObjectModel(job.shape) end)
+    preview:setCamRotation(pitch, yaw)
+    if background then
+        preview:setObjectModel(shape)
+    else
+        synced(function() preview:setObjectModel(shape) end)
+    end
     -- its full detail : left to the preview, a small tile could get a mesh's lowest level, or none
     -- (forced the way the game's own resource checker does). The largest level drawn (its size 0 or
     -- more), by the shape's own list as the shape editor reads it : the first level isn't always
@@ -536,10 +577,49 @@ local function stepJob()
             job.rect = rect
             job.yaws, job.pitch, job.upsideDown = thumbYaws(beamjoy_props.meta[job.shape:lower()], job.shape)
             job.view = 1
-            job.preview = newPreview()
-            render()
+            -- its shaders first compiled in the background (see WARM_MIN_FRAMES)
+            job.preview = newPreview(false, true)
             aim()
-            job.stage, job.frames = "settle", SETTLE_FRAMES
+            job.preview:renderWorld(job.rect)
+            job.stage, job.frames, job.still, job.shaders = "warm", 0, 0, shadersMade()
+            job.shown, job.shownStill = nil, 0
+            -- nothing in it to draw (an invisible wall) : it would never show
+            local okPolys, polys = pcall(function() return job.preview.mDetailPolys end)
+            job.nothing = okPolys and tonumber(polys) == 0
+        elseif job.stage == "warm" then
+            job.frames = job.frames + 1
+            -- what it shows (its last render), at 16 samples a side, then drawn again
+            job.warmBitmap = job.warmBitmap or GBitmap()
+            if not job.warmBitmapReady then
+                job.warmBitmap:init(RENDER_SIZE, RENDER_SIZE)
+                job.warmBitmapReady = true
+            end
+            job.preview:copyToBmp(job.warmBitmap:getPtr())
+            local seen = look(job.warmBitmap, 16)
+            local shown = seen.seen > 0 and
+                string.format("%d %d %d %d %d", seen.seen, seen.x0, seen.y0, seen.x1, seen.y1) or nil
+            if shown ~= job.shown then
+                job.shown, job.shownStill = shown, 0
+            else
+                job.shownStill = job.shownStill + 1
+            end
+            job.preview:renderWorld(job.rect)
+            local n = shadersMade()
+            if n ~= job.shaders then
+                job.shaders, job.still = n, 0
+            else
+                job.still = job.still + 1
+            end
+            local settled = (job.nothing or shown ~= nil and job.shownStill >= WARM_STILL_FRAMES) and
+                (n == nil or job.still >= WARM_STILL_FRAMES)
+            if job.frames >= WARM_MAX_FRAMES or job.frames >= WARM_MIN_FRAMES and settled then
+                -- made again as before, compiled on the spot : what's left of its shaders, if any
+                job.warmed = job.frames
+                job.preview = newPreview()
+                render()
+                aim()
+                job.stage, job.frames = "settle", SETTLE_FRAMES
+            end
         elseif job.stage == "settle" then
             job.frames = job.frames - 1
             if job.frames <= 0 then
@@ -663,15 +743,22 @@ local function stepJob()
         thumbs[job.shape] = false
         return true
     end
-    job.work = (job.work or 0) + (os.clock() - workFrom) * 1000
+    local stepMs = (os.clock() - workFrom) * 1000
+    job.work = (job.work or 0) + stepMs
+    if stepMs > (job.worst or 0) then job.worst = stepMs end
+    if stepMs >= SLOW_STEP_MS then
+        log("I", "beamjoy_propPicker", string.format("%s : a step took %.0f ms (now %s, %s frames warming)",
+            job.shape, stepMs, job.stage, tostring(job.warmed or job.frames)))
+    end
     if job.stage == "done" then
         stats.n, stats.frames, stats.work = stats.n + 1, stats.frames + job.steps, stats.work + job.work
         stats.ms = stats.ms + (GetCurrentTimeMillis() - (job.startedAt or GetCurrentTimeMillis()))
+        stats.worst = math.max(stats.worst, job.worst or 0)
         if stats.n >= STATS_EVERY then
             log("I", "beamjoy_propPicker", string.format(
-                "%d thumbnails : %.0f ms each, %.1f frames, %.1f ms of Lua work", stats.n,
-                stats.ms / stats.n, stats.frames / stats.n, stats.work / stats.n))
-            stats = { n = 0, ms = 0, frames = 0, work = 0 }
+                "%d thumbnails : %.0f ms each, %.1f frames, %.1f ms of Lua work, its longest frame %.0f ms",
+                stats.n, stats.ms / stats.n, stats.frames / stats.n, stats.work / stats.n, stats.worst))
+            stats = { n = 0, ms = 0, frames = 0, work = 0, worst = 0 }
         end
         made = made + 1
         deferred[job.shape] = nil
@@ -711,6 +798,87 @@ local function thumbSettled(shape)
         end
     end
     return thumbs[shape] ~= nil
+end
+
+-- the prefetch's previews (PREFETCH of them, made once, kept : see sharedPreview), each with the
+-- mesh it warms, if any
+---@type {preview: any, shape: string?, stage: string?, frames: integer}[]
+local warmSlots = {}
+-- a prefetch failed : none more this session (the thumbnails don't need it)
+local prefetchBroken = false
+
+---@param slot table
+local function freeSlot(slot)
+    if slot.shape then release(slot.preview) end
+    slot.shape, slot.stage, slot.frames = nil, nil, 0
+end
+
+local function freeSlots()
+    for _, slot in ipairs(warmSlots) do freeSlot(slot) end
+end
+
+--- the next meshes waiting get their shaders compiled in the background (see PREFETCH) : a mesh no
+--- longer waiting, or now being made, lets its preview go ; at most one new mesh started a frame
+--- (its materials one frame, its loading the next), as the game shows anything
+local function prefetch()
+    if prefetchBroken or renderBroken or not rawget(_G, "ShapePreview") then return end
+    -- the next ones waiting with no picture yet (by day : by night none is made)
+    local want, wanted = {}, 0
+    if lastNight ~= true then
+        for _, shape in ipairs(queue) do
+            if wanted >= PREFETCH then break end
+            if not (job and job.shape == shape) and not deferred[shape] and not thumbSettled(shape) then
+                want[shape] = true
+                wanted = wanted + 1
+            end
+        end
+    end
+    local ok, err = pcall(function()
+        local warming = {}
+        for _, slot in ipairs(warmSlots) do
+            if slot.shape and not want[slot.shape] then freeSlot(slot) end
+            if slot.shape then warming[slot.shape] = true end
+        end
+        local started = false
+        for _, slot in ipairs(warmSlots) do
+            if slot.stage == "materials" then
+                -- loaded, and drawn as the game draws : its shaders asked for
+                M.setUpPreview(slot.preview, slot.shape, THUMB_PITCH, THUMB_TURN, true)
+                slot.preview:fitToShape()
+                slot.preview:renderWorld(RectI(0, 0, RENDER_SIZE, RENDER_SIZE))
+                slot.stage, slot.frames = "warm", 0
+                started = true
+            elseif slot.stage == "warm" then
+                slot.frames = slot.frames + 1
+                if slot.frames % PREFETCH_RENDER_EVERY == 0 then
+                    slot.preview:renderWorld(RectI(0, 0, RENDER_SIZE, RENDER_SIZE))
+                end
+            end
+        end
+        if started then return end
+        for shape in pairs(want) do
+            if not warming[shape] then
+                local slot
+                for _, s in ipairs(warmSlots) do
+                    if not s.shape then slot = s break end
+                end
+                if not slot and #warmSlots < PREFETCH then
+                    slot = { preview = ShapePreview(), frames = 0 }
+                    table.insert(warmSlots, slot)
+                end
+                if not slot then return end
+                -- its materials first (borrowed from their map if need be), loaded next frame
+                beamjoy_props.ensureMaterials(shape)
+                slot.shape, slot.stage, slot.frames = shape, "materials", 0
+                return
+            end
+        end
+    end)
+    if not ok then
+        prefetchBroken = true
+        LogWarn("beamjoy_propPicker: no more shaders compiled ahead : " .. tostring(err))
+        pcall(freeSlots)
+    end
 end
 
 --- one thing a frame : a size, or a step of a thumbnail
@@ -894,6 +1062,8 @@ local function onUpdate()
             dropJob()
         end
     end
+    -- (with nothing waiting, it lets the last ones go)
+    if #queue > 0 or #warmSlots > 0 then prefetch() end
     if indexing then
         local ok, err = pcall(processIndex)
         if not ok then
@@ -915,6 +1085,7 @@ local function onClientEndMission()
     index, othersIndex, indexing, othersAsked, queue = nil, nil, nil, nil, {}
     deferred, lastNight = {}, nil
     dropJob()
+    freeSlots()
     if metaDirtyAt then saveMeta() end
 end
 
@@ -923,6 +1094,8 @@ local function onExit()
     dropJob()
     release(sharedPreview)
     sharedPreview = nil
+    freeSlots()
+    warmSlots = {}
 end
 
 M.onInit = onInit

@@ -8,8 +8,27 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2717, server build 2470.
+Version 1.11.0 : client build 2718, server build 2470.
 
+- **Passive races in the player settings (2718)** (direct request). Settings has a new Passive
+  races section, saved on this PC for every server : "Take part in passive races" (on by
+  default ; off, their start gates aren't shown or timed for you, and a run you're on ends) and
+  "Waypoint beams" (on by default ; off, no beam over a passive run's next gate, whatever the race
+  sets : the minimap still leads). Only your own game : others still run them.
+- **The prop picker no longer freezes while making its previews (2718)** (direct report, with the
+  log : scrolling the picker froze the game up to a second at a time). Each new mesh's preview had
+  its shaders compiled on the spot (so its first picture wasn't empty), holding the
+  game until they were done ; harmless while the game's shader cache knew them, but 0.40 starts
+  that cache over, and every material it hadn't seen yet cost up to a second. Now the mesh is first
+  shown to the preview as the game shows anything, its shaders compiled in the background while
+  the game runs on, until the preview shows the whole mesh (a material still compiling isn't drawn
+  at all), unchanged for 8 frames, and the game has made no new shader meanwhile ; only then is it
+  made again compiled on the spot, as before, with next to nothing left to compile. And the next
+  two meshes waiting are started compiling meanwhile (direct request), each shown to a preview of
+  its own, so they're mostly ready by their turn : the previews come about twice as fast on a cold
+  cache. The pictures are made the same way as before ; a mesh whose shaders were known takes
+  about a tenth of a second more, one still compiling waits for it (at most about 2.5 s). A
+  preview step still taking long is now logged, with what it was doing.
 - **0.40's lamps light up from the prop picker (2717)** (direct request : check every new light on
   Italy). 0.40 rebuilt Italy's lighting on a new set of lamps (the game's
   /assets/meshes/props/urban/lighting/) and placed some 8,600 lights on them ; none of those lamps

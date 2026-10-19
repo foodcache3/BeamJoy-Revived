@@ -9,8 +9,14 @@
 --- A run ends without a time on a reset or recovery, a change of car, joining an activity, too long
 --- without reaching a gate, slowing time / pausing, changing gravity or using the node grabber
 --- (none of which a freeroam run can block the way a race lobby does), or the HUD's Retire.
+--- Settings > Passive races (direct request), saved on this PC, shared between servers : a player
+--- can stay out of them (no start gate drawn or watched, a run going on ends), and hide the waypoint
+--- beam over a run's next gate whatever the race says (beamjoy_raceMarkers).
 
 local M = {
+    -- Settings > Passive races
+    playerEnabled = true,
+    waypointBeams = true,
     ---@type table? the run going on
     run = nil,
     ---@type BJRace[] the freeroam races whose start gates are near enough to watch
@@ -37,6 +43,7 @@ local lastPos
 
 ---@return boolean
 local function enabled()
+    if not M.playerEnabled then return false end
     local fr = beamjoy_config and beamjoy_config.data and beamjoy_config.data.Freeroam
     return not fr or fr.RaceRuns ~= false
 end
@@ -427,7 +434,32 @@ local function onVehicleResetted(vid)
     if M.run and M.run.vid == vid then cancel("beamjoy.raceFreeroam.cancelled.reset") end
 end
 
+local function sendSettingsToUI()
+    beamjoy_communications_ui.send("BJUserSettings", {
+        passiveRaces = { enabled = M.playerEnabled, waypointBeams = M.waypointBeams },
+    })
+end
+
 local function onInit()
+    M.playerEnabled = localStorage.get(localStorage.GLOBAL_VALUES.PASSIVE_RACES) ~= false
+    M.waypointBeams = localStorage.get(localStorage.GLOBAL_VALUES.PASSIVE_RACE_BEAMS) ~= false
+    beamjoy_communications_ui.addHandler("BJRequestVehicleSettings", sendSettingsToUI)
+    beamjoy_communications_ui.addHandler("BJUserSettings", function(newSettings)
+        local p = type(newSettings) == "table" and newSettings.passiveRaces
+        if type(p) ~= "table" then return end
+        if type(p.enabled) == "boolean" and p.enabled ~= M.playerEnabled then
+            M.playerEnabled = p.enabled
+            localStorage.set(localStorage.GLOBAL_VALUES.PASSIVE_RACES, M.playerEnabled)
+            -- off : a run going on ends, the start gates go at once
+            if not M.playerEnabled then cancel() end
+            onSlowUpdate()
+        end
+        if type(p.waypointBeams) == "boolean" and p.waypointBeams ~= M.waypointBeams then
+            M.waypointBeams = p.waypointBeams
+            localStorage.set(localStorage.GLOBAL_VALUES.PASSIVE_RACE_BEAMS, M.waypointBeams)
+            extensions.hook("onBJRaceMarkersRefresh")
+        end
+    end)
     beamjoy_communications.addHandler("raceFreeroamResult", onResult)
     -- the race HUD's Retire, on a freeroam run
     beamjoy_communications_ui.addHandler("BJRaceRetire", function()
