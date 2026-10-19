@@ -26,7 +26,8 @@ local M = {
         observers = {},
         gravitySync = false,
         gravity = DEFAULT_GRAVITY,
-        --- weather sync : what an admin sets in the game's own weather panel (clouds, fog, wind)
+        --- weather sync : what an admin sets in the game's own weather panel (clouds, fog, wind,
+        --- temperature)
         --- is applied on every client. Only the fields the panel sends, in its own units (see
         --- the client's WEATHER_FIELDS) ; nil until an admin turns sync on or changes something,
         --- the map's own weather until then (identical for everyone anyway)
@@ -330,6 +331,33 @@ local WEATHER_VECTORS = {
     groundWind = { "x", "y", "z" },
     cloudWindDirection = { "x", "y" },
 }
+-- the panel's temperature (0.40) : a daily curve, {time 0-1, degrees C} points in time order (the
+-- game's temperatureCurveOverrideC), false for the map's own ; within the panel's own bounds
+local TEMPERATURE_KEY = "temperatureCurveOverrideC"
+local TEMPERATURE_MIN_C, TEMPERATURE_MAX_C = -50, 60
+local TEMPERATURE_MAX_POINTS = 96
+
+---@param curve any
+---@return table|false|nil the cleaned curve, false (the map's own), nil when unusable
+local function cleanTemperatureCurve(curve)
+    if curve == false then return false end
+    if type(curve) ~= "table" or #curve < 2 or #curve > TEMPERATURE_MAX_POINTS then return nil end
+    local out, previous = {}, nil
+    for i, point in ipairs(curve) do
+        local time = type(point) == "table" and tonumber(point[1])
+        local tempC = type(point) == "table" and tonumber(point[2])
+        if not time or not tempC or tempC ~= tempC or time < 0 or time > 1 or
+            (previous and time <= previous) then
+            return nil
+        end
+        out[i] = { time, math.clamp(tempC, TEMPERATURE_MIN_C, TEMPERATURE_MAX_C) }
+        previous = time
+    end
+    if #out ~= #curve then return nil end
+    -- as the game stores it : a curve spanning the whole day ends where it starts
+    if out[1][1] == 0 and out[#out][1] == 1 then out[#out][2] = out[1][2] end
+    return out
+end
 
 ---@param weather any
 ---@return table? only the known fields, cleaned ; nil when nothing valid
@@ -352,6 +380,8 @@ local function cleanWeather(weather)
             if out then clean[key] = out end
         end
     end
+    local curve = cleanTemperatureCurve(weather[TEMPERATURE_KEY])
+    if curve ~= nil then clean[TEMPERATURE_KEY] = curve end
     return next(clean) and clean or nil
 end
 

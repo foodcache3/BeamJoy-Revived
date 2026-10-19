@@ -197,6 +197,16 @@ local M = {
         { id = "standingLight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_standinglight_01.dae" },
         -- raised a little (direct request) : its bracket's lowest point is 0.08 m under its origin
         { id = "spotlight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_spotlight_01.dae", zOffset = .2 },
+        -- 0.40's lamps (the game's own, every map : direct request), as Italy places them ; their
+        -- mounted floodlights are prefabs (PREFABS below)
+        { id = "lampPostHighway", cat = "scenery", tags = "street lamp light pole road", shape = "/assets/meshes/props/urban/lighting/s_lamp_post_single_highway_01.dae" },
+        { id = "lampPostStreet", cat = "scenery", tags = "street lamp light pole", shape = "/assets/meshes/props/urban/lighting/s_lamp_post_street_single_01.dae" },
+        { id = "streetLampSidewalk", cat = "scenery", tags = "street lamp light lantern pole town", shape = "/assets/meshes/props/urban/lighting/s_streetlamp_sidewalk_01.dae" },
+        { id = "streetLampHanging", cat = "scenery", tags = "street lamp light lantern hanging town", shape = "/assets/meshes/props/urban/lighting/s_streetlamp_hanging_01.dae" },
+        { id = "wallLantern", cat = "scenery", tags = "wall lamp light lantern town", shape = "/assets/meshes/props/urban/lighting/s_wall_lamp_urban_01.dae" },
+        { id = "floodlight100", cat = "scenery", tags = "flood lamp light projector", shape = "/assets/meshes/props/urban/lighting/s_floodlight_100W.dae" },
+        { id = "floodlight500", cat = "scenery", tags = "flood lamp light projector", shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae" },
+        { id = "floodlight1000", cat = "scenery", tags = "flood lamp light projector", shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae" },
         { id = "foldTable", cat = "scenery", tags = "pit", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_table_01.dae" },
         { id = "foldChair", cat = "scenery", tags = "pit seat", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_chair_01.dae", collision = "None", thumbTurn = 180 },
         { id = "tireHr", cat = "scenery", tags = "tyre wheel giant", shape = "/levels/hirochi_raceway/art/shapes/buildings/hr_tire.DAE" },
@@ -393,6 +403,20 @@ for _, p in ipairs({
         parts = { { shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_light_off.dae", pos = { 0, 0, 0 } } } },
     { id = "ceilingLightOn", cat = "scenery", shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", thumb = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", tags = "ceiling light lamp tube garage hanging on lit",
         parts = { { shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_light_on.dae", pos = { 0, 0, 0 } } } },
+    -- 0.40's floodlights in their brackets (direct request), as the game sets them : the lamp at the
+    -- bracket's pivot, only tilted. On the ground bracket it looks up 30 degrees (the game's own
+    -- 100 W ones) ; on the pole, down 35 degrees (Italy's upright 1000 W poles), the pole stood on
+    -- the ground (its foot 1.94 / 1.98 m under the pivot). LAMPS lights the lamp
+    { id = "floodlight100Mount", cat = "scenery", shape = "/assets/meshes/props/urban/lighting/s_floodlight_100W_mount.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_100W.dae", tags = "flood lamp light projector bracket mount ground", lift = .11,
+        parts = { { shape = "/assets/meshes/props/urban/lighting/s_floodlight_100W.dae", pos = { 0, 0, 0 }, dir = { 0, 1, 0 }, up = { -.5, 0, .866 } } } },
+    { id = "floodlight500Mount", cat = "scenery", shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W_mount.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae", tags = "flood lamp light projector bracket mount ground", lift = .22,
+        parts = { { shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae", pos = { 0, 0, 0 }, dir = { 0, 1, 0 }, up = { -.5, 0, .866 } } } },
+    { id = "floodlight1000Mount", cat = "scenery", shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W_mount.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae", tags = "flood lamp light projector bracket mount ground", lift = .26,
+        parts = { { shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae", pos = { 0, 0, 0 }, dir = { 0, 1, 0 }, up = { -.5, 0, .866 } } } },
+    { id = "floodlight500Pole", cat = "scenery", shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W_mount_pole.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae", tags = "flood lamp light projector pole post", lift = 1.94,
+        parts = { { shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae", pos = { 0, 0, 0 }, dir = { 0, 1, 0 }, up = { .574, 0, .819 } } } },
+    { id = "floodlight1000Pole", cat = "scenery", shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W_mount_pole.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae", tags = "flood lamp light projector pole post", lift = 1.98,
+        parts = { { shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae", pos = { 0, 0, 0 }, dir = { 0, 1, 0 }, up = { .574, 0, .819 } } } },
     { id = "containers2High", cat = "scenery", shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", thumb = "/levels/Industrial/art/shapes/misc/container_01_a.dae", tags = "containers shipping stack port wall",
         parts = { { shape = "/levels/Industrial/art/shapes/misc/container_01_b.dae", pos = { 0, 0, 2.61 } } } },
     { id = "containers2x2", cat = "scenery", shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", thumb = "/levels/Industrial/art/shapes/misc/container_01_a.dae", tags = "containers shipping stack port wall",
@@ -2372,10 +2396,19 @@ local LAMPS = {
         range = 80, inner = 50, outer = 130, color = { .906, .89, 1 }, brightness = 1, glow = { 231, 227, 255 } },
     pole_lighting2 = { spot = true, heads = { { 1.8, 0, 34.23, .86, 0, -.51 } }, range = 150, inner = 25, outer = 140,
         color = { .855, .996, 1 }, brightness = 5, glow = { 218, 254, 255 } },
-    -- the airport's mast (Italy's, and West Coast's copy) : four of its eight lamps, as the maps light it
+    -- the airport's mast (Italy's before 0.40, and West Coast's copy) : four of its eight lamps, as the
+    -- maps light it
     italy_airport_lightpole = { spot = true, heads = { { 1.3, 0, 30, .5, 0, -.87 }, { -1.3, 0, 30, -.5, 0, -.87 },
         { 0, 1.23, 30, 0, .5, -.87 }, { 0, -1.23, 30, 0, -.5, -.87 } }, range = 55, inner = 75, outer = 130,
         color = { .774, .807, 1 }, brightness = 1, glow = { 195, 205, 255 } },
+    -- its 0.40 version (Italy's airport) : four lamps, each turned a little off its arm
+    italy_airport_lightpole_v2 = { spot = true, heads = { { 1.2, 0, 30.2, .49, -.1, -.87 },
+        { -1.2, 0, 30.2, -.49, .1, -.87 }, { 0, 1.2, 30.2, .1, .49, -.87 }, { 0, -1.2, 30.2, -.1, -.49, -.87 } },
+        range = 150, inner = 60, outer = 120, color = { .778, 1, .896 }, brightness = 2.4, glow = { 198, 255, 228 } },
+    -- Italy's port mast : four banks facing out and down
+    port_floodlight = { spot = true, heads = { { 1.15, 0, 31.95, .71, 0, -.71 }, { -1.1, 0, 31.95, -.71, 0, -.71 },
+        { 0, 1.27, 31.95, 0, .71, -.71 }, { 0, -1.28, 31.95, 0, -.71, -.71 } }, range = 120, inner = 60, outer = 130,
+        color = { .948, .932, 1 }, brightness = 3, glow = { 255, 255, 255 } },
     -- four floodlights at its corners, facing out
     substation_lightning = { spot = true, heads = { { -.77, .63, 10.17, -.66, .66, -.36 },
         { .77, -.63, 10.17, .66, -.66, -.36 }, { -.77, -.64, 10.17, -.66, -.66, -.36 },
@@ -2423,6 +2456,27 @@ local LAMPS = {
     lightplane_a = { heads = { { 0, 0, .5 } }, range = 12, color = { 1, 1, 1 }, brightness = 2, always = true },
     lighttube_a = { heads = { { 0, 0, 0 } }, range = 6, color = { 1, 1, 1 }, brightness = .5, always = true },
     lighttube_b = { heads = { { 0, 0, 1.12 } }, range = 6, color = { 1, 1, 1 }, brightness = .5, always = true },
+    -- 0.40's street lamps (/assets/meshes/props/urban/lighting/), as Italy lights them ; their bulbs
+    -- glow as there (the light's own colour, or white where Italy gives them none)
+    s_lamp_post_single_highway_01 = { spot = true, heads = { { 0, 3.1, 11.95 } }, range = 30, inner = 20, outer = 140,
+        color = { 1, .604, .308 }, brightness = 1.5, glow = { 255, 255, 255 } },
+    s_lamp_post_street_single_01 = { spot = true, heads = { { 0, -2.26, 6.72 } }, range = 30, inner = 100, outer = 140,
+        color = { 1, 1, 1 }, brightness = .3, glow = { 255, 255, 255 } },
+    s_streetlamp_sidewalk_01 = { spot = true, heads = { { 0, .84, 6.94 } }, range = 20, inner = 90, outer = 130,
+        color = { 1, .615, .344 }, brightness = .17, glow = { 255, 157, 88 } },
+    s_streetlamp_hanging_01 = { spot = true, heads = { { 0, .79, -.05 } }, range = 20, inner = 90, outer = 130,
+        color = { 1, .615, .344 }, brightness = .25, glow = { 255, 157, 88 } },
+    -- the wall lantern (Italy's towns, thousands of them) : dim, as there
+    s_wall_lamp_urban_01 = { spot = true, heads = { { .5, 0, -.15 } }, range = 10, inner = 45, outer = 150,
+        color = { 1, .452, .127 }, brightness = .0344, glow = { 255, 115, 32 } },
+    -- and its floodlights, facing their own +X (their glass ; Italy aims each one by hand). Their
+    -- mounts and poles (_mount, _mount_pole) are only the bracket, no lamp
+    s_floodlight_100w = { spot = true, heads = { { .05, 0, 0, 1, 0, 0 } }, range = 10, inner = 90, outer = 140,
+        color = { 1, .826, .669 }, brightness = .16, glow = { 255, 255, 255 } },
+    s_floodlight_500w = { spot = true, heads = { { .08, 0, 0, 1, 0, 0 } }, range = 50, inner = 90, outer = 170,
+        color = { 1, .365, .063 }, brightness = .17, glow = { 255, 118, 6 } },
+    s_floodlight_1000w = { spot = true, heads = { { .08, 0, 0, 1, 0, 0 } }, range = 80, inner = 90, outer = 140,
+        color = { 1, 1, 1 }, brightness = 1, glow = { 255, 255, 255 } },
     -- the catalog's flood lights, facing their own +X
     s_standinglight_01 = { spot = true, heads = { { .1, 0, 1.51, 1, 0, -.25 } }, range = 30, inner = 40, outer = 110,
         color = { .9, .95, 1 }, brightness = 1.2 },

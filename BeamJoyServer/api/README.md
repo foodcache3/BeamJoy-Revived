@@ -237,8 +237,11 @@ sent change. → the same as `environment.get`, after the change.
 - `clock` is `"HH:MM"` ; `timeOfDay` is the game's own scale (`0` noon) ; send one or the other.
 - `date` is `{year, month, day}`.
 - `weather` holds the weather panel's fields: `cloudCover`, `fogDensity`, `windSpeed`,
-  `fogAtmosphereHeight`, `groundWind {x, y, z}`, `cloudWindDirection {x, y}`. Only the ones sent
-  change. Players only see it while `weatherSync` is on.
+  `fogAtmosphereHeight`, `groundWind {x, y, z}`, `cloudWindDirection {x, y}`, and
+  `temperatureCurveOverrideC`, the day's temperature: `[[time, °C], ...]` points in time order
+  (`time` on the game's scale, `0` noon, `.5` midnight ; at least 2 points, at most 96, -50 to
+  60 °C), or `false` for the map's own. Only the ones sent change. Players only see it while
+  `weatherSync` is on.
 
 ### `overlay.show` / `overlay.hide` / `overlay.clear`
 An activity overlay: what the race HUD is to races, for an activity of your own (or extra

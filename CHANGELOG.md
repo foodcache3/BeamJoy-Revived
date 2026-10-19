@@ -8,8 +8,37 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2716, server build 2469.
+Version 1.11.0 : client build 2717, server build 2470.
 
+- **0.40's lamps light up from the prop picker (2717)** (direct request : check every new light on
+  Italy). 0.40 rebuilt Italy's lighting on a new set of lamps (the game's
+  /assets/meshes/props/urban/lighting/) and placed some 8,600 lights on them ; none of those lamps
+  was in the mod's list, so placed from the prop picker they stayed dark. Added, each lit where and
+  as Italy lights it (its position, aim, cone, reach, colour and brightness, its bulb glowing at
+  night in Italy's colour) : the highway and street lamp posts, the sidewalk and hanging street
+  lamps, the town wall lantern (dim, as there), the 100 W / 500 W / 1000 W floodlights (facing out
+  of their glass ; their mounts and poles are only the bracket), the airport's new light mast and
+  the port's floodlight mast (an older Italy lamp that was missing too). Checked against the map
+  itself : on every one of Italy's own copies, its lights sit on the mod's lamp heads and shine the
+  same way (Italy's hand-aimed floodlights within 40 degrees). 0.40's new light units ("intensity",
+  in lumens or candelas) don't change the mod's lights : the game keeps the brightness it sets in
+  step with them.
+  - **in the prop picker's lists** (direct request) : the game's own lamps (every map's, not only
+    Italy's) are in Curated > Scenery : the highway and street lamp posts, the sidewalk and hanging
+    street lamps, the wall lantern and the three floodlights. And in Prefabs > Scenery, each
+    floodlight in its bracket as the game sets them (the lamp at the bracket's pivot) : the 100 W,
+    500 W and 1000 W on their ground bracket, looking up 30 degrees (as the game's own 100 W ones),
+    and the 500 W and 1000 W on their pole, the pole stood on the ground, looking down 35 degrees
+    (as Italy's upright ones). The brackets alone stay in the full mesh list.
+- **The temperature syncs with the weather (2717 / 2470)** (direct request). 0.40's environment
+  panel has a temperature (its average, daily low and daily high : a curve over the day the game
+  follows with the clock). With weather sync on, an admin's change in it now reaches everyone, as
+  clouds, fog and wind do ; anyone else's is dropped, their panel back on the synced one ; the
+  panel's reset puts everyone back on the map's own temperature ; a player whose map reloads gets
+  it back. The server keeps it (a sane curve only : at least 2 points, times in order, -50 to 60
+  degrees C), and a new map starts on its own temperature, as for the rest of the weather. Plugins
+  read and set it with the rest of the weather (`temperatureCurveOverrideC`, see the API's
+  README). Needs server 2470 (an older server drops it).
 - **BeamNG 0.40 and BeamMP 4.23.1 (2716)** (direct request : check nothing broke). Every game
   function and extension the mod calls or replaces was compared between 0.39.4 and 0.40 ; none was
   removed. What did change, fixed (for 0.40 only : players are expected to update, direct request) :

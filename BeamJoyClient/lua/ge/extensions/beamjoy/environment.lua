@@ -65,14 +65,29 @@ AddPreloadedDependencies(M)
 -- WEATHER SYNC ---------------------------------------------------------------------------------
 -- What the game's own weather panel (pause menu > Environment > Time and weather) can change,
 -- in core_environment.setState / getState's units (fogDensity x1000). Rain isn't in the panel.
+-- The temperature (0.40) too : the panel's average / daily low / daily high make a daily curve,
+-- {time 0-1, degrees C} points the game keeps as temperatureCurveOverrideC (false : the map's own)
+local TEMPERATURE_KEY = "temperatureCurveOverrideC"
 local WEATHER_FIELDS = { "windSpeed", "groundWind", "cloudCover", "cloudWindDirection", "fogDensity",
-    "fogAtmosphereHeight" }
+    "fogAtmosphereHeight", TEMPERATURE_KEY }
 local WEATHER_VECTORS = { groundWind = { "x", "y", "z" }, cloudWindDirection = { "x", "y" } }
 
 ---@param key string
----@param value any number, or a vec3 / Point2F / {x, y, z}
+---@param value any number, a vec3 / Point2F / {x, y, z}, or the temperature's curve
 ---@return any a plain, sendable value ; nil when unusable
 local function plainWeatherValue(key, value)
+    if key == TEMPERATURE_KEY then
+        if value == false then return false end
+        if type(value) ~= "table" then return nil end
+        local out = {}
+        for i, point in ipairs(value) do
+            local time = type(point) == "table" and tonumber(point[1])
+            local tempC = type(point) == "table" and tonumber(point[2])
+            if not time or not tempC then return nil end
+            out[i] = { time, tempC }
+        end
+        return #out >= 2 and out or nil
+    end
     local axes = WEATHER_VECTORS[key]
     if axes then
         if value == nil then return nil end
@@ -93,8 +108,18 @@ end
 ---@return boolean
 local function weatherValueDiffers(a, b)
     if a == nil or b == nil then return a ~= b end
+    -- the temperature's false : the map's own curve
+    if type(a) == "boolean" or type(b) == "boolean" then return a ~= b end
     if type(a) == "table" or type(b) == "table" then
         if type(a) ~= "table" or type(b) ~= "table" then return true end
+        -- the temperature's curve, and its points
+        if #a > 0 or #b > 0 then
+            if #a ~= #b then return true end
+            for i = 1, #a do
+                if weatherValueDiffers(a[i], b[i]) then return true end
+            end
+            return false
+        end
         for axis, v in pairs(a) do
             if math.abs(v - (tonumber(b[axis]) or 0)) > 1e-4 then return true end
         end
@@ -485,6 +510,30 @@ local function interceptEnvState(state, lerpSeconds)
     M.baseFunctions.core_environment.setState(state, lerpSeconds)
 end
 
+--- wrapped core_environment.setTemperatureProfile / resetTemperatureProfile : the panel's temperature
+--- (0.40) goes through these, not setState. With the weather synced, an admin's change is synced
+--- like the rest of the weather (the curve the game made of it, once the slider settles) ; anyone
+--- else's is dropped and their panel shown the synced one again
+---@param name string the wrapped function
+---@return function
+local function interceptTemperature(name)
+    return function(...)
+        local base = M.baseFunctions.core_environment[name]
+        if not M.data.weatherSync then return base(...) end
+        if not canSetEnv() then
+            extensions.core_environment.requestState()
+            return
+        end
+        base(...)
+        local value = plainWeatherValue(TEMPERATURE_KEY, extensions.core_environment.getState()[TEMPERATURE_KEY])
+        if value ~= nil then
+            M.pendingWeather = M.pendingWeather or {}
+            M.pendingWeather[TEMPERATURE_KEY] = value
+            M.pendingWeatherAt = GetCurrentTimeMillis()
+        end
+    end
+end
+
 --- wrapped core_environment.setTimeOfDay: other callers (0.39's panel for some actions, photomode,
 --- scenarios) go through here instead of setState
 ---@param ToD table
@@ -589,6 +638,10 @@ local function onInit()
             setState = extensions.core_environment and extensions.core_environment.setState,
             requestState = extensions.core_environment and extensions.core_environment.requestState,
             setTimeOfDay = extensions.core_environment and extensions.core_environment.setTimeOfDay,
+            setTemperatureProfile = extensions.core_environment and
+                extensions.core_environment.setTemperatureProfile,
+            resetTemperatureProfile = extensions.core_environment and
+                extensions.core_environment.resetTemperatureProfile,
         }
     }
     if not M.baseFunctions.core_environment.setState then
@@ -603,6 +656,11 @@ local function onInit()
             end
         end
         extensions.core_environment.setTimeOfDay = interceptSetTimeOfDay
+        for _, name in ipairs({ "setTemperatureProfile", "resetTemperatureProfile" }) do
+            if M.baseFunctions.core_environment[name] then
+                extensions.core_environment[name] = interceptTemperature(name)
+            end
+        end
     end
     installTogglePause()
 end

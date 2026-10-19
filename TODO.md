@@ -659,6 +659,17 @@ Presets tab. To check live :
   player's selector once it's fetched), "Retake photo" in and out of the build, the game's UI
   only blinking while it's taken, a build made before 2705 keeping the model's picture until retaken ;
 - join (2713) and the date at midnight (2713) : see their own sections ;
+- lamps (2717) : at night, from the prop picker's meshes (the game's lighting folder), each lamp
+  lights where its bulb is and its bulb glows : the highway and street lamp posts, the sidewalk and
+  hanging lamps, the wall lantern (dim), the three floodlights (out of their glass, turned with the
+  prop), Italy's airport mast (v2) and port mast ; dark by day ; on West Coast too (they're the
+  game's own, not Italy's) ; Curated > Scenery lists the eight (named, pictured) ; Prefabs >
+  Scenery the five bracketed floodlights : the bracket's foot (the pole's) on the ground, the lamp
+  in it tilted (up on the bracket, down on the pole), lit at night, moved / turned / deleted as one ;
+- temperature (2717 / 2470) : weather sync on, an admin moves the panel's average / daily low /
+  daily high : another player's panel and car (tyre / engine temperatures) follow ; a player
+  moving it goes back to the synced one ; the admin's reset puts everyone on the map's own ; a
+  player joining later gets it ; a map change starts on the new map's own ;
 - 0.40 (2716) : the welcome panel (Config > General > intro panel, preview ; and on joining when
   enabled) opens with its title, image and text, its COPY button works, Continue closes it, a
   controller can close it and drive again after ; a bus on a line : the stop display's text in its
