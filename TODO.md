@@ -663,10 +663,23 @@ Presets tab. To check live :
   gate goes at once, driving through it starts nothing, a run going on ends (no toast) ; back on,
   the gates come back ; kept after a restart and on another server ; a passive run shows no beam
   at all (the minimap shows the next gate), a grid race of the same race still has its beams ;
-- paint first line (2719) : fresh game, a map, the prop editor's Paint tab : pick chevrons (then
-  checkered, spray, rubber, hazard...) : the ghost shows at once (a short hitch the first time on
-  a cold shader cache at most) and follows the mouse, the placed line shows ; the log has
-  "paint <id> : its first decal this map" once per paint ; a map without a terrain (Mondello) too ;
+- props drawer (2723) : open the race editor's props : the drawer at the screen's left edge, its
+  full border, the preview beside it ; config window moved to the far left : beside it instead ;
+  moved by its header then "put it back" (and double-click) : back to the left edge ;
+- skid marks (2724) : Paint tab > Tyre marks, on West Coast and another map : Skid marks, Skid
+  marks light, Tyre line one tyre, Tyre lines one car : each shows (dark streaks, not a blank or
+  a white line), follows the mouse, fades at its ends, keeps its look made wider ;
+- controls bar (2723) : props section, none armed : nothing selected, a prop, several, a group's,
+  a line / curb / paint alone with an end then a point held, the gizmo on rotate : each shows its
+  own actions ; arming a prop brings the placing bar back ; no props placed : no bar ;
+- paint lines (2721 / 2722) : fresh game, West Coast, the prop editor's Paint tab : pick chevrons
+  (then checkered, white, rubber, hazard, spray...) without placing any first : back over the
+  world, the ghost shows at once where you were looking (a third of a second late only further
+  away), then follows the mouse, no flash then gone ; the placed line shows and
+  stays ; a long drag into new ground holds its shape a moment at most, never blanks ; a placed
+  white line changed to checkered keeps white until checkered shows ; far away (another town)
+  the same ; the log has "paint <id> : its first anchors stand" once per paint ; a race with
+  paint lines joined as a player shows them ; a map without a terrain (Mondello) as before ;
 - prop picker previews (2718) : scroll the full mesh list (other maps' meshes too) on a fresh
   0.40 shader cache : no freeze, the previews still come (none empty, none half-drawn), the next
   ones quicker than the first ; scroll away mid-way : no stutter, the new tiles' previews start ;

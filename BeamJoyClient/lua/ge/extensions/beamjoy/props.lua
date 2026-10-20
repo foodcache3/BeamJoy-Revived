@@ -1985,7 +1985,9 @@ end
 -- the shared /assets (a map's copies are links to them). The game has no yellow and black stripes
 -- (its "line_yellowblack" is a double yellow line with reflectors), so that one is the mod's own
 -- (art/beamjoy/paints, made from the game's slanted stripes), and so are the two rubbers (the
--- game's textures, without the dynamic reflections that made them slow to show when made anew) :
+-- game's textures, without the dynamic reflections that made them slow to show when made anew)
+-- and the skid marks (the game's own, Italy's and the Automation Test Track's, each defined by
+-- that one map only : the same materials renamed, on the game's shared textures) :
 -- their material file is loaded when it's first needed (`file`), a mod the server sends being
 -- mounted after the game loaded art/ at its start. Drawn over objects too (a map's mesh
 -- roads, a bridge), out of the AI's road network (`drivability` -1), never saved with the map, and
@@ -2078,6 +2080,25 @@ M.PAINTS = {
     { id = "dirtTracks", cat = "marks", tags = "dirt tyre tire tracks ruts gravel", material = "m_dirt_tiretracks",
         width = 3.5, texLength = 16, priority = MARK_PRIORITY, fade = 4,
         look = { pattern = "tread", colours = { "#5b4631" } } },
+    -- skid marks (direct request) : Italy's two, a patch of several tyres' streaks, kept in their
+    -- own proportions (4 times as long as wide) ; the Automation Test Track's tyre lines, one tyre's
+    -- and one car's pair, laid as that map does (a repeat every 20 m)
+    { id = "skidmarks", cat = "marks", tags = "skid marks skidmarks braking slide rubber tyre tire black streaks",
+        material = "bjs_paint_skid", file = "/art/beamjoy/paints/main.materials.json",
+        width = 4, aspect = 4, priority = MARK_PRIORITY, fade = 3,
+        look = { pattern = "skid", colours = { "#262626" } } },
+    { id = "skidmarksLight", cat = "marks", tags = "skid marks skidmarks light faint braking slide rubber tyre tire",
+        material = "bjs_paint_skid_light", file = "/art/beamjoy/paints/main.materials.json",
+        width = 4, aspect = 4, priority = MARK_PRIORITY, fade = 3,
+        look = { pattern = "skid", colours = { "#3c3c3c" } } },
+    { id = "skidSingle", cat = "marks", tags = "skid mark single one tyre tire line burnout black",
+        material = "bjs_paint_skid_single", file = "/art/beamjoy/paints/main.materials.json",
+        width = .25, texLength = 20, priority = MARK_PRIORITY, fade = 2,
+        look = { pattern = "solid", colours = { "#222222" } } },
+    { id = "skidDouble", cat = "marks", tags = "skid marks pair two tyres tires lines car black",
+        material = "bjs_paint_skid_double", file = "/art/beamjoy/paints/main.materials.json",
+        width = 1.8, texLength = 20, priority = MARK_PRIORITY, fade = 2,
+        look = { pattern = "double", colours = { "#222222" } } },
 }
 M.PAINT_CATEGORIES = { "lines", "race", "marks" }
 
@@ -2214,27 +2235,40 @@ local function paintLayout(entry)
     return paint, pts, width, texLength
 end
 
--- paint materials whose first decal was made this map, its shaders compiled on the spot (makePaint)
-local paintMaterialsReady = {}
+-- A paint the map doesn't use itself showed neither its ghost nor the placed line (direct reports,
+-- 2718 to 2720 on 0.40 : it shows a frame, then goes), until it was picked again after placing it,
+-- then fine, dragged too ; the zebra, the yellow line and the short dashes always fine (West Coast's
+-- own decal roads use them, 153 to 1478 times, all over). The game batches decal roads by place and
+-- material (SceneStaticDecalRoadManager, 0.40) : a decal that starts its material's batch in a
+-- place shows until the batch takes over, then never ; one added to a batch already there shows
+-- (the placed line there when the paint was picked again, the map's own for the zebra). Shaders
+-- weren't it (2719, 2720 : made in 0 to 6 ms), and a first decal deleted before the real line
+-- came (2720) left that line to start the batch again. So a paint's lines never start one : every
+-- PAINT_ANCHOR_CELL metres square a line goes through (and those around it, a drag goes on into
+-- them), an anchor of its paint is laid first, a decal tiny and faded out, kept until the map is
+-- left, and the line is made once the anchors under it have stood PAINT_ANCHOR_MIN_*. Meanwhile it
+-- waits : a new one comes a fraction of a second late, the first time a paint is used somewhere
+-- on a map ; one dragged on, or changing to that paint, keeps what it showed until then. The
+-- editor lays them as soon as a paint is armed (M.anchorPaint, PAINT_ANCHOR_ARM_REACH cells around
+-- where you look), so they mostly stand by the time the mouse is back over the world (2722 : the
+-- wait was seen, direct report)
+local PAINT_ANCHOR_CELL = 25
+local PAINT_ANCHOR_ARM_REACH = 2
+local PAINT_ANCHOR_MIN_FRAMES, PAINT_ANCHOR_MIN_MS, PAINT_ANCHOR_MAX_FRAMES = 20, 300, 240
+-- an anchor : metres long and wide, faded over its whole length
+local PAINT_ANCHOR_LENGTH, PAINT_ANCHOR_WIDTH = .3, .02
 
---- runs `fn` with the game's shaders compiled on the spot (as beamjoy_propPicker's previews). The
---- game compiles a shader it hasn't got yet in the background, and the first object set up with
---- that material meanwhile never draws, the next ones do (direct report, 2718 on 0.40 : a paint the
---- map doesn't use itself showed neither its ghost nor the placed line, until it was picked again,
---- then fine). Back on at once, the game has no getter for it
----@param fn function
----@return any
-local function shadersOnTheSpot(fn)
-    local sync = pcall(function() Engine.Render.setAsyncShaderCompilation(false) end)
-    local ok, res = pcall(fn)
-    if sync then pcall(function() Engine.Render.setAsyncShaderCompilation(true) end) end
-    if not ok then error(res, 0) end
-    return res
-end
+-- paint material -> cell ("x:y") -> anchor { obj, frames, started, ready }
+local paintAnchors = {}
+-- the anchors not standing long enough yet (a set)
+local anchorsWaiting = {}
+-- paint materials whose first anchors were logged this map
+local anchorsLogged = {}
 
 --- a painted line's decal or flat mesh made, as makePaint
+---@param fade number? metres it fades over at each end, else its paint's
 ---@return table? obj a DecalRoad or a ProceduralMesh
-local function buildPaint(paint, pts, width, texLength)
+local function buildPaint(paint, pts, width, texLength, fade)
     if not mapHasTerrain() then return makePaintMesh(paint, pts, width, texLength) end
     local road = createObject("DecalRoad")
     road.canSave = false
@@ -2244,7 +2278,7 @@ local function buildPaint(paint, pts, width, texLength)
     road:setField("improvedSpline", 0, "1")
     road:setField("overObjects", 0, "1")
     road:setField("drivability", 0, "-1")
-    local fade = paintFade(paint, pts)
+    fade = fade or paintFade(paint, pts)
     road:setField("startEndFade", 0, string.format("%.2f %.2f", fade, fade))
     for _, p in ipairs(pts) do
         road:setField("Node", 0, string.format("%f %f %f %f", p.pos.x, p.pos.y, p.pos.z + PAINT_RAY_LIFT, width))
@@ -2254,23 +2288,108 @@ local function buildPaint(paint, pts, width, texLength)
     return road
 end
 
+--- the ground height at `x`, `y` (the terrain's), else `z`
+---@return number
+local function groundAt(x, y, z)
+    local ok, h = pcall(function() return core_terrain.getTerrainHeight(vec3(x, y, 0)) end)
+    return ok and tonumber(h) or z
+end
+
+--- a paint's anchor laid at `at` (see PAINT_ANCHOR_* above) ; one that couldn't be made counts as
+--- standing (nothing to wait for)
+---@param paint table
+---@param at vec3
+---@return table anchor
+local function layAnchor(paint, at)
+    local way = vec3(1, 0, 0)
+    local ok, obj = pcall(buildPaint, paint, { { pos = at, way = way }, { pos = at + way * PAINT_ANCHOR_LENGTH, way = way } },
+        PAINT_ANCHOR_WIDTH, 1, PAINT_ANCHOR_LENGTH)
+    if not ok or not obj then
+        if not ok then LogWarn("beamjoy_props: a paint's anchor couldn't be made: " .. tostring(obj)) end
+        return { ready = true }
+    end
+    local a = { obj = obj, id = paint.id, material = paint.material, frames = 0, started = GetCurrentTimeMillis() }
+    anchorsWaiting[a] = true
+    return a
+end
+
+--- a paint's anchors, by cell
+---@param paint table
+---@return table<string, table>
+local function anchorCells(paint)
+    local cells = paintAnchors[paint.material]
+    if not cells then
+        cells = {}
+        paintAnchors[paint.material] = cells
+    end
+    return cells
+end
+
+--- a paint's anchors laid where missing in the cell under `at` (at `at` itself) and `reach` cells
+--- around it (at their middle, on the ground)
+---@param paint table
+---@param cells table anchorCells(paint)
+---@param at vec3
+---@param reach integer
+---@return table anchor the one in the cell under `at`
+local function anchorAround(paint, cells, at, reach)
+    local cx, cy = math.floor(at.x / PAINT_ANCHOR_CELL), math.floor(at.y / PAINT_ANCHOR_CELL)
+    local key = cx .. ":" .. cy
+    if not cells[key] then cells[key] = layAnchor(paint, at) end
+    for dx = -reach, reach do
+        for dy = -reach, reach do
+            local k = (cx + dx) .. ":" .. (cy + dy)
+            if not cells[k] then
+                local x, y = (cx + dx + .5) * PAINT_ANCHOR_CELL, (cy + dy + .5) * PAINT_ANCHOR_CELL
+                cells[k] = layAnchor(paint, vec3(x, y, groundAt(x, y, at.z)))
+            end
+        end
+    end
+    return cells[key]
+end
+
+--- whether a painted line can be made now : its paint's anchors stand in every cell it goes
+--- through (see PAINT_ANCHOR_* above), laid now where missing, in the cells around them too (a
+--- line dragged on goes into them). True for an unknown paint, and on a map without a terrain (a
+--- flat mesh, no decal batches)
+---@param entry table
+---@return boolean
+local function paintReady(entry)
+    local paint, pts = paintLayout(entry)
+    if not paint or not mapHasTerrain() then return true end
+    ensurePaintMaterial(paint)
+    local cells = anchorCells(paint)
+    local ready = true
+    for _, p in ipairs(pts) do
+        local a = cells[math.floor(p.pos.x / PAINT_ANCHOR_CELL) .. ":" .. math.floor(p.pos.y / PAINT_ANCHOR_CELL)]
+        if not a then a = anchorAround(paint, cells, p.pos, 1) end
+        if not a.ready then ready = false end
+    end
+    return ready
+end
+
+--- a paint armed in the editor : its anchors laid now around each of `spots` (where you look,
+--- under you, where the mouse last was), PAINT_ANCHOR_ARM_REACH cells around, so its first line
+--- there needn't wait for them (see PAINT_ANCHOR_* above)
+---@param id string
+---@param spots vec3[]
+function M.anchorPaint(id, spots)
+    local paint = paintById[id]
+    if not paint or type(spots) ~= "table" or not mapHasTerrain() then return end
+    ensurePaintMaterial(paint)
+    local cells = anchorCells(paint)
+    for _, at in ipairs(spots) do anchorAround(paint, cells, at, PAINT_ANCHOR_ARM_REACH) end
+end
+
 --- a painted line's decal made (on a map without a terrain, its flat mesh) : nil when its paint
---- isn't known or its path is too short. Its material's first one this map with its shaders
---- compiled on the spot (shadersOnTheSpot) : a moment's wait the first time a paint is used, only
---- when the game hasn't got them yet
+--- isn't known, its path is too short, or its anchors don't stand yet (paintReady)
 ---@param entry table
 ---@return table? obj a DecalRoad or a ProceduralMesh
 local function makePaint(entry)
+    if not paintReady(entry) then return nil end
     local paint, pts, width, texLength = paintLayout(entry)
     if not paint then return nil end
-    ensurePaintMaterial(paint)
-    if paintMaterialsReady[paint.material] then return buildPaint(paint, pts, width, texLength) end
-    local started = os.clock()
-    local obj = shadersOnTheSpot(function() return buildPaint(paint, pts, width, texLength) end)
-    paintMaterialsReady[paint.material] = obj ~= nil or nil
-    log("I", "beamjoy_props", string.format("paint %s : its first decal this map, its shaders made in %.0f ms",
-        paint.id, (os.clock() - started) * 1000))
-    return obj
+    return buildPaint(paint, pts, width, texLength)
 end
 
 --- a painted line (the same paint) made again on its object : only its flat mesh (a map without a
@@ -2766,6 +2885,11 @@ end
 ---@param e table
 ---@param sig string
 local function remakePaint(s, e, sig)
+    if s.obj and simObjectExists(s.obj) and not paintReady(e) then
+        -- its paint's anchors not standing yet : kept as it is meanwhile, made then (catchUpPaints)
+        s.entry, s.wantSig = e, sig
+        return
+    end
     local started = os.clock()
     local old = s.obj
     if not (old and s.paint == e.paint and reshapePaint(old, e)) then
@@ -2962,13 +3086,25 @@ local function spawnPending()
             if p and not set.objects[i] then set.objects[i] = spawn(p) end
             spawned = spawned + 1
         end
+        -- a painted line whose paint's anchors don't stand yet waits for them (paintReady)
+        local waiting = {}
         for i in pairs(set.sweepPending) do
-            if spawned > 0 and (os.clock() - started) * 1000 >= M.SPAWN_BUDGET_MS then return true end
+            if spawned > 0 and (os.clock() - started) * 1000 >= M.SPAWN_BUDGET_MS then
+                for _, w in ipairs(waiting) do set.sweepPending[w] = true end
+                return true
+            end
             set.sweepPending[i] = nil
             local s = set.sweeps[i]
-            if s and not s.obj then s.obj = spawnSweep(s.entry) end
-            spawned = spawned + 1
+            if s and not s.obj then
+                if s.solid or paintReady(s.entry) then
+                    s.obj = spawnSweep(s.entry)
+                    spawned = spawned + 1
+                else
+                    waiting[#waiting + 1] = i
+                end
+            end
         end
+        for _, w in ipairs(waiting) do set.sweepPending[w] = true end
     end
     return false
 end
@@ -2990,10 +3126,31 @@ local function catchUpPaints()
     end
 end
 
+--- the anchors laid (paintReady, PAINT_ANCHOR_* above), a frame on : standing once they've been
+--- there PAINT_ANCHOR_MIN_FRAMES and PAINT_ANCHOR_MIN_MS (or PAINT_ANCHOR_MAX_FRAMES)
+local function standAnchors()
+    if not next(anchorsWaiting) then return end
+    local now = GetCurrentTimeMillis()
+    for a in pairs(anchorsWaiting) do
+        a.frames = a.frames + 1
+        if a.frames >= PAINT_ANCHOR_MAX_FRAMES or
+            (a.frames >= PAINT_ANCHOR_MIN_FRAMES and now - a.started >= PAINT_ANCHOR_MIN_MS) then
+            a.ready = true
+            anchorsWaiting[a] = nil
+            if not anchorsLogged[a.material] then
+                anchorsLogged[a.material] = true
+                log("I", "beamjoy_props", string.format("paint %s : its first anchors stand after %d frames (%d ms)",
+                    a.id, a.frames, now - a.started))
+            end
+        end
+    end
+end
+
 --- props come in a few per frame ; then the static collision catches up with them (debounced, see
 --- scheduleCollisionReload : it waits for the last prop)
 local function onUpdate()
     deleteRetiredPaints()
+    standAnchors()
     updateLamps()
     catchUpPaints()
     if anyPending() then
@@ -3093,7 +3250,12 @@ local function cleanup()
     -- a new map, its own materials and its terrain : looked at again
     materialDirs, materialShapes, mapped, sharedDone = {}, {}, nil, {}
     terrainKnown = nil
-    paintMaterialsReady = {}
+    for _, cells in pairs(paintAnchors) do
+        for _, a in pairs(cells) do
+            if a.obj and simObjectExists(a.obj) then a.obj:delete() end
+        end
+    end
+    paintAnchors, anchorsWaiting, anchorsLogged = {}, {}, {}
     if collisionReloadAt then
         collisionReloadAt = nil
         if be then reloadCollision() end

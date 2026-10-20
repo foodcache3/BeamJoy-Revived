@@ -1,6 +1,6 @@
 // The editors' props drawer (direct request) : the prop picker that replaced the race editor's
-// small dropdown. It slides out beside the config window, over the game view (or covers the
-// window when there's no room beside it), and folds to a slim strip while a prop is armed.
+// small dropdown. It slides out at the screen's left edge, over the game view (beside the config
+// window, or over it, when that's too far left), and folds to a slim strip while a prop is armed.
 //
 // Three lists : the curated catalog (beamjoy_props.CATALOG, sent as BJEditorPropCatalog, with
 // categories and hand-written tags), the prefabs (beamjoy_props.PREFABS, in the same message :
@@ -121,7 +121,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
         onSwapEnd: "&",
     },
     templateUrl: "/ui/modModules/beamjoy/cmps/propDrawer/app.html",
-    controller: function ($rootScope, $scope, $element, $filter, $timeout, beamjoyStore) {
+    controller: function ($rootScope, $scope, $element, $filter, $timeout, beamjoyStore, beamjoyPropEditor) {
         const translate = $filter("translate");
         const T = (key) => translate("beamjoy.window.config.tabs.races.props.drawer." + key);
         this.T = T;
@@ -674,6 +674,10 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 tread: band(64, `linear-gradient(180deg, transparent 0 8%, ${a} 18% 38%, transparent 46% 54%, ${a} 62% 82%, transparent 92%)`, {
                     opacity: 0.9,
                 }),
+                // skid marks : streaks of several tyres, uneven
+                skid: band(60, `repeating-linear-gradient(180deg, ${a} 0 0.12em, transparent 0.12em 0.2em, ${a} 0.2em 0.26em, transparent 0.26em 0.46em)`, {
+                    opacity: 0.85,
+                }),
             };
             paintPictures[item.key] = { line: looks[item.pattern] || looks.solid };
             return paintPictures[item.key];
@@ -798,6 +802,58 @@ angular.module("beamjoy").component("bjPropDrawer", {
         this.budgetText = () => {
             const b = this.budget();
             return b.adding > 0 ? `${b.used} + ${b.adding} / ${b.max}` : `${b.used} / ${b.max}`;
+        };
+
+        // EDITING HINTS (direct request : the placing bar kept at the bottom of the screen when no
+        // prop is armed, showing what can be done then) : by what's selected, from the props editor
+        // (beamjoyPropEditor) and the gizmo's tool. Rows built again only when that changes (a new
+        // array every digest would never settle)
+        let gizmoTool = "translate";
+        $scope.$on(
+            "$destroy",
+            $rootScope.$on("BJEditorChangeTool", (_, tool) => (gizmoTool = tool || "translate"))
+        );
+        let editKey = null;
+        let editRows = [];
+        const isPath = (prop) => !!prop && (prop.kind === "line" || prop.kind === "sweep" || prop.kind === "paint");
+        this.editHints = () => {
+            const ed = beamjoyPropEditor;
+            const props = Array.isArray(ed.props) ? ed.props : [];
+            const selected = Array.isArray(ed.selected) ? ed.selected : [];
+            const activeProp = Number.isInteger(ed.active) ? props[ed.active] : null;
+            const grouped = props.some((prop) => prop && prop.group);
+            // a line, curb, wall or painted line alone selected : its handles and nodes
+            const path = !!activeProp && selected.length <= 1 && isPath(activeProp);
+            const node = path && /^n\d+$/.test(String(ed.part || ""));
+            const key = [props.length > 0, selected.length, !!activeProp, path, node, grouped, gizmoTool].join("|");
+            if (key === editKey) return editRows;
+            editKey = key;
+            const rows = [];
+            const add = (k, hint) => rows.push({ key: k, hint });
+            if (props.length > 0 && !activeProp) {
+                add("keys.click", "hints.select");
+                add("keys.ctrlClick", "hints.selectSeveral");
+                if (grouped) add("keys.shiftClick", "hints.alone");
+            } else if (path) {
+                add("keys.handle", "hints.movePoint");
+                add("keys.ctrlDrag", "hints.moveLine");
+                add("keys.clickPath", "hints.addNode");
+                add("keys.altClick", "hints.extend");
+                add("keys.delete", node ? "hints.removeNode" : "hints.delete");
+                add("keys.ctrlClick", "hints.addRemove");
+                add("keys.click", "hints.selectOther");
+            } else if (activeProp) {
+                add(
+                    "keys.gizmo",
+                    gizmoTool === "rotate" ? "hints.turnIt" : gizmoTool === "scale" ? "hints.resizeIt" : "hints.moveIt"
+                );
+                add("keys.delete", selected.length > 1 ? "hints.deleteAll" : "hints.delete");
+                add("keys.ctrlClick", "hints.addRemove");
+                if (grouped) add("keys.shiftClick", "hints.alone");
+                add("keys.click", "hints.selectOther");
+            }
+            editRows = rows;
+            return rows;
         };
 
         // CONTROLS (direct request) : every key and click of placing and editing props, in a card
@@ -935,9 +991,11 @@ angular.module("beamjoy").component("bjPropDrawer", {
         document.addEventListener("keydown", onDocumentKey);
 
         // PLACEMENT ON SCREEN ----------------------------------------------------------------
-        // beside the config window, on whichever side has room (left first), over the game view ;
-        // covering the window's content when neither side has. Measured from the window itself,
-        // which the player can move and resize, so it's checked again a few times a second.
+        // at the screen's left edge (direct request), level with the config window ; when the
+        // window itself is too far left for that, beside it on whichever side has room (left
+        // first), over the game view ; covering the window's content when neither side has.
+        // Measured from the window itself, which the player can move and resize, so it's checked
+        // again a few times a second.
 
         let anchor = null;
         let lastPos = "";
@@ -975,7 +1033,15 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 const spaceL = r.left - gap - margin;
                 const spaceR = vw - r.right - gap - margin;
                 let left, width;
-                if (spaceL >= PANEL_MIN_EM * fs) {
+                // the screen's left edge, when the panel fits there left of the window
+                const edgeW = Math.min(PANEL_EM * fs, spaceL - margin);
+                const edge = edgeW >= PANEL_MIN_EM * fs;
+                if (edge) {
+                    // its own look : not joined to the window (pd-left / pd-right are)
+                    pos.mode = "edge";
+                    width = edgeW;
+                    left = margin;
+                } else if (spaceL >= PANEL_MIN_EM * fs) {
                     pos.mode = "left";
                     width = Math.min(PANEL_EM * fs, spaceL);
                     left = r.left - gap - width;
@@ -1008,15 +1074,21 @@ angular.module("beamjoy").component("bjPropDrawer", {
                 }
                 pos.panel = { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` };
                 const stripW = STRIP_EM * fs;
-                const stripLeft =
-                    pos.mode === "left"
+                const stripLeft = edge
+                    ? margin
+                    : pos.mode === "left"
                         ? r.left - gap - stripW
                         : pos.mode === "right"
                           ? r.right + gap
                           : r.left + 0.5 * fs;
                 pos.strip = { left: `${stripLeft}px`, top: `${top + (pos.mode === "cover" ? 0.5 * fs : 0)}px` };
                 const pvW = PREVIEW_EM * fs;
-                if (pos.mode === "left" && left - gap - pvW >= margin) {
+                if (edge && left + width + gap + pvW <= r.left - gap) {
+                    // between the panel and the window
+                    pos.preview = { left: `${left + width + gap}px`, width: `${pvW}px` };
+                } else if (edge) {
+                    pos.dock = true;
+                } else if (pos.mode === "left" && left - gap - pvW >= margin) {
                     pos.preview = { left: `${left - gap - pvW}px`, width: `${pvW}px` };
                 } else if (pos.mode === "right" && left + width + gap + pvW <= vw - margin) {
                     pos.preview = { left: `${left + width + gap}px`, width: `${pvW}px` };
@@ -1081,7 +1153,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
             document.addEventListener("mouseup", onDragEnd);
             event.preventDefault();
         };
-        // back beside the config window
+        // back where it opens by default (the screen's left edge)
         this.dock = (event) => {
             if (event) event.stopPropagation();
             if (event && event.target.closest && event.type === "dblclick" && event.target.closest("button")) return;

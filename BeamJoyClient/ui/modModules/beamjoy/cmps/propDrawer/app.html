@@ -1175,3 +1175,9 @@
     </span>
     <span><span class="pd-kbd">{{$ctrl.T('keys.stop')}}</span>{{$ctrl.T('hints.stop')}}</span>
 </div>
+<!-- no prop armed : what can be done with what's selected (direct request) -->
+<div class="pd-hints" ng-if="!$ctrl.placing.armed && $ctrl.editHints().length > 0">
+    <span ng-repeat="row in $ctrl.editHints() track by $index">
+        <span class="pd-kbd">{{$ctrl.T(row.key)}}</span>{{$ctrl.T(row.hint)}}
+    </span>
+</div>

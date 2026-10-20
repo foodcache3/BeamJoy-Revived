@@ -8,16 +8,46 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2719, server build 2470.
+Version 1.11.0 : client build 2724, server build 2470.
 
-- **Fix (2719) : a paint's first line never showed** (direct report on 2718 : the paints that
-  didn't follow the mouse smoothly before showed neither while being placed nor once placed, until
-  picked again from the prop picker, then fine, smooth placing too). Those are the paints the map
-  doesn't use itself : the game compiles a material's shaders in the background the first time
-  something uses it, and the object set up with it meanwhile never draws, the next ones do (what
-  the prop picker's previews met too). A paint's first line on a map is now made with its shaders
-  compiled on the spot : a moment's wait the first time a paint is used, and only when the game
-  hasn't got its shaders yet ; every line after as before.
+- **Skid marks in the Paint tab (2724)** (direct request), under Tyre marks : "Skid marks" and
+  "Skid marks, light" (Italy's two, streaks of several tyres, 4 m wide by default and kept in
+  their proportions at any width), "Tyre line, one tyre" (0.25 m) and "Tyre lines, one car" (a
+  pair 1.8 m apart), the Automation Test Track's. The game defines each in that one map only, so
+  they're the mod's own materials (art/beamjoy/paints) on the game's shared textures : nothing
+  copied, on every map. Fade in and out at their ends like the other tyre marks.
+- **The props drawer opens at the screen's left edge (2723)** (direct request), level with the
+  config window, its preview between the two when there's room. Beside the window as before only
+  when the window is too far left for that ; one moved by its header stays where it was left, and
+  its "put it back" button (and double-click) now brings it back to the left edge.
+- **The controls bar stays when no prop is armed (2723)** (direct request : the bar at the bottom
+  of the screen while placing, kept to show the other actions when they're there). In the props
+  section, with props placed and none armed, it shows what can be done with what's selected :
+  nothing (select one, Ctrl + click several, Shift + click one of a group alone) ; props (the
+  gizmo moves, turns or resizes them by its tool, Delete, Ctrl + click, another click) ; a line,
+  curb, wall or painted line alone (drag a handle, Ctrl + drag the whole line, click the line to add
+  a point, Alt + click to extend it, Delete it or the point held).
+- **Fix (2721) : a paint's lines never showed** (direct reports on 2718 to 2720 : the paints that
+  didn't follow the mouse smoothly before showed neither while being placed nor once placed, a
+  frame's flash then nothing, until the paint was picked again after placing one, then fine,
+  dragged too ; the zebra, the yellow line and the short dashes always fine). Those three are
+  paints West Coast's own decal roads use all over. On 0.40 the game batches decal roads by place
+  and material : a decal that starts its material's batch somewhere shows until the batch takes
+  over, then never ; one added to a batch already there shows (the placed line there when the paint
+  was picked again, the map's own roads for the zebra). Not the shaders : 2719 and 2720 compiled
+  them on the spot (made in 0 to 6 ms) and changed nothing, 2720's throwaway first decal being
+  deleted before the real line came. Now a paint's lines never start a batch : in every 25 m square
+  a line goes through (and those around it, where a drag goes on), an anchor of its paint, a decal
+  tiny and faded out, is laid first and kept until the map is left, and the line is made once the
+  anchors under it have stood 300 ms. A new line comes that late the first time a paint is used
+  somewhere on a map ; nothing shown ever blanks (one dragged into a new area, or changed to a
+  paint not anchored there yet, keeps what it showed until then, direct request : no blank). The
+  log has "paint <id> : its first anchors stand" once per paint. Maps without a terrain (flat
+  meshes, no batches) as before.
+  - **anchors laid as the paint is armed (2722)** (direct report : it works, a third of a second
+    late) : picking a paint in the editor lays its anchors at once over 125 m around where you
+    look, under you and where the mouse last was, so they mostly stand by the time the mouse is
+    back over the world and the ghost shows at once there.
 - **Passive races in the player settings (2718)** (direct request). Settings has a new Passive
   races section, saved on this PC for every server : "Take part in passive races" (on by
   default ; off, their start gates aren't shown or timed for you, and a run you're on ends). Only

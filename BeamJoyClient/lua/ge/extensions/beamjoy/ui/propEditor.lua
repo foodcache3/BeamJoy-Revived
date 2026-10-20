@@ -1847,6 +1847,18 @@ end
 local function onArmPaint(id, width)
     if not active() or not beamjoy_props.getPaint(id) then return end
     if not propBudget(1) then return disarmProp() end
+    -- its anchors laid now (beamjoy_props PAINTS), around where it'll most likely go : where you
+    -- look, under you, where the mouse last was over the world
+    local spots = {}
+    pcall(function()
+        local camPos, fwd = core_camera.getPosition(), core_camera.getForward()
+        local dist = castRayStatic(camPos, fwd, PLACE_RAY_DISTANCE)
+        if dist and dist > 0 and dist < PLACE_RAY_DISTANCE then spots[#spots + 1] = camPos + fwd * dist end
+        local down = castRayStatic(camPos, vec3(0, 0, -1), PLACE_RAY_DISTANCE)
+        if down and down > 0 and down < PLACE_RAY_DISTANCE then spots[#spots + 1] = camPos + vec3(0, 0, -down) end
+    end)
+    if M.placing and M.placing.hit then spots[#spots + 1] = M.placing.hit end
+    beamjoy_props.anchorPaint(id, spots)
     local rot = M.placing and M.placing.paint == id and M.placing.rot or 0
     M.placing = { paint = id, width = tonumber(width), rot = rot, spacing = 1 }
     unselectForPlacing()

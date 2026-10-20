@@ -86,5 +86,117 @@
     "translucent": true,
     "translucentZWrite": true,
     "version": 1.5
+  },
+  "bjs_paint_skid": {
+    "name": "bjs_paint_skid",
+    "mapTo": "bjs_paint_skid",
+    "class": "Material",
+    "persistentId": "462e4204-7b51-4d73-b8a0-2f4a5c0f7fa0",
+    "Stages": [
+      {
+        "colorMap": "/assets/materials/decalroad/treadmark/skidmarks_01/skidmarks_01_d.color.png",
+        "diffuseColor": [
+          1,
+          0.999989986,
+          0.999989986,
+          0.738390028
+        ],
+        "normalMap": "/assets/materials/decalroad/treadmark/skidmarks_01/skidmarks_01_n.normal.png",
+        "specularMap": "/assets/materials/decalroad/treadmark/skidmarks_01/skidmarks_01_s.color.png",
+        "useAnisotropic": true
+      },
+      {},
+      {},
+      {}
+    ],
+    "alphaRef": 255,
+    "annotation": "ASPHALT",
+    "castShadows": false,
+    "materialTag0": "RoadAndPath",
+    "materialTag1": "beamng",
+    "materialTag2": "decal",
+    "translucent": true,
+    "translucentZWrite": true
+  },
+  "bjs_paint_skid_light": {
+    "name": "bjs_paint_skid_light",
+    "mapTo": "bjs_paint_skid_light",
+    "class": "Material",
+    "persistentId": "406d638a-a070-464a-ae83-c1df984a0a28",
+    "Stages": [
+      {
+        "colorMap": "/assets/materials/decalroad/treadmark/skidmarks_02/skidmarks_02_d.color.png",
+        "diffuseColor": [
+          1,
+          0.999989986,
+          0.999989986,
+          0.608390033
+        ],
+        "normalMap": "/assets/materials/decalroad/treadmark/skidmarks_02/skidmarks_02_n.normal.png",
+        "specularMap": "/assets/materials/decalroad/treadmark/skidmarks_02/skidmarks_02_s.color.png",
+        "useAnisotropic": true
+      },
+      {},
+      {},
+      {}
+    ],
+    "alphaRef": 255,
+    "annotation": "ASPHALT",
+    "castShadows": false,
+    "materialTag0": "RoadAndPath",
+    "materialTag1": "beamng",
+    "materialTag2": "decal",
+    "translucent": true,
+    "translucentZWrite": true
+  },
+  "bjs_paint_skid_single": {
+    "name": "bjs_paint_skid_single",
+    "mapTo": "bjs_paint_skid_single",
+    "class": "Material",
+    "persistentId": "4c062480-b1b1-4829-bdf7-fdf243de25ee",
+    "Stages": [
+      {
+        "colorMap": "/assets/materials/decalroad/treadmark/skidmark_car_single/skidmark_car_single_d.dds",
+        "pixelSpecular": true,
+        "roughnessFactor": 0.546600401,
+        "specularMap": "/assets/materials/decalroad/treadmark/skidmark_car_double/white.dds",
+        "useAnisotropic": true
+      },
+      {},
+      {},
+      {}
+    ],
+    "alphaRef": 150,
+    "annotation": "ASPHALT",
+    "castShadows": false,
+    "materialTag0": "RoadAndPath",
+    "materialTag1": "beamng",
+    "translucent": true,
+    "translucentZWrite": true
+  },
+  "bjs_paint_skid_double": {
+    "name": "bjs_paint_skid_double",
+    "mapTo": "bjs_paint_skid_double",
+    "class": "Material",
+    "persistentId": "07010ed2-84b6-4219-8e10-bc724f389df5",
+    "Stages": [
+      {
+        "colorMap": "/assets/materials/decalroad/treadmark/skidmark_car_double/skidmark_car_double_d.dds",
+        "pixelSpecular": true,
+        "roughnessFactor": 0.546600401,
+        "specularMap": "/assets/materials/decalroad/treadmark/skidmark_car_double/white.dds",
+        "useAnisotropic": true
+      },
+      {},
+      {},
+      {}
+    ],
+    "alphaRef": 150,
+    "annotation": "ASPHALT",
+    "castShadows": false,
+    "materialTag0": "RoadAndPath",
+    "materialTag1": "beamng",
+    "translucent": true,
+    "translucentZWrite": true
   }
 }
