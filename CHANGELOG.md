@@ -8,7 +8,14 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2738, server build 2472.
+Version 1.11.0 : client build 2739, server build 2472.
+
+- **Shorter tooltips, and a translation script (2739)** (direct request) : the 32 longest tooltips
+  (over about 160 characters) are cut down to the essentials. `Tools/translate.py` fills every
+  language file from en-US with Azure Translator's free tier : only keys a file is missing or
+  whose English changed since (tracked in `Tools/translate_state.json`), placeholders, commands,
+  paths and names kept as they are, hand fixes never overwritten. Latin American Spanish uses
+  Mexican Spanish. *(client; the server's locale files are filled by the same script)*
 
 - **Drift spots in white spray paint (2738)** (direct request) : the start and finish lines,
   and the edges of any spot without its own edge paint picked, are white spray paint instead
