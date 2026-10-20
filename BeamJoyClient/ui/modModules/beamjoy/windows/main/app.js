@@ -266,6 +266,8 @@ angular.module("beamjoy").component("bjMain", {
         this.crewCount = () => beamjoyCrew.requestCount();
         this.$onInit = () => {
             beamjoyNow.refresh();
+            // shown or not : Lua's push at the join can come before this window exists
+            beamjoyStore.send("BJRequestWindowSettings");
             beamjoyStore.send("BJMainPadRequest");
             beamjoyStore.send("BJPluginPagesRequest");
         };

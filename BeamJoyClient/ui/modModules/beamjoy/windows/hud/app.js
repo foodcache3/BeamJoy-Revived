@@ -54,5 +54,8 @@ angular.module("beamjoy").component("bjHud", {
                 }, textData.duration);
             }
         });
+
+        // its size and position : Lua's push at the join can come before this window exists
+        this.$onInit = () => beamjoyStore.send("BJRequestWindowSettings");
     },
 });

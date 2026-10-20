@@ -8,7 +8,13 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2724, server build 2470.
+Version 1.11.0 : client build 2725, server build 2470.
+
+- **Fix (2725) : the sidebar only showed once you spawned a car** (direct report). Since the join's
+  caches got faster (2713), they land about half a second after the UI reload, before BeamJoy's
+  windows have mounted : the one push saying "show the sidebar" (and the windows' sizes) went to
+  no one, and only the next update of your own player (a spawn) sent it again. The sidebar, the
+  config window and the HUD now ask for their state when they mount. *(client only)*
 
 - **Skid marks in the Paint tab (2724)** (direct request), under Tyre marks : "Skid marks" and
   "Skid marks, light" (Italy's two, streaks of several tyres, 4 m wide by default and kept in

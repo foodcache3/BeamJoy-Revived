@@ -54,6 +54,11 @@ local M = {
     -- bumped on every server leave : a start-up job from an earlier session stops instead of
     -- running against the new (or no) session's data
     session = 0,
+    -- true once this session's start-up has set the windows up (initWindows) : from then on a
+    -- window mounting asks for its state (BJRequestWindowSettings) instead of relying on that
+    -- one push, which can come before it exists (2725, direct report : the sidebar only showed
+    -- after spawning a car, the caches now landing before BeamJoy's windows mount)
+    windowsReady = false,
 
     EVENT = "BJEvent",
     handlers = Table(),
@@ -199,6 +204,7 @@ end
 local function onInit()
     InitPreloadedDependencies(M)
     M.addHandler("BJRequestWindowsSizesAndPositions", M.sendWindowsSizesAndPositions)
+    M.addHandler("BJRequestWindowSettings", M.requestWindowSettings)
     M.addHandler("BJCloseWindow", M.closeWindow)
     M.addHandler("BJRequestOpenWindow", M.requestOpenWindow)
     M.addHandler("BJReady", onUIReady)
@@ -251,6 +257,7 @@ end
 
 local function onServerLeave()
     M.session = M.session + 1
+    M.windowsReady = false
     M.send("BJUnload")
     M.introPanelShown = false
     -- the UI is about to be torn down : nothing left to report the popup closing, so don't leave
@@ -343,7 +350,7 @@ local function isMainForced()
     return beamjoy_permissions.isStaff() or beamjoy_config.data.ForceHud == true
 end
 
-local function onBJUpdateSelf()
+local function sendWindowSettings()
     local forced = isMainForced()
     -- config window visibility is gated on canOpenConfig() (isStaff OR any config-tab permission,
     -- see permissions.lua), NOT isStaff alone. Gating on isStaff alone used to force-close/hide the
@@ -369,6 +376,7 @@ local function onBJUpdateSelf()
 end
 
 local function initWindows()
+    M.windowsReady = true
     local forced = isMainForced()
     -- forced (staff, or the host's ForceHud, default on) : open from the start. The separate "Show
     -- HUD at start" setting was removed
@@ -537,6 +545,18 @@ end
 
 ---@param title string?
 ---@param content string?
+local function onBJUpdateSelf()
+    sendWindowSettings()
+end
+
+--- a window just mounted (windows/main, config, hud) : its visibility, sizes and positions,
+--- once this session's start-up has set them (initWindows pushes them itself then)
+local function requestWindowSettings()
+    if not M.windowsReady then return end
+    sendWindowSettings()
+    M.sendWindowsSizesAndPositions()
+end
+
 ---@param image string?
 local function openIntroPanel(title, content, image)
     uiHelpers.openPanel(title or beamjoy_config.data.IntroPanel.title,
@@ -572,6 +592,7 @@ M.addHandler = addHandler
 M.dispatch = dispatch
 M.sendWindowsSizesAndPositions = sendWindowsSizesAndPositions
 M.initWindows = initWindows
+M.requestWindowSettings = requestWindowSettings
 M.toggleWindow = toggleWindow
 M.isMainForced = isMainForced
 M.closeWindow = closeWindow

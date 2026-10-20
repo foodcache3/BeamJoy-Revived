@@ -247,6 +247,8 @@ angular.module("beamjoy").component("bjConfig", {
         $rootScope.$on("BJPluginUiChanged", syncPluginTabs);
 
         this.$onInit = () => {
+            // shown or not, its size : Lua's push at the join can come before this window exists
+            beamjoyStore.send("BJRequestWindowSettings");
             syncPluginTabs();
             this.activeTabIndex = this.tabs.length > 0 ? 0 : -1;
             this.activeTabId = this.tabs.length > 0 ? this.tabs[this.activeTabIndex].id : null;
