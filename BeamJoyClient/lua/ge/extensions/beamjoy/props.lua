@@ -73,7 +73,8 @@ local M = {
     --- tuned from its measured size (tuning() below : beamjoy_propPicker measures a mesh the first
     --- time it's previewed or armed). `xOffset` (mesh units, scaled) : a mesh standing to one side of
     --- its origin is moved that much along its own x when it's placed alone, so it's centred where
-    --- it's placed as the others are (the flip ramps : their origin is a corner). `collision` is the
+    --- it's placed as the others are (the flip ramps : their origin is a corner) ; `yOffset` the same
+    --- along its own y (a fence whose origin is at one end of it). `collision` is the
     --- TSStatic collision type : "None" for the decorative ones cars should drive through (tape,
     --- flags) ; a mesh with no collision of its own is passable anyway (checked against its .dae, see
     --- meshHasCollision) ; `invisible` ones are drawn
@@ -107,6 +108,26 @@ local M = {
         { id = "tireStackHr", cat = "barriers", tags = "tyre wall", shape = "/levels/hirochi_raceway/art/shapes/objects/hr_tirestack.dae" },
         { id = "tireStackHrGreen", cat = "barriers", tags = "tyre wall", shape = "/levels/hirochi_raceway/art/shapes/objects/hr_tirestack_green.dae" },
         { id = "tireStackHrWhite", cat = "barriers", tags = "tyre wall", shape = "/levels/hirochi_raceway/art/shapes/objects/hr_tirestack_white.dae" },
+        -- more of the game's and the maps' own (direct request). Stood on their origin (`zOffset = 0`)
+        -- where the maps sink their posts or footings into the ground, or where the mesh's collision
+        -- reaches lower than what's drawn (measured lifts from the box with it : West Coast's curb
+        -- floated, direct report). East Coast's rails at the height its posts carry them
+        { id = "guardrailBasic", cat = "barriers", tags = "armco rail steel italy", shape = "/art/shapes/objects/italy_guardrails_basic.dae", length = 3, zOffset = 0, thumbTurn = 180 },
+        { id = "guardrailBasicEndCcw", cat = "barriers", tags = "armco rail steel italy end cap", shape = "/art/shapes/objects/italy_guardrails_basic_end_ccw.dae", zOffset = 0 },
+        { id = "guardrailBasicEndCw", cat = "barriers", tags = "armco rail steel italy end cap", shape = "/art/shapes/objects/italy_guardrails_basic_end_cw.dae", zOffset = 0 },
+        { id = "guardrailHighway", cat = "barriers", tags = "armco rail steel bridge heavy", shape = "/art/shapes/objects/italy_guardrails_highway_bridge_heavy.dae", length = 3, thumbTurn = 180 },
+        { id = "guardrailHighwayCap", cat = "barriers", tags = "armco rail steel bridge heavy end cap", shape = "/art/shapes/objects/italy_guardrails_highway_bridge_heavy_cap.dae", thumbTurn = 180 },
+        { id = "guardrailEca1", cat = "barriers", tags = "armco rail steel east coast", shape = "/levels/east_coast_usa/art/shapes/buildings/eca_guardrail1.dae", length = 2, zOffset = .95, thumbTurn = 180 },
+        { id = "guardrailEca2", cat = "barriers", tags = "armco rail steel east coast", shape = "/levels/east_coast_usa/art/shapes/buildings/eca_guardrail2.dae", length = 2, zOffset = .95, thumbTurn = 180 },
+        { id = "guardrailEcaEndL", cat = "barriers", tags = "armco rail steel east coast", shape = "/levels/east_coast_usa/art/shapes/buildings/eca_guardrail_endcap_L.dae", zOffset = .95 },
+        { id = "guardrailEcaEndR", cat = "barriers", tags = "armco rail steel east coast", shape = "/levels/east_coast_usa/art/shapes/buildings/eca_guardrail_endcap_R.dae", zOffset = .95 },
+        { id = "guardrailEcaPost", cat = "barriers", tags = "armco rail steel east coast", shape = "/levels/east_coast_usa/art/shapes/buildings/eca_guardrailpost.dae" },
+        { id = "barrierFenceConcrete", cat = "barriers", tags = "wall catch fence automation", shape = "/levels/automation_test_track/art/shapes/objects/barrierfence_concrete.dae", length = 4, zOffset = 0 },
+        { id = "barrierFenceConcretePainted", cat = "barriers", tags = "wall catch fence automation red white", shape = "/levels/automation_test_track/art/shapes/objects/barrierfence_concrete_painted.dae", length = 4, zOffset = 0, thumbTurn = 180 },
+        { id = "barrierSegmentL", cat = "barriers", tags = "chevron curve driver training", shape = "/levels/driver_training/art/shapes/race/barriersegment_L.dae", yaw = 270, thumbTurn = 0 },
+        { id = "barrierSegmentR", cat = "barriers", tags = "chevron curve driver training", shape = "/levels/driver_training/art/shapes/race/barriersegment_R.dae", yaw = 270, thumbTurn = 0 },
+        { id = "centerDivider", cat = "barriers", tags = "median highway road", shape = "/levels/west_coast_usa/art/shapes/objects/centerDividerBarrier.dae", zOffset = .2, yOffset = 5.22 },
+        { id = "metalBarrier", cat = "barriers", tags = "rail steel industrial long", shape = "/levels/Industrial/art/shapes/buildings/tankfarm/ind_metal_barrier.DAE", zOffset = 0 },
         -- fences and tape
         { id = "tape6", cat = "fences", tags = "police ribbon closure", shape = "/art/shapes/race/rally/rally_assets/s_tape_road_closure_6m.dae", collision = "None" },
         { id = "tape8", cat = "fences", tags = "police ribbon closure", shape = "/art/shapes/race/rally/rally_assets/s_tape_road_closure_8m.dae", collision = "None" },
@@ -115,11 +136,31 @@ local M = {
         { id = "spectatorTapeBig", cat = "fences", tags = "crowd ribbon", shape = "/art/shapes/race/rally/rally_assets/s_spectator_tape_big_a.dae", collision = "None" },
         { id = "spectatorGrid", cat = "fences", tags = "crowd barrier mesh", shape = "/art/shapes/race/rally/rally_assets/s_spectator_grid_a_2m.dae" },
         { id = "spectatorTarp", cat = "fences", tags = "screen sheet", shape = "/art/shapes/race/rally/rally_assets/s_spectator_tarp_4m.dae", collision = "None" },
+        { id = "spectatorTarpAngle", cat = "fences", tags = "screen sheet angle", shape = "/art/shapes/race/rally/rally_assets/s_spectator_tarp_angle.dae", collision = "None", xOffset = -.95, yOffset = 1.06 },
         { id = "metalFence", cat = "fences", tags = "mesh wire", shape = "/art/shapes/objects/s_metal_fence.dae", thumbLying = true },
         { id = "scrapFence", cat = "fences", tags = "corrugated sheet", shape = "/art/shapes/objects/s_scrap_fence_35_a.dae" },
         { id = "scrapFenceLong", cat = "fences", tags = "corrugated sheet", shape = "/art/shapes/objects/s_scrap_fence_5.dae" },
         { id = "brickWall", cat = "fences", tags = "masonry", shape = "/assets/meshes/architecture/modular/architectural_elements/fences/stone/s_brick_wall_001_300x400.dae" },
         { id = "concreteWall", cat = "fences", tags = "masonry", shape = "/assets/meshes/architecture/modular/architectural_elements/fences/stone/s_conc_wall_001_400x400.dae" },
+        { id = "chainlinkOld", cat = "fences", tags = "wire mesh", shape = "/art/shapes/objects/s_chainlink_old.dae", length = 2, zOffset = 0, xOffset = 1 },
+        { id = "spectatorGridB", cat = "fences", tags = "crowd barrier mesh", shape = "/art/shapes/race/rally/rally_assets/s_spectator_grid_b_2m.dae", yOffset = 1 },
+        { id = "spectatorTapeBigB", cat = "fences", tags = "crowd ribbon", shape = "/art/shapes/race/rally/rally_assets/s_spectator_tape_big_b.dae", collision = "None", yOffset = 1 },
+        { id = "brickMetFence4", cat = "fences", tags = "masonry metal fence", shape = "/assets/meshes/architecture/modular/architectural_elements/fences/stone/s_brick_met_fence_001_400.dae", length = 4, xOffset = -2 },
+        { id = "brickMetFence3", cat = "fences", tags = "masonry metal fence", shape = "/assets/meshes/architecture/modular/architectural_elements/fences/stone/s_brick_met_fence_001_300x400.dae", length = 3, yOffset = -1.5 },
+        { id = "brickColumn", cat = "fences", tags = "masonry pillar post", shape = "/assets/meshes/architecture/modular/architectural_elements/fences/stone/s_brick_col_001_70x400.dae", yOffset = .27 },
+        { id = "barrierFencePlain", cat = "fences", tags = "catch fence wall race west coast", shape = "/levels/west_coast_usa/art/shapes/objects/barrierfence_plain.dae", thumbTurn = 180 },
+        { id = "barrierFenceFolk", cat = "fences", tags = "catch fence wall race banner west coast", shape = "/levels/west_coast_usa/art/shapes/objects/barrierfence_folk.dae", thumbTurn = 180 },
+        { id = "fenceEcaA", cat = "fences", tags = "wire mesh", shape = "/levels/east_coast_usa/art/shapes/buildings/eca_bld_fence_a.DAE", length = 2, zOffset = 0, xOffset = -1, thumbTurn = 180 },
+        { id = "fenceEcaEnd", cat = "fences", tags = "wire mesh end pole", shape = "/levels/east_coast_usa/art/shapes/buildings/eca_bld_fence_end.DAE", zOffset = 0 },
+        { id = "screenFence1", cat = "fences", tags = "catch fence mesh west coast", shape = "/levels/west_coast_usa/art/shapes/objects/screenfence1.dae", length = 3, zOffset = 1.52 },
+        { id = "screenFence2", cat = "fences", tags = "catch fence mesh west coast", shape = "/levels/west_coast_usa/art/shapes/objects/screenfence2.dae", length = 3, zOffset = 1.52 },
+        { id = "airportWall", cat = "fences", tags = "concrete wall italy", shape = "/levels/italy/art/shapes/buildings/italy_wall_concrete_airport_10m.dae", length = 10, zOffset = 0 },
+        { id = "meshFence2m", cat = "fences", tags = "wire industrial", shape = "/levels/Industrial/art/shapes/buildings/ind_mesh_fence_2m.dae", length = 2 },
+        { id = "meshFence4m", cat = "fences", tags = "wire industrial", shape = "/levels/Industrial/art/shapes/buildings/ind_mesh_fence_4m.dae", length = 4 },
+        { id = "meshFenceGate", cat = "fences", tags = "wire industrial door", shape = "/levels/Industrial/art/shapes/buildings/ind_mesh_fence_gate_3m.dae", xOffset = -1.5 },
+        { id = "fenceMesh6m", cat = "fences", tags = "wire italy", shape = "/levels/italy/art/shapes/buildings/italy_fence_mesh_6m.dae", length = 6, zOffset = 0 },
+        { id = "fenceMesh6mBase", cat = "fences", tags = "wire wall italy", shape = "/levels/italy/art/shapes/buildings/italy_fence_mesh_6m_conc_base.dae", length = 6 },
+        { id = "heavyDutyFence", cat = "fences", tags = "concrete wall steel jungle rock", shape = "/levels/jungle_rock_island/art/shapes/buildings/heavyDutyFence.dae", zOffset = 0, yOffset = -4 },
         -- cones and markers
         { id = "cone", cat = "markers", tags = "pylon traffic", shape = "/art/shapes/garage_and_dealership/Clutter/road_cone.DAE", yaw = 0, length = 2.5 },
         { id = "raceCone", cat = "markers", tags = "pylon autocross", shape = "/art/shapes/race/cone.dae" },
@@ -129,6 +170,8 @@ local M = {
         { id = "flagMarker", cat = "markers", tags = "pole", shape = "/art/shapes/race/flagMarker.dae", collision = "None", thumbLying = true },
         { id = "flagMarkerOrange", cat = "markers", tags = "pole", shape = "/art/shapes/race/flagMarkerOrange.dae", collision = "None", thumbLying = true },
         { id = "cornerMarker", cat = "markers", tags = "rally post", shape = "/art/shapes/race/rally/rally_assets/s_corner_marker.dae", collision = "None" },
+        -- Automation's skidpad target, flush with the ground as the map lays it
+        { id = "targetAtt", cat = "markers", tags = "skidpad circle bullseye automation", shape = "/levels/automation_test_track/art/shapes/misc/target.dae", zOffset = 0 },
         -- signs
         -- `yaw` of the signs, the flags, the rally gates and the ramps turned by hand (direct request :
         -- each a quarter turn counterclockwise from the size-based guess, the pacenote boards a half
@@ -165,8 +208,17 @@ local M = {
         { id = "arrowFlagB", cat = "start", tags = "pennant", shape = "/art/shapes/race/arrowFlag_02.dae", collision = "None" },
         { id = "flagFeather", cat = "start", tags = "banner", shape = "/art/shapes/garage_and_dealership/s_flag_floor_feather_01.dae", yaw = 90, length = 4, collision = "None" },
         { id = "flagTeardrop", cat = "start", tags = "banner", shape = "/art/shapes/garage_and_dealership/s_flag_floor_teardrop_01.dae", yaw = 90, length = 4, collision = "None", thumbTurn = 180 },
+        -- bunting and garlands : they hang from their origin at one end
+        { id = "flagTinsel1", cat = "start", tags = "bunting pennant string", shape = "/art/shapes/garage_and_dealership/s_flag_tinsel_01.dae", collision = "None", length = 3, xOffset = -1.5 },
+        { id = "flagTinsel2", cat = "start", tags = "bunting pennant string", shape = "/art/shapes/garage_and_dealership/s_flag_tinsel_02.dae", collision = "None", length = 3, xOffset = -1.5 },
+        { id = "flagTinsel3", cat = "start", tags = "bunting pennant string", shape = "/art/shapes/garage_and_dealership/s_flag_tinsel_03.dae", collision = "None", length = 3, xOffset = -1.5 },
+        { id = "flagTinselHang1", cat = "start", tags = "bunting pennant string", shape = "/art/shapes/garage_and_dealership/s_flag_tinsel_hang_01.dae", collision = "None", xOffset = -1.47 },
+        { id = "flagTinselHang2", cat = "start", tags = "bunting pennant string", shape = "/art/shapes/garage_and_dealership/s_flag_tinsel_hang_02.dae", collision = "None", xOffset = -1.47 },
+        { id = "stringTinsel", cat = "start", tags = "garland decoration", shape = "/art/shapes/garage_and_dealership/s_string_tinsel_01.dae", collision = "None", xOffset = -1.62 },
+        { id = "stringTinselHang1", cat = "start", tags = "garland decoration", shape = "/art/shapes/garage_and_dealership/s_string_tinsel_hang_01.dae", collision = "None", xOffset = -1.68 },
+        { id = "stringTinselHang2", cat = "start", tags = "garland decoration", shape = "/art/shapes/garage_and_dealership/s_string_tinsel_hang_02.dae", collision = "None", xOffset = -1.7 },
         -- its tower starts 6.86 m above its origin (its concrete footing) : stood on the ground
-        { id = "timerBoard", cat = "start", tags = "scoreboard clock drag timing", shape = "/art/shapes/race/dragstrip/timerboard.dae", zOffset = -6.86 },
+        { id = "timerBoard", cat = "start", tags = "scoreboard clock drag timing", shape = "/art/shapes/race/dragstrip/timerboard.dae", zOffset = -6.86, thumbTurn = 180 },
         -- East Coast's rally gates (direct request). Stood on their origin, as the map places them :
         -- their concrete feet are sunk 2.30 m into the ground (the measured lift, 3.26 m, raised
         -- them out of it, and their collision mesh reaches lower still)
@@ -183,6 +235,18 @@ local M = {
         { id = "flipRamp4x2Mild", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_mild.dae", xOffset = 1, yaw = 90 },
         { id = "flipRamp4x2Heavy", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_heavy.dae", xOffset = 1, yaw = 90 },
         { id = "flipRamp4x4", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x4.dae", xOffset = 2, yaw = 90 },
+        -- curbs and bumps. The same speed bump ships with Derby, East Coast, Italy, Jungle Rock and
+        -- Small Island ; Driver Training's comes in three pieces sharing one origin (its middle and
+        -- both ends), placed on the same spot they make the whole bump : all three turned alike (the
+        -- ends' size-based yaw was a quarter turn from the middle's)
+        { id = "curbModule", cat = "ramps", tags = "kerb edge", shape = "/art/shapes/objects/s_curb_module.dae", length = 2, xOffset = -1 },
+        { id = "curbWc", cat = "ramps", tags = "kerb edge", shape = "/levels/west_coast_usa/art/shapes/objects/s_curb.dae", length = 2, zOffset = 0 },
+        { id = "curbRamp", cat = "ramps", tags = "kerb wedge west coast", shape = "/levels/west_coast_usa/art/shapes/race/curbramp.dae", length = 1 },
+        { id = "speedBump", cat = "ramps", tags = "hump road", shape = "/levels/italy/art/shapes/misc/speedbump_01a.DAE", length = 6, zOffset = 0 },
+        { id = "speedBumpDt1", cat = "ramps", tags = "hump road", shape = "/levels/driver_training/art/shapes/objects/speedbump1.dae", yaw = 0 },
+        { id = "speedBumpDt2", cat = "ramps", tags = "hump road", shape = "/levels/driver_training/art/shapes/objects/speedbump2.dae", yaw = 0 },
+        { id = "speedBumpDt3", cat = "ramps", tags = "hump road", shape = "/levels/driver_training/art/shapes/objects/speedbump3.dae", yaw = 0 },
+        { id = "bumpItaly", cat = "ramps", tags = "hump road speed", shape = "/levels/italy/art/shapes/buildings/italy_bump.DAE" },
         -- scenery
         { id = "woodCrate", cat = "scenery", tags = "box", shape = "/art/shapes/objects/s_wood_crate_closed.dae", yaw = 0, length = 3 },
         { id = "crateStack", cat = "scenery", tags = "boxes", shape = "/art/shapes/garage_and_dealership/Clutter/crate_stack.DAE" },
@@ -191,8 +255,11 @@ local M = {
         { id = "barrel", cat = "scenery", tags = "drum oil red", shape = "/art/shapes/garage_and_dealership/Clutter/clutter_barrels_red.dae", yaw = 0, length = 1 },
         { id = "barrelWhite", cat = "scenery", tags = "drum oil", shape = "/art/shapes/garage_and_dealership/Clutter/clutter_barrels_white.dae" },
         { id = "metalDrum", cat = "scenery", tags = "barrel oil", shape = "/art/shapes/garage_and_dealership/Clutter/metal_drum_a.DAE" },
+        { id = "metalDrumOldA", cat = "scenery", tags = "barrel oil rusty", shape = "/art/shapes/garage_and_dealership/Clutter/metal_drum_old_a.DAE" },
+        { id = "metalDrumOldB", cat = "scenery", tags = "barrel oil rusty", shape = "/art/shapes/garage_and_dealership/Clutter/metal_drum_old_b.DAE" },
         { id = "dumpster", cat = "scenery", tags = "skip trash", shape = "/art/shapes/garage_and_dealership/Clutter/ind_dumpster_full.DAE" },
         { id = "cityBin", cat = "scenery", tags = "trash", shape = "/art/shapes/garage_and_dealership/Clutter/clutter_city_bin_round.dae" },
+        { id = "bigPile", cat = "scenery", tags = "rubble junk heap big", shape = "/art/shapes/garage_and_dealership/Clutter/big_pile.DAE" },
         -- lights (their own category, direct request) : their light is LAMPS' (below)
         { id = "lightPole", cat = "lights", tags = "street lamp light", shape = "/art/shapes/objects/pole_light_single.dae" },
         -- the same arm and head on a bridge railing mount, and one each side
@@ -219,12 +286,52 @@ local M = {
         { id = "tree", cat = "scenery", tags = "forest beech", shape = "/assets/meshes/foliage/trees_library/beech/tree_beech_large_b.dae" },
         { id = "bush", cat = "scenery", tags = "shrub hedge beech", shape = "/assets/meshes/foliage/trees_library/beech/tree_beech_bush_a.dae", collision = "None" },
         { id = "deadTree", cat = "scenery", tags = "forest bare beech", shape = "/assets/meshes/foliage/trees_library/beech/tree_beech_dead_a.dae" },
+        -- the desert rocks (their own category, direct request), every one but their low-detail
+        -- copies. Stood on their origin as the maps do, their lower part in the ground ; the two huge
+        -- sheets whose collision reaches lower than what's drawn on its lowest point
+        { id = "rockDesertCollection1", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_collection_01.dae", zOffset = 0 },
+        { id = "rockDesertCollection2", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_collection_02.dae", zOffset = 0 },
+        { id = "rockDesertCollection3", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_collection_03.dae", zOffset = 0 },
+        { id = "rockDesertHugeSheet1", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_huge_sheet_1.dae", zOffset = 1.23 },
+        { id = "rockDesertHugeSheet2", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_huge_sheet_2.dae", zOffset = 2.89 },
+        { id = "rockDesertHugeSheet3", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_huge_sheet_3.dae", zOffset = 0 },
+        { id = "rockDesertLarge2", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_large_02.dae", zOffset = 0 },
+        { id = "rockDesertLarge3", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_large_03.dae", zOffset = 0 },
+        { id = "rockDesertLarge4", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_large_04.dae", zOffset = 0 },
+        { id = "rockDesertLarge5", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_large_05.dae", zOffset = 0 },
+        { id = "rockDesertLarge6", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_large_06.dae", zOffset = 0 },
+        { id = "rockDesertLarge7", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_large_07.dae", zOffset = 0 },
+        { id = "rockDesertMedium1", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_medium_01.dae", zOffset = 0 },
+        { id = "rockDesertMedium2", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_medium_02.dae", zOffset = 0 },
+        { id = "rockDesertMedium3", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_medium_03.dae", zOffset = 0 },
+        { id = "rockDesertMedium4", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_medium_04.dae", zOffset = 0 },
+        { id = "rockDesertMedium5", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_medium_05.dae", zOffset = 0 },
+        { id = "rockDesertSmall1", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_small_01.dae", zOffset = 0 },
+        { id = "rockDesertSmall2", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_small_02.dae", zOffset = 0 },
+        { id = "rockDesertSmall3", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_small_03.dae", zOffset = 0 },
+        { id = "rockDesertSmall4", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_small_04.dae", zOffset = 0 },
+        { id = "rockDesertSmall5", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_small_05.dae", zOffset = 0 },
+        { id = "rockDesertSmall6", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_small_06.dae", zOffset = 0 },
+        { id = "rockDesertSmall7", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_small_07.dae", zOffset = 0 },
+        { id = "rockDesertSmall8", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_small_08.dae", zOffset = 0 },
+        { id = "rockDesertSmall9", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_small_09.dae", zOffset = 0 },
+        { id = "rockDesertTiny1", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_tiny_01.dae", zOffset = 0 },
+        { id = "rockDesertTiny2", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_tiny_02.dae", zOffset = 0 },
+        { id = "rockDesertTiny3", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_tiny_03.dae", zOffset = 0 },
+        { id = "rockDesertTiny4", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_tiny_04.dae", zOffset = 0 },
+        { id = "rockDesertTiny5", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_tiny_05.dae", zOffset = 0 },
+        { id = "rockDesertTiny6", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_tiny_06.dae", zOffset = 0 },
+        { id = "rockDesertTiny7", cat = "rocks", tags = "stone boulder desert", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_tiny_07.dae", zOffset = 0 },
+        { id = "rockDesertLowFlat01", cat = "rocks", tags = "stone boulder desert outcrop", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_low_flat_01.dae", zOffset = 0 },
+        { id = "rockDesertLowFlat02", cat = "rocks", tags = "stone boulder desert outcrop", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_low_flat_02.dae", zOffset = 0 },
+        { id = "rockDesertLowSmall", cat = "rocks", tags = "stone boulder desert outcrop", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_low_small.dae", zOffset = 0 },
+        { id = "rockDesertLowTiny", cat = "rocks", tags = "stone boulder desert outcrop", shape = "/assets/meshes/rocks/johnson_valley/s_rocks_desert_low_tiny.dae", zOffset = 0 },
         -- utility
         { id = "invisibleWall", cat = "utility", tags = "collision blocker hidden", shape = "/assets/meshes/props/misc/invisible_wall_1m.dae", yaw = 0, length = 1, zOffset = .5, invisible = true },
     },
 
     --- the picker's categories, in order
-    CATEGORIES = { "barriers", "fences", "markers", "signs", "start", "ramps", "scenery", "lights", "utility" },
+    CATEGORIES = { "barriers", "fences", "markers", "signs", "start", "ramps", "scenery", "rocks", "lights", "utility" },
 
     --- prefabs (the drawer's Prefabs tab, direct request) : several meshes placed as one prop (see
     --- `parts` at the top of this file). The game's own layouts (its art/prefabs files : the rally

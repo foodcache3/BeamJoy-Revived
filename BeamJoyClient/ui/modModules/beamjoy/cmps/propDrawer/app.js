@@ -126,7 +126,7 @@ angular.module("beamjoy").component("bjPropDrawer", {
         const T = (key) => translate("beamjoy.window.config.tabs.races.props.drawer." + key);
         this.T = T;
 
-        this.CATEGORIES = ["barriers", "fences", "markers", "signs", "start", "ramps", "scenery", "lights", "utility"];
+        this.CATEGORIES = ["barriers", "fences", "markers", "signs", "start", "ramps", "scenery", "rocks", "lights", "utility"];
         this.GROUPS = ["art", "assets", "map"];
         this.PREFAB_CATEGORIES = ["gazebos", "billboards", "fences", "pits", "scenery", "lights"];
         this.SWEEP_CATEGORIES = ["curbs", "walls"];

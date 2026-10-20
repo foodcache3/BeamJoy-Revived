@@ -1689,13 +1689,16 @@ local function placingEntry()
         return prefab, 0
     end
     local dir = singleDir(base, yaw)
-    -- a mesh standing to one side of its origin (the catalog's `xOffset` : the flip ramps), centred
-    -- where it's placed as the others are : its origin moved along its own x
+    -- a mesh standing to one side of its origin (the catalog's `xOffset` : the flip ramps ; `yOffset`
+    -- : a fence whose origin is at one end), centred where it's placed as the others are : its
+    -- origin moved along its own x and y
     local cat = beamjoy_props.catalogForShape(p.shape)
-    if cat and tonumber(cat.xOffset) then
-        local stretchX = type(tpl.stretch) == "table" and tonumber(tpl.stretch.x) or 1
+    if cat and (tonumber(cat.xOffset) or tonumber(cat.yOffset)) then
+        local stretch = type(tpl.stretch) == "table" and tpl.stretch or {}
         local right = vec3(dir.y, -dir.x, 0)
-        at = at + right * (cat.xOffset * scale * stretchX)
+        local ahead = vec3(dir.x, dir.y, 0)
+        at = at + right * ((tonumber(cat.xOffset) or 0) * scale * (tonumber(stretch.x) or 1))
+            + ahead * ((tonumber(cat.yOffset) or 0) * scale * (tonumber(stretch.y) or 1))
         if snapOn() then at.z = groundHeightAt(at) end
     end
     local single = {

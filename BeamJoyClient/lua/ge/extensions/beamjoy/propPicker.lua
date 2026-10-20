@@ -49,8 +49,8 @@ local META_FILE = CACHE_DIR .. "/meta.json"
 -- the thumbnails : v4 since the shared meshes borrow their missing materials (those made before are
 -- left unused, some pictured with "no material" ; as are the World Editor's own, one camera for all),
 -- v5 since some curated meshes have a view of their own, v6 since 0.40 turned the preview's camera
--- round (PREVIEW_YAW), v7 since more of them have one
-local THUMB_DIR = CACHE_DIR .. "/v7"
+-- round (PREVIEW_YAW), v7 since more of them have one, v8 since more again
+local THUMB_DIR = CACHE_DIR .. "/v8"
 -- frames the preview is given to load and settle before it's captured (as the asset browser does)
 local SETTLE_FRAMES = 3
 -- the render the thumbnail is cut from (px), and the margin left around the mesh (of its size)

@@ -8,7 +8,34 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2729, server build 2471.
+Version 1.11.0 : client build 2732, server build 2471.
+
+- **The new props sorted out (2732)** (direct request) : the spectator grid's and big tape's
+  centre pieces taken out again, the tarp's corner beside the tarp, the old drums beside the
+  barrels. Pictured from their other side : the basic and highway guardrails and the highway
+  end, both guardrail rails, the painted concrete fence barrier, both barrier fences, the
+  chain-link fence, the timing board ; the barrier segments too, and placed the other way round.
+  The screen fences stood on their posts' feet (direct report : sunk 1.52 m), the speed bump's
+  ends turned to line up with its middle (direct report). Previews made again (v8). *(client
+  only)*
+
+- **No map names in the new props' names (2731)** (direct request) : East Coast's guardrail
+  pieces and chain-link fence, West Coast's curb, Italy's mesh fences and bump (now "Road
+  bump"), Driver Training's speed bump pieces. Italy's copies of the highway guardrail and its
+  end left out again : the same mesh as the shared ones but for a level-of-detail distance, so
+  without the map name they'd be two identical entries. *(client only)*
+
+- **93 more curated props (2730)** (direct request), a new **Rocks** category among them : the
+  game's old metal drums, debris pile, flag and string tinsel, basic and highway guardrails, old chain-link fence, curb module, another spectator grid and tape, a
+  corner tarp, brick walls with railings and a brick column, and every desert rock but their
+  low-detail copies ; and the maps' own : East Coast's guardrail pieces and chain-link fence, West
+  Coast's curb, curb ramp, barrier fences, screen fences and centre divider, the shared speed bump
+  and Driver Training's three-piece one, Italy's bump, airport wall and mesh fences, Automation's
+  skidpad target and concrete fence barriers, Driver Training's barrier segments, Industrial's mesh
+  fences, gate and metal barrier, Jungle Rock's heavy duty fence. Stood on their origin where the
+  maps sink them into the ground or their collision reaches below them (West Coast's curb floated,
+  direct report), centred where they're placed when their origin is at one end (a new `yOffset`
+  beside `xOffset`). *(client only)*
 
 - **Props placed and pictured the right way round, and a Lights category (2729)** (direct
   request). Placed a quarter turn counterclockwise from before : both arrow signs, both arrow
