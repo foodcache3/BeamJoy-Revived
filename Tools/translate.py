@@ -122,6 +122,9 @@ def prepare(text):
 def restore(translated, tokens, source):
     """the translated text, or None if a protected token got lost"""
     seen = []
+    # German compounds : Azure spaces a protected name off its hyphens ("Free- <name> -Rennen")
+    translated = re.sub(r"(?<=\w)-\s+(?=<span)", "-", translated)
+    translated = re.sub(r"(</span>)\s+-(?=\w)", r"\1-", translated)
 
     def put(m):
         seen.append(int(m.group(1)))

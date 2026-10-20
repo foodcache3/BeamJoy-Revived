@@ -8,7 +8,15 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2739, server build 2472.
+Version 2.0.0 : client build 2740, server build 2473.
+
+- **Version 2.0.0, and every language filled in (2740 / 2473)** (direct request) : the release is
+  numbered 2.0.0 (three parts : the updater compares versions number by number). Every client
+  language file (12) and server language file (7) is complete, machine translated with
+  `Tools/translate.py` (Azure Translator) : about 1,750 client and 177 server strings each,
+  the shortened tooltips included. Hand translations already there were kept. The script now
+  also closes the space Azure leaves between a protected name and a German compound's hyphen.
+  *(client + server : the server's locales folder changed)*
 
 - **Shorter tooltips, and a translation script (2739)** (direct request) : the 32 longest tooltips
   (over about 160 characters) are cut down to the essentials. `Tools/translate.py` fills every
