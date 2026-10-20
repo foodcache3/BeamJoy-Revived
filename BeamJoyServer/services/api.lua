@@ -463,7 +463,7 @@ M.methods["race.unready"] = function(params, ctx)
     local reason = params.reason
     if absent(reason) then reason = nil end
     if reason ~= nil and type(reason) ~= "string" then return nil, "badParams", "reason must be text" end
-    if reason then reason = reason:sub(1, 200) end
+    if reason then reason = services_pluginOverlay.cleanText(reason, 200) end
     local ok, why = services_raceGrid.pluginUnready(math.floor(playerID), reason, plugin)
     if not ok then return nil, "refused", why end
     return { playerId = playerID }
@@ -680,7 +680,7 @@ M.methods["config.set"] = function(params, ctx)
     local keys = {}
     for k in pairs(changed) do keys[#keys + 1] = k end
     table.sort(keys)
-    if #keys > 0 then M.configChanged(plugin, services_pluginUi.configOf(plugin), keys, "plugin:" .. plugin) end
+    if #keys > 0 then M.configChanged(plugin, keys, "plugin:" .. plugin) end
     return { values = services_pluginUi.configOf(plugin), changed = keys }
 end
 
@@ -830,7 +830,7 @@ end
 local function firstBlock(answers)
     for _, a in ipairs(answers) do
         if a.answer.allow == false then
-            local reason = type(a.answer.reason) == "string" and a.answer.reason:sub(1, 200) or ""
+            local reason = services_pluginOverlay.cleanText(a.answer.reason, 200) or ""
             return { reason = reason, by = a.plugin }
         end
     end
@@ -1064,13 +1064,16 @@ function M.raceFinished(session, info, results)
 end
 
 --- a plugin's config tab was saved (or the plugin set its values) : its values, and which changed.
---- Goes to every plugin like any event ; `plugin` says whose
+--- Goes to every plugin like any event ; `plugin` says whose. Secrets left out, `secretsSet` saying
+--- which are set (security review : a plugin passing every event on, to Discord or a log, passed
+--- the API keys on too). The plugin reads them with config.get, as the helper does
 ---@param plugin string
----@param values table
 ---@param changed string[]
 ---@param by string a player's name, or "plugin:<name>"
-function M.configChanged(plugin, values, changed, by)
-    emit("ConfigChanged", { plugin = plugin, values = values, changed = changed, by = by })
+function M.configChanged(plugin, changed, by)
+    local values, secretsSet = services_pluginUi.configOf(plugin, true)
+    emit("ConfigChanged", { plugin = plugin, values = values, secretsSet = secretsSet or {}, changed = changed,
+        by = by })
 end
 
 --- a button on a plugin's config tab was clicked

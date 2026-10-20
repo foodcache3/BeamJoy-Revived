@@ -249,7 +249,7 @@ information beside a BeamJoy race). See [Overlays](#overlays).
 
 ### `hud.message` `{text, color?, durationS?, players?}`
 A line of text across BeamJoy's own HUD for a few seconds (default 5, 1 to 30). `players` is a
-list of player IDs ; everyone when left out.
+list of player IDs ; everyone when left out, nobody when empty (players connected now only).
 
 ### Leaderboard entries
 
@@ -354,8 +354,16 @@ or nobody was ready in time. `state` is where it was. A finished race sends `Rac
 clock simply moving on.
 
 **`ConfigChanged`** and **`ConfigAction`** go to every plugin like any event ; `plugin` says whose
-tab it was (`BJ.configTab` and `BJ.onConfigAction` only pass on your own). `values` holds secret
-options too, for that plugin.
+tab it was (`BJ.configTab` and `BJ.onConfigAction` only pass on your own). `values` leaves secret
+options empty, `secretsSet` saying which are set : every plugin gets this event. Read them with
+`config.get` (`BJ.configTab`'s callback does, and gets them all).
+
+**Text from players**: names (`name`, `by.name`), race names, and what players type in a page's
+fields are theirs. Escape them before putting them on a web page, and take `@everyone` / `@here`
+out before posting them to Discord. A leaderboard entry's `identity` says what kind of name it is
+(`"beammp"`: a BeamMP account ; a guest's nickname can't be an account's name). In what you send
+BeamJoy, `{{` gets an invisible space between its braces : the game runs what's in `{{ }}` as
+code.
 
 **`PageOpened`** and **`PageAction`** go to every plugin too (`BJ.onPageOpened` and
 `BJ.onPageAction` only pass on your own). `values` are the page's fields as that player set them,
@@ -400,7 +408,9 @@ replaces the one you showed with the same `id`. `overlay.hide {id, players?}` ta
 those players only, when given) ; `overlay.clear {}` takes all of yours down.
 
 - `id`: your own name for it (letters, digits, `_ - .`). A plugin can show 8 at once.
-- `players`: player IDs ; everyone when left out (players who join later too).
+- `players`: player IDs ; everyone when left out (players who join later too), nobody when empty.
+  Only players connected now count : BeamMP gives a player's ID to the next one who connects
+  after they leave, so an ID you kept from before is skipped.
 - `position`: `"top-right"` (default, where the race HUD is), `"top-left"`, `"bottom-right"`,
   `"bottom-left"`, `"top"`, `"bottom"`, `"left"`, `"right"`. Overlays at the same place stack.
 - `hides`: BeamJoy overlays yours stands in for while it's up. `{"race"}` hides BeamJoy's race HUD.
@@ -531,7 +541,7 @@ end)
 - Up to 8 sections, 40 options in all ; the [options](#race-options) as above.
 - `secret = true` on a text option: its value never goes to a player's game. The tab shows
   whether one is set, and leaving it empty keeps it.
-- Saving sends `ConfigChanged` (with every value) ; values only change for options your tab has.
+- Saving sends `ConfigChanged` (every value but the secrets) ; values only change for options your tab has.
 
 ## Pages
 
@@ -569,7 +579,8 @@ adds a page, or replaces yours with the same `id`:
   rail shows 4 plugin pages at most, the full window 6, in `order` (lowest first, then the order
   they were added).
 - `wide = true`: a wider panel. `staffOnly = true`: staff only (it follows promotions within a
-  second). `players`: only those player IDs.
+  second). `players`: only those player IDs (connected now : one from a player who left is
+  skipped).
 - `blocks`: the content everyone sees.
 
 `pages.update {id, blocks, players?}` changes the content: everyone's, or with `players`, those

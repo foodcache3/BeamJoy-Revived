@@ -616,7 +616,7 @@ local function onConfigSave(ctxt, plugin, values)
         local keys = {}
         for k in pairs(changed) do keys[#keys + 1] = k end
         table.sort(keys)
-        services_api.configChanged(plugin, configOf(plugin), keys, ctxt.sender.playerName)
+        services_api.configChanged(plugin, keys, ctxt.sender.playerName)
     end
     communications_tx.sendToPlayer(ctxt.senderID, "toast", "success",
         services_lang.get("pluginConfig.saved", ctxt.sender.lang):var({ name = M.configTabs[plugin].title }))

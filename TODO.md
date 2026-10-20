@@ -9,6 +9,10 @@ belongs in CHANGELOG.md, not here.
 
 Built (see CHANGELOG), not yet tried live. Newest first.
 
+- plugin API security fixes (2726 / 2471) : a guest's nickname matching an account's name (or a
+  connected player's) is refused as taken ; a plugin's config tab still saves and its callback
+  still gets its secrets ; a plugin text with `{{1+1}}` shows as typed, not "2" ;
+
 - sidebar at the join (2725) : join (and rejoin) West Coast without spawning : the sidebar shows
   as soon as the loading ends, in its place ; the HUD text in its place ; a guest's nickname
   prompt still comes first ; F4 still hides / shows it when the host's ForceHud is off ;

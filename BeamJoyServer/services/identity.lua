@@ -13,7 +13,8 @@
 ---    explicitly NOT password-protected (a deliberate scope cut - see this feature's own request
 ---    thread): anyone can type anyone else's nickname and inherit their leaderboard history/tag,
 ---    same trust model as any LAN-party "just type a name" convention. Only prevents two people
----    CURRENTLY connected from colliding on the same nickname at once.
+---    CURRENTLY connected from colliding on the same nickname at once, and a nickname being an
+---    account's name (a connected player's, or one saved : leaderboards are kept by name).
 ---
 --- 2) A single `/login <password>` chat command covering both staff and owner, gated by two
 ---    independent shared passwords (one per tier) set from the server console (never in a chat
@@ -24,7 +25,7 @@
 ---    use the existing `/bj group` or `/setgroup` to demote someone back down.
 
 local M = {
-    dependencies = { "dao_staffAuth", "services_players", "services_groups",
+    dependencies = { "dao_staffAuth", "dao_players", "services_players", "services_groups",
         "services_chatCommands", "services_consoleCommands", "services_chat", "services_lang",
         "services_config", "utils_sha", "communications_rx", "communications_tx" },
 
@@ -61,9 +62,15 @@ local function setNickname(ctxt, nickname)
     if not ctxt.sender.guest then return false, "notGuest" end
     local clean = sanitizeNickname(nickname)
     if not clean then return false, "invalidNickname" end
+    -- nobody connected goes by it, nickname or account name, in any case ; and no account that
+    -- ever joined has it (security review : a guest called "Bob" put times on the account Bob's
+    -- leaderboard entries, and a website showing them couldn't tell)
+    local lower = clean:lower()
     local collision = services_players.players:any(function(p)
-        return p.playerID ~= ctxt.senderID and p.identityNickname == clean
-    end)
+        return p.playerID ~= ctxt.senderID and (
+            (type(p.identityNickname) == "string" and p.identityNickname:lower() == lower) or
+            (type(p.playerName) == "string" and p.playerName:lower() == lower))
+    end) or dao_players.nameExists(clean)
     if collision then return false, "nicknameTaken" end
     ctxt.sender.identityNickname = clean
     -- Real bug: a few places (vehicles.lua's own onVehicleSpawn, services_players.savePlayer)

@@ -162,12 +162,14 @@ end
 --- Hardening : the game's toasts and messages run their text through Angular's template
 --- interpolation (an unknown text goes through $translate.instant), so a "{{" coming from a player's
 --- name or a crew name would be evaluated as an expression. A zero-width space between the two
---- braces keeps it plain text
+--- braces keeps it plain text. Again until none is left : "{{{" is "{" + "{{", and one pass left
+--- "{" + space + "{{" (security review)
 ---@param s any
 ---@return any
 local function noTemplate(s)
     if type(s) ~= "string" then return s end
-    return (s:gsub("{{", "{\226\128\139{"))
+    while s:find("{{", 1, true) do s = s:gsub("{{", "{\226\128\139{") end
+    return s
 end
 
 ---@param text string? nil to remove category message

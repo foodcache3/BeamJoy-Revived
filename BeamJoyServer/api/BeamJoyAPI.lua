@@ -578,7 +578,13 @@ function BJ.configTab(tab, onChange)
     if first then
         BJ.on("ConfigChanged", function(data)
             if data.plugin ~= BJ.name or not configTab.onChange then return end
-            configTab.onChange(data.values, data.changed, data.by)
+            -- the event leaves secrets out (every plugin gets it) : the values, secrets included,
+            -- come from config.get
+            BJ.call("config.get", {}, function(ok, result)
+                if not ok or not configTab.onChange then return end
+                local done, err = pcall(configTab.onChange, result.values, data.changed, data.by)
+                if not done then print("[BeamJoyAPI] the config callback failed : " .. tostring(err)) end
+            end)
         end)
     end
     if BJ.ready then registerConfigTab() end

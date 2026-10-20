@@ -8,7 +8,27 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2725, server build 2470.
+Version 1.11.0 : client build 2726, server build 2471.
+
+- **Security review of the plugin API (2726 / 2471)** (direct request). Players can't reach it :
+  their games can't send it requests or fake its events, and everything plugins show is drawn as
+  plain text. Five weak spots fixed :
+  - **`{{` in plugin text** : the game's translate filter (a plugin's select choices, its config
+    tab's title) and its toasts run what's in `{{ }}` as code. Harmless while a plugin writes its
+    own text, not once it passes on what players typed. Every text a plugin sends (ready-block
+    reasons too) now gets an invisible space between the braces. The toasts' own guard missed
+    `{{{` : fixed too.
+  - **A guest's nickname can't be an account's name** any more (a connected player's, or any
+    account that ever joined, in any case) : leaderboards are kept by name, so a guest called
+    "Bob" put times on the account Bob's entries, and a website sync couldn't tell.
+  - **An empty `players` list is nobody** for overlays and HUD messages (it was everyone) : a
+    plugin filtering its list down to no one broadcast what was meant for a few.
+  - **`ConfigChanged` leaves secrets out** (`secretsSet` says which are set) : every plugin gets
+    it, so a plugin passing events on to Discord passed API keys on. The helper reads them with
+    `config.get` for its own plugin, so `BJ.configTab`'s callback still gets them all.
+  - **Only connected player IDs count** in `players` (overlays, messages, pages) : BeamMP gives a
+    player's ID to the next one who connects after they leave, who got what was meant for them.
+  *(server and client ; plugins pick the new helper up on their next start)*
 
 - **Fix (2725) : the sidebar only showed once you spawned a car** (direct report). Since the join's
   caches got faster (2713), they land about half a second after the UI reload, before BeamJoy's

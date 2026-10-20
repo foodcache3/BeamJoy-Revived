@@ -27,6 +27,20 @@ local function get(playerName)
     return dao_main.get(M.path .. "/" .. playerName .. ".json")
 end
 
+--- whether an account has this name, in any case (only accounts are saved, guests never are).
+--- A guest's nickname mustn't be one : leaderboards are kept by name, so a guest called "Bob" put
+--- times on the account Bob's entry (security review, the plugin API's website sync)
+---@param playerName any
+---@return boolean
+local function nameExists(playerName)
+    if type(playerName) ~= "string" then return false end
+    local wanted = playerName:lower() .. ".json"
+    for _, fileName in pairs(FS.ListFiles(dao_main.getDbPath() .. "/" .. M.path) or {}) do
+        if type(fileName) == "string" and fileName:lower() == wanted then return true end
+    end
+    return false
+end
+
 ---@return table<string, BJSPlayerSaved>
 local function getAll()
     local res = {}
@@ -51,6 +65,7 @@ end
 M.onInit = onInit
 
 M.get = get
+M.nameExists = nameExists
 M.getAll = getAll
 M.save = save
 

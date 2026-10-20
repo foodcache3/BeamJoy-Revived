@@ -136,7 +136,9 @@ local function audienceOf(players)
     for _, pid in ipairs(players) do
         pid = tonumber(pid)
         if not pid then return nil, "players must be a list of player IDs" end
-        set[math.floor(pid)] = true
+        -- connected now only : a left player's ID goes to the next one to connect
+        pid = math.floor(pid)
+        if services_pluginOverlay.isConnected(pid) then set[pid] = true end
     end
     return set
 end

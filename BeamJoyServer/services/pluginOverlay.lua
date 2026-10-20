@@ -45,6 +45,17 @@ local function cut(s, max)
     return s:sub(1, i)
 end
 
+--- no "{{" left (security review) : the game's translate filter and its toasts run what's between
+--- "{{" and "}}" as code, and a plugin's select choices and tab titles go through that filter (a
+--- plugin may well pass on what a player typed). A zero-width space between the braces keeps it
+--- plain text ; again until none is left, "{{{" being "{" + "{{"
+---@param s string
+---@return string
+local function noTemplate(s)
+    while s:find("{{", 1, true) do s = s:gsub("{{", "{\226\128\139{") end
+    return s
+end
+
 ---@param v any
 ---@param max integer
 ---@param keepEmpty boolean? a table cell : a blank one keeps the columns lined up
@@ -52,7 +63,7 @@ end
 local function text(v, max, keepEmpty)
     if type(v) == "number" then v = tostring(v) end
     if type(v) ~= "string" then return nil end
-    v = cut((v:gsub("%c", " ")), max)
+    v = cut(noTemplate((v:gsub("%c", " "))), max)
     if #v == 0 and not keepEmpty then return nil end
     return v
 end
@@ -237,16 +248,27 @@ local function customSpec(s)
     }
 end
 
+--- a player ID that's connected right now (security review) : BeamMP gives a player's ID to the
+--- next player who connects after they leave, who mustn't get what was meant for the other
+---@param id integer
+---@return boolean
+local function isConnected(id)
+    return services_players.players:any(function(p) return p.playerID == id end)
+end
+
+--- left out : everyone. A list : those players, the ones connected ; an empty list is nobody
+--- (security review : a plugin filtering its list down to no one showed it to everyone)
 ---@param players any
 ---@return table<integer, true>?, string? error
 local function audienceOf(players)
-    if players == nil or (type(players) == "table" and next(players) == nil) then return nil end
+    if players == nil then return nil end
     if type(players) ~= "table" then return nil, "players must be a list of player IDs" end
     local set = {}
     for _, id in ipairs(players) do
         id = tonumber(id)
         if not id then return nil, "players must be a list of player IDs" end
-        set[math.floor(id)] = true
+        id = math.floor(id)
+        if isConnected(id) then set[id] = true end
     end
     return set
 end
@@ -473,6 +495,7 @@ M.visibleTo = visibleTo
 -- the same checks, for services/pluginUi.lua and services/pluginPages.lua
 M.cleanText = text
 M.cleanColor = color
+M.isConnected = isConnected
 --- one of the custom layout's blocks, checked (nil when it isn't one)
 ---@param b any
 ---@return table?
