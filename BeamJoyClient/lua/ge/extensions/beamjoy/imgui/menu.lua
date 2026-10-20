@@ -8,9 +8,25 @@ local M = {
     windowConfig = nil,
 
     GITHUB_URL = "https://github.com/foodcache3/BeamJoy-Revived",
+    -- the game only lets openWebBrowser through to beamng.com addresses (CEF's URL domain
+    -- filter) : its forum's link proxy forwards to anywhere else, the way other servers' mods
+    -- open their own pages
+    BNG_PROXY = "https://www.beamng.com/proxy.php?link=",
 }
 -- gc prevention
 local size, position
+
+-- opens a fixed link of ours in the player's own browser, or copies it when the game can't
+-- (only ever called with the constants above, never with text from a server or a plugin)
+---@param url string
+local function openLink(url)
+    if type(openWebBrowser) == "function" and pcall(openWebBrowser, M.BNG_PROXY .. url) then
+        toast.info(beamjoy_lang.translate("beamjoy.menu.about.opened"), nil, 3)
+    else
+        ui_imgui.SetClipboardText(url)
+        toast.info(beamjoy_lang.translate("beamjoy.menu.about.copyGithub.toast"), nil, 3)
+    end
+end
 
 ---@param ctxt TickContext
 local function render(ctxt)
@@ -84,7 +100,9 @@ local function render(ctxt)
     -- here instead, per direct request, as a "copy link" action in this same About menu - clipboard
     -- access works fine from this ImGui overlay (`ui_imgui.SetClipboardText`, the same call the
     -- installed game's own asset browser "Copy path" actions use), so the player can paste it
-    -- wherever they actually want it.
+    -- wherever they actually want it. Opening it was added back (direct request) through the
+    -- game's own openWebBrowser and beamng.com's link proxy (openLink), and the copy item taken out
+    -- (direct request) : openLink still copies the link when the game can't open a browser.
     RenderMenuDropdown(beamjoy_lang.translate("beamjoy.menu.about"), {
         { type = "item", label = string.var(beamjoy_lang.translate("beamjoy.menu.about.label"), { version = beamjoy_main.VERSION, buildversion = beamjoy_main.BUILD }) },
         { type = "item", label = beamjoy_lang.translate("beamjoy.menu.about.createdBy") },
@@ -93,10 +111,9 @@ local function render(ctxt)
         { type = "separator" },
         {
             type = "item",
-            label = beamjoy_lang.translate("beamjoy.menu.about.copyGithub"),
+            label = beamjoy_lang.translate("beamjoy.menu.about.openGithub"),
             onClick = function()
-                ui_imgui.SetClipboardText(M.GITHUB_URL)
-                toast.info(beamjoy_lang.translate("beamjoy.menu.about.copyGithub.toast"), nil, 3)
+                openLink(M.GITHUB_URL)
             end,
         },
     })

@@ -4,8 +4,7 @@ local M = {
     oneUseHandlers = Table(),
 
     -- events left out of the debug log, received / sent : frequent ones that would bury the rest
-    -- (clockSync : 8 pings every 5 minutes, 3 lines each ; its own burst result is logged instead,
-    -- see clockSync.lua)
+    -- (clockSync : 8 pings every 5 minutes, 3 lines each, and not logged at all : direct request)
     RX_LOG_EVENTS_BLACKLIST = { "tick", "trafficRubberbandTick", "clockSync" },
     TX_LOG_EVENTS_BLACKLIST = { "clockSync" },
 }

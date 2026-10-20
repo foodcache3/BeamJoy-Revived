@@ -8,7 +8,45 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2732, server build 2471.
+Version 1.11.0 : client build 2738, server build 2472.
+
+- **Drift spots in white spray paint (2738)** (direct request) : the start and finish lines,
+  and the edges of any spot without its own edge paint picked, are white spray paint instead
+  of chalk. A spot saved with chalk picked keeps it (Edge lines, in the editor). *(client
+  only)*
+
+- **A drift spot's 3rd and 4th signs go by the finish (2737)** (direct request) : they stood
+  right on the 1st and 2nd, beside the start. Now the right then the left of the finish line,
+  3 m before it, facing the cars coming to it. *(client only)*
+
+- **Drift spots : the gate posts gone, a lighter sign marker (2736)** (direct request) : the
+  green and white posts at the ends of the start and finish lines are taken out, the paint
+  and signs show where a spot is. In the editor a sign shows its label only, the big ball and
+  arrow over it gone (the gizmo shows the picked one). *(client only)*
+
+- **Drift spots painted, with signs (2735)** (direct request) : the start and finish lines are
+  chalk painted across the road, and the edges painted along the curve in the spot's own
+  "Edge lines" paint (any of the prop picker's paints, or none ; chalk by default). Every spot
+  needs at least one drift sign : added beside the start in Config > Freeroam > Drift spots,
+  moved and turned with the gizmo, up to 4. A spot without one can't be saved (the editor says
+  which), but spots saved before signs still load and run until they're next edited. The paint
+  and signs are the same for every player, solid signs included ; while editing they follow
+  the changes and aren't solid. The coloured debug lines across the gates and along the edges
+  are gone. *(client and server : the server keeps the new
+  fields and refuses a save without a sign)*
+
+- **Drift spots curve smoothly between their points (2734)** (direct request) : the route and
+  its edges are a smooth curve through the points instead of straight lines from one to the
+  next, in the editor and when driven, and the corridor a run has to stay in follows the same
+  curve. The width eases from one point's to the next's. Nothing to change in saved spots.
+  *(client only)*
+- **Less in the game's log (2734)** (direct request) : the clock's sync result and the police
+  arrest check's distance and speed readings no longer print. *(client only)*
+
+- **The GitHub page opens from the F4 menu again (2733)** (direct request) : About > "Open
+  GitHub page" opens it in the player's own browser, through beamng.com's link proxy since the
+  game only lets its own site through. "Copy GitHub link" taken out (direct request) : the link
+  is still copied if the game can't open a browser. *(client only)*
 
 - **The new props sorted out (2732)** (direct request) : the spectator grid's and big tape's
   centre pieces taken out again, the tarp's corner beside the tarp, the old drums beside the

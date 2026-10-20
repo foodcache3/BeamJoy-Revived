@@ -16,6 +16,9 @@
     bj-config-drift-zones .point-row:hover {
         background-color: rgba(0, 0, 0, 0.25);
     }
+    bj-config-drift-zones .sign-missing {
+        color: #ffb74d;
+    }
     /* capped, so the row keeps empty space to click on (same as the bus lines' name input) */
     bj-config-drift-zones .name-input {
         flex: 1 1 auto;
@@ -84,7 +87,53 @@
                     <bj-slider ng-model="zone.width" min="6" max="60" hard-max="60" step="1"></bj-slider>
                 </td>
             </tr>
+            <tr>
+                <td class="text-right" title="{{'beamjoy.driftZones.edit.edgePaint.tooltip' | translate}}">
+                    {{'beamjoy.driftZones.edit.edgePaint' | translate}}
+                </td>
+                <td>
+                    <bj-select
+                        ng-if="$ctrl.paintOptions.length > 0"
+                        ng-model="zone.edgePaint"
+                        options="$ctrl.paintOptions"
+                        ng-change="$ctrl.setZone(zoneIdx, {edgePaint: value})"
+                    ></bj-select>
+                </td>
+            </tr>
         </table>
+
+        <div class="d-flex align-center gap-1 mt-1 mb-1">
+            <span class="flex-grow-1 opacity-70 small">
+                {{'beamjoy.driftZones.edit.signs' | translate}} ({{zone.signs.length}}/{{$ctrl.MAX_SIGNS}})
+            </span>
+            <button
+                class="btn success"
+                ng-disabled="zone.signs.length >= $ctrl.MAX_SIGNS"
+                ng-click="$ctrl.addSign($event, zoneIdx)"
+                title="{{'beamjoy.driftZones.edit.addSign' | translate}}"
+            >
+                <icon name="add"></icon>
+            </button>
+        </div>
+        <div class="sign-missing small mb-1" ng-if="zone.signs.length === 0">
+            {{'beamjoy.driftZones.edit.noSign' | translate}}
+        </div>
+        <div
+            ng-repeat="sign in zone.signs track by $index"
+            ng-init="signIdx = $index + 1"
+            class="point-row d-flex p-1 gap-1 cursor-pointer align-center"
+            ng-class="{active: $ctrl.activeZone === zoneIdx && $ctrl.activeSign === signIdx}"
+            ng-click="$ctrl.selectSign($event, zoneIdx, signIdx)"
+        >
+            <span class="flex-grow-1">{{'beamjoy.driftZones.edit.sign' | translate}} {{signIdx}}</span>
+            <button
+                class="btn danger"
+                ng-click="$ctrl.deleteSign($event, zoneIdx, signIdx)"
+                title="{{'beamjoy.common.delete' | translate}}"
+            >
+                <icon name="delete"></icon>
+            </button>
+        </div>
 
         <div class="d-flex align-center gap-1 mt-1 mb-1">
             <span class="flex-grow-1 opacity-70 small">

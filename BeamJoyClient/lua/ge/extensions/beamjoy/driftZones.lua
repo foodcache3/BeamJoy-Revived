@@ -13,7 +13,15 @@
 --- Called "drift spots" to players (direct request), the code keeps its zone names. Each point of the
 --- route has its own width (`w`, set by the editor's handles at the ends of its line across the
 --- route), the spot's `width` for one without : the corridor narrows and widens from point to point,
---- and the start and finish gates are their points' width.
+--- and the start and finish gates are their points' width. The route is a smooth curve through its
+--- points (direct request), drawn and checked alike (curve).
+---
+--- In the world (direct request) : the start and finish lines are white spray paint across the gates
+--- (chalk at first, direct request), the edges painted along the curve in the spot's `edgePaint` (any
+--- of beamjoy_props' paints, "none" for no edge lines, white spray paint when unset), and its `signs` (drift signs, at least one a spot : the editor
+--- won't save one without) stand where they were placed. Laid by beamjoy_props as its own set
+--- ("driftZones", every spot on the map at once, so its signs' collision is rebuilt only when the
+--- spots change), the same for every player ; the editor's spots instead while they're edited.
 
 local M = {
     ---@type table[] the current map's zones (the server's cache)
@@ -39,6 +47,16 @@ local HUD_PUSH_MS = 100
 local RESULT_SECONDS = 6
 -- metres, a point's width (kept in sync with services/driftZones.lua)
 local MIN_WIDTH, MAX_WIDTH, DEFAULT_WIDTH = 6, 60, 16
+-- metres between the curve's samples, and at most this many per stretch between two points
+local CURVE_STEP, CURVE_MAX_SAMPLES = 2.5, 24
+-- the paint across the gates, and its width (metres) ; the edges' when a spot has none set
+local GATE_PAINT, GATE_PAINT_WIDTH = "sprayWhite", .5
+M.DEFAULT_EDGE_PAINT = "sprayWhite"
+M.SIGN_SHAPE = "/art/shapes/objects/s_sign_drift.dae"
+-- an edge line's points : about this many metres apart (the paint's own spline smooths between
+-- them), and one painted line at most this long or with this many points (beamjoy_props'
+-- PAINT_MAX_SEGMENTS, about 400 m, and MAX_LINE_NODES), the next going on from its end
+local EDGE_STEP, EDGE_MAX_LENGTH, EDGE_MAX_KNOTS = 6, 360, 48
 
 local lastLy = {}
 local prevFrameMs, frameMs
@@ -52,6 +70,10 @@ local result
 ---@param p table
 ---@return vec3
 local function v3(p) return vec3(p.x, p.y, p.z) end
+
+---@param v vec3
+---@return table
+local function xyz(v) return { x = v.x, y = v.y, z = v.z } end
 
 ---@param a vec3
 ---@param b vec3
@@ -107,6 +129,185 @@ local function pointFrame(zone, i)
 end
 M.pointFrame = pointFrame
 
+---@type table<table, {sig: number, samples: table[]}> zone -> its curve, made again when it moves
+local curves = setmetatable({}, { __mode = "k" })
+
+--- the zone's points and widths as one number : changes when the editor moves one
+---@param zone table
+---@return number
+local function curveSignature(zone)
+    local sig = #zone.points + (tonumber(zone.width) or 0) * 1e-3
+    for i, pt in ipairs(zone.points) do
+        sig = sig + i * (pt.x * 1.3 + pt.y * 1.7 + pt.z * 2.9 + (tonumber(pt.w) or 0) * 3.1)
+    end
+    return sig
+end
+
+--- the route as a smooth curve through its points : between two points a cubic leaving one and
+--- reaching the next along their own way (pointFrame's, so the lines across the route and their
+--- handles stay square to it), its pull the stretch's length ; the height and width go from one
+--- point's to the next's (the width eased, so it holds at each point)
+---@param zone table
+---@return {pos: vec3, right: vec3, w: number}[] samples from the start to the finish
+local function curve(zone)
+    local sig = curveSignature(zone)
+    local cached = curves[zone]
+    if cached and cached.sig == sig then return cached.samples end
+    local samples = {}
+    local n = #zone.points
+    local p0, d0 = pointFrame(zone, 1)
+    local w0 = pointWidth(zone, 1)
+    table.insert(samples, { pos = p0, right = d0:cross(vec3(0, 0, 1)) * (w0 / 2), w = w0 })
+    for i = 2, n do
+        local p1, d1 = pointFrame(zone, i)
+        local w1 = pointWidth(zone, i)
+        local len = math.sqrt((p1.x - p0.x) ^ 2 + (p1.y - p0.y) ^ 2)
+        local k = math.max(1, math.min(CURVE_MAX_SAMPLES, math.ceil(len / CURVE_STEP)))
+        local m0, m1 = d0 * len, d1 * len
+        for j = 1, k do
+            local t = j / k
+            local t2, t3 = t * t, t * t * t
+            local h00, h10, h01, h11 = 2 * t3 - 3 * t2 + 1, t3 - 2 * t2 + t, -2 * t3 + 3 * t2, t3 - t2
+            local pos = p0 * h00 + m0 * h10 + p1 * h01 + m1 * h11
+            pos.z = p0.z + (p1.z - p0.z) * t
+            local tan = p0 * (6 * t2 - 6 * t) + m0 * (3 * t2 - 4 * t + 1) + p1 * (6 * t - 6 * t2) +
+                m1 * (3 * t2 - 2 * t)
+            tan.z = 0
+            local dir = tan:length() > 1e-4 and tan:normalized() or flatDir(p0, p1)
+            if j == k then dir = d1 end
+            local w = w0 + (w1 - w0) * (t2 * (3 - 2 * t))
+            table.insert(samples, { pos = pos, right = dir:cross(vec3(0, 0, 1)) * (w / 2), w = w })
+        end
+        p0, d0, w0 = p1, d1, w1
+    end
+    curves[zone] = { sig = sig, samples = samples }
+    return samples
+end
+M.curve = curve
+
+--- the paint a zone's edges are lined with, nil for none
+---@param zone table
+---@return string?
+function M.edgePaint(zone)
+    local id = zone.edgePaint
+    if id == "none" then return nil end
+    if type(id) == "string" and beamjoy_props and beamjoy_props.getPaint(id) then return id end
+    return M.DEFAULT_EDGE_PAINT
+end
+
+---@param pos vec3
+---@return vec3 on the surface under (or a little over) pos
+local function grounded(pos)
+    return shape.onGround(pos, 5)
+end
+
+--- a painted line along `pts` (its ends and the points between as its nodes)
+---@param paint string
+---@param pts vec3[]
+---@param width number? metres, the paint's own when nil
+---@return table entry beamjoy_props' paint entry
+local function paintEntry(paint, pts, width)
+    local e = { kind = "paint", paint = paint, a = xyz(pts[1]), b = xyz(pts[#pts]), followGround = false, width = width }
+    if #pts > 2 then
+        e.nodes = {}
+        for i = 2, #pts - 1 do e.nodes[#e.nodes + 1] = xyz(pts[i]) end
+    end
+    e.count = beamjoy_props.paintCount(e)
+    return e
+end
+
+--- the zone's two edges as painted lines' points, on the ground : about every EDGE_STEP metres
+--- along the curve, cut into pieces one painted line can take (made again with the curve)
+---@param zone table
+---@return vec3[][] pieces
+local function edgePieces(zone)
+    local samples = curve(zone)
+    local cached = curves[zone]
+    if cached.edges then return cached.edges end
+    local pieces = {}
+    for _, side in ipairs({ -1, 1 }) do
+        local pts, along = {}, 0
+        for i, s in ipairs(samples) do
+            local p = s.pos + s.right * side
+            if i > 1 then along = along + p:distance(samples[i - 1].pos + samples[i - 1].right * side) end
+            if i == 1 or i == #samples or along >= EDGE_STEP then
+                pts[#pts + 1] = grounded(p)
+                along = 0
+            end
+        end
+        local piece, length = { pts[1] }, 0
+        for i = 2, #pts do
+            length = length + pts[i]:distance(pts[i - 1])
+            piece[#piece + 1] = pts[i]
+            if i < #pts and (#piece >= EDGE_MAX_KNOTS or length >= EDGE_MAX_LENGTH) then
+                pieces[#pieces + 1] = piece
+                piece, length = { pts[i] }, 0
+            end
+        end
+        if #piece >= 2 then pieces[#pieces + 1] = piece end
+    end
+    cached.edges = pieces
+    return pieces
+end
+
+--- a sign's facing : the way its mesh's +Y points (its painted face looks the other way)
+---@param sign table
+---@return vec3
+function M.signDir(sign)
+    local d = type(sign.dir) == "table" and vec3(tonumber(sign.dir.x) or 0, tonumber(sign.dir.y) or 0, 0) or nil
+    return (d and d:length() > 1e-4) and d:normalized() or vec3(0, 1, 0)
+end
+
+--- what the zone puts in the world : spray paint across its gates, its edge lines, its signs
+---@param zone table
+---@return table[] beamjoy_props entries
+local function worldEntries(zone)
+    local out = {}
+    if type(zone.points) ~= "table" or #zone.points < 2 then return out end
+    for _, i in ipairs({ 1, #zone.points }) do
+        local pos, _, right = pointFrame(zone, i)
+        out[#out + 1] = paintEntry(GATE_PAINT, { grounded(pos - right), grounded(pos + right) }, GATE_PAINT_WIDTH)
+    end
+    local edge = M.edgePaint(zone)
+    if edge then
+        for _, piece in ipairs(edgePieces(zone)) do out[#out + 1] = paintEntry(edge, piece) end
+    end
+    for _, sign in ipairs(type(zone.signs) == "table" and zone.signs or {}) do
+        if tonumber(sign.x) and tonumber(sign.y) and tonumber(sign.z) then
+            out[#out + 1] = { kind = "static", shape = M.SIGN_SHAPE, pos = { x = sign.x, y = sign.y, z = sign.z },
+                dir = xyz(M.signDir(sign)), up = { x = 0, y = 0, z = 1 } }
+        end
+    end
+    return out
+end
+
+local WORLD_SET = "driftZones"
+--- the editor's zones while it's open on them (setEditorZones), else nil : the saved ones
+local editorZones = nil
+
+--- the spots' paint and signs laid (beamjoy_props), the editor's while it edits them : not solid
+--- then, as the prop editor's own
+local function showWorld()
+    if not beamjoy_props then return end
+    local entries = {}
+    for _, zone in ipairs(editorZones or M.zones) do
+        for _, e in ipairs(worldEntries(zone)) do entries[#entries + 1] = e end
+    end
+    if #entries == 0 then return beamjoy_props.hide(WORLD_SET) end
+    if editorZones then
+        beamjoy_props.show(WORLD_SET, entries, { collision = false, collisionType = "None" })
+    else
+        beamjoy_props.show(WORLD_SET, entries)
+    end
+end
+
+--- the drift spot editor's zones shown in the world instead of the saved ones (nil : back to them)
+---@param zones table[]?
+function M.setEditorZones(zones)
+    editorZones = zones
+    showWorld()
+end
+
 ---@param p vec3
 ---@param a vec3
 ---@param b vec3
@@ -123,10 +324,11 @@ end
 ---@param p vec3
 ---@return boolean within the corridor along the route : its width going from point to point
 local function inCorridor(zone, p)
-    for i = 2, #zone.points do
-        local dist, t = segmentDistance(p, v3(zone.points[i - 1]), v3(zone.points[i]))
-        local width = pointWidth(zone, i - 1) * (1 - t) + pointWidth(zone, i) * t
-        if dist <= width / 2 + CORRIDOR_SLACK then return true end
+    local samples = curve(zone)
+    for i = 2, #samples do
+        local a, b = samples[i - 1], samples[i]
+        local dist, t = segmentDistance(p, a.pos, b.pos)
+        if dist <= (a.w * (1 - t) + b.w * t) / 2 + CORRIDOR_SLACK then return true end
     end
     return false
 end
@@ -322,40 +524,9 @@ local function onVehicleResetted(vid)
 end
 
 -- THE ZONES IN THE WORLD ----------------------------------------------------------------------
-
-local LAYER = "driftZones"
-
-local function draw()
-    local layer = shape.layer(LAYER)
-    layer.reset()
-    if M.editing or (beamjoy_markerSettings and beamjoy_markerSettings.activitiesHidden()) then return end
-    local startColor = BJColor(.2, 1, .4, .85)
-    local finishColor = BJColor(1, 1, 1, .9)
-    local edgeColor = BJColor(1, .45, .1, .45)
-    -- no name over the start (direct request : no nametags on drift spots)
-    for _, zone in ipairs(M.nearby) do
-        local n = #zone.points
-        -- every line on the road's own surface : across a cambered road its two ends sit at
-        -- different heights, along a crest it bends with it
-        for _, which in ipairs({ "start", "finish" }) do
-            local pos, _, right = pointFrame(zone, which == "start" and 1 or n)
-            local color = which == "start" and startColor or finishColor
-            layer.addGroundLine(pos - right, pos + right, .2, color, .05, 1.5)
-            for _, side in ipairs({ pos - right, pos + right }) do
-                local foot = shape.onGround(side)
-                layer.addLine(foot, .12, foot + vec3(0, 0, 2.5), .12, color)
-            end
-        end
-        -- the corridor's edges, from the end of one point's line across the route to the next's
-        local prevPos, _, prevRight = pointFrame(zone, 1)
-        for i = 2, n do
-            local pos, _, right = pointFrame(zone, i)
-            layer.addGroundLine(prevPos - prevRight, pos - right, .08, edgeColor)
-            layer.addGroundLine(prevPos + prevRight, pos + right, .08, edgeColor)
-            prevPos, prevRight = pos, right
-        end
-    end
-end
+-- Nothing drawn over them : no name (direct request : no nametags on drift spots), and the posts
+-- that stood at the gates' ends taken out too (direct request) ; the painted gates, edges and
+-- signs show where a spot is (showWorld)
 
 local lastNearKey
 local function onSlowUpdate()
@@ -378,7 +549,6 @@ local function onSlowUpdate()
         for k in pairs(lastLy) do
             if k ~= "finish" then lastLy[k] = nil end
         end
-        draw()
     end
 end
 
@@ -390,6 +560,7 @@ local function retrieveCache(caches)
     M.zones = table.isArray(caches.driftzones) and caches.driftzones or {}
     M.run = nil
     lastNearKey = nil
+    showWorld()
     extensions.hook("onBJDriftZonesChanged")
     if bigmap and bigmap.updatePOIs then bigmap.updatePOIs() end
 end
@@ -433,11 +604,10 @@ function M.list()
     end)
 end
 
---- the Freeroam editor opened or closed (ui/freeroamEditor.lua) : its drawing replaces these
+--- the Freeroam editor opened or closed (ui/freeroamEditor.lua) : no runs meanwhile
 ---@param open boolean
 local function onBJStationEditorState(open)
     M.editing = open == true
-    draw()
 end
 
 local function onInit()
@@ -448,12 +618,20 @@ end
 local function onServerLeave()
     M.run, M.zones, M.nearby, result = nil, {}, {}, nil
     lastLy, lastPos = {}, nil
-    shape.layer(LAYER).reset()
+    editorZones = nil
+    if beamjoy_props then beamjoy_props.hide(WORLD_SET) end
     if bigmap and bigmap.updatePOIs then bigmap.updatePOIs() end
+end
+
+--- a map loaded : its spots laid again (beamjoy_props clears every set when a map is left)
+---@param state integer
+local function onWorldReadyState(state)
+    if state == 2 then showWorld() end
 end
 
 M.inCorridor = inCorridor
 M.onInit = onInit
+M.onWorldReadyState = onWorldReadyState
 M.onUpdate = onUpdate
 M.onSlowUpdate = onSlowUpdate
 M.onVehicleResetted = onVehicleResetted

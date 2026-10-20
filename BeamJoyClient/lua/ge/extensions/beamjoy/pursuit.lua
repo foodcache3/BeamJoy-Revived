@@ -480,12 +480,6 @@ local function arrestTick(now, dt)
         end
     end
     if not target or gap > M.arrest.dropGap then
-        -- diagnostic : near but beyond the arrest's reach (a wrong distance would show here)
-        if target and gap <= 40 and (not M.arrest.lastLogAt or now - M.arrest.lastLogAt >= 2000) then
-            M.arrest.lastLogAt = now
-            LogInfo(string.format("beamjoy_pursuit: arrest check : nearest fugitive %.1f m away (centres %.1f m apart, lengths %.1f + %.1f)",
-                gap, pos:distance(fPos), radius * 2, target.veh:getInitialLength()))
-        end
         if M.arrest.target then resetArrestation() end
         return
     end
@@ -503,15 +497,6 @@ local function arrestTick(now, dt)
     local speed = math.min(reported or math.huge, measured or math.huge)
     if speed == math.huge then speed = 0 end
     M.arrest.lastPos = fPos
-
-    -- Diagnostic (direct report: "I'm not getting the arrest prompt" while pinned against the
-    -- fugitive) : every 2 s near a fugitive, what the check sees, in the game's log
-    if not M.arrest.lastLogAt or now - M.arrest.lastLogAt >= 2000 then
-        M.arrest.lastLogAt = now
-        LogInfo(string.format("beamjoy_pursuit: arrest check : gap %.1f m (needs %d), speed %.1f m/s (reported %s, measured %s, needs %d), %.1f / %d s",
-            gap, M.arrest.maxGap, speed, tostring(reported), measured and string.format("%.1f", measured) or "-",
-            M.arrest.maxSpeed, M.arrest.progress, M.arrest.duration))
-    end
 
     if gap <= M.arrest.maxGap and speed <= M.arrest.maxSpeed then
         M.arrest.progress = M.arrest.progress + dt

@@ -12,6 +12,11 @@
 ---@field points {x: number, y: number, z: number, w: number?}[] the route : the start gate, any
 ---number of points along the way, the finish gate (2 to MAX_POINTS). `w` : the corridor's width at
 ---that point (metres, the editor's width handles), the gates' own at the start and the finish
+---@field edgePaint string? the paint along its edges (the client's beamjoy_props paints, "none" for
+---none ; checked for its form only, as a prop's paint), the client's default when unset
+---@field signs {x: number, y: number, z: number, dir: {x: number, y: number}}[] its drift signs
+---(direct request : at least one, a save without is refused ; spots saved before them have none
+---until edited), `dir` the way the sign's mesh faces
 
 local M = {
     dependencies = { "dao_activity", "services_core", "services_players", "services_permissions",
@@ -24,6 +29,7 @@ local M = {
     MIN_WIDTH = 6,
     MAX_WIDTH = 60,
     DEFAULT_WIDTH = 16,
+    MAX_SIGNS = 4,
 
     ---@type BJDriftZone[] the current map's zones
     zones = {},
@@ -75,6 +81,20 @@ local function sanitize(list)
                 points[#points + 1] = clean
             end
         end
+        local signs = {}
+        for _, s in ipairs(type(z.signs) == "table" and z.signs or {}) do
+            local clean = point(s)
+            if clean and #signs < M.MAX_SIGNS then
+                local dx = type(s.dir) == "table" and tonumber(s.dir.x) or nil
+                local dy = type(s.dir) == "table" and tonumber(s.dir.y) or nil
+                local len = dx and dy and math.sqrt(dx * dx + dy * dy) or 0
+                if len ~= len or len < 1e-4 then dx, dy, len = 0, 1, 1 end
+                clean.dir = { x = dx / len, y = dy / len }
+                signs[#signs + 1] = clean
+            end
+        end
+        local edgePaint = type(z.edgePaint) == "string" and #z.edgePaint <= 40 and
+            z.edgePaint:match("^[%w_]+$") and z.edgePaint or nil
         if #points >= 2 then
             local name = type(z.name) == "string" and z.name:trim() or ""
             -- a default name from before they were called drift spots : the new one
@@ -84,6 +104,8 @@ local function sanitize(list)
                 id = z.id,
                 name = name:sub(1, M.MAX_NAME_LEN),
                 width = math.clamp(tonumber(z.width) or M.DEFAULT_WIDTH, M.MIN_WIDTH, M.MAX_WIDTH),
+                edgePaint = edgePaint,
+                signs = signs,
                 points = points,
             }
         end
@@ -121,6 +143,13 @@ local function driftZonesSave(ctxt, list)
         return communications_tx.sendToPlayer(ctxt.senderID, "driftZonesSaved", false, err)
     end
     local zones, err = sanitize(list)
+    -- a sign each (direct request ; only checked on save : spots saved before signs still load)
+    for _, z in ipairs(zones or {}) do
+        if #z.signs == 0 then
+            zones, err = nil, string.format("%s needs at least one drift sign", z.name)
+            break
+        end
+    end
     if not zones then
         LogError(string.format("driftZonesSave rejected%s: %s",
             ctxt.sender and (" from " .. ctxt.sender.playerName) or "", err))

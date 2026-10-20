@@ -529,17 +529,28 @@ angular.module("beamjoy").component("bjConfigDriftZones", {
         // kept in sync with services/driftZones.lua
         this.MAX_POINTS = 40;
 
+        this.MAX_SIGNS = 4;
+
         this.zones = [];
         this.activeZone = null; // 1-based, or null
         this.activePoint = null; // 1-based, or null
+        this.activeSign = null; // 1-based, or null
+        // the edge lines' paints : none, then every paint (pushed by ui/driftZoneEditor.lua)
+        this.paintOptions = [];
         // the widths last seen, to spot a slider move (bj-slider has no change callback)
         let widths = "";
+
+        $rootScope.$on("BJEditorDriftZonesPaints", (_, options) => {
+            this.paintOptions = Array.isArray(options) ? options : [];
+        });
 
         $rootScope.$on("BJEditorDriftZonesListUpdate", (_, zones) => {
             // an empty Lua table arrives as {} : not an array
             this.zones = Array.isArray(zones) ? zones : [];
             this.zones.forEach((z) => {
                 if (!Array.isArray(z.points)) z.points = [];
+                if (!Array.isArray(z.signs)) z.signs = [];
+                if (!z.edgePaint) z.edgePaint = "sprayWhite";
             });
             widths = this.zones.map((z) => z.width).join(",");
         });
@@ -547,6 +558,7 @@ angular.module("beamjoy").component("bjConfigDriftZones", {
             active = active || {};
             this.activeZone = active.zone || null;
             this.activePoint = active.point || null;
+            this.activeSign = active.sign || null;
             if (this.activeZone && this.activePoint) {
                 $timeout(() => {
                     const el = document.getElementById(`drift-point-row-${this.activeZone}-${this.activePoint}`);
@@ -603,6 +615,18 @@ angular.module("beamjoy").component("bjConfigDriftZones", {
             send("BJEditorDriftZonesDeleteZone", [zi]);
         };
         this.setZone = (zi, partial) => send("BJEditorDriftZonesSetZone", [zi, partial]);
+        this.addSign = (event, zi) => {
+            event.stopPropagation();
+            send("BJEditorDriftZonesAddSign", [zi]);
+        };
+        this.selectSign = (event, zi, si) => {
+            event.stopPropagation();
+            send("BJEditorDriftZonesSelectSign", [zi, si]);
+        };
+        this.deleteSign = (event, zi, si) => {
+            event.stopPropagation();
+            send("BJEditorDriftZonesDeleteSign", [zi, si]);
+        };
         this.selectPoint = (event, zi, pi) => {
             event.stopPropagation();
             send("BJEditorDriftZonesSelectPoint", [zi, pi]);
