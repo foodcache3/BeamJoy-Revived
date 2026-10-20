@@ -2710,10 +2710,31 @@ function M.onBJClick(clickType)
     return true
 end
 
+-- the host's snapping to the ground as last seen (followSnap), nil until seen since it attached
+local lastSnap = nil
+
+--- the host's snapping switched : what's selected follows the ground with it, as its own "Follow
+--- the ground" would (direct request : snapping off turns it off, on turns it on again), lines too
+local function followSnap()
+    local on = snapOn()
+    if lastSnap == nil or on == lastSnap then
+        lastSnap = on
+        return
+    end
+    lastSnap = on
+    local list = props()
+    if not list then return end
+    local selected = #M.propSelection > 0 and M.propSelection or { M.activePropIndex }
+    for _, i in ipairs(selected) do
+        if list[i] then onSetProp(i, { followGround = on }) end
+    end
+end
+
 --- per frame, from the host's onUpdate : true while a prop is armed (the mouse is the placing's,
 --- the host's own handles wait)
 ---@return boolean
 function M.onUpdate()
+    followSnap()
     if updateHandleDrag() then return true end
     local placing = updatePlacing()
     updateHover()
@@ -2776,6 +2797,7 @@ end
 function M.attach(host)
     if M.host and M.host ~= host then M.detach(M.host) end
     M.host = host
+    lastSnap = nil
     blockNodeGrabber(true)
     M.reset()
 end
@@ -2787,6 +2809,7 @@ function M.detach(host)
     disarmProp()
     handleDrag = nil
     M.host = nil
+    lastSnap = nil
     shape.layer(HOVER_LAYER).reset()
     hoverShown = false
     blockNodeGrabber(false)

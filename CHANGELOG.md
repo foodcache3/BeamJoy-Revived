@@ -8,7 +8,32 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 1.11.0 : client build 2726, server build 2471.
+Version 1.11.0 : client build 2729, server build 2471.
+
+- **Props placed and pictured the right way round, and a Lights category (2729)** (direct
+  request). Placed a quarter turn counterclockwise from before : both arrow signs, both arrow
+  boards, the construction sign, the checkpoint and finish signs, the feather and teardrop flags,
+  both rally gates and every ramp ; the pacenote boards a half turn. Props already placed keep
+  how they stand. Pictured from their other side : the teardrop flag, the start lights, the drift
+  sign, the straight pacenote board, the signboards, construction signs B and C, the arrow signs
+  and the Italian guardrail ; the fold chair as it was before 2727, the 2x2 flip ramp like the
+  other ramps again. The spotlight stands lower (0.12 m up, not 0.2). The lamps, street lights
+  and floodlights have a Lights category of their own, in the curated props and the prefabs (the
+  floodlights on their mounts, the ceiling lights). *(client only)*
+
+- **The editors' snap to ground switches the selected props' "Follow the ground" with it (2728)**
+  (direct request). Snapping turned off turns it off for what's selected (a prop, a prefab, a line,
+  a curb, a painted line, several at once), turned on again turns it back on : the prop back on
+  the ground, laid on its tilt. *(client only)*
+
+- **Fix (2727) : prop pictures turned round since 0.40** (direct report : the arrow boards shown
+  from the back). 0.40's preview puts its camera on the other side of a mesh for the same turn :
+  the curated meshes with a view of their own (the construction signs, the rally corner markers,
+  the fold chair) showed their backs, the lying ones (the flag markers, the metal fence) came out
+  upside down, and a mesh about as good from both sides (the arrow boards) got its other side.
+  Every turn now makes up for it, the arrow boards always get their face, and the pictures are
+  all made again once. The 2x2 flip ramp's was right as 0.40 drew it (direct report, 2728) : kept
+  so. *(client only)*
 
 - **Security review of the plugin API (2726 / 2471)** (direct request). Players can't reach it :
   their games can't send it requests or fake its events, and everything plugins show is drawn as

@@ -48,8 +48,9 @@ local CACHE_DIR = "/temp/bjPropThumbs"
 local META_FILE = CACHE_DIR .. "/meta.json"
 -- the thumbnails : v4 since the shared meshes borrow their missing materials (those made before are
 -- left unused, some pictured with "no material" ; as are the World Editor's own, one camera for all),
--- v5 since some curated meshes have a view of their own
-local THUMB_DIR = CACHE_DIR .. "/v5"
+-- v5 since some curated meshes have a view of their own, v6 since 0.40 turned the preview's camera
+-- round (PREVIEW_YAW), v7 since more of them have one
+local THUMB_DIR = CACHE_DIR .. "/v7"
 -- frames the preview is given to load and settle before it's captured (as the asset browser does)
 local SETTLE_FRAMES = 3
 -- the render the thumbnail is cut from (px), and the margin left around the mesh (of its size)
@@ -68,6 +69,10 @@ local STATS_EVERY = 20
 -- the camera's pitch, and its turn off square to the mesh's long side (so it shows some depth)
 local THUMB_PITCH = 0.35
 local THUMB_TURN = 0.6
+-- added to every turn : 0.40's preview puts its camera on the other side of the mesh for the same
+-- turn (direct report : the arrow boards shown from the back ; the signs' and the corner markers'
+-- set views showed their backs too, the lying flag markers and metal fence came out upside down)
+local PREVIEW_YAW = math.pi
 local META_SAVE_DELAY_MS = 2000
 -- the mesh's shaders compiled in the background first (direct report : the drawer froze up to a
 -- second a mesh, scrolling it after 0.40 had emptied the shader cache) : its preview rendered as the
@@ -368,9 +373,9 @@ end
 ---@return number[] yaws, number pitch, boolean upsideDown
 local function thumbYaws(size, shape)
     local cat = beamjoy_props.catalogForShape(shape)
-    if cat and cat.thumbLying then return { 0 }, math.pi / 2 - THUMB_PITCH, true end
-    local base = 0
-    if size and tonumber(size.x) and tonumber(size.y) and size.y > size.x then base = math.pi / 2 end
+    if cat and cat.thumbLying then return { PREVIEW_YAW }, math.pi / 2 - THUMB_PITCH, true end
+    local base = PREVIEW_YAW
+    if size and tonumber(size.x) and tonumber(size.y) and size.y > size.x then base = base + math.pi / 2 end
     if cat and tonumber(cat.thumbTurn) then return { base + THUMB_TURN + math.rad(cat.thumbTurn) }, THUMB_PITCH, false end
     return { base + THUMB_TURN, base + THUMB_TURN + math.pi }, THUMB_PITCH, false
 end

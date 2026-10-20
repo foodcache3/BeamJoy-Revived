@@ -80,7 +80,8 @@ local M = {
     --- as a panel by the editor, since nothing of them shows in the world. A mesh under /levels/<map>/
     --- has its materials defined by that map only : ensureMaterials() brings them along elsewhere.
     --- How its picture is made (beamjoy_propPicker), where the view from its size doesn't suit it :
-    --- `thumbTurn` (degrees) turns the camera round it (from the back of a sign to its face),
+    --- `thumbTurn` (degrees) turns the camera round it (from the back of a sign to its face ; 0 : the
+    --- first side only, not whichever side shows more of it),
     --- `thumbLying` pictures a mesh the preview draws lying on its back, its top toward its own +y
     --- (its file stands it up with an axis or node rotation the preview doesn't apply, the world does).
     CATALOG = {
@@ -99,7 +100,7 @@ local M = {
         { id = "raceBarricadeCurveB", cat = "barriers", tags = "crowd fence metal bend", shape = "/art/shapes/race/ut_race_mesh_barricade_curve_b.DAE" },
         { id = "safetyCushion", cat = "barriers", tags = "crash impact attenuator", shape = "/art/shapes/race/rally/rally_assets/s_safety_cushion_01.dae" },
         { id = "constructionBarrier", cat = "barriers", tags = "roadworks arrows", shape = "/art/shapes/objects/constructionbarrier_arrows.dae", yaw = 0, length = 2 },
-        { id = "guardrailItaly", cat = "barriers", tags = "armco rail steel italy", shape = "/art/shapes/objects/italy_guardrails_common_section.dae" },
+        { id = "guardrailItaly", cat = "barriers", tags = "armco rail steel italy", shape = "/art/shapes/objects/italy_guardrails_common_section.dae", thumbTurn = 180 },
         { id = "tireStackAtt", cat = "barriers", tags = "tyre wall", shape = "/levels/automation_test_track/art/shapes/objects/tirestack.dae" },
         { id = "tireStackAttBlue", cat = "barriers", tags = "tyre wall", shape = "/levels/automation_test_track/art/shapes/objects/tirestack_blue.dae" },
         { id = "tireWallAtt", cat = "barriers", tags = "tyre stack", shape = "/levels/automation_test_track/art/shapes/objects/tirewall.dae" },
@@ -129,28 +130,30 @@ local M = {
         { id = "flagMarkerOrange", cat = "markers", tags = "pole", shape = "/art/shapes/race/flagMarkerOrange.dae", collision = "None", thumbLying = true },
         { id = "cornerMarker", cat = "markers", tags = "rally post", shape = "/art/shapes/race/rally/rally_assets/s_corner_marker.dae", collision = "None" },
         -- signs
-        { id = "arrowSignLeft", cat = "signs", tags = "direction turn", shape = "/art/shapes/objects/race_arrowsign_1_L.dae", yaw = 0, length = 3.1 },
-        { id = "arrowSignRight", cat = "signs", tags = "direction turn", shape = "/art/shapes/objects/race_arrowsign_1_R.dae", yaw = 0, length = 3.1 },
-        -- turned by hand (direct report : a quarter turn counterclockwise) : their box is about
-        -- square, so the size-based guess couldn't tell their face from their side
-        { id = "arrowBoardLeft", cat = "signs", tags = "roadworks direction", shape = "/art/shapes/objects/arrowboard_L.dae", yaw = -90 },
-        { id = "arrowBoardRight", cat = "signs", tags = "roadworks direction", shape = "/art/shapes/objects/arrowboard_R.dae", yaw = -90 },
-        -- pictured from their face (direct report : the preview showed their back)
-        { id = "constructionSign", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_a.DAE", yaw = 0, length = 2.6, thumbTurn = 180 },
-        { id = "constructionSignB", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_b.DAE" },
-        { id = "constructionSignC", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_c.DAE" },
-        { id = "signboardStart", cat = "signs", tags = "rally board", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_start.dae", collision = "None" },
-        { id = "signboardFinish", cat = "signs", tags = "rally board end", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_finish.dae", collision = "None" },
-        { id = "signboardStop", cat = "signs", tags = "rally board", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_stop.dae", collision = "None" },
-        { id = "signboardTimeControl", cat = "signs", tags = "rally board", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_time_control.dae", collision = "None" },
-        { id = "cornerLeft", cat = "signs", tags = "rally pacenote turn", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_left.dae", collision = "None", thumbTurn = 180 },
-        { id = "cornerRight", cat = "signs", tags = "rally pacenote turn", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_right.dae", collision = "None" },
-        { id = "cornerStraight", cat = "signs", tags = "rally pacenote", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_straight.dae", collision = "None" },
-        { id = "checkpointSign", cat = "signs", tags = "gate", shape = "/art/shapes/race/sign_checkpoint.dae" },
-        { id = "finishSign", cat = "signs", tags = "end", shape = "/art/shapes/race/sign_finish.dae" },
-        { id = "driftSign", cat = "signs", tags = "drift zone", shape = "/art/shapes/objects/s_sign_drift.dae" },
+        -- `yaw` of the signs, the flags, the rally gates and the ramps turned by hand (direct request :
+        -- each a quarter turn counterclockwise from the size-based guess, the pacenote boards a half
+        -- turn), and those pictured from their face (`thumbTurn`, direct report : the preview showed
+        -- their back)
+        { id = "arrowSignLeft", cat = "signs", tags = "direction turn", shape = "/art/shapes/objects/race_arrowsign_1_L.dae", yaw = 90, length = 3.1, thumbTurn = 180 },
+        { id = "arrowSignRight", cat = "signs", tags = "direction turn", shape = "/art/shapes/objects/race_arrowsign_1_R.dae", yaw = 90, length = 3.1, thumbTurn = 180 },
+        -- their box is about square : the size-based guess can't tell their face from their side
+        { id = "arrowBoardLeft", cat = "signs", tags = "roadworks direction", shape = "/art/shapes/objects/arrowboard_L.dae", yaw = 0, thumbTurn = 0 },
+        { id = "arrowBoardRight", cat = "signs", tags = "roadworks direction", shape = "/art/shapes/objects/arrowboard_R.dae", yaw = 0, thumbTurn = 0 },
+        { id = "constructionSign", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_a.DAE", yaw = 90, length = 2.6, thumbTurn = 180 },
+        { id = "constructionSignB", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_b.DAE", thumbTurn = 180 },
+        { id = "constructionSignC", cat = "signs", tags = "roadworks warning", shape = "/art/shapes/objects/construction_sign_big_c.DAE", thumbTurn = 180 },
+        { id = "signboardStart", cat = "signs", tags = "rally board", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_start.dae", collision = "None", thumbTurn = 180 },
+        { id = "signboardFinish", cat = "signs", tags = "rally board end", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_finish.dae", collision = "None", thumbTurn = 180 },
+        { id = "signboardStop", cat = "signs", tags = "rally board", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_stop.dae", collision = "None", thumbTurn = 180 },
+        { id = "signboardTimeControl", cat = "signs", tags = "rally board", shape = "/art/shapes/race/rally/rally_assets/s_rally_signboard_time_control.dae", collision = "None", thumbTurn = 180 },
+        { id = "cornerLeft", cat = "signs", tags = "rally pacenote turn", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_left.dae", collision = "None", yaw = 180, thumbTurn = 180 },
+        { id = "cornerRight", cat = "signs", tags = "rally pacenote turn", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_right.dae", collision = "None", yaw = 180 },
+        { id = "cornerStraight", cat = "signs", tags = "rally pacenote", shape = "/art/shapes/race/rally/rally_assets/s_corner_dir_straight.dae", collision = "None", yaw = 180, thumbTurn = 180 },
+        { id = "checkpointSign", cat = "signs", tags = "gate", shape = "/art/shapes/race/sign_checkpoint.dae", yaw = 90 },
+        { id = "finishSign", cat = "signs", tags = "end", shape = "/art/shapes/race/sign_finish.dae", yaw = 90 },
+        { id = "driftSign", cat = "signs", tags = "drift zone", shape = "/art/shapes/objects/s_sign_drift.dae", thumbTurn = 180 },
         -- start and finish
-        { id = "startTree", cat = "start", tags = "lights christmas countdown", shape = "/art/shapes/race/rally/rally_assets/s_rally_start_tree.dae", yaw = 0, length = 1 },
+        { id = "startTree", cat = "start", tags = "lights christmas countdown", shape = "/art/shapes/race/rally/rally_assets/s_rally_start_tree.dae", yaw = 0, length = 1, thumbTurn = 180 },
         { id = "startSensor", cat = "start", tags = "timing beam", shape = "/art/shapes/race/rally/rally_assets/s_rally_start_sensor.dae", collision = "None" },
         { id = "truss1", cat = "start", tags = "gantry arch gate", shape = "/art/shapes/race/rally/rally_assets/s_trusssystem_01.dae" },
         { id = "truss2", cat = "start", tags = "gantry arch gate", shape = "/art/shapes/race/rally/rally_assets/s_trusssystem_02.dae" },
@@ -160,25 +163,26 @@ local M = {
         { id = "truss6", cat = "start", tags = "gantry arch gate", shape = "/art/shapes/race/rally/rally_assets/s_trusssystem_06.dae" },
         { id = "arrowFlag", cat = "start", tags = "pennant", shape = "/art/shapes/race/arrowFlag_01.dae", collision = "None" },
         { id = "arrowFlagB", cat = "start", tags = "pennant", shape = "/art/shapes/race/arrowFlag_02.dae", collision = "None" },
-        { id = "flagFeather", cat = "start", tags = "banner", shape = "/art/shapes/garage_and_dealership/s_flag_floor_feather_01.dae", yaw = 0, length = 4, collision = "None" },
-        { id = "flagTeardrop", cat = "start", tags = "banner", shape = "/art/shapes/garage_and_dealership/s_flag_floor_teardrop_01.dae", yaw = 0, length = 4, collision = "None" },
+        { id = "flagFeather", cat = "start", tags = "banner", shape = "/art/shapes/garage_and_dealership/s_flag_floor_feather_01.dae", yaw = 90, length = 4, collision = "None" },
+        { id = "flagTeardrop", cat = "start", tags = "banner", shape = "/art/shapes/garage_and_dealership/s_flag_floor_teardrop_01.dae", yaw = 90, length = 4, collision = "None", thumbTurn = 180 },
         -- its tower starts 6.86 m above its origin (its concrete footing) : stood on the ground
         { id = "timerBoard", cat = "start", tags = "scoreboard clock drag timing", shape = "/art/shapes/race/dragstrip/timerboard.dae", zOffset = -6.86 },
         -- East Coast's rally gates (direct request). Stood on their origin, as the map places them :
         -- their concrete feet are sunk 2.30 m into the ground (the measured lift, 3.26 m, raised
         -- them out of it, and their collision mesh reaches lower still)
-        { id = "rallyGate", cat = "start", tags = "arch gantry banner hirochi gripall", shape = "/levels/east_coast_usa/art/shapes/race/race_rally_gate.dae", yaw = 0, length = 12, zOffset = 0 },
-        { id = "rallyGateFinish", cat = "start", tags = "arch gantry banner finish line", shape = "/levels/east_coast_usa/art/shapes/race/race_rally_gate_finish.dae", yaw = 0, length = 12, zOffset = 0 },
-        -- ramps and obstacles
-        { id = "rampLarge", cat = "ramps", tags = "jump kicker", shape = "/art/shapes/objects/ramp_massive.dae" },
-        { id = "crossRampHr", cat = "ramps", tags = "jump derby", shape = "/levels/hirochi_raceway/art/shapes/buildings/derby_crossramp.dae" },
+        { id = "rallyGate", cat = "start", tags = "arch gantry banner hirochi gripall", shape = "/levels/east_coast_usa/art/shapes/race/race_rally_gate.dae", yaw = 90, length = 12, zOffset = 0 },
+        { id = "rallyGateFinish", cat = "start", tags = "arch gantry banner finish line", shape = "/levels/east_coast_usa/art/shapes/race/race_rally_gate_finish.dae", yaw = 90, length = 12, zOffset = 0 },
+        -- ramps and obstacles : turned a quarter counterclockwise from their size-based guess (the
+        -- cross ramp's was 90)
+        { id = "rampLarge", cat = "ramps", tags = "jump kicker", shape = "/art/shapes/objects/ramp_massive.dae", yaw = 90 },
+        { id = "crossRampHr", cat = "ramps", tags = "jump derby", shape = "/levels/hirochi_raceway/art/shapes/buildings/derby_crossramp.dae", yaw = 180 },
         -- (direct report) centred where they're placed as the other ramps are : their origin is a
         -- corner, the ramp 2 m (4 m) to its -x. The square one pictured from the side as the others
         -- (its box about square, the view from its size looked up its slope)
-        { id = "flipRamp2x2", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_2x2_1.dae", xOffset = 1, thumbTurn = 90 },
-        { id = "flipRamp4x2Mild", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_mild.dae", xOffset = 1 },
-        { id = "flipRamp4x2Heavy", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_heavy.dae", xOffset = 1 },
-        { id = "flipRamp4x4", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x4.dae", xOffset = 2 },
+        { id = "flipRamp2x2", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_2x2_1.dae", xOffset = 1, yaw = 90, thumbTurn = 90 },
+        { id = "flipRamp4x2Mild", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_mild.dae", xOffset = 1, yaw = 90 },
+        { id = "flipRamp4x2Heavy", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x2_heavy.dae", xOffset = 1, yaw = 90 },
+        { id = "flipRamp4x4", cat = "ramps", tags = "jump kicker", shape = "/levels/gridmap_v2/art/shapes/grid/s_gm_flip_ramp_4x4.dae", xOffset = 2, yaw = 90 },
         -- scenery
         { id = "woodCrate", cat = "scenery", tags = "box", shape = "/art/shapes/objects/s_wood_crate_closed.dae", yaw = 0, length = 3 },
         { id = "crateStack", cat = "scenery", tags = "boxes", shape = "/art/shapes/garage_and_dealership/Clutter/crate_stack.DAE" },
@@ -189,26 +193,27 @@ local M = {
         { id = "metalDrum", cat = "scenery", tags = "barrel oil", shape = "/art/shapes/garage_and_dealership/Clutter/metal_drum_a.DAE" },
         { id = "dumpster", cat = "scenery", tags = "skip trash", shape = "/art/shapes/garage_and_dealership/Clutter/ind_dumpster_full.DAE" },
         { id = "cityBin", cat = "scenery", tags = "trash", shape = "/art/shapes/garage_and_dealership/Clutter/clutter_city_bin_round.dae" },
-        -- lamps : their light is LAMPS' (below)
-        { id = "lightPole", cat = "scenery", tags = "street lamp light", shape = "/art/shapes/objects/pole_light_single.dae" },
+        -- lights (their own category, direct request) : their light is LAMPS' (below)
+        { id = "lightPole", cat = "lights", tags = "street lamp light", shape = "/art/shapes/objects/pole_light_single.dae" },
         -- the same arm and head on a bridge railing mount, and one each side
-        { id = "lightPoleBridge", cat = "scenery", tags = "street lamp light railing", shape = "/art/shapes/objects/pole_light_bridge.dae" },
-        { id = "lightPoleDouble", cat = "scenery", tags = "street lamp light twin", shape = "/art/shapes/objects/pole_light_double.dae" },
-        { id = "standingLight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_standinglight_01.dae" },
-        -- raised a little (direct request) : its bracket's lowest point is 0.08 m under its origin
-        { id = "spotlight", cat = "scenery", tags = "flood lamp light", shape = "/art/shapes/objects/s_spotlight_01.dae", zOffset = .2 },
+        { id = "lightPoleBridge", cat = "lights", tags = "street lamp light railing", shape = "/art/shapes/objects/pole_light_bridge.dae" },
+        { id = "lightPoleDouble", cat = "lights", tags = "street lamp light twin", shape = "/art/shapes/objects/pole_light_double.dae" },
+        { id = "standingLight", cat = "lights", tags = "flood lamp light", shape = "/art/shapes/objects/s_standinglight_01.dae" },
+        -- raised a little (direct request) : its bracket's lowest point is 0.08 m under its origin.
+        -- 0.2 was too much (direct report)
+        { id = "spotlight", cat = "lights", tags = "flood lamp light", shape = "/art/shapes/objects/s_spotlight_01.dae", zOffset = .12 },
         -- 0.40's lamps (the game's own, every map : direct request), as Italy places them ; their
         -- mounted floodlights are prefabs (PREFABS below)
-        { id = "lampPostHighway", cat = "scenery", tags = "street lamp light pole road", shape = "/assets/meshes/props/urban/lighting/s_lamp_post_single_highway_01.dae" },
-        { id = "lampPostStreet", cat = "scenery", tags = "street lamp light pole", shape = "/assets/meshes/props/urban/lighting/s_lamp_post_street_single_01.dae" },
-        { id = "streetLampSidewalk", cat = "scenery", tags = "street lamp light lantern pole town", shape = "/assets/meshes/props/urban/lighting/s_streetlamp_sidewalk_01.dae" },
-        { id = "streetLampHanging", cat = "scenery", tags = "street lamp light lantern hanging town", shape = "/assets/meshes/props/urban/lighting/s_streetlamp_hanging_01.dae" },
-        { id = "wallLantern", cat = "scenery", tags = "wall lamp light lantern town", shape = "/assets/meshes/props/urban/lighting/s_wall_lamp_urban_01.dae" },
-        { id = "floodlight100", cat = "scenery", tags = "flood lamp light projector", shape = "/assets/meshes/props/urban/lighting/s_floodlight_100W.dae" },
-        { id = "floodlight500", cat = "scenery", tags = "flood lamp light projector", shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae" },
-        { id = "floodlight1000", cat = "scenery", tags = "flood lamp light projector", shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae" },
+        { id = "lampPostHighway", cat = "lights", tags = "street lamp light pole road", shape = "/assets/meshes/props/urban/lighting/s_lamp_post_single_highway_01.dae" },
+        { id = "lampPostStreet", cat = "lights", tags = "street lamp light pole", shape = "/assets/meshes/props/urban/lighting/s_lamp_post_street_single_01.dae" },
+        { id = "streetLampSidewalk", cat = "lights", tags = "street lamp light lantern pole town", shape = "/assets/meshes/props/urban/lighting/s_streetlamp_sidewalk_01.dae" },
+        { id = "streetLampHanging", cat = "lights", tags = "street lamp light lantern hanging town", shape = "/assets/meshes/props/urban/lighting/s_streetlamp_hanging_01.dae" },
+        { id = "wallLantern", cat = "lights", tags = "wall lamp light lantern town", shape = "/assets/meshes/props/urban/lighting/s_wall_lamp_urban_01.dae" },
+        { id = "floodlight100", cat = "lights", tags = "flood lamp light projector", shape = "/assets/meshes/props/urban/lighting/s_floodlight_100W.dae" },
+        { id = "floodlight500", cat = "lights", tags = "flood lamp light projector", shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae" },
+        { id = "floodlight1000", cat = "lights", tags = "flood lamp light projector", shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae" },
         { id = "foldTable", cat = "scenery", tags = "pit", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_table_01.dae" },
-        { id = "foldChair", cat = "scenery", tags = "pit seat", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_chair_01.dae", collision = "None", thumbTurn = 180 },
+        { id = "foldChair", cat = "scenery", tags = "pit seat", shape = "/art/shapes/race/rally/rally_assets/s_rally_fold_chair_01.dae", collision = "None", thumbTurn = 0 },
         { id = "tireHr", cat = "scenery", tags = "tyre wheel giant", shape = "/levels/hirochi_raceway/art/shapes/buildings/hr_tire.DAE" },
         { id = "wheelbarrow", cat = "scenery", tags = "construction", shape = "/art/shapes/objects/s_wheelbarrow.dae" },
         { id = "tree", cat = "scenery", tags = "forest beech", shape = "/assets/meshes/foliage/trees_library/beech/tree_beech_large_b.dae" },
@@ -219,7 +224,7 @@ local M = {
     },
 
     --- the picker's categories, in order
-    CATEGORIES = { "barriers", "fences", "markers", "signs", "start", "ramps", "scenery", "utility" },
+    CATEGORIES = { "barriers", "fences", "markers", "signs", "start", "ramps", "scenery", "lights", "utility" },
 
     --- prefabs (the drawer's Prefabs tab, direct request) : several meshes placed as one prop (see
     --- `parts` at the top of this file). The game's own layouts (its art/prefabs files : the rally
@@ -228,7 +233,7 @@ local M = {
     --- lift). Filled below
     ---@type table[]
     PREFABS = {},
-    PREFAB_CATEGORIES = { "gazebos", "billboards", "fences", "pits", "scenery" },
+    PREFAB_CATEGORIES = { "gazebos", "billboards", "fences", "pits", "scenery", "lights" },
 
     --- meshes measured by beamjoy_propPicker (their object box, unscaled) : shape (lower case) ->
     --- { x, y, z, minZ }
@@ -399,23 +404,23 @@ for _, p in ipairs({
     -- the garage's ceiling light (direct request), off and on (LAMPS lights the lit one) : its case
     -- and its tube share their origin, as the garage hangs them, the tube at the case's bottom and
     -- the case's rod 2.5 m up to the ceiling
-    { id = "ceilingLightOff", cat = "scenery", shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", thumb = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", tags = "ceiling light lamp tube garage hanging off",
+    { id = "ceilingLightOff", cat = "lights", shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", thumb = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", tags = "ceiling light lamp tube garage hanging off",
         parts = { { shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_light_off.dae", pos = { 0, 0, 0 } } } },
-    { id = "ceilingLightOn", cat = "scenery", shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", thumb = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", tags = "ceiling light lamp tube garage hanging on lit",
+    { id = "ceilingLightOn", cat = "lights", shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", thumb = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_case.dae", tags = "ceiling light lamp tube garage hanging on lit",
         parts = { { shape = "/levels/garage_v2/art/shapes/garage/s_ceiling_light_light_on.dae", pos = { 0, 0, 0 } } } },
     -- 0.40's floodlights in their brackets (direct request), as the game sets them : the lamp at the
     -- bracket's pivot, only tilted. On the ground bracket it looks up 30 degrees (the game's own
     -- 100 W ones) ; on the pole, down 35 degrees (Italy's upright 1000 W poles), the pole stood on
     -- the ground (its foot 1.94 / 1.98 m under the pivot). LAMPS lights the lamp
-    { id = "floodlight100Mount", cat = "scenery", shape = "/assets/meshes/props/urban/lighting/s_floodlight_100W_mount.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_100W.dae", tags = "flood lamp light projector bracket mount ground", lift = .11,
+    { id = "floodlight100Mount", cat = "lights", shape = "/assets/meshes/props/urban/lighting/s_floodlight_100W_mount.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_100W.dae", tags = "flood lamp light projector bracket mount ground", lift = .11,
         parts = { { shape = "/assets/meshes/props/urban/lighting/s_floodlight_100W.dae", pos = { 0, 0, 0 }, dir = { 0, 1, 0 }, up = { -.5, 0, .866 } } } },
-    { id = "floodlight500Mount", cat = "scenery", shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W_mount.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae", tags = "flood lamp light projector bracket mount ground", lift = .22,
+    { id = "floodlight500Mount", cat = "lights", shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W_mount.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae", tags = "flood lamp light projector bracket mount ground", lift = .22,
         parts = { { shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae", pos = { 0, 0, 0 }, dir = { 0, 1, 0 }, up = { -.5, 0, .866 } } } },
-    { id = "floodlight1000Mount", cat = "scenery", shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W_mount.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae", tags = "flood lamp light projector bracket mount ground", lift = .26,
+    { id = "floodlight1000Mount", cat = "lights", shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W_mount.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae", tags = "flood lamp light projector bracket mount ground", lift = .26,
         parts = { { shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae", pos = { 0, 0, 0 }, dir = { 0, 1, 0 }, up = { -.5, 0, .866 } } } },
-    { id = "floodlight500Pole", cat = "scenery", shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W_mount_pole.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae", tags = "flood lamp light projector pole post", lift = 1.94,
+    { id = "floodlight500Pole", cat = "lights", shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W_mount_pole.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae", tags = "flood lamp light projector pole post", lift = 1.94,
         parts = { { shape = "/assets/meshes/props/urban/lighting/s_floodlight_500W.dae", pos = { 0, 0, 0 }, dir = { 0, 1, 0 }, up = { .574, 0, .819 } } } },
-    { id = "floodlight1000Pole", cat = "scenery", shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W_mount_pole.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae", tags = "flood lamp light projector pole post", lift = 1.98,
+    { id = "floodlight1000Pole", cat = "lights", shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W_mount_pole.dae", thumb = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae", tags = "flood lamp light projector pole post", lift = 1.98,
         parts = { { shape = "/assets/meshes/props/urban/lighting/s_floodlight_1000W.dae", pos = { 0, 0, 0 }, dir = { 0, 1, 0 }, up = { .574, 0, .819 } } } },
     { id = "containers2High", cat = "scenery", shape = "/levels/Industrial/art/shapes/misc/container_01_a.dae", thumb = "/levels/Industrial/art/shapes/misc/container_01_a.dae", tags = "containers shipping stack port wall",
         parts = { { shape = "/levels/Industrial/art/shapes/misc/container_01_b.dae", pos = { 0, 0, 2.61 } } } },
