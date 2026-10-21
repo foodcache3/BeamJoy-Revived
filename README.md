@@ -28,12 +28,16 @@ Come say hi for troubleshooting help, to suggest features, or for sneak peeks at
 ## How to install
 
 Just like the free version, you can download the latest release [HERE](https://github.com/foodcache3/BeamJoy-Revived/releases/latest) and extract it inside your server's `Resources` folder.<br/>
-No update should never replace server nor players data.
+Updates never replace server or player data.
 
-## Importing legacy Hunter arenas / races from BeamJoy Free
+Once installed, the server keeps itself up to date: it checks GitHub for new releases, tells
+owners in game, and installs one with `/bjupdate` (`/bjupdate channel development` follows test
+builds instead).
+
+## Importing from BeamJoy Free
 
 If you're moving from an old BeamJoy Free (BJI) server, you don't have to rebuild your Hunter
-arenas or races by hand: Legacy Import converts them over automatically.
+arenas, races or delivery points by hand: Legacy Import converts them over automatically.
 
 1. On your old BeamJoy Free server, find its data folder's own `scenarii` subfolder (inside its
    `BeamJoyData/db/` folder).
@@ -41,7 +45,7 @@ arenas or races by hand: Legacy Import converts them over automatically.
    end up with `BeamJoyData/db/scenarii/<map>_hunter.json` and/or `<map>_races.json` files.
 3. Restart this server (or make sure it's picked up the new files).
 4. In-game, open Config → Core, scroll to the **Legacy Import** section, and click the button for
-   whichever you want to import (Hunter arenas / Races). A preview lists every map found, with
+   whichever you want to import (Hunter arenas, races, delivery points). A preview lists every map found, with
    counts and any conflicts, before anything is actually imported. Nothing happens until you
    confirm it. The section's own ⓘ button repeats these steps in-game.
 
@@ -53,15 +57,37 @@ is already used is skipped instead, so importing is always safe to re-run.
 ## About this fork
 
 This is an actively developed, upgraded version of BeamJoy Sandbox, updated to run on
-BeamNG.drive 0.39. On top of the sandbox/moderation feature set below, it's building toward a
-set of racing- and gameplay-focused features.
+BeamNG.drive 0.40 and BeamMP 4.23.1. On top of the sandbox/moderation feature set below, it's
+building toward a set of racing- and gameplay-focused features.
+
+**New in 2.0**: deliveries and convoys, Derby, crews, a redesigned main window with controller
+support, a props editor for races and arenas, passive races, drift spots and dragstrips, police
+chases between players, Discord webhooks, a plugin API and a self-updating server. See the
+[2.0.0 release notes](https://github.com/foodcache3/BeamJoy-Revived/releases/tag/v2.0.0) for
+everything that changed.
 
 ## Features
 
-- HTML windows and interfaces:
-  - Provide a faster system than the IMGUI one implemented in the free version
-  - Allow for persistent yet resizable/movable UI-Apps
-  - Include a new custom Drag&Drop system
+- **Main window** (F4): a slim rail on the edge of the screen opens small panels (Now, Activities,
+  Players, Crew, Settings, ...), or the full window with Home, Activities, Players, Leaderboards
+  and Settings. Invites and new lobbies show up as cards beside the rail with Join and Dismiss.
+  Everything is HTML (faster than the free version's IMGUI), resizable and movable, and works with
+  a gamepad: the **Focus** control (RB + X) hands the pad to BeamJoy and gives it back
+- **Deliveries and convoys**: delivery points with depots and drop-offs (import the map's own
+  delivery locations, or use the ones bundled for nine maps). Pick package or vehicle jobs from a
+  depot's job board, scored on route distance, time and the vehicle's condition, or take a job
+  together as a convoy of up to 4 players. A Jobs window lists every depot's open jobs, with
+  package and vehicle delivery leaderboards
+- **Derby**: Last man standing, Timed and Sumo (the arena shrinks) on the map's derby arenas, with
+  wreck credit, a kill feed, results and a Derby leaderboard. Several arenas per map, each with its
+  own start positions, zone and default settings
+- **Crews**: groups of up to 8 players. When the leader opens a race, hunt, infected game, derby or
+  convoy, every free crewmate joins automatically
+- **Passive races, drift spots and dragstrips**: passive races start when you drive through the
+  start gate in freeroam, no lobby needed. Drift spots have a painted corridor and drift signs;
+  dragstrips have a choice of 1/4 mile, 1/8 mile or 1000 ft, a sportsman or pro tree, live times
+  and a timeslip. All of them have leaderboards (the game's own drift spots and drag strips
+  included) and pins on the Big Map
 - **Racing**: full grid-based racing (solo hotlapping and head-to-head), with join/ready/leave/
   cancel/retire, gate-crossing detection, lap and sector timing, a live leaderboard, DNF handling,
   and configurable respawn strategies. Includes an in-world 3D gate/start editor (translate/rotate
@@ -69,8 +95,18 @@ set of racing- and gameplay-focused features.
   button), manual sector boundaries, ghost backmarkers, a disable-collisions option, configurable
   phase timers, and a live race-info panel (standings while racing, results and lap breakdown
   after)
+  - **Props editor**: place props with the mouse in races and in Hunter, Infected and Derby arenas.
+    Hundreds of curated props (barriers, cushions, guardrails, signs, lights, rocks, prefabs) plus
+    every mesh in the game, lines that curve through any number of nodes, curbs and walls, road
+    paint and skid marks, copy and paste between races. Up to 1000 props per race
+  - **316 bundled races on 14 maps**, most dressed with props, ready on a fresh install. **Import
+    map races** brings in the map's own time trials and quick races, modded maps included
+  - **Rejoin after a disconnect** (back at your last checkpoint, in your exact car), a shared
+    green light, **race control** for staff (time penalties, disqualify), three HUD layouts built
+    for full grids, and gates on the minimap
   - **Persistent leaderboards**: per-race personal-best/record tracking (top 100, with your own
-    rank pinned separately if you're outside it) and a new-PB/new-record popup on finish
+    rank pinned separately if you're outside it), a new-PB/new-record popup on finish, and a
+    Leaderboards tab with Races, Deliveries, Derby, Drift and Drag boards
   - **Vehicle restrictions**: optionally lock a race to one exact vehicle (Single Config,
     force-spawned for every participant, custom setups included) or a host-curated pool of
     allowed vehicles to pick from, either baked into the race itself or chosen fresh each time
@@ -89,10 +125,21 @@ set of racing- and gameplay-focused features.
   with an option to hide infected nametags entirely so the color itself doesn't give them away.
   Shares its in-world arena editor (spawns) with Hunter's own pattern
 - **Vehicle presets**: admin-curated, shareable vehicle lists (captured model/config/parts/tuning)
-  usable to restrict a race or Hunter session to one exact vehicle or a host-picked pool, with
-  matching that tolerates post-spawn paint and tuning changes
-- **Legacy import**: convert an old BeamJoy Free (BJI) server's Hunter arenas and races straight
-  into this fork's own format, see the section above for the full walkthrough
+  usable to restrict a race, Hunter or Infected session to one exact vehicle or a host-picked
+  pool, with matching that tolerates post-spawn paint and tuning changes. **Shared builds**: add
+  the car you're driving, custom setup included, and every player can pick it in their vehicle
+  selector
+- **Police chases between players**: from your own police car, chase players who break the law
+  near you, using the game's police rules (players can opt out). Players in a race, hunt,
+  infected game or derby can be ghosted from freeroam players
+- **Discord webhooks**: post race results and records, hunter, infected and derby results,
+  deliveries, votes, joins and leaves, and chat to your Discord channels, no extra plugin needed
+- **Plugin API**: your own BeamMP server plugins can read BeamJoy's data, hear about race events
+  as they happen, take part in races, show overlays, set the time and weather, and add options
+  and pages to BeamJoy's windows. See the [plugin API documentation](BeamJoyServer/api/README.md)
+- **Self-updater**: the server checks GitHub for new releases and installs them with `/bjupdate`
+- **Legacy import**: convert an old BeamJoy Free (BJI) server's Hunter arenas, races and delivery
+  points straight into this fork's own format, see the section above for the full walkthrough
 - **Freeroam energy stations and garages**: server-owner-placed refuel/repair points, synced per
   map and registered as real BeamNG POIs, so the game's own marker system, drive-up prompt, and
   Big Map both show them exactly like the map's own vanilla gas stations (which now behave the
@@ -118,7 +165,6 @@ set of racing- and gameplay-focused features.
   - Customizable (max traffic vehicle, max vehicles per player, vehicles models)
   - Automatic lights with day & night cycle
   - Pursuits and arrests (random events when driving a police vehicle)
-- Top screen menu bar with editable keybind (F4)
 - Group system with permissions and configuration UI
 - Players moderation tools (mute/kick/ban/temporary ban/remove vehicle(s)/...)
 - Players database UI to manage offline players
@@ -162,6 +208,7 @@ set of racing- and gameplay-focused features.
   - Customizable day/night cycle duration
   - Configurable night speed (0.1x to 10x), with a live readout of the resulting full cycle length
   - Night follows each map's real sunset and sunrise, and the calendar date is synced too
+  - Weather sync: everyone sees the same clouds, fog, wind and temperature
 - Trailers and Props spawning permissions
 - Vehicle models blacklist
 - Toggle allowing players mods:
@@ -190,22 +237,18 @@ will move into Features as things ship.
 - Pit road / pit paddock options
 - Reset/teleport to pits option
 - Repair / refuel in pits, with configurable times for each
-- Importer for old race configs to the new system
 - Hotlapping system similar to Forza / SRP: a passive route with no visible checkpoints, driven
   naturally, as opposed to an active/visible race
 - Per-race environment customization (time and weather planner)
-- Per-race prop placement
 
 **Drag Racing**
-- Eighth / quarter / half / full mile options
-- Usable drag strips
+- Half / full mile options
 - Heads-up / bracket racing
 
 **Gameplay**
 - Simplified traffic agents / traffic group support
 - New weather system customization
-- Vehicle delivery together
-- Trailer / cargo delivery
+- Trailer delivery
 - Rideshare / taxi
 
 ## Support Samael
