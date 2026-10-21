@@ -6,7 +6,17 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
-## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
+## [Unreleased]
+
+Server build 2475.
+
+- **One-time bundled race sync removed (2475)** (direct request) : it ran with 2.0.0 and isn't
+  part of later builds. Renamed bundled races still follow their `formerNames`, and new ones
+  are still seeded once. A server updating straight from 1.10.x to a later build keeps its
+  bundled races as they were (renamed, with new props merged in) instead of overwriting them.
+  *(server)*
+
+## [2.0.0] - 2026-10-20 - Deliveries and convoys, Derby, crews, main window redesign, props editor
 
 Version 2.0.0 : client build 2740, server build 2474.
 
