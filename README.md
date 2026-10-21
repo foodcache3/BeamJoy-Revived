@@ -68,11 +68,11 @@ everything that changed.
 
 ## Features
 
-- **Main window** (F4): a slim rail on the edge of the screen opens small panels (Now, Activities,
-  Players, Crew, Settings, ...), or the full window with Home, Activities, Players, Leaderboards
+- **Main window**: a rail on the right edge of the screen opens small panels (Now, Activities,
+  Players, Crew, Settings, ...), or the fullscreen window with Home, Activities, Players, Leaderboards
   and Settings. Invites and new lobbies show up as cards beside the rail with Join and Dismiss.
-  Everything is HTML (faster than the free version's IMGUI), resizable and movable, and works with
-  a gamepad: the **Focus** control (RB + X) hands the pad to BeamJoy and gives it back
+  Everything is HTML (faster than the free version's IMGUI), resizable and movable, and 100% compatible with
+  a gamepad: the **Focus** control (RB + X) allows you to interact with the UI with a controller.
 - **Deliveries and convoys**: delivery points with depots and drop-offs (import the map's own
   delivery locations, or use the ones bundled for nine maps). Pick package or vehicle jobs from a
   depot's job board, scored on route distance, time and the vehicle's condition, or take a job
@@ -138,6 +138,7 @@ everything that changed.
   as they happen, take part in races, show overlays, set the time and weather, and add options
   and pages to BeamJoy's windows. See the [plugin API documentation](BeamJoyServer/api/README.md)
 - **Self-updater**: the server checks GitHub for new releases and installs them with `/bjupdate`
+  or `bj update` in the server console
 - **Legacy import**: convert an old BeamJoy Free (BJI) server's Hunter arenas, races and delivery
   points straight into this fork's own format, see the section above for the full walkthrough
 - **Freeroam energy stations and garages**: server-owner-placed refuel/repair points, synced per
@@ -160,7 +161,7 @@ everything that changed.
   and timeouts and a live status panel
 - **Teleportation**: self-teleport to another player (rate-limited) and a moderator-relayed
   "summon", plus `/tp`/`/tpfrom` chat command equivalents
-- Server-distributed traffic:
+- **Server-distributed traffic**:
   - Allowed players can toggle it with menus, keybinds and radial menu
   - Customizable (max traffic vehicle, max vehicles per player, vehicles models)
   - Automatic lights with day & night cycle
@@ -237,8 +238,6 @@ will move into Features as things ship.
 - Pit road / pit paddock options
 - Reset/teleport to pits option
 - Repair / refuel in pits, with configurable times for each
-- Hotlapping system similar to Forza / SRP: a passive route with no visible checkpoints, driven
-  naturally, as opposed to an active/visible race
 - Per-race environment customization (time and weather planner)
 
 **Drag Racing**
@@ -246,8 +245,6 @@ will move into Features as things ship.
 - Heads-up / bracket racing
 
 **Gameplay**
-- Simplified traffic agents / traffic group support
-- New weather system customization
 - Trailer delivery
 - Rideshare / taxi
 
