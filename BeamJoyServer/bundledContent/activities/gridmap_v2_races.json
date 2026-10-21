@@ -19,14 +19,20 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 2069,
+        "freeroam": false,
         "gates": [
             {
                 "dir": {
@@ -110,6 +116,10 @@
         "manualSectors": false,
         "mode": "grid",
         "name": "Highspeed Ring - Oval",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 4,
         "startPositions": [
             {
@@ -255,14 +265,20 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 577,
+        "freeroam": false,
         "gates": [
             {
                 "dir": {
@@ -338,7 +354,7 @@
                 "width": 9
             }
         ],
-        "id": 3,
+        "id": 2,
         "leaderboard": [
 
         ],
@@ -346,6 +362,10 @@
         "manualSectors": false,
         "mode": "grid",
         "name": "Easy Skycurve",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -383,14 +403,23 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 576,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
         "gates": [
             {
                 "dir": {
@@ -398,7 +427,7 @@
                     "y": 0.0087778322802291,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "parents": [
                     0
                 ],
@@ -408,7 +437,7 @@
                     "z": 104.79
                 },
                 "step": 1,
-                "width": 9.0
+                "width": 9
             },
             {
                 "dir": {
@@ -416,7 +445,7 @@
                     "y": 0.99831798205407,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "parents": [
                     1
                 ],
@@ -426,7 +455,7 @@
                     "z": 122.099
                 },
                 "step": 2,
-                "width": 9.0
+                "width": 9
             },
             {
                 "dir": {
@@ -434,7 +463,7 @@
                     "y": 0.002495992949717,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "parents": [
                     2
                 ],
@@ -444,7 +473,7 @@
                     "z": 114.792
                 },
                 "step": 3,
-                "width": 9.0
+                "width": 9
             },
             {
                 "dir": {
@@ -452,7 +481,7 @@
                     "y": -0.99018445149541,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "isFinish": true,
                 "parents": [
                     3
@@ -463,17 +492,24 @@
                     "z": 110.085
                 },
                 "step": 4,
-                "width": 9.0
+                "width": 9
             }
         ],
-        "id": 4,
+        "id": 3,
         "leaderboard": [
 
         ],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "name": "Easy Skycurve Reverse",
+        "formerNames": [
+            "Easy Skycurve Reverse"
+        ],
+        "name": "Easy Skycurve (reverse)",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -511,14 +547,20 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 7443,
+        "freeroam": false,
         "gates": [
             {
                 "dir": {
@@ -738,7 +780,7 @@
                 "width": 17
             }
         ],
-        "id": 5,
+        "id": 4,
         "leaderboard": [
 
         ],
@@ -746,6 +788,10 @@
         "manualSectors": false,
         "mode": "grid",
         "name": "Highspeed Ring - Perimeter",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -963,14 +1009,23 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 7443,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
         "gates": [
             {
                 "dir": {
@@ -978,7 +1033,7 @@
                     "y": -0.0034007822903041,
                     "z": 0
                 },
-                "height": 17.0,
+                "height": 17,
                 "parents": [
                     0
                 ],
@@ -988,7 +1043,7 @@
                     "z": 99.98
                 },
                 "step": 1,
-                "width": 17.0
+                "width": 17
             },
             {
                 "dir": {
@@ -996,7 +1051,7 @@
                     "y": -0.010448879675719,
                     "z": 0
                 },
-                "height": 17.0,
+                "height": 17,
                 "parents": [
                     1
                 ],
@@ -1006,7 +1061,7 @@
                     "z": 99.98
                 },
                 "step": 2,
-                "width": 17.0
+                "width": 17
             },
             {
                 "dir": {
@@ -1014,7 +1069,7 @@
                     "y": -0.99996957443812,
                     "z": 0
                 },
-                "height": 17.0,
+                "height": 17,
                 "parents": [
                     2
                 ],
@@ -1024,7 +1079,7 @@
                     "z": 99.98
                 },
                 "step": 3,
-                "width": 17.0
+                "width": 17
             },
             {
                 "dir": {
@@ -1050,7 +1105,7 @@
                     "y": -0.0053788071157187,
                     "z": 0
                 },
-                "height": 17.0,
+                "height": 17,
                 "parents": [
                     4
                 ],
@@ -1060,7 +1115,7 @@
                     "z": 99.98
                 },
                 "step": 5,
-                "width": 17.0
+                "width": 17
             },
             {
                 "dir": {
@@ -1176,7 +1231,7 @@
                     "y": 0.0017139247028608,
                     "z": 0
                 },
-                "height": 17.0,
+                "height": 17,
                 "isFinish": true,
                 "parents": [
                     11
@@ -1187,17 +1242,24 @@
                     "z": 99.993
                 },
                 "step": 12,
-                "width": 17.0
+                "width": 17
             }
         ],
-        "id": 6,
+        "id": 5,
         "leaderboard": [
 
         ],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "name": "Highspeed Ring - Perimeter Reverse",
+        "formerNames": [
+            "Highspeed Ring - Perimeter Reverse"
+        ],
+        "name": "Highspeed Ring - Perimeter (reverse)",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -1343,14 +1405,23 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 1339,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
         "gates": [
             {
                 "dir": {
@@ -1462,14 +1533,21 @@
                 "width": 4
             }
         ],
-        "id": 7,
+        "id": 6,
         "leaderboard": [
 
         ],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "name": "Halfpipes - Roofs",
+        "formerNames": [
+            "Halfpipes - Roofs"
+        ],
+        "name": "Halfpipes - Roof",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -1507,14 +1585,23 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 1338,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
         "gates": [
             {
                 "dir": {
@@ -1576,7 +1663,7 @@
                     "y": -0.012692475126523,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "parents": [
                     3
                 ],
@@ -1586,7 +1673,7 @@
                     "z": 139.978
                 },
                 "step": 4,
-                "width": 9.0
+                "width": 9
             },
             {
                 "dir": {
@@ -1626,14 +1713,21 @@
                 "width": 16
             }
         ],
-        "id": 8,
+        "id": 7,
         "leaderboard": [
 
         ],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "name": "Halfpipes - Roofs Reverse",
+        "formerNames": [
+            "Halfpipes - Roofs Reverse"
+        ],
+        "name": "Halfpipes - Roof (reverse)",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -1671,14 +1765,20 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 723,
+        "freeroam": false,
         "gates": [
             {
                 "dir": {
@@ -1737,7 +1837,7 @@
                 "width": 30
             }
         ],
-        "id": 9,
+        "id": 8,
         "leaderboard": [
 
         ],
@@ -1745,6 +1845,10 @@
         "manualSectors": false,
         "mode": "grid",
         "name": "Halfpipes",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -1818,14 +1922,23 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 723,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
         "gates": [
             {
                 "dir": {
@@ -1884,14 +1997,21 @@
                 "width": 30
             }
         ],
-        "id": 10,
+        "id": 9,
         "leaderboard": [
 
         ],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
-        "name": "Halfpipes Reverse",
+        "formerNames": [
+            "Halfpipes Reverse"
+        ],
+        "name": "Halfpipes (reverse)",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -1965,14 +2085,20 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 427,
+        "freeroam": false,
         "gates": [
             {
                 "dir": {
@@ -2048,7 +2174,7 @@
                 "width": 9.0
             }
         ],
-        "id": 11,
+        "id": 10,
         "leaderboard": [
 
         ],
@@ -2056,6 +2182,10 @@
         "manualSectors": false,
         "mode": "grid",
         "name": "Medium Skycurve",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -2093,14 +2223,23 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 427,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
         "gates": [
             {
                 "dir": {
@@ -2108,7 +2247,7 @@
                     "y": 0.99995609946101,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "parents": [
                     0
                 ],
@@ -2118,7 +2257,7 @@
                     "z": 100.79
                 },
                 "step": 1,
-                "width": 9.0
+                "width": 9
             },
             {
                 "dir": {
@@ -2126,7 +2265,7 @@
                     "y": -0.93494756823506,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "parents": [
                     1
                 ],
@@ -2136,7 +2275,7 @@
                     "z": 118.167
                 },
                 "step": 2,
-                "width": 9.0
+                "width": 9
             },
             {
                 "dir": {
@@ -2144,7 +2283,7 @@
                     "y": -0.99907528722667,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "parents": [
                     2
                 ],
@@ -2154,7 +2293,7 @@
                     "z": 105.068
                 },
                 "step": 3,
-                "width": 9.0
+                "width": 9
             },
             {
                 "dir": {
@@ -2162,7 +2301,7 @@
                     "y": -0.99968289370542,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "isFinish": true,
                 "parents": [
                     3
@@ -2173,17 +2312,24 @@
                     "z": 109.329
                 },
                 "step": 4,
-                "width": 9.0
+                "width": 9
             }
         ],
-        "id": 12,
+        "id": 11,
         "leaderboard": [
 
         ],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "name": "Medium Skycurve Reverse",
+        "formerNames": [
+            "Medium Skycurve Reverse"
+        ],
+        "name": "Medium Skycurve (reverse)",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -2221,14 +2367,20 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 483,
+        "freeroam": false,
         "gates": [
             {
                 "dir": {
@@ -2304,7 +2456,7 @@
                 "width": 9.0
             }
         ],
-        "id": 13,
+        "id": 12,
         "leaderboard": [
 
         ],
@@ -2312,6 +2464,10 @@
         "manualSectors": false,
         "mode": "grid",
         "name": "Fast Skycurve",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -2349,14 +2505,23 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 468,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
         "gates": [
             {
                 "dir": {
@@ -2364,7 +2529,7 @@
                     "y": -0.0053772093885661,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "parents": [
                     0
                 ],
@@ -2374,7 +2539,7 @@
                     "z": 109.79
                 },
                 "step": 1,
-                "width": 9.0
+                "width": 9
             },
             {
                 "dir": {
@@ -2382,7 +2547,7 @@
                     "y": -0.99977596918652,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "parents": [
                     1
                 ],
@@ -2392,7 +2557,7 @@
                     "z": 103.94
                 },
                 "step": 2,
-                "width": 9.0
+                "width": 9
             },
             {
                 "dir": {
@@ -2432,14 +2597,21 @@
                 "width": 8.4
             }
         ],
-        "id": 14,
+        "id": 13,
         "leaderboard": [
 
         ],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "name": "Fast Skycurve Reverse",
+        "formerNames": [
+            "Fast Skycurve Reverse"
+        ],
+        "name": "Fast Skycurve (reverse)",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -2477,14 +2649,20 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 676,
+        "freeroam": false,
         "gates": [
             {
                 "dir": {
@@ -2596,7 +2774,7 @@
                 "width": 48
             }
         ],
-        "id": 15,
+        "id": 14,
         "leaderboard": [
 
         ],
@@ -2604,6 +2782,10 @@
         "manualSectors": false,
         "mode": "grid",
         "name": "Halfpipes - Tunnel",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -2677,14 +2859,23 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 724,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
         "gates": [
             {
                 "dir": {
@@ -2692,7 +2883,7 @@
                     "y": 0.0056688299774227,
                     "z": 0
                 },
-                "height": 17.0,
+                "height": 17,
                 "parents": [
                     0
                 ],
@@ -2702,7 +2893,7 @@
                     "z": 112.005
                 },
                 "step": 1,
-                "width": 17.0
+                "width": 17
             },
             {
                 "dir": {
@@ -2746,7 +2937,7 @@
                     "y": 0.0093414778107605,
                     "z": 0
                 },
-                "height": 17.0,
+                "height": 17,
                 "parents": [
                     3
                 ],
@@ -2756,7 +2947,7 @@
                     "z": 73.005
                 },
                 "step": 4,
-                "width": 17.0
+                "width": 17
             },
             {
                 "dir": {
@@ -2764,7 +2955,7 @@
                     "y": 0.0019906113155358,
                     "z": 0
                 },
-                "height": 17.0,
+                "height": 17,
                 "parents": [
                     4
                 ],
@@ -2774,7 +2965,7 @@
                     "z": 73.016
                 },
                 "step": 5,
-                "width": 17.0
+                "width": 17
             },
             {
                 "dir": {
@@ -2796,14 +2987,21 @@
                 "width": 36
             }
         ],
-        "id": 16,
+        "id": 15,
         "leaderboard": [
 
         ],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
-        "name": "Halfpipes - Tunnel Reverse",
+        "formerNames": [
+            "Halfpipes - Tunnel Reverse"
+        ],
+        "name": "Halfpipes - Tunnel (reverse)",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -2877,14 +3075,23 @@
             "joinable": false,
             "laps": 3,
             "limitVisibleGates": true,
+            "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 2068,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
         "gates": [
             {
                 "dir": {
@@ -2910,7 +3117,7 @@
                     "y": 0.0077951846718518,
                     "z": 0
                 },
-                "height": 17.0,
+                "height": 17,
                 "parents": [
                     1
                 ],
@@ -2920,7 +3127,7 @@
                     "z": 100.26
                 },
                 "step": 2,
-                "width": 17.0
+                "width": 17
             },
             {
                 "dir": {
@@ -2946,7 +3153,7 @@
                     "y": -0.0011473585892681,
                     "z": 0
                 },
-                "height": 17.0,
+                "height": 17,
                 "isFinish": true,
                 "parents": [
                     3
@@ -2957,17 +3164,24 @@
                     "z": 100.124
                 },
                 "step": 4,
-                "width": 17.0
+                "width": 17
             }
         ],
-        "id": 2,
+        "id": 16,
         "leaderboard": [
 
         ],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "name": "Highspeed Ring - Oval Reverse",
+        "formerNames": [
+            "Highspeed Ring - Oval Reverse"
+        ],
+        "name": "Highspeed Ring - Oval (reverse)",
+        "oneWayGates": false,
+        "props": [
+
+        ],
         "sectorCount": 3,
         "startPositions": [
             {

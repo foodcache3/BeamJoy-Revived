@@ -103,7 +103,7 @@
                 "width": 14.877532285926
             }
         ],
-        "id": 1,
+        "id": 4,
         "leaderboard": [
 
         ],
@@ -111,6 +111,51 @@
         "manualSectors": false,
         "mode": "grid",
         "name": "Dirt Oval",
+        "oneWayGates": false,
+        "props": [
+            {
+                "dir": {
+                    "x": 0.9933,
+                    "y": 0.0248,
+                    "z": -0.1132
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 104.713,
+                    "y": -25.776,
+                    "z": 81.825
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1125,
+                    "y": 0.0294,
+                    "z": 0.9932
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9933,
+                    "y": 0.0248,
+                    "z": -0.1132
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 104.713,
+                    "y": -31.09,
+                    "z": 82.008
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1125,
+                    "y": 0.0294,
+                    "z": 0.9932
+                }
+            }
+        ],
         "sectorCount": 2,
         "startPositions": [
             {
@@ -330,13 +375,21 @@
             "limitVisibleGates": true,
             "placementMode": "random",
             "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
             "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
             "resetPenaltySeconds": 5,
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
-            "visibleGateCount": 2
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
         },
         "distance": 237,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
         "gates": [
             {
                 "dir": {
@@ -412,14 +465,62 @@
                 "width": 15
             }
         ],
-        "id": 2,
+        "id": 5,
         "leaderboard": [
 
         ],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "name": "Dirt Oval Reverse",
+        "formerNames": [
+            "Dirt Oval Reverse"
+        ],
+        "name": "Dirt Oval (reverse)",
+        "oneWayGates": false,
+        "props": [
+            {
+                "dir": {
+                    "x": 0.9933,
+                    "y": 0.0248,
+                    "z": -0.1132
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 104.713,
+                    "y": -25.776,
+                    "z": 81.825
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1125,
+                    "y": 0.0294,
+                    "z": 0.9932
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9933,
+                    "y": 0.0248,
+                    "z": -0.1132
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 104.713,
+                    "y": -31.09,
+                    "z": 82.008
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1125,
+                    "y": 0.0294,
+                    "z": 0.9932
+                }
+            }
+        ],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -721,14 +822,556 @@
                 "width": 25
             }
         ],
-        "id": 3,
-        "leaderboard": [
-
-        ],
+        "id": 6,
+        "leaderboard": {
+            "guest0626756": {
+                "date": 1790928880,
+                "model": "SP Dunekicker (2008) - ST2 Stadium (A)",
+                "time": 64190
+            },
+            "guest6164469": {
+                "date": 1790924993,
+                "model": "",
+                "time": 58916
+            },
+            "guest9952216": {
+                "date": 1790928132,
+                "model": "SP Dunekicker (2008) - ST2 Stadium (A)",
+                "time": 76131
+            }
+        },
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
         "name": "The Big 8",
+        "oneWayGates": false,
+        "props": [
+            {
+                "dir": {
+                    "x": -0.6163,
+                    "y": 0.7783,
+                    "z": 0.12
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -104.685,
+                    "y": 133.967,
+                    "z": 77.722
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1007,
+                    "y": -0.0733,
+                    "z": 0.9922
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.919,
+                    "y": 0.3942,
+                    "z": -0.0088
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -112.897,
+                    "y": 192.736,
+                    "z": 76.423
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0223,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1709,
+                    "z": -0.0104
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -154.32,
+                    "y": 211.538,
+                    "z": 76.98
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": -0.038,
+                    "z": 0.9991
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1709,
+                    "z": -0.0104
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -153.464,
+                    "y": 215.769,
+                    "z": 77.233
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": -0.038,
+                    "z": 0.9991
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1703,
+                    "z": -0.0184
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -157.328,
+                    "y": 196.042,
+                    "z": 76.926
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": 0.0086,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.919,
+                    "y": 0.3942,
+                    "z": -0.0088
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -116.182,
+                    "y": 185.488,
+                    "z": 76.672
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0223,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9373,
+                    "y": -0.3486,
+                    "z": 0.007
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -106.151,
+                    "y": 207.751,
+                    "z": 75.924
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0011,
+                    "y": 0.023,
+                    "z": 0.9997
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.919,
+                    "y": 0.3942,
+                    "z": -0.0088
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -111.202,
+                    "y": 196.312,
+                    "z": 76.286
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0223,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.17,
+                    "z": -0.0207
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -157.885,
+                    "y": 191.849,
+                    "z": 76.957
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": 0.0223,
+                    "z": 0.9996
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.6757,
+                    "y": -0.7372,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -101.607,
+                    "y": 136.479,
+                    "z": 77.684
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.919,
+                    "y": 0.3942,
+                    "z": -0.0088
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -114.54,
+                    "y": 189.171,
+                    "z": 76.565
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0223,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1703,
+                    "z": -0.0184
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -156.655,
+                    "y": 199.889,
+                    "z": 76.925
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": 0.0086,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.919,
+                    "y": 0.3942,
+                    "z": -0.0088
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -109.575,
+                    "y": 199.933,
+                    "z": 76.189
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0223,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1712,
+                    "z": -0.0021
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -152.705,
+                    "y": 219.49,
+                    "z": 77.398
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": -0.0864,
+                    "z": 0.9961
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1707,
+                    "z": -0.0143
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -155.883,
+                    "y": 203.754,
+                    "z": 76.975
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": -0.0155,
+                    "z": 0.9997
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.6176,
+                    "y": 0.7851,
+                    "z": 0.0475
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -107.509,
+                    "y": 131.548,
+                    "z": 77.866
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0766,
+                    "y": 0,
+                    "z": 0.9971
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9924,
+                    "y": -0.1225,
+                    "z": 0.0081
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -151.978,
+                    "y": 223.503,
+                    "z": 77.682
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0162,
+                    "y": -0.0658,
+                    "z": 0.9977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1705,
+                    "z": -0.0157
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -155.064,
+                    "y": 207.622,
+                    "z": 76.936
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": -0.0072,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.919,
+                    "y": 0.3942,
+                    "z": -0.0088
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -107.76,
+                    "y": 203.85,
+                    "z": 76.066
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0223,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8841,
+                    "y": 0.4427,
+                    "z": 0.1495
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -94.586,
+                    "y": 277.681,
+                    "z": 87.439
+                },
+                "scale": 1.5,
+                "shape": "/levels/derby/art/shapes/race/sign_checkpoint.dae",
+                "up": {
+                    "x": 0.0438,
+                    "y": -0.24,
+                    "z": 0.9698
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8607,
+                    "y": 0.5092,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -154.797,
+                    "y": -235.788,
+                    "z": 80.239
+                },
+                "scale": 1.5,
+                "shape": "/levels/derby/art/shapes/race/sign_checkpoint.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9186,
+                    "y": 0.3908,
+                    "z": -0.0588
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -145.102,
+                    "y": -253.787,
+                    "z": 85.9
+                },
+                "scale": 1.5,
+                "shape": "/levels/derby/art/shapes/race/sign_checkpoint.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.1487,
+                    "z": 0.9889
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.0429,
+                    "y": 0.999,
+                    "z": -0.0135
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -272.521,
+                    "y": 2.645,
+                    "z": 89.727
+                },
+                "scale": 1.5,
+                "shape": "/levels/derby/art/shapes/race/sign_checkpoint.dae",
+                "up": {
+                    "x": 0.1986,
+                    "y": 0.0218,
+                    "z": 0.9798
+                }
+            },
+            {
+                "dir": {
+                    "x": 0,
+                    "y": 1,
+                    "z": -0.0007
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -254.037,
+                    "y": 2.406,
+                    "z": 81.373
+                },
+                "scale": 1.5,
+                "shape": "/levels/derby/art/shapes/race/sign_checkpoint.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0007,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8841,
+                    "y": 0.4601,
+                    "z": 0.0818
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -107.942,
+                    "y": 255.399,
+                    "z": 76.821
+                },
+                "scale": 1.5,
+                "shape": "/levels/derby/art/shapes/race/sign_checkpoint.dae",
+                "up": {
+                    "x": 0.0438,
+                    "y": -0.0927,
+                    "z": 0.9947
+                }
+            }
+        ],
         "sectorCount": 4,
         "startPositions": [
             {
@@ -969,6 +1612,4983 @@
                     "x": -121.96144743726,
                     "y": 263.02930886133,
                     "z": 77.78125
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "guest7103768",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": true,
+            "laps": 2,
+            "limitVisibleGates": true,
+            "placementMode": "random",
+            "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
+            "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
+        },
+        "distance": 1237,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
+        "gates": [
+            {
+                "dir": {
+                    "x": 0.09094863745363,
+                    "y": 0.99585558458309,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": -179.7172089,
+                    "y": -32.6093483,
+                    "z": 80.42805480957
+                },
+                "step": 1,
+                "width": 17.5
+            },
+            {
+                "dir": {
+                    "x": 0.020004682544871,
+                    "y": 0.9997998863154,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": -179.9745636,
+                    "y": 186.5515747,
+                    "z": 77.711051940918
+                },
+                "step": 2,
+                "width": 21.5
+            },
+            {
+                "dir": {
+                    "x": 0.99707710862073,
+                    "y": -0.076401828934412,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": -119.868988,
+                    "y": 278.0855713,
+                    "z": 82.878974914551
+                },
+                "step": 3,
+                "width": 20
+            },
+            {
+                "dir": {
+                    "x": -0.17800623574267,
+                    "y": -0.98402935933677,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": -68.8572998,
+                    "y": 179.9049988,
+                    "z": 80.406608581543
+                },
+                "step": 4,
+                "width": 30
+            },
+            {
+                "dir": {
+                    "x": -0.10215545590385,
+                    "y": -0.99476844684031,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": -264.4568481,
+                    "y": 1.428344727,
+                    "z": 84.410530090332
+                },
+                "step": 5,
+                "width": 30
+            },
+            {
+                "dir": {
+                    "x": 0.36651125071002,
+                    "y": -0.93041361936667,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    5
+                ],
+                "pos": {
+                    "x": -126.4996948,
+                    "y": -178.2954102,
+                    "z": 80.166702270508
+                },
+                "step": 6,
+                "width": 30
+            },
+            {
+                "dir": {
+                    "x": -0.76440428015431,
+                    "y": 0.64473723056899,
+                    "z": 0
+                },
+                "height": 12,
+                "isFinish": true,
+                "parents": [
+                    6
+                ],
+                "pos": {
+                    "x": -211.7489624,
+                    "y": -234.04245,
+                    "z": 83.090171813965
+                },
+                "step": 7,
+                "width": 30
+            }
+        ],
+        "id": 1,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "The Big 8 (reverse)",
+        "oneWayGates": false,
+        "props": [
+            {
+                "dir": {
+                    "x": -0.6163,
+                    "y": 0.7783,
+                    "z": 0.12
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -104.685,
+                    "y": 133.967,
+                    "z": 77.722
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1007,
+                    "y": -0.0733,
+                    "z": 0.9922
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.919,
+                    "y": 0.3942,
+                    "z": -0.0088
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -112.897,
+                    "y": 192.736,
+                    "z": 76.423
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0223,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1709,
+                    "z": -0.0104
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -154.32,
+                    "y": 211.538,
+                    "z": 76.98
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": -0.038,
+                    "z": 0.9991
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1709,
+                    "z": -0.0104
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -153.464,
+                    "y": 215.769,
+                    "z": 77.233
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": -0.038,
+                    "z": 0.9991
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1703,
+                    "z": -0.0184
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -157.328,
+                    "y": 196.042,
+                    "z": 76.926
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": 0.0086,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.919,
+                    "y": 0.3942,
+                    "z": -0.0088
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -116.182,
+                    "y": 185.488,
+                    "z": 76.672
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0223,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9373,
+                    "y": -0.3486,
+                    "z": 0.007
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -106.151,
+                    "y": 207.751,
+                    "z": 75.924
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0011,
+                    "y": 0.023,
+                    "z": 0.9997
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.919,
+                    "y": 0.3942,
+                    "z": -0.0088
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -111.202,
+                    "y": 196.312,
+                    "z": 76.286
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0223,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.17,
+                    "z": -0.0207
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -157.885,
+                    "y": 191.849,
+                    "z": 76.957
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": 0.0223,
+                    "z": 0.9996
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.6757,
+                    "y": -0.7372,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -101.607,
+                    "y": 136.479,
+                    "z": 77.684
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.919,
+                    "y": 0.3942,
+                    "z": -0.0088
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -114.54,
+                    "y": 189.171,
+                    "z": 76.565
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0223,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1703,
+                    "z": -0.0184
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -156.655,
+                    "y": 199.889,
+                    "z": 76.925
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": 0.0086,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.919,
+                    "y": 0.3942,
+                    "z": -0.0088
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -109.575,
+                    "y": 199.933,
+                    "z": 76.189
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0223,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1712,
+                    "z": -0.0021
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -152.705,
+                    "y": 219.49,
+                    "z": 77.398
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": -0.0864,
+                    "z": 0.9961
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1707,
+                    "z": -0.0143
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -155.883,
+                    "y": 203.754,
+                    "z": 76.975
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": -0.0155,
+                    "z": 0.9997
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.6176,
+                    "y": 0.7851,
+                    "z": 0.0475
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -107.509,
+                    "y": 131.548,
+                    "z": 77.866
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0766,
+                    "y": 0,
+                    "z": 0.9971
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9924,
+                    "y": -0.1225,
+                    "z": 0.0081
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -151.978,
+                    "y": 223.503,
+                    "z": 77.682
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0162,
+                    "y": -0.0658,
+                    "z": 0.9977
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.9852,
+                    "y": 0.1705,
+                    "z": -0.0157
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -155.064,
+                    "y": 207.622,
+                    "z": 76.936
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0171,
+                    "y": -0.0072,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.919,
+                    "y": 0.3942,
+                    "z": -0.0088
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": -107.76,
+                    "y": 203.85,
+                    "z": 76.066
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.0223,
+                    "z": 0.9998
+                }
+            }
+        ],
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": 0.091276209325834,
+                    "y": 0.99582561405655,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -179.98876482331,
+                    "y": -35.338994115141,
+                    "z": 80.5625
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.091276209325834,
+                    "y": 0.99582561405655,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -182.61934951671,
+                    "y": -42.127220994886,
+                    "z": 80.9375
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.091276209325834,
+                    "y": 0.99582561405655,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -178.63604706048,
+                    "y": -42.492325832189,
+                    "z": 80.926284790039
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.091276209325834,
+                    "y": 0.99582561405655,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -183.25828298199,
+                    "y": -49.098000293281,
+                    "z": 81.395622253418
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.091276209325834,
+                    "y": 0.99582561405655,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -179.27498052576,
+                    "y": -49.463105130585,
+                    "z": 81.371154785156
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.091276209325834,
+                    "y": 0.99582561405655,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -183.89721644727,
+                    "y": -56.068779591677,
+                    "z": 81.93424987793
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.091276209325834,
+                    "y": 0.99582561405655,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -179.91391399104,
+                    "y": -56.433884428981,
+                    "z": 81.909782409668
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.091276209325834,
+                    "y": 0.99582561405655,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -184.53614991255,
+                    "y": -63.039558890073,
+                    "z": 82.824012756348
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "guest7103768",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": true,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "placementMode": "random",
+            "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
+            "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
+        },
+        "distance": 288,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
+        "gates": [
+            {
+                "dir": {
+                    "x": 0.031353469187931,
+                    "y": -0.99950835912957,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 119.9441986,
+                    "y": -58.96960831,
+                    "z": 79.779296875
+                },
+                "step": 1,
+                "width": 23
+            },
+            {
+                "dir": {
+                    "x": -0.01479036633928,
+                    "y": 0.99989061654941,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": 178.9578705,
+                    "y": -59.3095665,
+                    "z": 79.710975646973
+                },
+                "step": 2,
+                "width": 22.5
+            },
+            {
+                "dir": {
+                    "x": 0.0098323452242018,
+                    "y": 0.99995166132538,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 122.1567383,
+                    "y": 5.382551193,
+                    "z": 79.578636169434
+                },
+                "step": 3,
+                "width": 26.5
+            },
+            {
+                "dir": {
+                    "x": -0.047566587806992,
+                    "y": -0.99886806922856,
+                    "z": 0
+                },
+                "height": 12,
+                "isFinish": true,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 178.1107941,
+                    "y": 6.161333084,
+                    "z": 79.757507324219
+                },
+                "step": 4,
+                "width": 24.5
+            }
+        ],
+        "id": 2,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Figure 8",
+        "oneWayGates": false,
+        "props": [
+            {
+                "dir": {
+                    "x": -0.7276,
+                    "y": 0.6815,
+                    "z": -0.0782
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 179.094,
+                    "y": -1.795,
+                    "z": 79.312
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1542,
+                    "y": -0.0514,
+                    "z": 0.9867
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8527,
+                    "y": -0.5155,
+                    "z": 0.0847
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 156.465,
+                    "y": -5.566,
+                    "z": 78.746
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0588,
+                    "y": 0.0665,
+                    "z": 0.9961
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7295,
+                    "y": -0.6791,
+                    "z": -0.0812
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 182.273,
+                    "y": -55.208,
+                    "z": 80.006
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1658,
+                    "y": 0.0603,
+                    "z": 0.9843
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.712,
+                    "y": -0.6929,
+                    "z": -0.1142
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 186.547,
+                    "y": -59.935,
+                    "z": 81.414
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.295,
+                    "y": 0.1475,
+                    "z": 0.944
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7372,
+                    "y": 0.6757,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 170.255,
+                    "y": -11.438,
+                    "z": 78.656
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.574,
+                    "y": -0.8188,
+                    "z": -0.0113
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 163.535,
+                    "y": 5.588,
+                    "z": 78.654
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0221,
+                    "y": 0.0017,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7366,
+                    "y": 0.6754,
+                    "z": -0.0352
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 156.971,
+                    "y": -25.934,
+                    "z": 78.652
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0145,
+                    "y": 0.0363,
+                    "z": 0.9992
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7368,
+                    "y": -0.675,
+                    "z": -0.0384
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 144.915,
+                    "y": -11.368,
+                    "z": 78.656
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0162,
+                    "y": -0.0392,
+                    "z": 0.9991
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.2457,
+                    "y": -0.9693,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 149.768,
+                    "y": -38.467,
+                    "z": 78.726
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.7438,
+                    "y": -0.6677,
+                    "z": -0.0308
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 152.719,
+                    "y": -10.934,
+                    "z": 78.717
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0375,
+                    "y": -0.0044,
+                    "z": 0.9993
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7722,
+                    "y": 0.6253,
+                    "z": -0.113
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 136.402,
+                    "y": -30.65,
+                    "z": 78.521
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1035,
+                    "y": 0.0517,
+                    "z": 0.9933
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7357,
+                    "y": 0.6729,
+                    "z": 0.0766
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 172.47,
+                    "y": -9.022,
+                    "z": 78.656
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0534,
+                    "y": -0.0551,
+                    "z": 0.997
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8862,
+                    "y": -0.4628,
+                    "z": -0.0221
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 136.492,
+                    "y": 3.611,
+                    "z": 78.686
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0177,
+                    "y": -0.0138,
+                    "z": 0.9997
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8726,
+                    "y": -0.4884,
+                    "z": -0.0054
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 138.776,
+                    "y": -49.179,
+                    "z": 78.688
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0106,
+                    "y": 0.0079,
+                    "z": 0.9999
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8702,
+                    "y": -0.49,
+                    "z": -0.051
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 134.153,
+                    "y": -57.589,
+                    "z": 78.61
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0368,
+                    "y": -0.0387,
+                    "z": 0.9986
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7314,
+                    "y": 0.6777,
+                    "z": -0.0762
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 174.683,
+                    "y": -6.607,
+                    "z": 78.79
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1036,
+                    "y": 0,
+                    "z": 0.9946
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8874,
+                    "y": -0.4611,
+                    "z": 0.0018
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 139.837,
+                    "y": -2.97,
+                    "z": 78.719
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.009,
+                    "y": -0.0134,
+                    "z": 0.9999
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7751,
+                    "y": -0.6294,
+                    "z": 0.0555
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 116.128,
+                    "y": 2.86,
+                    "z": 80.292
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1536,
+                    "y": -0.1024,
+                    "z": 0.9828
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7783,
+                    "y": 0.6279,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 134.345,
+                    "y": -33.2,
+                    "z": 78.5
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.7982,
+                    "y": -0.6016,
+                    "z": -0.0313
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 142.223,
+                    "y": -43.607,
+                    "z": 78.637
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0265,
+                    "y": -0.0168,
+                    "z": 0.9995
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7706,
+                    "y": 0.6322,
+                    "z": 0.0803
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 122.006,
+                    "y": -48.494,
+                    "z": 79.01
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1036,
+                    "y": 0,
+                    "z": 0.9946
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7244,
+                    "y": 0.6848,
+                    "z": -0.0796
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 183.462,
+                    "y": 2.972,
+                    "z": 80.343
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.2029,
+                    "y": -0.1015,
+                    "z": 0.9739
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7765,
+                    "y": -0.6276,
+                    "z": 0.056
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 118.138,
+                    "y": 0.333,
+                    "z": 79.788
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1231,
+                    "y": -0.064,
+                    "z": 0.9903
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8367,
+                    "y": -0.5289,
+                    "z": -0.1422
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 160.237,
+                    "y": -50.804,
+                    "z": 78.617
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1321,
+                    "y": -0.0571,
+                    "z": 0.9896
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8298,
+                    "y": -0.555,
+                    "z": -0.0578
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 158.469,
+                    "y": -48.044,
+                    "z": 78.613
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0446,
+                    "y": -0.0374,
+                    "z": 0.9983
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.623,
+                    "y": -0.7812,
+                    "z": 0.0407
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 150.376,
+                    "y": -13.204,
+                    "z": 78.626
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0365,
+                    "y": 0.0229,
+                    "z": 0.9991
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8482,
+                    "y": -0.5223,
+                    "z": -0.0883
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 143.035,
+                    "y": -8.688,
+                    "z": 78.682
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0743,
+                    "y": -0.0479,
+                    "z": 0.9961
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7391,
+                    "y": 0.6686,
+                    "z": -0.0821
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 163.613,
+                    "y": -18.685,
+                    "z": 78.683
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0797,
+                    "y": 0.0342,
+                    "z": 0.9962
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.732,
+                    "y": 0.6637,
+                    "z": -0.154
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 161.399,
+                    "y": -21.101,
+                    "z": 78.677
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1516,
+                    "y": 0.0617,
+                    "z": 0.9865
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7663,
+                    "y": -0.639,
+                    "z": -0.0666
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 154.641,
+                    "y": -42.731,
+                    "z": 78.734
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0547,
+                    "y": -0.0384,
+                    "z": 0.9978
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7761,
+                    "y": -0.6254,
+                    "z": 0.0808
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 122.191,
+                    "y": -4.762,
+                    "z": 79.022
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1036,
+                    "y": 0,
+                    "z": 0.9946
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7767,
+                    "y": 0.6286,
+                    "z": 0.0405
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 126.115,
+                    "y": -43.401,
+                    "z": 78.688
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0414,
+                    "y": -0.0132,
+                    "z": 0.9991
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7169,
+                    "y": -0.6876,
+                    "z": -0.1151
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 188.661,
+                    "y": -62.274,
+                    "z": 82.412
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.2507,
+                    "y": 0.1003,
+                    "z": 0.9628
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7348,
+                    "y": -0.6641,
+                    "z": 0.1383
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 169.14,
+                    "y": -40.689,
+                    "z": 78.67
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0762,
+                    "y": 0.1219,
+                    "z": 0.9896
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.739,
+                    "y": -0.6724,
+                    "z": -0.042
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 177.924,
+                    "y": -50.398,
+                    "z": 79.065
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1035,
+                    "y": 0.0517,
+                    "z": 0.9933
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7471,
+                    "y": -0.6629,
+                    "z": -0.0494
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 157.656,
+                    "y": -28.626,
+                    "z": 78.686
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0323,
+                    "y": -0.0381,
+                    "z": 0.9988
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7346,
+                    "y": -0.6687,
+                    "z": 0.1148
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 166.94,
+                    "y": -38.257,
+                    "z": 78.666
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1026,
+                    "y": 0.0577,
+                    "z": 0.993
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7324,
+                    "y": 0.6795,
+                    "z": -0.0437
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 181.287,
+                    "y": 0.598,
+                    "z": 79.799
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1345,
+                    "y": -0.0815,
+                    "z": 0.9876
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7783,
+                    "y": -0.6227,
+                    "z": -0.0811
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 136.461,
+                    "y": -22.702,
+                    "z": 78.469
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0765,
+                    "y": -0.0341,
+                    "z": 0.9965
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9011,
+                    "y": 0.4333,
+                    "z": -0.0164
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 133.404,
+                    "y": -60.502,
+                    "z": 78.524
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0368,
+                    "y": -0.0387,
+                    "z": 0.9986
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7826,
+                    "y": -0.6225,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 126.266,
+                    "y": -9.885,
+                    "z": 78.717
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8325,
+                    "y": -0.5262,
+                    "z": -0.1734
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 165.602,
+                    "y": -59.443,
+                    "z": 78.628
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.179,
+                    "y": -0.0407,
+                    "z": 0.983
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8696,
+                    "y": -0.4853,
+                    "z": 0.0906
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 161.36,
+                    "y": 2.961,
+                    "z": 78.711
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1036,
+                    "y": 0,
+                    "z": 0.9946
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7368,
+                    "y": 0.675,
+                    "z": 0.0384
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 159.175,
+                    "y": -23.517,
+                    "z": 78.556
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.052,
+                    "y": 0,
+                    "z": 0.9986
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7016,
+                    "y": -0.7125,
+                    "z": -0.0084
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 152.427,
+                    "y": -40.319,
+                    "z": 78.722
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0041,
+                    "y": -0.0078,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8325,
+                    "y": -0.5262,
+                    "z": -0.1734
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 163.681,
+                    "y": -56.383,
+                    "z": 78.568
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1556,
+                    "y": -0.0784,
+                    "z": 0.9847
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7826,
+                    "y": -0.6225,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 130.343,
+                    "y": -15.01,
+                    "z": 78.623
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.888,
+                    "y": -0.4471,
+                    "z": -0.1073
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 138.364,
+                    "y": -0.044,
+                    "z": 78.73
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0961,
+                    "y": -0.0477,
+                    "z": 0.9942
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7776,
+                    "y": 0.6279,
+                    "z": 0.0327
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 128.171,
+                    "y": -40.85,
+                    "z": 78.671
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0319,
+                    "y": -0.0125,
+                    "z": 0.9994
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7617,
+                    "y": -0.6404,
+                    "z": 0.0983
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 112.183,
+                    "y": 7.82,
+                    "z": 82.01
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.2492,
+                    "y": -0.1495,
+                    "z": 0.9568
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7459,
+                    "y": 0.645,
+                    "z": 0.1659
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 113.875,
+                    "y": -58.573,
+                    "z": 80.953
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.2797,
+                    "y": 0.0773,
+                    "z": 0.957
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.577,
+                    "y": -0.8087,
+                    "z": 0.1143
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 147.327,
+                    "y": -13.562,
+                    "z": 78.633
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0517,
+                    "y": 0.1035,
+                    "z": 0.9933
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7779,
+                    "y": 0.627,
+                    "z": -0.0405
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 132.287,
+                    "y": -35.75,
+                    "z": 78.566
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0301,
+                    "y": 0.0272,
+                    "z": 0.9992
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8793,
+                    "y": -0.4759,
+                    "z": 0.021
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 135.629,
+                    "y": -54.925,
+                    "z": 78.695
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0295,
+                    "y": -0.0105,
+                    "z": 0.9995
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8541,
+                    "y": -0.4919,
+                    "z": 0.1689
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 158.145,
+                    "y": -2.75,
+                    "z": 78.673
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1524,
+                    "y": 0.0739,
+                    "z": 0.9856
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8587,
+                    "y": -0.5117,
+                    "z": -0.0267
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 140.439,
+                    "y": -46.355,
+                    "z": 78.636
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0179,
+                    "y": -0.022,
+                    "z": 0.9996
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7639,
+                    "y": 0.6328,
+                    "z": 0.1262
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 119.959,
+                    "y": -51.032,
+                    "z": 79.321
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.181,
+                    "y": 0.0225,
+                    "z": 0.9832
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7764,
+                    "y": -0.6227,
+                    "z": 0.0966
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 128.311,
+                    "y": -12.447,
+                    "z": 78.657
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1142,
+                    "y": 0.0117,
+                    "z": 0.9934
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8351,
+                    "y": -0.5483,
+                    "z": -0.0435
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 154.685,
+                    "y": -8.314,
+                    "z": 78.727
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0357,
+                    "y": -0.0248,
+                    "z": 0.9991
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7783,
+                    "y": 0.6279,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 130.23,
+                    "y": -38.3,
+                    "z": 78.563
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7606,
+                    "y": -0.6418,
+                    "z": 0.0978
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 114.143,
+                    "y": 5.356,
+                    "z": 81.028
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.2492,
+                    "y": -0.1495,
+                    "z": 0.9568
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.76,
+                    "y": 0.6378,
+                    "z": 0.1251
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 117.922,
+                    "y": -53.557,
+                    "z": 79.795
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1946,
+                    "y": 0.0397,
+                    "z": 0.9801
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7398,
+                    "y": -0.6712,
+                    "z": -0.0474
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 171.34,
+                    "y": -43.115,
+                    "z": 78.666
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0235,
+                    "y": -0.0446,
+                    "z": 0.9987
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.772,
+                    "y": -0.6296,
+                    "z": 0.0878
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 120.159,
+                    "y": -2.208,
+                    "z": 79.331
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1542,
+                    "y": -0.0514,
+                    "z": 0.9867
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7295,
+                    "y": -0.6791,
+                    "z": -0.0812
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 184.437,
+                    "y": -57.602,
+                    "z": 80.549
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.2029,
+                    "y": 0.1015,
+                    "z": 0.9739
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7796,
+                    "y": -0.621,
+                    "z": 0.0812
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 124.226,
+                    "y": -7.32,
+                    "z": 78.81
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1036,
+                    "y": 0,
+                    "z": 0.9946
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8666,
+                    "y": -0.4842,
+                    "z": 0.1208
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 159.767,
+                    "y": 0.097,
+                    "z": 78.655
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1059,
+                    "y": 0.058,
+                    "z": 0.9927
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7372,
+                    "y": 0.6757,
+                    "z": -0.0032
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 165.827,
+                    "y": -16.27,
+                    "z": 78.722
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0081,
+                    "y": 0.0136,
+                    "z": 0.9999
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7781,
+                    "y": 0.6281,
+                    "z": 0.0078
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 124.059,
+                    "y": -45.95,
+                    "z": 78.786
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0519,
+                    "y": 0.0519,
+                    "z": 0.9973
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7717,
+                    "y": 0.6343,
+                    "z": 0.0473
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 110.053,
+                    "y": -63.308,
+                    "z": 82.61
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1396,
+                    "y": 0.0963,
+                    "z": 0.9855
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.7175,
+                    "y": -0.673,
+                    "z": 0.1799
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 144.246,
+                    "y": -41.033,
+                    "z": 78.748
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1024,
+                    "y": 0.1536,
+                    "z": 0.9828
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8731,
+                    "y": -0.485,
+                    "z": -0.0505
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 141.375,
+                    "y": -5.863,
+                    "z": 78.663
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0382,
+                    "y": -0.0353,
+                    "z": 0.9986
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7826,
+                    "y": -0.6225,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 134.422,
+                    "y": -20.139,
+                    "z": 78.473
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7793,
+                    "y": -0.6191,
+                    "z": -0.0967
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 132.386,
+                    "y": -17.564,
+                    "z": 78.526
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0332,
+                    "y": -0.1133,
+                    "z": 0.993
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8408,
+                    "y": -0.5147,
+                    "z": -0.168
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 161.948,
+                    "y": -53.597,
+                    "z": 78.645
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1287,
+                    "y": -0.1114,
+                    "z": 0.9854
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7313,
+                    "y": -0.6774,
+                    "z": -0.079
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 180.102,
+                    "y": -52.807,
+                    "z": 79.511
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1542,
+                    "y": 0.0514,
+                    "z": 0.9867
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8731,
+                    "y": -0.4728,
+                    "z": -0.1193
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 137.173,
+                    "y": -52.038,
+                    "z": 78.675
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1091,
+                    "y": -0.0492,
+                    "z": 0.9928
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7392,
+                    "y": -0.6723,
+                    "z": -0.0385
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 175.733,
+                    "y": -47.974,
+                    "z": 78.813
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0705,
+                    "y": 0.0204,
+                    "z": 0.9973
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7314,
+                    "y": 0.6777,
+                    "z": -0.0762
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 176.892,
+                    "y": -4.197,
+                    "z": 78.989
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1036,
+                    "y": 0,
+                    "z": 0.9946
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7562,
+                    "y": 0.6424,
+                    "z": 0.1241
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 115.892,
+                    "y": -56.073,
+                    "z": 80.293
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1893,
+                    "y": 0.0332,
+                    "z": 0.9814
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7429,
+                    "y": -0.6688,
+                    "z": 0.0262
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 162.019,
+                    "y": -33.527,
+                    "z": 78.685
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0089,
+                    "y": 0.049,
+                    "z": 0.9988
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7413,
+                    "y": -0.6687,
+                    "z": 0.0566
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 173.536,
+                    "y": -45.547,
+                    "z": 78.667
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0395,
+                    "y": 0.0407,
+                    "z": 0.9984
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7356,
+                    "y": 0.6579,
+                    "z": 0.1613
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 111.901,
+                    "y": -61.019,
+                    "z": 81.981
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.2968,
+                    "y": 0.0989,
+                    "z": 0.9498
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7813,
+                    "y": -0.6223,
+                    "z": -0.049
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 138.501,
+                    "y": -25.266,
+                    "z": 78.528
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0454,
+                    "y": -0.0216,
+                    "z": 0.9987
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7763,
+                    "y": 0.6252,
+                    "z": -0.0808
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 138.459,
+                    "y": -28.099,
+                    "z": 78.564
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0957,
+                    "y": 0.0099,
+                    "z": 0.9954
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7352,
+                    "y": 0.6742,
+                    "z": 0.0702
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 168.041,
+                    "y": -13.854,
+                    "z": 78.708
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0576,
+                    "y": -0.0411,
+                    "z": 0.9975
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.5853,
+                    "y": -0.8097,
+                    "z": 0.0422
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 146.676,
+                    "y": -38.862,
+                    "z": 78.668
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.052,
+                    "z": 0.9986
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7176,
+                    "y": 0.692,
+                    "z": -0.0788
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 185.601,
+                    "y": 5.305,
+                    "z": 81.168
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.2492,
+                    "y": -0.1495,
+                    "z": 0.9568
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8076,
+                    "y": -0.5898,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 156.617,
+                    "y": -45.342,
+                    "z": 78.719
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7201,
+                    "y": 0.6892,
+                    "z": -0.0798
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 187.72,
+                    "y": 7.617,
+                    "z": 82.237
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.2492,
+                    "y": -0.1495,
+                    "z": 0.9568
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7405,
+                    "y": -0.671,
+                    "z": 0.0386
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 164.747,
+                    "y": -35.827,
+                    "z": 78.72
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0143,
+                    "y": 0.0417,
+                    "z": 0.999
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7453,
+                    "y": -0.6649,
+                    "z": -0.0495
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 159.84,
+                    "y": -31.069,
+                    "z": 78.673
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0323,
+                    "y": -0.0381,
+                    "z": 0.9988
+                }
+            }
+        ],
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": 0.43017045070377,
+                    "y": -0.90274768531485,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 124.40667527324,
+                    "y": -56.784340956713,
+                    "z": 78.924758911133
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.43017045070377,
+                    "y": -0.90274768531485,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 123.20097748894,
+                    "y": -49.604766258101,
+                    "z": 78.885314941406
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.43017045070377,
+                    "y": -0.90274768531485,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 119.58998674768,
+                    "y": -51.325448060916,
+                    "z": 79.399597167969
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.43017045070377,
+                    "y": -0.90274768531485,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 120.18978433402,
+                    "y": -43.285532460897,
+                    "z": 79.16773223877
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.43017045070377,
+                    "y": -0.90274768531485,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 116.57879359276,
+                    "y": -45.006214263713,
+                    "z": 79.775253295898
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.43017045070377,
+                    "y": -0.90274768531485,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 117.17859117909,
+                    "y": -36.966298663694,
+                    "z": 79.591911315918
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.43017045070377,
+                    "y": -0.90274768531485,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 113.56760043783,
+                    "y": -38.686980466509,
+                    "z": 80.183837890625
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.43017045070377,
+                    "y": -0.90274768531485,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 114.16739802416,
+                    "y": -30.64706486649,
+                    "z": 79.982559204102
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "guest7103768",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": true,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "placementMode": "random",
+            "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
+            "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
+        },
+        "distance": 288,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.031353469187931,
+                    "y": 0.99950835912957,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": 119.9441986,
+                    "y": -58.96960831,
+                    "z": 79.779296875
+                },
+                "step": 1,
+                "width": 23
+            },
+            {
+                "dir": {
+                    "x": 0.047566587806992,
+                    "y": 0.99886806922856,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": 178.1107941,
+                    "y": 6.161333084,
+                    "z": 79.757507324219
+                },
+                "step": 2,
+                "width": 24.5
+            },
+            {
+                "dir": {
+                    "x": -0.0098323452242018,
+                    "y": -0.99995166132538,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": 122.1567383,
+                    "y": 5.382551193,
+                    "z": 79.578636169434
+                },
+                "step": 3,
+                "width": 26.5
+            },
+            {
+                "dir": {
+                    "x": 0.01479036633928,
+                    "y": -0.99989061654941,
+                    "z": 0
+                },
+                "height": 12,
+                "isFinish": true,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": 178.9578705,
+                    "y": -59.3095665,
+                    "z": 79.710975646973
+                },
+                "step": 4,
+                "width": 22.5
+            }
+        ],
+        "id": 3,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Figure 8 (reverse)",
+        "oneWayGates": false,
+        "props": [
+            {
+                "dir": {
+                    "x": -0.7276,
+                    "y": 0.6815,
+                    "z": -0.0782
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 179.094,
+                    "y": -1.795,
+                    "z": 79.312
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1542,
+                    "y": -0.0514,
+                    "z": 0.9867
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8527,
+                    "y": -0.5155,
+                    "z": 0.0847
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 156.465,
+                    "y": -5.566,
+                    "z": 78.746
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0588,
+                    "y": 0.0665,
+                    "z": 0.9961
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7295,
+                    "y": -0.6791,
+                    "z": -0.0812
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 182.273,
+                    "y": -55.208,
+                    "z": 80.006
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1658,
+                    "y": 0.0603,
+                    "z": 0.9843
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.712,
+                    "y": -0.6929,
+                    "z": -0.1142
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 186.547,
+                    "y": -59.935,
+                    "z": 81.414
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.295,
+                    "y": 0.1475,
+                    "z": 0.944
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7372,
+                    "y": 0.6757,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 170.255,
+                    "y": -11.438,
+                    "z": 78.656
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.574,
+                    "y": -0.8188,
+                    "z": -0.0113
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 163.535,
+                    "y": 5.588,
+                    "z": 78.654
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0221,
+                    "y": 0.0017,
+                    "z": 0.9998
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7366,
+                    "y": 0.6754,
+                    "z": -0.0352
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 156.971,
+                    "y": -25.934,
+                    "z": 78.652
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0145,
+                    "y": 0.0363,
+                    "z": 0.9992
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7368,
+                    "y": -0.675,
+                    "z": -0.0384
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 144.915,
+                    "y": -11.368,
+                    "z": 78.656
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0162,
+                    "y": -0.0392,
+                    "z": 0.9991
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.2457,
+                    "y": -0.9693,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 149.768,
+                    "y": -38.467,
+                    "z": 78.726
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.7438,
+                    "y": -0.6677,
+                    "z": -0.0308
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 152.719,
+                    "y": -10.934,
+                    "z": 78.717
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0375,
+                    "y": -0.0044,
+                    "z": 0.9993
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7722,
+                    "y": 0.6253,
+                    "z": -0.113
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 136.402,
+                    "y": -30.65,
+                    "z": 78.521
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1035,
+                    "y": 0.0517,
+                    "z": 0.9933
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7357,
+                    "y": 0.6729,
+                    "z": 0.0766
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 172.47,
+                    "y": -9.022,
+                    "z": 78.656
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0534,
+                    "y": -0.0551,
+                    "z": 0.997
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8862,
+                    "y": -0.4628,
+                    "z": -0.0221
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 136.492,
+                    "y": 3.611,
+                    "z": 78.686
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0177,
+                    "y": -0.0138,
+                    "z": 0.9997
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8726,
+                    "y": -0.4884,
+                    "z": -0.0054
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 138.776,
+                    "y": -49.179,
+                    "z": 78.688
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0106,
+                    "y": 0.0079,
+                    "z": 0.9999
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8702,
+                    "y": -0.49,
+                    "z": -0.051
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 134.153,
+                    "y": -57.589,
+                    "z": 78.61
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0368,
+                    "y": -0.0387,
+                    "z": 0.9986
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7314,
+                    "y": 0.6777,
+                    "z": -0.0762
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 174.683,
+                    "y": -6.607,
+                    "z": 78.79
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1036,
+                    "y": 0,
+                    "z": 0.9946
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8874,
+                    "y": -0.4611,
+                    "z": 0.0018
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 139.837,
+                    "y": -2.97,
+                    "z": 78.719
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.009,
+                    "y": -0.0134,
+                    "z": 0.9999
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7751,
+                    "y": -0.6294,
+                    "z": 0.0555
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 116.128,
+                    "y": 2.86,
+                    "z": 80.292
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1536,
+                    "y": -0.1024,
+                    "z": 0.9828
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7783,
+                    "y": 0.6279,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 134.345,
+                    "y": -33.2,
+                    "z": 78.5
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.7982,
+                    "y": -0.6016,
+                    "z": -0.0313
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 142.223,
+                    "y": -43.607,
+                    "z": 78.637
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0265,
+                    "y": -0.0168,
+                    "z": 0.9995
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7706,
+                    "y": 0.6322,
+                    "z": 0.0803
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 122.006,
+                    "y": -48.494,
+                    "z": 79.01
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1036,
+                    "y": 0,
+                    "z": 0.9946
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7244,
+                    "y": 0.6848,
+                    "z": -0.0796
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 183.462,
+                    "y": 2.972,
+                    "z": 80.343
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.2029,
+                    "y": -0.1015,
+                    "z": 0.9739
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7765,
+                    "y": -0.6276,
+                    "z": 0.056
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 118.138,
+                    "y": 0.333,
+                    "z": 79.788
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1231,
+                    "y": -0.064,
+                    "z": 0.9903
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8367,
+                    "y": -0.5289,
+                    "z": -0.1422
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 160.237,
+                    "y": -50.804,
+                    "z": 78.617
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1321,
+                    "y": -0.0571,
+                    "z": 0.9896
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8298,
+                    "y": -0.555,
+                    "z": -0.0578
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 158.469,
+                    "y": -48.044,
+                    "z": 78.613
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0446,
+                    "y": -0.0374,
+                    "z": 0.9983
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.623,
+                    "y": -0.7812,
+                    "z": 0.0407
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 150.376,
+                    "y": -13.204,
+                    "z": 78.626
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0365,
+                    "y": 0.0229,
+                    "z": 0.9991
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8482,
+                    "y": -0.5223,
+                    "z": -0.0883
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 143.035,
+                    "y": -8.688,
+                    "z": 78.682
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0743,
+                    "y": -0.0479,
+                    "z": 0.9961
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7391,
+                    "y": 0.6686,
+                    "z": -0.0821
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 163.613,
+                    "y": -18.685,
+                    "z": 78.683
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0797,
+                    "y": 0.0342,
+                    "z": 0.9962
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.732,
+                    "y": 0.6637,
+                    "z": -0.154
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 161.399,
+                    "y": -21.101,
+                    "z": 78.677
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1516,
+                    "y": 0.0617,
+                    "z": 0.9865
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7663,
+                    "y": -0.639,
+                    "z": -0.0666
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 154.641,
+                    "y": -42.731,
+                    "z": 78.734
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0547,
+                    "y": -0.0384,
+                    "z": 0.9978
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7761,
+                    "y": -0.6254,
+                    "z": 0.0808
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 122.191,
+                    "y": -4.762,
+                    "z": 79.022
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1036,
+                    "y": 0,
+                    "z": 0.9946
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7767,
+                    "y": 0.6286,
+                    "z": 0.0405
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 126.115,
+                    "y": -43.401,
+                    "z": 78.688
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0414,
+                    "y": -0.0132,
+                    "z": 0.9991
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7169,
+                    "y": -0.6876,
+                    "z": -0.1151
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 188.661,
+                    "y": -62.274,
+                    "z": 82.412
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.2507,
+                    "y": 0.1003,
+                    "z": 0.9628
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7348,
+                    "y": -0.6641,
+                    "z": 0.1383
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 169.14,
+                    "y": -40.689,
+                    "z": 78.67
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0762,
+                    "y": 0.1219,
+                    "z": 0.9896
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.739,
+                    "y": -0.6724,
+                    "z": -0.042
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 177.924,
+                    "y": -50.398,
+                    "z": 79.065
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1035,
+                    "y": 0.0517,
+                    "z": 0.9933
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7471,
+                    "y": -0.6629,
+                    "z": -0.0494
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 157.656,
+                    "y": -28.626,
+                    "z": 78.686
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0323,
+                    "y": -0.0381,
+                    "z": 0.9988
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7346,
+                    "y": -0.6687,
+                    "z": 0.1148
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 166.94,
+                    "y": -38.257,
+                    "z": 78.666
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1026,
+                    "y": 0.0577,
+                    "z": 0.993
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7324,
+                    "y": 0.6795,
+                    "z": -0.0437
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 181.287,
+                    "y": 0.598,
+                    "z": 79.799
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1345,
+                    "y": -0.0815,
+                    "z": 0.9876
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7783,
+                    "y": -0.6227,
+                    "z": -0.0811
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 136.461,
+                    "y": -22.702,
+                    "z": 78.469
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0765,
+                    "y": -0.0341,
+                    "z": 0.9965
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.9011,
+                    "y": 0.4333,
+                    "z": -0.0164
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 133.404,
+                    "y": -60.502,
+                    "z": 78.524
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0368,
+                    "y": -0.0387,
+                    "z": 0.9986
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7826,
+                    "y": -0.6225,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 126.266,
+                    "y": -9.885,
+                    "z": 78.717
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8325,
+                    "y": -0.5262,
+                    "z": -0.1734
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 165.602,
+                    "y": -59.443,
+                    "z": 78.628
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.179,
+                    "y": -0.0407,
+                    "z": 0.983
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8696,
+                    "y": -0.4853,
+                    "z": 0.0906
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 161.36,
+                    "y": 2.961,
+                    "z": 78.711
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1036,
+                    "y": 0,
+                    "z": 0.9946
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7368,
+                    "y": 0.675,
+                    "z": 0.0384
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 159.175,
+                    "y": -23.517,
+                    "z": 78.556
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.052,
+                    "y": 0,
+                    "z": 0.9986
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7016,
+                    "y": -0.7125,
+                    "z": -0.0084
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 152.427,
+                    "y": -40.319,
+                    "z": 78.722
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0041,
+                    "y": -0.0078,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8325,
+                    "y": -0.5262,
+                    "z": -0.1734
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 163.681,
+                    "y": -56.383,
+                    "z": 78.568
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1556,
+                    "y": -0.0784,
+                    "z": 0.9847
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7826,
+                    "y": -0.6225,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 130.343,
+                    "y": -15.01,
+                    "z": 78.623
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.888,
+                    "y": -0.4471,
+                    "z": -0.1073
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 138.364,
+                    "y": -0.044,
+                    "z": 78.73
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0961,
+                    "y": -0.0477,
+                    "z": 0.9942
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7776,
+                    "y": 0.6279,
+                    "z": 0.0327
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 128.171,
+                    "y": -40.85,
+                    "z": 78.671
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0319,
+                    "y": -0.0125,
+                    "z": 0.9994
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7617,
+                    "y": -0.6404,
+                    "z": 0.0983
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 112.183,
+                    "y": 7.82,
+                    "z": 82.01
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.2492,
+                    "y": -0.1495,
+                    "z": 0.9568
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7459,
+                    "y": 0.645,
+                    "z": 0.1659
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 113.875,
+                    "y": -58.573,
+                    "z": 80.953
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.2797,
+                    "y": 0.0773,
+                    "z": 0.957
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.577,
+                    "y": -0.8087,
+                    "z": 0.1143
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 147.327,
+                    "y": -13.562,
+                    "z": 78.633
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0517,
+                    "y": 0.1035,
+                    "z": 0.9933
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7779,
+                    "y": 0.627,
+                    "z": -0.0405
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 132.287,
+                    "y": -35.75,
+                    "z": 78.566
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0301,
+                    "y": 0.0272,
+                    "z": 0.9992
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8793,
+                    "y": -0.4759,
+                    "z": 0.021
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 135.629,
+                    "y": -54.925,
+                    "z": 78.695
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0295,
+                    "y": -0.0105,
+                    "z": 0.9995
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8541,
+                    "y": -0.4919,
+                    "z": 0.1689
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 158.145,
+                    "y": -2.75,
+                    "z": 78.673
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1524,
+                    "y": 0.0739,
+                    "z": 0.9856
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8587,
+                    "y": -0.5117,
+                    "z": -0.0267
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 140.439,
+                    "y": -46.355,
+                    "z": 78.636
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0179,
+                    "y": -0.022,
+                    "z": 0.9996
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7639,
+                    "y": 0.6328,
+                    "z": 0.1262
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 119.959,
+                    "y": -51.032,
+                    "z": 79.321
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.181,
+                    "y": 0.0225,
+                    "z": 0.9832
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7764,
+                    "y": -0.6227,
+                    "z": 0.0966
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 128.311,
+                    "y": -12.447,
+                    "z": 78.657
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1142,
+                    "y": 0.0117,
+                    "z": 0.9934
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8351,
+                    "y": -0.5483,
+                    "z": -0.0435
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 154.685,
+                    "y": -8.314,
+                    "z": 78.727
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0357,
+                    "y": -0.0248,
+                    "z": 0.9991
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7783,
+                    "y": 0.6279,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 130.23,
+                    "y": -38.3,
+                    "z": 78.563
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7606,
+                    "y": -0.6418,
+                    "z": 0.0978
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 114.143,
+                    "y": 5.356,
+                    "z": 81.028
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.2492,
+                    "y": -0.1495,
+                    "z": 0.9568
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.76,
+                    "y": 0.6378,
+                    "z": 0.1251
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 117.922,
+                    "y": -53.557,
+                    "z": 79.795
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1946,
+                    "y": 0.0397,
+                    "z": 0.9801
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7398,
+                    "y": -0.6712,
+                    "z": -0.0474
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 171.34,
+                    "y": -43.115,
+                    "z": 78.666
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0235,
+                    "y": -0.0446,
+                    "z": 0.9987
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.772,
+                    "y": -0.6296,
+                    "z": 0.0878
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 120.159,
+                    "y": -2.208,
+                    "z": 79.331
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1542,
+                    "y": -0.0514,
+                    "z": 0.9867
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7295,
+                    "y": -0.6791,
+                    "z": -0.0812
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 184.437,
+                    "y": -57.602,
+                    "z": 80.549
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.2029,
+                    "y": 0.1015,
+                    "z": 0.9739
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7796,
+                    "y": -0.621,
+                    "z": 0.0812
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 124.226,
+                    "y": -7.32,
+                    "z": 78.81
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1036,
+                    "y": 0,
+                    "z": 0.9946
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8666,
+                    "y": -0.4842,
+                    "z": 0.1208
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 159.767,
+                    "y": 0.097,
+                    "z": 78.655
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1059,
+                    "y": 0.058,
+                    "z": 0.9927
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7372,
+                    "y": 0.6757,
+                    "z": -0.0032
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 165.827,
+                    "y": -16.27,
+                    "z": 78.722
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0081,
+                    "y": 0.0136,
+                    "z": 0.9999
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7781,
+                    "y": 0.6281,
+                    "z": 0.0078
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 124.059,
+                    "y": -45.95,
+                    "z": 78.786
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0519,
+                    "y": 0.0519,
+                    "z": 0.9973
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7717,
+                    "y": 0.6343,
+                    "z": 0.0473
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 110.053,
+                    "y": -63.308,
+                    "z": 82.61
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1396,
+                    "y": 0.0963,
+                    "z": 0.9855
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.7175,
+                    "y": -0.673,
+                    "z": 0.1799
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 144.246,
+                    "y": -41.033,
+                    "z": 78.748
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1024,
+                    "y": 0.1536,
+                    "z": 0.9828
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8731,
+                    "y": -0.485,
+                    "z": -0.0505
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 141.375,
+                    "y": -5.863,
+                    "z": 78.663
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0382,
+                    "y": -0.0353,
+                    "z": 0.9986
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7826,
+                    "y": -0.6225,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 134.422,
+                    "y": -20.139,
+                    "z": 78.473
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7793,
+                    "y": -0.6191,
+                    "z": -0.0967
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 132.386,
+                    "y": -17.564,
+                    "z": 78.526
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0332,
+                    "y": -0.1133,
+                    "z": 0.993
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8408,
+                    "y": -0.5147,
+                    "z": -0.168
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 161.948,
+                    "y": -53.597,
+                    "z": 78.645
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1287,
+                    "y": -0.1114,
+                    "z": 0.9854
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7313,
+                    "y": -0.6774,
+                    "z": -0.079
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 180.102,
+                    "y": -52.807,
+                    "z": 79.511
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1542,
+                    "y": 0.0514,
+                    "z": 0.9867
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.8731,
+                    "y": -0.4728,
+                    "z": -0.1193
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 137.173,
+                    "y": -52.038,
+                    "z": 78.675
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1091,
+                    "y": -0.0492,
+                    "z": 0.9928
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7392,
+                    "y": -0.6723,
+                    "z": -0.0385
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 175.733,
+                    "y": -47.974,
+                    "z": 78.813
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0705,
+                    "y": 0.0204,
+                    "z": 0.9973
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7314,
+                    "y": 0.6777,
+                    "z": -0.0762
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 176.892,
+                    "y": -4.197,
+                    "z": 78.989
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.1036,
+                    "y": 0,
+                    "z": 0.9946
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7562,
+                    "y": 0.6424,
+                    "z": 0.1241
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 115.892,
+                    "y": -56.073,
+                    "z": 80.293
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.1893,
+                    "y": 0.0332,
+                    "z": 0.9814
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7429,
+                    "y": -0.6688,
+                    "z": 0.0262
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 162.019,
+                    "y": -33.527,
+                    "z": 78.685
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0089,
+                    "y": 0.049,
+                    "z": 0.9988
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7413,
+                    "y": -0.6687,
+                    "z": 0.0566
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 173.536,
+                    "y": -45.547,
+                    "z": 78.667
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0395,
+                    "y": 0.0407,
+                    "z": 0.9984
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7356,
+                    "y": 0.6579,
+                    "z": 0.1613
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 111.901,
+                    "y": -61.019,
+                    "z": 81.981
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.2968,
+                    "y": 0.0989,
+                    "z": 0.9498
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7813,
+                    "y": -0.6223,
+                    "z": -0.049
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 138.501,
+                    "y": -25.266,
+                    "z": 78.528
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0454,
+                    "y": -0.0216,
+                    "z": 0.9987
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7763,
+                    "y": 0.6252,
+                    "z": -0.0808
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 138.459,
+                    "y": -28.099,
+                    "z": 78.564
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0957,
+                    "y": 0.0099,
+                    "z": 0.9954
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7352,
+                    "y": 0.6742,
+                    "z": 0.0702
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 168.041,
+                    "y": -13.854,
+                    "z": 78.708
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0576,
+                    "y": -0.0411,
+                    "z": 0.9975
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.5853,
+                    "y": -0.8097,
+                    "z": 0.0422
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 146.676,
+                    "y": -38.862,
+                    "z": 78.668
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0.052,
+                    "z": 0.9986
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7176,
+                    "y": 0.692,
+                    "z": -0.0788
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 185.601,
+                    "y": 5.305,
+                    "z": 81.168
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.2492,
+                    "y": -0.1495,
+                    "z": 0.9568
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.8076,
+                    "y": -0.5898,
+                    "z": 0
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 156.617,
+                    "y": -45.342,
+                    "z": 78.719
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7201,
+                    "y": 0.6892,
+                    "z": -0.0798
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 187.72,
+                    "y": 7.617,
+                    "z": 82.237
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.2492,
+                    "y": -0.1495,
+                    "z": 0.9568
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7405,
+                    "y": -0.671,
+                    "z": 0.0386
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 164.747,
+                    "y": -35.827,
+                    "z": 78.72
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": 0.0143,
+                    "y": 0.0417,
+                    "z": 0.999
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.7453,
+                    "y": -0.6649,
+                    "z": -0.0495
+                },
+                "kind": "static",
+                "lift": 0,
+                "pos": {
+                    "x": 159.84,
+                    "y": -31.069,
+                    "z": 78.673
+                },
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
+                "up": {
+                    "x": -0.0323,
+                    "y": -0.0381,
+                    "z": 0.9988
+                }
+            }
+        ],
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": 0.69302212927191,
+                    "y": 0.72091631160588,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 119.76498037682,
+                    "y": -62.246069769015,
+                    "z": 80.133445739746
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.69302212927191,
+                    "y": 0.72091631160588,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 113.47199284871,
+                    "y": -65.906439691712,
+                    "z": 82.278015136719
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.69302212927191,
+                    "y": 0.72091631160588,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 116.35565809513,
+                    "y": -68.6785282088,
+                    "z": 82.131675720215
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.69302212927191,
+                    "y": 0.72091631160588,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 108.6208379438,
+                    "y": -70.952853872953,
+                    "z": 82.114990234375
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.69302212927191,
+                    "y": 0.72091631160588,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 103.7696830389,
+                    "y": -75.999268054194,
+                    "z": 80.24259185791
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.69302212927191,
+                    "y": 0.72091631160588,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 106.65334828532,
+                    "y": -78.771356571282,
+                    "z": 80.53678894043
+                }
+            },
+            {
+                "dir": {
+                    "x": 0.69302212927191,
+                    "y": 0.72091631160588,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 98.918528133995,
+                    "y": -81.045682235436,
+                    "z": 82.628463745117
                 }
             }
         ],

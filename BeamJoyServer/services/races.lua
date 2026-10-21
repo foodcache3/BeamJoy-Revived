@@ -1093,6 +1093,20 @@ end
 --- per (map, name), tracked persistently by dao_bundled's own ledger, so this can never re-add
 --- something an admin has since deleted on purpose, and never touches an already-seeded map again
 --- just because the server restarted
+--- One-time sync of every bundled race (direct request, 2.0.0) : bumping this overwrites, once per
+--- server, each bundled race that server still has with the race as BeamJoy ships it now (course,
+--- props, default settings, vehicle rule, author). Its id and name stay. Its times stay when the
+--- course is the same, and are cleared when it changed (times on the old course don't compare). A
+--- race deleted on a server stays deleted. Tracked per race in dao_bundled's ledger, under
+--- "<name>#sync@<revision>".
+local BUNDLED_SYNC_REVISION = 1
+
+---@param name string
+---@return string
+local function syncKey(name)
+    return string.format("%s#sync@%d", name, BUNDLED_SYNC_REVISION)
+end
+
 local function seedBundledRaces()
     for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
         local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
@@ -1129,6 +1143,7 @@ local function seedBundledRaces()
                         candidate.leaderboard = {}
                         table.insert(targetList, candidate)
                         dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, name)
+                        dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, syncKey(name))
                         changed = true
                         LogInfo(string.format("seedBundledRaces: seeded %s / %s", mapName, name))
                     end
@@ -1187,6 +1202,46 @@ local function sameGates(a, b)
         if dx * dx + dy * dy + dz * dz > .25 then return false end
     end
     return true
+end
+
+local function syncBundledRaces()
+    for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
+        local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
+        local list, changed
+        for _, race in ipairs(table.isArray(bundled) and bundled or {}) do
+            local name = type(race.name) == "string" and race.name or ""
+            if name ~= "" and not dao_bundled.isSeeded(mapName, M.ACTIVITY_TYPE, syncKey(name)) then
+                list = list or dao_activity.get(mapName, M.ACTIVITY_TYPE) or {}
+                local live = table.find(list, function(r)
+                    return type(r.name) == "string" and r.name:trim():lower() == name:trim():lower()
+                end)
+                -- a failed sync is retried on the next boot
+                local failed = false
+                if live then
+                    local candidate = table.deepcopy(race)
+                    candidate.id, candidate.name, candidate.formerNames = live.id, live.name, nil
+                    local keepTimes = sameGates(live, race)
+                    candidate.leaderboard = keepTimes and live.leaderboard or {}
+                    candidate.freeroamLeaderboard = keepTimes and live.freeroamLeaderboard or {}
+                    local err = sanitizeRace(candidate, list)
+                    if err then
+                        failed = true
+                        LogError(string.format("bundled race sync %s / %s failed: %s", mapName, name, err))
+                    else
+                        for i, r in ipairs(list) do
+                            if r == live then list[i] = candidate end
+                        end
+                        changed = true
+                        LogInfo(string.format("bundled race synced: %s / %s%s", mapName, name,
+                            keepTimes and "" or ", course changed, times cleared"))
+                    end
+                end
+                -- no race of this name here : deleted on purpose, nothing to sync
+                if not failed then dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, syncKey(name)) end
+            end
+        end
+        if changed then dao_activity.save(mapName, M.ACTIVITY_TYPE, list) end
+    end
 end
 
 local function applyBundledCourseUpdates()
@@ -1968,6 +2023,7 @@ local function onInit()
     renameBundledRaces()
     seedBundledRaces()
     applyBundledCourseUpdates()
+    syncBundledRaces()
     mergeBundledProps()
     loadData()
 end

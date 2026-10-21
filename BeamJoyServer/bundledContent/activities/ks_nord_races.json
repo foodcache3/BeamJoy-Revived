@@ -1,0 +1,2589 @@
+[
+    {
+        "author": "guest4614816",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": true,
+            "laps": 1,
+            "limitVisibleGates": true,
+            "placementMode": "random",
+            "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
+            "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
+        },
+        "distance": 16182,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.77934143703581,
+                    "y": 0.6265994929131,
+                    "z": 0
+                },
+                "height": 9,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": -925.9650269,
+                    "y": -1820.73999,
+                    "z": 439.1867980957
+                },
+                "step": 1,
+                "width": 12
+            },
+            {
+                "dir": {
+                    "x": -0.49657513762161,
+                    "y": 0.86799374000973,
+                    "z": 0
+                },
+                "height": 6,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": -2481.957031,
+                    "y": -1150.749268,
+                    "z": 376.03689575195
+                },
+                "step": 2,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.93671999155692,
+                    "y": 0.35007950156728,
+                    "z": 0
+                },
+                "height": 6.5,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": -2943.330078,
+                    "y": 549.7659912,
+                    "z": 337.78567504883
+                },
+                "step": 3,
+                "width": 8.5
+            },
+            {
+                "dir": {
+                    "x": 0.83937949477912,
+                    "y": 0.54354582487989,
+                    "z": 0
+                },
+                "height": 6,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": -2142.02002,
+                    "y": 1532.253052,
+                    "z": 293.96795654297
+                },
+                "step": 4,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.99984866010727,
+                    "y": 0.017397036578272,
+                    "z": 0
+                },
+                "height": 6.5,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": -1211.793945,
+                    "y": 2518.562988,
+                    "z": 183.20678710938
+                },
+                "step": 5,
+                "width": 8.5
+            },
+            {
+                "dir": {
+                    "x": 0.19862891507159,
+                    "y": -0.98007476964642,
+                    "z": 0
+                },
+                "height": 6,
+                "parents": [
+                    5
+                ],
+                "pos": {
+                    "x": -48.9070015,
+                    "y": 2569.116943,
+                    "z": 201.19442749023
+                },
+                "step": 6,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.81583101886565,
+                    "y": 0.57829036707923,
+                    "z": 0
+                },
+                "height": 6.5,
+                "parents": [
+                    6
+                ],
+                "pos": {
+                    "x": 1454.869019,
+                    "y": 2039.890991,
+                    "z": 323.41662597656
+                },
+                "step": 7,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": 0.95643162878277,
+                    "y": -0.29195639993658,
+                    "z": 0
+                },
+                "height": 7,
+                "parents": [
+                    7
+                ],
+                "pos": {
+                    "x": 2466.061035,
+                    "y": 2399.0271,
+                    "z": 432.71612548828
+                },
+                "step": 8,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": -0.99999993369747,
+                    "y": 0.00036414976701592,
+                    "z": 0
+                },
+                "height": 10,
+                "parents": [
+                    8
+                ],
+                "pos": {
+                    "x": 3015.874023,
+                    "y": 1506.552979,
+                    "z": 365.69647216797
+                },
+                "step": 9,
+                "width": 13
+            },
+            {
+                "dir": {
+                    "x": -0.96766261203,
+                    "y": -0.25224803126938,
+                    "z": 0
+                },
+                "height": 7,
+                "parents": [
+                    9
+                ],
+                "pos": {
+                    "x": 2152.610107,
+                    "y": 526.1040039,
+                    "z": 355.77267456055
+                },
+                "step": 10,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": -0.87511127742215,
+                    "y": -0.4839217417399,
+                    "z": 0
+                },
+                "height": 9,
+                "parents": [
+                    10
+                ],
+                "pos": {
+                    "x": 1254.176514,
+                    "y": -331.687561,
+                    "z": 370.99594116211
+                },
+                "step": 11,
+                "width": 12
+            },
+            {
+                "dir": {
+                    "x": -0.91152554641456,
+                    "y": -0.4112434537274,
+                    "z": 0
+                },
+                "height": 10,
+                "isFinish": true,
+                "parents": [
+                    11
+                ],
+                "pos": {
+                    "x": -241.0170746,
+                    "y": -1200.214722,
+                    "z": 405.53128051758
+                },
+                "step": 12,
+                "width": 13.5
+            }
+        ],
+        "id": 1,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Nordschleife (Full, 20,832m)",
+        "oneWayGates": false,
+        "props": [
+            {
+                "a": {
+                    "x": -912.34497070312,
+                    "y": -1851.9677734375,
+                    "z": 438.51931762695
+                },
+                "b": {
+                    "x": -918.43774414062,
+                    "y": -1846.3403320312,
+                    "z": 438.61993408203
+                },
+                "count": 3,
+                "followGround": true,
+                "heights": [
+                    438.519,
+                    438.615,
+                    438.62
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_arrow_barrier.dae",
+                "yaw": 90
+            }
+        ],
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.81647054603109,
+                    "y": 0.57738708633264,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -917.19679973492,
+                    "y": -1827.5634627158,
+                    "z": 438.8366394043
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.81647054603109,
+                    "y": 0.57738708633264,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -912.63628008537,
+                    "y": -1833.2381134122,
+                    "z": 438.72515869141
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.81647054603109,
+                    "y": 0.57738708633264,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -910.32673174004,
+                    "y": -1829.9722312281,
+                    "z": 438.60723876953
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.81647054603109,
+                    "y": 0.57738708633264,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -906.92098626315,
+                    "y": -1837.2798230166,
+                    "z": 438.55328369141
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.81647054603109,
+                    "y": 0.57738708633264,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -904.61143791782,
+                    "y": -1834.0139408324,
+                    "z": 438.4748840332
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.81647054603109,
+                    "y": 0.57738708633264,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -901.20569244093,
+                    "y": -1841.3215326209,
+                    "z": 438.28244018555
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.81647054603109,
+                    "y": 0.57738708633264,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -898.8961440956,
+                    "y": -1838.0556504368,
+                    "z": 438.24951171875
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.81647054603109,
+                    "y": 0.57738708633264,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -895.49039861872,
+                    "y": -1845.3632422252,
+                    "z": 438.18627929688
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "guest4614816",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": true,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "placementMode": "random",
+            "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
+            "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
+        },
+        "distance": 14561,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.91152554641456,
+                    "y": -0.4112434537274,
+                    "z": 0
+                },
+                "height": 10,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": -241.0170746,
+                    "y": -1200.214722,
+                    "z": 405.53128051758
+                },
+                "step": 1,
+                "width": 13.5
+            },
+            {
+                "dir": {
+                    "x": -0.49657513762161,
+                    "y": 0.86799374000973,
+                    "z": 0
+                },
+                "height": 6,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": -2481.957031,
+                    "y": -1150.749268,
+                    "z": 376.03689575195
+                },
+                "step": 2,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.93671999155692,
+                    "y": 0.35007950156728,
+                    "z": 0
+                },
+                "height": 6.5,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": -2943.330078,
+                    "y": 549.7659912,
+                    "z": 337.78567504883
+                },
+                "step": 3,
+                "width": 8.5
+            },
+            {
+                "dir": {
+                    "x": 0.83937949477912,
+                    "y": 0.54354582487989,
+                    "z": 0
+                },
+                "height": 6,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": -2142.02002,
+                    "y": 1532.253052,
+                    "z": 293.96795654297
+                },
+                "step": 4,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.99984866010727,
+                    "y": 0.017397036578272,
+                    "z": 0
+                },
+                "height": 6.5,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": -1211.793945,
+                    "y": 2518.562988,
+                    "z": 183.20678710938
+                },
+                "step": 5,
+                "width": 8.5
+            },
+            {
+                "dir": {
+                    "x": 0.19862891507159,
+                    "y": -0.98007476964642,
+                    "z": 0
+                },
+                "height": 6,
+                "parents": [
+                    5
+                ],
+                "pos": {
+                    "x": -48.9070015,
+                    "y": 2569.116943,
+                    "z": 201.19442749023
+                },
+                "step": 6,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.81583101886565,
+                    "y": 0.57829036707923,
+                    "z": 0
+                },
+                "height": 6.5,
+                "parents": [
+                    6
+                ],
+                "pos": {
+                    "x": 1454.869019,
+                    "y": 2039.890991,
+                    "z": 323.41662597656
+                },
+                "step": 7,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": 0.95643162878277,
+                    "y": -0.29195639993658,
+                    "z": 0
+                },
+                "height": 7,
+                "parents": [
+                    7
+                ],
+                "pos": {
+                    "x": 2466.061035,
+                    "y": 2399.0271,
+                    "z": 432.71612548828
+                },
+                "step": 8,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": -0.99999993369747,
+                    "y": 0.00036414976701592,
+                    "z": 0
+                },
+                "height": 10,
+                "parents": [
+                    8
+                ],
+                "pos": {
+                    "x": 3015.874023,
+                    "y": 1506.552979,
+                    "z": 365.69647216797
+                },
+                "step": 9,
+                "width": 13
+            },
+            {
+                "dir": {
+                    "x": -0.96766261203,
+                    "y": -0.25224803126938,
+                    "z": 0
+                },
+                "height": 7,
+                "parents": [
+                    9
+                ],
+                "pos": {
+                    "x": 2152.610107,
+                    "y": 526.1040039,
+                    "z": 355.77267456055
+                },
+                "step": 10,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": -0.87511127742215,
+                    "y": -0.4839217417399,
+                    "z": 0
+                },
+                "height": 9,
+                "isFinish": true,
+                "parents": [
+                    10
+                ],
+                "pos": {
+                    "x": 1254.176514,
+                    "y": -331.687561,
+                    "z": 370.99594116211
+                },
+                "step": 11,
+                "width": 12
+            }
+        ],
+        "id": 3,
+        "leaderboard": [
+
+        ],
+        "loopable": false,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Nordschleife Bridge-to-Gantry (Tourist,",
+        "oneWayGates": false,
+        "props": [
+            {
+                "a": {
+                    "x": 267.11505126953,
+                    "y": -907.44207763672,
+                    "z": 386.24554443359
+                },
+                "b": {
+                    "x": 260.39205932617,
+                    "y": -896.53631591797,
+                    "z": 386.26354980469
+                },
+                "count": 5,
+                "followGround": true,
+                "heights": [
+                    386.246,
+                    386.286,
+                    386.349,
+                    386.33,
+                    386.264
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/concrete_road_barrier_a.dae",
+                "yaw": 90
+            },
+            {
+                "a": {
+                    "x": 153.53297424316,
+                    "y": -974.78881835938,
+                    "z": 392.19329833984
+                },
+                "b": {
+                    "x": 147.2374420166,
+                    "y": -963.33489990234,
+                    "z": 392.2200012207
+                },
+                "count": 5,
+                "followGround": true,
+                "heights": [
+                    392.193,
+                    392.252,
+                    392.302,
+                    392.288,
+                    392.22
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/concrete_road_barrier_a.dae",
+                "yaw": 90
+            }
+        ],
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.85920865095217,
+                    "y": -0.51162534547162,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 171.83141702738,
+                    "y": -941.89445953632,
+                    "z": 390.94439697266
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.85920865095217,
+                    "y": -0.51162534547162,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 178.86912827499,
+                    "y": -940.03149941992,
+                    "z": 390.61004638672
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.85920865095217,
+                    "y": -0.51162534547162,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 176.8226268931,
+                    "y": -936.59466481612,
+                    "z": 390.71224975586
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.85920865095217,
+                    "y": -0.51162534547162,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 184.88358883165,
+                    "y": -936.45012200162,
+                    "z": 390.32379150391
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.85920865095217,
+                    "y": -0.51162534547162,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 182.83708744977,
+                    "y": -933.01328739781,
+                    "z": 390.42602539062
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.85920865095217,
+                    "y": -0.51162534547162,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 190.89804938832,
+                    "y": -932.86874458332,
+                    "z": 390.03753662109
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.85920865095217,
+                    "y": -0.51162534547162,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 188.85154800643,
+                    "y": -929.43190997951,
+                    "z": 390.13977050781
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.85920865095217,
+                    "y": -0.51162534547162,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 196.91250994498,
+                    "y": -929.28736716502,
+                    "z": 389.75128173828
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "guest4614816",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": true,
+            "laps": 3,
+            "limitVisibleGates": true,
+            "placementMode": "random",
+            "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
+            "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
+        },
+        "distance": 16030,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.60530323181622,
+                    "y": 0.79599497332134,
+                    "z": 0
+                },
+                "height": 7,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": -1044.320068,
+                    "y": -1700.659058,
+                    "z": 446.57919311523
+                },
+                "step": 1,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": -0.61152346267573,
+                    "y": 0.7912262979686,
+                    "z": 0
+                },
+                "height": 6,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": -2481.957031,
+                    "y": -1150.749268,
+                    "z": 376.03689575195
+                },
+                "step": 2,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.92789780101279,
+                    "y": 0.37283464280514,
+                    "z": 0
+                },
+                "height": 6.5,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": -2943.336182,
+                    "y": 549.7659912,
+                    "z": 337.78619384766
+                },
+                "step": 3,
+                "width": 8.5
+            },
+            {
+                "dir": {
+                    "x": 0.80997203519917,
+                    "y": 0.5864685005994,
+                    "z": 0
+                },
+                "height": 6,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": -2142.021484,
+                    "y": 1532.252563,
+                    "z": 293.96801757812
+                },
+                "step": 4,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 1,
+                    "y": 0,
+                    "z": 0
+                },
+                "height": 6.5,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": -1211.797729,
+                    "y": 2518.563232,
+                    "z": 183.20710754395
+                },
+                "step": 5,
+                "width": 8.5
+            },
+            {
+                "dir": {
+                    "x": 0.092869692147341,
+                    "y": -0.99567827147149,
+                    "z": 0
+                },
+                "height": 6,
+                "parents": [
+                    5
+                ],
+                "pos": {
+                    "x": -48.90694427,
+                    "y": 2569.116699,
+                    "z": 201.19444274902
+                },
+                "step": 6,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.81421646829171,
+                    "y": 0.58056140309409,
+                    "z": 0
+                },
+                "height": 6.5,
+                "parents": [
+                    6
+                ],
+                "pos": {
+                    "x": 1454.869141,
+                    "y": 2039.891357,
+                    "z": 323.41665649414
+                },
+                "step": 7,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": 0.94708726861516,
+                    "y": -0.32097617610514,
+                    "z": 0
+                },
+                "height": 7,
+                "parents": [
+                    7
+                ],
+                "pos": {
+                    "x": 2466.060303,
+                    "y": 2399.026855,
+                    "z": 432.71615600586
+                },
+                "step": 8,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": -0.99924169103566,
+                    "y": 0.038936395521389,
+                    "z": 0
+                },
+                "height": 10,
+                "parents": [
+                    8
+                ],
+                "pos": {
+                    "x": 3015.873779,
+                    "y": 1506.552734,
+                    "z": 365.69650268555
+                },
+                "step": 9,
+                "width": 13
+            },
+            {
+                "dir": {
+                    "x": -0.91749302597116,
+                    "y": -0.3977518664875,
+                    "z": 0
+                },
+                "height": 7,
+                "parents": [
+                    9
+                ],
+                "pos": {
+                    "x": 2152.610352,
+                    "y": 526.1040039,
+                    "z": 355.77267456055
+                },
+                "step": 10,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": -0.87277652577943,
+                    "y": -0.4881200016885,
+                    "z": 0
+                },
+                "height": 10.5,
+                "parents": [
+                    10
+                ],
+                "pos": {
+                    "x": 1254.399902,
+                    "y": -331.6279297,
+                    "z": 371.00180053711
+                },
+                "step": 11,
+                "width": 14
+            },
+            {
+                "dir": {
+                    "x": -0.86844414082286,
+                    "y": -0.49578702511305,
+                    "z": 0
+                },
+                "height": 10,
+                "parents": [
+                    11
+                ],
+                "pos": {
+                    "x": -241.0170746,
+                    "y": -1200.214722,
+                    "z": 405.53128051758
+                },
+                "step": 12,
+                "width": 13.5
+            },
+            {
+                "dir": {
+                    "x": -0.79069675212262,
+                    "y": 0.61220800891751,
+                    "z": 0
+                },
+                "height": 9,
+                "isFinish": true,
+                "parents": [
+                    12
+                ],
+                "pos": {
+                    "x": -925.9646606,
+                    "y": -1820.741943,
+                    "z": 439.18676757812
+                },
+                "step": 13,
+                "width": 12
+            }
+        ],
+        "id": 4,
+        "leaderboard": [
+
+        ],
+        "loopable": false,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Nordschleife (Pre-2019, 20,600m)",
+        "oneWayGates": false,
+        "props": [
+            {
+                "a": {
+                    "x": -924.36962890625,
+                    "y": -1861.9016113281,
+                    "z": 438.80014038086
+                },
+                "b": {
+                    "x": -932.90411376953,
+                    "y": -1847.6097412109,
+                    "z": 439.04644775391
+                },
+                "count": 5,
+                "followGround": true,
+                "heights": [
+                    438.8,
+                    438.846,
+                    438.799,
+                    438.864,
+                    439.046
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/race/s_concrete_arrow_barrier.dae",
+                "yaw": 90
+            }
+        ],
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.51740415909267,
+                    "y": 0.85574116189044,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1043.0264356023,
+                    "y": -1702.7984109047,
+                    "z": 446.56051635742
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.51740415909267,
+                    "y": 0.85574116189044,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1041.1160888124,
+                    "y": -1709.8234073561,
+                    "z": 446.4147644043
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.51740415909267,
+                    "y": 0.85574116189044,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1037.6931241648,
+                    "y": -1707.7537907198,
+                    "z": 446.41693115234
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.51740415909267,
+                    "y": 0.85574116189044,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1037.4942596988,
+                    "y": -1715.8135954894,
+                    "z": 446.27966308594
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.51740415909267,
+                    "y": 0.85574116189044,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1034.0712950512,
+                    "y": -1713.743978853,
+                    "z": 446.2262878418
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.51740415909267,
+                    "y": 0.85574116189044,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1033.8724305851,
+                    "y": -1721.8037836226,
+                    "z": 446.13363647461
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.51740415909267,
+                    "y": 0.85574116189044,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1030.4494659375,
+                    "y": -1719.7341669862,
+                    "z": 446.0227355957
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.51740415909267,
+                    "y": 0.85574116189044,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1030.2506014715,
+                    "y": -1727.7939717558,
+                    "z": 445.91064453125
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "guest4614816",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": true,
+            "laps": 1,
+            "limitVisibleGates": true,
+            "placementMode": "random",
+            "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
+            "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
+        },
+        "distance": 18904,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.74756348502895,
+                    "y": -0.66419036115513,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": -1136.660034,
+                    "y": -2058.149902,
+                    "z": 438.10580444336
+                },
+                "step": 1,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": -0.91272294614867,
+                    "y": -0.40857902977721,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": -1646.790039,
+                    "y": -2436.290039,
+                    "z": 425.47158813477
+                },
+                "step": 2,
+                "width": 18
+            },
+            {
+                "dir": {
+                    "x": -0.79598628827133,
+                    "y": -0.60531465279145,
+                    "z": 0
+                },
+                "height": 7.5,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": -1774.5557657608,
+                    "y": -2764.1521716055,
+                    "z": 421.57482910156
+                },
+                "step": 3,
+                "width": 11.443579858729
+            },
+            {
+                "dir": {
+                    "x": 0.79617663017772,
+                    "y": 0.60506427225448,
+                    "z": 0
+                },
+                "height": 9.5,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": -1876.400024,
+                    "y": -2274.879883,
+                    "z": 413.12002563477
+                },
+                "step": 4,
+                "width": 12.5
+            },
+            {
+                "dir": {
+                    "x": 0.50168269086475,
+                    "y": 0.86505171965999,
+                    "z": 0
+                },
+                "height": 10,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": -1221.26001,
+                    "y": -1915.140015,
+                    "z": 428.32778930664
+                },
+                "step": 5,
+                "width": 13
+            },
+            {
+                "dir": {
+                    "x": -0.55419714424978,
+                    "y": -0.83238544275196,
+                    "z": 0
+                },
+                "height": 10,
+                "parents": [
+                    5
+                ],
+                "pos": {
+                    "x": -1000.655579,
+                    "y": -1800.876587,
+                    "z": 440.10763549805
+                },
+                "step": 6,
+                "width": 13.5
+            },
+            {
+                "dir": {
+                    "x": -0.49657513762161,
+                    "y": 0.86799374000973,
+                    "z": 0
+                },
+                "height": 6,
+                "parents": [
+                    6
+                ],
+                "pos": {
+                    "x": -2481.957031,
+                    "y": -1150.749268,
+                    "z": 376.03689575195
+                },
+                "step": 7,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.93671999155692,
+                    "y": 0.35007950156728,
+                    "z": 0
+                },
+                "height": 6.5,
+                "parents": [
+                    7
+                ],
+                "pos": {
+                    "x": -2943.330078,
+                    "y": 549.7659912,
+                    "z": 337.78567504883
+                },
+                "step": 8,
+                "width": 8.5
+            },
+            {
+                "dir": {
+                    "x": 0.83937949477912,
+                    "y": 0.54354582487989,
+                    "z": 0
+                },
+                "height": 6,
+                "parents": [
+                    8
+                ],
+                "pos": {
+                    "x": -2142.02002,
+                    "y": 1532.253052,
+                    "z": 293.96795654297
+                },
+                "step": 9,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.99984866010727,
+                    "y": 0.017397036578272,
+                    "z": 0
+                },
+                "height": 6.5,
+                "parents": [
+                    9
+                ],
+                "pos": {
+                    "x": -1211.793945,
+                    "y": 2518.562988,
+                    "z": 183.20678710938
+                },
+                "step": 10,
+                "width": 8.5
+            },
+            {
+                "dir": {
+                    "x": 0.19862891507159,
+                    "y": -0.98007476964642,
+                    "z": 0
+                },
+                "height": 6,
+                "parents": [
+                    10
+                ],
+                "pos": {
+                    "x": -48.9070015,
+                    "y": 2569.116943,
+                    "z": 201.19442749023
+                },
+                "step": 11,
+                "width": 8
+            },
+            {
+                "dir": {
+                    "x": 0.81583101886565,
+                    "y": 0.57829036707923,
+                    "z": 0
+                },
+                "height": 6.5,
+                "parents": [
+                    11
+                ],
+                "pos": {
+                    "x": 1454.869019,
+                    "y": 2039.890991,
+                    "z": 323.41662597656
+                },
+                "step": 12,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": 0.95643162878277,
+                    "y": -0.29195639993658,
+                    "z": 0
+                },
+                "height": 7,
+                "parents": [
+                    12
+                ],
+                "pos": {
+                    "x": 2466.061035,
+                    "y": 2399.0271,
+                    "z": 432.71612548828
+                },
+                "step": 13,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": -0.99999993369747,
+                    "y": 0.00036414976701592,
+                    "z": 0
+                },
+                "height": 10,
+                "parents": [
+                    13
+                ],
+                "pos": {
+                    "x": 3015.874023,
+                    "y": 1506.552979,
+                    "z": 365.69647216797
+                },
+                "step": 14,
+                "width": 13
+            },
+            {
+                "dir": {
+                    "x": -0.96766261203,
+                    "y": -0.25224803126938,
+                    "z": 0
+                },
+                "height": 7,
+                "parents": [
+                    14
+                ],
+                "pos": {
+                    "x": 2152.610107,
+                    "y": 526.1040039,
+                    "z": 355.77267456055
+                },
+                "step": 15,
+                "width": 9
+            },
+            {
+                "dir": {
+                    "x": -0.87511127742215,
+                    "y": -0.4839217417399,
+                    "z": 0
+                },
+                "height": 9,
+                "parents": [
+                    15
+                ],
+                "pos": {
+                    "x": 1254.176514,
+                    "y": -331.687561,
+                    "z": 370.99594116211
+                },
+                "step": 16,
+                "width": 12
+            },
+            {
+                "dir": {
+                    "x": -0.91152554641456,
+                    "y": -0.4112434537274,
+                    "z": 0
+                },
+                "height": 10,
+                "isFinish": true,
+                "parents": [
+                    16
+                ],
+                "pos": {
+                    "x": -241.0170746,
+                    "y": -1200.214722,
+                    "z": 405.53128051758
+                },
+                "step": 17,
+                "width": 13.5
+            }
+        ],
+        "id": 5,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Nordschleife 24 Hours (Combined, 25,378m",
+        "oneWayGates": false,
+        "props": [
+            {
+                "a": {
+                    "x": -1024.8695369356,
+                    "y": -1830.6879951553,
+                    "z": 437.69572622135
+                },
+                "b": {
+                    "x": -1010.7716341503,
+                    "y": -1821.3300056001,
+                    "z": 438.33280544487
+                },
+                "count": 9,
+                "followGround": true,
+                "heights": [
+                    437.696,
+                    437.682,
+                    437.774,
+                    437.866,
+                    437.962,
+                    438.058,
+                    438.152,
+                    438.24,
+                    438.333
+                ],
+                "kind": "line",
+                "mid": {
+                    "x": -1017.3063354492,
+                    "y": -1826.9509277344,
+                    "z": 437.95764160156
+                },
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE",
+                "yaw": 90
+            },
+            {
+                "a": {
+                    "x": -939.38598632812,
+                    "y": -1855.8234863281,
+                    "z": 438.9680480957
+                },
+                "b": {
+                    "x": -896.94415283203,
+                    "y": -1830.7326660156,
+                    "z": 438.22790527344
+                },
+                "count": 19,
+                "followGround": true,
+                "heights": [
+                    438.968,
+                    438.942,
+                    438.916,
+                    438.89,
+                    438.865,
+                    438.839,
+                    438.813,
+                    438.788,
+                    438.762,
+                    438.736,
+                    438.71,
+                    438.685,
+                    438.659,
+                    438.627,
+                    438.536,
+                    438.454,
+                    438.389,
+                    438.304,
+                    438.228
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE",
+                "yaw": 90
+            },
+            {
+                "a": {
+                    "x": -1267.6221923828,
+                    "y": -1935.1184082031,
+                    "z": 425.49078369141
+                },
+                "b": {
+                    "x": -1246.6154785156,
+                    "y": -1928.0678710938,
+                    "z": 426.71307373047
+                },
+                "count": 8,
+                "followGround": true,
+                "heights": [
+                    425.491,
+                    425.699,
+                    425.88,
+                    426.064,
+                    426.228,
+                    426.389,
+                    426.567,
+                    426.713
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier_red.DAE",
+                "yaw": 90
+            },
+            {
+                "a": {
+                    "x": -1609.9632568359,
+                    "y": -2461.5280761719,
+                    "z": 424.76373291016
+                },
+                "b": {
+                    "x": -1623.1265931948,
+                    "y": -2433.5713233593,
+                    "z": 425.15698883628
+                },
+                "count": 13,
+                "followGround": true,
+                "heights": [
+                    424.764,
+                    424.733,
+                    424.73,
+                    424.746,
+                    424.764,
+                    424.788,
+                    424.818,
+                    424.862,
+                    424.914,
+                    424.973,
+                    425.037,
+                    425.109,
+                    425.157
+                ],
+                "kind": "line",
+                "mid": {
+                    "x": -1615.3211669922,
+                    "y": -2447.9367675781,
+                    "z": 424.80737304688
+                },
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier_red.DAE",
+                "yaw": 90
+            },
+            {
+                "a": {
+                    "x": -1759.7683105469,
+                    "y": -2763.8625488281,
+                    "z": 421.6946105957
+                },
+                "b": {
+                    "x": -1772.7941010561,
+                    "y": -2770.7828723234,
+                    "z": 421.65233621004
+                },
+                "count": 7,
+                "followGround": true,
+                "heights": [
+                    421.695,
+                    421.688,
+                    421.693,
+                    421.697,
+                    421.7,
+                    421.712,
+                    421.652
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier_red.DAE",
+                "yaw": 90
+            }
+        ],
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.70522088763858,
+                    "y": -0.70898765831166,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1127.3369237809,
+                    "y": -2053.2675698542,
+                    "z": 438.21469116211
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.70522088763858,
+                    "y": -0.70898765831166,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1120.9824022508,
+                    "y": -2049.7150980213,
+                    "z": 438.28982543945
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.70522088763858,
+                    "y": -0.70898765831166,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1123.8183528841,
+                    "y": -2046.8942144708,
+                    "z": 438.21075439453
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.70522088763858,
+                    "y": -0.70898765831166,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1116.0458560373,
+                    "y": -2044.7521844131,
+                    "z": 438.32431030273
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.70522088763858,
+                    "y": -0.70898765831166,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1118.8818066706,
+                    "y": -2041.9313008626,
+                    "z": 438.24127197266
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.70522088763858,
+                    "y": -0.70898765831166,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1111.1093098239,
+                    "y": -2039.789270805,
+                    "z": 438.36993408203
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.70522088763858,
+                    "y": -0.70898765831166,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1113.9452604571,
+                    "y": -2036.9683872544,
+                    "z": 438.27789306641
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.70522088763858,
+                    "y": -0.70898765831166,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1106.1727636104,
+                    "y": -2034.8263571968,
+                    "z": 438.41714477539
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "guest4614816",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": true,
+            "laps": 1,
+            "limitVisibleGates": true,
+            "placementMode": "random",
+            "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
+            "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
+        },
+        "distance": 2495,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.74756348502895,
+                    "y": -0.66419036115513,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": -1136.660034,
+                    "y": -2058.149902,
+                    "z": 438.10580444336
+                },
+                "step": 1,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": -0.99140312835388,
+                    "y": -0.13084279533139,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": -1670.531128,
+                    "y": -2283.038574,
+                    "z": 427.66149902344
+                },
+                "step": 2,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": -0.98422122060354,
+                    "y": 0.17694233216974,
+                    "z": 0
+                },
+                "height": 10,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": -1802.670044,
+                    "y": -2768.350098,
+                    "z": 420.32833862305
+                },
+                "step": 3,
+                "width": 13.5
+            },
+            {
+                "dir": {
+                    "x": 0.79617663017772,
+                    "y": 0.60506427225448,
+                    "z": 0
+                },
+                "height": 9.5,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": -1876.400024,
+                    "y": -2274.879883,
+                    "z": 413.12002563477
+                },
+                "step": 4,
+                "width": 12.5
+            },
+            {
+                "dir": {
+                    "x": 0.50168269086475,
+                    "y": 0.86505171965999,
+                    "z": 0
+                },
+                "height": 10,
+                "isFinish": true,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": -1221.26001,
+                    "y": -1915.140015,
+                    "z": 428.32778930664
+                },
+                "step": 5,
+                "width": 13
+            }
+        ],
+        "id": 6,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Sprint (Short, 3,629m)",
+        "oneWayGates": false,
+        "props": [
+            {
+                "a": {
+                    "x": -1002.5192871094,
+                    "y": -1791.8143310547,
+                    "z": 440.91052246094
+                },
+                "b": {
+                    "x": -992.49072265625,
+                    "y": -1795.9599609375,
+                    "z": 441.02862548828
+                },
+                "count": 7,
+                "followGround": true,
+                "heights": [
+                    440.911,
+                    440.827,
+                    440.867,
+                    440.908,
+                    440.948,
+                    440.989,
+                    441.029
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE",
+                "yaw": 90
+            },
+            {
+                "a": {
+                    "x": -1641.3347929828,
+                    "y": -2443.6471899627,
+                    "z": 425.40540990967
+                },
+                "b": {
+                    "x": -1640.4728389149,
+                    "y": -2424.4756558502,
+                    "z": 425.47083234015
+                },
+                "count": 8,
+                "followGround": true,
+                "heights": [
+                    425.405,
+                    425.424,
+                    425.444,
+                    425.464,
+                    425.471,
+                    425.474,
+                    425.47,
+                    425.471
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE",
+                "yaw": 90
+            },
+            {
+                "a": {
+                    "x": -1763.734029253,
+                    "y": -2774.7030069813,
+                    "z": 421.41810546878
+                },
+                "b": {
+                    "x": -1771.5811238855,
+                    "y": -2773.1381046656,
+                    "z": 421.63379444953
+                },
+                "count": 5,
+                "followGround": true,
+                "heights": [
+                    421.418,
+                    421.468,
+                    421.526,
+                    421.582,
+                    421.634
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier_red.DAE",
+                "yaw": 90
+            },
+            {
+                "a": {
+                    "x": -1260.7608195115,
+                    "y": -1929.7451728827,
+                    "z": 426.06773108205
+                },
+                "b": {
+                    "x": -1249.0045043561,
+                    "y": -1924.8933055249,
+                    "z": 426.72392532786
+                },
+                "count": 6,
+                "followGround": true,
+                "heights": [
+                    426.068,
+                    426.191,
+                    426.317,
+                    426.44,
+                    426.573,
+                    426.724
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier_red.DAE",
+                "yaw": 90
+            }
+        ],
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1128.4635440995,
+                    "y": -2054.4376527484,
+                    "z": 438.20458984375
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1122.0250173767,
+                    "y": -2051.0398043645,
+                    "z": 438.28598022461
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1124.7919601792,
+                    "y": -2048.1512013236,
+                    "z": 438.20965576172
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1116.9699620552,
+                    "y": -2046.1976544601,
+                    "z": 438.32208251953
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1119.7369048577,
+                    "y": -2043.3090514192,
+                    "z": 438.24154663086
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1111.9149067337,
+                    "y": -2041.3555045557,
+                    "z": 438.37243652344
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1114.6818495362,
+                    "y": -2038.4669015148,
+                    "z": 438.28207397461
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1106.8598514122,
+                    "y": -2036.5133546513,
+                    "z": 438.42407226562
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    },
+    {
+        "author": "guest4614816",
+        "branchingEnabled": false,
+        "defaults": {
+            "allowTuning": true,
+            "autoSpectateOnFinish": true,
+            "countdown": 10,
+            "disableCameras": true,
+            "disableCollisions": false,
+            "disableGravityChange": true,
+            "disableNodegrabber": true,
+            "dnfEnabled": true,
+            "dnfTimeout": 30,
+            "ghostBackmarkers": false,
+            "ghostOnCountdown": true,
+            "gridReadyTimeout": 10,
+            "gridTimeout": 180,
+            "joinable": true,
+            "laps": 1,
+            "limitVisibleGates": true,
+            "placementMode": "random",
+            "randomizeVehiclePool": false,
+            "rejoinGraceMinutes": 10,
+            "resetPenaltyEnabled": false,
+            "resetPenaltyMode": "hold",
+            "resetPenaltySeconds": 5,
+            "respawnStrategy": "lastcheckpoint",
+            "showGateNametags": false,
+            "showGates": true,
+            "visibleGateCount": 2,
+            "waypointBeams": true
+        },
+        "distance": 2443,
+        "freeroam": false,
+        "freeroamLeaderboard": [
+
+        ],
+        "gates": [
+            {
+                "dir": {
+                    "x": -0.74756348502895,
+                    "y": -0.66419036115513,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    0
+                ],
+                "pos": {
+                    "x": -1136.660034,
+                    "y": -2058.149902,
+                    "z": 438.10580444336
+                },
+                "step": 1,
+                "width": 16
+            },
+            {
+                "dir": {
+                    "x": -0.99140312835388,
+                    "y": -0.13084279533139,
+                    "z": 0
+                },
+                "height": 12,
+                "parents": [
+                    1
+                ],
+                "pos": {
+                    "x": -1670.7005865069,
+                    "y": -2281.75457748,
+                    "z": 427.44061279297
+                },
+                "step": 2,
+                "width": 18.590261182975
+            },
+            {
+                "dir": {
+                    "x": -0.59107293124565,
+                    "y": -0.80661811903073,
+                    "z": 0
+                },
+                "height": 7.5,
+                "parents": [
+                    2
+                ],
+                "pos": {
+                    "x": -1759.640015,
+                    "y": -2748.800049,
+                    "z": 422.10232543945
+                },
+                "step": 3,
+                "width": 10
+            },
+            {
+                "dir": {
+                    "x": 0.79617663017772,
+                    "y": 0.60506427225448,
+                    "z": 0
+                },
+                "height": 9.5,
+                "parents": [
+                    3
+                ],
+                "pos": {
+                    "x": -1876.400024,
+                    "y": -2274.879883,
+                    "z": 413.12002563477
+                },
+                "step": 4,
+                "width": 12.5
+            },
+            {
+                "dir": {
+                    "x": -0.12543842041866,
+                    "y": 0.99210140745937,
+                    "z": 0
+                },
+                "height": 12,
+                "isFinish": true,
+                "parents": [
+                    4
+                ],
+                "pos": {
+                    "x": -1256.390015,
+                    "y": -1917.619995,
+                    "z": 426.77719116211
+                },
+                "step": 5,
+                "width": 17
+            }
+        ],
+        "id": 7,
+        "leaderboard": [
+
+        ],
+        "loopable": true,
+        "manualSectors": false,
+        "mode": "grid",
+        "name": "Grand Prix (GP Chicane, 5,148m)",
+        "oneWayGates": false,
+        "props": [
+            {
+                "dir": {
+                    "x": -0.95176690218944,
+                    "y": -0.30682203945727,
+                    "z": 0
+                },
+                "kind": "static",
+                "pos": {
+                    "x": -1228.6672363281,
+                    "y": -1931.6809082031,
+                    "z": 427.57418823242
+                },
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.95176690218944,
+                    "y": -0.30682203945727,
+                    "z": 0
+                },
+                "kind": "static",
+                "pos": {
+                    "x": -1229.0634765625,
+                    "y": -1929.8524169922,
+                    "z": 427.58526611328
+                },
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.95176690218944,
+                    "y": -0.30682203945727,
+                    "z": 0
+                },
+                "kind": "static",
+                "pos": {
+                    "x": -1229.6693115234,
+                    "y": -1927.8248291016,
+                    "z": 427.58944702148
+                },
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.95176690218944,
+                    "y": -0.30682203945727,
+                    "z": 0
+                },
+                "kind": "static",
+                "pos": {
+                    "x": -1236.8109699898,
+                    "y": -1930.2751210469,
+                    "z": 427.144
+                },
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.95176690218944,
+                    "y": -0.30682203945727,
+                    "z": 0
+                },
+                "kind": "static",
+                "pos": {
+                    "x": -1237.4256808911,
+                    "y": -1928.3682779422,
+                    "z": 427.125
+                },
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.95176690218944,
+                    "y": -0.30682203945727,
+                    "z": 0
+                },
+                "kind": "static",
+                "pos": {
+                    "x": -1238.0403917925,
+                    "y": -1926.4614348374,
+                    "z": 427.12
+                },
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE",
+                "up": {
+                    "x": 0,
+                    "y": 0,
+                    "z": 1
+                }
+            },
+            {
+                "a": {
+                    "x": -1227.7570035627,
+                    "y": -1916.8659977456,
+                    "z": 427.95488690467
+                },
+                "b": {
+                    "x": -1223.9027441542,
+                    "y": -1919.4540489866,
+                    "z": 428.06717132559
+                },
+                "count": 3,
+                "followGround": true,
+                "heights": [
+                    427.955,
+                    428.027,
+                    428.067
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE",
+                "yaw": 90
+            },
+            {
+                "a": {
+                    "x": -1768.9692652635,
+                    "y": -2753.2399719177,
+                    "z": 421.9501033895
+                },
+                "b": {
+                    "x": -1774.6917953462,
+                    "y": -2770.3200192085,
+                    "z": 421.58566217116
+                },
+                "count": 8,
+                "followGround": true,
+                "heights": [
+                    421.95,
+                    421.903,
+                    421.849,
+                    421.795,
+                    421.742,
+                    421.691,
+                    421.638,
+                    421.586
+                ],
+                "kind": "line",
+                "scale": 1,
+                "shape": "/art/shapes/garage_and_dealership/Clutter/hr_plasticbarrier.DAE",
+                "yaw": 90
+            }
+        ],
+        "sectorCount": 3,
+        "startPositions": [
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1128.4635440995,
+                    "y": -2054.4376527484,
+                    "z": 438.20458984375
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1122.0250173767,
+                    "y": -2051.0398043645,
+                    "z": 438.28598022461
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1124.7919601792,
+                    "y": -2048.1512013236,
+                    "z": 438.20965576172
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1116.9699620552,
+                    "y": -2046.1976544601,
+                    "z": 438.32208251953
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1119.7369048577,
+                    "y": -2043.3090514192,
+                    "z": 438.24154663086
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1111.9149067337,
+                    "y": -2041.3555045557,
+                    "z": 438.37243652344
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1114.6818495362,
+                    "y": -2038.4669015148,
+                    "z": 438.28207397461
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.72215076021419,
+                    "y": -0.6917357006271,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -1106.8598514122,
+                    "y": -2036.5133546513,
+                    "z": 438.42407226562
+                }
+            }
+        ],
+        "vehicleRestrictionMode": "free"
+    }
+]

@@ -8,7 +8,22 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased] - Phase 3 deliveries: delivery points, package and vehicle delivery, convoys, Jobs section; main window redesign
 
-Version 2.0.0 : client build 2740, server build 2473.
+Version 2.0.0 : client build 2740, server build 2474.
+
+- **New bundled races, and a one-time sync of every bundled race (2474)** (direct request) :
+  the bundled races are the 2.0 set : 316 races on 14 maps (88 more, Driver Training and
+  Nordschleife among them), with props. Reverse directions are named "X (reverse)", and a few
+  races were renamed (Alternate -> Alternative Race Circuit, Containerland -> Container Land,
+  Industrial Rally Stage -> Industrial Stage, River Rally -> River Route, ...) : each lists the
+  names it shipped under in `formerNames` (105 in all, matched by name and by course), so a
+  server renames its copy instead of getting a second one. Then, on its first boot, a server
+  overwrites each bundled race it has with the race as 2.0.0 ships it (course, props, default
+  settings, vehicle rule, author), keeping its id and name. Times stay when the course is the
+  same and are cleared when it changed (6 races from 1.10.7). A race deleted on a server stays
+  deleted; one no longer shipped (Raceway Experience #1) stays as the server's own. Once per
+  race per server (the bundled ledger, `<name>#sync@1`); bumping `BUNDLED_SYNC_REVISION` in
+  services/races.lua runs it again. Tested against every map, upgrading from 1.10.7's races :
+  no duplicates, no errors, nothing on the next boot. *(server)*
 
 - **Version 2.0.0, and every language filled in (2740 / 2473)** (direct request) : the release is
   numbered 2.0.0 (three parts : the updater compares versions number by number). Every client
