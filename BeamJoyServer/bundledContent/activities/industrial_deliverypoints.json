@@ -1,0 +1,360 @@
+[
+    {
+        "id": 1,
+        "name": "Depot 1",
+        "pos": {
+            "x": -169.08,
+            "y": 93.243,
+            "z": 34.764
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 5,
+        "receives": [
+
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.74649204554187,
+                    "y": 0.66539433867648,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -169.08,
+                    "y": 93.243,
+                    "z": 34.764
+                }
+            }
+        ]
+    },
+    {
+        "id": 2,
+        "name": "Depot 2",
+        "pos": {
+            "x": -270.893,
+            "y": 388.874,
+            "z": 33.918
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 4,
+        "receives": [
+
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.59016687874265,
+                    "y": -0.80728127392821,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -270.893,
+                    "y": 388.874,
+                    "z": 33.918
+                }
+            }
+        ]
+    },
+    {
+        "id": 3,
+        "name": "Depot 3",
+        "pos": {
+            "x": -300.715,
+            "y": -198.921,
+            "z": 40.703
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 3,
+        "receives": [
+
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": 0.11261840601951,
+                    "y": 0.99363831177427,
+                    "z": 0
+                },
+                "pos": {
+                    "x": -300.715,
+                    "y": -198.921,
+                    "z": 40.703
+                }
+            }
+        ]
+    },
+    {
+        "id": 4,
+        "name": "Depot 4",
+        "pos": {
+            "x": 193.944,
+            "y": -371.145,
+            "z": 34.052
+        },
+        "provides": [
+            "packages",
+            "vehicles"
+        ],
+        "radius": 4,
+        "receives": [
+
+        ],
+        "slots": [
+            {
+                "dir": {
+                    "x": -0.73575240185432,
+                    "y": -0.67725062064616,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 193.944,
+                    "y": -371.145,
+                    "z": 34.052
+                }
+            }
+        ]
+    },
+    {
+        "id": 5,
+        "name": "Drop-off 1",
+        "pos": {
+            "x": -304.67,
+            "y": 413.195,
+            "z": 34.763
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 6,
+        "name": "Drop-off 2",
+        "pos": {
+            "x": -226.947,
+            "y": 318.487,
+            "z": 35.991
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 7,
+        "name": "Drop-off 3",
+        "pos": {
+            "x": -231.298,
+            "y": 188.313,
+            "z": 35.996
+        },
+        "provides": [
+
+        ],
+        "radius": 4.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 8,
+        "name": "Drop-off 4",
+        "pos": {
+            "x": -121.995,
+            "y": 173.665,
+            "z": 35.994
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 9,
+        "name": "Drop-off 5",
+        "pos": {
+            "x": -496.607,
+            "y": -100.964,
+            "z": 40.718
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 10,
+        "name": "Drop-off 6",
+        "pos": {
+            "x": -295.464,
+            "y": -250.862,
+            "z": 40.772
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 11,
+        "name": "Drop-off 7",
+        "pos": {
+            "x": -345.133,
+            "y": -49.839,
+            "z": 40.705
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 12,
+        "name": "Drop-off 8",
+        "pos": {
+            "x": 445.231,
+            "y": -347.588,
+            "z": 35.604
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 13,
+        "name": "Drop-off 9",
+        "pos": {
+            "x": 165.642,
+            "y": -396.944,
+            "z": 33.953
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 14,
+        "name": "Drop-off 10",
+        "pos": {
+            "x": 178.1,
+            "y": -38.719,
+            "z": 36.121
+        },
+        "provides": [
+
+        ],
+        "radius": 3,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 15,
+        "name": "Drop-off 11",
+        "pos": {
+            "x": 374.559,
+            "y": 350.749,
+            "z": 40.506
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 16,
+        "name": "Drop-off 12",
+        "pos": {
+            "x": 12.425,
+            "y": 171.622,
+            "z": 37.333
+        },
+        "provides": [
+
+        ],
+        "radius": 4.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    },
+    {
+        "id": 17,
+        "name": "Drop-off 13",
+        "pos": {
+            "x": -139.029,
+            "y": -144.721,
+            "z": 38.992
+        },
+        "provides": [
+
+        ],
+        "radius": 3.5,
+        "receives": [
+            "packages",
+            "cars",
+            "trucks"
+        ]
+    }
+]

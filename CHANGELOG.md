@@ -23,7 +23,8 @@ Version 2.0.0 : client build 2740, server build 2474.
   deleted; one no longer shipped (Raceway Experience #1) stays as the server's own. Once per
   race per server (the bundled ledger, `<name>#sync@1`); bumping `BUNDLED_SYNC_REVISION` in
   services/races.lua runs it again. Tested against every map, upgrading from 1.10.7's races :
-  no duplicates, no errors, nothing on the next boot. *(server)*
+  no duplicates, no errors, nothing on the next boot. Industrial also ships 17 bundled delivery
+  points (`industrial_deliverypoints.json`), seeded like every other map's. *(server)*
 
 - **Version 2.0.0, and every language filled in (2740 / 2473)** (direct request) : the release is
   numbered 2.0.0 (three parts : the updater compares versions number by number). Every client
