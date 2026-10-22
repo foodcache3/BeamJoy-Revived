@@ -8,12 +8,15 @@
 //              for its Race info / Retire buttons
 // Everything shown is built once per BJRaceHud push (~20/s while racing, see raceRunner.lua's
 // pushHud), never in template getters : fresh arrays per digest break ng-repeat.
+// Server plugins can put up to 2 labels beside each racer's name (results.setFields with `hud`) :
+// every standings row, your own (in the header on a run alone, under the position in compact), and
+// the first one beside the cars either side ; the player can turn them off (Settings > Menu).
 const RACE_HUD_LAYOUT_KEY = "beamjoy.raceHud.layout";
 const RACE_HUD_LAYOUTS = ["standard", "compact", "full", "off"];
 
 angular.module("beamjoy").component("bjRaceHud", {
     templateUrl: "/ui/modModules/beamjoy/windows/raceHud/app.html",
-    controller: function ($rootScope, $scope, $filter, $interval, beamjoyStore, beamjoyDelivery, beamjoyInfoPanel, beamjoyLeaderboardFormat) {
+    controller: function ($rootScope, $scope, $filter, $interval, beamjoyStore, beamjoyDelivery, beamjoyInfoPanel, beamjoyLeaderboardFormat, beamjoyPluginUi) {
         const translate = (key) => $filter("translate")(key);
         const fill = (key, values) =>
             Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, v), translate(key));
@@ -74,6 +77,9 @@ angular.module("beamjoy").component("bjRaceHud", {
             return Number.isInteger(s) ? String(s) : s.toFixed(1);
         };
         const penOf = (row) => (row && row.penaltyMs > 0 && !row.disqualified ? penText(row.penaltyMs) : null);
+        const labelsOf = (row) => beamjoyPluginUi.labelsOf(row && row.labels);
+        // beside the cars either side, there's room for one
+        const firstLabel = (row) => labelsOf(row)[0] || null;
 
         const build = (data) => {
             this.spectator = !!data.spectator;
@@ -95,6 +101,7 @@ angular.module("beamjoy").component("bjRaceHud", {
                 finished: !!self.finished,
                 dnf: !!self.dnf,
                 pen: penOf(self),
+                selfLabels: labelsOf(self),
             };
             v.ofCount = fill("beamjoy.raceHud.ofCount", { n: v.count });
             v.finishedText = fill("beamjoy.raceHud.finishedCount", { n: v.finishedCount });
@@ -143,8 +150,8 @@ angular.module("beamjoy").component("bjRaceHud", {
             v.ahead = null;
             v.behind = null;
             if (v.multi) {
-                if (data.ahead) v.ahead = { ...gapParts(data.ahead), name: nameOf(data.ahead), fin: !!data.ahead.finished };
-                if (data.behind && !data.behind.dnf) v.behind = { ...gapParts(data.behind), name: nameOf(data.behind), fin: !!data.behind.finished };
+                if (data.ahead) v.ahead = { ...gapParts(data.ahead), name: nameOf(data.ahead), fin: !!data.ahead.finished, lbl: firstLabel(data.ahead) };
+                if (data.behind && !data.behind.dnf) v.behind = { ...gapParts(data.behind), name: nameOf(data.behind), fin: !!data.behind.finished, lbl: firstLabel(data.behind) };
             }
 
             // the standings, one row per racer
@@ -163,6 +170,7 @@ angular.module("beamjoy").component("bjRaceHud", {
                     rowCls: (row.playerName === self.playerName ? "you" : row.dnf || row.disqualified ? "out" : "") +
                         (row.disqualified ? " dsq" : ""),
                     name: nameOf(row),
+                    labels: labelsOf(row),
                     pen: penOf(row),
                     fin: !!row.finished,
                     gap,
@@ -210,7 +218,9 @@ angular.module("beamjoy").component("bjRaceHud", {
         this.pluginHidden = false;
         $rootScope.$on("BJPluginHides", (_, hides) => (this.pluginHidden = !!(hides && hides.race)));
 
-        $rootScope.$on("BJRaceHud", (_, data) => {
+        let lastData = null;
+        const show = (data) => {
+            lastData = data;
             this.active = !!data.active;
             this.v = this.active ? build(data) : null;
             if (this.v) {
@@ -218,6 +228,11 @@ angular.module("beamjoy").component("bjRaceHud", {
                 this.v.canRetire = !data.spectatingPlayerName && !this.v.finished && !this.v.dnf;
                 if (!this.v.canRetire && this.cursor > 0) this.cursor = 0;
             }
+        };
+        $rootScope.$on("BJRaceHud", (_, data) => show(data));
+        // plugins' labels turned on or off (Settings) : at once, not on the next push
+        $rootScope.$on("BJHudLabelsShown", () => {
+            if (lastData) $scope.$applyAsync(() => show(lastData));
         });
 
         // FOCUS : the Focus control during a race (beamjoy/mainNav.lua) gives the HUD the pad and

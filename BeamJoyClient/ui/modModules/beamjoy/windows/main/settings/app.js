@@ -1,6 +1,6 @@
 angular.module("beamjoy").component("bjMainSettings", {
     templateUrl: "/ui/modModules/beamjoy/windows/main/settings/app.html",
-    controller: function ($scope, $rootScope, beamjoyStore) {
+    controller: function ($scope, $rootScope, beamjoyStore, beamjoyPluginUi) {
         this.resetValues = angular.copy(beamjoyStore.settings.defaults);
         this.settings = angular.copy(beamjoyStore.settings.data);
         $rootScope.$on("BJUserSettings", () => {
@@ -39,6 +39,15 @@ angular.module("beamjoy").component("bjMainSettings", {
         } catch (e) {
             // storage unavailable : standard
         }
+        // server plugins' labels beside racers' names on the race HUD (cmps/pluginOptions)
+        this.hudLabels = beamjoyPluginUi.labelsShown();
+        $scope.$watch(
+            () => this.hudLabels,
+            (on, old) => {
+                if (on === old) return;
+                beamjoyPluginUi.setLabelsShown(on);
+            }
+        );
         $scope.$watch(
             () => this.raceHudLayout,
             (layout, old) => {

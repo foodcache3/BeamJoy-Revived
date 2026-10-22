@@ -1257,7 +1257,7 @@ local function buildResults(session)
         r.bestLapMs = #p.lapTimes > 0 and math.min(table.unpack(p.lapTimes)) or nil
         r.order = p.finishOrder or math.huge
         r.identity = participantIdentityKind(p)
-        r.fields = services_pluginUi.fieldList(services_pluginUi.racerFields(session, p))
+        r.fields = services_pluginUi.fieldList(services_pluginUi.withoutHudOnly(services_pluginUi.racerFields(session, p)))
         r.participant = p
         if r.counted then
             for _, entry in ipairs(board) do
@@ -1329,7 +1329,7 @@ local function trySubmitTime(session, participant, timeMs)
     local previousMs = previous and previous.time
     participant.isNewPB, participant.isNewRecord = services_races.submitTime(
         session.raceId, key, participant.vehicleModel or "", timeMs, nil, participantIdentityKind(participant),
-        services_pluginUi.racerFields(session, participant))
+        services_pluginUi.withoutHudOnly(services_pluginUi.racerFields(session, participant)))
     if participant.isNewPB then
         -- kept to put back if staff disqualify this run (raceStaffAction)
         participant.leaderboardKey = key
@@ -1555,8 +1555,14 @@ local function pluginSetGridOrder(session, order, plugin)
     return true
 end
 
---- the plugin API's results.setFields : a plugin's labels on a racer, shown with their result.
---- When this race already put their time on the leaderboard, the entry gets them too
+--- sessions whose racers' labels changed since the last onUpdate : sent once then, however many
+--- labels changed in between (a plugin updating every racer's live label at once)
+---@type table<string, true>
+local fieldsChanged = {}
+
+--- the plugin API's results.setFields : a plugin's labels on a racer, shown with their result (and
+--- on the race HUD, the ones marked `hud`). When this race already put their time on the
+--- leaderboard, the entry gets them too
 ---@param session BJRaceSession
 ---@param playerID integer
 ---@param plugin string
@@ -1570,8 +1576,18 @@ local function pluginSetFields(session, playerID, plugin, fields, replace)
     if p.leaderboardKey and p.isNewPB then
         services_races.setEntryFields(session.raceId, "grid", p.leaderboardKey, plugin, fields, replace)
     end
-    pushSessionUpdate(session)
+    fieldsChanged[session.id] = true
     return true
+end
+
+local function onUpdate()
+    if next(fieldsChanged) == nil then return end
+    local ids = fieldsChanged
+    fieldsChanged = {}
+    for id in pairs(ids) do
+        local session = M.sessions[id]
+        if session then pushSessionUpdate(session) end
+    end
 end
 
 --- the leader starts the race now with everyone who's ready (and is marked ready themselves,
@@ -2573,6 +2589,7 @@ local function onPlayerDisconnect(playerID)
 end
 
 M.onInit = onInit
+M.onUpdate = onUpdate
 M.onPlayerDisconnect = onPlayerDisconnect
 M.raceRejoin = raceRejoin
 M.onBJIdentityChanged = onBJIdentityChanged

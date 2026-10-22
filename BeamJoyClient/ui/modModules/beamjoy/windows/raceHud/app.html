@@ -139,6 +139,38 @@
         gap: 0.3em;
     }
 
+    /* plugins' labels beside a racer's name (results.setFields with `hud`), two at most, each cut
+       past 6em. The name gives way first, down to a few characters, and only then the labels : flex
+       shrinks every item at once, in proportion, so the labels' shrink is next to nothing (a label
+       shrinking at all cuts it, "G…") until the name can't go further */
+    #beamjoy-race-hud .lbls {
+        display: flex;
+        flex: 0 0.001 auto;
+        align-items: center;
+        gap: 0.25em;
+        min-width: 0;
+    }
+    #beamjoy-race-hud .lbl {
+        flex: 0 1 auto;
+        box-sizing: border-box;
+        min-width: 1.8em;
+        max-width: 6em;
+        overflow: hidden;
+        padding: 0 0.35em;
+        border: 1px solid rgba(200, 206, 220, 0.35);
+        border-radius: 0.25em;
+        color: #c8cedc;
+        font-size: 0.7em;
+        font-weight: 600;
+        font-style: normal;
+        line-height: 1.45;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #beamjoy-race-hud .selflbls {
+        padding-top: 0.1em;
+    }
+
     /* this lap's sectors */
     #beamjoy-race-hud .secs {
         display: flex;
@@ -193,9 +225,14 @@
         color: #979dad;
     }
     #beamjoy-race-hud .gap .nm .t {
+        flex: 0 1 auto;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+    #beamjoy-race-hud .gap .nm .lbl {
+        flex: 0 0.001 auto;
+        font-size: 0.9em;
     }
 
     #beamjoy-race-hud .timer {
@@ -333,8 +370,8 @@
         color: #979dad;
     }
     #beamjoy-race-hud .row .nm {
-        flex: 1;
-        min-width: 0;
+        flex: 1 1 auto;
+        min-width: 2.5em;
         overflow: hidden;
         font-weight: 500;
         text-overflow: ellipsis;
@@ -506,7 +543,15 @@
     #beamjoy-race-hud .tower li.out {
         color: #979dad;
     }
+    #beamjoy-race-hud .tower .nmc {
+        display: flex;
+        align-items: center;
+        gap: 0.35em;
+        min-width: 0;
+    }
     #beamjoy-race-hud .tower .nm {
+        flex: 1 1 auto;
+        min-width: 2.5em;
         overflow: hidden;
         font-weight: 600;
         text-overflow: ellipsis;
@@ -568,6 +613,9 @@
         <header class="std-head">
             <span class="eyebrow">{{$ctrl.v.spectating || ('beamjoy.raceHud.racing' | translate)}}</span>
             <h2>{{$ctrl.v.raceName}}</h2>
+            <span class="lbls selflbls" ng-if="!$ctrl.v.multi && $ctrl.v.selfLabels.length > 0">
+                <span class="lbl" ng-repeat="l in $ctrl.v.selfLabels track by $index" ng-style="l.style" title="{{l.title}}">{{l.text}}</span>
+            </span>
         </header>
         <div class="std-body">
             <div class="herobox" ng-if="$ctrl.v.multi">
@@ -579,12 +627,12 @@
                     <div class="gap" ng-if="$ctrl.v.ahead">
                         <svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><polygon points="6,0 12,10 0,10" fill="#ff8955"></polygon></svg>
                         <span class="num">{{$ctrl.v.ahead.num}}<small>{{$ctrl.v.ahead.unit}}</small></span>
-                        <span class="nm"><span class="sr">{{'beamjoy.raceHud.carAhead' | translate}}</span><span class="t">{{$ctrl.v.ahead.name}}</span><span ng-if="$ctrl.v.ahead.fin" ng-include="'bjRaceHudFlag.html'"></span></span>
+                        <span class="nm"><span class="sr">{{'beamjoy.raceHud.carAhead' | translate}}</span><span class="t">{{$ctrl.v.ahead.name}}</span><span class="lbl" ng-if="$ctrl.v.ahead.lbl" ng-style="$ctrl.v.ahead.lbl.style" title="{{$ctrl.v.ahead.lbl.title}}">{{$ctrl.v.ahead.lbl.text}}</span><span ng-if="$ctrl.v.ahead.fin" ng-include="'bjRaceHudFlag.html'"></span></span>
                     </div>
                     <div class="gap" ng-if="$ctrl.v.behind">
                         <svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><polygon points="0,0 12,0 6,10" fill="#6b7180"></polygon></svg>
                         <span class="num soft">{{$ctrl.v.behind.num}}<small>{{$ctrl.v.behind.unit}}</small></span>
-                        <span class="nm"><span class="sr">{{'beamjoy.raceHud.carBehind' | translate}}</span><span class="t">{{$ctrl.v.behind.name}}</span></span>
+                        <span class="nm"><span class="sr">{{'beamjoy.raceHud.carBehind' | translate}}</span><span class="t">{{$ctrl.v.behind.name}}</span><span class="lbl" ng-if="$ctrl.v.behind.lbl" ng-style="$ctrl.v.behind.lbl.style" title="{{$ctrl.v.behind.lbl.title}}">{{$ctrl.v.behind.lbl.text}}</span></span>
                     </div>
                 </div>
             </div>
@@ -611,6 +659,9 @@
                     <div class="row" ng-if="r.kind === 'car'" ng-class="r.rowCls">
                         <span class="plate" ng-class="r.plateCls"><span>{{r.pos}}</span></span>
                         <span class="nm">{{r.name}}</span>
+                        <span class="lbls" ng-if="r.labels.length > 0">
+                            <span class="lbl" ng-repeat="l in r.labels track by $index" ng-style="l.style" title="{{l.title}}">{{l.text}}</span>
+                        </span>
                         <span ng-if="r.fin" ng-include="'bjRaceHudFlag.html'"></span>
                         <span class="pen" ng-if="r.pen">+{{r.pen}}s</span>
                         <span class="g">{{r.gap || ('beamjoy.raceHud.leader' | translate)}}</span>
@@ -631,6 +682,9 @@
             </div>
             <span class="ov lap">{{$ctrl.v.progress}}<small>{{$ctrl.v.progressOf}}</small></span>
         </div>
+        <span class="lbls" ng-if="$ctrl.v.selfLabels.length > 0">
+            <span class="lbl" ng-repeat="l in $ctrl.v.selfLabels track by $index" ng-style="l.style" title="{{l.title}}">{{l.text}}</span>
+        </span>
         <div class="clockrow">
             <span class="clockgrp">
                 <span class="timer" role="timer">{{$ctrl.v.timer}}</span>
@@ -645,12 +699,12 @@
             <div class="gap" ng-if="$ctrl.v.ahead">
                 <svg width="10" height="9" viewBox="0 0 12 10" aria-hidden="true"><polygon points="6,0 12,10 0,10" fill="#ff8955"></polygon></svg>
                 <span class="num">{{$ctrl.v.ahead.num}}<small>{{$ctrl.v.ahead.unit}}</small></span>
-                <span class="nm"><span class="sr">{{'beamjoy.raceHud.carAhead' | translate}}</span><span class="t">{{$ctrl.v.ahead.name}}</span><span ng-if="$ctrl.v.ahead.fin" ng-include="'bjRaceHudFlag.html'"></span></span>
+                <span class="nm"><span class="sr">{{'beamjoy.raceHud.carAhead' | translate}}</span><span class="t">{{$ctrl.v.ahead.name}}</span><span class="lbl" ng-if="$ctrl.v.ahead.lbl" ng-style="$ctrl.v.ahead.lbl.style" title="{{$ctrl.v.ahead.lbl.title}}">{{$ctrl.v.ahead.lbl.text}}</span><span ng-if="$ctrl.v.ahead.fin" ng-include="'bjRaceHudFlag.html'"></span></span>
             </div>
             <div class="gap" ng-if="$ctrl.v.behind">
                 <svg width="10" height="9" viewBox="0 0 12 10" aria-hidden="true"><polygon points="0,0 12,0 6,10" fill="#6b7180"></polygon></svg>
                 <span class="num soft">{{$ctrl.v.behind.num}}<small>{{$ctrl.v.behind.unit}}</small></span>
-                <span class="nm"><span class="sr">{{'beamjoy.raceHud.carBehind' | translate}}</span><span class="t">{{$ctrl.v.behind.name}}</span></span>
+                <span class="nm"><span class="sr">{{'beamjoy.raceHud.carBehind' | translate}}</span><span class="t">{{$ctrl.v.behind.name}}</span><span class="lbl" ng-if="$ctrl.v.behind.lbl" ng-style="$ctrl.v.behind.lbl.style" title="{{$ctrl.v.behind.lbl.title}}">{{$ctrl.v.behind.lbl.text}}</span></span>
             </div>
         </div>
         <div class="laps" ng-if="$ctrl.v.showLaps">
@@ -670,7 +724,12 @@
         <ol class="tower">
             <li ng-repeat="r in $ctrl.v.full track by $index" ng-class="r.rowCls">
                 <span class="plate" ng-class="r.plateCls"><span>{{r.pos}}</span></span>
-                <span class="nm">{{r.name}}</span>
+                <span class="nmc">
+                    <span class="nm">{{r.name}}</span>
+                    <span class="lbls" ng-if="r.labels.length > 0">
+                        <span class="lbl" ng-repeat="l in r.labels track by $index" ng-style="l.style" title="{{l.title}}">{{l.text}}</span>
+                    </span>
+                </span>
                 <span class="fl"><span ng-if="r.fin" ng-include="'bjRaceHudFlag.html'"></span><span class="pen" ng-if="r.pen">+{{r.pen}}s</span></span>
                 <span class="tg" ng-class="r.gapCls">{{r.gap}}</span>
             </li>

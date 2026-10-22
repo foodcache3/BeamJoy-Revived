@@ -8,8 +8,24 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2478, client build 2743.
+Server build 2480, client build 2745.
 
+- **Plugin API : labels on the race HUD (2480, 2745)** (direct request). A plugin's field marked
+  `hud` (results.setFields) shows beside the racer's name on BeamJoy's race HUD : every standings
+  row, your own, and the first one beside the cars either side. `hud = true` keeps it on the
+  result and leaderboard entry too ; `hud = "only"` is live information (a tyre, places gained)
+  never kept. Two per racer, each cut past ~6 characters' width, the name giving way first.
+  results.setFields takes several racers at once (`racers`), and label changes made within 100 ms
+  go out as one race update (each used to send the race's standings to everyone straight away).
+  Default-layout overlays' rows take the same labels (`fields`), so a plugin's own HUD standing in
+  for BeamJoy's can show them too. Players can turn them off (Settings > Menu). New example plugin
+  `api/example/BJHudLabels` : class and places gained, on BeamJoy's HUD or an extended one of its
+  own, picked in its config tab. *(server + client : update both)*
+- **Plugin API : the chequered flag and penalty tags in custom overlays (2479, 2744)** (direct
+  request). A cell of a custom overlay's `table` or `row` takes `flag = true` (the chequered flag
+  after its text) and `pen = "+5s"` (the red penalty tag), as the default layout's standings rows
+  have them, so a plugin's own standings table (class and tyre columns, say) can look like the race
+  HUD's. Plugin pages' tables and rows too. *(server + client : update both)*
 - **Fix : one player saving a vehicle preset crashed another player's BeamMP launcher (2478,
   2743)** (direct report). Every game then downloads the new shared builds' photos (up to 200 KB
   each), and the server sent them at a fixed ~400 KB/s whatever the player's connection could take.

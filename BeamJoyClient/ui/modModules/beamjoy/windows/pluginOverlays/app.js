@@ -8,7 +8,7 @@
 // An overlay can stand in for BeamJoy's race HUD while it's up (hides : ["race"], see raceHud).
 angular.module("beamjoy").component("bjPluginOverlays", {
     templateUrl: "/ui/modModules/beamjoy/windows/pluginOverlays/app.html",
-    controller: function ($rootScope, $scope, $interval, beamjoyStore, beamjoyLeaderboardFormat) {
+    controller: function ($rootScope, $scope, $interval, beamjoyStore, beamjoyLeaderboardFormat, beamjoyPluginUi) {
         const f = beamjoyLeaderboardFormat;
         const POSITIONS = ["top-right", "top-left", "bottom-right", "bottom-left", "top", "bottom", "left", "right"];
         // the plugin API's colour names : the race HUD's own tokens
@@ -88,6 +88,8 @@ angular.module("beamjoy").component("bjPluginOverlays", {
                 o.rows.forEach((r) => {
                     r._you = isYou(r, me);
                     r._style = r.color ? { color: color(r.color) } : {};
+                    // the row's labels, as on the race HUD (the player's switch applies)
+                    r._labels = beamjoyPluginUi.labelsOf(r.fields);
                 });
                 if (o.plate) o.plate._style = o.plate.color ? { background: color(o.plate.color) } : {};
                 o._bar = typeof o.bar === "number" ? { width: `${Math.round(o.bar * 100)}%` } : null;
@@ -119,6 +121,11 @@ angular.module("beamjoy").component("bjPluginOverlays", {
                 asList(o.rows).forEach((r) => (r._you = isYou(r, me)));
                 asList(o.blocks).forEach((b) => asList(b.rows).forEach((r) => (r._you = isYou(r, me))));
             });
+        });
+
+        // plugins' labels turned on or off (Settings)
+        $rootScope.$on("BJHudLabelsShown", () => {
+            $scope.$applyAsync(() => list.forEach((o) => asList(o.rows).forEach((r) => (r._labels = beamjoyPluginUi.labelsOf(r.fields)))));
         });
 
         // a running timer's value now ("up" counts on from the plugin's value, "down" counts it down)

@@ -150,7 +150,26 @@
     .bj-pov .row.you,
     .bj-pov .ctable tr.you { background: rgba(255, 102, 0, 0.1); box-shadow: inset 3px 0 0 #ff6600; }
     .bj-pov .row.out { color: #979dad; }
-    .bj-pov .row .nm { flex: 1; min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+    .bj-pov .row .nm { flex: 1 1 auto; min-width: 2.5em; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+    /* a row's labels (its `fields`), as on the race HUD : two at most, each cut past 6em ; the name
+       gives way first, down to a few characters, then the labels (their shrink is next to nothing) */
+    .bj-pov .lbls { display: flex; flex: 0 0.001 auto; align-items: center; gap: 0.25em; min-width: 0; }
+    .bj-pov .lbl {
+        flex: 0 1 auto;
+        box-sizing: border-box;
+        min-width: 1.8em;
+        max-width: 6em;
+        overflow: hidden;
+        padding: 0 0.35em;
+        border: 1px solid rgba(200, 206, 220, 0.35);
+        border-radius: 0.25em;
+        color: #c8cedc;
+        font-size: 0.7em;
+        font-weight: 600;
+        line-height: 1.45;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
     .bj-pov .row .g { color: #a7aebf; white-space: nowrap; }
     .bj-pov .fastest {
         display: flex;
@@ -193,6 +212,10 @@
         white-space: nowrap;
     }
     .bj-pov .ctable td.bold { font-weight: 700; }
+    /* a cell with the chequered flag or a penalty tag after its text (the text gives way first) */
+    .bj-pov .cval { display: inline-flex; align-items: center; gap: 0.4em; max-width: 100%; vertical-align: bottom; }
+    .bj-pov .cval > .ctxt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .bj-pov .cval > :not(.ctxt) { flex-shrink: 0; display: inline-flex; }
 </style>
 
 <!-- the chequered flag, at the plates' slant (the race HUD's own) -->
@@ -245,6 +268,9 @@
                     <div class="row" ng-repeat="r in o.rows track by $index" ng-class="{you: r._you, out: r.out}">
                         <span class="plate" ng-if="r.pos" ng-class="{p1: r.pos === '1'}"><span>{{r.pos}}</span></span>
                         <span class="nm" ng-style="r._style">{{r.name}}</span>
+                        <span class="lbls" ng-if="r._labels.length > 0">
+                            <span class="lbl" ng-repeat="l in r._labels track by $index" ng-style="l.style" title="{{l.title}}">{{l.text}}</span>
+                        </span>
                         <span ng-if="r.flag" ng-include="'bjPovFlag.html'"></span>
                         <span class="pen" ng-if="r.pen">{{r.pen}}</span>
                         <span class="g" ng-if="r.value">{{r.value}}</span>
@@ -264,7 +290,7 @@
                 ng-style="b._style">{{b.text}}</div>
             <div ng-switch-when="row" class="crow">
                 <span ng-repeat="c in b.cells track by $index" ng-class="['sz-' + (c.size || 'm'), {grow: c.grow, bold: c.bold}]"
-                    ng-style="c._style">{{c.text}}</span>
+                    ng-style="c._style"><span class="cval" ng-if="c.flag || c.pen"><span class="ctxt" ng-if="c.text">{{c.text}}</span><span ng-if="c.flag" ng-include="'bjPovFlag.html'"></span><span class="pen" ng-if="c.pen">{{c.pen}}</span></span><span ng-if="!(c.flag || c.pen)">{{c.text}}</span></span>
             </div>
             <div ng-switch-when="timer" class="timer" ng-class="'sz-' + (b.size || 'l')" ng-style="b._style" role="timer">{{$ctrl.timerText(b, o)}}</div>
             <div ng-switch-when="bar" class="prog" aria-hidden="true"><div ng-style="b._fill"></div></div>
@@ -282,7 +308,7 @@
                 </thead>
                 <tbody>
                     <tr ng-repeat="r in b.rows track by $index" ng-class="{you: r._you}" ng-style="r._style">
-                        <td ng-repeat="c in r.cells track by $index" ng-class="{bold: c.bold}" ng-style="c._style">{{c.text}}</td>
+                        <td ng-repeat="c in r.cells track by $index" ng-class="{bold: c.bold}" ng-style="c._style"><span class="cval" ng-if="c.flag || c.pen"><span class="ctxt" ng-if="c.text">{{c.text}}</span><span ng-if="c.flag" ng-include="'bjPovFlag.html'"></span><span class="pen" ng-if="c.pen">{{c.pen}}</span></span><span ng-if="!(c.flag || c.pen)">{{c.text}}</span></td>
                     </tr>
                 </tbody>
             </table>

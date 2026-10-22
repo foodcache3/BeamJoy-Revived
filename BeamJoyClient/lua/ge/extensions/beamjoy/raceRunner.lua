@@ -1131,6 +1131,21 @@ end
 --- against, but still gets the live best-lap delta once it has a lap to compare to). Also serves
 --- pure non-participant spectating (M.spectatingSession) : same payload shape either way, just
 --- built around the spectated participant instead of "self" when there's no self to speak of.
+--- a racer's plugin labels meant for the race HUD (the plugin API's results.setFields with `hud`),
+--- as the server lists them ; nil when none
+---@param fields table[]?
+---@return table[]?
+local function hudLabels(fields)
+    if type(fields) ~= "table" then return nil end
+    local out = {}
+    for _, f in ipairs(fields) do
+        if type(f) == "table" and f.hud and f.value then
+            out[#out + 1] = { value = f.value, label = f.label, color = f.color, showLabel = f.showLabel }
+        end
+    end
+    return #out > 0 and out or nil
+end
+
 local function pushHud()
     -- an actual attempt (M.session) takes priority over pure spectating (M.spectatingSession) if
     -- somehow both were set. The server won't actually let that happen (see raceSpectate's own
@@ -1188,7 +1203,8 @@ local function pushHud()
             return { playerName = row.playerName, displayName = row.displayName,
                 finished = row.finished, dnf = row.dnf, disconnected = row.disconnected,
                 gapMs = gapMs, lapsDiff = lapsDiff,
-                penaltyMs = row.penaltyMs, disqualified = row.disqualified }
+                penaltyMs = row.penaltyMs, disqualified = row.disqualified,
+                labels = hudLabels(row.fields) }
         end
         for i, row in ipairs(leaderboard) do
             if row.playerName == participant.playerName then
@@ -1252,6 +1268,7 @@ local function pushHud()
             liveDeltaMs = participant.liveDeltaMs,
             -- this lap's finished sectors (keyed "s1", "s2"... see keyify)
             lapSectors = keyify(participant.lapSectors, "s"),
+            labels = hudLabels(participant.fields),
         },
         fastestSectorMs = keyify(fastestSectorMs, "s"),
         fastestLap = fastestLap,

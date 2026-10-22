@@ -124,16 +124,19 @@ local function timer(t)
     return { mode = mode, ms = math.max(0, math.floor(tonumber(t.ms))) }
 end
 
---- a table cell, or a row cell : plain text, or {text, color, align, bold, grow, size}
+--- a table cell, or a row cell : plain text, or {text, color, align, bold, grow, size, flag, pen}.
+--- `flag` puts the chequered flag after the text and `pen` a penalty tag ("+5s"), as the default
+--- layout's standings rows have them (direct request) ; a cell can be only a flag or a penalty
 local function cell(c)
     if type(c) ~= "table" then
         local t = text(c, 60, true)
         return t and { text = t } or nil
     end
-    local t = text(c.text, 60, true)
+    local finished, pen = flag(c.flag), text(c.pen, 8)
+    local t = text(c.text, 60, true) or ((finished or pen) and "" or nil)
     if not t then return nil end
     return { text = t, color = color(c.color), align = oneOf(c.align, ALIGNS), bold = flag(c.bold),
-        grow = flag(c.grow), size = oneOf(c.size, SIZES) }
+        grow = flag(c.grow), size = oneOf(c.size, SIZES), flag = finished, pen = pen }
 end
 
 ---@param p any
@@ -143,6 +146,36 @@ local function plate(p)
     local t = text(p.text, 8)
     if not t then return nil end
     return { text = t, sub = text(p.sub, 24), color = color(p.color) }
+end
+
+--- a standings row's labels (direct request) : as results.setFields takes them, a list of
+--- {key?, value, label?, color?, showLabel?} (or values alone), or an object of key -> value or
+--- {value, ...}. The client shows the first 2
+---@param list any
+---@return table[]?
+local function rowFields(list)
+    if type(list) ~= "table" then return nil end
+    if #list == 0 then
+        local keys = {}
+        for k in pairs(list) do
+            if type(k) == "string" then keys[#keys + 1] = k end
+        end
+        table.sort(keys)
+        local ordered = {}
+        for _, k in ipairs(keys) do
+            local f = list[k]
+            ordered[#ordered + 1] = type(f) == "table" and f or { value = f, label = k }
+            if type(f) == "table" and f.label == nil then ordered[#ordered].label = k end
+        end
+        list = ordered
+    end
+    return listOf(list, 4, function(f)
+        if type(f) ~= "table" then f = { value = f } end
+        local value = text(f.value, 24)
+        if not value then return nil end
+        return { value = value, label = text(f.label, 24) or text(f.key, 24), color = color(f.color),
+            showLabel = flag(f.showLabel) }
+    end)
 end
 
 local function defaultSpec(s)
@@ -165,7 +198,7 @@ local function defaultSpec(s)
             if not name then return nil end
             return { pos = text(r.pos, 6), name = name, value = text(r.value, 20),
                 playerId = tonumber(r.playerId), you = flag(r.you), out = flag(r.out),
-                flag = flag(r.flag), pen = text(r.pen, 8), color = color(r.color) }
+                flag = flag(r.flag), pen = text(r.pen, 8), color = color(r.color), fields = rowFields(r.fields) }
         end),
         bar = fraction(s.bar),
     }

@@ -1927,7 +1927,8 @@ local function setEntryFields(raceId, board, playerName, plugin, fields, replace
     local boardName, field = boardField(board)
     local entry = race and race[field] and race[field][playerName]
     if not entry then return false end
-    entry.fields = services_pluginUi.applyFields(entry.fields, plugin, fields, replace)
+    -- HUD-only labels are the race's live information, never the run's
+    entry.fields = services_pluginUi.applyFields(entry.fields, plugin, services_pluginUi.keptFields(fields), replace)
     saveData(true)
     if services_api then services_api.leaderboardChanged(raceId, boardName, "fields", playerName) end
     return true

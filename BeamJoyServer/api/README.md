@@ -12,8 +12,8 @@ Lets your own BeamMP server plugins work with BeamJoy:
   your way, and a line of text across BeamJoy's HUD.
 - **Set** the time and weather.
 - **Add to BeamJoy's windows**: sections of options in the race start menu and the race editor
-  (a race class, league rules), labels on results and leaderboard entries (the class, points, a
-  team), a tab of your plugin's settings in the config window, and pages of your own in the main
+  (a race class, league rules), labels on results, leaderboard entries and the race HUD (the
+  class, points, a team, a tyre), a tab of your plugin's settings in the config window, and pages of your own in the main
   window (a button on its side rail, a tab in the full window) with buttons and fields players
   use.
 
@@ -104,7 +104,7 @@ end
   `fn(pageId, action, values, by)` when they click one of its buttons.
 - `BJ.json`: the JSON encoder/decoder the helper uses (`BJ.json.stringify`, `BJ.json.parse`).
 
-Two complete example plugins. To try one, copy its folder into `Resources/Server/`, next to
+Complete example plugins. To try one, copy its folder into `Resources/Server/`, next to
 `BeamJoyServer`, and restart the server.
 
 - `example/BJLeaderboardExport/` writes every map's leaderboards (BeamMP accounts and nicknamed
@@ -116,6 +116,10 @@ Two complete example plugins. To try one, copy its folder into `Resources/Server
   the cars of each class set in a config tab, cars outside the class refused at ready-up, the
   class and league points shown on results and leaderboard entries, and a League page in the main
   window with the standings (each player's own place, a class to pick).
+- `example/BJHudLabels/` puts labels beside racers' names on the race HUD: their class (kept on
+  their result and leaderboard entry) and the places they've gained since the start (HUD only).
+  A config tab picks the HUD: BeamJoy's own, or an extended one of the plugin's (an overlay in the
+  race HUD's look, standing in for BeamJoy's) with the same labels.
 
 ## Methods
 
@@ -194,10 +198,12 @@ they're not in a lobby.
 Your sections of options in the race start menu and race editor (replacing any you registered
 before). See [Race options](#race-options). → `{sections}`
 
-### `results.setFields` `{sessionId, playerId, fields, replace?}`
+### `results.setFields` `{sessionId, playerId, fields, replace?}` / `{sessionId, racers, replace?}`
 Labels on a racer's result in a race being run, shown in the game's results and in the race
-events. When that race already put their time on the leaderboard, the entry gets them too. See
-[Fields](#fields). → `{sessionId, playerId}`
+events, and on the race HUD for the ones marked `hud`. When that race already put their time on
+the leaderboard, the entry gets them too. `racers` sets several racers' at once: `{[playerId] =
+fields}`, or a list of `{playerId, fields, replace?}` (64 at most ; one wrong racer and nothing
+changes). See [Fields](#fields). → `{sessionId, playerId}` (`racers`: `{sessionId, playerIds}`)
 
 ### `leaderboard.setFields` `{raceId, name, fields, board?, replace?}`
 Labels on a leaderboard entry of the current map's race (`name` is the entry's name, `board`
@@ -435,7 +441,7 @@ those players only, when given) ; `overlay.clear {}` takes all of yours down.
 | `segments` | up to 20 of `"done"`, `"best"`, `"live"`, `""` (the sector strip) |
 | `info` | `{left?, right?}` small line (last / best) |
 | `bar` | 0 to 1, a progress bar |
-| `rows` | up to 30 `{pos?, name, value?, playerId?, you?, out?, flag?, pen?, color?}` standings ; the player whose `playerId` it is sees their row highlighted |
+| `rows` | up to 30 `{pos?, name, value?, playerId?, you?, out?, flag?, pen?, color?, fields?}` standings ; the player whose `playerId` it is sees their row highlighted. `fields`: labels beside the name, as [results.setFields](#fields) takes them (the first 2 shown, as on the race HUD ; `hud` doesn't matter here) |
 | `footer` | `{label, name?, value?}` (fastest lap) |
 
 **`layout = "custom"`**: your own blocks, top to bottom: `{width? (em, 8 to 40), background?,
@@ -444,12 +450,12 @@ accent?, blocks}`. Up to 40 blocks:
 | Block | |
 |---|---|
 | `{type = "text", text, size?, color?, align?, bold?, italic?, display?}` | `size` `"s"`, `"m"`, `"l"`, `"xl"` ; `display` uses the race HUD's numbers font |
-| `{type = "row", cells}` | up to 6 cells side by side: text, or `{text, color?, align?, bold?, grow?, size?}` |
+| `{type = "row", cells}` | up to 6 cells side by side: text, or `{text, color?, align?, bold?, grow?, size?, flag?, pen?}` ; `flag = true` puts the chequered flag after the text, `pen` a red penalty tag (`"+5s"`), as on the race HUD's standings (a cell can be only one of them) |
 | `{type = "timer", mode, ms, size?, color?, align?}` | a timer |
 | `{type = "plate", text, sub?, color?}` | a position plate |
 | `{type = "bar", value, color?}` | 0 to 1 |
 | `{type = "segments", items}` | like the default layout's |
-| `{type = "table", columns?, rows}` | `columns` up to 6 `{label, align?}` ; `rows` up to 30 `{cells, playerId?, you?, color?}` |
+| `{type = "table", columns?, rows}` | `columns` up to 6 `{label, align?}` ; `rows` up to 30 `{cells, playerId?, you?, color?}`, cells as a row's |
 | `{type = "divider"}` | a line |
 
 ## Race options
@@ -516,6 +522,35 @@ BJ.call("results.setFields", { sessionId = id, playerId = racer.id, fields = {
 - `color` as for [overlays](#overlays).
 - Setting a racer's fields before their time goes on the leaderboard puts them on the entry with
   it ; after (on `RacerFinished`, say), the entry gets them too.
+
+### On the race HUD
+
+`hud` puts a racer's field beside their name on BeamJoy's race HUD as well:
+
+```lua
+BJ.call("results.setFields", { sessionId = id, racers = {
+    [3] = { { key = "class", value = "GT", hud = true },                        -- HUD, results, leaderboard
+            { key = "tyre", label = "Tyre", value = "Soft", color = "bad", hud = "only" } }, -- HUD only
+    [7] = { { key = "class", value = "Touring", hud = true } },
+} })
+```
+
+- `hud = true`: on the race HUD, the results and the leaderboard entry.
+- `hud = "only"`: on the race HUD only, for the race's live information (a tyre, a pit stop,
+  places gained). Never on a result once the race is over, nor on a leaderboard entry, nor in the
+  game's results window.
+- Left out: results and leaderboard only, as before. Race options marked `field` aren't on the
+  HUD (they're the same for every racer).
+- **Where they show**: every standings row (standard and full layouts), the player's own (their
+  row ; in the header on a race run alone ; under the position in the compact layout), and the
+  first one beside the cars ahead and behind.
+- **Two per racer** are shown, the first two in order (by plugin name, then the order you sent
+  them). Each is cut past about 6 characters' width (hovering shows it whole) ; a long name gives
+  way first, and keeps a few characters. Keep HUD labels short: `"GT"`, `"+2"`, `"S"`, `"P"`.
+- **Live**: a change shows within about a tenth of a second. Changes made within the same 100 ms
+  go out as one update, however many racers they're for, but every update sends the race's
+  standings to everyone in it: update on events (a lap, a pit stop), not on a timer.
+- Players can turn plugins' labels off (Settings > Menu > "Show plugin labels on the race HUD").
 
 ## Config tabs
 

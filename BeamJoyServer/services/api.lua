@@ -609,12 +609,48 @@ M.methods["raceOptions.unregister"] = function(_, ctx)
     return {}
 end
 
---- labels on a racer's result in a race being run (and on the leaderboard entry it set, if it did)
+--- labels on a racer's result in a race being run (and on the leaderboard entry it set, if it did),
+--- or on several racers' at once (`racers`)
 M.methods["results.setFields"] = function(params, ctx)
     local plugin, perr = pluginOf(ctx)
     if not plugin then return nil, "badParams", perr end
     local session = findSession(params.sessionId)
     if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
+    if params.racers ~= nil then
+        -- {[playerId] = fields} or [{playerId, fields, replace?}] : every racer checked before any
+        -- changes, so a mistake changes nothing
+        if type(params.racers) ~= "table" then return nil, "badParams", "racers must be a list or an object" end
+        -- every key, not ipairs : the helper sends {[3] = ..., [7] = ...} as a JSON array with gaps
+        -- (nulls), which arrives as a table with holes
+        local list = {}
+        for k, r in pairs(params.racers) do
+            if type(r) ~= "table" then return nil, "badParams", "each racer's fields must be a list or an object" end
+            if r.playerId ~= nil then
+                list[#list + 1] = { id = r.playerId, fields = r.fields, replace = r.replace }
+            else
+                list[#list + 1] = { id = k, fields = r }
+            end
+        end
+        table.sort(list, function(a, b) return (tonumber(a.id) or 0) < (tonumber(b.id) or 0) end)
+        if #list > 64 then return nil, "badParams", "64 racers at most" end
+        local checked, ids = {}, {}
+        for _, r in ipairs(list) do
+            local id = tonumber(r.id)
+            if not id then return nil, "badParams", "each racer needs a playerId" end
+            id = math.floor(id)
+            if not session.participants[id] then
+                return nil, "notFound", string.format("player %d isn't in this race", id)
+            end
+            local fields, why = services_pluginUi.fieldsOf(r.fields)
+            if not fields then return nil, "badParams", string.format("player %d : %s", id, why) end
+            checked[#checked + 1] = { id = id, fields = fields, replace = r.replace == true or params.replace == true }
+        end
+        for _, r in ipairs(checked) do
+            services_raceGrid.pluginSetFields(session, r.id, plugin, r.fields, r.replace)
+            ids[#ids + 1] = r.id
+        end
+        return { sessionId = session.id, playerIds = ids }
+    end
     local playerID = tonumber(params.playerId)
     if not playerID then return nil, "badParams", "playerId is needed" end
     local fields, why = services_pluginUi.fieldsOf(params.fields)

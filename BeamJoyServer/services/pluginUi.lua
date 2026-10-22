@@ -4,7 +4,9 @@
 ---   GT3 / GT4 / Street"). The values chosen travel with the race session (settings.plugins), the
 ---   race editor's are the race's own defaults (defaults.plugins), and plugins see both
 --- - fields : labels on a racer's result and their leaderboard entry ("GT3", "Team Red"). One entry
----   per player stays one entry : a field describes the run that set it
+---   per player stays one entry : a field describes the run that set it. `hud` puts one beside the
+---   racer's name on the race HUD too (true), or only there ("only" : live information, a tyre or a
+---   pit stop, never kept on a result or an entry)
 --- - config tabs : a tab of the plugin's own settings in BeamJoy's config window, stored by BeamJoy
 ---   (BeamJoyData/db/pluginConfig.json), for staff holding EditPluginConfig
 --- Plugins only ever describe these : BeamJoy draws them, as plain text, and checks every value
@@ -334,7 +336,7 @@ end
 -- ---------------------------------------------------------------------------------------------
 -- fields
 
----@param f any {label?, value, color?, showLabel?} or the value alone
+---@param f any {label?, value, color?, showLabel?, hud?} or the value alone
 ---@param key string
 ---@param order integer
 ---@return table?
@@ -349,6 +351,8 @@ local function field(f, key, order)
         value = value,
         color = services_pluginOverlay.cleanColor(f.color),
         showLabel = f.showLabel == true or nil,
+        -- on the race HUD too (true), or only there ("only")
+        hud = (f.hud == true or f.hud == "only") and f.hud or nil,
         order = order,
     }
 end
@@ -420,6 +424,37 @@ local function applyFields(holder, plugin, fields, replace)
     return next(holder) and holder or nil
 end
 
+--- a plugin's fields as fieldsOf gives them, without the HUD-only ones : what a leaderboard entry
+--- takes (removals stay)
+---@param fields table<string, table|false>
+---@return table<string, table|false>
+local function keptFields(fields)
+    local out = {}
+    for key, f in pairs(fields) do
+        if not (f and f.hud == "only") then out[key] = f end
+    end
+    return out
+end
+
+--- a holder's fields (plugin -> key -> field) without the HUD-only ones : what a result and a
+--- leaderboard entry keep once the race is over
+---@param fields table<string, table>?
+---@return table<string, table>?
+local function withoutHudOnly(fields)
+    if type(fields) ~= "table" then return nil end
+    local out
+    for plugin, mine in pairs(fields) do
+        for key, f in pairs(mine) do
+            if f.hud ~= "only" then
+                out = out or {}
+                out[plugin] = out[plugin] or {}
+                out[plugin][key] = f
+            end
+        end
+    end
+    return out
+end
+
 --- the race options marked `field`, as fields : a session's values shown on its results
 ---@param values table? settings.plugins
 ---@return table<string, table>? plugin -> key -> field
@@ -478,7 +513,7 @@ end
 
 --- fields as a list, the way they're shown : by plugin, then in the plugin's order
 ---@param fields table<string, table>? plugin -> key -> field
----@return table[] {plugin, key, label, value, color, showLabel}
+---@return table[] {plugin, key, label, value, color, showLabel, hud}
 local function fieldList(fields)
     local list = {}
     if type(fields) ~= "table" then return list end
@@ -487,7 +522,7 @@ local function fieldList(fields)
             for key, f in pairs(mine) do
                 if type(f) == "table" and f.value then
                     list[#list + 1] = { plugin = plugin, key = key, label = f.label or key, value = f.value,
-                        color = f.color, showLabel = f.showLabel, order = f.order or 0 }
+                        color = f.color, showLabel = f.showLabel, hud = f.hud, order = f.order or 0 }
                 end
             end
         end
@@ -665,6 +700,8 @@ M.fieldsOf = fieldsOf
 M.applyFields = applyFields
 M.racerFields = racerFields
 M.fieldList = fieldList
+M.keptFields = keptFields
+M.withoutHudOnly = withoutHudOnly
 M.registerConfigTab = registerConfigTab
 M.unregisterConfigTab = unregisterConfigTab
 M.configOf = configOf

@@ -65,10 +65,28 @@
     }
     .bj-ppage .ctable td.bold { font-weight: 700; }
     .bj-ppage .ctable tr.you { background: rgba(255, 102, 0, 0.1); box-shadow: inset 3px 0 0 #ff6600; }
+    .bj-ppage .pen {
+        padding: 0.05em 0.35em;
+        border-radius: 3px;
+        background: #d63b3b;
+        color: #fff;
+        font-weight: 700;
+        font-size: 0.78em;
+        white-space: nowrap;
+    }
+    /* a cell with the chequered flag or a penalty tag after its text (the text gives way first) */
+    .bj-ppage .cval { display: inline-flex; align-items: center; gap: 0.4em; max-width: 100%; vertical-align: bottom; }
+    .bj-ppage .cval > .ctxt { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .bj-ppage .cval > :not(.ctxt) { flex-shrink: 0; display: inline-flex; }
     .bj-ppage .cbuttons { display: flex; flex-wrap: wrap; gap: 0.4em; }
     .bj-ppage input.ptext { width: 100%; box-sizing: border-box; }
     .bj-ppage .pfrom { margin-top: 0.4em; font-size: 0.72em; color: var(--bjr-muted, #a7aebf); opacity: 0.8; }
 </style>
+
+<!-- the chequered flag, at the plates' slant (the race HUD's own) -->
+<script type="text/ng-template" id="bjPPageFlag.html">
+    <svg class="flag" width="15" height="11" viewBox="0 0 15 11" aria-hidden="true"><g transform="skewX(-10) translate(2 0)"><rect x="0" y="0" width="13" height="11" fill="#ebebeb"></rect><rect x="0" y="0" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="6.5" y="0" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="3.25" y="3.67" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="9.75" y="3.67" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="0" y="7.34" width="3.25" height="3.66" fill="#2a2d33"></rect><rect x="6.5" y="7.34" width="3.25" height="3.66" fill="#2a2d33"></rect></g></svg>
+</script>
 
 <div class="bj-ppage">
     <p class="bjr-muted" ng-if="$ctrl.blocks.length === 0">{{'beamjoy.window.main.plugin.empty' | translate}}</p>
@@ -82,7 +100,7 @@
             ng-style="b._style">{{b.text}}</div>
         <div ng-switch-when="row" class="crow">
             <span ng-repeat="c in b.cells track by $index" ng-class="['sz-' + (c.size || 'm'), {grow: c.grow, bold: c.bold}]"
-                ng-style="c._style">{{c.text}}</span>
+                ng-style="c._style"><span class="cval" ng-if="c.flag || c.pen"><span class="ctxt" ng-if="c.text">{{c.text}}</span><span ng-if="c.flag" ng-include="'bjPPageFlag.html'"></span><span class="pen" ng-if="c.pen">{{c.pen}}</span></span><span ng-if="!(c.flag || c.pen)">{{c.text}}</span></span>
         </div>
         <div ng-switch-when="timer" class="timer" ng-class="'sz-' + (b.size || 'l')" ng-style="b._style" role="timer">{{$ctrl.timerText(b)}}</div>
         <div ng-switch-when="bar" class="prog" aria-hidden="true"><div ng-style="b._fill"></div></div>
@@ -100,7 +118,7 @@
             </thead>
             <tbody>
                 <tr ng-repeat="r in b.rows track by $index" ng-class="{you: r._you}" ng-style="r._style">
-                    <td ng-repeat="c in r.cells track by $index" ng-class="{bold: c.bold}" ng-style="c._style">{{c.text}}</td>
+                    <td ng-repeat="c in r.cells track by $index" ng-class="{bold: c.bold}" ng-style="c._style"><span class="cval" ng-if="c.flag || c.pen"><span class="ctxt" ng-if="c.text">{{c.text}}</span><span ng-if="c.flag" ng-include="'bjPPageFlag.html'"></span><span class="pen" ng-if="c.pen">{{c.pen}}</span></span><span ng-if="!(c.flag || c.pen)">{{c.text}}</span></td>
                 </tr>
             </tbody>
         </table>

@@ -670,6 +670,8 @@
     "beamjoy.window.main.tabs.settings.sections.menu.raceHud.compact": "Compact",
     "beamjoy.window.main.tabs.settings.sections.menu.raceHud.full": "Full standings",
     "beamjoy.window.main.tabs.settings.sections.menu.raceHud.off": "Disabled",
+    "beamjoy.window.main.tabs.settings.sections.menu.hudLabels": "Show plugin labels on the race HUD",
+    "beamjoy.window.main.tabs.settings.sections.menu.hudLabels.tooltip": "Labels a server's plugins put beside racers' names, like a class, a tyre or points, on the race HUD and on plugins' race overlays.",
     "beamjoy.raceHud.racing": "Racing",
     "beamjoy.raceHud.spectating": "Spectating {name}",
     "beamjoy.raceHud.ofCount": "of {n}",
