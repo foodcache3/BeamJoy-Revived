@@ -12,6 +12,7 @@ local function onInit()
     local constants = require("communications/constants")
     MP.RegisterEvent(constants.BASE_EVENT, "_BJSRxEvent")
     MP.RegisterEvent(constants.DATA_EVENT, "_BJSRxData")
+    MP.RegisterEvent(constants.ACK_EVENT, "_BJSRxAck")
 end
 
 ---@param key string
@@ -89,6 +90,7 @@ function _BJSRxEvent(senderID, dataStr)
         LogError(string.format("Invalid senderID %d", senderID))
         return
     end
+    communications_tx.markClient(senderID)
     if not data.id or not data.key or not data.parts then
         LogError("Invalid event: ")
         return dump(data)
@@ -134,6 +136,7 @@ function _BJSRxData(senderID, dataStr)
         LogError(string.format("Invalid senderID %d", senderID))
         return
     end
+    communications_tx.markClient(senderID)
     if not data.id or not data.part or not data.data then
         LogError("Invalid event: ")
         return dump(data)
@@ -161,6 +164,16 @@ function _BJSRxData(senderID, dataStr)
             M.pending[data.id] = nil
         end, 30, getTimeoutKey(data.id))
     end
+end
+
+--- how much of what the server sent paced the player's game got (communications/tx.lua's flow
+--- control)
+---@param senderID integer
+---@param dataStr string
+function _BJSRxAck(senderID, dataStr)
+    if #MP.GetPlayerName(senderID) == 0 then return end
+    communications_tx.markClient(senderID)
+    communications_tx.acknowledge(senderID, tonumber(dataStr))
 end
 
 M.onInit = onInit

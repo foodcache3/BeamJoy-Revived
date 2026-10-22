@@ -454,6 +454,15 @@ local function createPostSpawnMergeCheck(vid)
     end, 500, event)
 end
 
+--- every traffic car this game spawned, alive, whether beamjoy_vehicles has registered it into
+--- M.vehs yet or not : what the periodic check counts, so a car still registering (or one that
+--- never registers) isn't spawned again
+---@type table<integer, true>
+local spawnedVids = {}
+
+--- how long one car's spot search goes on before this round gives up (the periodic check retries)
+local SPAWN_SEARCH_MS = 3000
+
 local spawnLock = false
 ---@param amount? integer 1-N
 local function spawnNewTrafficVehicles(amount)
@@ -475,9 +484,9 @@ local function spawnNewTrafficVehicles(amount)
         -- swallowing it.
         local ok, err = pcall(function()
             local vehConfigs = createGroup(job, amount)
-            uiHelpers.toastInfo(beamjoy_lang.translate("beamjoy.toast.traffic.waitForSpawn"))
-            uiHelpers.applyLoading(true)
-            job.sleep(.3)
+            -- shown once there's somewhere to put a car : a round that finds nowhere (see below)
+            -- says nothing, the periodic check retries it every few seconds
+            local announced = false
             for i = 1, amount do
                 local vehConfig = vehConfigs[i]
                 if vehConfig then
@@ -486,10 +495,22 @@ local function spawnNewTrafficVehicles(amount)
                     options.cling = true
                     options.autoEnterVehicle = false
 
+                    -- Real bug (direct report : no traffic at all while alone on the server). This
+                    -- searched until it found a spot, however long : a search with nowhere to find
+                    -- (on the loading screen, no car and the camera nowhere near a road, or off
+                    -- road) never ended and held spawnLock, so no traffic ever spawned after it. It
+                    -- gives up now, and the periodic check (onSlowUpdate) tries again
                     local pos, rot
-                    while not pos do
+                    local searchUntil = GetCurrentTimeMillis() + SPAWN_SEARCH_MS
+                    while not pos and GetCurrentTimeMillis() < searchUntil do
                         pos, rot = getNewRandomSpawn(job)
                         if not pos then job.sleep(.01) end
+                    end
+                    if not pos then break end
+                    if not announced then
+                        announced = true
+                        uiHelpers.toastInfo(beamjoy_lang.translate("beamjoy.toast.traffic.waitForSpawn"))
+                        uiHelpers.applyLoading(true)
                     end
                     job.sleep(.01)
                     local coreModel = extensions.core_vehicles.getModel(vehConfig.model)
@@ -533,6 +554,7 @@ local function spawnNewTrafficVehicles(amount)
                         spawnConfig = baseConfig
                     end
                     local veh = spawn.spawnVehicle(vehConfig.model, spawnConfig, pos, rot, options)
+                    spawnedVids[veh:getID()] = true
                     -- beamjoy_vehicles' own isAi() only recognizes a model as traffic by its name
                     -- containing "traffic" (simple_traffic, agent_traffic_eu2, ...), which a vehGroup
                     -- can easily name off a model that doesn't follow that convention at all (e.g.
@@ -836,6 +858,7 @@ local function updateVehs(forceReset)
 
     local function clearVehs()
         for _, vid in pairs(M.vehs) do
+            spawnedVids[vid] = nil
             beamjoy_vehicles.delete(vid)
             extensions.hook("onBJTrafficVehicleDeleted", vid)
         end
@@ -848,6 +871,7 @@ local function updateVehs(forceReset)
         if M.vehs:length() > M.data.amount then
             for i = M.vehs:length(), M.data.amount + 1, -1 do
                 local vid = M.vehs:remove(i)
+                spawnedVids[vid] = nil
                 beamjoy_vehicles.delete(vid)
                 extensions.hook("onBJTrafficVehicleDeleted", vid)
             end
@@ -1133,6 +1157,53 @@ local function onRubberbandTick()
     end)
 end
 
+--- this game's moving traffic cars still in the world : M.vehs and the ones still registering.
+--- Gone ones are forgotten (deleted by a player or staff, removed by BeamMP)
+---@return integer
+local function liveTrafficCount()
+    M.vehs = M.vehs:filter(function(vid) return be:getObjectByID(vid) ~= nil end)
+    local counted, n = {}, 0
+    for vid in pairs(spawnedVids) do
+        if not be:getObjectByID(vid) then spawnedVids[vid] = nil end
+    end
+    local function count(vid)
+        if not counted[vid] and not M.parkedVehs:includes(vid) then
+            counted[vid] = true
+            n = n + 1
+        end
+    end
+    for _, vid in ipairs(M.vehs) do count(vid) end
+    for vid in pairs(spawnedVids) do count(vid) end
+    return n
+end
+
+--- Real bug (direct report : no traffic at all while alone on the server ; it only came once a
+--- second player joined). A game only ever spawned its share when the server's traffic settings
+--- for it changed, and on joining, that first push lands during the loading screen : no road
+--- network or parking spots yet, no car, so nothing could spawn, and nothing tried again until the
+--- share changed (a player joining or leaving, a settings change). Every few seconds now, this
+--- game tops its own share back up : the traffic and parked cars it should have and doesn't,
+--- including any deleted since
+local TOP_UP_INTERVAL_MS = 5000
+local nextTopUpMs = 0
+local function onSlowUpdate()
+    local now = GetCurrentTimeMillis()
+    if now < nextTopUpMs then return end
+    nextTopUpMs = now + TOP_UP_INTERVAL_MS
+    if not M.data.enabled or spawnLock then return end
+    if table.length(map.getMap().nodes) == 0 then return end
+
+    local missing = (M.data.amount or 0) - liveTrafficCount()
+    if missing > 0 then spawnNewTrafficVehicles(missing) end
+
+    -- parked : not while a batch is still landing (onVehicleGroupSpawned claims it)
+    if now >= parkedSpawnDeadline then
+        M.parkedVehs = M.parkedVehs:filter(function(vid) return be:getObjectByID(vid) ~= nil end)
+        local parkedMissing = (M.data.parkedAmount or 0) - M.parkedVehs:length()
+        if parkedMissing > 0 then spawnParkedTopUp(parkedMissing) end
+    end
+end
+
 local function retrieveCache(cache)
     if not table.compare(cache, M.data, true) then
         local previousModels = table.clone(M.data.models)
@@ -1169,6 +1240,7 @@ M.onBJVehicleModChanged = onBJVehicleModChanged
 M.onVehicleGroupSpawned = onVehicleGroupSpawned
 M.onRubberbandTick = onRubberbandTick
 M.onBJBusLinesChanged = onBJBusLinesChanged
+M.onSlowUpdate = onSlowUpdate
 
 M.getMinMaxDistFromPlayer = getMinMaxDistFromPlayer
 M.getPathRandomization = getPathRandomization

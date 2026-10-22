@@ -179,7 +179,7 @@ local function resolveMapName(query)
     return table.keys(services_maps.data):filter(function(name)
         local map = services_maps.data[name]
         return map.enabled and not map.ignore and
-            tostring(name):lower():find(query:lower()) ~= nil
+            tostring(name):lower():find(query:lower(), 1, true) ~= nil
     end)
 end
 
