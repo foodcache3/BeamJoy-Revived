@@ -1093,6 +1093,41 @@ end
 --- per (map, name), tracked persistently by dao_bundled's own ledger, so this can never re-add
 --- something an admin has since deleted on purpose, and never touches an already-seeded map again
 --- just because the server restarted
+--- One-time sync of every bundled race (direct request, 2.0.0) : overwrites, once per server, each
+--- bundled race that server still has with the race as BeamJoy ships it now (course, props,
+--- default settings, vehicle rule, author). Its id and name stay. Its times stay when the course is
+--- the same, and are cleared when it changed (times on the old course don't compare). A race
+--- deleted on a server stays deleted. Tracked per race in dao_bundled's ledger, under
+--- "<name>#sync@<revision>".
+--- Since 2477 it only runs on a server updating from before 2.0 (direct request) : one whose ledger
+--- has bundled races but none synced. A server that ran 2.0.0 already had its sync, and a new
+--- server seeds the races as they ship now. That's decided once, before this boot seeds anything,
+--- and kept in the ledger under the map "*" ("pending" until every race synced, then "done").
+local BUNDLED_SYNC_REVISION = 1
+local SYNC_LEDGER_MAP = "*"
+
+---@param name string
+---@return string
+local function syncKey(name)
+    return string.format("%s#sync@%d", name, BUNDLED_SYNC_REVISION)
+end
+
+---@return boolean
+local function bundledSyncNeeded()
+    if dao_bundled.isSeeded(SYNC_LEDGER_MAP, M.ACTIVITY_TYPE, syncKey("done")) then return false end
+    if dao_bundled.isSeeded(SYNC_LEDGER_MAP, M.ACTIVITY_TYPE, syncKey("pending")) then return true end
+    local hadRaces = dao_bundled.anySeeded(M.ACTIVITY_TYPE, function(mapName)
+        return mapName ~= SYNC_LEDGER_MAP
+    end)
+    local synced = dao_bundled.anySeeded(M.ACTIVITY_TYPE, function(mapName, itemName)
+        return mapName ~= SYNC_LEDGER_MAP and itemName:find("#sync@", 1, true) ~= nil
+    end)
+    local needed = hadRaces and not synced
+    dao_bundled.markSeeded(SYNC_LEDGER_MAP, M.ACTIVITY_TYPE, syncKey(needed and "pending" or "done"))
+    if needed then LogInfo("bundled race sync: updating from before 2.0, every bundled race is synced once") end
+    return needed
+end
+
 local function seedBundledRaces()
     for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
         local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
@@ -1129,6 +1164,7 @@ local function seedBundledRaces()
                         candidate.leaderboard = {}
                         table.insert(targetList, candidate)
                         dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, name)
+                        dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, syncKey(name))
                         changed = true
                         LogInfo(string.format("seedBundledRaces: seeded %s / %s", mapName, name))
                     end
@@ -1187,6 +1223,48 @@ local function sameGates(a, b)
         if dx * dx + dy * dy + dz * dz > .25 then return false end
     end
     return true
+end
+
+---@return boolean done false when a race failed, retried on the next boot
+local function syncBundledRaces()
+    local done = true
+    for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
+        local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
+        local list, changed
+        for _, race in ipairs(table.isArray(bundled) and bundled or {}) do
+            local name = type(race.name) == "string" and race.name or ""
+            if name ~= "" and not dao_bundled.isSeeded(mapName, M.ACTIVITY_TYPE, syncKey(name)) then
+                list = list or dao_activity.get(mapName, M.ACTIVITY_TYPE) or {}
+                local live = table.find(list, function(r)
+                    return type(r.name) == "string" and r.name:trim():lower() == name:trim():lower()
+                end)
+                local failed = false
+                if live then
+                    local candidate = table.deepcopy(race)
+                    candidate.id, candidate.name, candidate.formerNames = live.id, live.name, nil
+                    local keepTimes = sameGates(live, race)
+                    candidate.leaderboard = keepTimes and live.leaderboard or {}
+                    candidate.freeroamLeaderboard = keepTimes and live.freeroamLeaderboard or {}
+                    local err = sanitizeRace(candidate, list)
+                    if err then
+                        failed, done = true, false
+                        LogError(string.format("bundled race sync %s / %s failed: %s", mapName, name, err))
+                    else
+                        for i, r in ipairs(list) do
+                            if r == live then list[i] = candidate end
+                        end
+                        changed = true
+                        LogInfo(string.format("bundled race synced: %s / %s%s", mapName, name,
+                            keepTimes and "" or ", course changed, times cleared"))
+                    end
+                end
+                -- no race of this name here : deleted on purpose, nothing to sync
+                if not failed then dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, syncKey(name)) end
+            end
+        end
+        if changed then dao_activity.save(mapName, M.ACTIVITY_TYPE, list) end
+    end
+    return done
 end
 
 local function applyBundledCourseUpdates()
@@ -1965,9 +2043,14 @@ local function onInit()
     communications_rx.addHandler("raceMapImportProps", M.raceMapImportProps)
     communications_rx.addHandler("raceProps", M.onRacePropsRequest)
 
+    -- before seeding : seeded races are marked synced, a pre-2.0 server would then look like 2.0
+    local syncFromPre20 = bundledSyncNeeded()
     renameBundledRaces()
     seedBundledRaces()
     applyBundledCourseUpdates()
+    if syncFromPre20 and syncBundledRaces() then
+        dao_bundled.markSeeded(SYNC_LEDGER_MAP, M.ACTIVITY_TYPE, syncKey("done"))
+    end
     mergeBundledProps()
     loadData()
 end

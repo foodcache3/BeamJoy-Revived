@@ -102,7 +102,14 @@ local function instantiatePlayer(playerID, pending, saved)
         data = {},
         replay = false,
     }, pending)
-    return saved and table.assign(res, saved) or res
+    if saved then
+        table.assign(res, saved)
+        -- the name they're connected under, which M.players is keyed by : a saved file can be read
+        -- back under another case (Windows' file names ignore it) and carry that other case, and
+        -- every M.players[target.playerName] after a lookup then missed them
+        res.playerName = pending.playerName
+    end
+    return res
 end
 
 ---@param playerID integer
@@ -312,12 +319,45 @@ local function getAllPlayers()
     return dao_players.getAll()
 end
 
----@param str string can be an insensitive subpart of playername
----@return tablelib<integer, BJSPlayer> matches index 1-N, if exact name, then only one match, otherwise 0-N insensitive matches
+--- Real bug (direct report : `bj group <name>` said the player wasn't connected, listing them).
+--- The part of a name was looked up as a Lua PATTERN, inside table.filter's pcall : a name holding
+--- "-", "(", "[", "%", "+", "*" or "?" was never found unless typed in its exact case ("-" and "["
+--- mean something else in a pattern, a malformed one threw and the pcall hid it). Now plain text,
+--- matched against every name a player goes by : the one the not-found message lists, their
+--- account name and a guest's nickname. The usage line's "<name>", typed with its brackets, works.
+---@param str string the name, or an insensitive part of it
+---@return tablelib<integer, BJSPlayer> matches index 1-N : the one player of that exact name (any
+---case, if only one has it), otherwise 0-N players whose name holds it
 local function getConnectedByName(str)
-    local exactMatch = M.players:find(function(p) return p.playerName == str end)
-    if exactMatch then return Table({ exactMatch }) end
-    return M.players:filter(function(p) return p.playerName:lower():find(str:lower()) ~= nil end):values()
+    if type(str) ~= "string" or #str == 0 then return Table() end
+    ---@param p BJSPlayer
+    ---@param key string
+    ---@return string[]
+    local function names(p, key)
+        return { key, p.playerName, p.identityNickname }
+    end
+    ---@param text string
+    ---@return tablelib<integer, BJSPlayer>
+    local function lookup(text)
+        local wanted = text:lower()
+        local exact = M.players:find(function(p, key)
+            return table.includes(names(p, key), text)
+        end)
+        if exact then return Table({ exact }) end
+        local sameButCase = M.players:filter(function(p, key)
+            return table.any(names(p, key), function(n) return type(n) == "string" and n:lower() == wanted end)
+        end):values()
+        if #sameButCase == 1 then return sameButCase end
+        return M.players:filter(function(p, key)
+            return table.any(names(p, key), function(n)
+                return type(n) == "string" and n:lower():find(wanted, 1, true) ~= nil
+            end)
+        end):values()
+    end
+    local found = lookup(str)
+    local unwrapped = str:match("^<(.+)>$")
+    if #found == 0 and unwrapped then found = lookup(unwrapped) end
+    return found
 end
 
 local function sendCacheUpdate()

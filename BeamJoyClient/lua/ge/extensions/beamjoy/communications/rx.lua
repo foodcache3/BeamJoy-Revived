@@ -99,6 +99,28 @@ local function retrieveEventPart(strData)
     end
 end
 
+--- bytes received on the paced events since communications.lua last acknowledged them (the
+--- server's communications/tx.lua sends no more until enough of it is acknowledged)
+local received = 0
+
 local constants = require("ge/extensions/beamjoy/communications/constants")
 AddEventHandler(constants.BASE_EVENT, retrieveEvent)
 AddEventHandler(constants.DATA_EVENT, retrieveEventPart)
+AddEventHandler(constants.PACED_BASE_EVENT, function(strData)
+    received = received + #strData
+    retrieveEvent(strData)
+end)
+AddEventHandler(constants.PACED_DATA_EVENT, function(strData)
+    received = received + #strData
+    retrieveEventPart(strData)
+end)
+
+return {
+    --- what arrived paced since the last call
+    ---@return integer
+    takeReceived = function()
+        local n = received
+        received = 0
+        return n
+    end,
+}

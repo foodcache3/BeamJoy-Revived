@@ -67,6 +67,18 @@ local function markSeeded(mapName, activityType, itemName)
     dao_main.save(M.LEDGER_FILE, ledger)
 end
 
+--- whether any ledger entry of this activity type passes the test
+---@param activityType string
+---@param test fun(mapName: string, itemName: string): boolean
+---@return boolean
+local function anySeeded(activityType, test)
+    for key, done in pairs(loadLedger()) do
+        local mapName, keyType, itemName = key:match("^([^|]*)|([^|]*)|(.*)$")
+        if done == true and keyType == activityType and test(mapName, itemName) then return true end
+    end
+    return false
+end
+
 local sync
 
 -- Real, confirmed bug (direct report : a fresh install came up without any bundled races, its
@@ -146,5 +158,6 @@ M.get = get
 M.listMapsForType = listMapsForType
 M.isSeeded = isSeeded
 M.markSeeded = markSeeded
+M.anySeeded = anySeeded
 
 return M

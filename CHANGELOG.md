@@ -8,13 +8,60 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2475.
+Server build 2478, client build 2743.
 
-- **One-time bundled race sync removed (2475)** (direct request) : it ran with 2.0.0 and isn't
-  part of later builds. Renamed bundled races still follow their `formerNames`, and new ones
-  are still seeded once. A server updating straight from 1.10.x to a later build keeps its
-  bundled races as they were (renamed, with new props merged in) instead of overwriting them.
-  *(server)*
+- **Fix : one player saving a vehicle preset crashed another player's BeamMP launcher (2478,
+  2743)** (direct report). Every game then downloads the new shared builds' photos (up to 200 KB
+  each), and the server sent them at a fixed ~400 KB/s whatever the player's connection could take.
+  BeamMP's server writes to a player's connection from more than one thread with no lock between
+  them : once that connection is full, one write goes out in pieces, another slips in between, and
+  the launcher reads a broken packet and quits (the same "Decompression failed" crash as the old
+  join bursts). The server now
+  sends at each player's own pace : their game acknowledges what it got, and no more than 64 KB is
+  ever on its way to one player. Big messages to everyone go through the same per-player pacing
+  (small ones still go at once), order is kept, and a game that stops acknowledging slows down
+  rather than stalls. *(server + client : update both)*
+
+- **A game's own big messages are paced too (2742).** A message from a game to the server went out
+  in all its parts at once, and a preset carrying its shared builds' photos can be a megabyte or
+  more. A game's messages now queue and leave at about 400 KB/s, as the server's do ; small ones
+  still go at once when nothing is waiting, and order is kept. *(client)*
+
+- **Fix : no traffic while alone on the server, and traffic stuck off until a restart (2741)**
+  (direct report : none spawned alone, changing the settings or turning traffic off and on did
+  nothing, and it only came once a second player joined). A game spawned its share only when the
+  server's traffic settings for it changed, and on joining that lands during the loading screen,
+  with no road or car to place one by. The search for a spot then never ended and held the traffic
+  lock, so every later change waited behind it. A car's search now gives up after 3 s, and every
+  5 s each game tops its own share back up : traffic and parked cars it should have and doesn't,
+  including ones deleted since. The "waiting for traffic" message shows only once a car has
+  somewhere to go. *(client)*
+
+- **Fix : console and chat commands couldn't find some players (2476)** (direct report : `bj group
+  <name>` said the player wasn't connected, listing them as connected). A name holding "-", "(",
+  "[", "%", "+", "*" or "?" was only found typed in its exact case, since the typed part was read
+  as a pattern. Names now match as plain text, in any case, and also by a guest's nickname; "bob"
+  picks Bob over Bobby when only one is called that, and `<name>` typed with the usage line's
+  brackets works. Every command taking a player name uses this (`bj group`/`setgroup`, kick, ban,
+  mute, `/pm`, `/setgroup`, ...). `/votemap` had the same fault with map names. And a
+  player keeps the exact name they connected under : on Windows, saved data written under another
+  capitalisation of it renamed them, and commands then found them but couldn't act on them. *(server)*
+
+- **Bundled race authors** (direct request) : the 95 bundled races credited to a guest account
+  (`guest1728877`, ...) are now credited to BeamNG, and four Utah races to yep : Canyon Loop,
+  Canyon Loop (reverse), Overlook to Information Center and Information Center to Overlook. No
+  race was renamed. Servers seeding these races from now on, and servers updating from before
+  2.0 (see the sync below), get the new authors. A server that ran 2.0.0 keeps the authors it
+  has. *(server)*
+
+- **One-time bundled race sync, now only for servers updating from before 2.0 (2475, 2477)**
+  (direct request) : 2475 removed the sync 2.0.0 ran ; 2477 brings it back for a server whose last
+  version was older than 2.0, so one updating straight from 1.10.x to a later build gets every
+  bundled race as BeamJoy ships it now, as it would have with 2.0.0. A server that ran 2.0.0 already
+  had its sync and a new server seeds the races as they ship, so neither is touched. It's decided
+  once, the first boot on 2477 or later : a server whose saved data has bundled races but none
+  synced is updating from before 2.0. Renamed bundled races still follow their `formerNames`, and
+  new ones are still seeded once. *(server)*
 
 ## [2.0.0] - 2026-10-20 - Deliveries and convoys, Derby, crews, main window redesign, props editor
 

@@ -9,8 +9,11 @@ local M = {
     TX_LOG_EVENTS_BLACKLIST = { "clockSync" },
 }
 
+local constants = require("ge/extensions/beamjoy/communications/constants")
+local rx
+
 local function onInit()
-    require("ge/extensions/beamjoy/communications/rx")
+    rx = require("ge/extensions/beamjoy/communications/rx")
 
     ---@param serverTick BJServerTick
     M.addHandler("tick", function(serverTick)
@@ -90,13 +93,30 @@ end
 
 local tx = require("ge/extensions/beamjoy/communications/tx")
 local function send(key, ...)
-    tx(key, ...)
+    tx.send(key, ...)
     if not table.includes(M.TX_LOG_EVENTS_BLACKLIST, key) then
         LogDebug(string.format("Event %s sent (%d args)", key, #{ ... }))
     end
 end
 
+--- big messages go out a part at a time (communications/tx.lua's pacing) ; what the server sent
+--- paced is acknowledged once a frame (its own communications/tx.lua's flow control : a few bytes,
+--- plain digits, straight out)
+local function onUpdate()
+    tx.drain()
+    local received = rx and rx.takeReceived() or 0
+    if received > 0 then
+        TriggerServerEvent(constants.ACK_EVENT, tostring(received))
+    end
+end
+
+local function onServerLeave()
+    tx.clear()
+end
+
 M.onInit = onInit
+M.onUpdate = onUpdate
+M.onServerLeave = onServerLeave
 
 M.addHandler = addHandler
 M.addOneUseHandler = addOneUseHandler
