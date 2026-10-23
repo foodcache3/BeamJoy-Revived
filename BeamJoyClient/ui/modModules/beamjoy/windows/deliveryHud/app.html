@@ -67,6 +67,9 @@
     }
     #beamjoy-delivery-hud .hud-buttons {
         display: flex;
+        /* the focus hint takes a line of its own (flex-basis 100%) : without wrapping it shared the
+           buttons' row and crushed Abandon (direct report) */
+        flex-wrap: wrap;
         gap: 0.4em;
         margin-top: 0.55em;
     }

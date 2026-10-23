@@ -6,9 +6,13 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
-## [Unreleased]
+## [2.0.1] - 2026-10-23 - Derby arena turning, fixes
 
-Server build 2478, client build 2749.
+Server build 2478, client build 2751.
+
+- **Fix (2751) : the delivery HUD's buttons were squashed** (reported). With the HUD focused,
+  the "B to go back to driving" hint shared the buttons' row instead of taking its own line, and
+  crushed Hold to abandon into a sliver. *(client only)*
 
 - **Turn a whole Derby arena (2749)** (direct request). The Derby arena editor's toolbar has two
   turn buttons with an angle between them (90 by default, 1 to 180). They turn the whole arena
