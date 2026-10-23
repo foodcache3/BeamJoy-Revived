@@ -2382,6 +2382,28 @@ local function onSessionUpdate(session)
         end
     end
 
+    -- one at a time : the next one to go is told so (direct request), once a phase, while the one
+    -- before them is on track. Picked as the server's releaseNextTurn does : the first in grid order
+    -- of those waiting, one away (disconnected) passed over
+    if session.settings.start == "sequential" and participant.awaitingStart == true and
+        not (participant.finished or participant.dnf or participant.sittingOut) and
+        (session.state == "COUNTDOWN" or session.state == "RACE") and M.nextUpToldFor ~= phaseKey(session) then
+        local someoneOnTrack, anyoneAhead = false, false
+        for _, p in pairs(session.participants) do
+            if p.playerName ~= participant.playerName and not (p.finished or p.dnf or p.sittingOut) then
+                if not p.awaitingStart then
+                    someoneOnTrack = true
+                elseif not p.disconnected and (p.gridPosition or math.huge) < (participant.gridPosition or math.huge) then
+                    anyoneAhead = true
+                end
+            end
+        end
+        if someoneOnTrack and not anyoneAhead then
+            M.nextUpToldFor = phaseKey(session)
+            toast.info(beamjoy_lang.translate("beamjoy.race.nextUp"), nil, 6)
+        end
+    end
+
     -- the break's over (the next phase's countdown) : its results close (direct request)
     if wasBreak and session.state ~= "BREAK" then
         beamjoy_communications_ui.send("BJRaceInfoAutoClose", {})
@@ -2990,14 +3012,19 @@ end
 ---@param vid integer
 local function applyResetPenalty(vid)
     if not M.session or M.session.state ~= "RACE" then return end
+    -- every reset is reported (services/raceGrid.lua's raceReset : the plugin API's RacerReset, and
+    -- the "time" penalty below, added there), once however often the hook fires for it
+    local now = GetCurrentTimeMillis()
+    local repeated = M.lastResetSentMs and now - M.lastResetSentMs < 1500
+    if not repeated then
+        M.lastResetSentMs = now
+        beamjoy_communications.send("raceReset", M.session.id)
+    end
     if not M.session.settings.resetPenaltyEnabled then return end
-    -- "time" : no hold, the seconds go on the race time instead (services/raceGrid.lua's
-    -- raceResetPenalty, which also ignores a repeat of the same reset). A short popup says so
+    -- "time" : no hold, the seconds go on the race time instead (the server adds them). A short
+    -- popup says so
     if M.session.settings.resetPenaltyMode == "time" then
-        local now = GetCurrentTimeMillis()
-        if M.lastResetPenaltySentMs and now - M.lastResetPenaltySentMs < 1500 then return end
-        M.lastResetPenaltySentMs = now
-        beamjoy_communications.send("raceResetPenalty", M.session.id)
+        if repeated then return end
         beamjoy_communications_ui.send("BJRaceCountdown", {
             active = true,
             mode = "timePenalty",

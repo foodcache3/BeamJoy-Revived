@@ -524,6 +524,7 @@
     "beamjoy.race.go": "GO!",
     "beamjoy.race.finished": "Finished!",
     "beamjoy.race.dnf": "DNF",
+    "beamjoy.race.nextUp": "You're up next : get ready",
     "beamjoy.race.disqualified": "Disqualified",
     "beamjoy.race.penaltyTag": "+{seconds} s",
     "beamjoy.race.penaltyAdded": "penalty added to your race time",

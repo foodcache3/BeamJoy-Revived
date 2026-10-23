@@ -4,10 +4,12 @@ Lets your own BeamMP server plugins work with BeamJoy:
 
 - **Read** its data: races, leaderboards, maps, online players, races being run, time and weather.
 - **Hear** about events as they happen: a new best time, a lobby opening, the countdown and the
-  green light (with server times), every lap, racers finishing or retiring, a finished race with
-  every lap and sector, a map change, time and weather changes.
-- **Take part** in races: refuse a racer's ready-up with a reason they see, set the order cars
-  start in, take a racer back to not ready.
+  green light (with server times), every gate and lap, overtakes, resets, racers finishing or
+  retiring, a finished race with every lap and sector, a map change, time and weather changes.
+- **Take part** in races: refuse a player's joining or ready-up with a reason they see, set the
+  order cars start in, take a racer back to not ready.
+- **Run** races: open lobbies of your own (scheduled events, league nights, an entry list), start
+  or close them, and steward them while they run (time penalties, disqualifications).
 - **Build a discipline**: races run as events in [phases](#phases) (practice, qualifying, heats, a
   final, runs, timed races). Your plugin can add formats of its own to the start menu, choose who
   races each phase and in what order, start racers itself, rank them by its own scores, judge a
@@ -24,9 +26,9 @@ Lets your own BeamMP server plugins work with BeamJoy:
 Typical uses: a website kept in sync with the leaderboards, a Discord bot, live timing, a
 championship or league plugin, race classes, an entry list, a game mode of your own.
 
-API version 1. Plugins can label leaderboard entries and results and judge a phase's result
-(time penalties, racers out, an order of their own : the `phaseResult` hook), but never change a
-lap time.
+API version 1. Plugins can label leaderboard entries and results, give time penalties and
+disqualify racers (during a phase, or judging its result : the `phaseResult` hook), but never
+change a lap time.
 
 ## How it works
 
@@ -131,6 +133,9 @@ Complete example plugins. To try one, copy its folder into `Resources/Server/`, 
 - `example/BJShootout/` runs a phase itself: one lap each, alone on track, the plugin starting
   each racer in turn and scoring them, the 107% rule through the `phaseResult` hook, then the
   race on that grid.
+- `example/BJRaceDirector/` runs races of its own: a lobby every half hour (`race.open`), a time
+  penalty for each reset past the free ones (`RacerReset`, `race.penalize`), and the new leader
+  told on their own HUD (`RacePositionsChanged`, `hud.message` to one player).
 
 ## Methods
 
@@ -181,9 +186,11 @@ Every race of a map, with both boards in full (or only `board` when given). Made
 → `{sessions: [session]}` : the races being run right now, lobbies included.
 
 A session is `{sessionId, raceId, raceName, map, options, state, joinable, private, laps,
-timeLimitMin?, placementMode, gridSlots, greenAt?, endsAt?, timeUpAt?, breakEndsAt?, starter,
-phaseIndex, phase, phaseCount, format?, phases, result, phaseResults, eventStandings?, racers:
-[racer]}`. `format` is a plugin's [format](#formats) it runs (`"plugin:id"`), if it does.
+timeLimitMin?, placementMode, gridSlots, greenAt?, endsAt?, timeUpAt?, breakEndsAt?, starter?,
+hostedBy?, hostName?, holdStart?, phaseIndex, phase, phaseCount, format?, phases, result,
+phaseResults, eventStandings?, racers: [racer]}`. `format` is a plugin's [format](#formats) it
+runs (`"plugin:id"`), if it does. `hostedBy` is the plugin whose lobby it is (`race.open`) : it has
+no `starter`.
 
 - `state` is `"GRID"` (the lobby), `"COUNTDOWN"`, `"RACE"`, `"BREAK"` (between two
   [phases](#phases)) or `"FINISHED"`.
@@ -191,7 +198,7 @@ phaseIndex, phase, phaseCount, format?, phases, result, phaseResults, eventStand
   are the phase under way's. `laps` is left out for a phase timed only.
 - `phase` is the phase under way (in the lobby, the first), `phases` all of them, `phaseResults`
   the ones run so far (`[{phase, results}]`), `eventStandings` the event's result so far.
-- `racers` come in the phase's standings order. Each racer is `{id, name, identity, away, vehicle,
+- `racers` come in the phase's standings order. Each racer is `{id, racerKey, name, identity, away, vehicle,
   ready, readyChecking, readyBlock?, gridPosition?, position?, lap, finished, dnf, disqualified,
   penaltyMs?, bestLapMs?, totalMs?, inPhase, startAt?, awaitingStart?, score?, scoreDisplay?,
   fields}`. `inPhase` is false for a racer sitting the phase out (its `takes` left them out, or
@@ -201,17 +208,22 @@ phaseIndex, phase, phaseCount, format?, phases, result, phaseResults, eventStand
   value}}`, every option of every plugin running, filled in. Every race event carries it too.
 - `fields` is the racer's [labels](#fields) (a list, maybe empty).
 - `id` is the racer's player ID ; it's left out while they're `away` (disconnected mid-race, inside
-  their rejoin time).
+  their rejoin time). A racer who comes back gets a new one, often.
+- `racerKey` is the racer's for the whole event : away, back under a new player ID, in every phase.
+  Results have it too. Every method that takes a racer's `playerId` takes a `racerKey` instead, and
+  lists or maps of racers (grid orders, scores, hook answers) are by racer key with `by =
+  "racerKey"` : use it for anything you keep across a disconnect (points, resets, penalties). It's
+  only that session's : another event starts its own.
 - `readyBlock` is `{reason, by}` when a plugin refused their last ready-up.
 - `greenAt`, and every `at` in the race events, is a moment as `{unixMs, clockMs}` (see
   [Times](#times)).
 
-### `race.setGridOrder` `{sessionId, order}`
+### `race.setGridOrder` `{sessionId, order, by?}`
 Sets the order cars start in, while the session is still a lobby: `order` is a list of player
-IDs, first on the grid first. Racers it leaves out start behind, in BeamJoy's own order. An answer
+IDs (racer keys with `by = "racerKey"`), first on the grid first. Racers it leaves out start behind, in BeamJoy's own order. An answer
 to the `gridOrder` hook, if a plugin gives one, comes first. → `{sessionId, order}`
 
-### `race.unready` `{playerId, reason?}`
+### `race.unready` `{playerId, reason?}` or `{sessionId, racerKey, reason?}`
 Takes a racer in a lobby back to not ready. They see `reason` in the lobby and as a message (their
 car no longer qualifies, an entry they haven't paid...). → `{playerId}`. Error `refused` when
 they're not in a lobby.
@@ -228,19 +240,67 @@ or a phase on laps gets `laps` more (runs on a point-to-point track ; fewer, neg
 what anyone's done ; not once someone's finished it) → `{sessionId, laps}` ; between two phases,
 the next one's countdown starts now. Error `refused` when the session isn't in that state.
 
-### `race.startRacer` `{sessionId, playerId, countdownS?, from?}` / `race.stopRacer` `{sessionId, playerId}`
+### `race.startRacer` `{sessionId, playerId | racerKey, countdownS?, from?}` / `race.stopRacer` `{sessionId, playerId | racerKey}`
 In a phase with `start = "plugin"`, racers wait on their grid slot until you start them :
 `countdownS` (default 5, 0 to 30) of their own countdown, from their grid slot (`from = "grid"`,
-default) or the first one (`"first"`). → `{sessionId, playerId, startAt}`. `race.stopRacer` ends
+default) or the first one (`"first"`). → `{sessionId, playerId, racerKey, startAt}`. `race.stopRacer` ends
 a racer's phase (any phase) : finished with the laps or runs they completed, out without any
 (`RacerOut` reason `"stopped"`).
 
-### `phase.setScores` `{sessionId, scores, better?, display?, event?}`
-Your scores for racers : `scores` is `{[playerId] = number}`, `better` `"high"` or `"low"`
+### `phase.setScores` `{sessionId, scores, better?, display?, event?, by?}`
+Your scores for racers : `scores` is `{[playerId] = number}` (`{[racerKey] = number}` with `by =
+"racerKey"`), `better` `"high"` or `"low"`
 (default), `display` `{[playerId] = text}` what the HUD and results show instead ("86 pts", 16
 characters at most). A phase ranked `"plugin"` places its racers by them ; with `event = true`
 they're the event's, for a `result = "plugin"` event. Call again whenever they change ; changes
-within 100 ms go out together. → `{sessionId, count}`
+within 100 ms go out together. A racer who left the event still takes event scores under the
+player ID (or racer key) an earlier phase's result gave them ; one that isn't a racer of this event (or,
+for a phase's scores, no longer in the race) is left out, the others still set. → `{sessionId,
+count, skipped?}` : `count` the scores set, `skipped` the ones left out
+
+### `race.penalize` `{sessionId, playerId | racerKey, ms, reason?}`
+Race control, while the phase runs : `ms` of time penalty on the racer's race time (taken off with
+a negative ; never under none, an hour in all at most ; 600000 at most at once). It shows on the
+race HUD straight away and counts in the standings, as a penalty staff give. The racer is told
+("Race control : a 5 s penalty...", then your `reason`). → `{sessionId, playerId, racerKey,
+penaltyMs, changeMs}` : `penaltyMs` their penalties now. Error `refused` when no phase is running,
+the racer sits it out or is disqualified, or nothing changes.
+
+### `race.clearPenalties` / `race.disqualify` / `race.reinstate` `{sessionId, playerId | racerKey, reason?}`
+Clears a racer's penalties ; disqualifies them (one still racing is stopped, one who finished keeps
+their laps but drops to the bottom and loses this phase's leaderboard time) ; reinstates them
+(a finisher's time goes back on the leaderboard ; one stopped by it stays out). As staff watching
+the race can, while the phase runs. The racer is told, with your `reason`. → the same as
+`race.penalize`, with `disqualified`. A disqualification sends `RacerOut` too, and every one of
+these `RaceControl`.
+
+### `race.open` `{raceId, options?, name?, holdStart?, entrants?}`
+Opens a lobby of your own on a race of the current map : a scheduled event, a league night. It
+has no leader (nobody changes its settings or starts it early) and stays open while empty, until
+its time runs out. Then it starts with whoever's ready, or closes when nobody is. → the session
+(as `races.sessions` gives them), with `invited`.
+
+- `options`: the race start menu's options, as a start sends them : `laps`, `timeLimitMin`,
+  `phases`, `format`, `result`, `respawnStrategy`, `placementMode`, `countdown`, `gridTimeout`
+  (seconds the lobby stays open), `gridReadyTimeout`, `vehicleRestrictionMode` (`"free"`,
+  `"raceDefined"`, `"pool"` with `vehicleRestrictionPoolPresetId`), `disableCollisions`,
+  `lateJoin`, your [race options](#race-options) under `plugins`... What's left out is the race's
+  own, as for any start.
+- `name`: what the lobby lists show instead of a leader's name ("League night"; your plugin's name
+  by default).
+- `holdStart = true`: it starts only when its time's up or you say (`race.startNow`), not once
+  everyone's been ready a moment.
+- `entrants`: player IDs, its entry list : only they may join. It isn't listed : each gets an
+  invite in their notifications (`invited` : the ones connected and free right now). For
+  conditions of your own (licences, a class), answer the `raceJoin` [hook](#hooks) instead.
+
+Error `refused` when the race isn't a grid race on this map, or has fewer than 2 grid slots.
+
+### `race.startNow` `{sessionId}` / `race.close` `{sessionId, reason?}`
+`race.startNow` starts a lobby now, as when its time runs out : whoever isn't ready is left out,
+and nobody ready closes it. → `{sessionId, state}` (`"CLOSED"` then). `race.close` ends any
+session now, a lobby or an event under way (`RaceClosed` follows) ; its racers are told, with
+your `reason`. → `{sessionId}`
 
 ### `formats.register` `{formats}` / `formats.unregister`
 Your formats in the race start menu, replacing the ones you registered before. See
@@ -250,12 +310,13 @@ Your formats in the race start menu, replacing the ones you registered before. S
 Your sections of options in the race start menu and race editor (replacing any you registered
 before). See [Race options](#race-options). → `{sections}`
 
-### `results.setFields` `{sessionId, playerId, fields, replace?}` / `{sessionId, racers, replace?}`
+### `results.setFields` `{sessionId, playerId | racerKey, fields, replace?}` / `{sessionId, racers, replace?, by?}`
 Labels on a racer's result in a race being run, shown in the game's results and in the race
 events, and on the race HUD for the ones marked `hud`. When that race already put their time on
 the leaderboard, the entry gets them too. `racers` sets several racers' at once: `{[playerId] =
-fields}`, or a list of `{playerId, fields, replace?}` (64 at most ; one wrong racer and nothing
-changes). See [Fields](#fields). → `{sessionId, playerId}` (`racers`: `{sessionId, playerIds}`)
+fields}` (`{[racerKey] = fields}` with `by = "racerKey"`), or a list of `{playerId | racerKey,
+fields, replace?}` (64 at most ; one wrong racer and nothing changes). See [Fields](#fields). →
+`{sessionId, playerId}` (`racers`: `{sessionId, playerIds}`)
 
 ### `leaderboard.setFields` `{raceId, name, fields, board?, replace?}`
 Labels on a leaderboard entry of the current map's race (`name` is the entry's name, `board`
@@ -305,9 +366,17 @@ sent change. → the same as `environment.get`, after the change.
 An activity overlay: what the race HUD is to races, for an activity of your own (or extra
 information beside a BeamJoy race). See [Overlays](#overlays).
 
-### `hud.message` `{text, color?, durationS?, players?}`
-A line of text across BeamJoy's own HUD for a few seconds (default 5, 1 to 30). `players` is a
-list of player IDs ; everyone when left out, nobody when empty (players connected now only).
+### `hud.message` `{text, color?, durationS?, players? | playerId? | sessionId?, audience?, racerKey?}`
+A line of text across BeamJoy's own HUD for a few seconds (default 5, 1 to 30), to everyone, or
+one of :
+
+- `players`: a list of player IDs (nobody when empty) ;
+- `playerId`: one player ;
+- `sessionId`: a race's players, `audience` `"racers"`, `"spectators"` (the players watching it)
+  or `"all"` (both, the default) ; with `racerKey`, that one racer.
+
+Players connected now only : BeamMP gives a player's ID to the next one who connects after they
+leave.
 
 ### Leaderboard entries
 
@@ -363,9 +432,13 @@ Names are display names, not permanent IDs: a guest can change their nickname.
 | `RaceGreenLight` | `{sessionId, raceId, raceName, map, at, greenAt, laps, timeLimitMin?, endsAt?, racers: [racer]}` |
 | `RacerStarted` | `{sessionId, ..., at, racer, startAt, run}` : a start of a racer's own was set (their next run, a plugin's start, a mid-phase join) |
 | `RacerJoinedPhase` | `{sessionId, ..., at, racer}` : a player who joined mid-event is in the phase |
+| `RacerGate` | `{sessionId, ..., at, racer, gate, step, lap, lapComplete, outLap?, lapMs?, deltaMs?, sectors, position}` : a racer went through a gate |
 | `RacerLap` | `{sessionId, raceId, raceName, map, at, racer, lap, lapMs, sectorsMs, raceMs, bestLap, position}` |
 | `RacerFinished` | `{sessionId, raceId, raceName, map, at, racer, finishOrder, raceMs, totalMs, laps, newPB, newRecord}` |
 | `RacerOut` | `{sessionId, raceId, raceName, map, at, racer, reason, laps}` |
+| `RacerReset` | `{sessionId, ..., at, racer, lap, lastGate?, respawn, penaltyMs?, holdS?}` : a racer reset |
+| `RacePositionsChanged` | `{sessionId, ..., at, changes: [{racer, from, to}]}` : places changed |
+| `RaceControl` | `{sessionId, ..., at, racer, action, ms?, penaltyMs, by, reason?}` : staff or a plugin stewarded a racer |
 | `RaceClosed` | `{sessionId, raceId, raceName, map, at, state}` |
 | `ConfigChanged` | `{plugin, values, changed, by}` : a plugin's config tab was saved |
 | `ConfigAction` | `{plugin, action, by: {id, name}}` : a button on a plugin's config tab was clicked |
@@ -417,14 +490,41 @@ racer's race time so far ; `position` their place in the standings right then.
 
 **`RacerFinished`**: `totalMs` is `raceMs` plus any time penalties ; the standings go by it.
 
+**`RacerGate`** fires for every gate a racer goes through, in the order they're meant to (a gate
+crossed out of order, or twice, doesn't count : no event). `gate` is the gate's number in the race,
+`step` its place along the lap (the same as `gate`, except on a race with branches), `lap` the lap
+it's on. `lapMs` is the time into that lap, `deltaMs` against the racer's own best lap at that
+point (negative : faster ; none before they have one), `sectors` the sectors this gate completed
+(`[{sector, ms}]`, most often none or one), `position` their place right after. The line closing a
+lap has `lapComplete`, and comes after `RacerLap` (and `RacerFinished`, or `RacerStarted` for a
+next run). An out lap's gates have `outLap` and no times. One event per gate per racer : on a long
+race with many racers, that's several a second.
+
+**`RacerReset`**: the racer recovered or reset during a phase, as their game reports it (once per
+reset, however it was done). `respawn` is the race's respawn rule (`"lastcheckpoint"`, `"all"`,
+`"flipupright"`, `"lastroad"`...), `lastGate` the last gate they went through, `penaltyMs` the time
+penalty the race's own reset rule added (`holdS` : the seconds it holds them instead). Your
+penalties come on top (`race.penalize`).
+
+**`RacePositionsChanged`**: places in the phase's standings changed since the last update : an
+overtake at a gate, a finish, a penalty, a disqualification. `changes` lists only the racers whose
+place changed, best place first. A phase's first update, and a racer joining mid-phase, set where
+they are without an event.
+
+**`RaceControl`**: `action` is `"penalty"` (`ms` added, or taken off when negative),
+`"clearPenalties"` (`ms` taken off), `"disqualify"` or `"reinstate"` ; `penaltyMs` the racer's
+penalties now ; `by` `"staff:<name>"` or `"plugin:<name>"`. A reset's own penalty isn't one of
+these (`RacerReset`).
+
 **`RacerOut`**: `reason` is `"retired"` (they retired, or BeamJoy retired them for not moving),
-`"disconnected"` (they left and didn't come back in time), `"disqualified"` (by staff or a
-`phaseResult` answer ; also sent for a racer who had already finished), `"timeUp"` (a timed phase
+`"disconnected"` (they left and didn't come back in time), `"disqualified"` (by staff, a plugin's
+`race.disqualify` or a `phaseResult` answer ; also sent for a racer who had already finished), `"timeUp"` (a timed phase
 ended before they completed a lap) or `"stopped"` (`race.stopRacer`, without a lap). Out of a
 phase isn't out of the event : they're back for the next one.
 
-**`RaceClosed`** means a session ended without a result: the lobby was cancelled, everyone left,
-or nobody was ready in time. `state` is where it was. A finished race sends `RaceFinished` instead.
+**`RaceClosed`** means a session ended without a result: the lobby was cancelled (by its leader,
+staff or `race.close`), everyone left, or nobody was ready in time. `state` is where it was. A
+finished race sends `RaceFinished` instead.
 
 **`EnvironmentChanged`**: `by` lists who changed it since the last one (player names,
 `"plugin:<name>"`, or `"server"` for BeamJoy itself, e.g. on a map change). It isn't sent for the
@@ -459,10 +559,14 @@ brings it back), so a removed or broken plugin can't hold races up.
 
 | Hook | Asked when | Question | Answer |
 |---|---|---|---|
+| `raceJoin` | a player joins a lobby, or an event under way (a phase's `lateJoin`) | `{session, player, midway}` ; `player` is `{id, name, displayName, nickname, guest, group, staff, identity, leaderboardMs}` ; `midway` whether the event's under way | `{allow = false, reason = "..."}` refuses ; anything else lets them in |
 | `raceReady` | a racer readies up in a lobby (the leader's "Start now" too) | `{session, racer}` ; `racer.vehicle` is what they're in, `racer.leaderboardMs` their time on this race | `{allow = false, reason = "..."}` refuses ; anything else allows |
 | `gridOrder` | a phase's grid is about to be placed (2 racers or more) | `{session, racers, defaultOrder, phaseIndex, phase, previous, event}` ; each racer has `leaderboardMs` and `joinIndex` ; `defaultOrder` is the player IDs in BeamJoy's own order (the phase's `order`) ; `previous` the phases run so far `[{phase, results}]`, `event` the event's standings | `{order = {playerId, ...}}` first on the grid first ; `{take = {playerId, ...}}` only these race the phase ; nothing keeps BeamJoy's |
 | `phaseResult` | a phase is over, before its result is final | `{session, phaseIndex, phase, results, previous}` ; `results` as BeamJoy has them | `{adjustMs = {[playerId] = ms}}` time added (taken off, negative) ; `{out = {playerId, ...}}` disqualified ; `{order = {playerId, ...}}` placed first, in this order ; nothing keeps BeamJoy's result |
 
+- **`raceJoin`**: the player is in once every plugin's answered (or the time's up), if nothing
+  changed meanwhile (the lobby full, started) ; a refusal shows them the reason as a message. An
+  entry list, licences, a class, a ban from your league.
 - **`raceReady`**: the racer shows "Checking…" while plugins are asked. A refusal shows them the
   reason in the lobby, and as a message. When several plugins answer, the first to refuse (in
   the order they registered) gives the reason.
@@ -474,6 +578,8 @@ brings it back), so a removed or broken plugin can't hold races up.
 - **`phaseResult`**: everyone's adjustments add up, every `out` counts, the first `order` wins. An
   order places the racers it names first, in its order, whatever their time : judged disciplines,
   stewards' decisions. A racer put out loses this phase's leaderboard time, as with staff.
+- **By racer key**: an answer with `by = "racerKey"` names racers by their racer key everywhere in
+  it (`order`, `take`, `adjustMs`, `out`) ; the questions' racers and results all have `racerKey`.
 
 ```lua
 BJ.hook("raceReady", function(q)
@@ -557,7 +663,11 @@ again whenever BeamJoy restarts.
 - **Judged runs** (drift, gymkhana) : `start = "plugin"`, `ranking = "plugin"`, no laps or time.
   `race.startRacer` each in turn, `race.stopRacer` when their run's judged, `phase.setScores`, and
   `race.endPhase` when everyone's been.
-- **Stewards** : answer `phaseResult` with time penalties, racers out, or an order.
+- **Stewards** : `race.penalize` and `race.disqualify` while a phase runs (track limits from
+  `RacerGate`, too many resets from `RacerReset`), or answer `phaseResult` with time penalties,
+  racers out, or an order once it's over.
+- **Scheduled events** : `race.open` on a timer of your own, with `holdStart` and the lobby's
+  `gridTimeout` ; an entry list with `entrants` or the `raceJoin` hook.
 - **A knockout** : `takes = {from = 1, top = 10}`, or pick the racers yourself with the
   `gridOrder` hook's `take`.
 

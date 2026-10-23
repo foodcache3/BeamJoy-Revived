@@ -40,12 +40,14 @@ local REQUEST_EVENT = "BJAPI_Request"
 local RESPONSE_EVENT = "BJAPI_Response"
 local EVENTS = { "Ready", "LeaderboardChanged", "RacesChanged", "MapChanged", "PlayerJoined", "PlayerLeft",
     "RaceGridOpened", "RaceCountdown", "RaceGreenLight", "RacerLap", "RacerFinished", "RacerOut",
-    "RacerStarted", "RacerJoinedPhase", "RacePhaseFinished", "RaceFinished", "RaceClosed", "EnvironmentChanged", "ConfigChanged", "ConfigAction", "PageOpened",
-    "PageAction", "Hook" }
+    "RacerStarted", "RacerJoinedPhase", "RacerGate", "RacerReset", "RacePositionsChanged", "RaceControl",
+    "RacePhaseFinished", "RaceFinished", "RaceClosed", "EnvironmentChanged", "ConfigChanged", "ConfigAction",
+    "PageOpened", "PageAction", "Hook" }
 local LEADERBOARD_LIMIT_DEFAULT = 100
 
 --- the questions BeamJoy asks plugins (see raceGrid.lua)
 local HOOKS = {
+    raceJoin = true, -- a player joins a lobby, or an event under way : a plugin may refuse, with a reason
     raceReady = true, -- a racer readies up : a plugin may refuse, with a reason
     gridOrder = true, -- the grid is about to be placed : a plugin may give the order
     phaseResult = true, -- a phase is over : a plugin may change its result (penalties, out, an order)
@@ -247,7 +249,8 @@ local function lapsOf(p)
 end
 
 --- one racer, as plugins see them. `id` is their player ID while connected ; nil while they're
---- away (disconnected mid-race, waiting under a key of their own)
+--- away (disconnected mid-race, waiting under a key of their own). `racerKey` is theirs for the
+--- whole event, away or back under a new ID (their joinIndex)
 ---@param p table BJRaceParticipant
 ---@param session table? BJRaceSession, for their fields
 ---@return table
@@ -257,6 +260,7 @@ local function racerOut(p, session)
     if not best and p.lapTimes and #p.lapTimes > 0 then best = math.min(table.unpack(p.lapTimes)) end
     return {
         id = p.playerID >= 0 and p.playerID or nil,
+        racerKey = p.joinIndex,
         name = info.name,
         identity = info.identity,
         away = p.disconnected == true,
@@ -345,6 +349,7 @@ local function resultsOut(rows)
         out[i] = {
             position = r.position,
             id = r.playerID and r.playerID >= 0 and r.playerID or nil,
+            racerKey = r.joinIndex,
             name = r.playerName,
             identity = r.identity or "unknown",
             vehicle = r.vehicle,
@@ -405,6 +410,10 @@ local function sessionOut(session)
     out.eventStandings = session.eventStandings and resultsOut(session.eventStandings) or nil
     local starter = session.participants[session.starterID]
     out.starter = starter and services_raceGrid.racerInfo(starter).name or nil
+    -- a plugin's lobby (race.open) : that plugin, and the lobby's name
+    out.hostedBy = session.hostedBy
+    out.hostName = session.hostedBy and session.hostName or nil
+    out.holdStart = session.holdStart == true or nil
     out.racers = {}
     local racing = session.state == "RACE" or session.state == "BREAK" or session.state == "FINISHED"
     for i, p in ipairs(services_raceGrid.computeLeaderboard(session)) do
@@ -423,6 +432,33 @@ local function leaderboardMs(session, name)
     local race = services_races.getById(session.raceId)
     local entry = race and race.leaderboard and race.leaderboard[name]
     return entry and tonumber(entry.time) or nil
+end
+
+--- a connected player, as plugins see them (players.online)
+---@param p table services_players player
+---@return table
+local function playerOut(p)
+    return {
+        id = p.playerID,
+        name = p.playerName,
+        displayName = p.identityNickname or p.displayName or p.playerName,
+        nickname = p.identityNickname,
+        guest = p.guest == true,
+        group = p.group,
+        staff = services_permissions.isStaff(p.playerName) == true,
+    }
+end
+
+--- the raceJoin hook's question : who's joining which session, and whether it's under way
+---@param session table BJRaceSession
+---@param player table services_players player
+---@param midway boolean
+---@return table
+function M.joinHookData(session, player, midway)
+    local out = playerOut(player)
+    out.identity = services_identity.getIdentityKind(player.playerID) or (player.guest and "guest" or "beammp")
+    out.leaderboardMs = leaderboardMs(session, services_identity.getIdentityKey(player.playerID) or player.playerName)
+    return { session = sessionOut(session), player = out, midway = midway == true }
 end
 
 --- the raceReady hook's question : who's readying up, in what, for which race
@@ -480,6 +516,46 @@ end
 local function findSession(sessionId)
     if type(sessionId) ~= "string" or not services_raceGrid then return nil end
     return services_raceGrid.sessions[sessionId]
+end
+
+--- the racer a request names : `racerKey` (theirs for the whole event, see racerOut) or `playerId`
+---@param session table BJRaceSession
+---@param params table
+---@return integer? playerID their key in the session (an away racer's is below 0), string? code, string? why
+local function racerIdParam(session, params)
+    if not absent(params.racerKey) then
+        local key = tonumber(params.racerKey)
+        local p = key and services_raceGrid.participantByKey(session, math.floor(key))
+        if not p then return nil, "notFound", "no racer " .. tostring(params.racerKey) .. " in this race" end
+        return p.playerID
+    end
+    local id = tonumber(params.playerId)
+    if not id then return nil, "badParams", "playerId (or racerKey) is needed" end
+    return math.floor(id)
+end
+
+--- one racer a plugin names in a list or a map : a player ID, or a racer key when it says
+--- `by = "racerKey"`
+---@param id any
+---@param byKey boolean
+---@param session table? BJRaceSession
+---@return integer? playerID
+local function idOf(id, byKey, session)
+    id = tonumber(id)
+    if not id then return nil end
+    id = math.floor(id)
+    if not byKey then return id end
+    local p = session and services_raceGrid.participantByKey(session, id)
+    return p and p.playerID or nil
+end
+
+--- a reason a plugin gives (race control, closing a race), checked
+---@param v any
+---@return string|false? reason (false : not text)
+local function reasonParam(v)
+    if absent(v) then return nil end
+    if type(v) ~= "string" then return false end
+    return services_pluginOverlay.cleanText(v, 200)
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -571,11 +647,11 @@ M.methods["race.setGridOrder"] = function(params, ctx)
     if type(params.order) ~= "table" then
         return nil, "badParams", "order must be a list of player IDs, first on the grid first"
     end
-    local order = {}
+    local order, byKey = {}, params.by == "racerKey"
     for _, id in ipairs(params.order) do
-        id = tonumber(id)
-        if not id then return nil, "badParams", "order must be a list of player IDs" end
-        order[#order + 1] = math.floor(id)
+        if not tonumber(id) then return nil, "badParams", "order must be a list of player IDs (or racer keys)" end
+        -- a racer key that isn't a racer's : left out, as a player ID that isn't
+        order[#order + 1] = idOf(id, byKey, session)
     end
     local ok, why = services_raceGrid.pluginSetGridOrder(session, order, plugin)
     if not ok then return nil, "refused", why end
@@ -586,6 +662,13 @@ M.methods["race.unready"] = function(params, ctx)
     local plugin, perr = pluginOf(ctx)
     if not plugin then return nil, "badParams", perr end
     local playerID = tonumber(params.playerId)
+    if not absent(params.racerKey) then
+        local session = findSession(params.sessionId)
+        if not session then return nil, "notFound", "a racerKey needs its sessionId" end
+        local code, why
+        playerID, code, why = racerIdParam(session, params)
+        if not playerID then return nil, code, why end
+    end
     if not playerID then return nil, "badParams", "playerId is needed" end
     local reason = params.reason
     if absent(reason) then reason = nil end
@@ -682,16 +765,17 @@ M.methods["race.startRacer"] = function(params, ctx)
     if not plugin then return nil, "badParams", perr end
     local session = findSession(params.sessionId)
     if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
-    local playerID = tonumber(params.playerId)
-    if not playerID then return nil, "badParams", "playerId is needed" end
+    local playerID, code, err = racerIdParam(session, params)
+    if not playerID then return nil, code, err end
     if not absent(params.from) and params.from ~= "grid" and params.from ~= "first" then
         return nil, "badParams", "from must be \"grid\" or \"first\""
     end
-    local ok, why = services_raceGrid.pluginStartRacer(session, math.floor(playerID),
+    local ok, why = services_raceGrid.pluginStartRacer(session, playerID,
         not absent(params.countdownS) and params.countdownS or nil, not absent(params.from) and params.from or nil)
     if not ok then return nil, "refused", why end
-    local p = session.participants[math.floor(playerID)]
-    return { sessionId = session.id, playerId = playerID, startAt = stamp(p.startAtMs) }
+    local p = session.participants[playerID]
+    return { sessionId = session.id, playerId = playerID >= 0 and playerID or nil, racerKey = p.joinIndex,
+        startAt = stamp(p.startAtMs) }
 end
 
 --- this racer's phase is over (finished with the laps they did, out without any)
@@ -700,11 +784,12 @@ M.methods["race.stopRacer"] = function(params, ctx)
     if not plugin then return nil, "badParams", perr end
     local session = findSession(params.sessionId)
     if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
-    local playerID = tonumber(params.playerId)
-    if not playerID then return nil, "badParams", "playerId is needed" end
-    local ok, why = services_raceGrid.pluginStopRacer(session, math.floor(playerID))
+    local playerID, code, err = racerIdParam(session, params)
+    if not playerID then return nil, code, err end
+    local p = session.participants[playerID]
+    local ok, why = services_raceGrid.pluginStopRacer(session, playerID)
     if not ok then return nil, "refused", why end
-    return { sessionId = session.id, playerId = playerID }
+    return { sessionId = session.id, playerId = playerID >= 0 and playerID or nil, racerKey = p and p.joinIndex }
 end
 
 --- scores : this phase's (its ranking "plugin" places racers by them) or the event's (`event`, its
@@ -737,25 +822,114 @@ M.methods["phase.setScores"] = function(params, ctx)
             if id and text then display[math.floor(id)] = text end
         end
     end
-    local ok, why = services_raceGrid.pluginSetScores(session, scores,
-        params.better == "high" and "high" or "low", display, params.event == true)
-    if not ok then return nil, "notFound", why end
-    return { sessionId = session.id, count = n }
+    -- a player who isn't a racer of this event (or, for a phase's scores, no longer in the race) is
+    -- left out rather than failing everyone else's
+    local skipped = services_raceGrid.pluginSetScores(session, scores,
+        params.better == "high" and "high" or "low", display, params.event == true, params.by == "racerKey")
+    return { sessionId = session.id, count = n - #skipped, skipped = #skipped > 0 and skipped or nil }
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- race control : stewarding a racer while the phase runs, as staff watching it can
+
+---@param action "penalty"|"clearPenalties"|"disqualify"|"reinstate"
+local function raceControlMethod(action)
+    return function(params, ctx)
+        local plugin, perr = pluginOf(ctx)
+        if not plugin then return nil, "badParams", perr end
+        local session = findSession(params.sessionId)
+        if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
+        local playerID, code, err = racerIdParam(session, params)
+        if not playerID then return nil, code, err end
+        local ms
+        if action == "penalty" then
+            ms = tonumber(params.ms)
+            if not ms or ms ~= ms or math.abs(ms) < 1 or math.abs(ms) > 600000 then
+                return nil, "badParams", "ms must be a number of milliseconds, 600000 at most either way, not 0"
+            end
+            ms = math.floor(ms)
+        end
+        local reason = reasonParam(params.reason)
+        if reason == false then return nil, "badParams", "reason must be text" end
+        local ok, why, p, change = services_raceGrid.pluginControlRacer(session, playerID, action, ms, plugin, reason)
+        if not ok then return nil, "refused", why end
+        return { sessionId = session.id, playerId = p.playerID >= 0 and p.playerID or nil, racerKey = p.joinIndex,
+            penaltyMs = p.penaltyMs or 0, changeMs = change ~= 0 and change or nil, disqualified = p.disqualified == true }
+    end
+end
+
+--- a time penalty (`ms`, time taken off with a negative), on their race time at once
+M.methods["race.penalize"] = raceControlMethod("penalty")
+M.methods["race.clearPenalties"] = raceControlMethod("clearPenalties")
+M.methods["race.disqualify"] = raceControlMethod("disqualify")
+M.methods["race.reinstate"] = raceControlMethod("reinstate")
+
+-- ---------------------------------------------------------------------------------------------
+-- a plugin's own lobbies : scheduled events, league nights
+
+--- a lobby of the plugin's, on a race of the current map
+M.methods["race.open"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local raceId = tonumber(params.raceId)
+    if not raceId then return nil, "badParams", "raceId is needed (races.list gives them)" end
+    local options = params.options
+    if absent(options) then options = {} end
+    if type(options) ~= "table" then return nil, "badParams", "options must be an object (the start options)" end
+    local name
+    if not absent(params.name) then
+        name = type(params.name) == "string" and services_pluginOverlay.cleanText(params.name, 48) or nil
+        if not name then return nil, "badParams", "name must be text" end
+    end
+    if not absent(params.holdStart) and type(params.holdStart) ~= "boolean" then
+        return nil, "badParams", "holdStart must be true or false"
+    end
+    local entrants
+    if params.entrants ~= nil then
+        if type(params.entrants) ~= "table" then return nil, "badParams", "entrants must be a list of player IDs" end
+        entrants = {}
+        for _, id in ipairs(params.entrants) do
+            if not tonumber(id) then return nil, "badParams", "entrants must be a list of player IDs" end
+            entrants[#entrants + 1] = math.floor(tonumber(id))
+        end
+        if #entrants == 0 then return nil, "badParams", "entrants must name a player at least (leave it out : anyone)" end
+    end
+    local session, why, invited = services_raceGrid.pluginOpen(plugin, math.floor(raceId), options,
+        { name = name, holdStart = params.holdStart == true, entrants = entrants })
+    if not session then return nil, "refused", why end
+    local out = sessionOut(session)
+    out.invited = invited
+    return out
+end
+
+--- a session ends now (a lobby, or an event under way), its racers told why
+M.methods["race.close"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local session = findSession(params.sessionId)
+    if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
+    local reason = reasonParam(params.reason)
+    if reason == false then return nil, "badParams", "reason must be text" end
+    LogInfo(string.format("[BJ api] %s closed race session %s (%s)", plugin, session.id, session.state))
+    services_raceGrid.pluginClose(session, reason)
+    return { sessionId = session.id }
+end
+
+--- a lobby starts now, as when its time runs out
+M.methods["race.startNow"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local session = findSession(params.sessionId)
+    if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
+    local ok, why = services_raceGrid.pluginStartNow(session)
+    if not ok then return nil, "refused", why end
+    -- nobody was ready : the lobby closed
+    return { sessionId = session.id, state = findSession(session.id) and session.state or "CLOSED" }
 end
 
 M.methods["players.online"] = function()
     local players = {}
-    services_players.players:forEach(function(p)
-        players[#players + 1] = {
-            id = p.playerID,
-            name = p.playerName,
-            displayName = p.identityNickname or p.displayName or p.playerName,
-            nickname = p.identityNickname,
-            guest = p.guest == true,
-            group = p.group,
-            staff = services_permissions.isStaff(p.playerName) == true,
-        }
-    end)
+    services_players.players:forEach(function(p) players[#players + 1] = playerOut(p) end)
     table.sort(players, function(a, b) return a.id < b.id end)
     return { players = players }
 end
@@ -854,12 +1028,37 @@ M.methods["overlay.clear"] = function(_, ctx)
     return { removed = services_pluginOverlay.clear(plugin) }
 end
 
---- the line of text across BeamJoy's own HUD (the one "X started a race" used to use)
+--- the line of text across BeamJoy's own HUD (the one "X started a race" used to use) : for
+--- everyone, a list of players, one player, or a race's racers and / or spectators (one racer of it,
+--- by racer key)
 M.methods["hud.message"] = function(params, ctx)
     local plugin, perr = pluginOf(ctx)
     if not plugin then return nil, "badParams", perr end
     if type(params.text) ~= "string" or #params.text == 0 then return nil, "badParams", "text is needed" end
-    local ok, why = services_pluginOverlay.message(params)
+    local targets = (params.players ~= nil and 1 or 0) + (not absent(params.playerId) and 1 or 0) +
+        (not absent(params.sessionId) and 1 or 0)
+    if targets > 1 then return nil, "badParams", "players, playerId or sessionId : one of them" end
+    local message = { text = params.text, color = params.color, durationS = params.durationS, players = params.players }
+    if not absent(params.playerId) then
+        local id = tonumber(params.playerId)
+        if not id then return nil, "badParams", "playerId must be a player ID" end
+        message.players = { math.floor(id) }
+    elseif not absent(params.sessionId) then
+        local session = findSession(params.sessionId)
+        if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
+        if not absent(params.racerKey) then
+            local id, code, err = racerIdParam(session, params)
+            if not id then return nil, code, err end
+            message.players = { id }
+        else
+            local audience = absent(params.audience) and "all" or params.audience
+            if audience ~= "all" and audience ~= "racers" and audience ~= "spectators" then
+                return nil, "badParams", "audience must be \"racers\", \"spectators\" or \"all\""
+            end
+            message.players = services_raceGrid.audienceOf(session, audience)
+        end
+    end
+    local ok, why = services_pluginOverlay.message(message)
     if not ok then return nil, "badParams", why end
     return {}
 end
@@ -896,24 +1095,27 @@ M.methods["results.setFields"] = function(params, ctx)
         if type(params.racers) ~= "table" then return nil, "badParams", "racers must be a list or an object" end
         -- every key, not ipairs : the helper sends {[3] = ..., [7] = ...} as a JSON array with gaps
         -- (nulls), which arrives as a table with holes
-        local list = {}
+        -- `by = "racerKey"` : the keys are racer keys ; a list's entries may name either
+        local list, byKey = {}, params.by == "racerKey"
         for k, r in pairs(params.racers) do
             if type(r) ~= "table" then return nil, "badParams", "each racer's fields must be a list or an object" end
-            if r.playerId ~= nil then
+            if r.racerKey ~= nil then
+                list[#list + 1] = { id = r.racerKey, byKey = true, fields = r.fields, replace = r.replace }
+            elseif r.playerId ~= nil then
                 list[#list + 1] = { id = r.playerId, fields = r.fields, replace = r.replace }
             else
-                list[#list + 1] = { id = k, fields = r }
+                list[#list + 1] = { id = k, byKey = byKey, fields = r }
             end
         end
         table.sort(list, function(a, b) return (tonumber(a.id) or 0) < (tonumber(b.id) or 0) end)
         if #list > 64 then return nil, "badParams", "64 racers at most" end
         local checked, ids = {}, {}
         for _, r in ipairs(list) do
-            local id = tonumber(r.id)
-            if not id then return nil, "badParams", "each racer needs a playerId" end
-            id = math.floor(id)
-            if not session.participants[id] then
-                return nil, "notFound", string.format("player %d isn't in this race", id)
+            if not tonumber(r.id) then return nil, "badParams", "each racer needs a playerId (or racerKey)" end
+            local id = idOf(r.id, r.byKey == true, session)
+            if not id or not session.participants[id] then
+                return nil, "notFound", string.format("%s %s isn't in this race", r.byKey and "racer" or "player",
+                    tostring(r.id))
             end
             local fields, why = services_pluginUi.fieldsOf(r.fields)
             if not fields then return nil, "badParams", string.format("player %d : %s", id, why) end
@@ -925,14 +1127,14 @@ M.methods["results.setFields"] = function(params, ctx)
         end
         return { sessionId = session.id, playerIds = ids }
     end
-    local playerID = tonumber(params.playerId)
-    if not playerID then return nil, "badParams", "playerId is needed" end
+    local playerID, code, err = racerIdParam(session, params)
+    if not playerID then return nil, code, err end
     local fields, why = services_pluginUi.fieldsOf(params.fields)
     if not fields then return nil, "badParams", why end
-    local ok, notFound = services_raceGrid.pluginSetFields(session, math.floor(playerID), plugin, fields,
+    local ok, notFound = services_raceGrid.pluginSetFields(session, playerID, plugin, fields,
         params.replace == true)
     if not ok then return nil, "notFound", notFound end
-    return { sessionId = session.id, playerId = playerID }
+    return { sessionId = session.id, playerId = playerID >= 0 and playerID or nil }
 end
 
 --- labels on a leaderboard entry, on the current map
@@ -1146,16 +1348,28 @@ local function firstBlock(answers)
     end
 end
 
+--- a hook answer's list of racers as player IDs : `by = "racerKey"` in the answer, racer keys
+---@param list table
+---@param answer table
+---@param session table? BJRaceSession
+---@return integer[]
+local function answerIds(list, answer, session)
+    local out = {}
+    for _, id in ipairs(list) do
+        local playerID = idOf(id, answer.by == "racerKey", session)
+        if playerID then out[#out + 1] = playerID end
+    end
+    return out
+end
+
 --- the first `take` (who races the phase : player IDs) among a gridOrder hook's answers
 ---@param answers {plugin: string, answer: table}[]
+---@param session table? BJRaceSession (answers by racer key)
 ---@return integer[]?, string? plugin
-local function firstTake(answers)
+local function firstTake(answers, session)
     for _, a in ipairs(answers) do
         if type(a.answer.take) == "table" and #a.answer.take > 0 then
-            local take = {}
-            for _, id in ipairs(a.answer.take) do
-                if tonumber(id) then take[#take + 1] = math.floor(tonumber(id)) end
-            end
+            local take = answerIds(a.answer.take, a.answer, session)
             if #take > 0 then return take, a.plugin end
         end
     end
@@ -1164,30 +1378,25 @@ end
 --- the phaseResult hook's answers together : every plugin's time adjustments added up, every
 --- racer any of them puts out, and the first order given
 ---@param answers {plugin: string, answer: table}[]
+---@param session table? BJRaceSession (answers by racer key)
 ---@return {adjustMs: table<integer, integer>, out: integer[], order: integer[]?}
-local function judging(answers)
+local function judging(answers, session)
     local out = { adjustMs = {}, out = {} }
     for _, a in ipairs(answers) do
         local ans = a.answer
         if type(ans.adjustMs) == "table" then
             for id, ms in pairs(ans.adjustMs) do
-                id, ms = tonumber(id), tonumber(ms)
+                id, ms = idOf(id, ans.by == "racerKey", session), tonumber(ms)
                 if id and ms and ms == ms then
-                    id = math.floor(id)
                     out.adjustMs[id] = math.clamp((out.adjustMs[id] or 0) + math.floor(ms), -3600000, 3600000)
                 end
             end
         end
         if type(ans.out) == "table" then
-            for _, id in ipairs(ans.out) do
-                if tonumber(id) then out.out[#out.out + 1] = math.floor(tonumber(id)) end
-            end
+            for _, id in ipairs(answerIds(ans.out, ans, session)) do out.out[#out.out + 1] = id end
         end
         if not out.order and type(ans.order) == "table" and #ans.order > 0 then
-            local order = {}
-            for _, id in ipairs(ans.order) do
-                if tonumber(id) then order[#order + 1] = math.floor(tonumber(id)) end
-            end
+            local order = answerIds(ans.order, ans, session)
             if #order > 0 then out.order = order end
         end
     end
@@ -1196,14 +1405,12 @@ end
 
 --- the first grid order among a gridOrder hook's answers
 ---@param answers {plugin: string, answer: table}[]
+---@param session table? BJRaceSession (answers by racer key)
 ---@return integer[]?, string? plugin
-local function firstOrder(answers)
+local function firstOrder(answers, session)
     for _, a in ipairs(answers) do
         if type(a.answer.order) == "table" and #a.answer.order > 0 then
-            local order = {}
-            for _, id in ipairs(a.answer.order) do
-                if tonumber(id) then order[#order + 1] = math.floor(tonumber(id)) end
-            end
+            local order = answerIds(a.answer.order, a.answer, session)
             if #order > 0 then return order, a.plugin end
         end
     end
@@ -1386,6 +1593,90 @@ function M.racerStarted(session, p)
     -- their run (or lap) about to start
     data.run = p.currentLap
     emit("RacerStarted", data)
+end
+
+--- a racer's place in the phase's standings now (the ones sitting it out left out)
+---@param session table BJRaceSession
+---@param p table BJRaceParticipant
+---@return integer?
+local function positionOf(session, p)
+    local place = 0
+    for _, other in ipairs(services_raceGrid.computeLeaderboard(session)) do
+        if not other.sittingOut then
+            place = place + 1
+            if other == p then return place end
+        end
+    end
+end
+
+--- a racer went through a gate (every one, the line included). When it completes a lap, after
+--- RacerLap (and RacerFinished, or RacerStarted for their next run)
+---@param session table BJRaceSession
+---@param p table BJRaceParticipant
+---@param c {gate: integer, step: integer, lap: integer, lapMs: integer?, deltaMs: integer?, lapComplete: boolean?, outLap: boolean?, sectors: {sector: integer, ms: integer}[]?}
+function M.racerGate(session, p, c)
+    local data = sessionBase(session)
+    data.at = stamp()
+    data.racer = racerOut(p, session)
+    data.gate = c.gate
+    data.step = c.step
+    data.lap = c.lap
+    data.lapComplete = c.lapComplete == true
+    data.outLap = c.outLap == true or nil
+    data.lapMs = c.lapMs
+    data.deltaMs = c.deltaMs
+    data.sectors = c.sectors or {}
+    data.position = positionOf(session, p)
+    emit("RacerGate", data)
+end
+
+--- a racer reset (recovered, respawned at a checkpoint...), as their game reports it
+---@param session table BJRaceSession
+---@param p table BJRaceParticipant
+---@param addedMs integer? the reset's time penalty, when the race has one
+function M.racerReset(session, p, addedMs)
+    local s = session.settings
+    local data = sessionBase(session)
+    data.at = stamp()
+    data.racer = racerOut(p, session)
+    data.lap = p.currentLap
+    data.lastGate = p.lastCrossedGate ~= 0 and p.lastCrossedGate or nil
+    data.respawn = s.respawnStrategy
+    data.penaltyMs = addedMs and addedMs > 0 and addedMs or nil
+    data.holdS = s.resetPenaltyEnabled and s.resetPenaltyMode ~= "time" and s.resetPenaltySeconds or nil
+    emit("RacerReset", data)
+end
+
+--- places changed during a phase (an overtake, a finish, a penalty) : who, from where to where
+---@param session table BJRaceSession
+---@param changes {p: table, from: integer, to: integer}[] best place first
+function M.racePositionsChanged(session, changes)
+    local data = sessionBase(session)
+    data.at = stamp()
+    data.changes = {}
+    for i, c in ipairs(changes) do
+        data.changes[i] = { racer = racerOut(c.p, session), from = c.from, to = c.to }
+    end
+    emit("RacePositionsChanged", data)
+end
+
+--- race control acted on a racer : staff, or a plugin
+---@param session table BJRaceSession
+---@param p table BJRaceParticipant
+---@param action "penalty"|"clearPenalties"|"disqualify"|"reinstate"
+---@param change integer the penalty time added (taken off, negative), 0 for the others
+---@param by string "staff:<name>" or "plugin:<name>"
+---@param reason string?
+function M.raceControl(session, p, action, change, by, reason)
+    local data = sessionBase(session)
+    data.at = stamp()
+    data.racer = racerOut(p, session)
+    data.action = action
+    data.ms = change ~= 0 and change or nil
+    data.penaltyMs = p.penaltyMs or 0
+    data.by = by
+    data.reason = reason
+    emit("RaceControl", data)
 end
 
 --- a player joined the event while a phase was under way (its `lateJoin`) and is in it now

@@ -8,7 +8,39 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2485, client build 2757 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2488, client build 2760 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **Fix (2488, 2760) : no Join button on a running race open to join mid-race** (direct report).
+  The sessions list the games show was last sent at the countdown, when nobody could join yet, and
+  not again at the green light ; now it is. *(server)*
+- **The start form's Phases button sits right under the format list** (direct request), not after
+  the length settings. *(client)*
+
+- **Plugin API : running races and stewarding them (2487, 2759)** (direct request : "do everything
+  but 5 and 6", from the suggestions after race phases). See `BeamJoyServer/api/README.md`.
+  - **Racer keys** : every racer and result has a `racerKey`, theirs for the whole event (away,
+    back under a new player ID, every phase). Every method taking a racer's `playerId` takes a
+    `racerKey` instead ; grid orders, scores, field maps and hook answers take them with `by =
+    "racerKey"`. Points, resets and penalties a plugin keeps survive a disconnect.
+  - **Race control** : `race.penalize` (ms, taken off with a negative), `race.clearPenalties`,
+    `race.disqualify`, `race.reinstate`, while a phase runs, as staff watching can. On the HUD at
+    once, in the standings ; the racer told by "Race control" with the plugin's reason. Staff's
+    and plugins' actions both send the new `RaceControl` event.
+  - **A plugin's own lobbies** : `race.open` (a race of the current map, the start menu's options,
+    a name for the lists, `holdStart` : only when its time's up or the plugin says, `entrants` : an
+    entry list, invited, not listed), `race.startNow`, `race.close` (any session, with a reason).
+    No leader ; open while empty until its time runs out.
+  - **Finer events** : `RacerGate` (every gate : lap time so far, delta to their best, sectors
+    completed, place), `RacerReset` (every reset during a phase, with the race's own reset penalty),
+    `RacePositionsChanged` (the places that changed since the last update).
+  - **`raceJoin` hook** : a plugin may refuse a player joining a lobby or an event under way, with
+    a reason they see (entry lists, licences).
+  - **`hud.message`** to one player (`playerId`), or to a race's racers and / or spectators
+    (`sessionId`, `audience`), or one racer of it (`racerKey`).
+  - Example plugin `BJRaceDirector` : a lobby every half hour, penalties for resets past the free
+    ones, the new leader told on their HUD.
+  - The client reports every reset during a race (`raceReset`, was `raceResetPenalty` for the time
+    penalty only : still taken from older clients). *(server and client)*
 
 - **Fix (2755) : every seat showed an occupant** (reported : "vehicle presets sometimes fill every
   slot with occupants"). The game hides an empty seat's occupant figure by making it fully
@@ -153,12 +185,22 @@ Server build 2485, client build 2757 (main got its own 2749, 2751, then 2752 for
     tab only offered Spectate) : the start menu has "Players can join mid-race", the race's own (with
     phases, it sets every phase's ; each still has its own in the phase editor). Off by default, as
     before. Start option `lateJoin`.
+  - **Fix (2486) : a plugin's points stopped when a racer left** (found looking into points per
+    phase) : `phase.setScores` refused the whole call when one player ID in it wasn't in the race
+    any more, so after a racer left between heats (the BJRallycross example's case) nobody's points
+    updated, and the one who left could never be scored. Event scores now reach a racer who left
+    (or came back under a new ID) by the ID an earlier phase's result had them under, and an ID
+    that's no racer is left out (returned as `skipped`) instead of failing everyone's.
+    *(server only)*
   - **Fix (2485) : collisions off in time offset starts** (reported : with the option unticked) : any
     phase where racers start on their own (time offset, one at a time, open runs) had collisions
     switched off whatever the start menu said. They follow the option (or the phase's own rule) now.
   - **The results close when the break's over (2757)** (direct request) : the results opened for a
     break between phases close as the next phase's countdown starts (not at all when the leader
     starts it within their 3 s delay).
+  - **One at a time : "You're up next" (2758)** (direct request) : the racer whose turn comes next
+    gets a toast while the one before them is on track, once a phase. They're picked as the server
+    picks the next turn : the first in grid order of those still waiting, one away passed over.
   - **Knockouts' wording (2757)** (direct request) : "Through to Q2" gave way to "In the top 10 so far"
     while others race, and "Advancing : you made the top 10" at the phase's end, like "Eliminated : the
     top 10 go through".

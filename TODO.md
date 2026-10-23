@@ -9,6 +9,13 @@ belongs in CHANGELOG.md, not here.
 
 Built (see CHANGELOG), not yet tried live. Newest first.
 
+- plugin API race control (server 2487, client 2759) : `api/example/BJRaceDirector` with RACE_ID set
+  and EVERY_MIN at 1 : its lobby listed under "Open race", joinable, held till its time's up, then
+  started ; a reset past the two free ones gives a 5 s penalty (the red tag on the HUD, the toast
+  with the reason) ; overtaking for the lead shows "You're leading" on that player's HUD only ;
+  an older client (2758) still gets the time reset penalty ;
+- one at a time, "You're up next" (2758) : three players, the second gets the toast when the first
+  starts, the third when the second does ;
 - plugin API security fixes (2726 / 2471) : a guest's nickname matching an account's name (or a
   connected player's) is refused as taken ; a plugin's config tab still saves and its callback
   still gets its secrets ; a plugin text with `{{1+1}}` shows as typed, not "2" ;
@@ -202,12 +209,22 @@ it keeps working while the game server restarts) ; or snapshot JSON files a brid
 when the bot runs on the server's machine and there's no website. Bot commands acting on the
 server (weather from Discord...) are writes : out of scope for now.
 
+**The user's championship / scheduling tool** (direct request, 2026-10-23 : "add to todo because
+I'd like to make a championship/scheduling tool"). The user means to build it themselves on the
+API ; `race.open`, `race.startNow`, `race.close`, racer keys and the `raceJoin` hook are built for it
+(server 2487). Two API pieces were left for when it's being built :
+- **Changing upcoming phases during a break** : `race.setPhases` only works in the lobby. Allow
+  changes to phases not started yet (a repechage heat added, a final's length, a phase's weather or
+  time of day : `environment.set` exists but isn't tied to a phase).
+- **Championships across events** : points carried from one event to the next. A small per-plugin
+  store in BeamJoy (`store.get` / `store.set`, JSON under `BeamJoyData`, namespaced, size-capped)
+  and standings shown through pages. Plugins can already write their own files ; the store would
+  make it safe and consistent. Overlaps with per-player storage below.
+
 **Worth adding to the API (suggested, not asked for yet) :**
-- More hooks : `raceStart` (rules for a league night : laps, vehicles), `raceJoin` (entry lists,
-  licences), `raceResult` (before a time goes on the leaderboard), `environmentChange` (lock the
-  weather during an event).
-- Race control for plugins : `race.start` (scheduled events : open a lobby for given players),
-  `race.cancel`, `race.penalty` / `race.disqualify` (stewarding from a plugin or a Discord bot).
+- More hooks : `raceStart` (rules for a league night : laps, vehicles), `raceResult` (before a time
+  goes on the leaderboard), `environmentChange` (lock the weather during an event).
+- Race control : a drive-through or stop-and-go penalty (served on track, not added to the time).
 - The other activities' events and sessions (hunter, infected, derby, drag, drift, deliveries),
   the same way as races ; `hides` for their HUDs too.
 - Per-player storage for plugins (`players.data.get/set`, namespaced per plugin, in BeamJoy's

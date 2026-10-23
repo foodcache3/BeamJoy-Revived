@@ -498,7 +498,7 @@ end
 --- answers one of BeamJoy's hooks : `fn(question, answer)` returns its answer (a table), or
 --- returns nothing and calls `answer(table)` itself later (within the hook's time : `timeoutMs`,
 --- default 2000, at most 10000). An error in fn answers with nothing
----@param name string "raceReady", "gridOrder" or "phaseResult"
+---@param name string "raceJoin", "raceReady", "gridOrder" or "phaseResult"
 ---@param fn function
 ---@param opts {timeoutMs: integer?}?
 function BJ.hook(name, fn, opts)

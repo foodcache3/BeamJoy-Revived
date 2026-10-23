@@ -118,6 +118,7 @@
 ---they're out of the event) : they watch it
 ---@field eventOut boolean? out of the event : they disconnected and didn't come back in time. They
 ---keep their earlier phases' results, and sit out the rest
+---@field lastResetMs integer? the shared clock at their last reset counted (raceReset)
 
 ---@class BJRaceSessionSettings host-configurable at start time, seeded from BJRaceDefaults
 ---@field laps integer?
@@ -245,6 +246,14 @@
 ---@field judging boolean? a phase over, its result with the plugins answering the phaseResult hook
 ---@field eventScores table<integer, {score: number, key: number, display: string?}>? joinIndex -> a
 ---plugin's event score (phase.setScores with `event`), for an event whose result is "plugin"
+---@field hostedBy string? a lobby a plugin opened (the plugin API's race.open) : no leader, and it
+---stays open while empty, until its time runs out
+---@field hostName string? that lobby's name where a leader's would be ("League night")
+---@field holdStart boolean? that lobby starts only when its time's up or the plugin says
+---(race.startNow), not once everyone's been ready a moment
+---@field entrants table<integer, true>? that lobby's entry list (player IDs) : only they may join
+---@field lastPositions table<integer, integer>? RACE : joinIndex -> place at the last update (the
+---plugin API's RacePositionsChanged)
 ---@field allReadyAt integer? GetCurrentTime() of the moment every current participant most
 ---recently became ready together, cleared again the instant that's no longer true (someone leaves
 ---unready, joins unready, un-readies via vehicle-change). gridReadySecondsLeft and the actual
@@ -559,7 +568,10 @@ local SLIM_DROPPED = { settings = true, phases = true, phaseResults = true, even
 -- track with hundreds of gates it was most of every session update, and it was only ever read to
 -- work out the gaps between racers, which the server now does itself (gapBetween below)
 local PAYLOAD_DROPPED_FIELDS = { gateTimes = true, bestLapGateTimes = true, leaderboardKey = true, replacedEntry = true,
-    lastResetPenaltyMs = true, pluginFields = true }
+    lastResetMs = true, pluginFields = true }
+
+--- a session's own tables never sent to clients (an entry list's player IDs, the last places)
+local SESSION_PRIVATE = { participants = true, baseSettings = true, lastPositions = true, entrants = true }
 
 --- the copy of a participant that goes out in session updates : shallow (nothing in a payload
 --- is modified after it's built), without the per-gate tables, plus a `displayName`
@@ -667,7 +679,7 @@ local function summarize(session)
         id = session.id,
         raceId = session.raceId,
         raceName = race and race.name or "?",
-        starterName = starter and resolveDisplayName(starter.playerID, starter.playerName) or "?",
+        starterName = starter and resolveDisplayName(starter.playerID, starter.playerName) or session.hostName or "?",
         joinable = session.joinable,
         participantCount = session.participants:length(),
         maxParticipants = race and #race.startPositions or 0,
@@ -699,7 +711,7 @@ end
 local function buildSessionPayload(session, slim)
     local payload = {}
     for k, v in pairs(session) do
-        if k ~= "participants" and k ~= "baseSettings" and not (slim and SLIM_DROPPED[k]) then payload[k] = v end
+        if not SESSION_PRIVATE[k] and not (slim and SLIM_DROPPED[k]) then payload[k] = v end
     end
 
     local race = getRace(session)
@@ -755,7 +767,7 @@ local function buildSessionPayload(session, slim)
     -- unrelated and unchanged: the hard deadline where anyone still unready gets kicked and the
     -- lobby starts (or closes) regardless, still anchored to session.createdAt.
     if session.state == "GRID" and session.joinable then
-        payload.gridReadySecondsLeft = session.allReadyAt and
+        payload.gridReadySecondsLeft = (session.allReadyAt and not session.holdStart) and
             math.max(0, math.ceil(session.settings.gridReadyTimeout - (GetCurrentTime() - session.allReadyAt)))
             or nil
         payload.gridTimeoutSecondsLeft = math.max(0,
@@ -794,6 +806,33 @@ local function buildSessionPayload(session, slim)
     return payload
 end
 
+--- the plugin API's RacePositionsChanged : during a phase, the places that changed since the last
+--- update (an overtake, a finish, a penalty). A phase's first update only takes note of them, as
+--- does a racer's first (a mid-phase join)
+---@param session BJRaceSession
+local function notePositions(session)
+    if session.state ~= "RACE" or not services_api then return end
+    local positions, byJoin, place = {}, {}, 0
+    for _, p in ipairs(M.computeLeaderboard(session)) do
+        if not p.sittingOut then
+            place = place + 1
+            positions[p.joinIndex] = place
+            byJoin[p.joinIndex] = p
+        end
+    end
+    local last = session.lastPositions
+    session.lastPositions = positions
+    if not last then return end
+    local changes = {}
+    for joinIndex, to in pairs(positions) do
+        local from = last[joinIndex]
+        if from and from ~= to then changes[#changes + 1] = { p = byJoin[joinIndex], from = from, to = to } end
+    end
+    if #changes == 0 then return end
+    table.sort(changes, function(a, b) return a.to < b.to end)
+    apiEvent("racePositionsChanged", session, changes)
+end
+
 --- pushes the full session (with leaderboard) to every current participant, and the exact same
 --- payload under a different event name (so the client never confuses the two) to anyone
 --- currently spectating this session. See M.spectators's own comment for why that has to be a
@@ -812,6 +851,7 @@ local function pushSessionUpdate(session, slim)
     if #watchers > 0 then
         communications_tx.sendToPlayers(watchers, "raceSpectateUpdate", payload)
     end
+    notePositions(session)
 end
 
 --- pushes every session worth showing on the main HUD to every connected player: GRID+joinable
@@ -1380,12 +1420,12 @@ local function beginCountdown(session)
             if state == "GRID" then return removeSession(session) end
             return finishEvent(session)
         end
-        local take = services_api.firstTake(answers)
+        local take = services_api.firstTake(answers, session)
         if take then
             local taken = takeOnly(still, take)
             if #taken > 0 then still = taken end
         end
-        local order, by = services_api.firstOrder(answers)
+        local order, by = services_api.firstOrder(answers, session)
         if not order then order, by = session.pluginGridOrder, session.pluginGridOrderBy end
         startCountdown(session, race, applyGridOrder(still, order), order and by or nil)
     end)
@@ -1420,7 +1460,12 @@ local function beginRace(sessionId)
         p.dnf = false
         p.lastProgressTime = GetCurrentTime()
     end)
+    session.lastPositions = nil
     pushSessionUpdate(session)
+    -- open to join now (a phase's lateJoin : summarize's lateJoinable). Real bug (direct report : no
+    -- Join button on a running race with it on) : the list was last sent at the countdown, when
+    -- nobody could join yet, and nothing sent it again
+    pushOpenSessionsList()
     apiEvent("raceGreenLight", session)
 end
 
@@ -1664,7 +1709,7 @@ local function completePhase(session)
     services_api.runHook("phaseResult", data, function(answers)
         session.judging = nil
         if M.sessions[session.id] ~= session or session.state ~= "RACE" then return end
-        local judged = services_api.judging(answers)
+        local judged = services_api.judging(answers, session)
         for id, ms in pairs(judged.adjustMs) do
             local p = session.participants[id]
             if p then p.penaltyMs = math.max(0, (p.penaltyMs or 0) + ms) end
@@ -1927,8 +1972,10 @@ end
 tryStartFromGrid = function(session)
     if session.state ~= "GRID" then return end
     updateAllReadyState(session)
-    -- a private lobby nobody joined is a solo start
-    if not session.joinable or (session.private and session.participants:length() == 1) then
+    -- a plugin's lobby held for its time (race.open's holdStart) : its time's up, or the plugin says
+    if session.holdStart then return end
+    -- a private lobby nobody joined is a solo start (not a plugin's : it waits for its entrants)
+    if not session.joinable or (session.private and not session.hostedBy and session.participants:length() == 1) then
         -- solo path: starts the instant its lone participant is ready, no grace period
         if session.participants:every(function(p) return p.ready end) then
             beginCountdown(session)
@@ -2201,35 +2248,59 @@ local function pluginStopRacer(session, playerID)
     return true
 end
 
+--- a racer of this session by their racer key (the plugin API's `racerKey` : their joinIndex, the
+--- same for the whole event, through a disconnect and a rejoin)
+---@param session BJRaceSession
+---@param key integer
+---@return BJRaceParticipant?
+local function participantByKey(session, key)
+    return session.participants:find(function(p) return p.joinIndex == key end)
+end
+
 --- the plugin API's phase.setScores : a plugin's scores for this phase's racers (its ranking
 --- "plugin" places them by these) or, `event`, for the event (its result "plugin")
 ---@param session BJRaceSession
----@param scores table<integer, number> player ID -> score
+---@param scores table<integer, number> player ID (racer key, `byKey`) -> score
 ---@param better "high"|"low"
----@param display table<integer, string>? player ID -> the text shown ("86 pts")
+---@param display table<integer, string>? the same keys -> the text shown ("86 pts")
 ---@param event boolean?
----@return boolean ok, string? why not
-local function pluginSetScores(session, scores, better, display, event)
-    for id in pairs(scores) do
-        if not session.participants[id] then return false, string.format("player %d isn't in this race", id) end
+---@param byKey boolean? the keys are racer keys (joinIndex), not player IDs
+---@return integer[] skipped the keys given that aren't racers of this event
+local function pluginSetScores(session, scores, better, display, event, byKey)
+    -- a racer by player ID : one in the race, or, for the event's scores, one who left it (or came
+    -- back under a new ID) known by the latest phase result that has them under that ID. By racer
+    -- key : the same, whatever their player ID
+    local function racerOf(id)
+        local p = byKey and participantByKey(session, id) or (not byKey and session.participants[id])
+        if p then return p.joinIndex, p end
+        if not event then return end
+        for i = #(session.phases or {}), 1, -1 do
+            for _, r in ipairs(session.phaseResults and session.phaseResults[i] or {}) do
+                if (byKey and r.joinIndex or r.playerID) == id then return r.joinIndex end
+            end
+        end
     end
+    local skipped = {}
     for id, score in pairs(scores) do
-        local p = session.participants[id]
+        local joinIndex, p = racerOf(id)
         local key = better == "high" and -score or score
         local text = display and display[id] or nil
-        if event then
+        if not joinIndex then
+            skipped[#skipped + 1] = id
+        elseif event then
             session.eventScores = session.eventScores or {}
-            session.eventScores[p.joinIndex] = { score = score, key = key, display = text }
+            session.eventScores[joinIndex] = { score = score, key = key, display = text }
         else
             p.score, p.scoreKey, p.scoreDisplay = score, key, text
         end
     end
+    table.sort(skipped)
     if event then
         session.eventStandings = services_racePhases.eventStandings(session.phases, session.phaseResults,
             session.result, session.eventScores)
     end
     fieldsChanged[session.id] = true
-    return true
+    return skipped
 end
 
 local function onUpdate()
@@ -2294,7 +2365,7 @@ local function resetForPhase(p)
     p.currentSector, p.sectorStartMs = 1, 0
     p.lapSectors, p.lapSectorHistory, p.bestSectorMs = {}, {}, {}
     p.finished, p.dnf = false, false
-    p.disqualified, p.penaltyMs, p.lastResetPenaltyMs = nil, 0, nil
+    p.disqualified, p.penaltyMs, p.lastResetMs = nil, 0, nil
     p.isNewPB, p.isNewRecord, p.leaderboardKey, p.replacedEntry = nil, nil, nil, nil
     p.startPosition, p.gridPosition = nil, nil
     p.score, p.scoreKey, p.scoreDisplay, p.awaitingStart = nil, nil, nil, nil
@@ -2406,6 +2477,93 @@ local function raceStart(ctxt, raceId, opts)
     return session.id
 end
 
+--- the plugin API's race.open : a lobby a plugin opens (a scheduled event, a league night), with no
+--- leader. Listed like any (with an entry list : not listed, its entrants invited), open while
+--- empty until its time runs out (the options' gridTimeout). It starts like any lobby once
+--- everyone's been ready a moment, or, `holdStart`, only when its time's up or the plugin says
+--- (race.startNow)
+---@param plugin string
+---@param raceId integer
+---@param opts table the start options, the start menu's
+---@param host {name: string?, holdStart: boolean?, entrants: integer[]?}
+---@return BJRaceSession? session, string? why not, integer[]? invited the entrants invited (connected, free)
+local function pluginOpen(plugin, raceId, opts, host)
+    local race = services_races.getById(raceId)
+    if not race or race.mode ~= services_races.MODES.GRID then
+        return nil, string.format("no grid race %s on this map", tostring(raceId))
+    end
+    if #race.startPositions < 2 then return nil, "the race needs 2 grid slots or more" end
+    ---@type BJRaceSession
+    local session = {
+        id = UUID(),
+        raceId = raceId,
+        hostedBy = plugin,
+        hostName = host.name or plugin,
+        holdStart = host.holdStart == true or nil,
+        joinable = true,
+        baseSettings = buildSettings(race, opts),
+        state = "GRID",
+        createdAt = GetCurrentTime(),
+        participants = Table(),
+        phaseIndex = 1,
+        phaseResults = {},
+    }
+    session.phases, session.result, session.format = services_racePhases.fromStart(race, opts)
+    session.settings = services_racePhases.effectiveSettings(session.baseSettings, session.phases[1])
+    if host.entrants then
+        session.entrants = {}
+        for _, id in ipairs(host.entrants) do session.entrants[id] = true end
+        -- not listed : its entrants get an invite instead
+        session.private = true
+    end
+    session.startOpts = editableOpts(opts)
+    session.settingsRev = 0
+    M.sessions[session.id] = session
+    utils_async.delayTask(function() onGridTimeout(session.id) end,
+        session.settings.gridTimeout, "BJRaceGrid-" .. session.id .. "-gridTimeout")
+    LogInfo(string.format("[BJ raceGrid] %s opened race session %s (race %s, open %ds)", plugin, session.id,
+        tostring(raceId), session.settings.gridTimeout))
+    pushOpenSessionsList()
+    apiEvent("raceGridOpened", session)
+    local invited = {}
+    if session.entrants and services_lobbyInvites then
+        for id in pairs(session.entrants) do
+            if services_lobbyInvites.hostInvite("race", session, id, session.hostName,
+                    math.min(session.settings.gridTimeout, 300)) then
+                invited[#invited + 1] = id
+            end
+        end
+        table.sort(invited)
+    end
+    return session, nil, invited
+end
+
+--- the plugin API's race.close : the session ends now (a lobby, or an event under way), its racers
+--- told, with the plugin's reason
+---@param session BJRaceSession
+---@param reason string?
+local function pluginClose(session, reason)
+    session.participants:forEach(function(p)
+        local player = services_players.players:find(function(pl) return pl.playerID == p.playerID end)
+        if not player then return end
+        local text = reason and services_lang.get("race.cancelledByHostReason", player.lang)
+            :var({ reason = (reason:gsub("%%", "%%%%")) }) or services_lang.get("race.cancelledByHost", player.lang)
+        communications_tx.sendToPlayer(p.playerID, "toast", "info", text)
+    end)
+    removeSession(session)
+end
+
+--- the plugin API's race.startNow : a lobby starts now, as when its time runs out (whoever isn't
+--- ready is left out ; nobody ready closes it)
+---@param session BJRaceSession
+---@return boolean ok, string? why not
+local function pluginStartNow(session)
+    if session.state ~= "GRID" then return false, "only while the lobby is open" end
+    if session.placing then return false, "its grid is being placed" end
+    onGridTimeout(session.id)
+    return true
+end
+
 --- whether players may join this event now : its lobby, or (services/racePhases.lua's `lateJoin`)
 --- while the phase allowing it runs, or in the break before one that does
 ---@param session BJRaceSession
@@ -2421,9 +2579,29 @@ joinableNow = function(session)
     return false, false
 end
 
+--- players whose joining the plugins answering the raceJoin hook are being asked about :
+--- playerID -> the session
+---@type table<integer, string>
+local pendingJoins = {}
+
+--- tells a player a plugin refused their joining (the raceJoin hook)
+---@param player table services_players player
+---@param reason string?
+local function tellJoinBlocked(player, reason)
+    local text
+    if reason and #reason > 0 then
+        text = services_lang.get("race.joinBlocked", player.lang):var({ reason = (reason:gsub("%%", "%%%%")) })
+    else
+        text = services_lang.get("race.joinBlockedNoReason", player.lang)
+    end
+    communications_tx.sendToPlayer(player.playerID, "toast", "warning", text)
+end
+
 ---@param ctxt BJSContext
 ---@param sessionId string
-local function raceJoin(ctxt, sessionId)
+---@param asked boolean? the plugins answering the raceJoin hook let them in : everything else is
+---checked again
+local function raceJoin(ctxt, sessionId, asked)
     if not ctxt.sender then return end
     local session = M.sessions[sessionId]
     if not session then return end
@@ -2432,10 +2610,16 @@ local function raceJoin(ctxt, sessionId)
     -- the grid's being placed (the gridOrder hook) : about to start
     if session.placing then return end
     if session.participants[ctxt.senderID] then return end
-    -- private lobbies take invited players only
-    if session.private and not (services_lobbyInvites and
+    if session.entrants then
+        -- a plugin's lobby with an entry list (race.open) : its entrants only
+        if not session.entrants[ctxt.senderID] then
+            return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
+                services_lang.get("race.notEntrant", ctxt.sender.lang))
+        end
+    elseif session.private and not (services_lobbyInvites and
             services_lobbyInvites.isInvited("race", ctxt.senderID, session.id)) and
         not services_crews.sameCrew(ctxt.senderID, session.starterID) then
+        -- private lobbies take invited players only
         return
     end
     -- see raceStart's own identical check / findSessionByParticipant's comment. Joining a second
@@ -2448,6 +2632,27 @@ local function raceJoin(ctxt, sessionId)
     end
     local race = getRace(session)
     if not race or session.participants:length() >= #race.startPositions then return end
+
+    -- plugins may refuse (the plugin API's raceJoin hook) : an entry list, licences. Asked first,
+    -- then everything above is checked again (the lobby may have moved on or filled up meanwhile)
+    if not asked and services_api and services_api.hasHook("raceJoin") then
+        if pendingJoins[ctxt.senderID] then return end
+        local okData, data = pcall(services_api.joinHookData, session, ctxt.sender, midway)
+        if okData then
+            pendingJoins[ctxt.senderID] = session.id
+            local playerID, playerName = ctxt.senderID, ctxt.sender.playerName
+            return services_api.runHook("raceJoin", data, function(answers)
+                pendingJoins[playerID] = nil
+                local again = InitContext(playerID)
+                -- gone, or someone else under that ID now
+                if not again.sender or again.sender.playerName ~= playerName then return end
+                local block = services_api.firstBlock(answers)
+                if block then return tellJoinBlocked(again.sender, block.reason) end
+                raceJoin(again, sessionId, true)
+            end)
+        end
+        LogError("[BJ raceGrid] the raceJoin hook's question failed : " .. tostring(data))
+    end
 
     addParticipant(session, ctxt.senderID, ctxt.sender.playerName)
     if midway then
@@ -2547,7 +2752,8 @@ local function raceLeave(ctxt, sessionId)
     -- session.participants will never reach them again, so without this their own client never
     -- learns the leave actually succeeded (stuck thinking they're still in a live session)
     communications_tx.sendToPlayer(ctxt.senderID, "raceSessionRemoved", sessionId)
-    if session.participants:length() == 0 then
+    -- a plugin's lobby stays open, empty, until its time runs out
+    if session.participants:length() == 0 and not (session.hostedBy and session.state == "GRID") then
         return removeSession(session)
     end
     if ctxt.senderID == session.starterID then
@@ -2916,6 +3122,8 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
             participant.gateTimes = { [gate.step] = elapsedMs }
             participant.currentSector, participant.sectorStartMs, participant.lapSectors = 1, 0, {}
         end
+        apiEvent("racerGate", session, participant, { gate = gateIndex, step = gate.step,
+            lap = participant.currentLap, outLap = true, lapComplete = lapComplete })
         return pushSessionUpdate(session, true)
     end
 
@@ -2931,12 +3139,19 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
     -- gets skipped this way again; a repeatable loop just quietly catches up instead.
     local sectorGates = sectorEndGates(race, session.settings.flyingStart)
     local sectorCount = #sectorGates
+    local sectorBefore = participant.currentSector
     while participant.currentSector < sectorCount and
         gateIndex == sectorGates[participant.currentSector] do
         completeCurrentSector(participant, lapRelativeNow)
     end
     if participant.currentSector >= sectorCount and lapComplete then
         completeCurrentSector(participant, lapRelativeNow)
+    end
+    -- what this crossing was, for the plugin API's RacerGate (sent once the lap's dealt with)
+    local crossing = { gate = gateIndex, step = gate.step, lap = participant.currentLap, lapMs = lapRelativeNow,
+        deltaMs = participant.liveDeltaMs, lapComplete = lapComplete, sectors = {} }
+    for s = sectorBefore, participant.currentSector - 1 do
+        crossing.sectors[#crossing.sectors + 1] = { sector = s, ms = participant.lapSectors[s] }
     end
 
     if lapComplete then
@@ -2986,6 +3201,7 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         end
     end
 
+    apiEvent("racerGate", session, participant, crossing)
     -- slim : gate crossings are by far the most frequent pushes (see buildSessionPayload)
     pushSessionUpdate(session, true)
 end
@@ -3060,36 +3276,32 @@ local function raceStaffPhase(ctxt, sessionId, action)
     end
 end
 
-local function raceStaffAction(ctxt, sessionId, targetID, action, seconds)
-    if not ctxt.sender or not services_permissions.isStaff(ctxt.sender.playerName) then return end
-    local session = M.sessions[sessionId]
-    if not session or session.state ~= "RACE" or M.spectators[ctxt.senderID] ~= sessionId then return end
-    local p = session.participants[tonumber(targetID) or -1]
-    if not p then return end
-
-    local target = services_players.players:find(function(pl) return pl.playerID == p.playerID end)
-    local function tell(key, vars)
-        communications_tx.sendToPlayer(p.playerID, "toast", "warning",
-            services_lang.get(key, target and target.lang):var(vars or {}))
-    end
-    local staffName = ctxt.sender.playerName
-    local targetName = resolveDisplayName(p.playerID, p.playerName)
-
+--- race control's actions on a racer while the phase runs, from staff (raceStaffAction) or a
+--- plugin (pluginControlRacer) : a time penalty (time taken off with a negative, never under
+--- none), clearing their penalties, disqualifying them, or reinstating them. The plugin API's
+--- RaceControl tells plugins
+---@param session BJRaceSession
+---@param p BJRaceParticipant
+---@param action "penalty"|"clearPenalties"|"disqualify"|"reinstate"
+---@param ms integer? "penalty" : the time added (taken off, negative)
+---@param by string "staff:<name>" or "plugin:<name>"
+---@param reason string?
+---@return integer? change nil : nothing changed ; else the penalty time added (taken off, negative ; 0
+---for a disqualification or a reinstatement)
+local function controlRacer(session, p, action, ms, by, reason)
+    local change
     if action == "penalty" then
-        -- tenths of a second : the half-second penalty, and nothing finer than the race clock shows
-        local ms = math.floor((tonumber(seconds) or 0) * 10 + 0.5) * 100
-        if ms < 100 or ms > STAFF_PENALTY_MAX_SEC * 1000 or p.disqualified then return end
-        p.penaltyMs = math.min(STAFF_PENALTY_TOTAL_MAX_MS, (p.penaltyMs or 0) + ms)
-        tell("race.staff.penalty", { seconds = penaltySecondsText(ms), total = penaltySecondsText(p.penaltyMs), name = staffName })
-        LogInfo(string.format("raceGrid: %s gave %s a %ss penalty (session %s)", staffName, targetName,
-            penaltySecondsText(ms), session.id))
+        if p.disqualified or not ms or ms == 0 then return nil end
+        local before = p.penaltyMs or 0
+        p.penaltyMs = math.clamp(before + ms, 0, STAFF_PENALTY_TOTAL_MAX_MS)
+        change = p.penaltyMs - before
+        if change == 0 then return nil end
     elseif action == "clearPenalties" then
-        if (p.penaltyMs or 0) == 0 then return end
+        if (p.penaltyMs or 0) == 0 then return nil end
+        change = -p.penaltyMs
         p.penaltyMs = 0
-        tell("race.staff.penaltiesCleared", { name = staffName })
-        LogInfo(string.format("raceGrid: %s cleared %s's penalties (session %s)", staffName, targetName, session.id))
     elseif action == "disqualify" then
-        if p.disqualified then return end
+        if p.disqualified then return nil end
         p.disqualified = true
         if not p.finished and not p.dnf then
             p.dnf = true
@@ -3099,50 +3311,128 @@ local function raceStaffAction(ctxt, sessionId, targetID, action, seconds)
             p.leaderboardKey, p.replacedEntry = nil, nil
             if p.discordResult then p.discordResult.counted = false end
         end
-        tell("race.staff.disqualified", { name = staffName })
+        change = 0
         apiEvent("racerOut", session, p, "disqualified")
-        LogInfo(string.format("raceGrid: %s disqualified %s (session %s)", staffName, targetName, session.id))
     elseif action == "reinstate" then
-        if not p.disqualified then return end
+        if not p.disqualified then return nil end
         p.disqualified = false
         if p.finished and p.bestLapMs then
             trySubmitTime(session, p, p.bestLapMs)
         end
-        tell("race.staff.reinstated", { name = staffName })
-        LogInfo(string.format("raceGrid: %s reinstated %s (session %s)", staffName, targetName, session.id))
+        change = 0
     else
-        return
+        return nil
     end
-
+    apiEvent("raceControl", session, p, action, change, by, reason)
     -- a disqualification can be what ends the race (the last one still racing)
     checkSessionComplete(session)
     if session.state == "RACE" then
         pushSessionUpdate(session)
     end
+    return change
+end
+
+local function raceStaffAction(ctxt, sessionId, targetID, action, seconds)
+    if not ctxt.sender or not services_permissions.isStaff(ctxt.sender.playerName) then return end
+    local session = M.sessions[sessionId]
+    if not session or session.state ~= "RACE" or M.spectators[ctxt.senderID] ~= sessionId then return end
+    local p = session.participants[tonumber(targetID) or -1]
+    if not p then return end
+
+    local ms
+    if action == "penalty" then
+        -- tenths of a second : the half-second penalty, and nothing finer than the race clock shows
+        ms = math.floor((tonumber(seconds) or 0) * 10 + 0.5) * 100
+        if ms < 100 or ms > STAFF_PENALTY_MAX_SEC * 1000 then return end
+    end
+    local staffName = ctxt.sender.playerName
+    local target = services_players.players:find(function(pl) return pl.playerID == p.playerID end)
+    local targetName = resolveDisplayName(p.playerID, p.playerName)
+    if not controlRacer(session, p, action, ms, "staff:" .. staffName) then return end
+
+    local function tell(key, vars)
+        communications_tx.sendToPlayer(p.playerID, "toast", "warning",
+            services_lang.get(key, target and target.lang):var(vars or {}))
+    end
+    if action == "penalty" then
+        tell("race.staff.penalty", { seconds = penaltySecondsText(ms), total = penaltySecondsText(p.penaltyMs), name = staffName })
+        LogInfo(string.format("raceGrid: %s gave %s a %ss penalty (session %s)", staffName, targetName,
+            penaltySecondsText(ms), session.id))
+    elseif action == "clearPenalties" then
+        tell("race.staff.penaltiesCleared", { name = staffName })
+        LogInfo(string.format("raceGrid: %s cleared %s's penalties (session %s)", staffName, targetName, session.id))
+    elseif action == "disqualify" then
+        tell("race.staff.disqualified", { name = staffName })
+        LogInfo(string.format("raceGrid: %s disqualified %s (session %s)", staffName, targetName, session.id))
+    elseif action == "reinstate" then
+        tell("race.staff.reinstated", { name = staffName })
+        LogInfo(string.format("raceGrid: %s reinstated %s (session %s)", staffName, targetName, session.id))
+    end
+end
+
+--- the plugin API's race control (race.penalize / race.clearPenalties / race.disqualify /
+--- race.reinstate) : as staff's, the racer told by "race control", with the plugin's reason
+---@param session BJRaceSession
+---@param playerID integer
+---@param action "penalty"|"clearPenalties"|"disqualify"|"reinstate"
+---@param ms integer? "penalty"
+---@param plugin string
+---@param reason string?
+---@return boolean ok, string? why not, BJRaceParticipant? p, integer? change
+local function pluginControlRacer(session, playerID, action, ms, plugin, reason)
+    if session.state ~= "RACE" then return false, "no phase is running" end
+    local p = session.participants[playerID]
+    if not p then return false, "that player isn't in this race" end
+    if p.sittingOut then return false, "that racer isn't in this phase" end
+    local target = services_players.players:find(function(pl) return pl.playerID == p.playerID end)
+    local change = controlRacer(session, p, action, ms, "plugin:" .. plugin, reason)
+    if not change then
+        if action == "penalty" and p.disqualified then return false, "that racer is disqualified" end
+        return false, "nothing to change"
+    end
+    if target then
+        local key = ({ penalty = change > 0 and "race.control.penalty" or "race.control.penaltyOff",
+            clearPenalties = "race.control.penaltiesCleared", disqualify = "race.control.disqualified",
+            reinstate = "race.control.reinstated" })[action]
+        local text = services_lang.get(key, target.lang):var({ seconds = penaltySecondsText(math.abs(change)),
+            total = penaltySecondsText(p.penaltyMs or 0) })
+        if reason and #reason > 0 then text = text .. " : " .. reason end
+        communications_tx.sendToPlayer(p.playerID, "toast", "warning", text)
+    end
+    LogInfo(string.format("raceGrid: %s : %s on %s%s (session %s)", plugin, action,
+        resolveDisplayName(p.playerID, p.playerName), change ~= 0 and string.format(" %+dms", change) or "", session.id))
+    return true, nil, p, change
 end
 
 -- one reset, however many times the client reports it (a held key, the reset settling)
-local RESET_PENALTY_DEBOUNCE_MS = 1500
+local RESET_DEBOUNCE_MS = 1500
 
---- a racer reset, in a race whose reset penalty adds time : resetPenaltySeconds go on their race
---- time, with any staff penalties (the same red box, the same finishing order). Reported by the
---- racer's own client, the way the "hold" version is enforced there too.
+--- a racer reset during a phase, reported by their own game (raceRunner.lua's applyResetPenalty,
+--- every reset since client build 2759 ; before, only for the time penalty : "raceResetPenalty",
+--- counted the same). The plugin API's RacerReset ; and in a race whose reset penalty adds time,
+--- resetPenaltySeconds go on their race time, with any staff penalties (the same red box, the same
+--- finishing order). The "hold" penalty is enforced by their game
 ---@param ctxt BJSContext
 ---@param sessionId string
-local function raceResetPenalty(ctxt, sessionId)
+local function raceReset(ctxt, sessionId)
     if not ctxt.sender then return end
     local session = M.sessions[sessionId]
     if not session or session.state ~= "RACE" then return end
-    local s = session.settings
-    if not s.resetPenaltyEnabled or s.resetPenaltyMode ~= "time" or s.respawnStrategy == "norespawn" then return end
     local p = session.participants[ctxt.senderID]
-    if not p or p.finished or p.dnf or p.disqualified or p.sittingOut then return end
+    if not p or p.finished or p.dnf or p.disqualified or p.sittingOut or p.awaitingStart then return end
     local now = services_clockSync.nowMs()
-    if p.lastResetPenaltyMs and now - p.lastResetPenaltyMs < RESET_PENALTY_DEBOUNCE_MS then return end
-    p.lastResetPenaltyMs = now
-    p.penaltyMs = math.min(STAFF_PENALTY_TOTAL_MAX_MS,
-        (p.penaltyMs or 0) + math.floor((tonumber(s.resetPenaltySeconds) or 5) * 1000))
-    pushSessionUpdate(session, true)
+    if p.lastResetMs and now - p.lastResetMs < RESET_DEBOUNCE_MS then return end
+    p.lastResetMs = now
+    local s = session.settings
+    local addedMs
+    if s.resetPenaltyEnabled and s.resetPenaltyMode == "time" and s.respawnStrategy ~= "norespawn" then
+        local before = p.penaltyMs or 0
+        p.penaltyMs = math.min(STAFF_PENALTY_TOTAL_MAX_MS,
+            before + math.floor((tonumber(s.resetPenaltySeconds) or 5) * 1000))
+        addedMs = p.penaltyMs - before
+    end
+    apiEvent("racerReset", session, p, addedMs)
+    if addedMs and addedMs > 0 then pushSessionUpdate(session, true) end
 end
 
 --- chat-command front door for ready/leave/cancel/retire. All four act on "whichever session I'm
@@ -3226,7 +3516,9 @@ local function onInit()
     communications_rx.addHandler("raceUpdateSettings", M.raceUpdateSettings)
     communications_rx.addHandler("raceStaffAction", M.raceStaffAction)
     communications_rx.addHandler("raceStaffPhase", M.raceStaffPhase)
-    communications_rx.addHandler("raceResetPenalty", M.raceResetPenalty)
+    communications_rx.addHandler("raceReset", M.raceReset)
+    -- games before client build 2759
+    communications_rx.addHandler("raceResetPenalty", M.raceReset)
 
     services_chatCommands.addCommand("race", "chat.command.race.desc", M.chatRace,
         { commandKey = "chat.command.race.command" })
@@ -3387,12 +3679,13 @@ end
 
 local function onPlayerDisconnect(playerID)
     M.spectators[playerID] = nil
+    pendingJoins[playerID] = nil
     M.sessions:forEach(function(session)
         if not session.participants[playerID] then return end
 
         if session.state == "GRID" then
             session.participants[playerID] = nil
-            if session.participants:length() == 0 then
+            if session.participants:length() == 0 and not session.hostedBy then
                 return removeSession(session)
             end
             if playerID == session.starterID then
@@ -3480,7 +3773,7 @@ M.raceDNF = raceDNF
 M.raceSpectate = raceSpectate
 M.raceStopSpectate = raceStopSpectate
 M.raceStaffAction = raceStaffAction
-M.raceResetPenalty = raceResetPenalty
+M.raceReset = raceReset
 M.raceStartNow = raceStartNow
 M.findSessionByParticipant = findSessionByParticipant
 M.summarize = summarize
@@ -3498,6 +3791,29 @@ M.pluginNextPhase = pluginNextPhase
 M.pluginStartRacer = pluginStartRacer
 M.pluginStopRacer = pluginStopRacer
 M.pluginSetScores = pluginSetScores
+M.participantByKey = participantByKey
+M.pluginControlRacer = pluginControlRacer
+M.pluginOpen = pluginOpen
+M.pluginClose = pluginClose
+M.pluginStartNow = pluginStartNow
+--- a session's players for a message (the plugin API's hud.message) : its racers, its spectators,
+--- or both
+---@param session BJRaceSession
+---@param which "racers"|"spectators"|"all"
+---@return integer[]
+M.audienceOf = function(session, which)
+    local list = {}
+    if which ~= "spectators" then
+        session.participants:forEach(function(p) if p.playerID >= 0 then list[#list + 1] = p.playerID end end)
+    end
+    if which ~= "racers" then
+        M.spectators:forEach(function(sessionId, playerID)
+            if sessionId == session.id then list[#list + 1] = playerID end
+        end)
+    end
+    table.sort(list)
+    return list
+end
 M.raceStaffPhase = raceStaffPhase
 M.provisionalResults = function(session) return select(2, buildResults(session)) end
 M.chatRace = chatRace

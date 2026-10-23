@@ -400,6 +400,10 @@
                     </button>
                 </div>
             </div>
+            <button type="button" class="bjr-btn small ghost" ng-if="!$ctrl.startOptions.phaseList" ng-click="$ctrl.editPhases(race)"
+                title="{{'beamjoy.racePhases.editPhases.tooltip' | translate}}" style="align-self: flex-start">
+                {{'beamjoy.racePhases.editPhases' | translate}}
+            </button>
 
             <!-- ONE RACE : its length, laps, time, or both (whichever comes first) -->
             <div class="bjr-field" ng-if="race.loopable && !$ctrl.startOptions.phaseList">
@@ -428,10 +432,6 @@
                     </button>
                 </div>
             </div>
-            <button type="button" class="bjr-btn small ghost" ng-if="!$ctrl.startOptions.phaseList" ng-click="$ctrl.editPhases(race)"
-                title="{{'beamjoy.racePhases.editPhases.tooltip' | translate}}" style="align-self: flex-start">
-                {{'beamjoy.racePhases.editPhases' | translate}}
-            </button>
 
             <!-- AN EVENT : its phases (a plugin's format : what it says, and what it locks) -->
             <span class="bjr-muted" ng-if="$ctrl.formatInfo()">{{$ctrl.formatInfo()}}</span>
