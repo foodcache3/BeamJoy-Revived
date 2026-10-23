@@ -1,6 +1,9 @@
 angular.module("beamjoy").component("bjRaceCountdown", {
     templateUrl: "/ui/modModules/beamjoy/windows/raceCountdown/app.html",
-    controller: function ($rootScope, beamjoyLeaderboardFormat) {
+    controller: function ($rootScope, $filter, beamjoyLeaderboardFormat) {
+        const translate = (key) => $filter("translate")(key);
+        const fill = (key, values) =>
+            Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, v), translate(key));
         this.active = false;
         this.seconds = null;
         this.raceName = null;
@@ -27,6 +30,26 @@ angular.module("beamjoy").component("bjRaceCountdown", {
             this.isNewRecord = data.isNewRecord ?? false;
             // staff time penalties at the finish, in seconds ("5", "0.5" ; null : none, nothing shown)
             this.penaltySeconds = data.penaltyMs > 0 ? penText(data.penaltyMs) : null;
+            // the place they finished in (racing others), "so far" while others are still out there
+            this.place = typeof data.place === "number" ? data.place : null;
+            this.placeText = this.place !== null && data.placeOf
+                ? fill(data.provisional ? "beamjoy.race.placeSoFar" : "beamjoy.race.place", { place: this.place, of: data.placeOf })
+                : null;
+            // the phase over (its final place, big) : "of 12" under it
+            this.placeOfText = data.placeOf ? fill("beamjoy.race.placeOf", { of: data.placeOf }) : null;
+            // a knockout (a later phase takes only the top n) : through to it, or out
+            const ko = data.knockout;
+            this.knockout = ko
+                ? {
+                    through: !!ko.through,
+                    text: fill(
+                        ko.through
+                            ? data.provisional ? "beamjoy.race.knockout.throughSoFar" : "beamjoy.race.knockout.through"
+                            : data.provisional ? "beamjoy.race.knockout.outSoFar" : "beamjoy.race.knockout.out",
+                        { phase: ko.phaseName || fill("beamjoy.racePhases.phaseN", { n: ko.phaseNumber }), top: ko.top }
+                    ),
+                }
+                : null;
             if (data.raceName) {
                 this.raceName = data.raceName;
                 // an event's phase starting (practice, qualifying, the race...), when it has several

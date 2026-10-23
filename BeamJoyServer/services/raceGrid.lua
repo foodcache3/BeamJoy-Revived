@@ -120,6 +120,8 @@
 
 ---@class BJRaceSessionSettings host-configurable at start time, seeded from BJRaceDefaults
 ---@field laps integer?
+---@field flyingStart boolean? a point-to-point track : each racer's time (every run's) starts at the
+---first checkpoint, not at their release (see BJRaceDefaults.flyingStart)
 ---@field respawnStrategy BJRaceRespawnStrategy
 ---@field placementMode BJRacePlacementMode how grid slots are assigned at countdown time:
 ---"deterministic" = lobby join order (starter first), "random" = shuffled, "manual" = whatever
@@ -403,8 +405,10 @@ end
 --- gate could ever line up again. The clamp guarantees every sector spans at least one real
 --- gate-to-gate segment instead.
 ---@param race BJRace
+---@param flyingStart boolean? a point-to-point track's flying start : its first checkpoint is where
+---the time starts, so no sector ends there (as a circuit's start/finish line)
 ---@return integer[] gateIndex per sector, 1-based
-local function sectorEndGates(race)
+local function sectorEndGates(race, flyingStart)
     -- branching paths make index/distance-based sector splitting ambiguous (which branch's
     -- distance counts?). Rather than trying to generalize it, sectors are simply disabled outright
     -- for a branching race: one "sector" spanning the whole lap, same degenerate-count handling
@@ -420,13 +424,18 @@ local function sectorEndGates(race)
     if race.manualSectors then
         local flagged = {}
         for i, g in ipairs(race.gates) do
-            if g.sector and i < #race.gates then table.insert(flagged, i) end
+            if g.sector and i < #race.gates and not (flyingStart and not race.loopable and i == 1) then
+                table.insert(flagged, i)
+            end
         end
         table.insert(flagged, #race.gates)
         if #flagged > 0 then return flagged end
     end
 
-    local count = math.max(1, math.min(race.sectorCount or 3, #race.gates))
+    -- a flying start's first checkpoint kept out (see searchFloor below) : one gate fewer to share
+    -- out (a circuit's last sector ends past its last gate, at the line : it has them all)
+    local flying = flyingStart == true and not race.loopable
+    local count = math.max(1, math.min(race.sectorCount or 3, #race.gates - (flying and 1 or 0)))
     local gates = {}
     if count <= 1 then
         gates[1] = #race.gates
@@ -453,7 +462,8 @@ local function sectorEndGates(race)
     -- the "leave room for what's left" upper bound gets one extra gate of slack to match, since the
     -- final sector never competes for a searched gate of its own either way) fixes this at the
     -- source instead of special-casing it in the completion logic.
-    local searchFloor = race.loopable and 1 or 0
+    -- A flying start's first checkpoint the same : the time starts there
+    local searchFloor = (race.loopable or flying) and 1 or 0
     local lastAssigned = searchFloor
     for s = 1, count - 1 do
         local found
@@ -474,7 +484,7 @@ local function sectorEndGates(race)
         -- never collapse onto (or behind) the previous sector, and always leave at least one gate
         -- for each sector still to come (including the final one, always gates[count] = #gates)
         found = math.max(found, lastAssigned + 1)
-        found = math.min(found, #race.gates - (count - s) + searchFloor)
+        found = math.min(found, #race.gates - (count - s) + (race.loopable and 1 or 0))
         gates[s] = found
         lastAssigned = found
     end
@@ -1005,6 +1015,17 @@ local function buildSettings(race, overrides)
         allowTuning = defaults.allowTuning == true
     end
 
+    -- a flying start (direct request) : a point-to-point track's only, where the first checkpoint
+    -- can be the start line, run up to at speed. A circuit's laps already run line to line
+    local flyingStart = false
+    if not race.loopable then
+        if overrides.flyingStart ~= nil then
+            flyingStart = overrides.flyingStart == true
+        elseif defaults.flyingStart ~= nil then
+            flyingStart = defaults.flyingStart == true
+        end
+    end
+
     local randomizeVehiclePool = false
     if overrides.randomizeVehiclePool ~= nil then
         randomizeVehiclePool = overrides.randomizeVehiclePool == true
@@ -1061,6 +1082,7 @@ local function buildSettings(race, overrides)
         waypointBeams = waypointBeams,
         allowTuning = allowTuning,
         randomizeVehiclePool = randomizeVehiclePool,
+        flyingStart = flyingStart,
         -- server plugins' own options (services/pluginUi.lua) : plugin -> option -> value
         plugins = services_pluginUi.sessionValues(defaults.plugins, overrides.plugins),
     }
@@ -2082,6 +2104,30 @@ local function pluginExtendPhase(session, minutes)
     return true
 end
 
+--- race control's "+1 lap" (direct request : a phase extended by laps when it's run on laps) and
+--- the plugin API's race.extendPhase `laps` : more laps (runs) for the phase under way (fewer, with a
+--- negative, never under 1 nor under what anyone's done). Not once someone's finished it : the
+--- others would race more than they did
+---@param session BJRaceSession
+---@param laps integer
+---@return boolean ok, string? why not
+local function pluginExtendLaps(session, laps)
+    if session.state ~= "RACE" or not session.settings.laps then return false, "no phase on laps is running" end
+    if session.flagAtMs then return false, "its time is already up" end
+    if session.participants:any(function(p) return p.finished end) then
+        return false, "someone has already finished it"
+    end
+    local most = 0
+    session.participants:forEach(function(p) most = math.max(most, #p.lapTimes) end)
+    local now = math.clamp(session.settings.laps + math.floor(laps), math.max(1, most + 1), services_racePhases.MAX_LAPS)
+    if now == session.settings.laps then return false, "no change" end
+    session.settings.laps = now
+    local phase = currentPhase(session)
+    if phase then phase.laps = now end
+    pushSessionUpdate(session)
+    return true
+end
+
 --- the plugin API's race.nextPhase : no more break, the next phase's countdown now
 ---@param session BJRaceSession
 ---@return boolean ok, string? why not
@@ -2788,6 +2834,9 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
     -- Keyed by step (progress number), not the raw gate index, so this stays correct even when
     -- several different physical gates share step 1 as parallel starting alternates
     local gateAlreadyCrossed = participant.gateTimes[gate.step] ~= nil
+    -- a flying start (a point-to-point track) : their time (this run's) starts here, at the first
+    -- checkpoint, instead of at their release
+    local flyingFrom = session.settings.flyingStart == true and not race.loopable and participant.currentGate == 0
 
     participant.currentGate = gate.step
     participant.lastCrossedGate = gateIndex
@@ -2801,6 +2850,11 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
     -- (a personal start's clock starts at 0 : the laps before it don't count here)
     local previousLapsElapsed = -(participant.elapsedOffsetMs or 0)
     table.forEach(participant.lapTimes, function(t) previousLapsElapsed = previousLapsElapsed + t end)
+    if flyingFrom then
+        -- the run up to the line doesn't count : the lap (run) is timed from now
+        participant.elapsedOffsetMs = (participant.elapsedOffsetMs or 0) - (elapsedMs - previousLapsElapsed)
+        previousLapsElapsed = elapsedMs
+    end
     local lapRelativeNow = elapsedMs - previousLapsElapsed
 
     -- live delta vs this participant's own best lap at the same STEP: nil (nothing to show)
@@ -2838,7 +2892,7 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
     -- crossing now. Kept as a loop rather than a single if-check anyway as a defensive backstop,
     -- not the primary fix. A single if-check silently drops a sector's timing entirely if it ever
     -- gets skipped this way again; a repeatable loop just quietly catches up instead.
-    local sectorGates = sectorEndGates(race)
+    local sectorGates = sectorEndGates(race, session.settings.flyingStart)
     local sectorCount = #sectorGates
     while participant.currentSector < sectorCount and
         gateIndex == sectorGates[participant.currentSector] do
@@ -2951,10 +3005,10 @@ end
 ---@param action "penalty"|"clearPenalties"|"disqualify"|"reinstate"
 ---@param seconds number? "penalty" : 0.1 to STAFF_PENALTY_MAX_SEC, to the tenth (the half-second button)
 --- race control for staff (watching the race, or in it) : the phase under way ends now, or gets 5
---- more minutes
+--- more minutes (a timed one) or one more lap or run (one on laps)
 ---@param ctxt BJSContext
 ---@param sessionId string
----@param action "endPhase"|"extendPhase"
+---@param action "endPhase"|"extendPhase"|"extendLaps"
 local function raceStaffPhase(ctxt, sessionId, action)
     if not ctxt.sender or not services_permissions.isStaff(ctxt.sender.playerName) then return end
     local session = M.sessions[sessionId]
@@ -2962,7 +3016,8 @@ local function raceStaffPhase(ctxt, sessionId, action)
     if M.spectators[ctxt.senderID] ~= sessionId and not session.participants[ctxt.senderID] then return end
     local ok
     if action == "endPhase" then ok = pluginEndPhase(session)
-    elseif action == "extendPhase" then ok = pluginExtendPhase(session, 5) end
+    elseif action == "extendPhase" then ok = pluginExtendPhase(session, 5)
+    elseif action == "extendLaps" then ok = pluginExtendLaps(session, 1) end
     if ok then
         LogInfo(string.format("raceGrid: %s : %s (session %s)", ctxt.sender.playerName, action, session.id))
     end
@@ -3401,6 +3456,7 @@ M.pluginSetFields = pluginSetFields
 M.pluginSetPhases = pluginSetPhases
 M.pluginEndPhase = pluginEndPhase
 M.pluginExtendPhase = pluginExtendPhase
+M.pluginExtendLaps = pluginExtendLaps
 M.pluginNextPhase = pluginNextPhase
 M.pluginStartRacer = pluginStartRacer
 M.pluginStopRacer = pluginStopRacer

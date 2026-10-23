@@ -27,14 +27,38 @@ angular.module("beamjoy").component("bjMainRaces", {
         // an event's format (cmps/racePhases) : one race as always, or phases ; "custom" once edited
         // built in, then the plugins' own (formats.register) for this kind of track ; "custom" once edited
         const pluginFormat = (ref) => (beamjoyPluginUi.state.formats || []).find((f) => f.ref === ref);
+        // this player's own saved formats (direct request) : "saved:<id>", kept by the game
+        // (lua beamjoy/raceRunner.lua's saveFormat, in their settings folder)
+        this.savedFormats = [];
+        const savedFormat = (value) => {
+            const m = /^saved:(\d+)$/.exec(value || "");
+            return m ? this.savedFormats.find((f) => Number(f.id) === Number(m[1])) || null : null;
+        };
+        let formatRace = null;
         const buildFormatOptions = (race) => {
+            formatRace = race;
             const fitting = (beamjoyPluginUi.state.formats || []).filter((f) =>
                 f.track === "any" || !f.track || (f.track === "loop") === !!(race && race.loopable));
             this.formatOptions = beamjoyRacePhases.FORMATS.map((f) => ({ value: f.id, label: `beamjoy.racePhases.formats.${f.id}` }))
                 .concat(fitting.map((f) => ({ value: f.ref, label: f.name })))
+                .concat(this.savedFormats.map((f) => ({ value: `saved:${f.id}`, label: f.name })))
                 .concat([{ value: "custom", label: "beamjoy.racePhases.formats.custom" }]);
         };
         buildFormatOptions(null);
+        // a format just saved : picked once the list comes back with it
+        let pendingSaveName = null;
+        $scope.$on("$destroy", $rootScope.$on("BJRaceSavedFormats", (_, list) => {
+            this.savedFormats = Array.isArray(list) ? list : [];
+            buildFormatOptions(formatRace);
+            const o = this.startOptions;
+            const saved = pendingSaveName !== null && this.savedFormats.find((f) => f.name === pendingSaveName);
+            pendingSaveName = null;
+            if (o && saved && Array.isArray(o.phaseList)) {
+                o.format = `saved:${saved.id}`;
+                formatAsPicked = sent(o.phaseList);
+            }
+        }));
+        beamjoyStore.send("BJRaceSavedFormatsRequest");
         // a plugin's format picked : what it says of itself, and what it locks
         this.formatInfo = () => {
             const f = this.startOptions && pluginFormat(this.startOptions.format);
@@ -349,6 +373,8 @@ angular.module("beamjoy").component("bjMainRaces", {
                 afterTime: d.afterTime || "leader",
                 // one race, or phases (the race's own, or a format picked here)
                 format: defaultPhases ? "custom" : "race",
+                // a point-to-point track : the time from the first checkpoint (a flying start)
+                flyingStart: d.flyingStart === true,
                 phaseList: defaultPhases ? beamjoyRacePhases.fromServer(d.phases) : null,
                 result: d.result === "sum" ? "sum" : "last",
                 respawnStrategy: d.respawnStrategy || "lastcheckpoint",
@@ -424,6 +450,12 @@ angular.module("beamjoy").component("bjMainRaces", {
                 o.phaseList = beamjoyRacePhases.fromServer(fromPlugin.phases);
                 o.result = fromPlugin.result || "last";
                 formatAsPicked = null;
+            } else if (savedFormat(id)) {
+                // one of this player's own
+                const saved = savedFormat(id);
+                o.phaseList = beamjoyRacePhases.fromServer(saved.phases);
+                o.result = saved.result === "sum" ? "sum" : "last";
+                formatAsPicked = sent(o.phaseList);
             } else if (id !== "custom") {
                 o.phaseList = beamjoyRacePhases.formatPhases(id, race.loopable, o.laps);
                 o.result = beamjoyRacePhases.formatResult(id);
@@ -435,11 +467,52 @@ angular.module("beamjoy").component("bjMainRaces", {
             const o = this.startOptions;
             o.phaseList = [beamjoyRacePhases.newPhase({
                 lengthMode: race.loopable ? o.lengthMode : "laps",
-                laps: o.laps,
+                // a point-to-point track (a sprint) : one run
+                laps: race.loopable ? o.laps : 1,
                 timeLimitMin: o.timeLimitMin,
                 afterTime: o.afterTime,
             })];
             o.format = "custom";
+        };
+        // SAVE / DELETE a format of your own (direct request) : these phases under a name, picked
+        // again from the list ; the same name replaces it (asked first)
+        this.canSaveFormat = () => {
+            const o = this.startOptions;
+            return !!o && Array.isArray(o.phaseList) && o.phaseList.length > 0 && !pluginFormat(o.format);
+        };
+        this.isSavedFormat = () => !!this.startOptions && !!savedFormat(this.startOptions.format);
+        this.saveFormat = (event) => {
+            event.stopPropagation();
+            if (!this.canSaveFormat()) return;
+            const o = this.startOptions;
+            const current = savedFormat(o.format);
+            beamjoyConfirm.askForInput(
+                translate("beamjoy.racePhases.saveFormat.prompt"),
+                current ? current.name : "",
+                translate("beamjoy.racePhases.saveFormat.placeholder"),
+                (name) => {
+                    const doSave = () => {
+                        pendingSaveName = name;
+                        beamjoyStore.send("BJRaceFormatSave", [name, beamjoyRacePhases.toServer(o.phaseList), o.result || "last"]);
+                    };
+                    const clash = this.savedFormats.find((f) => f.name === name);
+                    if (clash && (!current || clash.id !== current.id)) {
+                        beamjoyConfirm.ask(translate("beamjoy.racePhases.saveFormat.replace").replace("{name}", name), doSave);
+                    } else doSave();
+                },
+                null,
+                48
+            );
+        };
+        this.deleteFormat = (event) => {
+            event.stopPropagation();
+            const saved = this.startOptions && savedFormat(this.startOptions.format);
+            if (!saved) return;
+            beamjoyConfirm.ask(translate("beamjoy.racePhases.deleteFormat.confirm").replace("{name}", saved.name), () => {
+                beamjoyStore.send("BJRaceFormatDelete", [saved.id]);
+                // its phases stay as they are, a format of no name
+                if (this.startOptions && this.startOptions.format === `saved:${saved.id}`) this.startOptions.format = "custom";
+            });
         };
         // the phases edited : a format no more (compared as sent, the editor's own fields aside)
         const sent = (list) => angular.toJson(beamjoyRacePhases.toServer(list || []));
@@ -739,7 +812,8 @@ angular.module("beamjoy").component("bjMainRaces", {
                     : r.finished ? "beamjoy.window.main.tabs.races.raceControl.finished"
                     : "beamjoy.window.main.tabs.races.raceControl.racing"
             );
-        // the phase under way : ends now (a red flag), or 5 more minutes (a timed one)
+        // the phase under way : ends now (a red flag), 5 more minutes (a timed one), or one more lap
+        // or run (one on laps)
         this.staffPhase = (event, action) => {
             event.stopPropagation();
             if (action === "endPhase") {

@@ -71,6 +71,10 @@
     #beamjoy-race-countdown .race-countdown-badge.pb {
         color: #4caf50;
     }
+    /* a knockout : out */
+    #beamjoy-race-countdown .race-countdown-badge.out {
+        color: rgb(255, 110, 100);
+    }
     #beamjoy-race-countdown .race-countdown-badge.penalised {
         display: flex;
         align-items: center;
@@ -113,6 +117,20 @@
     <div class="race-countdown-time" ng-if="$ctrl.mode === 'finished' && $ctrl.timeMs != null">
         <span ng-if="$ctrl.isBestLap">{{'beamjoy.window.main.tabs.races.raceInfo.bestLap' | translate}}: </span>
         {{$ctrl.formatTime($ctrl.timeMs)}}
+    </div>
+    <div class="race-countdown-time" ng-if="$ctrl.mode === 'finished' && $ctrl.placeText">
+        {{$ctrl.placeText}}
+    </div>
+    <!-- a knockout phase over : their final place, through or out -->
+    <div class="race-countdown-number" ng-if="$ctrl.mode === 'phaseResult'" ng-class="$ctrl.knockout.through ? 'go' : 'dnf'">
+        {{$ctrl.place !== null ? 'P' + $ctrl.place : ('beamjoy.race.noTime' | translate)}}
+    </div>
+    <div class="race-countdown-time" ng-if="$ctrl.mode === 'phaseResult' && $ctrl.place !== null && $ctrl.placeOfText">
+        {{$ctrl.placeOfText}}
+    </div>
+    <div class="race-countdown-badge" ng-if="($ctrl.mode === 'finished' || $ctrl.mode === 'phaseResult') && $ctrl.knockout"
+        ng-class="$ctrl.knockout.through ? 'pb' : 'out'">
+        {{$ctrl.knockout.text}}
     </div>
     <div
         class="race-countdown-badge record"

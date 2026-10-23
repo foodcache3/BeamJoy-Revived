@@ -178,6 +178,33 @@
     bj-race-info-results button.cl.out {
         color: #979dad;
     }
+    /* a knockout : who goes through (green), who's out (red), and the line between */
+    bj-race-info-results button.cl.adv .plate:not(.p1) {
+        box-shadow: inset 0 0 0 1px rgba(76, 175, 80, 0.75);
+    }
+    bj-race-info-results button.cl.elim .plate:not(.dsq) {
+        background: rgba(214, 59, 59, 0.28);
+        box-shadow: inset 0 0 0 1px rgba(255, 110, 100, 0.55);
+    }
+    bj-race-info-results button.cl.elim .who b {
+        color: #f0a39b;
+    }
+    bj-race-info-results .cutline {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.2em 0.6em;
+        font-size: 0.72em;
+        font-weight: 600;
+        color: #8fd48f;
+        white-space: nowrap;
+    }
+    bj-race-info-results .cutline::before,
+    bj-race-info-results .cutline::after {
+        content: "";
+        flex: 1 1 auto;
+        border-top: 2px dashed rgba(76, 175, 80, 0.6);
+    }
     bj-race-info-results .who {
         display: flex;
         align-items: baseline;
@@ -472,7 +499,7 @@
             <span class="r">{{'beamjoy.raceInfo.bestLap' | translate}}</span>
         </div>
         <div class="scroll">
-            <button type="button" class="cl" ng-repeat="p in $ctrl.v.rows track by p.playerName" ng-class="p.rowCls"
+            <button type="button" class="cl" ng-repeat-start="p in $ctrl.v.rows track by p.playerName" ng-class="p.rowCls"
                 aria-pressed="{{p.selected}}" ng-click="$ctrl.selectPlayer(p.playerName)">
                 <span style="display: flex; justify-content: center"><span class="plate" ng-class="p.plateCls"><span>{{p.pos}}</span></span></span>
                 <span class="who"><b>{{p.name}}<bj-plugin-fields ng-if="p.fields" fields="p.fields"></bj-plugin-fields></b><small ng-if="p.car">{{p.car}}</small></span>
@@ -480,6 +507,7 @@
                 <span class="r">{{p.gap}}</span>
                 <span class="r" ng-class="p.bestCls">{{p.best}}</span>
             </button>
+            <div class="cutline" ng-repeat-end ng-if="p.cutAfter"><span>{{$ctrl.v.cut.label}}</span></div>
         </div>
     </div>
 

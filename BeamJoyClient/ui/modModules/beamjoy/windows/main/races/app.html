@@ -267,6 +267,11 @@
         <button type="button" class="bjr-btn small ghost" ng-if="$ctrl.status.timed" ng-click="$ctrl.staffPhase($event, 'extendPhase')">
             {{'beamjoy.window.main.tabs.races.raceControl.extendPhase' | translate}}
         </button>
+        <!-- a phase on laps : one more (a run on a point-to-point track), until someone's finished it -->
+        <button type="button" class="bjr-btn small ghost" ng-if="$ctrl.status.extendLaps" ng-click="$ctrl.staffPhase($event, 'extendLaps')"
+            title="{{'beamjoy.window.main.tabs.races.raceControl.extendLaps.tooltip' | translate}}">
+            {{($ctrl.status.runs ? 'beamjoy.window.main.tabs.races.raceControl.extendRuns' : 'beamjoy.window.main.tabs.races.raceControl.extendLaps') | translate}}
+        </button>
     </div>
     <div class="extras" ng-if="!$ctrl.inviting">
         <button type="button" class="bjr-btn small ghost" ng-click="$ctrl.openRaceInfo($event)" title="{{$ctrl.statusInfoText()}}">
@@ -308,6 +313,10 @@
             </button>
             <button type="button" class="bjr-btn small" ng-if="$ctrl.spectateStatus.timed" ng-click="$ctrl.staffPhase($event, 'extendPhase')">
                 {{'beamjoy.window.main.tabs.races.raceControl.extendPhase' | translate}}
+            </button>
+            <button type="button" class="bjr-btn small" ng-if="$ctrl.spectateStatus.extendLaps" ng-click="$ctrl.staffPhase($event, 'extendLaps')"
+                title="{{'beamjoy.window.main.tabs.races.raceControl.extendLaps.tooltip' | translate}}">
+                {{($ctrl.spectateStatus.runs ? 'beamjoy.window.main.tabs.races.raceControl.extendRuns' : 'beamjoy.window.main.tabs.races.raceControl.extendLaps') | translate}}
             </button>
         </div>
         <div class="rc-row" ng-repeat="r in $ctrl.spectateStatus.racers track by r.playerID" ng-class="{out: r.disqualified}">
@@ -377,7 +386,19 @@
             <!-- one race, or an event of phases (practice, qualifying, heats...) -->
             <div class="bjr-field">
                 <span class="name" title="{{'beamjoy.racePhases.format.tooltip' | translate}}">{{'beamjoy.racePhases.format' | translate}}</span>
-                <bj-select ng-model="$ctrl.startOptions.format" options="$ctrl.formatOptions" ng-change="$ctrl.setFormat(race, value)"></bj-select>
+                <!-- the list, then saving these phases as a format of your own, or deleting yours -->
+                <div style="display: flex; align-items: center; gap: 0.35em">
+                    <bj-select style="flex: 1 1 auto; min-width: 0" ng-model="$ctrl.startOptions.format" options="$ctrl.formatOptions"
+                        ng-change="$ctrl.setFormat(race, value)"></bj-select>
+                    <button type="button" class="bjr-btn small ghost" ng-if="$ctrl.canSaveFormat()" ng-click="$ctrl.saveFormat($event)"
+                        title="{{'beamjoy.racePhases.saveFormat.tooltip' | translate}}">
+                        {{'beamjoy.racePhases.saveFormat' | translate}}
+                    </button>
+                    <button type="button" class="bjr-btn small danger" ng-if="$ctrl.isSavedFormat()" ng-click="$ctrl.deleteFormat($event)"
+                        title="{{'beamjoy.racePhases.deleteFormat.tooltip' | translate}}">
+                        {{'beamjoy.racePhases.deleteFormat' | translate}}
+                    </button>
+                </div>
             </div>
 
             <!-- ONE RACE : its length, laps, time, or both (whichever comes first) -->
@@ -417,6 +438,23 @@
             <bj-race-phases ng-if="$ctrl.startOptions.phaseList" phases="$ctrl.startOptions.phaseList"
                 result="$ctrl.startOptions.result" loopable="race.loopable" laps="$ctrl.startOptions.laps"
                 locked="$ctrl.formatLocked()"></bj-race-phases>
+
+            <!-- a point-to-point track (a sprint) : the time from the release, or from the first checkpoint -->
+            <div class="bjr-field" ng-if="!race.loopable">
+                <span class="name" title="{{'beamjoy.window.config.tabs.races.timingStart.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.races.timingStart' | translate}}
+                </span>
+                <div class="bjr-seg">
+                    <button type="button" ng-class="{on: !$ctrl.startOptions.flyingStart}" ng-click="$ctrl.startOptions.flyingStart = false"
+                        title="{{'beamjoy.window.config.tabs.races.timingStarts.standing.tooltip' | translate}}">
+                        {{'beamjoy.window.config.tabs.races.timingStarts.standing' | translate}}
+                    </button>
+                    <button type="button" ng-class="{on: $ctrl.startOptions.flyingStart}" ng-click="$ctrl.startOptions.flyingStart = true"
+                        title="{{'beamjoy.window.config.tabs.races.timingStarts.flying.tooltip' | translate}}">
+                        {{'beamjoy.window.config.tabs.races.timingStarts.flying' | translate}}
+                    </button>
+                </div>
+            </div>
 
             <div class="bjr-field">
                 <span class="name" title="{{'beamjoy.window.main.tabs.races.vehicleRestriction.startMode.tooltip' | translate}}">

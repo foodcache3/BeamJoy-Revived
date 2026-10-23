@@ -94,6 +94,8 @@
 ---from ghostOnCountdown's own "race" ghost reason (see vehicles.lua's M.ghostReasons), so it never
 ---interferes with ghostOnCountdown's own solo-only full-race behavior or its multiplayer
 ---RACE-transition un-ghost ; default false
+---@field flyingStart boolean? a point-to-point track only : each racer's time starts as they cross
+---its first checkpoint, not when they're released (a flying start) ; default false (a standing start)
 ---@field ghostBackmarkers boolean? opt-in : once the race leader has gained a full lap of real
 ---gate-progress on a given participant (genuinely lapped them, not just a raw lap-NUMBER
 ---difference; see raceGrid.lua's buildSettings for why that distinction matters), that
@@ -513,6 +515,7 @@ local function sanitizeRace(race, existingRaces)
     race.defaults.ghostOnCountdown = race.defaults.ghostOnCountdown ~= false
     race.defaults.disableCollisions = race.defaults.disableCollisions == true
     race.defaults.ghostBackmarkers = race.defaults.ghostBackmarkers == true
+    race.defaults.flyingStart = race.defaults.flyingStart == true
     race.defaults.showGateNametags = race.defaults.showGateNametags == true
     race.defaults.limitVisibleGates = race.defaults.limitVisibleGates ~= false
     race.defaults.visibleGateCount = math.max(1, math.min(math.floor(tonumber(race.defaults.visibleGateCount) or 2), 5))

@@ -757,6 +757,24 @@
                     </div>
                 </td>
             </tr>
+            <!-- a point-to-point track : the time from the release, or from the first checkpoint -->
+            <tr ng-if="!$ctrl.race.loopable">
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.races.timingStart.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.races.timingStart' | translate}}
+                </td>
+                <td>
+                    <div class="d-flex gap-1 flex-wrap">
+                        <button class="btn info" ng-class="{success: !$ctrl.race.defaults.flyingStart}" ng-click="$ctrl.race.defaults.flyingStart = false"
+                            title="{{'beamjoy.window.config.tabs.races.timingStarts.standing.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.timingStarts.standing' | translate}}
+                        </button>
+                        <button class="btn info" ng-class="{success: $ctrl.race.defaults.flyingStart}" ng-click="$ctrl.race.defaults.flyingStart = true"
+                            title="{{'beamjoy.window.config.tabs.races.timingStarts.flying.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.timingStarts.flying' | translate}}
+                        </button>
+                    </div>
+                </td>
+            </tr>
             <tr>
                 <td
                     class="text-right"

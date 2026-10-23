@@ -8,7 +8,19 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2483, client build 2754 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2484, client build 2756 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **Fix (2755) : every seat showed an occupant** (reported : "vehicle presets sometimes fill every
+  slot with occupants"). The game hides an empty seat's occupant figure by making it fully
+  transparent, and BeamJoy's ghost look set the transparency of the whole car : every ghost
+  change (respawn protection, a race's countdown, a safe zone) and every switch between cars
+  showed a figure in every seat. The car's transparency now leaves the figures as the game has
+  them, an occupied seat's following the car's ghost look. *(client only)*
+
+- **Races with collisions off : the others look ghosted, not you (2755)** (direct request).
+  Nothing on track can touch you for the whole race, so your own car stays solid on your screen
+  and every other car is see-through, the way a solo race already looked. Only the look changes :
+  everyone else still sees your car see-through. *(client only)*
 
 - **Fix (2483, 2754) : Derby, Hunter and Infected didn't start on "GO" like races** (reported).
   Their start was a server timer counting whole seconds (utils_async.delayTask), fired up to ~2 s
@@ -104,7 +116,28 @@ Server build 2483, client build 2754 (main got its own 2749, 2751, then 2752 for
     one on track leaving ends their turn (their laps kept) instead of making everyone wait out
     their reconnect time. API : start `"sequential"`.
   - Fixes (2754) : the phase rules' dropdowns (respawn, collisions, stall DNF, reset penalty)
-    showed empty instead of "As the event" (reported).
+    showed empty instead of "As the event" (reported). 2755 : the lobby's countdown to the next
+    phase stood still during a break (reported) ; it ticks every second like the lobby's own.
+  - **Flying starts (2484, 2756)** (direct request) : on a point-to-point track (a sprint), the
+    start menu and the race editor's defaults choose when each racer's time starts : as they're
+    released ("Standing start", as before) or as they cross the first checkpoint ("Flying start" :
+    up to speed by then). Every run is timed so in open runs, one at a time and time offsets too.
+    The HUD's lap clock waits at 0 for the line, and no sector ends on it. Circuits don't show
+    it : their laps already run line to line. Race default `flyingStart`.
+  - **Race control : +1 lap (2484, 2756)** (direct request) : a phase on laps gets "+1 lap" ("+1
+    run" on a point-to-point track) beside "+5 min" for a timed one, both when it has both. Not
+    once someone has finished the phase : the others would race more than they did. API :
+    `race.extendPhase {sessionId, laps}` (fewer with a negative, never under what anyone's done).
+  - **Saved formats (2756)** (direct request) : the start menu's Format list has Save (asks a name ;
+    the same name replaces, asked first) and Delete (asked first) for a format of your own. They
+    are yours, kept in your game's settings folder (`settings/beamjoy_raceFormats.json`), 50 at most.
+  - **Knockouts (2756)** (direct request) : the finish popup says the place you finished in (racing
+    others ; "so far" while others are still out there) and, when a later phase takes only the top
+    n of this one, whether that puts you through. When the phase ends, a popup gives the final
+    word : your place, through to the next phase or eliminated. The results tab draws a line under
+    the ones going through ("Top 10 through to Q2"), their places outlined green, the ones out red.
+  - A point-to-point track's phases (a sprint) start on one run, unless the format says otherwise
+    (direct request).
   - **Joining mid-event** (per phase) : a player joining while a phase runs readies up and starts on
     their own after a short countdown ; in a race their time counts from its green light.
   - HUD : the phase's name, a timed phase's time left, standings by its ranking. Staff race control

@@ -640,12 +640,22 @@ M.methods["race.endPhase"] = function(params, ctx)
     return { sessionId = session.id, phaseIndex = session.phaseIndex }
 end
 
---- more time for a timed phase (`minutes`, less with a negative)
+--- more time for a timed phase (`minutes`, less with a negative), or more laps (runs) for one on
+--- laps (`laps`)
 M.methods["race.extendPhase"] = function(params, ctx)
     local plugin, perr = pluginOf(ctx)
     if not plugin then return nil, "badParams", perr end
     local session = findSession(params.sessionId)
     if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
+    if params.laps ~= nil and params.minutes == nil then
+        local laps = tonumber(params.laps)
+        if not laps or laps ~= laps or laps ~= math.floor(laps) or laps == 0 or math.abs(laps) > 999 then
+            return nil, "badParams", "laps must be a whole number, not 0, 999 at most either way"
+        end
+        local ok, why = services_raceGrid.pluginExtendLaps(session, laps)
+        if not ok then return nil, "refused", why end
+        return { sessionId = session.id, laps = session.settings.laps }
+    end
     local minutes = tonumber(params.minutes)
     if not minutes or minutes ~= minutes or minutes == 0 or math.abs(minutes) > 600 then
         return nil, "badParams", "minutes must be a number, not 0, 600 at most either way"

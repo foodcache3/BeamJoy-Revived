@@ -221,9 +221,11 @@ A lobby's [phases](#phases), and how the event's result comes from them, checked
 Everyone goes back to not ready. → `{sessionId, phases, result}`. Error `refused` once it's no
 longer a lobby.
 
-### `race.endPhase` `{sessionId}` / `race.extendPhase` `{sessionId, minutes}` / `race.nextPhase` `{sessionId}`
+### `race.endPhase` `{sessionId}` / `race.extendPhase` `{sessionId, minutes}` or `{sessionId, laps}` / `race.nextPhase` `{sessionId}`
 The phase under way ends now (a red flag, a judged run over : laps under way don't count) ; a
-timed phase gets `minutes` more (less, negative ; not once its time is up) ; between two phases,
+timed phase gets `minutes` more (less, negative ; not once its time is up) → `{sessionId, endsAt}`,
+or a phase on laps gets `laps` more (runs on a point-to-point track ; fewer, negative, never under
+what anyone's done ; not once someone's finished it) → `{sessionId, laps}` ; between two phases,
 the next one's countdown starts now. Error `refused` when the session isn't in that state.
 
 ### `race.startRacer` `{sessionId, playerId, countdownS?, from?}` / `race.stopRacer` `{sessionId, playerId}`

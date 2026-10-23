@@ -149,6 +149,72 @@ local M = {
     previousSpawnQueueSetting = nil,
 }
 
+-- the start menu's saved formats (direct request : save, with a name, and delete) : this
+-- player's own phase lists, kept in their game's settings
+local FORMATS_FILE = "/settings/beamjoy_raceFormats.json"
+local MAX_SAVED_FORMATS = 50
+-- bytes : the start menu holds a name to 48 characters, up to 4 bytes each
+local FORMAT_NAME_MAX = 192
+
+---@return {id: integer, name: string, phases: table[], result: string}[]
+local function readSavedFormats()
+    local ok, data = pcall(jsonReadFile, FORMATS_FILE)
+    if not ok or type(data) ~= "table" or type(data.formats) ~= "table" then return {} end
+    local out = {}
+    for _, f in ipairs(data.formats) do
+        if type(f) == "table" and tonumber(f.id) and type(f.name) == "string" and type(f.phases) == "table" then
+            out[#out + 1] = f
+        end
+    end
+    return out
+end
+
+---@param list table[]
+local function writeSavedFormats(list)
+    local ok, err = pcall(jsonWriteFile, FORMATS_FILE, { formats = list }, true)
+    if not ok then LogError("beamjoy_raceRunner: couldn't save the race formats: " .. tostring(err)) end
+end
+
+local function pushSavedFormats()
+    beamjoy_communications_ui.send("BJRaceSavedFormats", readSavedFormats())
+end
+
+--- saves a phase list under a name ; the same name replaces it
+---@param name string
+---@param phases table[] as the server takes them (cmps/racePhases toServer)
+---@param result string?
+local function saveFormat(name, phases, result)
+    if type(name) ~= "string" or type(phases) ~= "table" or #phases == 0 then return end
+    name = name:gsub("^%s+", ""):gsub("%s+$", ""):sub(1, FORMAT_NAME_MAX)
+    if #name == 0 then return end
+    local list, nextId = readSavedFormats(), 1
+    local entry
+    for _, f in ipairs(list) do
+        nextId = math.max(nextId, math.floor(tonumber(f.id)) + 1)
+        if f.name == name then entry = f end
+    end
+    if not entry then
+        if #list >= MAX_SAVED_FORMATS then
+            return toast.warn(string.format("%d saved formats at most : delete one first", MAX_SAVED_FORMATS))
+        end
+        entry = { id = nextId, name = name }
+        list[#list + 1] = entry
+    end
+    entry.phases = phases
+    entry.result = result == "sum" and "sum" or "last"
+    writeSavedFormats(list)
+    pushSavedFormats()
+end
+
+---@param id integer
+local function deleteFormat(id)
+    local list = readSavedFormats()
+    local kept = table.filter(list, function(f) return tonumber(f.id) ~= tonumber(id) end)
+    if #kept == #list then return end
+    writeSavedFormats(kept)
+    pushSavedFormats()
+end
+
 local function onInit()
     beamjoy_communications.addHandler("raceSessionUpdate", M.onSessionUpdate)
     beamjoy_communications.addHandler("raceSessionsList", M.onSessionsList)
@@ -176,7 +242,8 @@ local function onInit()
         if M.ready(true) then beamjoy_communications.send("raceStartNow", M.session.id) end
     end)
     beamjoy_communications_ui.addHandler("BJRaceRetire", M.retire)
-    -- race control for staff : the phase under way ends now, or gets 5 more minutes
+    -- race control for staff : the phase under way ends now, or gets 5 more minutes (a timed one)
+    -- or one more lap (one on laps)
     beamjoy_communications_ui.addHandler("BJRaceStaffPhase", function(action)
         local session = M.spectatingSession or M.session
         if session then beamjoy_communications.send("raceStaffPhase", session.id, action) end
@@ -210,6 +277,10 @@ local function onInit()
     -- coordinate with the session/server at all, just the local vehicle
     beamjoy_communications_ui.addHandler("BJRacePaintOptionsRequest", M.pushPaintOptions)
     beamjoy_communications_ui.addHandler("BJRaceSetPaint", M.setPaint)
+    -- the start menu's saved formats
+    beamjoy_communications_ui.addHandler("BJRaceSavedFormatsRequest", pushSavedFormats)
+    beamjoy_communications_ui.addHandler("BJRaceFormatSave", saveFormat)
+    beamjoy_communications_ui.addHandler("BJRaceFormatDelete", deleteFormat)
 end
 
 --- Auto-applies BeamMP's own native spawn/edit queue (the same action the player would otherwise
@@ -254,6 +325,50 @@ local function currentPhase(session)
     return session and session.phases and session.phases[session.phaseIndex or 1] or nil
 end
 
+--- a knockout (direct request) : the first phase after `index` that takes only the top n of its
+--- result (services/racePhases.lua's `takes`)
+---@param session BJRaceSession
+---@param index integer
+---@return {top: integer, phaseName: string?, phaseNumber: integer}?
+local function knockoutAfter(session, index)
+    for j = index + 1, #(session.phases or {}) do
+        local takes = session.phases[j].takes
+        if type(takes) == "table" and takes.from == index and tonumber(takes.top) then
+            return { top = tonumber(takes.top), phaseName = session.phases[j].name, phaseNumber = j }
+        end
+    end
+end
+
+--- a racer's place in the phase under way (the server's standings) out of how many, and whether
+--- someone else is still to finish it (the place can still change) ; nil racing alone
+---@param session BJRaceSession
+---@param participant BJRaceParticipant
+---@return integer? place, integer? of, boolean? provisional
+local function standingOf(session, participant)
+    local rows = table.filter(session.leaderboard or {}, function(p) return not p.sittingOut end)
+    if #rows < 2 then return nil end
+    local place
+    for i, row in ipairs(rows) do
+        if row.playerName == participant.playerName then
+            place = i
+            break
+        end
+    end
+    local open = table.any(session.participants, function(p)
+        return p.playerName ~= participant.playerName and not (p.finished or p.dnf or p.disqualified or p.sittingOut)
+    end)
+    return place, #rows, open
+end
+
+--- race control's "+1 lap" : a phase on laps (runs) that nobody has finished yet (raceGrid.lua's
+--- pluginExtendLaps refuses after : the others would race more than they did)
+---@param session BJRaceSession
+---@return boolean
+local function lapsExtendable(session)
+    return session.state == "RACE" and session.settings.laps ~= nil and session.flagAtMs == nil and
+        not table.any(session.participants, function(p) return p.finished == true end)
+end
+
 --- a timed phase's time left (ms), or nil : from its end on the shared clock, else the server's
 --- last reckoning
 ---@param session BJRaceSession
@@ -277,8 +392,11 @@ end
 --- the info panel iterates the same number of S1..SN columns the server actually populated,
 --- whether that count came from the automatic distance split or manually-flagged gates.
 ---@param race BJRace
+---@param flyingStart boolean? the session's flying start (raceGrid.lua's sectorEndGates : a
+---point-to-point track's first checkpoint is then where the time starts, never a sector's end)
 ---@return integer
-local function computeSectorCount(race)
+local function computeSectorCount(race, flyingStart)
+    local flying = flyingStart == true and not race.loopable
     -- sectors are disabled outright for a branching race (see races.lua's own
     -- BJRace.branchingEnabled doc), mirroring raceGrid.lua's sectorEndGates own branching
     -- short-circuit so this stays consistent with what the server actually populated. Real,
@@ -292,11 +410,11 @@ local function computeSectorCount(race)
     if race.manualSectors then
         local flagged = 0
         for i, g in ipairs(race.gates) do
-            if g.sector and i < #race.gates then flagged = flagged + 1 end
+            if g.sector and i < #race.gates and not (flying and i == 1) then flagged = flagged + 1 end
         end
         if flagged > 0 then return flagged + 1 end
     end
-    return math.max(1, math.min(race.sectorCount or 3, #race.gates))
+    return math.max(1, math.min(race.sectorCount or 3, #race.gates - (flying and 1 or 0)))
 end
 
 ---@return BJRace?
@@ -1409,7 +1527,7 @@ local function pushHud()
         active = true,
         raceName = race.name,
         totalGates = totalSteps(race),
-        totalSectors = computeSectorCount(race),
+        totalSectors = computeSectorCount(race, session.settings.flyingStart),
         -- nil : a timed phase with no lap count (timeLeftMs below)
         totalLaps = session.settings.laps,
         elapsedMs = elapsedMs,
@@ -1434,7 +1552,9 @@ local function pushHud()
             dnf = participant.dnf,
             disqualified = participant.disqualified,
             penaltyMs = participant.penaltyMs,
-            currentLapElapsedMs = elapsedMs - previousLapsElapsed,
+            -- a flying start (a point-to-point track) : not timed until the first checkpoint
+            currentLapElapsedMs = (session.settings.flyingStart and not race.loopable and
+                (participant.currentGate or 0) == 0) and 0 or elapsedMs - previousLapsElapsed,
             lastLapMs = participant.lapTimes and participant.lapTimes[#participant.lapTimes] or nil,
             bestLapMs = participant.bestLapMs,
             liveDeltaMs = participant.liveDeltaMs,
@@ -1535,7 +1655,9 @@ local function pushRaceInfo()
     local phases, phaseResults = {}, {}
     for i, phase in ipairs(session.phases or {}) do
         phases[i] = { index = i, name = phase.name, ranking = phase.ranking, laps = phase.laps,
-            timeLimitMin = phase.timeLimitMin, countsToEvent = phase.countsToEvent }
+            timeLimitMin = phase.timeLimitMin, countsToEvent = phase.countsToEvent,
+            -- a knockout : the results mark the cut (who goes through to it)
+            takes = phase.takes }
         local rows = session.phaseResults and session.phaseResults[i]
         if rows then phaseResults["p" .. i] = resultRows(rows) end
     end
@@ -1555,7 +1677,7 @@ local function pushRaceInfo()
         eventResult = session.result or "last",
         eventStandings = session.eventStandings and resultRows(session.eventStandings) or nil,
         totalGates = totalSteps(race),
-        sectorCount = computeSectorCount(race),
+        sectorCount = computeSectorCount(race, session.settings.flyingStart),
         selfPlayerName = MPConfig.getNickname(),
         -- leaderboard (already correctly sorted server-side) when there's someone to compare
         -- against, else just this player's own solo entry. Either way, every participant's full
@@ -1649,6 +1771,9 @@ local function pushSpectateStatus()
         staff = staff,
         -- race control : a timed phase can get more time
         timed = M.spectatingSession.phaseEndsAtMs ~= nil and M.spectatingSession.flagAtMs == nil,
+        -- ... and one on laps, a lap more (a run more on a point-to-point track)
+        extendLaps = lapsExtendable(M.spectatingSession),
+        runs = race ~= nil and not race.loopable,
         racers = staff and table.map(M.spectatingSession.participants, function(p)
             return {
                 playerID = p.playerID,
@@ -1843,6 +1968,8 @@ local function pushSessionStatus()
         -- race control for staff in the race (the phase : end it, more time)
         staff = beamjoy_permissions.isStaff(),
         timed = M.session.phaseEndsAtMs ~= nil and M.session.flagAtMs == nil,
+        extendLaps = lapsExtendable(M.session),
+        runs = race ~= nil and not race.loopable,
         breakSecondsLeft = M.breakTargetMs and
             math.max(0, math.ceil((M.breakTargetMs - GetCurrentTimeMillis()) / 1000)) or nil,
         respawnStrategy = M.session.settings.respawnStrategy,
@@ -2217,6 +2344,9 @@ local function onSessionUpdate(session)
             -- the next phase's rules decide again at its countdown
             beamjoy_vehicles.setGhostReason(myVeh.vid, "noCollisionRace", false)
             beamjoy_vehicles.setGhostReason(myVeh.vid, "backmarker", false)
+        else
+            -- out of the phase, car gone (its reasons with it) : the others' ghosted look goes too
+            beamjoy_vehicles.setSoloGhostVisualReversed(false)
         end
         camera.stopForcedCameras()
         camera.unblockCameras()
@@ -2224,6 +2354,29 @@ local function onSessionUpdate(session)
         extensions.hook("onBJScenarioChanged")
         local race = getRace()
         beamjoy_communications_ui.send("BJRaceInfoAutoOpen", { raceName = race and race.name })
+
+        -- a knockout's verdict, final (direct request) : their place in the phase just over, and
+        -- whether it puts them through to the one taking its top n. Not for one who sat it out
+        local ended = session.phaseIndex or 1
+        local knockout = knockoutAfter(session, ended)
+        local rows = knockout and session.phaseResults and session.phaseResults[ended]
+        local mine = rows and table.find(rows, function(r)
+            return (r.connectionName or r.playerName) == participant.playerName
+        end)
+        if mine then
+            knockout.through = mine.position ~= nil and mine.position <= knockout.top
+            beamjoy_communications_ui.send("BJRaceCountdown", {
+                active = true,
+                mode = "phaseResult",
+                raceName = race and race.name,
+                place = mine.position,
+                placeOf = #rows,
+                knockout = knockout,
+            })
+            async.delayTask(function()
+                beamjoy_communications_ui.send("BJRaceCountdown", { active = false })
+            end, FINISH_POPUP_SECONDS * 1000, "BJRaceCountdownFinishedHide")
+        end
     end
 
     if session.state == "COUNTDOWN" and not wasCountdown and not participant.sittingOut then
@@ -2481,6 +2634,12 @@ local function onSessionUpdate(session)
         -- race has no separate concept of "lap" vs "the whole attempt", so total time stays as-is
         -- the best lap too for a timed phase, and for one ranked by best lap
         local loopable = (session.settings.laps or 2) > 1 or session.settings.ranking == "best"
+        -- the place they finished in, racing others, and in a knockout (a later phase takes only
+        -- the top n of this one) whether it puts them through (direct request). Someone still out
+        -- there can change it : "so far"
+        local place, placeOf, provisional = standingOf(session, participant)
+        local knockout = knockoutAfter(session, session.phaseIndex or 1)
+        if knockout then knockout.through = place ~= nil and place <= knockout.top end
         beamjoy_communications_ui.send("BJRaceCountdown", {
             active = true,
             mode = "finished",
@@ -2501,6 +2660,10 @@ local function onSessionUpdate(session)
             isNewRecord = participant.isNewRecord == true,
             -- staff time penalties so far, added to the race time (the popup shows the slip)
             penaltyMs = participant.penaltyMs,
+            place = place,
+            placeOf = placeOf,
+            provisional = provisional == true,
+            knockout = place and knockout or nil,
         })
         async.delayTask(function()
             beamjoy_communications_ui.send("BJRaceCountdown", { active = false })
@@ -2950,7 +3113,8 @@ local function onUpdate()
     M.prevFrameElapsedMs = M.frameElapsedMs
     updateNodegrabberCamera()
     M.frameElapsedMs = raceElapsedNowMs()
-    if M.session and M.session.state == "GRID" then
+    -- the lobby's timers : the lobby's own, and a break's countdown to the next phase
+    if M.session and (M.session.state == "GRID" or M.session.state == "BREAK") then
         updateGridCountdown()
     end
     if M.session and M.session.state == "COUNTDOWN" then

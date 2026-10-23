@@ -184,7 +184,7 @@ local function registerVehicle(vid, callback)
         -- other already-tracked vehicle got when the reversal first turned on. Its own ghost
         -- flag never changes just because it spawned, so nothing else would ever apply this
         if M.soloGhostVisualReversed then
-            veh:setMeshAlpha(M.computeDisplayAlpha(vid, veh.ghost == "1"), "")
+            M.applyDisplayAlpha(veh)
         end
 
         -- consume any ghost broadcast that arrived for this vehicle before it finished syncing in
@@ -269,7 +269,7 @@ local function onVehicleSwitched(previousVID, newVID)
         -- recomputed on BOTH sides of the switch now, not just when v.veh.ghost == "1" : under
         -- M.soloGhostVisualReversed, a non-ghosted OTHER vehicle also needs to show translucent,
         -- so "is this vehicle itself ghosted" alone isn't enough to decide anymore either
-        v.veh:setMeshAlpha(M.computeDisplayAlpha(v.vid, v.veh.ghost == "1"), "")
+        M.applyDisplayAlpha(v.veh)
     end
     if newVID ~= -1 then
         local timeout = GetCurrentTimeMillis() + 2000
@@ -297,7 +297,7 @@ local function onVehicleSwitched(previousVID, newVID)
             end
             -- same re-assert as the previousVID side above
             if v then
-                v.veh:setMeshAlpha(M.computeDisplayAlpha(v.vid, v.veh.ghost == "1"), "")
+                M.applyDisplayAlpha(v.veh)
             end
         end)
     else
@@ -461,7 +461,7 @@ local function onServerTick(ctxt)
         lastCollisionsMode = collisionsMode
         if wasDisabled ~= isDisabled then
             M.vehicles:forEach(function(mpVeh)
-                mpVeh.veh:setMeshAlpha(M.computeDisplayAlpha(mpVeh.vid, mpVeh.veh.ghost == "1"), "")
+                M.applyDisplayAlpha(mpVeh.veh)
             end)
         end
     end
@@ -1191,6 +1191,7 @@ M.ghostReasons = {}
 --- whole race), per direct request : a solo racer doesn't want to stare at their own half-
 --- invisible car for an entire race, and every OTHER vehicle nearby genuinely can't stop them
 --- (that's the whole point of the ghost), so flagging THOSE as the visually-odd ones reads better.
+--- Same for a race with collisions off, whatever its size (see setGhostReason's "noCollisionRace").
 --- Purely a local rendering choice. The real ghost/collision flag and its cross-client sync are
 --- completely unaffected ; every OTHER client still sees this player's own vehicle as the
 --- (correctly, per the real synced ghost flag) translucent one, exactly as before.
@@ -1233,6 +1234,42 @@ local function computeDisplayAlpha(vid, isGhosted)
     return isGhosted and 0.5 or 1
 end
 
+-- the game's seat occupant figures (gameplay/seatOccupants.lua's setOccupantMeshes)
+local OCCUPANT_MESHES = { character_torso = true, character_head = true }
+
+--- sets a vehicle's transparency (computeDisplayAlpha), its seat occupants kept as the game has
+--- them. Real bug (reported : "vehicle presets sometimes fill every slot with occupants") :
+--- setMeshAlpha(alpha, "") reaches every mesh of the car, and the game hides an empty seat's
+--- occupant figure by its alpha (0), so every ghost change or vehicle switch showed a figure in
+--- every seat. The empty seats' figures are hidden again, the occupied ones follow the car's alpha
+---@param veh NGVehicle
+---@param isGhosted boolean? the vehicle's ghost state, its "ghost" field when omitted
+local function applyDisplayAlpha(veh, isGhosted)
+    if isGhosted == nil then isGhosted = veh.ghost == "1" end
+    local vid = veh:getID()
+    local alpha = computeDisplayAlpha(vid, isGhosted)
+    veh:setMeshAlpha(alpha, "")
+    if not gameplay_seatOccupants or not core_vehicle_manager then return end
+    local vehData = core_vehicle_manager.getVehicleData(vid)
+    local vdata = vehData and vehData.vdata
+    if not vdata then return end
+    local figuresShown = settings.getValue("enableSeatOccupants", true)
+    -- occupant part path -> whether its figure shows
+    local shown = {}
+    for _, seat in ipairs(gameplay_seatOccupants.getSeats(vid) or {}) do
+        if seat.partPath then shown[seat.partPath] = figuresShown and seat.occupied == true end
+    end
+    if not next(shown) then return end
+    local function apply(meshData)
+        if meshData.mesh and shown[meshData.partPath] ~= nil and
+            OCCUPANT_MESHES[meshData.originalMesh or meshData.mesh] then
+            veh:setMeshAlpha(shown[meshData.partPath] and alpha or 0, meshData.mesh)
+        end
+    end
+    for _, flexbody in pairs(vdata.flexbodies or {}) do apply(flexbody) end
+    for _, prop in pairs(vdata.props or {}) do apply(prop) end
+end
+
 ---@param state boolean
 local function setSoloGhostVisualReversed(state)
     if M.soloGhostVisualReversed == state then return end
@@ -1248,7 +1285,7 @@ end
 local function reapplyDisplayAlpha()
     M.vehicles:forEach(function(mpVeh)
         if mpVeh.veh then
-            mpVeh.veh:setMeshAlpha(computeDisplayAlpha(mpVeh.vid, mpVeh.veh.ghost == "1"), "")
+            applyDisplayAlpha(mpVeh.veh)
         end
     end)
 end
@@ -1263,7 +1300,7 @@ local function setPhotoSubject(vid)
     local function apply(id)
         local veh = id and be:getObjectByID(id)
         if veh then
-            veh:setMeshAlpha(computeDisplayAlpha(id, veh.ghost == "1"), "")
+            applyDisplayAlpha(veh)
         end
     end
     if previous ~= vid then apply(previous) end
@@ -1291,9 +1328,14 @@ local function setGhostReason(vid, reason, active, force, checkGhostedBystanders
     -- COUNTDOWN grid-ghost is unaffected. Every "race"-reason call already always targets the
     -- local player's own vehicle (raceRunner.lua never calls this for anyone else's), but checked
     -- explicitly anyway rather than assumed.
-    if reason == "race" and mpVeh.isLocal then
+    -- A race with collisions off ("noCollisionRace") too, per direct request ("everyone else should
+    -- have the ghost effect applied rather than you on your own screen") : nothing on track can
+    -- touch you for the whole race, so it's the others that look ghosted, your own car solid
+    if (reason == "race" or reason == "noCollisionRace") and mpVeh.isLocal then
+        local reasons = M.ghostReasons[vid]
         local session = beamjoy_raceRunner and beamjoy_raceRunner.session
-        M.setSoloGhostVisualReversed(active and session ~= nil and #session.participants <= 1)
+        M.setSoloGhostVisualReversed(reasons.noCollisionRace == true or
+            (reasons.race == true and session ~= nil and #session.participants <= 1))
     end
 end
 
@@ -1419,7 +1461,7 @@ local function setGhost(veh, state, force, checkGhostedBystanders)
     -- gameplay/traffic/vehicle.lua, both already using it for exactly this kind of fade) sets a
     -- vehicle's actual mesh transparency directly, unconditionally, regardless of any parts-
     -- selection state. The reliable primitive this should have used from the start.
-    veh:setMeshAlpha(M.computeDisplayAlpha(veh:getID(), state), "")
+    M.applyDisplayAlpha(veh, state)
     if mpVeh and mpVeh.isLocal then
         -- remoteVID, not vid. See the "updateVehicleGhost" handler's own comment above (onInit)
         -- for why vid alone doesn't identify this vehicle correctly on any OTHER client
@@ -1691,6 +1733,7 @@ M.setGhost = setGhost
 M.setGhostReason = setGhostReason
 M.applyRespawnProtection = applyRespawnProtection
 M.computeDisplayAlpha = computeDisplayAlpha
+M.applyDisplayAlpha = applyDisplayAlpha
 M.setSoloGhostVisualReversed = setSoloGhostVisualReversed
 M.reapplyDisplayAlpha = reapplyDisplayAlpha
 M.setPhotoSubject = setPhotoSubject

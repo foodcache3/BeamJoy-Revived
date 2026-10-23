@@ -88,13 +88,14 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
                         }
                     }
                 }
-                return { rows: ordered(data.eventStandings, ranking, true), ranking, done: true, event: true };
+                return { rows: ordered(data.eventStandings, ranking, true), ranking, done: true, event: true,
+                    index: Math.max(0, ...Object.keys(results).map((k) => Number(k.slice(1)) || 0)) };
             }
             const m = /^p(\d+)$/.exec(this.view || "");
             if (m && results[this.view]) {
                 const phase = phases[Number(m[1]) - 1] || {};
                 const ranking = phase.ranking || "position";
-                return { rows: ordered(results[this.view], ranking, true), ranking, done: true, phase };
+                return { rows: ordered(results[this.view], ranking, true), ranking, done: true, phase, index: Number(m[1]) };
             }
             const ranking = data.ranking || "position";
             const live = data.participants || [];
@@ -103,7 +104,23 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
                 ranking,
                 done: data.state === "FINISHED" || data.state === "BREAK",
                 phase: phases[(data.phaseIndex || 1) - 1] || null,
+                index: data.phaseIndex || 1,
             };
+        };
+        // a knockout (direct request) : the first phase after this one taking only the top n of its
+        // result (of the event's standings, for that tab) ; null when none does
+        const cutFor = (vd) => {
+            const phases = Array.isArray(data.phases) ? data.phases : [];
+            for (let j = vd.index + 1; j <= phases.length; j++) {
+                const takes = phases[j - 1].takes;
+                if (!takes || typeof takes.top !== "number") continue;
+                const fromHere = vd.event ? !takes.from : takes.from === vd.index;
+                if (fromHere) {
+                    const name = phases[j - 1].name || fill("beamjoy.racePhases.phaseN", { n: j });
+                    return { top: takes.top, label: fill("beamjoy.raceInfo.cutLine", { top: takes.top, phase: name }) };
+                }
+            }
+            return null;
         };
         // the tabs : every phase run so far, the one under way, the event (several phases only)
         const buildViews = () => {
@@ -188,12 +205,18 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
                 this.openLap = null;
             }
 
+            // a knockout : the ones going through (the first n placed ; while it runs, the first n
+            // still in it), a line under the last of them, the others out
+            const cut = cutFor(vd);
+            const through = (p, i) => !!cut && i < cut.top && !p.disqualified && !(p.dnf && !placed(p)) && (placed(p) || !vd.done);
+            const lastThrough = cut ? order.reduce((last, p, i) => (through(p, i) ? i : last), -1) : -1;
             const rows = order.map((p, i) => ({
                 playerName: p.playerName,
+                cutAfter: lastThrough >= 0 && i === lastThrough && i < order.length - 1,
                 pos: p.disqualified ? "DSQ" : placed(p) ? String(i + 1) : p.dnf ? "DNF" : String(i + 1),
                 plateCls: p.disqualified ? "dsq" : p.dnf && !placed(p) ? "out" : i === 0 && placed(p) ? "p1" : "",
                 rowCls: (p.playerName === this.selectedPlayerName ? "sel" : "") + ((p.dnf && !placed(p)) || p.disqualified ? " out" : "") +
-                    (p.disqualified ? " dsq" : ""),
+                    (p.disqualified ? " dsq" : "") + (cut ? (through(p, i) ? " adv" : " elim") : ""),
                 selected: p.playerName === this.selectedPlayerName,
                 name: nameOf(p),
                 pen: penOf(p),
@@ -306,6 +329,7 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
                 chips,
                 podium,
                 rows,
+                cut,
                 views: this.views,
                 // anyone penalised : the Total column widens for the box
                 hasPen: rows.some((r) => r.pen),

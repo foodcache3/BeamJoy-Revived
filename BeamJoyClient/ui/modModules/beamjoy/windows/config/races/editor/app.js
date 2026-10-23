@@ -269,7 +269,7 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             const d = this.race.defaults;
             this.phaseUi.list = on
                 ? [beamjoyRacePhases.newPhase({ lengthMode: this.race.loopable ? this.lengthMode() : "laps",
-                    laps: d.laps || 3, timeLimitMin: d.timeLimitMin || 10, afterTime: d.afterTime })]
+                    laps: this.race.loopable ? d.laps || 3 : 1, timeLimitMin: d.timeLimitMin || 10, afterTime: d.afterTime })]
                 : null;
         };
 

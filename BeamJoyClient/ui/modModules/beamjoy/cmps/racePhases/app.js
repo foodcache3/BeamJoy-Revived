@@ -99,11 +99,12 @@ angular.module("beamjoy").factory("beamjoyRacePhases", function ($filter) {
         return p;
     };
 
-    // a format's phases, for a race (`laps` : its own lap count, for the race phases)
+    // a format's phases, for a race (`laps` : its own lap count, for the race phases). A
+    // point-to-point track (a sprint) : one run each, unless the format says otherwise (direct request)
     const formatPhases = (id, loopable, laps) => {
         const f = FORMATS.find((x) => x.id === id) || FORMATS[0];
         return f.phases.map((p) => {
-            const phase = newPhase(p, p.laps || laps);
+            const phase = newPhase(p, p.laps || (loopable ? laps : 1));
             // a point-to-point track raced from the grid together : one run
             if (!loopable && phase.start === "grid") {
                 phase.lengthMode = "laps";
@@ -293,7 +294,8 @@ angular.module("beamjoy").component("bjRacePhases", {
         };
         this.add = () => {
             if (this.phases.length >= this.MAX || this.isLocked("phases")) return;
-            this.phases.push(beamjoyRacePhases.newPhase(null, this.laps));
+            // a point-to-point track's phase : one run to start from
+            this.phases.push(beamjoyRacePhases.newPhase(null, this.loopable ? this.laps : 1));
             this.open[this.phases.length - 1] = true;
             rebuild();
         };
