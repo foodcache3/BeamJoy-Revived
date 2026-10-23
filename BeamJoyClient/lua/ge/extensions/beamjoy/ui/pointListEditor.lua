@@ -73,8 +73,6 @@
 ---@field snapMethod string Lua -> Angular : ("terrain"|"raycast")
 ---@field setSnapToGround string Angular -> Lua : (boolean)
 ---@field setSnapMethod string Angular -> Lua : ("terrain"|"raycast")
----@field turnAll string? Angular -> Lua : (degrees) turns every point and the host's props round the
----middle (an arena turned whole : see onTurnAll) ; the toolbar shows its buttons only with it
 ---@field requestState string? Angular -> Lua : () re-sends the current lists/active/dirty/snap
 ---state as-is, without resetting anything (unlike open()). Optional, but every consumer should
 ---wire it up: `<bj-point-list-editor>` gets torn down and recreated by its host's own `ng-if`
@@ -92,8 +90,10 @@
 ---(ui/propEditor.lua) while it's open. Props and points are picked by the same world clicks,
 ---snapped by the same switch, and only one of them is selected at a time. The host still loads and
 ---saves the props array itself, and forwards onUpdate / onDeleteKey below
----@field pivot (fun(): vec3?)? what the whole arena turns round (events.turnAll), when not the
----points' middle
+---@field turnWhole boolean? the Rotate tool with nothing selected shows the gizmo on the arena's
+---middle, and turning it turns the whole arena (direct request : see onTurnAll)
+---@field pivot (fun(): vec3?)? what the whole arena turns round (turnWhole), when not the points'
+---middle
 
 local ACTIVE_COLOR = BJColor(1, 1, 1, .9)
 local TEXT_BG = BJColor(0, 0, 0, .3)
@@ -475,25 +475,30 @@ local function new(config)
         end,
     } or nil
 
+    --- what the whole arena turns round : the host's middle (config.pivot : the derby's zone),
+    --- else the points', else the props'
+    ---@return vec3?
+    local function arenaPivot()
+        local pivot = config.pivot and config.pivot() or nil
+        if pivot then return pivot end
+        local sum, n = vec3(0, 0, 0), 0
+        for _, spec in ipairs(config.lists) do
+            for _, item in ipairs(state.lists[spec.key]) do
+                sum, n = sum + vec3(item.pos.x, item.pos.y, item.pos.z), n + 1
+            end
+        end
+        return n > 0 and sum * (1 / n) or (propEditor and propEditor.centre()) or nil
+    end
+
     --- the whole arena turned round its middle (direct request) : every point (and its facing, a
-    --- derby zone's too) and the host's props, by `degrees` anticlockwise seen from above. The
-    --- middle is the host's (config.pivot : the derby's zone), else the points', else the props'.
-    --- With snapping on, each point keeps its height above the ground under it
+    --- derby zone's too) and the host's props, by `degrees` anticlockwise seen from above. With
+    --- snapping on, each point keeps its height above the ground under it
     ---@param degrees number
     local function onTurnAll(degrees)
         if not config.isActive() then return end
         degrees = tonumber(degrees)
         if not degrees or degrees % 360 == 0 then return end
-        local pivot = config.pivot and config.pivot() or nil
-        if not pivot then
-            local sum, n = vec3(0, 0, 0), 0
-            for _, spec in ipairs(config.lists) do
-                for _, item in ipairs(state.lists[spec.key]) do
-                    sum, n = sum + vec3(item.pos.x, item.pos.y, item.pos.z), n + 1
-                end
-            end
-            pivot = n > 0 and sum * (1 / n) or (propEditor and propEditor.centre()) or nil
-        end
+        local pivot = arenaPivot()
         if not pivot then return end
         local rad = math.rad(degrees)
         local c, s = math.cos(rad), math.sin(rad)
@@ -525,6 +530,42 @@ local function new(config)
         updateGizmo(state.activeList, state.activeIndex)
         pushListsUpdate()
         markDirty()
+    end
+
+    --- the gizmo's callback while it's the whole arena's (config.turnWhole)
+    ---@type fun(updated: GizmoObject)?
+    local wholeTurned
+    --- per frame (config.turnWhole) : the Rotate tool with nothing selected (no point, no prop, none
+    --- armed) puts the gizmo on the arena's middle, and turning it turns the whole arena (direct
+    --- request, instead of turn buttons). The game's gizmo reads a turn only once released, so the
+    --- arena turns then, in one go, and the gizmo comes back on its middle the next frame
+    ---@param armed boolean a prop being placed
+    local function syncWholeGizmo(armed)
+        local shown = wholeTurned ~= nil and gizmo.state and gizmo.onChange == wholeTurned
+        local wanted = not armed and config.isActive() and gizmo.tool == "rotate" and not state.activeList and
+            not (propEditor and propEditor.activePropIndex)
+        if not wanted then
+            if shown then gizmo.hide() end
+            return
+        end
+        if shown then return end
+        local pivot = arenaPivot()
+        if not pivot then return end
+        wholeTurned = function(updated) ---@param updated GizmoObject
+            if not config.isActive() or gizmo.tool ~= "rotate" or not updated.dir then return end
+            -- only the turn round the vertical : the gizmo starts facing +y
+            local degrees = math.deg(math.atan2(updated.dir.y, updated.dir.x) - math.pi / 2)
+            -- whole hundredths : the gizmo's own float noise isn't a turn
+            degrees = math.floor(degrees * 100 + .5) / 100
+            onTurnAll(degrees)
+        end
+        gizmo.hide()
+        gizmo.show({
+            pos = pivot,
+            dir = vec3(0, 1, 0),
+            up = vec3(0, 0, 1),
+            scales = vec3(1, 1, 1),
+        }, wholeTurned)
     end
 
     ---@param snapshot table<string, table[]> the host's own saved data, keyed by list key
@@ -585,9 +626,6 @@ local function new(config)
         if config.events.requestState then
             beamjoy_communications_ui.addHandler(config.events.requestState, pushFullState)
         end
-        if config.events.turnAll then
-            beamjoy_communications_ui.addHandler(config.events.turnAll, onTurnAll)
-        end
     end
 
     return {
@@ -608,7 +646,11 @@ local function new(config)
         getLists = function() return state.lists end,
         -- per frame, from the host's onUpdate : true while a prop is armed (the mouse is the
         -- placing's, the host's own handles wait)
-        onUpdate = function() return propEditor ~= nil and propEditor.onUpdate() end,
+        onUpdate = function()
+            local armed = propEditor ~= nil and propEditor.onUpdate()
+            if config.turnWhole then syncWholeGizmo(armed) end
+            return armed
+        end,
         -- the Delete key (activityEditor's onBJEditorDeleteKey) : the selected props
         onDeleteKey = function()
             if propEditor and config.isActive() then propEditor.onDeleteKey() end

@@ -221,11 +221,12 @@ listEditor = pointListEditor.new({
         setSnapToGround = "BJEditorDerbyArenaSetSnapToGround",
         setSnapMethod = "BJEditorDerbyArenaSetSnapMethod",
         requestState = "BJEditorDerbyArenaRequestState",
-        turnAll = "BJEditorDerbyArenaTurnAll",
     },
     isActive = function() return parent ~= nil and parent.activeEditor == M end,
     props = function() return M.props end,
-    -- the whole arena turns round its zone's centre (its start positions' middle without one)
+    -- the Rotate tool with nothing selected turns the whole arena, round its zone's centre (its
+    -- start positions' middle without one)
+    turnWhole = true,
     pivot = function()
         local zone = (listEditor.getLists().zone or {})[1]
         return zone and vec3(zone.pos.x, zone.pos.y, zone.pos.z) or nil

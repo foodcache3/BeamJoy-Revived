@@ -8,19 +8,21 @@ the live server per the usual workflow: see each entry.
 
 ## [2.0.1] - 2026-10-23 - Derby arena turning, fixes
 
-Server build 2478, client build 2751.
+Server build 2478, client build 2752.
 
 - **Fix (2751) : the delivery HUD's buttons were squashed** (reported). With the HUD focused,
   the "B to go back to driving" hint shared the buttons' row instead of taking its own line, and
   crushed Hold to abandon into a sliver. *(client only)*
 
-- **Turn a whole Derby arena (2749)** (direct request). The Derby arena editor's toolbar has two
-  turn buttons with an angle between them (90 by default, 1 to 180). They turn the whole arena
-  round its zone's centre (the middle of its start positions without a zone) : every start
-  position with its facing, the zone's facing, and every prop, lines, curbs and painted lines
-  included. With snapping on, each keeps its height above the ground under it, and props that
-  follow the ground are laid on it again. An ordinary unsaved edit until you save ; the other
-  button turns it back. *(client only)*
+- **Turn a whole Derby arena with the Rotate tool (2749, 2752)** (direct request). In the Derby
+  arena editor, pick the Rotate tool with nothing selected : the gizmo sits on the arena's middle
+  (its zone's centre, otherwise the middle of its start positions), and turning it round the
+  vertical turns the whole arena : every start position with its facing, the zone's facing, and
+  every prop, lines, curbs and painted lines included. The game's gizmo reads a turn when it's let
+  go, so the arena follows then. With snapping on, each keeps its height above the ground under
+  it, and props that follow the ground are laid on it again. An ordinary unsaved edit until you
+  save. A start position, the zone or a prop selected still turns on its own. 2749's turn buttons
+  were taken out (direct request). *(client only)*
 
 - **Fix (2749) : older vehicle presets refused the right car in races** (reported : "This race
   requires <preset>"). A pool entry was matched only against the parts it captured when it was
@@ -28,7 +30,10 @@ Server build 2478, client build 2751.
   vehicle's parts makes the capture stale. When the capture doesn't match, the entry's
   configuration is now checked as the game has it today : its `.pc` file (or a shared build's own
   parts). Every slot the file sets that the car has must hold the same part, plus the same tuning
-  when the race doesn't allow tuning. Lobbies and freeroam runs alike. *(client only)*
+  when the race doesn't allow tuning. Lobbies and freeroam runs alike. 2752 : the stock
+  configurations still never matched (reported again : an ETK I-Series preset). Their files write
+  an empty slot "none" where the car has it "" ; both now count as empty. The log now also says
+  why a configuration file didn't match. *(client only)*
 
 - **Fix (2749) : an error message stayed on screen until the game was restarted** (reported :
   enabling an arena without 2 start positions). Error toasts were sent with no timeout, and the

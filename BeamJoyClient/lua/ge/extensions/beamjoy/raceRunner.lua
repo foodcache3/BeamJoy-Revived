@@ -753,9 +753,9 @@ local function configFile(model, config)
         local ok, data = pcall(jsonReadFile, string.format("vehicles/%s/%s.pc", model, config))
         local out = false
         if ok and type(data) == "table" then
-            if data.format == 2 and type(data.parts) == "table" then
+            if type(data.parts) == "table" then
                 out = { parts = data.parts, vars = type(data.vars) == "table" and data.vars or {} }
-            elseif data.format == nil and data.parts == nil then
+            elseif data.format == nil then
                 -- the oldest files : the parts map is the whole file
                 out = { parts = data, vars = {} }
             end
@@ -772,12 +772,21 @@ end
 --- shared build's) doesn't. Every slot the file sets that the car has must hold the same part
 --- (empty or not) ; slots it leaves out are the game's defaults, and a different parent part shows
 --- in its own slot. Tuning too when the race doesn't allow it
+--- a slot's part as the game means it : configuration files write an empty slot "none", the
+--- vehicle's own parts map has it "" (the game's slotSystem reads "none" as "")
+---@param part any
+---@return string
+local function partName(part)
+    part = tostring(part or "")
+    return part == "none" and "" or part
+end
+
 ---@param veh NGVehicle
 ---@param entry table
 ---@param allowTuning boolean
----@return boolean
+---@return boolean matches, string? why not (for the diagnostic)
 local function matchesConfigFile(veh, entry, allowTuning)
-    if type(entry.model) ~= "string" or type(entry.config) ~= "string" then return false end
+    if type(entry.model) ~= "string" or type(entry.config) ~= "string" then return false, "no config" end
     local saved
     local buildId = tonumber(entry.buildId) or beamjoy_vehicleBuilds.idOf(entry.config)
     if buildId then
@@ -786,21 +795,26 @@ local function matchesConfigFile(veh, entry, allowTuning)
     else
         saved = configFile(entry.model, entry.config)
     end
-    if not saved then return false end
+    if not saved then return false, string.format("no readable file for %s/%s", entry.model, entry.config) end
     local data = extensions.core_vehicle_manager.getVehicleData(veh:getID())
     local cfg = data and data.config
-    if not cfg or not cfg.partsTree or cfg.model ~= entry.model then return false end
+    if not cfg or not cfg.partsTree or cfg.model ~= entry.model then return false, "no vehicle data" end
     local mine = extensions.core_vehicle_partmgmt.partsTreeToPartsMap(cfg.partsTree)
     local compared = 0
     for slot, part in pairs(saved.parts) do
         if mine[slot] ~= nil then
-            if tostring(mine[slot] or "") ~= tostring(part or "") then return false end
+            -- real report : the stock ETK I-Series files leave slots "none", which never equalled
+            -- the car's "" and refused the very configuration the player had picked
+            if partName(mine[slot]) ~= partName(part) then
+                return false, string.format("%s: live=%s file=%s", slot, partName(mine[slot]), partName(part))
+            end
             compared = compared + 1
         end
     end
     -- nothing in common : not this vehicle's configuration at all
-    if compared == 0 then return false end
-    return allowTuning or varsMatch(cfg.vars or {}, saved.vars or {})
+    if compared == 0 then return false, "no slot in common" end
+    if allowTuning or varsMatch(cfg.vars or {}, saved.vars or {}) then return true end
+    return false, "tuning differs"
 end
 
 ---@param veh NGVehicle
@@ -860,6 +874,12 @@ local function vehicleMatchesRestriction(veh, restriction)
                     end
                     LogWarn(string.format("pool match failed for '%s' (%d part diffs): %s",
                         tostring(v.label), #diffs, table.concat(diffs, " | ")))
+                end
+                if v.model == full.model then
+                    -- and why its configuration file didn't match either
+                    local ok, _, why = pcall(matchesConfigFile, veh, v, restriction.allowTuning == true)
+                    LogWarn(string.format("pool file match failed for '%s' (%s/%s): %s", tostring(v.label),
+                        tostring(v.model), tostring(v.config), ok and tostring(why) or "error: " .. tostring(_)))
                 end
             end
         end
