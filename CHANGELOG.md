@@ -8,7 +8,7 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2484, client build 2756 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2485, client build 2757 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
 
 - **Fix (2755) : every seat showed an occupant** (reported : "vehicle presets sometimes fill every
   slot with occupants"). The game hides an empty seat's occupant figure by making it fully
@@ -138,6 +138,30 @@ Server build 2484, client build 2756 (main got its own 2749, 2751, then 2752 for
     the ones going through ("Top 10 through to Q2"), their places outlined green, the ones out red.
   - A point-to-point track's phases (a sprint) start on one run, unless the format says otherwise
     (direct request).
+  - **One at a time : the others watch (2485, 2757)** (direct request) : a new "Waiting their turn"
+    choice. "Watching" (the default) : one car on track, the others' cars put away while they watch
+    the one racing, and every racer starts from the first slot, the first one too, to be fair. Their
+    car comes back on that slot when their turn comes. "On their slots" : as before, everyone waits in
+    their car on their grid slot. Watchers follow whoever's on track.
+  - **Out lap (2485, 2757)** (direct request) : a circuit's start menu and the race editor's defaults
+    have an "Out lap" switch : an untimed lap from the grid first, each racer's time starting as they
+    cross the start/finish line at its end. Its laps and sectors count for nothing ; the HUD says
+    "Out lap" with its clock at 0. Every start of one's own (one at a time, a time offset, a mid-race
+    join) has one too. Race default `outLap`. A flying start's single run and an out lap's single lap
+    now show the time from the line on the HUD, not from the release.
+  - **Joining mid-race, findable (2485, 2757)** (reported : no way to join a race under way, the Now
+    tab only offered Spectate) : the start menu has "Players can join mid-race", the race's own (with
+    phases, it sets every phase's ; each still has its own in the phase editor). Off by default, as
+    before. Start option `lateJoin`.
+  - **Fix (2485) : collisions off in time offset starts** (reported : with the option unticked) : any
+    phase where racers start on their own (time offset, one at a time, open runs) had collisions
+    switched off whatever the start menu said. They follow the option (or the phase's own rule) now.
+  - **The results close when the break's over (2757)** (direct request) : the results opened for a
+    break between phases close as the next phase's countdown starts (not at all when the leader
+    starts it within their 3 s delay).
+  - **Knockouts' wording (2757)** (direct request) : "Through to Q2" gave way to "In the top 10 so far"
+    while others race, and "Advancing : you made the top 10" at the phase's end, like "Eliminated : the
+    top 10 go through".
   - **Joining mid-event** (per phase) : a player joining while a phase runs readies up and starts on
     their own after a short countdown ; in a race their time counts from its green light.
   - HUD : the phase's name, a timed phase's time left, standings by its ranking. Staff race control

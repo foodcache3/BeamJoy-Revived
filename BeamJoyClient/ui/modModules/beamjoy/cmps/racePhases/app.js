@@ -71,6 +71,9 @@ angular.module("beamjoy").factory("beamjoyRacePhases", function ($filter) {
                 plugins: {},
                 start: "grid",
                 intervalS: 10,
+                // one at a time : the others watch (one car on track, all from the first slot), or
+                // wait on their slots
+                waiting: "watch",
                 lateJoin: false,
                 ranking: "position",
                 lengthMode: "laps",
@@ -135,6 +138,7 @@ angular.module("beamjoy").factory("beamjoyRacePhases", function ($filter) {
                 name: (p.name || "").trim() || undefined,
                 start: p.start || "grid",
                 intervalS: p.start === "individual" ? Number(p.intervalS) || 10 : undefined,
+                waiting: p.start === "sequential" ? (p.waiting === "grid" ? "grid" : "watch") : undefined,
                 lateJoin: p.lateJoin === true,
                 ranking: p.ranking,
                 laps: p.lengthMode !== "time" ? Number(p.laps) || 1 : undefined,
@@ -184,6 +188,7 @@ angular.module("beamjoy").component("bjRacePhases", {
         this.MAX = beamjoyRacePhases.MAX_PHASES;
         this.RANKINGS = ["position", "best", "total"];
         this.STARTS = beamjoyRacePhases.STARTS;
+        this.WAITING = ["watch", "grid"];
         // laps or a time to repeat : a circuit, or a point-to-point track raced in runs (not from
         // the grid all together)
         this.repeats = (p) => this.loopable || p.start !== "grid";

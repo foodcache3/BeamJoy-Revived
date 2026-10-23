@@ -96,6 +96,8 @@
 ---RACE-transition un-ghost ; default false
 ---@field flyingStart boolean? a point-to-point track only : each racer's time starts as they cross
 ---its first checkpoint, not when they're released (a flying start) ; default false (a standing start)
+---@field outLap boolean? a circuit only : the lap from the grid is an out lap, not timed ; each racer's
+---time starts as they cross the line at its end ; default false
 ---@field ghostBackmarkers boolean? opt-in : once the race leader has gained a full lap of real
 ---gate-progress on a given participant (genuinely lapped them, not just a raw lap-NUMBER
 ---difference; see raceGrid.lua's buildSettings for why that distinction matters), that
@@ -516,6 +518,7 @@ local function sanitizeRace(race, existingRaces)
     race.defaults.disableCollisions = race.defaults.disableCollisions == true
     race.defaults.ghostBackmarkers = race.defaults.ghostBackmarkers == true
     race.defaults.flyingStart = race.defaults.flyingStart == true
+    race.defaults.outLap = race.defaults.outLap == true
     race.defaults.showGateNametags = race.defaults.showGateNametags == true
     race.defaults.limitVisibleGates = race.defaults.limitVisibleGates ~= false
     race.defaults.visibleGateCount = math.max(1, math.min(math.floor(tonumber(race.defaults.visibleGateCount) or 2), 5))

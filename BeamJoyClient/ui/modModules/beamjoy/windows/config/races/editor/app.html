@@ -775,6 +775,13 @@
                     </div>
                 </td>
             </tr>
+            <!-- a circuit : an untimed out lap first -->
+            <tr ng-if="$ctrl.race.loopable">
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.races.outLap.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.races.outLap' | translate}}
+                </td>
+                <td><bj-toggle ng-model="$ctrl.race.defaults.outLap"></bj-toggle></td>
+            </tr>
             <tr>
                 <td
                     class="text-right"

@@ -7,7 +7,7 @@
 // backdrop/title/close around it. Same singleton-service-backed-by-one-root-mounted-component
 // shape as beamjoyConfirm/bj-confirm, so any component can call `beamjoyInfoPanel.open(...)`
 // without needing a reference to this one.
-angular.module("beamjoy").service("beamjoyInfoPanel", function () {
+angular.module("beamjoy").service("beamjoyInfoPanel", function ($rootScope) {
     this.state = {
         visible: false,
         title: "",
@@ -50,6 +50,12 @@ angular.module("beamjoy").service("beamjoyInfoPanel", function () {
         stack.length = 0;
         this.state.visible = false;
     };
+    // a race's results, opened for a break between phases : closed once it's over (raceRunner.lua)
+    $rootScope.$on("BJRaceInfoAutoClose", () => {
+        if (this.state.visible && this.state.tabs.some((t) => /bj-race-info-results/.test(t.template || ""))) {
+            $rootScope.$evalAsync(() => this.closeAll());
+        }
+    });
 });
 
 // Controller : while open the overlay has the pad (Lua : mainNav.lua's BJInfoPanelPad borrows the

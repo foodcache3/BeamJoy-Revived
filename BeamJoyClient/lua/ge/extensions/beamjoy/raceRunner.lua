@@ -487,13 +487,7 @@ end
 --- action and context menu) rather than building new camera-attach code.
 ---@param session BJRaceSession
 ---@return boolean found true if another racer's vehicle was actually found and focused
-local function spectateAnotherRacer(session)
-    local selfName = MPConfig.getNickname()
-    local target = table.find(session.participants, function(p)
-        return p.playerName ~= selfName and not p.finished and not p.dnf and not p.sittingOut
-    end)
-    if not target then return false end
-
+local function focusRacer(target)
     local targetPlayer = beamjoy_players.players[target.playerName]
     local remoteVID = targetPlayer and targetPlayer.currentVehicle
     if not remoteVID then return false end
@@ -506,6 +500,34 @@ local function spectateAnotherRacer(session)
     -- the checkpoints follow who's watched (raceMarkers.lua)
     extensions.hook("onBJRaceMarkersRefresh")
     return true
+end
+
+local function spectateAnotherRacer(session)
+    local selfName = MPConfig.getNickname()
+    local function active(p)
+        return p.playerName ~= selfName and not p.finished and not p.dnf and not p.sittingOut
+    end
+    -- one on track before one waiting their turn (one at a time : maybe with no car out)
+    local target = table.find(session.participants, function(p) return active(p) and not p.awaitingStart end) or
+        table.find(session.participants, active)
+    if not target then return false end
+    return focusRacer(target)
+end
+
+--- one at a time : whoever's watching (waiting their turn, done with theirs, a spectator) follows
+--- the one on track, once their car is out. Polled (onSlowUpdate) : the car comes a moment after
+--- the turn does
+---@param session table?
+local function followTurn(session)
+    if not session or session.state ~= "RACE" or session.settings.start ~= "sequential" then return end
+    -- in their own car, watching no one : left alone
+    if not M.spectatingVID and beamjoy_vehicles.getCurrentOwn() then return end
+    local selfName = MPConfig.getNickname()
+    local onTrack = table.find(session.participants, function(p)
+        return p.playerName ~= selfName and not (p.finished or p.dnf or p.sittingOut or p.awaitingStart)
+    end)
+    if not onTrack or onTrack.playerName == M.spectatingPlayerName then return end
+    focusRacer(onTrack)
 end
 
 --- the racer being spectated (see spectateAnotherRacer above) can themselves finish/DNF at any
@@ -529,7 +551,8 @@ local function onVehicleDestroyed(vid)
         if M.session and M.session.state == "RACE" and M.session.settings.respawnStrategy ~= "all" and
             not M.resumePending then
             local participant = getSelfParticipant()
-            if participant and not participant.finished and not participant.dnf and not participant.sittingOut then
+            if participant and not participant.finished and not participant.dnf and not participant.sittingOut and
+                not participant.awaitingStart then
                 beamjoy_communications.send("raceDNF", M.session.id)
             end
         end
@@ -618,14 +641,17 @@ end
 --- called once the race is actually over (session removed, or the player leaves/gets kicked
 --- while still spectating) rather than immediately at the finish/DNF moment, so it doesn't fight
 --- the moment-of-finish spectate camera or the "Finished"/"DNF" popup.
-local function restoreSavedVehicle()
+---@param at vec3? where (their turn's slot, one at a time) ; nil : where they're watching from
+local function restoreSavedVehicle(at)
     local saved = M.savedVehicleConfig
     if not saved then return end
     M.savedVehicleConfig = nil
 
-    local pos
+    local pos = at
     local currVeh = beamjoy_vehicles.getCurrent()
-    if currVeh and camera.getCamera() ~= camera.CAMERAS.FREE then
+    if pos then
+        -- there already
+    elseif currVeh and camera.getCamera() ~= camera.CAMERAS.FREE then
         pos = beamjoy_vehicles.getVehiclePositionRotation(currVeh.veh)
     else
         pos = camera.getPositionRotation(false)
@@ -1539,6 +1565,8 @@ local function pushHud()
         ranking = session.settings.ranking or "position",
         timed = session.phaseEndsAtMs ~= nil,
         timeLeftMs = timeLeftMs,
+        -- timed from a line (a flying start, after an out lap) : the clock is the lap's, even on one
+        lapClock = (session.settings.flyingStart and not race.loopable) or session.settings.outLap == true,
         timeUp = session.flagAtMs ~= nil,
         afterTime = session.settings.afterTime,
         waitingAhead = waitingAhead,
@@ -1552,9 +1580,12 @@ local function pushHud()
             dnf = participant.dnf,
             disqualified = participant.disqualified,
             penaltyMs = participant.penaltyMs,
-            -- a flying start (a point-to-point track) : not timed until the first checkpoint
-            currentLapElapsedMs = (session.settings.flyingStart and not race.loopable and
-                (participant.currentGate or 0) == 0) and 0 or elapsedMs - previousLapsElapsed,
+            -- a flying start (a point-to-point track) : not timed until the first checkpoint ; an
+            -- out lap (a circuit) : not until the line at its end
+            currentLapElapsedMs = ((session.settings.flyingStart and not race.loopable and
+                (participant.currentGate or 0) == 0) or participant.outLapPending) and 0 or
+                elapsedMs - previousLapsElapsed,
+            outLap = participant.outLapPending == true,
             lastLapMs = participant.lapTimes and participant.lapTimes[#participant.lapTimes] or nil,
             bestLapMs = participant.bestLapMs,
             liveDeltaMs = participant.liveDeltaMs,
@@ -2149,6 +2180,7 @@ local function onSessionUpdate(session)
         M.gridTimeoutTargetMs = nil
         M.breakTargetMs = nil
         M.personalAt = nil
+        M.waitingOffTrack = nil
         M.spectatingVID = nil
         M.spectatingPlayerName = nil
         M.myVehicleVid = nil
@@ -2323,11 +2355,44 @@ local function onSessionUpdate(session)
         end
     end
 
+    -- one at a time, the phase's `waiting` "watch" (direct request) : one car on track. Waiting
+    -- their turn, their car's put away and they watch ; their turn come, it's back on the first slot
+    local offTrack = session.settings.start == "sequential" and session.settings.waiting == "watch" and
+        participant.awaitingStart == true and not (participant.finished or participant.dnf or participant.sittingOut) and
+        (session.state == "COUNTDOWN" or session.state == "RACE")
+    if offTrack and M.waitingOffTrack ~= phaseKey(session) then
+        M.waitingOffTrack = phaseKey(session)
+        if beamjoy_vehicles.getCurrentOwn() then
+            saveCurrentVehicleForRespawn()
+            -- not a car lost mid-race (onVehicleDestroyed)
+            M.myVehicleVid = nil
+            beamjoy_vehicles.deleteCurrentOwnVehicle()
+        end
+        if not spectateAnotherRacer(session) then
+            camera.setCamera(camera.CAMERAS.FREE)
+        end
+    elseif not offTrack and M.waitingOffTrack then
+        M.waitingOffTrack = nil
+        local sp = participant.runStartPosition or participant.startPosition
+        if session.state == "RACE" and participant.startAtMs and not participant.finished and not participant.dnf then
+            M.spectatingVID = nil
+            M.spectatingPlayerName = nil
+            restoreSavedVehicle(sp and vec3(sp.pos.x, sp.pos.y, sp.pos.z) or nil)
+            extensions.hook("onBJRaceMarkersRefresh")
+        end
+    end
+
+    -- the break's over (the next phase's countdown) : its results close (direct request)
+    if wasBreak and session.state ~= "BREAK" then
+        beamjoy_communications_ui.send("BJRaceInfoAutoClose", {})
+    end
+
     -- between two phases : the last one's over for everyone. Whatever it locked comes off, a car it
     -- took away (out, or finished and watching, or sitting it out) comes back, and its results
     -- show ; the next phase's countdown puts everyone back on the grid
     if session.state == "BREAK" and not wasBreak then
         M.personalAt = nil
+        M.waitingOffTrack = nil
         M.spectatingVID = nil
         M.spectatingPlayerName = nil
         M.watchingPhase = nil
@@ -2379,7 +2444,7 @@ local function onSessionUpdate(session)
         end
     end
 
-    if session.state == "COUNTDOWN" and not wasCountdown and not participant.sittingOut then
+    if session.state == "COUNTDOWN" and not wasCountdown and not participant.sittingOut and not offTrack then
         -- Every participant's vehicle gets (re)positioned onto the grid within the same instant
         -- this transition fires (see the teleport block below), and a mismatched/randomized pick
         -- means a genuine new vehicle spawn too, for several players at once, all broadcast to
@@ -2495,7 +2560,7 @@ local function onSessionUpdate(session)
     local personalLater = waitingTurn or
         (participant.startAtMs ~= nil and session.goAtMs ~= nil and participant.startAtMs > session.goAtMs)
     local personalTarget = waitingTurn and WAITING_TURN or participant.startAtMs
-    if session.state == "RACE" and not wasRacing and not resuming and not participant.sittingOut then
+    if session.state == "RACE" and not wasRacing and not resuming and not participant.sittingOut and not offTrack then
         M.raceStartLocalMs = beamjoy_clockSync.localMs()
         M.raceUsesSharedClock = session.goAtMs ~= nil and beamjoy_clockSync.isSynced()
         M.frameElapsedMs = nil
@@ -2693,7 +2758,8 @@ local function onSessionUpdate(session)
         -- a first start (their turn, a join) is held where they are ; a run's car rolls to a stop
         M.personalHold = #(participant.lapTimes or {}) == 0
         -- joined while it was under way : what the countdown and green light set up for the others
-        if not M.raceStartLocalMs then
+        -- (waiting off track : once their car's back, their turn come)
+        if not M.raceStartLocalMs and not offTrack then
             M.raceStartLocalMs = beamjoy_clockSync.localMs()
             M.raceUsesSharedClock = beamjoy_clockSync.isSynced()
             local myVeh = beamjoy_vehicles.getCurrentOwn()
@@ -2778,6 +2844,7 @@ local function onSessionRemoved(sessionId)
         M.gridTimeoutTargetMs = nil
         M.breakTargetMs = nil
         M.personalAt = nil
+        M.waitingOffTrack = nil
         M.spectatingVID = nil
         M.spectatingPlayerName = nil
         M.myVehicleVid = nil
@@ -3065,17 +3132,28 @@ local function updatePersonalStart()
     if now < M.personalAt then
         if M.personalStage ~= "countdown" then
             M.personalStage = "countdown"
+            M.personalPlaced = false
+            M.lastLy = {}
+            M.lastSentPersonalSec = nil
+        end
+        -- on its slot as soon as it's there : a car put away while its racer waited their turn
+        -- (one at a time) comes back a moment after the turn's started
+        if not M.personalPlaced and myVeh then
+            M.personalPlaced = true
             local sp = M.personalPos
-            if myVeh and sp then
+            if sp then
                 -- not clinging to the surface below, as at the grid (see the COUNTDOWN transition)
                 beamjoy_vehicles.setVehiclePositionRotation(myVeh.veh, vec3(sp.pos.x, sp.pos.y, sp.pos.z),
                     vec3(sp.dir.x, sp.dir.y, sp.dir.z), vec3(0, 0, 1), { cling = false })
             end
-            if myVeh and session.settings.ghostOnCountdown ~= false then
+            if session.settings.ghostOnCountdown ~= false then
                 beamjoy_vehicles.setGhostReason(myVeh.vid, "race", true)
             end
-            M.lastLy = {}
-            M.lastSentPersonalSec = nil
+            if session.settings.disableCollisions then
+                beamjoy_vehicles.setGhostReason(myVeh.vid, "noCollisionRace", true)
+            end
+            M.myVehicleVid = M.myVehicleVid or myVeh.vid
+            saveRejoinCar(session.id)
         end
         if myVeh and myVeh.veh.froze ~= "1" then beamjoy_vehicles.setFreeze(myVeh.vid, true) end
         local remaining = math.max(1, math.ceil((M.personalAt - now) / 1000))
@@ -3326,6 +3404,7 @@ end
 
 local function onSlowUpdate()
     checkDnfStall()
+    followTurn(M.session or M.spectatingSession)
     if M.spawnQueueForced then
         flushSpawnQueue()
         if not (M.session and M.session.state == "COUNTDOWN") then restoreSpawnQueue() end

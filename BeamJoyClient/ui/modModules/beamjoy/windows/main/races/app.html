@@ -455,6 +455,16 @@
                     </button>
                 </div>
             </div>
+            <!-- a circuit : an untimed out lap first, the time from the line at its end -->
+            <div class="bjr-toggle-row" ng-if="race.loopable">
+                <span title="{{'beamjoy.window.config.tabs.races.outLap.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.outLap' | translate}}</span>
+                <bj-toggle ng-model="$ctrl.startOptions.outLap"></bj-toggle>
+            </div>
+            <!-- open to join while it's under way (with phases : every phase's) -->
+            <div class="bjr-toggle-row" ng-if="race.startPositions > 1">
+                <span title="{{'beamjoy.window.main.tabs.races.lateJoin.tooltip' | translate}}">{{'beamjoy.window.main.tabs.races.lateJoin' | translate}}</span>
+                <bj-toggle ng-model="$ctrl.lateJoinSwitch.on"></bj-toggle>
+            </div>
 
             <div class="bjr-field">
                 <span class="name" title="{{'beamjoy.window.main.tabs.races.vehicleRestriction.startMode.tooltip' | translate}}">

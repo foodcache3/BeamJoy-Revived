@@ -685,6 +685,7 @@ local function backfillRaceDefaults(race)
     if race.defaults.disableCollisions == nil then race.defaults.disableCollisions = false end
     if race.defaults.ghostBackmarkers == nil then race.defaults.ghostBackmarkers = false end
     if race.defaults.flyingStart == nil then race.defaults.flyingStart = false end
+    if race.defaults.outLap == nil then race.defaults.outLap = false end
     if race.defaults.showGateNametags == nil then race.defaults.showGateNametags = false end
     if race.defaults.limitVisibleGates == nil then race.defaults.limitVisibleGates = true end
     race.defaults.visibleGateCount = race.defaults.visibleGateCount or 2
@@ -776,6 +777,7 @@ local function onOpen(raceId)
                 disableCollisions = false,
                 ghostBackmarkers = false,
                 flyingStart = false,
+                outLap = false,
                 showGateNametags = false,
                 limitVisibleGates = true,
                 visibleGateCount = 2,

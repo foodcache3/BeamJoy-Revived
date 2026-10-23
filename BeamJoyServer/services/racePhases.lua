@@ -35,6 +35,9 @@
 ---run starts on its own once they're through the finish (practice, runs) ; "plugin" : each waits
 ---on their grid slot until a plugin starts them (the plugin API's race.startRacer)
 ---@field intervalS integer? "individual" : seconds between two racers' starts
+---@field waiting "watch"|"grid"|nil "sequential" : the racers waiting their turn watch the one on
+---track, their cars put away, and each starts from the first slot ("watch", one car on track) ; or
+---they wait in their cars on their grid slots ("grid")
 ---@field laps integer? laps on a circuit, runs on a point-to-point track ; nil : no limit
 ---@field timeLimitMin number? nil : no limit. Laps and a time limit : whichever comes first
 ---@field afterTime BJRacePhaseAfterTime once the time's up : "leader" (position ranking only) the
@@ -154,11 +157,10 @@ local function sanitizePhase(raw, index, race)
     }
     if not STARTS_RUN[phase.start] then phase.start = M.START.GRID end
     if phase.start == M.START.INDIVIDUAL then phase.intervalS = int(raw.intervalS, 3, 600) or 10 end
-    -- racers starting on their own (a run from the first slot, a staggered start) cross one another
-    -- at the start : ghosted unless the phase says otherwise
-    if phase.start ~= M.START.GRID and phase.rules.disableCollisions == nil then
-        phase.rules.disableCollisions = true
-    end
+    if phase.start == M.START.SEQUENTIAL then phase.waiting = raw.waiting == "grid" and "grid" or "watch" end
+    -- collisions as the event (or the phase's own rule) says : they used to be switched off for any
+    -- start of one's own, whatever the start menu said (reported : a time offset start ghosted
+    -- with the option unticked)
 
     local minutes = tonumber(raw.timeLimitMin)
     if minutes and minutes == minutes and minutes > 0 then
@@ -239,8 +241,11 @@ function M.fromStart(race, opts)
     if phases then return phases, M.sanitizeResult(defaults.result) end
     -- the start menu's length when it sent one (laps, time, or both), else the race's own
     local src = (opts.laps ~= nil or opts.timeLimitMin ~= nil) and opts or defaults
-    return M.sanitize({ { laps = src.laps, timeLimitMin = src.timeLimitMin, afterTime = src.afterTime } }, race),
-        M.RESULT.LAST
+    -- open to join while under way : the start menu's switch, else the race's own
+    local lateJoin = opts.lateJoin
+    if lateJoin == nil then lateJoin = defaults.lateJoin end
+    return M.sanitize({ { laps = src.laps, timeLimitMin = src.timeLimitMin, afterTime = src.afterTime,
+        lateJoin = lateJoin == true } }, race), M.RESULT.LAST
 end
 
 --- the session's settings for a phase : the event's own, the phase's rules over them, and its length
@@ -257,6 +262,7 @@ function M.effectiveSettings(base, phase)
     s.ranking = phase.ranking
     s.start = phase.start
     s.intervalS = phase.intervalS
+    s.waiting = phase.waiting
     -- a personal start's countdown (a run, a staggered start, a mid-phase join) : short
     s.startCountdownMs = math.clamp(math.floor(tonumber(base.countdown) or 5), 3, 5) * 1000
     return s
@@ -530,7 +536,7 @@ local LOCKABLE = { phases = true, name = true, start = true, length = true, rank
     takes = true, lateJoin = true, leaderboard = true, countsToEvent = true, breakS = true, rules = true,
     plugins = true }
 -- a phase's fields each lockable setting covers
-local LOCK_FIELDS = { length = { "laps", "timeLimitMin", "afterTime" }, start = { "start", "intervalS" } }
+local LOCK_FIELDS = { length = { "laps", "timeLimitMin", "afterTime" }, start = { "start", "intervalS", "waiting" } }
 
 --- a plugin's formats, checked (their phases against a circuit : each start checks them again
 --- against its own track)

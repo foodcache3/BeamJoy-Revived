@@ -134,6 +134,8 @@ angular.module("beamjoy").component("bjRaceHud", {
             if (self.disqualified) v.progress = translate("beamjoy.raceHud.disqualified");
             else if (self.finished) v.progress = translate("beamjoy.raceHud.finished");
             else if (self.dnf) v.progress = translate("beamjoy.raceHud.retired");
+            // an out lap (a circuit) : not timed until the line
+            else if (self.outLap) v.progress = translate("beamjoy.raceHud.outLap");
             // a timed phase : the time left, then the lap you're on ; once it's up, your last one
             else if (timed && data.timeUp) v.progress = translate("beamjoy.raceHud.finalLap");
             else if (timed) {
@@ -152,7 +154,8 @@ angular.module("beamjoy").component("bjRaceHud", {
             }
 
             // running clock : this lap on a multi-lap race, the whole run otherwise
-            v.timer = clock(multiLap ? self.currentLapElapsedMs : data.elapsedMs);
+            // (timed from a line, a flying start's or an out lap's end : the lap's, even on one)
+            v.timer = clock(multiLap || data.lapClock ? self.currentLapElapsedMs : data.elapsedMs);
             if (typeof self.liveDeltaMs === "number" && !self.finished && !self.dnf) {
                 v.delta = `${self.liveDeltaMs <= 0 ? "-" : "+"}${f.gap(self.liveDeltaMs)}`;
                 v.deltaCls = self.liveDeltaMs <= 0 ? "faster" : "slower";

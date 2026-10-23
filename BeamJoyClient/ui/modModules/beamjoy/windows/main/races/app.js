@@ -286,11 +286,14 @@ angular.module("beamjoy").component("bjMainRaces", {
         // one) actually finishes: auto-surfaces the results instead of requiring a manual click.
         // Delayed a few seconds per direct request, since popping the panel open the INSTANT the
         // race ends collides visually with the "Finished!"/"DNF" popup that's also on screen right then.
+        let autoOpen = null;
         $rootScope.$on("BJRaceInfoAutoOpen", (_, data) => {
-            $timeout(() => {
+            autoOpen = $timeout(() => {
                 this.openRaceInfoPanel(data && data.raceName, "results");
             }, 3000);
         });
+        // the break's over before they showed (the leader started the next phase) : not at all
+        $rootScope.$on("BJRaceInfoAutoClose", () => $timeout.cancel(autoOpen));
         // real, confirmed bug: this used to show a hardcoded "not implemented yet" line
         // regardless of the actual session, a leftover from before vehicle restrictions existed
         // as a feature at all. Now reflects the CURRENT session's own effective restriction
@@ -375,6 +378,10 @@ angular.module("beamjoy").component("bjMainRaces", {
                 format: defaultPhases ? "custom" : "race",
                 // a point-to-point track : the time from the first checkpoint (a flying start)
                 flyingStart: d.flyingStart === true,
+                // a circuit : an untimed out lap first
+                outLap: d.outLap === true,
+                // open to join while under way (each phase's own, with phases : lateJoinSwitch)
+                lateJoin: d.lateJoin === true,
                 phaseList: defaultPhases ? beamjoyRacePhases.fromServer(d.phases) : null,
                 result: d.result === "sum" ? "sum" : "last",
                 respawnStrategy: d.respawnStrategy || "lastcheckpoint",
@@ -439,6 +446,26 @@ angular.module("beamjoy").component("bjMainRaces", {
             return preset ? preset.entries.length : 0;
         };
 
+        // joining while under way (direct request : it couldn't be found) : the race's own switch, or
+        // with phases every phase's at once (each keeps its own in the phase editor). Read and set
+        // through bj-toggle's two-way binding
+        const lateJoinSwitch = {};
+        Object.defineProperty(lateJoinSwitch, "on", {
+            get: () => {
+                const o = this.startOptions;
+                if (!o) return false;
+                if (Array.isArray(o.phaseList) && o.phaseList.length > 0) return o.phaseList.every((p) => p.lateJoin === true);
+                return o.lateJoin === true;
+            },
+            set: (v) => {
+                const o = this.startOptions;
+                if (!o) return;
+                o.lateJoin = v === true;
+                (o.phaseList || []).forEach((p) => (p.lateJoin = v === true));
+            },
+        });
+        this.lateJoinSwitch = lateJoinSwitch;
+
         // FORMAT : one race (laps / time as below), or a format's phases, edited freely
         this.setFormat = (race, id) => {
             const o = this.startOptions;
@@ -471,6 +498,7 @@ angular.module("beamjoy").component("bjMainRaces", {
                 laps: race.loopable ? o.laps : 1,
                 timeLimitMin: o.timeLimitMin,
                 afterTime: o.afterTime,
+                lateJoin: o.lateJoin === true,
             })];
             o.format = "custom";
         };

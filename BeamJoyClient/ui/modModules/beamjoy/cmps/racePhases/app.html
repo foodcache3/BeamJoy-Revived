@@ -192,6 +192,16 @@
             <span class="name" title="{{'beamjoy.racePhases.intervalS.tooltip' | translate}}">{{'beamjoy.racePhases.intervalS' | translate}}</span>
             <bj-slider ng-model="p.intervalS" min="5" max="120" hard-max="600" step="5"></bj-slider>
         </div>
+        <!-- one at a time : the others watch (their cars put away), or wait on their slots -->
+        <div class="bjr-field" ng-if="p.start === 'sequential'" ng-class="{locked: $ctrl.isLocked('start')}">
+            <span class="name" title="{{'beamjoy.racePhases.waiting.tooltip' | translate}}">{{'beamjoy.racePhases.waiting' | translate}}</span>
+            <div class="bjr-seg">
+                <button type="button" ng-repeat="w in $ctrl.WAITING" ng-class="{on: p.waiting === w}" ng-click="p.waiting = w"
+                    title="{{('beamjoy.racePhases.waitings.' + w + '.tooltip') | translate}}">
+                    {{('beamjoy.racePhases.waitings.' + w) | translate}}
+                </button>
+            </div>
+        </div>
 
         <div class="bjr-field" ng-class="{locked: $ctrl.isLocked('ranking')}">
             <span class="name" title="{{'beamjoy.racePhases.ranking.tooltip' | translate}}">{{'beamjoy.racePhases.ranking' | translate}}</span>

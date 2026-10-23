@@ -106,6 +106,7 @@
 ---or the phase's green light (a mid-phase join into a race). nil : the green light
 ---@field runStartPosition table? where their personal start is (the first slot, or a free one)
 ---@field elapsedOffsetMs integer? their laps' time before clockBaseMs (a run's clock starts at 0)
+---@field outLapPending boolean? on their out lap (settings.outLap) : not timed until the line
 ---@field awaitingStart boolean? a plugin's phase (start = "plugin") : held on their slot until the
 ---plugin starts them (race.startRacer)
 ---@field score number? a plugin's score for them this phase (phase.setScores)
@@ -122,6 +123,9 @@
 ---@field laps integer?
 ---@field flyingStart boolean? a point-to-point track : each racer's time (every run's) starts at the
 ---first checkpoint, not at their release (see BJRaceDefaults.flyingStart)
+---@field outLap boolean? a circuit : an out lap from the grid first, each racer timed from the line
+---at its end (see BJRaceDefaults.outLap)
+---@field waiting "watch"|"grid"|nil a "sequential" phase's : how the racers wait their turn (racePhases)
 ---@field respawnStrategy BJRaceRespawnStrategy
 ---@field placementMode BJRacePlacementMode how grid slots are assigned at countdown time:
 ---"deterministic" = lobby join order (starter first), "random" = shuffled, "manual" = whatever
@@ -1026,6 +1030,16 @@ local function buildSettings(race, overrides)
         end
     end
 
+    -- an out lap (direct request) : a circuit's only, a lap from the grid before the timed ones
+    local outLap = false
+    if race.loopable then
+        if overrides.outLap ~= nil then
+            outLap = overrides.outLap == true
+        elseif defaults.outLap ~= nil then
+            outLap = defaults.outLap == true
+        end
+    end
+
     local randomizeVehiclePool = false
     if overrides.randomizeVehiclePool ~= nil then
         randomizeVehiclePool = overrides.randomizeVehiclePool == true
@@ -1083,6 +1097,7 @@ local function buildSettings(race, overrides)
         allowTuning = allowTuning,
         randomizeVehiclePool = randomizeVehiclePool,
         flyingStart = flyingStart,
+        outLap = outLap,
         -- server plugins' own options (services/pluginUi.lua) : plugin -> option -> value
         plugins = services_pluginUi.sessionValues(defaults.plugins, overrides.plugins),
     }
@@ -1248,9 +1263,11 @@ local function startCountdown(session, race, grid, orderedBy)
     local phase = currentPhase(session)
     session.phaseEndsAtMs = phase.timeLimitMin and session.goAtMs + math.floor(phase.timeLimitMin * 60000) or nil
     -- "individual" : one at a time from the first slot, in grid order, intervalS apart
+    local outLap = session.settings.outLap == true and race.loopable or nil
     for i, p in ipairs(placed) do
         p.elapsedOffsetMs = 0
         p.awaitingStart = nil
+        p.outLapPending = outLap
         if phase.start == services_racePhases.START.INDIVIDUAL then
             p.startAtMs = session.goAtMs + (i - 1) * (phase.intervalS or 10) * 1000
             p.clockBaseMs = p.startAtMs
@@ -1260,6 +1277,9 @@ local function startCountdown(session, race, grid, orderedBy)
             -- slot (releaseNextTurn) ; the phase's time limit is each one's own, from this start
             if i == 1 then
                 p.startAtMs, p.clockBaseMs, p.runStartPosition = session.goAtMs, session.goAtMs, race.startPositions[1]
+                -- the others watch till their turn, each from the first slot : the first one too,
+                -- to be fair (direct request)
+                if phase.waiting ~= "grid" then p.startPosition = race.startPositions[1] end
             else
                 p.startAtMs, p.clockBaseMs, p.runStartPosition = nil, nil, nil
                 p.awaitingStart = true
@@ -1731,6 +1751,8 @@ local function personalStart(session, p, position, delayMs, clockFromGreen, coun
     p.liveDeltaMs = nil
     p.currentSector, p.sectorStartMs, p.lapSectors = 1, 0, {}
     p.lastProgressTime = GetCurrentTime()
+    -- a circuit's out lap : every start of one's own has one (settings.outLap is a circuit's only)
+    p.outLapPending = session.settings.outLap == true or nil
     apiEvent("racerStarted", session, p)
 end
 
@@ -2277,6 +2299,7 @@ local function resetForPhase(p)
     p.startPosition, p.gridPosition = nil, nil
     p.score, p.scoreKey, p.scoreDisplay, p.awaitingStart = nil, nil, nil, nil
     p.startAtMs, p.clockBaseMs, p.runStartPosition, p.elapsedOffsetMs = nil, nil, nil, nil
+    p.outLapPending = nil
     p.lastProgressTime = GetCurrentTime()
 end
 
@@ -2880,6 +2903,20 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         lapComplete = gate.step == 1 and gateAlreadyCrossed
     else
         lapComplete = gate.isFinish == true
+    end
+
+    -- an out lap (a circuit, direct request) : the lap from the grid isn't one, nor its sectors.
+    -- Their time starts as they cross the line at its end, as a flying start's at its line
+    if participant.outLapPending then
+        participant.liveDeltaMs = nil
+        if lapComplete then
+            participant.outLapPending = nil
+            participant.elapsedOffsetMs = (participant.elapsedOffsetMs or 0) - lapRelativeNow
+            -- the line crossed : the next time over it closes their first lap
+            participant.gateTimes = { [gate.step] = elapsedMs }
+            participant.currentSector, participant.sectorStartMs, participant.lapSectors = 1, 0, {}
+        end
+        return pushSessionUpdate(session, true)
     end
 
     -- sector tracking: a sector completes whenever its own last gate is crossed, except the final
