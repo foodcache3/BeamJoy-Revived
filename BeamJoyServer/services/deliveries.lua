@@ -10,7 +10,7 @@
 ---     (separate from the spawn ModelBlacklist, which also applies) in `deliveryPool.json` : whole
 ---     models (which also covers configs a later refresh adds) and single configs.
 ---   - **jobs** : one per player. The server owns the clock (start time, hard deadline at 2x the
----     target) and checks the player's position at pickup and drop-off, so a client can't report
+---     target, unless the Timeouts setting is off) and checks the player's position at pickup and drop-off, so a client can't report
 ---     an arrival it didn't make.
 ---   - **convoys** : up to 4 players on one offer, one piece of cargo (or one vehicle) each. A
 ---     convoy forms in a lobby at the depot (ready-up, a countdown, "Start now" for the leader,
@@ -54,7 +54,8 @@
 ---@class BJDeliveryJob
 ---@field offer BJDeliveryOffer
 ---@field startedAt integer GetCurrentTime() seconds
----@field deadlineAt integer GetCurrentTime() seconds ; the job fails past this
+---@field deadlineAt integer? GetCurrentTime() seconds ; the job fails past this (nil : started with
+---the Timeouts setting off, it never runs out of time)
 ---@field serverVid any the vehicle carrying the cargo, as the client reported it
 ---@field convoyId integer?
 ---@field slot integer? convoy member index (vehicle convoys : the start slot)
@@ -156,6 +157,15 @@ local M = {
 ---@return table
 local function settings()
     return services_config.data.Deliveries
+end
+
+--- a job starting now : when it fails, nil with the Timeouts setting off (direct request)
+---@param now integer
+---@param offer table
+---@return integer?
+local function deadlineFrom(now, offer)
+    if settings().Timeouts == false then return nil end
+    return now + offer.targetSec * M.DEADLINE_FACTOR
 end
 
 ---@param playerID integer
@@ -718,7 +728,7 @@ local function jobPayload(job)
         vehicle = job.offer.vehicle,
         meters = job.offer.meters,
         targetSec = job.offer.targetSec,
-        deadlineSec = job.deadlineAt - job.startedAt,
+        deadlineSec = job.deadlineAt and job.deadlineAt - job.startedAt or nil,
         elapsedSec = GetCurrentTime() - job.startedAt,
         from = from and { id = from.id, name = from.name, pos = from.pos, radius = from.radius, slots = from.slots } or nil,
         to = to and { id = to.id, name = to.name, pos = to.pos, radius = to.radius } or nil,
@@ -860,7 +870,7 @@ local function deliveryStart(ctxt, offerId, serverVid)
     local job = {
         offer = offer,
         startedAt = now,
-        deadlineAt = now + offer.targetSec * M.DEADLINE_FACTOR,
+        deadlineAt = deadlineFrom(now, offer),
         serverVid = serverVid,
     }
     M.jobs[ctxt.senderID] = job
@@ -1232,7 +1242,7 @@ local function startConvoy(c)
         local job = {
             offer = c.offer,
             startedAt = now,
-            deadlineAt = now + c.offer.targetSec * M.DEADLINE_FACTOR,
+            deadlineAt = deadlineFrom(now, c.offer),
             serverVid = c.members[pid].serverVid,
             convoyId = c.id,
             slot = i,
@@ -1585,8 +1595,10 @@ local function onSlowUpdate()
             pushBoardToViewers(depotId)
         end
     end
+    -- the Timeouts setting turned off meanwhile : running jobs no longer fail either
+    local timeouts = settings().Timeouts ~= false
     for playerID, job in pairs(M.jobs) do
-        if now > job.deadlineAt then endJob(playerID, "timedOut") end
+        if timeouts and job.deadlineAt and now > job.deadlineAt then endJob(playerID, "timedOut") end
     end
     tickConvoys(now)
 end

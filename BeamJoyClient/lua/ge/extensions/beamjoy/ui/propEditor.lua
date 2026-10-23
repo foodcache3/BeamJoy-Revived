@@ -742,6 +742,52 @@ local function showSelectionGizmo()
     end)
 end
 
+---@return vec3? the middle of every prop's points, nil without props
+function M.centre()
+    local sum, n = vec3(0, 0, 0), 0
+    for _, prop in ipairs(props() or {}) do
+        for _, p in ipairs(propPoints(prop)) do sum, n = sum + p, n + 1 end
+    end
+    return n > 0 and sum * (1 / n) or nil
+end
+
+--- every prop turned round a point (direct request : the arena editors' "turn the whole arena"),
+--- by `degrees` anticlockwise seen from above. With snapping on, each keeps its height above the
+--- ground under it ; lines and props following the ground are laid on it again
+---@param pivot vec3
+---@param degrees number
+function M.turnAll(pivot, degrees)
+    if not active() then return end
+    local list = props()
+    if #list == 0 then return end
+    local rad = math.rad(degrees)
+    local c, s = math.cos(rad), math.sin(rad)
+    local function turned(v) return { x = v.x * c - v.y * s, y = v.x * s + v.y * c, z = v.z } end
+    local function place(p)
+        local out = turned({ x = p.x - pivot.x, y = p.y - pivot.y, z = p.z })
+        out.x, out.y = out.x + pivot.x, out.y + pivot.y
+        if snapOn() then out.z = p.z + groundHeightAt(toVec(out)) - groundHeightAt(toVec(p)) end
+        return out
+    end
+    for _, prop in ipairs(list) do
+        if isPath(prop) then
+            mapPathPoints(prop, place)
+            prop.heights, prop.normals = nil, nil
+            fitLineCount(prop)
+            updateLineHeights(prop)
+        elseif prop.pos then
+            prop.pos = place(prop.pos)
+            if prop.dir then prop.dir = turned(prop.dir) end
+            if prop.up then prop.up = turned(prop.up) end
+            if prop.followGround == true then tiltSingle(prop) end
+        end
+    end
+    markDirty()
+    pushUpdate()
+    if M.activePropIndex then updatePropGizmo() end
+    propsChanged()
+end
+
 updatePropGizmo = function()
     gizmo.hide()
     if not props() or not M.activePropIndex then return end

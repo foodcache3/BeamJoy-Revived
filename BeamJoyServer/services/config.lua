@@ -46,12 +46,13 @@
 ---@field ForceHud boolean forces the main BeamJoy window open and non-closable for every player,
 ---the same treatment staff already always get ; default on. (A "ShowHudAtStart" setting, open at
 ---start but closable, was removed : see sanitizeOnStart)
----@field Deliveries {MinRouteDistance: integer, MaxRouteDistance: integer, ReferenceSpeed: integer, OffersPerDepot: integer, OfferRotation: integer, HoldDuration: integer, LobbyDuration: integer}
+---@field Deliveries {MinRouteDistance: integer, MaxRouteDistance: integer, ReferenceSpeed: integer, OffersPerDepot: integer, OfferRotation: integer, HoldDuration: integer, LobbyDuration: integer, Timeouts: boolean}
 ---Phase 3 deliveries (services/deliveries.lua). MinRouteDistance/MaxRouteDistance : metres of road
 ---a job's route may span. ReferenceSpeed : km/h the target time assumes (route length / speed).
 ---OffersPerDepot : jobs each depot's board shows at once. OfferRotation : minutes an untaken offer
 ---stays up before it's replaced. HoldDuration : seconds a vehicle must hold inside a drop-off zone.
----LobbyDuration : seconds a convoy lobby waits for players before it leaves.
+---LobbyDuration : seconds a convoy lobby waits for players before it leaves. Timeouts : a job fails
+---past its deadline (twice its target time) ; off, a job never runs out of time.
 ---@field Voting {MapVoteThresholdPercent: number, MapVoteTimeout: integer, KickVoteThresholdPercent: number, KickVoteTimeout: integer}
 ---ThresholdPercent : percentage (1-100) of eligible voters needed to pass ; Timeout : seconds a
 ---vote stays open before it's automatically considered failed. Defaults (51%, 30s) match what
@@ -159,6 +160,7 @@ local M = {
             OfferRotation = 5,
             HoldDuration = 3,
             LobbyDuration = 180,
+            Timeouts = true,
         },
         RaceAuthorshipRestriction = false,
         RaceEditorShowOnlyEditable = false,
@@ -461,8 +463,13 @@ local function sanitizeConfigValue(key, value)
         if value.MaxRouteDistance < value.MinRouteDistance then
             return nil, "MaxRouteDistance must be at least MinRouteDistance"
         end
+        local switches = { Timeouts = true }
+        for k in pairs(switches) do
+            if value[k] == nil then value[k] = M.data.Deliveries[k] ~= false end
+            if type(value[k]) ~= "boolean" then return nil, k .. " must be a boolean" end
+        end
         for k in pairs(value) do
-            if not bounds[k] then value[k] = nil end
+            if not bounds[k] and not switches[k] then value[k] = nil end
         end
     elseif key == "Voting" then
         if type(value) ~= "table" then

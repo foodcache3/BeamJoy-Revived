@@ -28,7 +28,7 @@ angular.module("beamjoy").factory("beamjoyPluginUi", function ($rootScope, beamj
             .map((s) => Object.assign({}, s, { options: s.options.filter((o) => !o.where || o.where === "both" || o.where === place) }))
             .filter((s) => s.options.length > 0);
 
-    const state = { race: [], config: [], startSections: [], editorSections: [] };
+    const state = { race: [], config: [], startSections: [], editorSections: [], phaseSections: [], formats: [] };
     beamjoyStore.pluginUi = state;
     $rootScope.$on("BJPluginUi", (_, data) => {
         const race = asList(data && data.race).map((s) => prepareSection(s));
@@ -42,6 +42,12 @@ angular.module("beamjoy").factory("beamjoyPluginUi", function ($rootScope, beamj
             config,
             startSections: forPlace(race, "start"),
             editorSections: forPlace(race, "editor"),
+            // an event's phases : the options with a value of their own per phase (`where = "phase"`)
+            phaseSections: race
+                .map((s) => Object.assign({}, s, { options: s.options.filter((o) => o.where === "phase") }))
+                .filter((s) => s.options.length > 0),
+            // plugins' event formats (services/racePhases.lua, formats.register), for the start menu
+            formats: asList(data && data.formats).map((f) => Object.assign({}, f, { phases: asList(f.phases) })),
         });
         $rootScope.$broadcast("BJPluginUiChanged");
     });

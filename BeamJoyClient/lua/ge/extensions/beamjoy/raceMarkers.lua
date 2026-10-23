@@ -385,7 +385,7 @@ end
 local function markerParticipant(session)
     local selfName = MPConfig.getNickname()
     local own = table.find(session.participants, function(p) return p.playerName == selfName end)
-    if own and not own.finished and not own.dnf then return own end
+    if own and not own.finished and not own.dnf and not own.sittingOut then return own end
     local watched = beamjoy_raceRunner.spectatingPlayerName
     if watched then
         local p = table.find(session.participants, function(p) return p.playerName == watched end)
@@ -542,7 +542,7 @@ local function render()
                 -- visibleGateSet below, moot for a branching race (see visibleGateSetBranching
                 -- instead). Kept separate rather than reverse-deriving a single index out of the set.
                 local nextGateSet, expectedIndex
-                if participant and not participant.finished and not participant.dnf then
+                if participant and not participant.finished and not participant.dnf and not participant.sittingOut then
                     if race.branchingEnabled then
                         nextGateSet = {}
                         for _, i in ipairs(branchingStep(race, { participant.lastCrossedGate })) do

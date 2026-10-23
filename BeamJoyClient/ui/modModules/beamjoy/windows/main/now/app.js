@@ -70,7 +70,8 @@ angular.module("beamjoy").service("beamjoyNow", function ($rootScope, beamjoySto
         if (s.bus) return "busLines";
         return null;
     };
-    const lobby = (s) => (s.state === "GRID" || s.state === "LOBBY") && s.joinable;
+    // a race under way can be open to join too (a phase's lateJoin)
+    const lobby = (s) => ((s.state === "GRID" || s.state === "LOBBY") && s.joinable) || s.lateJoinable === true;
     this.joinableCount = () =>
         this.busy()
             ? 0
@@ -205,14 +206,16 @@ angular.module("beamjoy").component("bjMainNow", {
             const rows = [];
             const add = (kind, s, title) => {
                 if (s.id === mineId) return;
-                const forming = (s.state === "GRID" || s.state === "LOBBY") && s.joinable;
+                const lobbyState = s.state === "GRID" || s.state === "LOBBY";
+                const forming = (lobbyState && s.joinable) || s.lateJoinable === true;
                 rows.push({
                     id: `${kind}:${s.id}`,
                     kind,
                     session: s,
                     forming,
+                    running: !lobbyState,
                     title,
-                    line: fill(`beamjoy.window.main.now.row.${forming ? "lobby" : "running"}`, {
+                    line: fill(`beamjoy.window.main.now.row.${lobbyState && forming ? "lobby" : "running"}`, {
                         name: s.starterName || "?",
                         count: s.participantCount || 0,
                         max: s.maxParticipants || 0,
@@ -246,7 +249,7 @@ angular.module("beamjoy").component("bjMainNow", {
         };
 
         this.canJoin = (row) => row.forming && !beamjoyNow.busy();
-        this.canSpectate = (row) => !row.forming && row.kind === "race" && !beamjoyNow.busy();
+        this.canSpectate = (row) => (!row.forming || row.running) && row.kind === "race" && !beamjoyNow.busy();
         this.join = (row) => {
             // joining a convoy works from anywhere : you're brought to the depot when it leaves
             if (row.kind === "convoy") return beamjoyStore.send("BJDeliveryJobsJoin", [row.session.id]);

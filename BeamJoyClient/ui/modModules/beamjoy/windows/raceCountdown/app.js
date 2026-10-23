@@ -29,6 +29,8 @@ angular.module("beamjoy").component("bjRaceCountdown", {
             this.penaltySeconds = data.penaltyMs > 0 ? penText(data.penaltyMs) : null;
             if (data.raceName) {
                 this.raceName = data.raceName;
+                // an event's phase starting (practice, qualifying, the race...), when it has several
+                this.phaseName = data.phaseName || null;
             }
         });
 

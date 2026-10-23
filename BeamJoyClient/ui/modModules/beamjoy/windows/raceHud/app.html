@@ -611,7 +611,7 @@
     <!-- STANDARD -->
     <div ng-if="$ctrl.layout === 'standard'">
         <header class="std-head">
-            <span class="eyebrow">{{$ctrl.v.spectating || ('beamjoy.raceHud.racing' | translate)}}</span>
+            <span class="eyebrow">{{$ctrl.v.spectating || $ctrl.v.eyebrow}}</span>
             <h2>{{$ctrl.v.raceName}}</h2>
             <span class="lbls selflbls" ng-if="!$ctrl.v.multi && $ctrl.v.selfLabels.length > 0">
                 <span class="lbl" ng-repeat="l in $ctrl.v.selfLabels track by $index" ng-style="l.style" title="{{l.title}}">{{l.text}}</span>
@@ -716,7 +716,7 @@
     <!-- FULL STANDINGS -->
     <div ng-if="$ctrl.layout === 'full'">
         <div class="fullhead">
-            <span class="name">{{$ctrl.v.spectating || $ctrl.v.raceName}}</span>
+            <span class="name">{{$ctrl.v.spectating || $ctrl.v.raceName}}<small ng-if="$ctrl.v.phaseLabel && !$ctrl.v.spectating"> · {{$ctrl.v.phaseLabel}}</small></span>
             <span class="ov lap" ng-if="$ctrl.v.fullLap">{{$ctrl.v.fullLap}}<small>{{$ctrl.v.fullLapOf}}</small></span>
             <span class="ov lap" ng-if="!$ctrl.v.fullLap">{{$ctrl.v.timer}}</span>
         </div>

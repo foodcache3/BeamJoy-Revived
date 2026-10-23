@@ -523,6 +523,16 @@ local function sanitizeRace(race, existingRaces)
     if race.defaults.laps ~= nil then
         race.defaults.laps = math.max(1, math.floor(tonumber(race.defaults.laps) or 1))
     end
+    -- a timed race's length, and an event in phases (services/racePhases.lua) : the start menu's
+    -- starting point for this race
+    local minutes = tonumber(race.defaults.timeLimitMin)
+    race.defaults.timeLimitMin = minutes and minutes > 0 and math.clamp(minutes, 0.1, 1440) or nil
+    race.defaults.afterTime = ({ leader = true, own = true, stop = true })[race.defaults.afterTime] and
+        race.defaults.afterTime or nil
+    if race.defaults.phases ~= nil then
+        race.defaults.phases = services_racePhases and services_racePhases.sanitize(race.defaults.phases, race) or nil
+    end
+    race.defaults.result = race.defaults.phases and services_racePhases.sanitizeResult(race.defaults.result) or nil
     -- server plugins' own race options (services/pluginUi.lua), checked against the plugins running
     if services_pluginUi then
         race.defaults.plugins = services_pluginUi.raceDefaults(race.defaults.plugins)

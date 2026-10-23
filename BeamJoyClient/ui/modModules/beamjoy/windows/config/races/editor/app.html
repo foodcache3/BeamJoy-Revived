@@ -688,12 +688,45 @@
                 </td>
                 <td><bj-toggle ng-model="$ctrl.race.defaults.autoSpectateOnFinish"></bj-toggle></td>
             </tr>
-            <tr ng-if="$ctrl.race.loopable">
+            <!-- the race's length : laps, a time limit, or both (whichever comes first) -->
+            <tr ng-if="$ctrl.race.loopable && !$ctrl.phaseUi.list">
+                <td class="text-right" title="{{'beamjoy.racePhases.length.tooltip' | translate}}">
+                    {{'beamjoy.racePhases.length' | translate}}
+                </td>
+                <td>
+                    <div class="d-flex gap-1 flex-wrap">
+                        <button ng-repeat="mode in $ctrl.LENGTHS" class="btn info" ng-class="{success: $ctrl.lengthMode() === mode}"
+                            ng-click="$ctrl.setLength(mode)">
+                            {{('beamjoy.racePhases.lengths.' + mode) | translate}}
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            <tr ng-if="$ctrl.race.loopable && !$ctrl.phaseUi.list && $ctrl.lengthMode() !== 'time'">
                 <td class="text-right">
                     {{'beamjoy.window.config.tabs.races.laps' | translate}}
                 </td>
                 <td>
                     <bj-slider ng-model="$ctrl.race.defaults.laps" min="1" max="20" hard-max="500" step="1"></bj-slider>
+                </td>
+            </tr>
+            <tr ng-if="$ctrl.race.loopable && !$ctrl.phaseUi.list && $ctrl.lengthMode() !== 'laps'">
+                <td class="text-right">{{'beamjoy.racePhases.minutes' | translate}}</td>
+                <td>
+                    <bj-slider ng-model="$ctrl.race.defaults.timeLimitMin" min="1" max="60" hard-max="1440" step="1"></bj-slider>
+                </td>
+            </tr>
+            <tr ng-if="$ctrl.race.loopable && !$ctrl.phaseUi.list && $ctrl.lengthMode() !== 'laps'">
+                <td class="text-right" title="{{'beamjoy.racePhases.afterTime.tooltip' | translate}}">
+                    {{'beamjoy.racePhases.afterTime' | translate}}
+                </td>
+                <td>
+                    <div class="d-flex gap-1 flex-wrap">
+                        <button ng-repeat="a in $ctrl.AFTER_TIMES" class="btn info" ng-class="{success: $ctrl.race.defaults.afterTime === a}"
+                            ng-click="$ctrl.race.defaults.afterTime = a" title="{{('beamjoy.racePhases.afterTimes.' + a + '.tooltip') | translate}}">
+                            {{('beamjoy.racePhases.afterTimes.' + a) | translate}}
+                        </button>
+                    </div>
                 </td>
             </tr>
             <tr>
@@ -1051,6 +1084,26 @@
                         </td>
                     </tr>
                 </table>
+            </accordion-content>
+        </bj-accordion>
+
+        <!-- an event in phases : this race's own, the start menu's starting point -->
+        <bj-accordion id="race-editor-settings-phases" no-border-bottom="true" ng-if="$ctrl.phaseUi">
+            <accordion-title>
+                <h5>{{'beamjoy.racePhases.title' | translate}}</h5>
+            </accordion-title>
+            <accordion-content>
+                <div style="display: flex; flex-direction: column; gap: 0.5em">
+                    <span class="bjr-muted" style="font-size: 0.85em; opacity: 0.8">{{'beamjoy.racePhases.editorNote' | translate}}</span>
+                    <button class="btn info" ng-if="!$ctrl.phaseUi.list" ng-click="$ctrl.usePhases(true)" style="align-self: flex-start">
+                        {{'beamjoy.racePhases.editPhases' | translate}}
+                    </button>
+                    <bj-race-phases ng-if="$ctrl.phaseUi.list" phases="$ctrl.phaseUi.list" result="$ctrl.phaseUi.result"
+                        loopable="$ctrl.race.loopable" laps="$ctrl.race.defaults.laps"></bj-race-phases>
+                    <button class="btn" ng-if="$ctrl.phaseUi.list" ng-click="$ctrl.usePhases(false)" style="align-self: flex-start">
+                        {{'beamjoy.racePhases.oneRace' | translate}}
+                    </button>
+                </div>
             </accordion-content>
         </bj-accordion>
 

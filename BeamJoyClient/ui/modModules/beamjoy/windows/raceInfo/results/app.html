@@ -26,6 +26,28 @@
         background: rgba(73, 182, 114, 0.16);
         color: #73eb9d;
     }
+    /* an event's phases : one tab each, and the event's standings */
+    bj-race-info-results .views {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3em;
+        padding-bottom: 0.7em;
+    }
+    bj-race-info-results .views button {
+        min-height: 2em;
+        padding: 0 0.75em;
+        background: #282b33;
+        border: 0;
+        border-radius: 0.25em;
+        color: #c8cedc;
+        font-size: 0.82em;
+        cursor: pointer;
+    }
+    bj-race-info-results .views button.on {
+        background: rgba(255, 102, 0, 0.16);
+        box-shadow: inset 0 0 0 1px rgba(255, 102, 0, 0.6);
+        color: #fff;
+    }
     bj-race-info-results .ov {
         font-family: "Overpass", "Noto Sans", sans-serif;
         font-weight: 800;
@@ -423,6 +445,11 @@
 </style>
 
 <p class="empty" ng-if="!$ctrl.active">{{'beamjoy.window.main.tabs.races.raceInfo.noActiveRace' | translate}}</p>
+
+<div class="views" role="tablist" ng-if="$ctrl.active && $ctrl.v.views.length > 0">
+    <button type="button" role="tab" ng-repeat="w in $ctrl.v.views track by w.id" ng-class="{on: $ctrl.view === w.id}"
+        aria-selected="{{$ctrl.view === w.id}}" ng-click="$ctrl.setView(w.id)">{{w.label}}</button>
+</div>
 
 <div class="chips" ng-if="$ctrl.active">
     <span class="chip" ng-repeat="c in $ctrl.v.chips track by $index" ng-class="{ok: c.cls === 'ok'}">{{c.text}}</span>

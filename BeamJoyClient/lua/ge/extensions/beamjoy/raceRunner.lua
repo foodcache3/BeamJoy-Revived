@@ -167,9 +167,17 @@ local function onInit()
     -- ready up here first, through the same checks as the Ready button (a car, the right one) :
     -- without it a leader with no car could start the race carless (services/raceGrid.lua)
     beamjoy_communications_ui.addHandler("BJRaceStartNow", function()
-        if M.session and M.ready(true) then beamjoy_communications.send("raceStartNow", M.session.id) end
+        if not M.session then return end
+        -- between two phases : the next one now (everyone's already in)
+        if M.session.state == "BREAK" then return beamjoy_communications.send("raceStartNow", M.session.id) end
+        if M.ready(true) then beamjoy_communications.send("raceStartNow", M.session.id) end
     end)
     beamjoy_communications_ui.addHandler("BJRaceRetire", M.retire)
+    -- race control for staff : the phase under way ends now, or gets 5 more minutes
+    beamjoy_communications_ui.addHandler("BJRaceStaffPhase", function(action)
+        local session = M.spectatingSession or M.session
+        if session then beamjoy_communications.send("raceStaffPhase", session.id, action) end
+    end)
     beamjoy_communications_ui.addHandler("BJRaceSpectate", M.spectateSession)
     beamjoy_communications_ui.addHandler("BJRaceStopSpectate", M.stopSpectating)
     -- race control, staff watching a race (services/raceGrid.lua's raceStaffAction)
@@ -226,6 +234,32 @@ local function getSelfParticipant()
     if not M.session then return nil end
     local selfName = MPConfig.getNickname()
     return table.find(M.session.participants, function(p) return p.playerName == selfName end)
+end
+
+--- which phase of which session (services/racePhases.lua : an event runs one or more, each with
+--- its own countdown and green light), for what happens once per phase
+---@param session BJRaceSession
+---@return string
+local function phaseKey(session)
+    return string.format("%s#%d", session.id, session.phaseIndex or 1)
+end
+
+--- the phase being run (in the lobby, the first) ; nil from an older server
+---@param session BJRaceSession?
+---@return table?
+local function currentPhase(session)
+    return session and session.phases and session.phases[session.phaseIndex or 1] or nil
+end
+
+--- a timed phase's time left (ms), or nil : from its end on the shared clock, else the server's
+--- last reckoning
+---@param session BJRaceSession
+---@return integer?
+local function phaseTimeLeftMs(session)
+    if session.state ~= "RACE" or not session.phaseEndsAtMs then return nil end
+    local serverNow = beamjoy_clockSync.serverNowMs()
+    if serverNow then return math.max(0, session.phaseEndsAtMs - serverNow) end
+    return session.phaseTimeLeftMs
 end
 
 ---@param session BJRaceSession?
@@ -335,7 +369,7 @@ end
 local function spectateAnotherRacer(session)
     local selfName = MPConfig.getNickname()
     local target = table.find(session.participants, function(p)
-        return p.playerName ~= selfName and not p.finished and not p.dnf
+        return p.playerName ~= selfName and not p.finished and not p.dnf and not p.sittingOut
     end)
     if not target then return false end
 
@@ -374,7 +408,7 @@ local function onVehicleDestroyed(vid)
         if M.session and M.session.state == "RACE" and M.session.settings.respawnStrategy ~= "all" and
             not M.resumePending then
             local participant = getSelfParticipant()
-            if participant and not participant.finished and not participant.dnf then
+            if participant and not participant.finished and not participant.dnf and not participant.sittingOut then
                 beamjoy_communications.send("raceDNF", M.session.id)
             end
         end
@@ -435,7 +469,7 @@ local function onBJVehicleInstantiated(vid)
     M.myVehicleVid = vid
     if M.session.settings.respawnStrategy == "all" then return end
     local participant = getSelfParticipant()
-    if not participant or participant.finished or participant.dnf then return end
+    if not participant or participant.finished or participant.dnf or participant.sittingOut then return end
     beamjoy_communications.send("raceDNF", M.session.id)
 end
 
@@ -553,7 +587,7 @@ local function onBJRequestRestrictions(restrictions)
     -- race itself: being frozen only stops the vehicle from moving, not these inputs.
     if not isRaceLocked() then return end
     local participant = getSelfParticipant()
-    if not participant or participant.finished or participant.dnf then return end
+    if not participant or participant.finished or participant.dnf or participant.sittingOut then return end
 
     -- BeamNG's native "get out and walk" (action id confirmed via the game's own gameplay.json)
     -- trivially breaks an active attempt regardless of respawn strategy. Gate-crossing tracks
@@ -648,9 +682,13 @@ end
 local function activeVehicleRestriction()
     if not M.session then return nil end
     local state = M.session.state
-    if state ~= "GRID" and state ~= "COUNTDOWN" and state ~= "RACE" then return nil end
+    if state ~= "GRID" and state ~= "COUNTDOWN" and state ~= "RACE" and state ~= "BREAK" then return nil end
     local participant = getSelfParticipant()
-    if not participant or participant.finished or participant.dnf then return nil end
+    if not participant then return nil end
+    -- between phases, everyone's back in a car for the next one ; joining midway, they need one
+    if state ~= "BREAK" and (participant.finished or participant.dnf or (participant.sittingOut and not participant.lateJoining)) then
+        return nil
+    end
     local s = M.session.settings
     local startMode = s.vehicleRestrictionStartMode
     -- resolved once, session-wide, regardless of which branch below actually builds the rest of
@@ -739,6 +777,70 @@ local function varsMatch(a, b)
     return true
 end
 
+--- "<model>/<config>" -> that saved configuration's {parts, vars} as its file has them, or false
+--- when it can't be read (a vehicle collection, a missing file) ; a game session's files don't change
+---@type table<string, table|false>
+local configFileCache = {}
+
+---@param model string
+---@param config string
+---@return table? {parts: table<string, string>, vars: table<string, number>}
+local function configFile(model, config)
+    local key = model .. "/" .. config
+    if configFileCache[key] == nil then
+        local ok, data = pcall(jsonReadFile, string.format("vehicles/%s/%s.pc", model, config))
+        local out = false
+        if ok and type(data) == "table" then
+            if data.format == 2 and type(data.parts) == "table" then
+                out = { parts = data.parts, vars = type(data.vars) == "table" and data.vars or {} }
+            elseif data.format == nil and data.parts == nil then
+                -- the oldest files : the parts map is the whole file
+                out = { parts = data, vars = {} }
+            end
+        end
+        configFileCache[key] = out
+    end
+    return configFileCache[key] or nil
+end
+
+--- a pool entry's configuration as the game has it now, against the car (direct report : vehicle
+--- presets saved before the preset updates never matched, "This race requires <preset>"). An
+--- entry's own parts snapshot is missing on entries saved before it was captured, and goes stale
+--- when a game update renames a vehicle's parts ; the configuration itself (its .pc file, or a
+--- shared build's) doesn't. Every slot the file sets that the car has must hold the same part
+--- (empty or not) ; slots it leaves out are the game's defaults, and a different parent part shows
+--- in its own slot. Tuning too when the race doesn't allow it
+---@param veh NGVehicle
+---@param entry table
+---@param allowTuning boolean
+---@return boolean
+local function matchesConfigFile(veh, entry, allowTuning)
+    if type(entry.model) ~= "string" or type(entry.config) ~= "string" then return false end
+    local saved
+    local buildId = tonumber(entry.buildId) or beamjoy_vehicleBuilds.idOf(entry.config)
+    if buildId then
+        local build = beamjoy_vehicleBuilds.getById(buildId)
+        saved = build and type(build.pc) == "table" and type(build.pc.parts) == "table" and build.pc or nil
+    else
+        saved = configFile(entry.model, entry.config)
+    end
+    if not saved then return false end
+    local data = extensions.core_vehicle_manager.getVehicleData(veh:getID())
+    local cfg = data and data.config
+    if not cfg or not cfg.partsTree or cfg.model ~= entry.model then return false end
+    local mine = extensions.core_vehicle_partmgmt.partsTreeToPartsMap(cfg.partsTree)
+    local compared = 0
+    for slot, part in pairs(saved.parts) do
+        if mine[slot] ~= nil then
+            if tostring(mine[slot] or "") ~= tostring(part or "") then return false end
+            compared = compared + 1
+        end
+    end
+    -- nothing in common : not this vehicle's configuration at all
+    if compared == 0 then return false end
+    return allowTuning or varsMatch(cfg.vars or {}, saved.vars or {})
+end
+
 ---@param veh NGVehicle
 ---@param restriction BJVehicleRestriction
 ---@return boolean
@@ -771,6 +873,11 @@ local function vehicleMatchesRestriction(veh, restriction)
             return v.model == full.model and v.parts ~= nil and
                 table.deepcompare(full.parts or {}, v.parts) and
                 (restriction.allowTuning or (v.vars ~= nil and varsMatch(full.vars, v.vars)))
+        end) or table.find(restriction.pool, function(v)
+            -- no snapshot, or an outdated one : the entry's configuration as the game has it now
+            if v.model ~= full.model then return false end
+            local ok, matches = pcall(matchesConfigFile, veh, v, restriction.allowTuning == true)
+            return ok and matches == true
         end)
         if not match then
             -- Diagnostic only, same technique that found the real varsMatch float-precision bug
@@ -881,7 +988,7 @@ local function onBJRequestCanSpawnVehicle(req, model, config, action)
     -- hunterRunner.lua's own identical check.
     if isRaceLocked() then
         local participant = getSelfParticipant()
-        if participant and not participant.finished and not participant.dnf then
+        if participant and not participant.finished and not participant.dnf and not participant.sittingOut then
             if action == "clone" then
                 req.state = false
                 return
@@ -1096,8 +1203,11 @@ local function raceElapsedNowMs()
     if not M.session or M.session.state ~= "RACE" then return nil end
     if M.raceUsesSharedClock then
         local serverNow = beamjoy_clockSync.serverNowMs()
-        if serverNow and M.session.goAtMs then
-            return math.max(0, serverNow - M.session.goAtMs)
+        -- a start of their own (a run, a staggered start, a mid-phase join) counts from its own base
+        local own = M.personalAt and getSelfParticipant()
+        local base = own and own.clockBaseMs or M.session.goAtMs
+        if serverNow and base then
+            return math.max(0, serverNow - base)
         end
     end
     return M.raceStartLocalMs and (beamjoy_clockSync.localMs() - M.raceStartLocalMs) or nil
@@ -1188,10 +1298,17 @@ local function pushHud()
         elapsedMs = M.spectatingRaceStartTimeMs and (GetCurrentTimeMillis() - M.spectatingRaceStartTimeMs) or 0
     end
 
-    local previousLapsElapsed = 0
+    -- a start of their own (a run, a staggered start, a mid-phase join) : their clock is their own,
+    -- and the laps before it don't count in it
+    local serverNow = participant.clockBaseMs and beamjoy_clockSync.serverNowMs()
+    if serverNow then elapsedMs = math.max(0, serverNow - participant.clockBaseMs) end
+    local previousLapsElapsed = -(participant.elapsedOffsetMs or 0)
     table.forEach(participant.lapTimes or {}, function(t) previousLapsElapsed = previousLapsElapsed + t end)
 
-    local leaderboard = session.leaderboard
+    -- the ones sitting this phase out aren't in its standings
+    local leaderboard = session.leaderboard and table.filter(session.leaderboard, function(p)
+        return not p.sittingOut
+    end)
     local position, totalRacers, ahead, behind, standings
     if leaderboard and #leaderboard > 1 then
         totalRacers = #leaderboard
@@ -1202,7 +1319,9 @@ local function pushHud()
         local function opponent(row, gapMs, lapsDiff)
             return { playerName = row.playerName, displayName = row.displayName,
                 finished = row.finished, dnf = row.dnf, disconnected = row.disconnected,
-                gapMs = gapMs, lapsDiff = lapsDiff,
+                gapMs = gapMs, lapsDiff = lapsDiff, bestLapMs = row.bestLapMs,
+                -- a plugin's score (a phase ranked by a plugin)
+                score = row.score, scoreDisplay = row.scoreDisplay,
                 penaltyMs = row.penaltyMs, disqualified = row.disqualified,
                 labels = hudLabels(row.fields) }
         end
@@ -1223,7 +1342,9 @@ local function pushHud()
             desc.currentGate = row.currentGate
             desc.leaderGapMs = row.leaderGapMs
             desc.leaderLapsDiff = row.leaderLapsDiff
-            if row.finished then
+            desc.lapsDone = #(row.lapTimes or {})
+            -- every lap or run added up, as a "total" ranking goes by
+            if row.finished or session.settings.ranking == "total" then
                 -- the race time : laps plus staff penalties
                 local total = row.penaltyMs or 0
                 table.forEach(row.lapTimes or {}, function(t) total = total + t end)
@@ -1245,13 +1366,26 @@ local function pushHud()
         if p.finished then finishedCount = finishedCount + 1 end
     end
 
+    local phase = currentPhase(session)
+    local timeLeftMs = phaseTimeLeftMs(session)
     beamjoy_communications_ui.send("BJRaceHud", {
         active = true,
         raceName = race.name,
         totalGates = totalSteps(race),
         totalSectors = computeSectorCount(race),
-        totalLaps = session.settings.laps or 1,
+        -- nil : a timed phase with no lap count (timeLeftMs below)
+        totalLaps = session.settings.laps,
         elapsedMs = elapsedMs,
+        -- the event's phases (services/racePhases.lua) : this one's name and place, how its racers
+        -- are ranked, a timed one's time left, and whether it's up (each finishes their lap)
+        phaseName = phase and phase.name or nil,
+        phaseIndex = session.phaseIndex or 1,
+        phaseCount = session.phases and #session.phases or 1,
+        ranking = session.settings.ranking or "position",
+        timed = session.phaseEndsAtMs ~= nil,
+        timeLeftMs = timeLeftMs,
+        timeUp = session.flagAtMs ~= nil,
+        afterTime = session.settings.afterTime,
         self = {
             playerName = participant.playerName,
             displayName = participant.displayName,
@@ -1326,19 +1460,62 @@ local function pushRaceInfo()
         end
         return
     end
-    if session.state == "GRID" or session.state == "COUNTDOWN" then
+    -- a new event (its first countdown) : nothing to show yet. A later phase's countdown keeps
+    -- the phases already run
+    local firstPhase = (session.phaseIndex or 1) <= 1
+    if session.state == "GRID" or (session.state == "COUNTDOWN" and firstPhase) then
         M.lastRaceInfoPayload = nil
         return beamjoy_communications_ui.send("BJRaceInfo", { active = false })
     end
     local race = getRaceForSession(session)
     if not race then return end
 
+    -- a phase's results (raceGrid.lua's buildResults rows) in the shape of the live participants
+    local function resultRows(rows)
+        return table.map(rows or {}, function(r)
+            return {
+                playerName = r.connectionName or r.playerName,
+                displayName = r.playerName,
+                vehicleModel = r.vehicle,
+                position = r.position,
+                finished = r.position ~= nil,
+                dnf = r.position == nil,
+                disqualified = r.disqualified,
+                penaltyMs = r.penaltyMs,
+                totalMs = r.totalMs,
+                phasesDone = r.phasesDone,
+                score = r.score,
+                scoreDisplay = r.scoreDisplay,
+                lapTimes = r.lapTimes,
+                bestLapMs = r.bestLapMs,
+                lapSectorHistory = keyifyLapSectorHistory(r.lapSectorHistory),
+                bestSectorMs = keyify(r.bestSectorMs, "s"),
+                fields = r.fields,
+            }
+        end)
+    end
+    local phases, phaseResults = {}, {}
+    for i, phase in ipairs(session.phases or {}) do
+        phases[i] = { index = i, name = phase.name, ranking = phase.ranking, laps = phase.laps,
+            timeLimitMin = phase.timeLimitMin, countsToEvent = phase.countsToEvent }
+        local rows = session.phaseResults and session.phaseResults[i]
+        if rows then phaseResults["p" .. i] = resultRows(rows) end
+    end
+
     local payload = {
         active = true,
         state = session.state,
         raceId = race.id,
         raceName = race.name,
-        totalLaps = session.settings.laps or 1,
+        totalLaps = session.settings.laps,
+        timed = session.phaseEndsAtMs ~= nil or (currentPhase(session) or {}).timeLimitMin ~= nil,
+        ranking = session.settings.ranking or "position",
+        phaseIndex = session.phaseIndex or 1,
+        phases = phases,
+        -- keyed "p1", "p2"... (see keyify) : the phases run so far
+        phaseResults = phaseResults,
+        eventResult = session.result or "last",
+        eventStandings = session.eventStandings and resultRows(session.eventStandings) or nil,
         totalGates = totalSteps(race),
         sectorCount = computeSectorCount(race),
         selfPlayerName = MPConfig.getNickname(),
@@ -1347,7 +1524,9 @@ local function pushRaceInfo()
         -- sector/lap breakdown, not just self's (unlike pushHud, which only needs self plus two
         -- trimmed neighbor rows)
         participants = (function()
-            local rawParticipants = session.leaderboard or session.participants:values()
+            local rawParticipants = table.filter(session.leaderboard or session.participants:values(), function(p)
+                return not p.sittingOut
+            end)
             -- already in standings order server-side, each row with its gap to the leader and to
             -- the car in front worked out there (raceGrid.lua's gapBetween), the same figures the
             -- HUD shows
@@ -1371,6 +1550,10 @@ local function pushRaceInfo()
                     lapsDiff = p.leaderLapsDiff,
                     aheadGapMs = p.aheadGapMs,
                     aheadLapsDiff = p.aheadLapsDiff,
+                    -- a plugin's score (a phase ranked by a plugin)
+                    score = p.score,
+                    scoreKey = p.scoreKey,
+                    scoreDisplay = p.scoreDisplay,
                     -- server plugins' labels on this racer (services/pluginUi.lua)
                     fields = p.fields,
                 }
@@ -1426,6 +1609,8 @@ local function pushSpectateStatus()
         state = M.spectatingSession.state,
         participantCount = #M.spectatingSession.participants,
         staff = staff,
+        -- race control : a timed phase can get more time
+        timed = M.spectatingSession.phaseEndsAtMs ~= nil and M.spectatingSession.flagAtMs == nil,
         racers = staff and table.map(M.spectatingSession.participants, function(p)
             return {
                 playerID = p.playerID,
@@ -1453,6 +1638,12 @@ local function adoptSession(session, previous)
         else
             LogWarn("beamjoy_raceRunner: session update without settings for an unknown session")
             session.settings = {}
+        end
+    end
+    -- the event's phases and their results : left out of slim pushes too
+    if previous and previous.id == session.id then
+        for _, key in ipairs({ "phases", "phaseResults", "eventStandings" }) do
+            if session[key] == nil then session[key] = previous[key] end
         end
     end
 end
@@ -1507,7 +1698,7 @@ local function onVehicleSwitched(_, newVID)
     if not session or session.state ~= "RACE" or not newVID or newVID == -1 then return end
     if M.session then
         local own = getSelfParticipant()
-        if own and not own.finished and not own.dnf then return end
+        if own and not own.finished and not own.dnf and not own.sittingOut then return end
     end
     local mpVeh = beamjoy_vehicles.vehicles[newVID]
     if not mpVeh or mpVeh.isLocal or mpVeh.ownerName == M.spectatingPlayerName then return end
@@ -1601,6 +1792,21 @@ local function pushSessionStatus()
             }
         end),
         laps = M.session.settings.laps,
+        timeLimitMin = M.session.settings.timeLimitMin,
+        -- the event's phases (services/racePhases.lua), the one under way, and a break's time left
+        phases = table.map(M.session.phases or {}, function(phase, i)
+            return { index = i, name = phase.name, ranking = phase.ranking, laps = phase.laps,
+                timeLimitMin = phase.timeLimitMin }
+        end),
+        phaseIndex = M.session.phaseIndex or 1,
+        sittingOut = participant.sittingOut == true,
+        -- joined while it was under way : ready up to start
+        lateJoining = participant.lateJoining == true,
+        -- race control for staff in the race (the phase : end it, more time)
+        staff = beamjoy_permissions.isStaff(),
+        timed = M.session.phaseEndsAtMs ~= nil and M.session.flagAtMs == nil,
+        breakSecondsLeft = M.breakTargetMs and
+            math.max(0, math.ceil((M.breakTargetMs - GetCurrentTimeMillis()) / 1000)) or nil,
         respawnStrategy = M.session.settings.respawnStrategy,
         -- server plugins' own options for this race (services/pluginUi.lua)
         pluginValues = M.session.settings.plugins,
@@ -1637,16 +1843,20 @@ end
 --- whole-second-change pattern as updateCountdown's own COUNTDOWN-state ticking, just re-pushing
 --- the session status instead of the big overlay (this is specifically for the Races tab's small
 --- status panel, not a full-screen moment)
-local lastGridReadySec, lastGridTimeoutSec = nil, nil
+local lastGridReadySec, lastGridTimeoutSec, lastBreakSec = nil, nil, nil
 local function updateGridCountdown()
-    if not (M.gridReadyTargetMs or M.gridTimeoutTargetMs) then return end
+    if not (M.gridReadyTargetMs or M.gridTimeoutTargetMs or M.breakTargetMs) then return end
     local readySec = M.gridReadyTargetMs and
         math.max(0, math.ceil((M.gridReadyTargetMs - GetCurrentTimeMillis()) / 1000)) or nil
     local timeoutSec = M.gridTimeoutTargetMs and
         math.max(0, math.ceil((M.gridTimeoutTargetMs - GetCurrentTimeMillis()) / 1000)) or nil
-    if readySec ~= lastGridReadySec or timeoutSec ~= lastGridTimeoutSec then
+    -- between phases : the next one's countdown begins when this reaches 0
+    local breakSec = M.breakTargetMs and
+        math.max(0, math.ceil((M.breakTargetMs - GetCurrentTimeMillis()) / 1000)) or nil
+    if readySec ~= lastGridReadySec or timeoutSec ~= lastGridTimeoutSec or breakSec ~= lastBreakSec then
         lastGridReadySec = readySec
         lastGridTimeoutSec = timeoutSec
+        lastBreakSec = breakSec
         pushSessionStatus()
     end
 end
@@ -1718,12 +1928,13 @@ local function onSessionUpdate(session)
     -- this client already went green on its own (startAtGreenLight) : a push the server sent
     -- before its own RACE transition can still arrive afterwards. Without this it would read as
     -- RACE -> COUNTDOWN and rerun the whole countdown setup, teleporting the car back to the grid
-    if session.state == "COUNTDOWN" and M.goStartedFor ~= nil and M.goStartedFor == session.id then
+    if session.state == "COUNTDOWN" and M.goStartedFor ~= nil and M.goStartedFor == phaseKey(session) then
         session.state = "RACE"
     end
     local wasInSession = M.session ~= nil
     local wasRacing = M.session ~= nil and M.session.state == "RACE"
     local wasCountdown = M.session ~= nil and M.session.state == "COUNTDOWN"
+    local wasBreak = M.session ~= nil and M.session.state == "BREAK"
     local wasSessionFinished = M.session ~= nil and M.session.state == "FINISHED"
     local previousSettingsRev = M.session ~= nil and M.session.id == session.id and M.session.settingsRev or nil
     local wasDnf = false
@@ -1754,6 +1965,11 @@ local function onSessionUpdate(session)
     else
         M.gridTimeoutTargetMs = nil
     end
+    if session.state == "BREAK" and session.breakLeftMs ~= nil then
+        M.breakTargetMs = GetCurrentTimeMillis() + session.breakLeftMs
+    else
+        M.breakTargetMs = nil
+    end
 
     local participant = getSelfParticipant()
     if not participant then
@@ -1766,6 +1982,8 @@ local function onSessionUpdate(session)
         M.goStartedFor = nil
         M.gridReadyTargetMs = nil
         M.gridTimeoutTargetMs = nil
+        M.breakTargetMs = nil
+        M.personalAt = nil
         M.spectatingVID = nil
         M.spectatingPlayerName = nil
         M.myVehicleVid = nil
@@ -1822,7 +2040,7 @@ local function onSessionUpdate(session)
     -- starting one or just joining someone else's), not on every later GRID push. A vehicle that
     -- already matches is left completely alone, per direct request.
     local settingsChanged = previousSettingsRev ~= nil and session.settingsRev ~= previousSettingsRev
-    if session.state == "GRID" and (not wasInSession or settingsChanged) then
+    if (session.state == "GRID" or participant.lateJoining) and (not wasInSession or settingsChanged) then
         -- activeVehicleRestriction() reads M.session, already reassigned above, so it already
         -- reflects this fresh session's own vehicleRestrictionStartMode (raceDefined/single/free)
         local restriction = activeVehicleRestriction()
@@ -1923,10 +2141,54 @@ local function onSessionUpdate(session)
     -- (disconnect) and the server put them back (raceGrid.lua raceRejoin). Not a green light :
     -- the clock started long ago and they carry on from the last gate they crossed
     local resuming = session.state == "RACE" and not wasInSession and
-        not participant.finished and not participant.dnf
+        not participant.finished and not participant.dnf and not participant.sittingOut
     if resuming then M.startResume() end
 
-    if session.state == "COUNTDOWN" and not wasCountdown then
+    -- left out of this phase (its `takes`, or out of the event) : they watch it from its countdown
+    -- on, like a racer who retired, and get their car back at the break
+    if participant.sittingOut and not participant.lateJoining and (session.state == "COUNTDOWN" or session.state == "RACE") and
+        M.watchingPhase ~= phaseKey(session) then
+        M.watchingPhase = phaseKey(session)
+        if #session.participants > 1 then
+            saveCurrentVehicleForRespawn()
+            beamjoy_vehicles.deleteCurrentOwnVehicle()
+            if not spectateAnotherRacer(session) then
+                camera.setCamera(camera.CAMERAS.FREE)
+            end
+        end
+    end
+
+    -- between two phases : the last one's over for everyone. Whatever it locked comes off, a car it
+    -- took away (out, or finished and watching, or sitting it out) comes back, and its results
+    -- show ; the next phase's countdown puts everyone back on the grid
+    if session.state == "BREAK" and not wasBreak then
+        M.personalAt = nil
+        M.spectatingVID = nil
+        M.spectatingPlayerName = nil
+        M.watchingPhase = nil
+        releaseScenarioLock()
+        local myVeh = beamjoy_vehicles.getCurrentOwn()
+        if M.resetPenaltyLockedUntilMs then
+            M.resetPenaltyLockedUntilMs = nil
+            if myVeh then
+                beamjoy_vehicles.setFreeze(myVeh.vid, false)
+                beamjoy_vehicles.setGhostReason(myVeh.vid, "resetPenalty", false, true)
+            end
+        end
+        if myVeh then
+            -- the next phase's rules decide again at its countdown
+            beamjoy_vehicles.setGhostReason(myVeh.vid, "noCollisionRace", false)
+            beamjoy_vehicles.setGhostReason(myVeh.vid, "backmarker", false)
+        end
+        camera.stopForcedCameras()
+        camera.unblockCameras()
+        restoreSavedVehicle()
+        extensions.hook("onBJScenarioChanged")
+        local race = getRace()
+        beamjoy_communications_ui.send("BJRaceInfoAutoOpen", { raceName = race and race.name })
+    end
+
+    if session.state == "COUNTDOWN" and not wasCountdown and not participant.sittingOut then
         -- Every participant's vehicle gets (re)positioned onto the grid within the same instant
         -- this transition fires (see the teleport block below), and a mismatched/randomized pick
         -- means a genuine new vehicle spawn too, for several players at once, all broadcast to
@@ -2025,13 +2287,20 @@ local function onSessionUpdate(session)
         -- again within one frame.
 
         local race = getRace()
+        local phase = currentPhase(session)
         beamjoy_communications_ui.send("BJRaceCountdown",
-            { active = true, seconds = M.countdownTotal, raceName = race and race.name })
+            { active = true, seconds = M.countdownTotal, raceName = race and race.name,
+                -- the event's phase starting, when it has more than one
+                phaseName = session.phases and #session.phases > 1 and phase and
+                    (phase.name or string.format("#%d", session.phaseIndex or 1)) or nil })
         LogInfo("beamjoy_raceRunner: teleported to start position, race begins in "
             .. tostring(session.settings.countdown) .. "s")
     end
 
-    if session.state == "RACE" and not wasRacing and not resuming then
+    -- a start of their own later than the green light (their turn in a staggered start) : the green
+    -- light isn't theirs
+    local personalLater = participant.startAtMs ~= nil and session.goAtMs ~= nil and participant.startAtMs > session.goAtMs
+    if session.state == "RACE" and not wasRacing and not resuming and not participant.sittingOut then
         M.raceStartLocalMs = beamjoy_clockSync.localMs()
         M.raceUsesSharedClock = session.goAtMs ~= nil and beamjoy_clockSync.isSynced()
         M.frameElapsedMs = nil
@@ -2066,7 +2335,7 @@ local function onSessionUpdate(session)
         M.myVehicleVid = myVeh and myVeh.vid or nil
         -- the car they race with, should they drop out and rejoin (see REJOIN_CAR_FILE)
         saveRejoinCar(session.id)
-        if myVeh and #session.participants > 1 then
+        if myVeh and #session.participants > 1 and not personalLater then
             beamjoy_vehicles.setGhostReason(myVeh.vid, "race", false, false, false)
             local forceTaskName = "ghostRaceStartForce-" .. myVeh.vid
             async.removeTask(forceTaskName)
@@ -2094,7 +2363,8 @@ local function onSessionUpdate(session)
         -- nodegrabber can reach.
         camera.blockCameras(table.unpack(raceBlockedCameras()))
         extensions.hook("onBJScenarioChanged")
-        beamjoy_communications_ui.send("BJRaceCountdown", { active = true, seconds = 0 })
+        -- waiting for their turn : no "GO!" for them (their own countdown comes)
+        beamjoy_communications_ui.send("BJRaceCountdown", personalLater and { active = false } or { active = true, seconds = 0 })
         -- async.delayTask takes MILLISECONDS (its own param is literally named delayMs, see
         -- async.lua), not seconds ; every delayTask call in this file used to pass a bare
         -- "seconds" value straight through unconverted, which was the actual root cause behind
@@ -2111,7 +2381,7 @@ local function onSessionUpdate(session)
     -- once this player's own attempt is over (even if others are still racing), let them use
     -- whatever camera they like again and lift the norespawn reset/recover block. Nothing left
     -- for either to protect
-    if participant.finished or participant.dnf then
+    if participant.finished or participant.dnf or participant.sittingOut then
         camera.stopForcedCameras()
         camera.unblockCameras()
         extensions.hook("onBJScenarioChanged")
@@ -2134,7 +2404,7 @@ local function onSessionUpdate(session)
     -- pure unnecessary churn (and, per the user's report, a source of real confusion/risk) for
     -- whoever's own action happens to be the last one needed to finish the race. Skipped entirely
     -- in that case ; they simply stay in their own car the way anyone would if playing solo.
-    if participant.dnf and not wasDnf and #session.participants > 1 and session.state ~= "FINISHED" then
+    if participant.dnf and not wasDnf and #session.participants > 1 and session.state == "RACE" then
         saveCurrentVehicleForRespawn()
         beamjoy_vehicles.deleteCurrentOwnVehicle()
         if not spectateAnotherRacer(session) then
@@ -2148,7 +2418,7 @@ local function onSessionUpdate(session)
     -- perfectly reasonable thing to want (e.g. just driving back to the pits), so this is the one
     -- of the two that's actually configurable rather than always-on.
     if participant.finished and not wasFinished and session.settings.autoSpectateOnFinish and
-        #session.participants > 1 and session.state ~= "FINISHED" then
+        #session.participants > 1 and session.state == "RACE" then
         saveCurrentVehicleForRespawn()
         beamjoy_vehicles.deleteCurrentOwnVehicle()
         if not spectateAnotherRacer(session) then
@@ -2167,7 +2437,8 @@ local function onSessionUpdate(session)
         -- a loopable (multi-lap) race's own "best lap" is the meaningful number to celebrate here,
         -- not total elapsed time (which just rewards a long race, not a fast one) ; a single-lap
         -- race has no separate concept of "lap" vs "the whole attempt", so total time stays as-is
-        local loopable = (session.settings.laps or 1) > 1
+        -- the best lap too for a timed phase, and for one ranked by best lap
+        local loopable = (session.settings.laps or 2) > 1 or session.settings.ranking == "best"
         beamjoy_communications_ui.send("BJRaceCountdown", {
             active = true,
             mode = "finished",
@@ -2205,6 +2476,30 @@ local function onSessionUpdate(session)
         async.delayTask(function()
             beamjoy_communications_ui.send("BJRaceCountdown", { active = false })
         end, FINISH_POPUP_SECONDS * 1000, "BJRaceCountdownDnfHide")
+    end
+
+    -- a start of their own (their turn, their next run, a mid-phase join) : updatePersonalStart takes
+    -- it from here, every frame
+    if session.state == "RACE" and personalLater and M.personalAt ~= participant.startAtMs and
+        not participant.finished and not participant.dnf and not participant.sittingOut then
+        M.personalAt = participant.startAtMs
+        M.personalStage = "waiting"
+        M.personalPos = participant.runStartPosition or participant.startPosition
+        -- a first start (their turn, a join) is held where they are ; a run's car rolls to a stop
+        M.personalHold = #(participant.lapTimes or {}) == 0
+        -- joined while it was under way : what the countdown and green light set up for the others
+        if not M.raceStartLocalMs then
+            M.raceStartLocalMs = beamjoy_clockSync.localMs()
+            M.raceUsesSharedClock = beamjoy_clockSync.isSynced()
+            local myVeh = beamjoy_vehicles.getCurrentOwn()
+            M.myVehicleVid = myVeh and myVeh.vid or nil
+            saveRejoinCar(session.id)
+            if myVeh and session.settings.disableCollisions then
+                beamjoy_vehicles.setGhostReason(myVeh.vid, "noCollisionRace", true)
+            end
+            camera.blockCameras(table.unpack(raceBlockedCameras()))
+            extensions.hook("onBJScenarioChanged")
+        end
     end
 
     -- optional "ghost backmarkers" (see BJRaceDefaults.ghostBackmarkers) : server recomputes
@@ -2276,6 +2571,8 @@ local function onSessionRemoved(sessionId)
         M.goStartedFor = nil
         M.gridReadyTargetMs = nil
         M.gridTimeoutTargetMs = nil
+        M.breakTargetMs = nil
+        M.personalAt = nil
         M.spectatingVID = nil
         M.spectatingPlayerName = nil
         M.myVehicleVid = nil
@@ -2395,7 +2692,7 @@ local function startAtGreenLight()
     if not session or session.state ~= "COUNTDOWN" or not session.goAtMs then return end
     local serverNow = beamjoy_clockSync.serverNowMs()
     if not serverNow or serverNow < session.goAtMs then return end
-    M.goStartedFor = session.id
+    M.goStartedFor = phaseKey(session)
     local racing = {}
     for k, v in pairs(session) do racing[k] = v end
     racing.state = "RACE"
@@ -2517,7 +2814,7 @@ local function updateNodegrabberCamera()
     local s = M.session and M.session.settings
     local own = M.session and getSelfParticipant()
     local applies = s ~= nil and M.session.state == "RACE" and s.disableCameras == true and
-        s.disableNodegrabber ~= true and own ~= nil and not own.finished and not own.dnf
+        s.disableNodegrabber ~= true and own ~= nil and not own.finished and not own.dnf and not own.sittingOut
     local inUse = applies and nodegrabberInUse()
     if inUse and not M.nodegrabberCamera then
         local current = camera.getCamera()
@@ -2535,6 +2832,76 @@ local function updateNodegrabberCamera()
             extensions.hook("onBJScenarioChanged")
         end
     end
+end
+
+--- a start of this player's own (services/racePhases.lua : their turn in a staggered start, their
+--- next run on a point-to-point track, a mid-phase join), on the shared clock : held until their
+--- countdown (a first start ; a run's car rolls on), then put on its slot, held and ghosted for the
+--- countdown, then off. Their gates only count from then (onUpdate)
+---@return boolean whether they're still waiting for it
+local function updatePersonalStart()
+    if not M.personalAt then return false end
+    local session = M.session
+    local participant = getSelfParticipant()
+    if not session or session.state ~= "RACE" or not participant or participant.finished or participant.dnf or
+        participant.sittingOut then
+        M.personalAt = nil
+        return false
+    end
+    if M.personalStage == "go" then return false end
+    local now = beamjoy_clockSync.serverNowMs()
+    if not now then return true end
+    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    local countdownMs = session.settings.startCountdownMs or 5000
+    if now < M.personalAt - countdownMs then
+        if M.personalHold and myVeh and myVeh.veh.froze ~= "1" then beamjoy_vehicles.setFreeze(myVeh.vid, true) end
+        return true
+    end
+    if now < M.personalAt then
+        if M.personalStage ~= "countdown" then
+            M.personalStage = "countdown"
+            local sp = M.personalPos
+            if myVeh and sp then
+                -- not clinging to the surface below, as at the grid (see the COUNTDOWN transition)
+                beamjoy_vehicles.setVehiclePositionRotation(myVeh.veh, vec3(sp.pos.x, sp.pos.y, sp.pos.z),
+                    vec3(sp.dir.x, sp.dir.y, sp.dir.z), vec3(0, 0, 1), { cling = false })
+            end
+            if myVeh and session.settings.ghostOnCountdown ~= false then
+                beamjoy_vehicles.setGhostReason(myVeh.vid, "race", true)
+            end
+            M.lastLy = {}
+            M.lastSentPersonalSec = nil
+        end
+        if myVeh and myVeh.veh.froze ~= "1" then beamjoy_vehicles.setFreeze(myVeh.vid, true) end
+        local remaining = math.max(1, math.ceil((M.personalAt - now) / 1000))
+        if remaining ~= M.lastSentPersonalSec then
+            M.lastSentPersonalSec = remaining
+            beamjoy_communications_ui.send("BJRaceCountdown", { active = true, seconds = remaining })
+        end
+        return true
+    end
+    -- off
+    M.personalStage = "go"
+    M.lastLy = {}
+    M.lastProgressPos = nil
+    M.lastProgressCheckMs = GetCurrentTimeMillis()
+    if myVeh then
+        beamjoy_vehicles.setFreeze(myVeh.vid, false)
+        -- the same careful lift as the green light's (see the RACE transition)
+        if #session.participants > 1 then
+            beamjoy_vehicles.setGhostReason(myVeh.vid, "race", false, false, false)
+            local forceTaskName = "ghostRaceStartForce-" .. myVeh.vid
+            async.removeTask(forceTaskName)
+            async.delayTask(function()
+                beamjoy_vehicles.setGhostReason(myVeh.vid, "race", false, true)
+            end, 2000, forceTaskName)
+        end
+    end
+    beamjoy_communications_ui.send("BJRaceCountdown", { active = true, seconds = 0 })
+    async.delayTask(function()
+        beamjoy_communications_ui.send("BJRaceCountdown", { active = false })
+    end, 1000, "BJRaceCountdownGoHide")
+    return false
 end
 
 local function onUpdate()
@@ -2611,8 +2978,10 @@ local function onUpdate()
 
     if not M.session or M.session.state ~= "RACE" then return end
     if M.resumePending then return end
+    -- waiting for a start of their own : nothing counts yet
+    if updatePersonalStart() then return end
     local participant = getSelfParticipant()
-    if not participant or participant.finished or participant.dnf then return end
+    if not participant or participant.finished or participant.dnf or participant.sittingOut then return end
     local race = getRace()
     if not race then return end
     local myVeh = beamjoy_vehicles.getCurrentOwn()
@@ -2714,8 +3083,13 @@ end
 local function checkDnfStall()
     if not M.session or M.session.state ~= "RACE" or M.resumePending then return end
     if not M.session.settings.dnfEnabled then return end
+    -- waiting for a start of their own (held, or a run's car rolling to a stop) : not a stall
+    if M.personalAt and M.personalStage ~= "go" then
+        M.lastProgressPos = nil
+        return
+    end
     local participant = getSelfParticipant()
-    if not participant or participant.finished or participant.dnf then return end
+    if not participant or participant.finished or participant.dnf or participant.sittingOut then return end
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if not myVeh then return end
 
@@ -2795,7 +3169,7 @@ local function placeResumedCar(sessionId)
     local session = M.session
     local participant = session and getSelfParticipant()
     if not session or session.id ~= sessionId or session.state ~= "RACE" or not participant or
-        participant.finished or participant.dnf then
+        participant.finished or participant.dnf or participant.sittingOut then
         return
     end
     local myVeh = beamjoy_vehicles.getCurrentOwn()
@@ -2841,7 +3215,7 @@ local function finishResume(sessionId)
     local session = M.session
     local participant = session and getSelfParticipant()
     if not session or session.id ~= sessionId or session.state ~= "RACE" or not participant or
-        participant.finished or participant.dnf then
+        participant.finished or participant.dnf or participant.sittingOut then
         M.resumePending = nil
         return
     end
@@ -2980,7 +3354,7 @@ local function onBJRequestCurrentVehicleReset(req, resetType, mpVeh)
 
     if M.session.state ~= "RACE" then return end
     local participant = getSelfParticipant()
-    if not participant or participant.finished or participant.dnf then return end
+    if not participant or participant.finished or participant.dnf or participant.sittingOut then return end
 
     local strategy = M.session.settings.respawnStrategy
     -- "flipupright" / "lastroad" : whatever was pressed (a rewind, a physics reset, a reload, the
@@ -3115,7 +3489,7 @@ local function onVehicleResetted(vid)
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if not myVeh or myVeh.vid ~= vid then return end
     local participant = getSelfParticipant()
-    if not participant or participant.finished or participant.dnf then return end
+    if not participant or participant.finished or participant.dnf or participant.sittingOut then return end
     local race = getRace()
     if not race then return end
 

@@ -155,7 +155,8 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         beamjoyConfirm,
         beamjoyNavGuard,
         beamjoyPropEditor,
-        beamjoyPluginUi
+        beamjoyPluginUi,
+        beamjoyRacePhases
     ) {
         const translate = $filter("translate");
         // the race's props : the props editor's list and toolbar (cmps/propEditor), shared with the
@@ -214,6 +215,64 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         $scope.$on("$destroy", $rootScope.$on("BJPluginUiChanged", () => {
             this.pluginEditorSections = beamjoyPluginUi.state.editorSections;
         }));
+        // LENGTH AND PHASES : the race's own (laps, time, or both ; one race or an event in phases,
+        // cmps/racePhases), what the start menu starts from. Written to the race only when changed
+        // here, so opening the editor never makes a race look edited
+        this.LENGTHS = ["laps", "time", "both"];
+        this.AFTER_TIMES = ["leader", "own", "stop"];
+        this.lengthMode = () => {
+            const d = (this.race && this.race.defaults) || {};
+            const timed = typeof d.timeLimitMin === "number";
+            return timed ? (typeof d.laps === "number" ? "both" : "time") : "laps";
+        };
+        this.setLength = (mode) => {
+            const d = this.race.defaults;
+            if (mode === "time") delete d.laps;
+            else d.laps = d.laps || 3;
+            if (mode === "laps") {
+                delete d.timeLimitMin;
+                delete d.afterTime;
+            } else {
+                d.timeLimitMin = d.timeLimitMin || 10;
+                d.afterTime = d.afterTime || "leader";
+            }
+        };
+        this.phaseUi = null;
+        let phaseSnapshot = null;
+        const phaseState = () => (this.phaseUi
+            ? angular.toJson([this.phaseUi.list ? beamjoyRacePhases.toServer(this.phaseUi.list) : null, this.phaseUi.result])
+            : null);
+        $scope.$watch(() => this.race && this.race.id, () => {
+            const d = this.race && this.race.defaults;
+            this.phaseUi = this.race
+                ? {
+                    list: d && Array.isArray(d.phases) && d.phases.length > 0 ? beamjoyRacePhases.fromServer(d.phases) : null,
+                    result: (d && d.result) || "last",
+                }
+                : null;
+            phaseSnapshot = phaseState();
+        });
+        $scope.$watch(phaseState, (now) => {
+            if (!this.race || !this.phaseUi || now === phaseSnapshot) return;
+            phaseSnapshot = now;
+            const d = this.race.defaults;
+            if (this.phaseUi.list) {
+                d.phases = beamjoyRacePhases.toServer(this.phaseUi.list);
+                d.result = this.phaseUi.result;
+            } else {
+                delete d.phases;
+                delete d.result;
+            }
+        });
+        // one race, or this race's length as the first phase of a list
+        this.usePhases = (on) => {
+            const d = this.race.defaults;
+            this.phaseUi.list = on
+                ? [beamjoyRacePhases.newPhase({ lengthMode: this.race.loopable ? this.lengthMode() : "laps",
+                    laps: d.laps || 3, timeLimitMin: d.timeLimitMin || 10, afterTime: d.afterTime })]
+                : null;
+        };
+
         this.race = null;
         this.activeGate = null; // 0-indexed, for ng-repeat/track-by convenience
         this.activeStart = null;

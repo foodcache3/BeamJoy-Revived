@@ -55,6 +55,14 @@
             <bj-slider ng-model="$ctrl.data.LobbyDuration" min="15" max="300" hard-max="300" step="5"></bj-slider>
         </td>
     </tr>
+    <tr>
+        <td class="text-right" title="{{'beamjoy.window.config.tabs.general.deliveries.timeouts.tooltip'|translate}}">
+            {{"beamjoy.window.config.tabs.general.deliveries.timeouts"|translate}}
+        </td>
+        <td>
+            <bj-toggle ng-model="$ctrl.data.Timeouts"></bj-toggle>
+        </td>
+    </tr>
 </table>
 
 <style>

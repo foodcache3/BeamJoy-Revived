@@ -36,8 +36,9 @@ local MAX_FIELDS = 8
 local TEXT_MAX_DEFAULT = 100
 local TEXT_MAX = 500
 --- where a race option shows : both (its value set per race in the editor, changeable at start),
---- only the start menu, or only the editor (fixed per race)
-local WHERE = { both = true, start = true, editor = true }
+--- only the start menu, only the editor (fixed per race), or on every phase of an event (its own
+--- value per phase, services/racePhases.lua)
+local WHERE = { both = true, start = true, editor = true, phase = true }
 
 ---@param v any
 ---@param max integer
@@ -239,7 +240,9 @@ local function clientShape()
         copy.plugin = plugin
         config[#config + 1] = copy
     end
-    return { race = race, config = config }
+    -- plugins' event formats (services/racePhases.lua, formats.register) : the start menu's too
+    local formats = services_racePhases and services_racePhases.formatsForClient() or {}
+    return { race = race, config = config, formats = formats }
 end
 
 local function pushDefinitions()
@@ -282,7 +285,7 @@ local function raceDefaults(values)
             local kept = {}
             if defs then
                 for oid, o in pairs(optionsById(defs)) do
-                    if o.where ~= "start" then
+                    if o.where ~= "start" and o.where ~= "phase" then
                         local checked = valueFor(o, v[oid])
                         if checked ~= nil then kept[oid] = checked end
                     end
@@ -322,13 +325,38 @@ local function sessionValues(raceValues, chosen)
         local fromStart = type(chosen[plugin]) == "table" and chosen[plugin] or {}
         local values = {}
         for oid, o in pairs(optionsById(sections)) do
-            local v
-            if o.where ~= "editor" then v = valueFor(o, fromStart[oid]) end
-            if v == nil and o.where ~= "start" then v = valueFor(o, fromRace[oid]) end
-            if v == nil then v = o.default end
-            values[oid] = v
+            -- a phase's own (phaseValues) : not the event's
+            if o.where ~= "phase" then
+                local v
+                if o.where ~= "editor" then v = valueFor(o, fromStart[oid]) end
+                if v == nil and o.where ~= "start" then v = valueFor(o, fromRace[oid]) end
+                if v == nil then v = o.default end
+                values[oid] = v
+            end
         end
         out[plugin] = values
+    end
+    return out
+end
+
+--- a phase's own values (race options `where = "phase"`) : what was chosen for it, else the
+--- option's default, for the plugins running now
+---@param chosen any the phase's `plugins` : plugin -> option -> value
+---@return table? plugin -> option -> value ; nil when no plugin has phase options
+local function phaseValues(chosen)
+    chosen = type(chosen) == "table" and chosen or {}
+    local out
+    for plugin, sections in pairs(M.raceSections) do
+        local given = type(chosen[plugin]) == "table" and chosen[plugin] or {}
+        for oid, o in pairs(optionsById(sections)) do
+            if o.where == "phase" then
+                local v = valueFor(o, given[oid])
+                if v == nil then v = o.default end
+                out = out or {}
+                out[plugin] = out[plugin] or {}
+                out[plugin][oid] = v
+            end
+        end
     end
     return out
 end
@@ -696,6 +724,8 @@ M.registerRaceOptions = registerRaceOptions
 M.unregisterRaceOptions = unregisterRaceOptions
 M.raceDefaults = raceDefaults
 M.sessionValues = sessionValues
+M.phaseValues = phaseValues
+M.pushDefinitions = pushDefinitions
 M.fieldsOf = fieldsOf
 M.applyFields = applyFields
 M.racerFields = racerFields

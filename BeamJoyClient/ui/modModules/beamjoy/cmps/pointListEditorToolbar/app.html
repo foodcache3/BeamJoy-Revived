@@ -27,4 +27,38 @@
     >
         <icon name="snapToGround"></icon>
     </button>
+    <!-- the whole arena turned round its middle by the angle between (direct request) : only for
+         a host that wires it (the arena editors' events.turnAll) -->
+    <button
+        class="btn neutral"
+        ng-if="$ctrl.events.turnAll"
+        ng-click="$ctrl.turnAll($event, 1)"
+        title="{{'beamjoy.window.config.editor.turnAll.left' | translate}}"
+    >
+        <icon name="turnLeft"></icon>
+    </button>
+    <input
+        type="number"
+        class="bj-turn-angle"
+        ng-if="$ctrl.events.turnAll"
+        min="1"
+        max="180"
+        step="1"
+        ng-model="$ctrl.turnAngle"
+        title="{{'beamjoy.window.config.editor.turnAll.angle' | translate}}"
+        aria-label="{{'beamjoy.window.config.editor.turnAll.angle' | translate}}"
+    />
+    <button
+        class="btn neutral"
+        ng-if="$ctrl.events.turnAll"
+        ng-click="$ctrl.turnAll($event, -1)"
+        title="{{'beamjoy.window.config.editor.turnAll.right' | translate}}"
+    >
+        <icon name="turnRight"></icon>
+    </button>
 </div>
+<style>
+    bj-point-list-editor-toolbar .bj-turn-angle {
+        width: 3.5em;
+    }
+</style>

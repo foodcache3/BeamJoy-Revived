@@ -8,7 +8,67 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2480, client build 2745.
+Server build 2482, client build 2747.
+
+- **Turn a whole arena (2747)** (direct request). The Derby, Hunter and Infected arena editors'
+  toolbars have two turn buttons with an angle between them (90 by default, 1 to 180). They turn
+  the whole arena round its middle (a derby arena's zone centre, otherwise the middle of its
+  points) : every spawn, waypoint and hub with its facing, a derby zone's facing, and every prop,
+  lines, curbs and painted lines included. With snapping on, each point and prop keeps its height
+  above the ground under it, and lines and props that follow the ground are laid on it again. It's
+  an ordinary unsaved edit until you save, and the other button turns it back. *(client only)*
+
+- **Deliveries can have no time limit (2482, 2747)** (direct request). Config > General >
+  Deliveries has a new "Jobs can run out of time" switch (`Deliveries.Timeouts`, on by default).
+  Off, a job no longer fails at twice its target time ; a slow delivery still scores less (the
+  time factor still bottoms out at half). Turning it off also spares jobs already running ; jobs
+  started while it was off keep no deadline if it's turned back on. *(server + client)*
+
+- **Fix (2747) : older vehicle presets refused the right car in races** (reported : "This race
+  requires <preset>"). A pool entry was matched only against the parts it captured when it was
+  added. Entries saved before that capture existed have none, and a game update that renames a
+  vehicle's parts makes the capture stale, so the right car never matched. When the capture
+  doesn't match, the entry's configuration is now checked as the game has it today : its `.pc`
+  file (or a shared build's own parts). Every slot the file sets that the car has must hold the
+  same part, plus the same tuning when the race doesn't allow tuning. Applies to lobbies and
+  freeroam runs alike. *(client only)*
+
+- **Race phases : events of practice, qualifying, races, heats, runs... (2481, 2746)** (direct
+  request). A race session is now an event of one or more phases, as many as the starter likes
+  (20 at most), each with its own start (together from the grid, one at a time, or open runs),
+  length (laps, a time limit, or both), ranking (race order, best lap, total time), grid (the
+  lobby's, an earlier phase's result or the event's standings, reversed or not), who races it (the
+  top n of an earlier result : knockouts, finals), rules (respawns, collisions, stall DNF, reset
+  penalty), break, and leaderboard toggle. The event's result is its last counted phase, or every
+  counted phase's time added up. A race started as before is one phase and behaves as it always
+  did.
+  - **Timed races** : the start menu's Length is laps, time, or both (whichever comes first), with
+    what happens when the time's up (the leader's lap, everyone's own lap, or stop at once). The
+    HUD counts the time down.
+  - **Formats** in the start menu : race, qualifying + race, practice + qualifying + race, sprint +
+    feature (reversed grid), time attack, knockout qualifying + race, two runs added up ; edited
+    freely in a phase editor (cmps/racePhases). A race can have its own length and phases (race
+    editor > Phases), the start menu's starting point.
+  - **Between phases** : a break with the phase's results (results window : a tab per phase and the
+    event), the next phase's countdown, the leader's "Next phase now". Cars taken away (out,
+    finished and watching) come back. Racers left out of a phase watch it.
+  - **Point-to-point tracks** : practice and qualifying are repeat runs, each from the first slot
+    on its own clock, until the time or the runs are up. "One at a time" starts every racer alone,
+    a set interval apart (time trials, hill climbs).
+  - **Joining mid-event** (per phase) : a player joining while a phase runs readies up and starts on
+    their own after a short countdown ; in a race their time counts from its green light.
+  - HUD : the phase's name, a timed phase's time left, standings by its ranking. Staff race control
+    : End phase (a red flag), +5 min.
+  - **Plugin API** : formats of a plugin's own (formats.register, BJ.formats, with locked settings
+    kept server-side), race.setPhases, race.endPhase / extendPhase / nextPhase, phases a plugin
+    starts itself (start = "plugin", race.startRacer / stopRacer), rankings and event results by a
+    plugin's scores (phase.setScores), the phaseResult hook (time penalties, racers out, an order of
+    its own), the gridOrder hook asked before every phase (with the earlier results, and `take` :
+    who races it), race options with a value per phase (where = "phase"), and the events
+    RacePhaseFinished, RacerStarted, RacerJoinedPhase. Race events carry the phase ; an event of
+    several phases has several green lights. New examples api/example/BJRallycross (heats for
+    points, a final) and api/example/BJShootout (a plugin-run, plugin-scored phase, the 107% rule).
+    README : a Phases section. *(server + client : update both)*
 
 - **Plugin API : labels on the race HUD (2480, 2745)** (direct request). A plugin's field marked
   `hud` (results.setFields) shows beside the racer's name on BeamJoy's race HUD : every standings

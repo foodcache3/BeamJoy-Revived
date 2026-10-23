@@ -73,6 +73,8 @@
 ---@field snapMethod string Lua -> Angular : ("terrain"|"raycast")
 ---@field setSnapToGround string Angular -> Lua : (boolean)
 ---@field setSnapMethod string Angular -> Lua : ("terrain"|"raycast")
+---@field turnAll string? Angular -> Lua : (degrees) turns every point and the host's props round the
+---middle (an arena turned whole : see onTurnAll) ; the toolbar shows its buttons only with it
 ---@field requestState string? Angular -> Lua : () re-sends the current lists/active/dirty/snap
 ---state as-is, without resetting anything (unlike open()). Optional, but every consumer should
 ---wire it up: `<bj-point-list-editor>` gets torn down and recreated by its host's own `ng-if`
@@ -90,6 +92,8 @@
 ---(ui/propEditor.lua) while it's open. Props and points are picked by the same world clicks,
 ---snapped by the same switch, and only one of them is selected at a time. The host still loads and
 ---saves the props array itself, and forwards onUpdate / onDeleteKey below
+---@field pivot (fun(): vec3?)? what the whole arena turns round (events.turnAll), when not the
+---points' middle
 
 local ACTIVE_COLOR = BJColor(1, 1, 1, .9)
 local TEXT_BG = BJColor(0, 0, 0, .3)
@@ -471,6 +475,58 @@ local function new(config)
         end,
     } or nil
 
+    --- the whole arena turned round its middle (direct request) : every point (and its facing, a
+    --- derby zone's too) and the host's props, by `degrees` anticlockwise seen from above. The
+    --- middle is the host's (config.pivot : the derby's zone), else the points', else the props'.
+    --- With snapping on, each point keeps its height above the ground under it
+    ---@param degrees number
+    local function onTurnAll(degrees)
+        if not config.isActive() then return end
+        degrees = tonumber(degrees)
+        if not degrees or degrees % 360 == 0 then return end
+        local pivot = config.pivot and config.pivot() or nil
+        if not pivot then
+            local sum, n = vec3(0, 0, 0), 0
+            for _, spec in ipairs(config.lists) do
+                for _, item in ipairs(state.lists[spec.key]) do
+                    sum, n = sum + vec3(item.pos.x, item.pos.y, item.pos.z), n + 1
+                end
+            end
+            pivot = n > 0 and sum * (1 / n) or (propEditor and propEditor.centre()) or nil
+        end
+        if not pivot then return end
+        local rad = math.rad(degrees)
+        local c, s = math.cos(rad), math.sin(rad)
+        ---@param pos vec3
+        ---@return number?
+        local function ground(pos)
+            local h = groundHeightAt(pos, state.snapMethod)
+            return (type(h) == "number" and math.abs(h) < 1e6) and h or nil
+        end
+        for _, spec in ipairs(config.lists) do
+            for _, item in ipairs(state.lists[spec.key]) do
+                local was = vec3(item.pos.x, item.pos.y, item.pos.z)
+                local x, y = was.x - pivot.x, was.y - pivot.y
+                local pos = { x = pivot.x + x * c - y * s, y = pivot.y + x * s + y * c, z = was.z }
+                if state.snapToGroundEnabled then
+                    local from, to = ground(was), ground(vec3(pos.x, pos.y, was.z))
+                    if from and to then pos.z = was.z + to - from end
+                end
+                item.pos = pos
+                if item.dir then
+                    item.dir = { x = item.dir.x * c - item.dir.y * s, y = item.dir.x * s + item.dir.y * c,
+                        z = item.dir.z or 0 }
+                end
+            end
+        end
+        -- the props after the points : a selected prop's gizmo shown again, a selected point's below
+        if propEditor and propEditor.host == propHost then propEditor.turnAll(pivot, degrees) end
+        renderAll()
+        updateGizmo(state.activeList, state.activeIndex)
+        pushListsUpdate()
+        markDirty()
+    end
+
     ---@param snapshot table<string, table[]> the host's own saved data, keyed by list key
     ---@param keepSelection boolean? the same data again (it was just saved) : the selected point
     ---stays selected while it still exists
@@ -528,6 +584,9 @@ local function new(config)
         beamjoy_communications_ui.addHandler(config.events.setSnapMethod, onSetSnapMethod)
         if config.events.requestState then
             beamjoy_communications_ui.addHandler(config.events.requestState, pushFullState)
+        end
+        if config.events.turnAll then
+            beamjoy_communications_ui.addHandler(config.events.turnAll, onTurnAll)
         end
     end
 

@@ -8,6 +8,9 @@
 //              for its Race info / Retire buttons
 // Everything shown is built once per BJRaceHud push (~20/s while racing, see raceRunner.lua's
 // pushHud), never in template getters : fresh arrays per digest break ng-repeat.
+// An event's phases (practice, qualifying, the race...) : the phase's name in the header, a timed
+// phase's time left where the lap count would be, and its standings by its own ranking (best lap,
+// every lap added up, or the race order).
 // Server plugins can put up to 2 labels beside each racer's name (results.setFields with `hud`) :
 // every standings row, your own (in the header on a run alone, under the position in compact), and
 // the first one beside the cars either side ; the player can turn them off (Settings > Menu).
@@ -71,6 +74,14 @@ angular.module("beamjoy").component("bjRaceHud", {
             return "";
         };
         const nameOf = (row) => (row && (row.displayName || row.playerName)) || "";
+        // a timed phase's time left : 12:31, whole seconds (rounded up, 0:00 only once it's up)
+        const timeLeft = (ms) => {
+            const s = Math.max(0, Math.ceil((Number(ms) || 0) / 1000));
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const ss = String(s % 60).padStart(2, "0");
+            return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+        };
         // a racer's staff time penalty in seconds, for the penalty box ("5", "0.5") ; null : none to show
         const penText = (ms) => {
             const s = Math.round(ms / 100) / 10;
@@ -87,10 +98,19 @@ angular.module("beamjoy").component("bjRaceHud", {
             applyLayout();
             const self = data.self || {};
             const laps = data.totalLaps || 1;
+            // lap by lap : several laps, or a timed phase (as many as fit)
+            const timed = !!data.timed;
+            const multiLap = laps > 1 || timed;
+            const ranking = data.ranking || "position";
             const sectors = data.totalSectors || 0;
             const standings = Array.isArray(data.standings) ? data.standings : [];
+            const phaseLabel = data.phaseCount > 1
+                ? data.phaseName || fill("beamjoy.raceHud.phaseN", { n: data.phaseIndex || 1 })
+                : null;
             const v = {
                 raceName: data.raceName,
+                eyebrow: phaseLabel || translate("beamjoy.raceHud.racing"),
+                phaseLabel,
                 spectating: data.spectatingPlayerName
                     ? fill("beamjoy.raceHud.spectating", { name: nameOf(self) })
                     : null,
@@ -111,7 +131,12 @@ angular.module("beamjoy").component("bjRaceHud", {
             if (self.disqualified) v.progress = translate("beamjoy.raceHud.disqualified");
             else if (self.finished) v.progress = translate("beamjoy.raceHud.finished");
             else if (self.dnf) v.progress = translate("beamjoy.raceHud.retired");
-            else if (laps > 1 && self.currentLap >= laps) v.progress = translate("beamjoy.raceHud.finalLap");
+            // a timed phase : the time left, then the lap you're on ; once it's up, your last one
+            else if (timed && data.timeUp) v.progress = translate("beamjoy.raceHud.finalLap");
+            else if (timed) {
+                v.progress = timeLeft(data.timeLeftMs);
+                v.progressOf = ` · ${fill("beamjoy.raceHud.lapN", { n: self.currentLap })}`;
+            } else if (laps > 1 && self.currentLap >= laps) v.progress = translate("beamjoy.raceHud.finalLap");
             else if (laps > 1) {
                 v.progress = fill("beamjoy.raceHud.lapN", { n: self.currentLap });
                 v.progressOf = `/${laps}`;
@@ -124,12 +149,12 @@ angular.module("beamjoy").component("bjRaceHud", {
             }
 
             // running clock : this lap on a multi-lap race, the whole run otherwise
-            v.timer = clock(laps > 1 ? self.currentLapElapsedMs : data.elapsedMs);
+            v.timer = clock(multiLap ? self.currentLapElapsedMs : data.elapsedMs);
             if (typeof self.liveDeltaMs === "number" && !self.finished && !self.dnf) {
                 v.delta = `${self.liveDeltaMs <= 0 ? "-" : "+"}${f.gap(self.liveDeltaMs)}`;
                 v.deltaCls = self.liveDeltaMs <= 0 ? "faster" : "slower";
             } else v.delta = null;
-            v.showLaps = laps > 1 && typeof self.lastLapMs === "number";
+            v.showLaps = multiLap && typeof self.lastLapMs === "number";
             v.last = clock(self.lastLapMs);
             v.best = clock(self.bestLapMs);
 
@@ -149,32 +174,42 @@ angular.module("beamjoy").component("bjRaceHud", {
             // the cars either side of you
             v.ahead = null;
             v.behind = null;
+            // a plugin's ranking : their scores, not gaps
+            const sideOf = (row) => ranking === "plugin"
+                ? { num: row.scoreDisplay || (row.score !== undefined && row.score !== null ? String(row.score) : ""), unit: "" }
+                : gapParts(row);
             if (v.multi) {
-                if (data.ahead) v.ahead = { ...gapParts(data.ahead), name: nameOf(data.ahead), fin: !!data.ahead.finished, lbl: firstLabel(data.ahead) };
-                if (data.behind && !data.behind.dnf) v.behind = { ...gapParts(data.behind), name: nameOf(data.behind), fin: !!data.behind.finished, lbl: firstLabel(data.behind) };
+                if (data.ahead) v.ahead = { ...sideOf(data.ahead), name: nameOf(data.ahead), fin: !!data.ahead.finished, lbl: firstLabel(data.ahead) };
+                if (data.behind && !data.behind.dnf) v.behind = { ...sideOf(data.behind), name: nameOf(data.behind), fin: !!data.behind.finished, lbl: firstLabel(data.behind) };
             }
 
             // the standings, one row per racer
+            // by the phase's ranking : best lap (practice, qualifying : retiring keeps a time), every
+            // lap added up, or the race order (finished : the winner's race time)
             const rowOf = (row, i) => {
                 const lead = i === 0;
+                const hasBest = typeof row.bestLapMs === "number";
+                const out = row.dnf && !(ranking === "best" && hasBest);
                 let gap = "";
                 if (row.disqualified) gap = translate("beamjoy.raceHud.dsq");
-                else if (row.dnf) gap = translate("beamjoy.raceHud.out");
+                else if (out) gap = translate("beamjoy.raceHud.out");
                 else if (row.disconnected) gap = translate("beamjoy.raceHud.disconnected");
-                else if (lead) gap = row.finished ? clock(row.totalMs) : "";
+                else if (ranking === "best") gap = !hasBest ? "" : lead ? clock(row.bestLapMs) : leaderGap(row);
+                else if (ranking === "plugin") gap = row.scoreDisplay || (row.score !== undefined && row.score !== null ? String(row.score) : "");
+                else if (lead) gap = (row.finished || ranking === "total") && typeof row.totalMs === "number" ? clock(row.totalMs) : "";
                 else gap = leaderGap(row);
                 return {
                     kind: "car",
-                    pos: row.disqualified ? "DSQ" : row.dnf ? "-" : String(i + 1),
-                    plateCls: row.disqualified ? "dsq" : row.dnf ? "out" : lead ? "p1" : "",
-                    rowCls: (row.playerName === self.playerName ? "you" : row.dnf || row.disqualified ? "out" : "") +
+                    pos: row.disqualified ? "DSQ" : out ? "-" : String(i + 1),
+                    plateCls: row.disqualified ? "dsq" : out ? "out" : lead ? "p1" : "",
+                    rowCls: (row.playerName === self.playerName ? "you" : out || row.disqualified ? "out" : "") +
                         (row.disqualified ? " dsq" : ""),
                     name: nameOf(row),
                     labels: labelsOf(row),
                     pen: penOf(row),
                     fin: !!row.finished,
                     gap,
-                    gapCls: row.dnf || row.disqualified || row.disconnected ? "soft" : "",
+                    gapCls: out || row.disqualified || row.disconnected ? "soft" : "",
                 };
             };
             v.full = standings.map(rowOf);
@@ -203,9 +238,17 @@ angular.module("beamjoy").component("bjRaceHud", {
             v.fullLap = laps > 1 && leadLap < laps ? fill("beamjoy.raceHud.lapN", { n: leadLap }) : laps > 1 ? translate("beamjoy.raceHud.finalLap") : "";
             v.fullLapOf = laps > 1 && leadLap < laps ? `/${laps}` : "";
             const gates = data.totalGates || 1;
-            const done = leadRow
+            let done = leadRow
                 ? leadRow.finished ? 1 : ((Math.max(1, leadRow.currentLap || 1) - 1) * gates + (leadRow.currentGate || 0)) / (laps * gates)
                 : 0;
+            // a timed phase : its time left, and how much of it has gone
+            if (timed) {
+                v.fullLap = data.timeUp ? translate("beamjoy.raceHud.finalLap") : timeLeft(data.timeLeftMs);
+                v.fullLapOf = "";
+                const left = Number(data.timeLeftMs) || 0;
+                const gone = Number(data.elapsedMs) || 0;
+                done = data.timeUp ? 1 : gone + left > 0 ? gone / (gone + left) : 0;
+            }
             v.progressPct = `${Math.round(Math.min(1, Math.max(0, done)) * 100)}%`;
             v.fastestLap = data.fastestLap
                 ? { name: nameOf(data.fastestLap), time: clock(data.fastestLap.ms) }

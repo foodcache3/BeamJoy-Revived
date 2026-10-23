@@ -1,0 +1,319 @@
+<style>
+    bj-race-phases {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45em;
+    }
+    bj-race-phases .phase {
+        display: flex;
+        flex-direction: column;
+        gap: 0.55em;
+        padding: 0.55em 0.65em;
+        background: rgba(255, 255, 255, 0.04);
+        border-radius: 0.375em;
+        box-shadow: inset 3px 0 0 rgba(255, 137, 85, 0.55);
+    }
+    bj-race-phases .phase-head {
+        display: flex;
+        align-items: center;
+        gap: 0.4em;
+    }
+    bj-race-phases .phase-head .num {
+        flex-shrink: 0;
+        min-width: 1.6em;
+        height: 1.6em;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.25em;
+        background: #282b33;
+        font-size: 0.8em;
+        font-weight: 700;
+    }
+    /* the name gives way, the summary and buttons keep their size */
+    bj-race-phases .phase-head .title {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        background: transparent;
+        border: 0;
+        padding: 0;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+    bj-race-phases .phase-head .title b {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.9em;
+    }
+    bj-race-phases .phase-head .icon {
+        flex-shrink: 0;
+        width: 1.9em;
+        min-height: 1.9em;
+        padding: 0;
+    }
+    bj-race-phases input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+    }
+    bj-race-phases .row2 {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 0.5em;
+    }
+    /* a plugin's format : what it locks, shown, not changed */
+    bj-race-phases .locked {
+        pointer-events: none;
+        opacity: 0.5;
+    }
+    /* the same look in any window (the main window's own, the config window's race editor) */
+    bj-race-phases .bjr-seg {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25em;
+    }
+    bj-race-phases .bjr-seg button {
+        min-height: 2em;
+        padding: 0 0.7em;
+        background: #282b33;
+        border: 0;
+        border-radius: 0.25em;
+        color: #c8cedc;
+        font-size: 0.82em;
+        cursor: pointer;
+    }
+    bj-race-phases .bjr-seg button.on {
+        background: rgba(255, 102, 0, 0.16);
+        box-shadow: inset 0 0 0 1px rgba(255, 102, 0, 0.6);
+        color: #ebebeb;
+    }
+    bj-race-phases .bjr-field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3em;
+    }
+    bj-race-phases .bjr-field > .name {
+        font-size: 0.8em;
+        color: #a7aebf;
+    }
+    bj-race-phases .bjr-toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75em;
+        font-size: 0.85em;
+    }
+    bj-race-phases .bjr-muted {
+        font-size: 0.82em;
+        color: #a7aebf;
+    }
+    bj-race-phases .bjr-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 1.9em;
+        padding: 0 0.6em;
+        background: #363a45;
+        border: 0;
+        border-radius: 0.25em;
+        color: #ebebeb;
+        font-size: 0.78em;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    bj-race-phases .bjr-btn.ghost {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+        color: #c8cedc;
+    }
+    bj-race-phases .bjr-btn.danger {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px rgba(255, 110, 100, 0.5);
+        color: #ff9a8f;
+    }
+    bj-race-phases .bjr-btn:disabled {
+        opacity: 0.45;
+        cursor: default;
+    }
+    bj-race-phases .bjr-chip {
+        display: inline-flex;
+        align-self: flex-start;
+        padding: 0.15em 0.55em;
+        border-radius: 0.25em;
+        background: #282b33;
+        color: #c8cedc;
+        font-size: 0.78em;
+    }
+    bj-race-phases .rules {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45em;
+        padding-top: 0.45em;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+</style>
+
+<div class="phase" ng-repeat="p in $ctrl.phases track by $index" ng-init="i = $index" role="group" aria-label="{{$ctrl.label(p, $index)}}">
+    <div class="phase-head">
+        <span class="num">{{$index + 1}}</span>
+        <button type="button" class="title" ng-click="$ctrl.toggle($index)" aria-expanded="{{!!$ctrl.open[$index]}}">
+            <b>{{$ctrl.label(p, $index)}}</b>
+            <span class="bjr-muted">{{('beamjoy.racePhases.rankings.' + p.ranking) | translate}} · {{$ctrl.lengthText(p)}}</span>
+        </button>
+        <button type="button" class="bjr-btn small ghost icon" ng-if="!$ctrl.isLocked('phases')" ng-disabled="$first" ng-click="$ctrl.move($index, -1)"
+            aria-label="{{'beamjoy.racePhases.moveUp' | translate}}" title="{{'beamjoy.racePhases.moveUp' | translate}}">▲</button>
+        <button type="button" class="bjr-btn small ghost icon" ng-if="!$ctrl.isLocked('phases')" ng-disabled="$last" ng-click="$ctrl.move($index, 1)"
+            aria-label="{{'beamjoy.racePhases.moveDown' | translate}}" title="{{'beamjoy.racePhases.moveDown' | translate}}">▼</button>
+        <button type="button" class="bjr-btn small danger icon" ng-if="!$ctrl.isLocked('phases')" ng-disabled="$ctrl.phases.length <= 1" ng-click="$ctrl.remove($index)"
+            aria-label="{{'beamjoy.racePhases.remove' | translate}}" title="{{'beamjoy.racePhases.remove' | translate}}">✕</button>
+    </div>
+
+    <div ng-if="$ctrl.open[$index]" style="display: contents">
+        <div class="bjr-field" ng-class="{locked: $ctrl.isLocked('name')}">
+            <span class="name">{{'beamjoy.racePhases.name' | translate}}</span>
+            <input type="text" ng-model="p.name" maxlength="32" placeholder="{{$ctrl.label(null, $index)}}">
+        </div>
+
+        <!-- how it starts : together from the grid, one at a time, or open runs -->
+        <div class="bjr-field" ng-class="{locked: $ctrl.isLocked('start')}">
+            <span class="name" title="{{'beamjoy.racePhases.start.tooltip' | translate}}">{{'beamjoy.racePhases.start' | translate}}</span>
+            <span class="bjr-chip" ng-if="p.start === 'plugin'">{{'beamjoy.racePhases.starts.plugin' | translate}}</span>
+            <div class="bjr-seg" ng-if="p.start !== 'plugin'">
+                <button type="button" ng-repeat="st in $ctrl.STARTS" ng-class="{on: p.start === st}" ng-click="p.start = st"
+                    title="{{('beamjoy.racePhases.starts.' + st + '.tooltip') | translate}}">
+                    {{('beamjoy.racePhases.starts.' + st) | translate}}
+                </button>
+            </div>
+        </div>
+        <div class="bjr-field" ng-if="p.start === 'individual'" ng-class="{locked: $ctrl.isLocked('start')}">
+            <span class="name" title="{{'beamjoy.racePhases.intervalS.tooltip' | translate}}">{{'beamjoy.racePhases.intervalS' | translate}}</span>
+            <bj-slider ng-model="p.intervalS" min="5" max="120" hard-max="600" step="5"></bj-slider>
+        </div>
+
+        <div class="bjr-field" ng-class="{locked: $ctrl.isLocked('ranking')}">
+            <span class="name" title="{{'beamjoy.racePhases.ranking.tooltip' | translate}}">{{'beamjoy.racePhases.ranking' | translate}}</span>
+            <span class="bjr-chip" ng-if="p.ranking === 'plugin'">{{'beamjoy.racePhases.rankings.plugin' | translate}}</span>
+            <div class="bjr-seg" ng-if="p.ranking !== 'plugin'">
+                <button type="button" ng-repeat="r in $ctrl.RANKINGS" ng-class="{on: p.ranking === r}" ng-click="$ctrl.setRanking(p, r)"
+                    title="{{('beamjoy.racePhases.rankings.' + r + '.tooltip') | translate}}">
+                    {{('beamjoy.racePhases.rankings.' + r) | translate}}
+                </button>
+            </div>
+        </div>
+
+        <!-- length : laps, time, or both (whichever comes first) ; a point-to-point track's phase is one run -->
+        <div class="bjr-field" ng-if="$ctrl.repeats(p)" ng-class="{locked: $ctrl.isLocked('length')}">
+            <span class="name" title="{{'beamjoy.racePhases.length.tooltip' | translate}}">{{'beamjoy.racePhases.length' | translate}}</span>
+            <div class="bjr-seg">
+                <button type="button" ng-repeat="m in $ctrl.LENGTHS" ng-class="{on: p.lengthMode === m}" ng-click="p.lengthMode = m">
+                    {{('beamjoy.racePhases.lengths.' + m) | translate}}
+                </button>
+            </div>
+        </div>
+        <div class="bjr-field" ng-if="$ctrl.repeats(p) && p.lengthMode !== 'time'" ng-class="{locked: $ctrl.isLocked('length')}">
+            <span class="name">{{$ctrl.lapsWord()}}</span>
+            <bj-slider ng-model="p.laps" min="1" max="50" hard-max="999" step="1"></bj-slider>
+        </div>
+        <div class="bjr-field" ng-if="$ctrl.repeats(p) && p.lengthMode !== 'laps'" ng-class="{locked: $ctrl.isLocked('length')}">
+            <span class="name">{{'beamjoy.racePhases.minutes' | translate}}</span>
+            <bj-slider ng-model="p.timeLimitMin" min="1" max="60" hard-max="1440" step="1"></bj-slider>
+        </div>
+        <div class="bjr-field" ng-if="$ctrl.repeats(p) && p.lengthMode !== 'laps'" ng-class="{locked: $ctrl.isLocked('length')}">
+            <span class="name" title="{{'beamjoy.racePhases.afterTime.tooltip' | translate}}">{{'beamjoy.racePhases.afterTime' | translate}}</span>
+            <div class="bjr-seg">
+                <button type="button" ng-repeat="a in $ctrl.AFTER_TIMES" ng-if="a !== 'leader' || p.ranking === 'position'"
+                    ng-class="{on: p.afterTime === a}" ng-click="p.afterTime = a"
+                    title="{{('beamjoy.racePhases.afterTimes.' + a + '.tooltip') | translate}}">
+                    {{('beamjoy.racePhases.afterTimes.' + a) | translate}}
+                </button>
+            </div>
+        </div>
+
+        <!-- the grid, and who races : from an earlier phase's result -->
+        <div class="row2" ng-if="!$first" ng-class="{locked: $ctrl.isLocked('order')}">
+            <div class="bjr-field">
+                <span class="name" title="{{'beamjoy.racePhases.order.tooltip' | translate}}">{{'beamjoy.racePhases.order' | translate}}</span>
+                <bj-select ng-model="p.orderPick" options="$ctrl.orderOptions[$index]" ng-change="$ctrl.setOrder(p, value)"></bj-select>
+            </div>
+            <div class="bjr-field" ng-if="p.order.from !== 'lobby'">
+                <span class="name" title="{{'beamjoy.racePhases.reverse.tooltip' | translate}}">{{'beamjoy.racePhases.reverse' | translate}}</span>
+                <bj-select ng-model="p.order.reverse" options="$ctrl.reverseOptions"></bj-select>
+            </div>
+        </div>
+        <div class="row2" ng-if="!$first" ng-class="{locked: $ctrl.isLocked('takes')}">
+            <div class="bjr-field">
+                <span class="name" title="{{'beamjoy.racePhases.takes.tooltip' | translate}}">{{'beamjoy.racePhases.takes' | translate}}</span>
+                <bj-select ng-model="p.takesPick" options="$ctrl.takesOptions[$index]" ng-change="$ctrl.setTakes(p, value)"></bj-select>
+            </div>
+            <div class="bjr-field" ng-if="p.takes">
+                <span class="name">{{'beamjoy.racePhases.takesTop' | translate}}</span>
+                <bj-slider ng-model="p.takes.top" min="1" max="20" hard-max="64" step="1"></bj-slider>
+            </div>
+        </div>
+
+        <div class="bjr-toggle-row" ng-class="{locked: $ctrl.isLocked('countsToEvent')}">
+            <span title="{{'beamjoy.racePhases.countsToEvent.tooltip' | translate}}">{{'beamjoy.racePhases.countsToEvent' | translate}}</span>
+            <bj-toggle ng-model="p.countsToEvent"></bj-toggle>
+        </div>
+        <div class="bjr-toggle-row" ng-class="{locked: $ctrl.isLocked('leaderboard')}">
+            <span title="{{'beamjoy.racePhases.leaderboard.tooltip' | translate}}">{{'beamjoy.racePhases.leaderboard' | translate}}</span>
+            <bj-toggle ng-model="p.leaderboard"></bj-toggle>
+        </div>
+        <div class="bjr-toggle-row" ng-class="{locked: $ctrl.isLocked('lateJoin')}">
+            <span title="{{'beamjoy.racePhases.lateJoin.tooltip' | translate}}">{{'beamjoy.racePhases.lateJoin' | translate}}</span>
+            <bj-toggle ng-model="p.lateJoin"></bj-toggle>
+        </div>
+        <div class="bjr-field" ng-if="!$last" ng-class="{locked: $ctrl.isLocked('breakS')}">
+            <span class="name" title="{{'beamjoy.racePhases.breakS.tooltip' | translate}}">{{'beamjoy.racePhases.breakS' | translate}}</span>
+            <bj-slider ng-model="p.breakS" min="5" max="120" hard-max="600" step="5"></bj-slider>
+        </div>
+
+        <!-- plugins' own options for this phase -->
+        <div class="rules" ng-if="$ctrl.phaseSections.length > 0" ng-class="{locked: $ctrl.isLocked('plugins')}">
+            <bj-plugin-options sections="$ctrl.phaseSections" holder="p" layout="fields"></bj-plugin-options>
+        </div>
+
+        <!-- this phase's own rules over the event's -->
+        <div class="rules" ng-class="{locked: $ctrl.isLocked('rules')}">
+            <span class="bjr-muted" title="{{'beamjoy.racePhases.rules.tooltip' | translate}}">{{'beamjoy.racePhases.rules' | translate}}</span>
+            <div class="row2">
+                <div class="bjr-field">
+                    <span class="name">{{'beamjoy.window.config.tabs.races.respawnStrategy' | translate}}</span>
+                    <bj-select ng-model="p.rules.respawnStrategy" options="$ctrl.respawnOptions"></bj-select>
+                </div>
+                <div class="bjr-field">
+                    <span class="name">{{'beamjoy.racePhases.rules.collisions' | translate}}</span>
+                    <bj-select ng-model="p.rules.disableCollisions" options="$ctrl.collisionOptions"></bj-select>
+                </div>
+            </div>
+            <div class="row2">
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.dnfEnabled.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.dnfEnabled' | translate}}</span>
+                    <bj-select ng-model="p.rules.dnfEnabled" options="$ctrl.onOffOptions"></bj-select>
+                </div>
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.resetPenaltyEnabled.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.resetPenaltyEnabled' | translate}}</span>
+                    <bj-select ng-model="p.rules.resetPenaltyEnabled" options="$ctrl.onOffOptions"></bj-select>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<button type="button" class="bjr-btn small ghost" ng-if="!$ctrl.isLocked('phases')" ng-disabled="$ctrl.phases.length >= $ctrl.MAX" ng-click="$ctrl.add()">
+    + {{'beamjoy.racePhases.add' | translate}}
+</button>
+
+<!-- the event's result, once there's more than one phase -->
+<div class="bjr-field" ng-if="$ctrl.phases.length > 1">
+    <span class="name" title="{{'beamjoy.racePhases.result.tooltip' | translate}}">{{'beamjoy.racePhases.result' | translate}}</span>
+    <div class="bjr-seg">
+        <button type="button" ng-repeat="r in $ctrl.RESULTS" ng-class="{on: $ctrl.result === r}" ng-click="$ctrl.result = r"
+            title="{{('beamjoy.racePhases.results.' + r + '.tooltip') | translate}}">
+            {{('beamjoy.racePhases.results.' + r) | translate}}
+        </button>
+    </div>
+</div>

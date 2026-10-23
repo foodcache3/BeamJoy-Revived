@@ -46,6 +46,7 @@ angular.module("beamjoy").component("bjConfigDerbyArena", {
             setSnapToGround: "BJEditorDerbyArenaSetSnapToGround",
             setSnapMethod: "BJEditorDerbyArenaSetSnapMethod",
             requestState: "BJEditorDerbyArenaRequestState",
+            turnAll: "BJEditorDerbyArenaTurnAll",
         };
 
         this.meta = { arenas: [], blank: true };

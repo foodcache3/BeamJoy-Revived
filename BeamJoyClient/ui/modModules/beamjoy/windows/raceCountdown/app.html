@@ -97,6 +97,9 @@
     <div class="race-countdown-name" ng-if="$ctrl.raceName">
         {{$ctrl.raceName}}
     </div>
+    <div class="race-countdown-name" ng-if="$ctrl.phaseName && $ctrl.mode === 'countdown'" style="font-size: 0.7em; opacity: 0.8">
+        {{$ctrl.phaseName}}
+    </div>
     <div
         class="race-countdown-number"
         ng-if="$ctrl.mode === 'countdown'"

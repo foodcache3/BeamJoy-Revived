@@ -8,7 +8,8 @@
 --- the admin-forced server-wide path, and anything about `passive` mode (that's an ambient/
 --- freeroam mechanic, not a grid session at all).
 
----@alias BJRaceSessionState "GRID"|"COUNTDOWN"|"RACE"|"FINISHED"
+---@alias BJRaceSessionState "GRID"|"COUNTDOWN"|"RACE"|"BREAK"|"FINISHED" BREAK : between two of the
+---event's phases (services/racePhases.lua), the last one's results shown
 
 ---@class BJRaceParticipant
 ---@field playerID integer
@@ -97,6 +98,25 @@
 ---shown to them in the lobby ; cleared once they're ready
 ---@field readyBlockBy string? the plugin that refused
 ---@field gridPosition integer? their place on the grid, 1 first, set when the countdown begins
+---@field bestLapAtMs integer? when (the shared clock) they set bestLapMs : equal best laps, the first
+---to set it ranks first
+---@field startAtMs integer? a personal start (services/racePhases.lua : a staggered start, a run, a
+---mid-phase join) : when they go (the shared clock). nil : the phase's green light, with everyone
+---@field clockBaseMs integer? what their race times count from (the shared clock) : their own start,
+---or the phase's green light (a mid-phase join into a race). nil : the green light
+---@field runStartPosition table? where their personal start is (the first slot, or a free one)
+---@field elapsedOffsetMs integer? their laps' time before clockBaseMs (a run's clock starts at 0)
+---@field awaitingStart boolean? a plugin's phase (start = "plugin") : held on their slot until the
+---plugin starts them (race.startRacer)
+---@field score number? a plugin's score for them this phase (phase.setScores)
+---@field scoreKey number? the same, lower is better whichever way the plugin counts : the ranking
+---@field scoreDisplay string? how the HUD and results show it ("86 pts")
+---@field lateJoining boolean? joined while the event was under way, not ready yet : they sit out
+---until they are
+---@field sittingOut boolean? not taking part in the phase being run (its `takes` left them out, or
+---they're out of the event) : they watch it
+---@field eventOut boolean? out of the event : they disconnected and didn't come back in time. They
+---keep their earlier phases' results, and sit out the rest
 
 ---@class BJRaceSessionSettings host-configurable at start time, seeded from BJRaceDefaults
 ---@field laps integer?
@@ -201,6 +221,24 @@
 ---@field pluginGridOrder integer[]? player IDs, first on the grid first, from a plugin's
 ---race.setGridOrder ; used unless a gridOrder hook answer gives another
 ---@field pluginGridOrderBy string? that plugin
+---@field phases BJRacePhase[] the event's phases, in order (one : a race as it always was)
+---@field result BJRaceEventResult how the event's result comes from its phases
+---@field format string? a plugin's format it runs ("plugin:id", formats.register)
+---@field phaseIndex integer the phase being run (in the lobby : the first)
+---@field baseSettings BJRaceSessionSettings the event's own settings ; `settings` is them with the
+---current phase's rules and length over them (racePhases.effectiveSettings)
+---@field phaseResults table<integer, table[]> phase index -> its results (buildResults), once run
+---@field eventStandings table[]? the event's standings from the phases run so far
+---@field phaseEndsAtMs integer? a timed phase : when its time is up (the shared clock)
+---@field flagAtMs integer? when its time was up : racers finish per the phase's afterTime
+---@field chequered boolean? afterTime "leader" : the leader has taken the flag, everyone's next
+---crossing of the line ends their race
+---@field overtimeEndsAtMs integer? once the time's up, the latest the phase goes on (racers stopped
+---or lost out there) ; anyone still out then is done
+---@field breakEndsAtMs integer? BREAK : when the next phase's countdown begins (the shared clock)
+---@field judging boolean? a phase over, its result with the plugins answering the phaseResult hook
+---@field eventScores table<integer, {score: number, key: number, display: string?}>? joinIndex -> a
+---plugin's event score (phase.setScores with `event`), for an event whose result is "plugin"
 ---@field allReadyAt integer? GetCurrentTime() of the moment every current participant most
 ---recently became ready together, cleared again the instant that's no longer true (someone leaves
 ---unready, joins unready, un-readies via vehicle-change). gridReadySecondsLeft and the actual
@@ -208,7 +246,8 @@
 ---updateAllReadyState's own doc comment for why
 
 local M = {
-    dependencies = { "services_races", "services_vehiclePresets", "utils_async", "services_identity" },
+    dependencies = { "services_races", "services_racePhases", "services_vehiclePresets", "utils_async",
+        "services_identity" },
 
     ---@type tablelib<string, BJRaceSession>
     sessions = Table(),
@@ -245,6 +284,13 @@ local GO_GRACE_MS = 1000
 ---@return BJRace?
 local function getRace(session)
     return services_races.getById(session.raceId)
+end
+
+--- the phase being run (in the lobby, the first)
+---@param session BJRaceSession
+---@return BJRacePhase
+local function currentPhase(session)
+    return session.phases[session.phaseIndex or 1]
 end
 
 --- which session (if any) a player currently belongs to, regardless of raceId. Moved up here
@@ -491,6 +537,10 @@ local function nextAwayKey()
     return lastAwayKey
 end
 
+--- what a slim session update (a gate crossing) leaves out : what can't change at a crossing, and
+--- every client in the session already has (raceRunner.lua's onSessionUpdate keeps its own)
+local SLIM_DROPPED = { settings = true, phases = true, phaseResults = true, eventStandings = true }
+
 -- per-gate tables never sent to clients : gateTimes holds every gate's crossing time, so on a
 -- track with hundreds of gates it was most of every session update, and it was only ever read to
 -- work out the gaps between racers, which the server now does itself (gapBetween below)
@@ -535,13 +585,28 @@ end
 ---@param self BJRaceParticipant
 ---@param other BJRaceParticipant
 ---@param totalGates integer progress steps per lap (totalSteps)
+---@param ranking BJRacePhaseRanking? the phase's (best lap : the gap between best laps ; total :
+---between the times added up, or the laps/runs between them)
 ---@return integer? gapMs, integer? lapsDiff
-local function gapBetween(self, other, totalGates)
-    if self.dnf or other.dnf or self.disqualified or other.disqualified or
-        self.finished ~= other.finished then
+local function gapBetween(self, other, totalGates, ranking)
+    if self.disqualified or other.disqualified then return nil, nil end
+    if ranking == services_racePhases.RANKING.BEST then
+        local a, b = services_racePhases.bestOf(self), services_racePhases.bestOf(other)
+        if a and b then return b - a, nil end
+        return nil, nil
+    elseif ranking == services_racePhases.RANKING.TOTAL then
+        local a, b = services_racePhases.lapsDone(self), services_racePhases.lapsDone(other)
+        if a ~= b then return nil, a - b end
+        if a > 0 then return raceTimeMs(other) - raceTimeMs(self), nil end
+        return nil, nil
+    end
+    if self.dnf or other.dnf or self.finished ~= other.finished then
         return nil, nil
     end
     if self.finished then
+        -- a timed race's finishers can have done different laps
+        local a, b = services_racePhases.lapsDone(self), services_racePhases.lapsDone(other)
+        if a ~= b then return nil, a - b end
         return raceTimeMs(other) - raceTimeMs(self), nil
     end
     local selfProgress = (self.currentLap - 1) * totalGates + self.currentGate
@@ -575,6 +640,9 @@ local function gapBetween(self, other, totalGates)
     return nil, nil
 end
 
+-- forward-declared : the sessions list (summarize) says whether one can be joined midway
+local joinableNow
+
 ---@param session BJRaceSession
 ---@return {id: string, raceId: integer, raceName: string, starterName: string, joinable: boolean,
 ---participantCount: integer, maxParticipants: integer, state: BJRaceSessionState}
@@ -590,6 +658,12 @@ local function summarize(session)
         participantCount = session.participants:length(),
         maxParticipants = race and #race.startPositions or 0,
         state = session.state,
+        phaseIndex = session.phaseIndex,
+        phaseCount = #session.phases,
+        phaseName = currentPhase(session).name,
+        -- open to join now while under way (services/racePhases.lua's lateJoin)
+        lateJoinable = session.state ~= "GRID" and select(2, joinableNow(session)) and
+            session.participants:length() < (race and #race.startPositions or 0) or nil,
     }
 end
 
@@ -611,11 +685,12 @@ end
 local function buildSessionPayload(session, slim)
     local payload = {}
     for k, v in pairs(session) do
-        if k ~= "participants" and not (slim and k == "settings") then payload[k] = v end
+        if k ~= "participants" and k ~= "baseSettings" and not (slim and SLIM_DROPPED[k]) then payload[k] = v end
     end
 
     local race = getRace(session)
     local totalGates = race and totalSteps(race) or 0
+    local ranking = session.settings.ranking
     local ordered = M.computeLeaderboard(session)
     local leader = ordered[1]
     -- a still-racing row is measured against the leader as if the leader were still racing too,
@@ -634,14 +709,23 @@ local function buildSessionPayload(session, slim)
         local fields = services_pluginUi.racerFields(session, p)
         row.fields = fields and services_pluginUi.fieldList(fields) or nil
         if i > 1 then
-            row.aheadGapMs, row.aheadLapsDiff = gapBetween(ordered[i - 1], p, totalGates)
-            row.leaderGapMs, row.leaderLapsDiff = gapBetween(p.finished and leader or racingLeader, p, totalGates)
+            row.aheadGapMs, row.aheadLapsDiff = gapBetween(ordered[i - 1], p, totalGates, ranking)
+            row.leaderGapMs, row.leaderLapsDiff = gapBetween(p.finished and leader or racingLeader, p, totalGates,
+                ranking)
         end
         payload.participants[i] = row
     end
 
     if session.state == "RACE" and session.goAtMs then
         payload.raceElapsedMs = math.max(0, services_clockSync.nowMs() - session.goAtMs)
+    end
+    -- a timed phase's time left, and a break's, as durations too (the shared-clock moments,
+    -- phaseEndsAtMs / breakEndsAtMs, go out as well)
+    if session.state == "RACE" and session.phaseEndsAtMs then
+        payload.phaseTimeLeftMs = math.max(0, session.phaseEndsAtMs - services_clockSync.nowMs())
+    end
+    if session.state == "BREAK" and session.breakEndsAtMs then
+        payload.breakLeftMs = math.max(0, session.breakEndsAtMs - services_clockSync.nowMs())
     end
     -- lobby-phase countdown feedback, same "push a duration, not a timestamp" reasoning as
     -- raceElapsedMs above (session.createdAt/allReadyAt are in the server's own GetCurrentTime()
@@ -725,7 +809,7 @@ local function pushOpenSessionsList()
     local visible = M.sessions:filter(function(s)
         if s.private then return false end
         return (s.state == "GRID" and s.joinable) or
-            s.state == "COUNTDOWN" or s.state == "RACE"
+            s.state == "COUNTDOWN" or s.state == "RACE" or s.state == "BREAK"
     end):map(summarize):values()
     communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "raceSessionsList", visible)
 end
@@ -739,6 +823,7 @@ local function removeSession(session)
     utils_async.removeTask("BJRaceGrid-" .. session.id .. "-readyTimeout")
     utils_async.removeTask("BJRaceGrid-" .. session.id .. "-gridTimeout")
     utils_async.removeTask("BJRaceGrid-" .. session.id .. "-countdown")
+    utils_async.removeTask("BJRaceGrid-" .. session.id .. "-break")
     utils_async.removeTask("BJRaceGrid-" .. session.id .. "-cleanup")
     -- tell participants before the session disappears. Without this, clients never learn a
     -- session ended (only ever pushed updates while it existed), so anything derived from it
@@ -758,30 +843,16 @@ local function removeSession(session)
     pushOpenSessionsList()
 end
 
---- sorts participants for leaderboard display: disqualified last, then not-DNF first ; finishers
---- by race time with penalties (a penalty can drop someone behind a later finisher), still-racing
---- racers by most laps, most gates, fastest
+--- the phase's standings, by its ranking (racePhases.sort) : a race's finishers by laps then race
+--- time with penalties (a penalty can drop someone behind a later finisher), the ones still racing
+--- by most laps, most gates, fastest ; practice or qualifying by best lap. Disqualified after, the
+--- ones sitting the phase out last
 ---@param session BJRaceSession
 ---@return BJRaceParticipant[]
 local function computeLeaderboard(session)
     local list = {}
     session.participants:forEach(function(p) list[#list + 1] = p end)
-    table.sort(list, function(a, b)
-        if (a.disqualified == true) ~= (b.disqualified == true) then return not a.disqualified end
-        if a.dnf ~= b.dnf then return not a.dnf end
-        if a.finished ~= b.finished then return a.finished end
-        if a.finished then
-            local aTime, bTime = raceTimeMs(a), raceTimeMs(b)
-            if aTime ~= bTime then return aTime < bTime end
-            return (a.finishOrder or 0) < (b.finishOrder or 0)
-        end
-        if a.currentLap ~= b.currentLap then return a.currentLap > b.currentLap end
-        if a.currentGate ~= b.currentGate then return a.currentGate > b.currentGate end
-        local aTime = a.gateTimes[a.currentGate] or math.huge
-        local bTime = b.gateTimes[b.currentGate] or math.huge
-        return aTime < bTime
-    end)
-    return list
+    return services_racePhases.sort(list, session.settings.ranking)
 end
 
 ---@param race BJRace
@@ -1062,6 +1133,7 @@ local function defaultGrid(session, race)
         local taken = {}
         local unassigned = {}
         session.participants:forEach(function(p)
+            if p.sittingOut then return end
             local slot = p.gridSlot
             if slot and race.startPositions[slot] and not taken[slot] then
                 taken[slot] = true
@@ -1094,7 +1166,7 @@ local function defaultGrid(session, race)
         -- Confirmed live as "random placement just fails to teleport people": every client hit
         -- raceRunner.lua's own "no start position to teleport to" fallback. values() itself is
         -- safe (it rebuilds the ARRAY but keeps the same participant references inside).
-        local participants = session.participants:values()
+        local participants = session.participants:filter(function(p) return not p.sittingOut end):values()
         table.sort(participants, function(a, b) return (a.joinIndex or 0) < (b.joinIndex or 0) end)
         if mode == services_races.PLACEMENT_MODES.RANDOM then
             for i = #participants, 2, -1 do
@@ -1138,6 +1210,8 @@ end
 ---@param orderedBy string? the plugin whose order this is
 local function startCountdown(session, race, grid, orderedBy)
     session.state = "COUNTDOWN"
+    -- a plugin's race.setGridOrder was for this grid
+    session.pluginGridOrder, session.pluginGridOrderBy = nil, nil
     local placed = {}
     for i, e in ipairs(grid) do
         e.p.startPosition = race.startPositions[((e.slot - 1) % #race.startPositions) + 1]
@@ -1149,6 +1223,23 @@ local function startCountdown(session, race, grid, orderedBy)
     -- utils_async.delayTask, whose whole-second clock fired up to ~2s after the countdown the
     -- clients displayed
     session.goAtMs = services_clockSync.nowMs() + math.floor(session.settings.countdown * 1000)
+    local phase = currentPhase(session)
+    session.phaseEndsAtMs = phase.timeLimitMin and session.goAtMs + math.floor(phase.timeLimitMin * 60000) or nil
+    -- "individual" : one at a time from the first slot, in grid order, intervalS apart
+    for i, p in ipairs(placed) do
+        p.elapsedOffsetMs = 0
+        p.awaitingStart = nil
+        if phase.start == services_racePhases.START.INDIVIDUAL then
+            p.startAtMs = session.goAtMs + (i - 1) * (phase.intervalS or 10) * 1000
+            p.clockBaseMs = p.startAtMs
+            p.runStartPosition = race.startPositions[1]
+        else
+            p.startAtMs, p.clockBaseMs, p.runStartPosition = nil, nil, nil
+            -- a plugin's phase : on their slot until the plugin starts them (race.startRacer)
+            if phase.start == services_racePhases.START.PLUGIN then p.awaitingStart = true end
+        end
+    end
+    session.flagAtMs, session.chequered, session.overtimeEndsAtMs = nil, nil, nil
     utils_async.task(function()
         return services_clockSync.nowMs() >= session.goAtMs
     end, function() M.beginRace(session.id) end, "BJRaceGrid-" .. session.id .. "-countdown")
@@ -1157,16 +1248,64 @@ local function startCountdown(session, race, grid, orderedBy)
     apiEvent("raceCountdown", session, placed, orderedBy)
 end
 
---- begins the pre-race countdown : start positions per the session's placementMode, or a
---- plugin's order (race.setGridOrder, or an answer to the gridOrder hook, asked first)
+--- the phase's grid in BeamJoy's own order : the lobby's (the session's placementMode), or an
+--- earlier phase's result / the event's standings so far (reversed as the phase asks), the racers
+--- without a place there behind, in the lobby's order
+---@param session BJRaceSession
+---@param race BJRace
+---@return {p: BJRaceParticipant, slot: integer}[]
+local function phaseGrid(session, race)
+    local lobby = defaultGrid(session, race)
+    local order = currentPhase(session).order
+    if order.from == "lobby" then return lobby end
+    local rows = order.from == "phase" and session.phaseResults[order.phase] or session.eventStandings
+    local byJoin, used, out = {}, {}, {}
+    for _, e in ipairs(lobby) do byJoin[e.p.joinIndex] = e end
+    for _, joinIndex in ipairs(services_racePhases.orderOf(rows, order.reverse)) do
+        local e = byJoin[joinIndex]
+        if e and not used[e] then
+            used[e] = true
+            out[#out + 1] = { p = e.p, slot = #out + 1 }
+        end
+    end
+    for _, e in ipairs(lobby) do
+        if not used[e] then out[#out + 1] = { p = e.p, slot = #out + 1 } end
+    end
+    return out
+end
+
+--- a gridOrder hook's `take` : only these racers (player IDs) race the phase, the others sit it out
+---@param grid {p: BJRaceParticipant, slot: integer}[]
+---@param take integer[]
+---@return {p: BJRaceParticipant, slot: integer}[]
+local function takeOnly(grid, take)
+    local wanted, out = {}, {}
+    for _, id in ipairs(take) do wanted[id] = true end
+    for _, e in ipairs(grid) do
+        if wanted[e.p.playerID] then
+            out[#out + 1] = { p = e.p, slot = #out + 1 }
+        else
+            e.p.sittingOut = true
+        end
+    end
+    return out
+end
+
+local finishEvent
+
+--- begins a phase's countdown : start positions per its order, or a plugin's (race.setGridOrder,
+--- or an answer to the gridOrder hook, asked first, which may also pick who races)
 ---@param session BJRaceSession
 local function beginCountdown(session)
-    if session.state ~= "GRID" or session.placing then return end
+    local state = session.state
+    if (state ~= "GRID" and state ~= "BREAK") or session.placing then return end
     local race = getRace(session)
     if not race then return removeSession(session) end
-    local grid = defaultGrid(session, race)
+    local grid = phaseGrid(session, race)
+    -- nobody left to race this phase (everyone out of the event, or left out of it)
+    if #grid == 0 then return finishEvent(session) end
     -- a solo start has no order to decide
-    if session.participants:length() <= 1 or not (services_api and services_api.hasHook("gridOrder")) then
+    if #grid <= 1 or not (services_api and services_api.hasHook("gridOrder")) then
         return startCountdown(session, race, applyGridOrder(grid, session.pluginGridOrder),
             session.pluginGridOrder and session.pluginGridOrderBy or nil)
     end
@@ -1180,13 +1319,21 @@ local function beginCountdown(session)
     session.placing = true
     services_api.runHook("gridOrder", data, function(answers)
         session.placing = nil
-        if M.sessions[session.id] ~= session or session.state ~= "GRID" then return end
+        if M.sessions[session.id] ~= session or session.state ~= state then return end
         -- anyone who left meanwhile is off the grid
         local still = {}
         for _, e in ipairs(grid) do
             if session.participants[e.p.playerID] == e.p then still[#still + 1] = e end
         end
-        if #still == 0 then return removeSession(session) end
+        if #still == 0 then
+            if state == "GRID" then return removeSession(session) end
+            return finishEvent(session)
+        end
+        local take = services_api.firstTake(answers)
+        if take then
+            local taken = takeOnly(still, take)
+            if #taken > 0 then still = taken end
+        end
         local order, by = services_api.firstOrder(answers)
         if not order then order, by = session.pluginGridOrder, session.pluginGridOrderBy end
         startCountdown(session, race, applyGridOrder(still, order), order and by or nil)
@@ -1210,6 +1357,7 @@ local function beginRace(sessionId)
         p.finishOrder = nil
         p.discordResult = nil
         p.bestLapMs = nil
+        p.bestLapAtMs = nil
         p.bestLapGateTimes = nil
         p.liveDeltaMs = nil
         p.currentSector = 1
@@ -1225,55 +1373,91 @@ local function beginRace(sessionId)
     apiEvent("raceGreenLight", session)
 end
 
---- a finished race's results, fastest first (disqualified, then the ones who didn't finish, last),
---- for Discord and the plugin API
+--- a finished phase's results, in its standings' order (the disqualified, then the ones without a
+--- place, last), for the event's standings, Discord and the plugin API. Each row is a snapshot :
+--- the racers go on to the next phase, their laps reset
 ---@param session BJRaceSession
+---@param order integer[]? player IDs, first first : a plugin's order (the phaseResult hook) ahead of
+---the standings' own
 ---@return table? info, table[] results
-local function buildResults(session)
+local function buildResults(session, order)
     local race = getRace(session)
     if not race then return nil, {} end
+    local phase = currentPhase(session)
+    local ranking = session.settings.ranking or services_racePhases.RANKING.POSITION
     local board = services_races.getLeaderboard(session.raceId, math.huge)
+    local results, position, mostLaps = {}, 0, 0
+    local standings = computeLeaderboard(session)
+    if type(order) == "table" and #order > 0 then
+        local rank = {}
+        for i, id in ipairs(order) do if rank[id] == nil then rank[id] = i end end
+        local before = {}
+        for i, p in ipairs(standings) do before[p] = i end
+        table.sort(standings, function(a, b)
+            if (a.sittingOut == true) ~= (b.sittingOut == true) then return not a.sittingOut end
+            if (a.disqualified == true) ~= (b.disqualified == true) then return not a.disqualified end
+            local ra, rb = rank[a.playerID], rank[b.playerID]
+            if (ra ~= nil) ~= (rb ~= nil) then return ra ~= nil end
+            if ra and ra ~= rb then return ra < rb end
+            return before[a] < before[b]
+        end)
+    end
+    for _, p in ipairs(standings) do
+        -- racedebug's ghost. Not any negative id : a racer who left mid-race waits under one (see
+        -- nextAwayKey), and still has a result once retired. Nor anyone who sat this phase out
+        if p.playerID ~= -1000 and not p.sittingOut then
+            -- a copy : Real bug (direct report) : filled in place, the participant's own
+            -- discordResult took order = math.huge for anyone who didn't finish, went out with the
+            -- session's last update as "inf" (not JSON), and no client could read that update
+            local r = table.clone(p.discordResult or { counted = false })
+            -- a plugin's order (the phaseResult hook) places whoever it names
+            local placed = services_racePhases.classified(p, ranking) or
+                (order ~= nil and table.includes(order, p.playerID) and not p.disqualified)
+            if placed then
+                position = position + 1
+                r.position = position
+            end
+            r.playerID = p.playerID
+            -- their BeamMP name (playerName is their leaderboard name) : the client finds its own row by it
+            r.connectionName = p.playerName
+            r.joinIndex = p.joinIndex
+            r.playerName = services_identity.getIdentityKey(p.playerID) or p.nickname or p.playerName
+            r.vehicle = p.vehicleModel
+            r.dnf = not placed
+            r.disqualified = p.disqualified == true
+            r.penaltyMs = (p.penaltyMs or 0) > 0 and p.penaltyMs or nil
+            r.totalMs = placed and ranking ~= services_racePhases.RANKING.BEST and raceTimeMs(p) or nil
+            r.bestLapMs = #p.lapTimes > 0 and math.min(table.unpack(p.lapTimes)) or nil
+            r.lapsDone = #p.lapTimes
+            r.order = p.finishOrder
+            -- a plugin's score (phase.setScores)
+            r.score, r.scoreDisplay = p.score, p.scoreDisplay
+            r.identity = participantIdentityKind(p)
+            r.fields = services_pluginUi.fieldList(services_pluginUi.withoutHudOnly(services_pluginUi.racerFields(session, p)))
+            r.lapTimes = table.clone(p.lapTimes or {})
+            r.lapSectorHistory = table.clone(p.lapSectorHistory or {})
+            r.bestSectorMs = table.clone(p.bestSectorMs or {})
+            if r.counted then
+                for _, entry in ipairs(board) do
+                    if entry.playerName == r.playerName then r.rank = entry.rank end
+                end
+                r.entries = #board
+            end
+            if r.lapsDone > mostLaps then mostLaps = r.lapsDone end
+            table.insert(results, r)
+        end
+    end
+    local name = race.name or "?"
+    if #session.phases > 1 then
+        name = string.format("%s - %s", name, phase.name or ("#" .. tostring(session.phaseIndex)))
+    end
     local info = {
-        raceName = race.name or "?",
-        laps = session.settings.laps or 1,
+        raceName = name,
+        -- Discord shows a race's total time, a single lap's (or a best lap's) time on its own
+        laps = ranking == services_racePhases.RANKING.BEST and 1 or (phase.laps or math.max(1, mostLaps)),
         recordMs = board[1] and board[1].time,
         recordHolder = board[1] and board[1].playerName,
     }
-    local results = {}
-    session.participants:forEach(function(p)
-        -- racedebug's ghost. Not any negative id : a racer who left mid-race waits under one (see
-        -- nextAwayKey), and still has a result once retired
-        if p.playerID == -1000 then return end
-        -- a copy : Real bug (direct report) : filled in place, the participant's own discordResult
-        -- took order = math.huge for anyone who didn't finish, went out with the session's last
-        -- update as "inf" (not JSON), and no client could read that update
-        local r = table.clone(p.discordResult or { counted = false })
-        r.playerName = services_identity.getIdentityKey(p.playerID) or p.nickname or p.playerName
-        r.vehicle = p.vehicleModel
-        r.dnf = not p.finished or p.disqualified == true
-        r.disqualified = p.disqualified == true
-        r.penaltyMs = (p.penaltyMs or 0) > 0 and p.penaltyMs or nil
-        r.totalMs = p.finished and raceTimeMs(p) or nil
-        r.bestLapMs = #p.lapTimes > 0 and math.min(table.unpack(p.lapTimes)) or nil
-        r.order = p.finishOrder or math.huge
-        r.identity = participantIdentityKind(p)
-        r.fields = services_pluginUi.fieldList(services_pluginUi.withoutHudOnly(services_pluginUi.racerFields(session, p)))
-        r.participant = p
-        if r.counted then
-            for _, entry in ipairs(board) do
-                if entry.playerName == r.playerName then r.rank = entry.rank end
-            end
-            r.entries = #board
-        end
-        table.insert(results, r)
-    end)
-    table.sort(results, function(a, b)
-        if a.disqualified ~= b.disqualified then return not a.disqualified end
-        if a.dnf ~= b.dnf then return not a.dnf end
-        -- by race time with penalties, like the standings (a multi-lap race's totals)
-        if a.totalMs and b.totalMs and a.totalMs ~= b.totalMs then return a.totalMs < b.totalMs end
-        return a.order < b.order
-    end)
     return info, results
 end
 
@@ -1303,6 +1487,8 @@ local function trySubmitTime(session, participant, timeMs)
     -- onBJRequestRestrictions/onUpdate), so there's nothing to check here for it.
     -- a disqualified run never counts
     if participant.disqualified then return end
+    -- nor a phase kept off the leaderboard (racePhases : its `leaderboard`)
+    if currentPhase(session).leaderboard == false then return end
     local s = session.settings
     if not (s.disableNodegrabber and s.disableCameras and s.disableGravityChange) then
         return
@@ -1343,52 +1529,244 @@ local function trySubmitTime(session, participant, timeMs)
     }
 end
 
+--- the event is over : its result (the event's standings, or the last phase's when no phase
+--- counts towards it) to the plugin API, the results shown for a few seconds, then it closes
+---@param session BJRaceSession
+finishEvent = function(session)
+    session.state = "FINISHED"
+    session.phaseEndsAtMs, session.flagAtMs, session.chequered, session.overtimeEndsAtMs = nil, nil, nil, nil
+    session.breakEndsAtMs = nil
+    utils_async.removeTask("BJRaceGrid-" .. session.id .. "-break")
+    local race = getRace(session)
+    local last = session.phaseResults[session.phaseIndex] or {}
+    local info = { raceName = race and race.name or "?", laps = session.settings.laps }
+    if services_api then
+        local ok, err = pcall(services_api.raceFinished, session, info, session.eventStandings or last)
+        if not ok then LogError("[BJ raceGrid] plugin API raceFinished failed : " .. tostring(err)) end
+    end
+    pushSessionUpdate(session)
+    pushOpenSessionsList()
+    utils_async.delayTask(function() removeSession(session) end,
+        10, "BJRaceGrid-" .. session.id .. "-cleanup")
+end
+
+local function nextPhase(sessionId) return M.nextPhase(sessionId) end
+
+--- a phase's result, final : kept, posted when it counts towards the event, then the break before
+--- the next phase, or the event's end
+---@param session BJRaceSession
+---@param order integer[]? a plugin's order (the phaseResult hook)
+local function finalizePhase(session, order)
+    local index = session.phaseIndex
+    local built, info, results = pcall(buildResults, session, order)
+    if not built then
+        LogError("[BJ raceGrid] a phase's results failed : " .. tostring(info))
+        info, results = nil, {}
+    end
+    session.phaseResults[index] = results or {}
+    session.eventStandings = services_racePhases.eventStandings(session.phases, session.phaseResults,
+        session.result, session.eventScores)
+    if info and currentPhase(session).countsToEvent then pcall(postToDiscord, info, results) end
+    apiEvent("racePhaseFinished", session, index, session.phaseResults[index])
+    if index >= #session.phases then return finishEvent(session) end
+
+    session.state = "BREAK"
+    session.phaseEndsAtMs, session.flagAtMs, session.chequered, session.overtimeEndsAtMs = nil, nil, nil, nil
+    session.breakEndsAtMs = services_clockSync.nowMs() + currentPhase(session).breakS * 1000
+    local sessionId = session.id
+    utils_async.task(function()
+        return services_clockSync.nowMs() >= (session.breakEndsAtMs or 0)
+    end, function() nextPhase(sessionId) end, "BJRaceGrid-" .. session.id .. "-break")
+    pushSessionUpdate(session)
+    pushOpenSessionsList()
+end
+
+--- a racer a plugin put out (the phaseResult hook's `out`) : disqualified, their leaderboard time
+--- for this phase withdrawn, as staff disqualifying them would
+---@param session BJRaceSession
+---@param p BJRaceParticipant
+local function judgedOut(session, p)
+    if p.disqualified then return end
+    p.disqualified = true
+    if p.leaderboardKey then
+        services_races.restoreEntry(session.raceId, p.leaderboardKey, p.replacedEntry)
+        p.isNewPB, p.isNewRecord = false, false
+        p.leaderboardKey, p.replacedEntry = nil, nil
+        if p.discordResult then p.discordResult.counted = false end
+    end
+    apiEvent("racerOut", session, p, "disqualified")
+end
+
+--- a phase is over (everyone in it finished or out) : the plugins answering the phaseResult hook
+--- may change its result first (time penalties, racers out, their own order : judging, stewards),
+--- then it's final (finalizePhase)
+---@param session BJRaceSession
+local function completePhase(session)
+    if session.judging then return end
+    if not (services_api and services_api.hasHook("phaseResult")) then return finalizePhase(session) end
+    local okData, data = pcall(services_api.phaseResultHookData, session)
+    if not okData then
+        LogError("[BJ raceGrid] the phaseResult hook's question failed : " .. tostring(data))
+        return finalizePhase(session)
+    end
+    session.judging = true
+    services_api.runHook("phaseResult", data, function(answers)
+        session.judging = nil
+        if M.sessions[session.id] ~= session or session.state ~= "RACE" then return end
+        local judged = services_api.judging(answers)
+        for id, ms in pairs(judged.adjustMs) do
+            local p = session.participants[id]
+            if p then p.penaltyMs = math.max(0, (p.penaltyMs or 0) + ms) end
+        end
+        for _, id in ipairs(judged.out) do
+            local p = session.participants[id]
+            if p then judgedOut(session, p) end
+        end
+        finalizePhase(session, judged.order)
+    end)
+end
+
 local function checkSessionComplete(session)
+    if session.state ~= "RACE" or session.judging then return end
     -- a disconnected racer is neither finished nor out : the race waits for their grace period,
     -- but only while someone else is still racing. Real bug (direct report) : one racer left
     -- mid-race and, once everyone still there had finished, the race went on for the rest of the
     -- grace period with nobody in it. Once the last one here is done, those away are retired. (The
     -- last one still racing dropping out themselves is still waited for : nothing calls this then,
-    -- see onPlayerDisconnect)
+    -- see onPlayerDisconnect). With phases still to come, they keep their grace period for those
     local present, racing = false, false
     session.participants:forEach(function(p)
-        if p.disconnected then return end
+        if p.disconnected or p.sittingOut then return end
         present = true
         if not (p.finished or p.dnf) then racing = true end
     end)
     if present and not racing then
+        local morePhases = session.phaseIndex < #session.phases
         session.participants:forEach(function(p)
-            if not p.disconnected then return end
-            utils_async.removeTask(rejoinTaskKey(session.id, p.playerName))
-            p.disconnected, p.rejoinBy, p.rejoinSecondsLeft = nil, nil, nil
+            if not p.disconnected or p.sittingOut or p.finished or p.dnf then return end
+            if not morePhases then
+                utils_async.removeTask(rejoinTaskKey(session.id, p.playerName))
+                p.disconnected, p.rejoinBy, p.rejoinSecondsLeft = nil, nil, nil
+            end
             p.dnf = true
             if p.bestLapMs then trySubmitTime(session, p, p.bestLapMs) end
             apiEvent("racerOut", session, p, "disconnected")
         end)
     end
-    if session.participants:every(function(p) return p.finished or p.dnf end) then
-        session.state = "FINISHED"
-        local built, info, results = pcall(buildResults, session)
-        if built and info then
-            pcall(postToDiscord, info, results)
-            if services_api then pcall(services_api.raceFinished, session, info, results) end
-        end
-        pushSessionUpdate(session)
-        utils_async.delayTask(function() removeSession(session) end,
-            10, "BJRaceGrid-" .. session.id .. "-cleanup")
+    if session.participants:every(function(p) return p.finished or p.dnf or p.sittingOut end) then
+        completePhase(session)
     end
 end
 
 ---@param session BJRaceSession
 ---@param participant BJRaceParticipant
-local function finishParticipant(session, participant)
+---@param noCheck boolean? the caller checks whether the phase is over itself (several at once)
+local function finishParticipant(session, participant, noCheck)
     participant.finished = true
     session.finishCounter = (session.finishCounter or 0) + 1
     participant.finishOrder = session.finishCounter
-    local bestLap = math.min(table.unpack(participant.lapTimes))
-    trySubmitTime(session, participant, bestLap)
+    if #participant.lapTimes > 0 then
+        trySubmitTime(session, participant, math.min(table.unpack(participant.lapTimes)))
+    end
     apiEvent("racerFinished", session, participant)
+    if not noCheck then checkSessionComplete(session) end
+end
+
+--- once a run's done before the next starts (the car rolls to a stop, or not), ms
+local RUN_ROLL_MS = 3000
+
+--- a racer's next personal start : a run on a point-to-point track (back to the first slot, a
+--- short countdown, a clock of its own), or a mid-phase join (`clockFromGreen` : a race's time
+--- still counts from the phase's green light)
+---@param session BJRaceSession
+---@param p BJRaceParticipant
+---@param position table where they start
+---@param delayMs integer before the countdown
+---@param clockFromGreen boolean?
+local function personalStart(session, p, position, delayMs, clockFromGreen, countdownMs)
+    p.awaitingStart = nil
+    p.startAtMs = services_clockSync.nowMs() + delayMs + (countdownMs or session.settings.startCountdownMs or 5000)
+    p.clockBaseMs = clockFromGreen and session.goAtMs or p.startAtMs
+    p.runStartPosition = position
+    -- the laps done so far : the new clock starts at 0 (from the green light : it never stopped)
+    p.elapsedOffsetMs = clockFromGreen and 0 or services_racePhases.timeOf(p) - (p.penaltyMs or 0)
+    p.currentGate, p.lastCrossedGate = 0, 0
+    p.gateTimes = {}
+    p.liveDeltaMs = nil
+    p.currentSector, p.sectorStartMs, p.lapSectors = 1, 0, {}
+    p.lastProgressTime = GetCurrentTime()
+    apiEvent("racerStarted", session, p)
+end
+
+--- whether the lap a racer just completed ends their phase : its laps done, or, once its time is
+--- up, its afterTime : "own" their lap counts and they're done ; "leader" the leader's lap ends
+--- their race, then everyone's next. ("stop" ends it at once, see timeUp)
+---@param session BJRaceSession
+---@param p BJRaceParticipant
+---@return boolean
+local function lapEndsPhase(session, p)
+    local laps = session.settings.laps
+    if laps and #p.lapTimes >= laps then return true end
+    if not session.flagAtMs then return false end
+    if session.settings.afterTime ~= services_racePhases.AFTER_TIME.LEADER or session.chequered then return true end
+    -- the leader : someone's already through the flag, or nobody still in it has done as many laps
+    local leads = session.participants:any(function(o) return o.finished end) or
+        session.participants:every(function(o)
+            return o == p or o.dnf or o.disqualified or o.sittingOut or #o.lapTimes < #p.lapTimes
+        end)
+    if leads then session.chequered = true end
+    return leads
+end
+
+--- a phase ends now (its time's up and afterTime "stop", the overtime's over, or a plugin ends it)
+--- : whoever's still out there is done, finished with the laps they completed (the one under way
+--- doesn't count), or out when they have none
+---@param session BJRaceSession
+local function endPhaseNow(session)
+    if session.state ~= "RACE" then return end
+    session.participants:forEach(function(p)
+        if p.finished or p.dnf or p.sittingOut then return end
+        if #p.lapTimes > 0 then
+            finishParticipant(session, p, true)
+        else
+            p.dnf = true
+            apiEvent("racerOut", session, p, "timeUp")
+        end
+    end)
     checkSessionComplete(session)
+    if session.state == "RACE" then pushSessionUpdate(session) end
+end
+
+--- a timed phase's time is up : per its afterTime, at once ("stop") or once each racer finishes
+--- their lap. Not forever (stopped, lost out there) : 1.5 times the phase's fastest lap, a minute at
+--- least, then whoever's left is done
+---@param session BJRaceSession
+---@param now integer the shared clock
+local function timeUp(session, now)
+    session.flagAtMs = now
+    if session.settings.afterTime == services_racePhases.AFTER_TIME.STOP then return endPhaseNow(session) end
+    -- the ones waiting for a start (their next run, their turn) : no run under way, they're done
+    local waiting = false
+    session.participants:forEach(function(p)
+        if p.finished or p.dnf or p.sittingOut or not p.startAtMs or p.startAtMs <= now then return end
+        waiting = true
+        if #p.lapTimes > 0 then
+            finishParticipant(session, p, true)
+        else
+            p.dnf = true
+            apiEvent("racerOut", session, p, "timeUp")
+        end
+    end)
+    if waiting then
+        checkSessionComplete(session)
+        if session.state ~= "RACE" then return end
+    end
+    local fastest
+    session.participants:forEach(function(p)
+        if p.bestLapMs and (not fastest or p.bestLapMs < fastest) then fastest = p.bestLapMs end
+    end)
+    session.overtimeEndsAtMs = now + math.max(60000, math.floor((fastest or 120000) * 1.5))
+    pushSessionUpdate(session)
 end
 
 -- forward-declared: updateAllReadyState's own rescheduled delayTask (below) needs to call this
@@ -1550,7 +1928,9 @@ end
 ---@param plugin string
 ---@return boolean ok, string? why not
 local function pluginSetGridOrder(session, order, plugin)
-    if session.state ~= "GRID" or session.placing then return false, "that grid is already placed" end
+    if (session.state ~= "GRID" and session.state ~= "BREAK") or session.placing then
+        return false, "that grid is already placed"
+    end
     session.pluginGridOrder, session.pluginGridOrderBy = order, plugin
     return true
 end
@@ -1580,7 +1960,147 @@ local function pluginSetFields(session, playerID, plugin, fields, replace)
     return true
 end
 
+--- the plugin API's race.setPhases : a lobby's phases (and its result), checked like a start's.
+--- Everyone goes back to not ready, as when the leader changes the settings
+---@param session BJRaceSession
+---@param phases any
+---@param result any
+---@return boolean ok, string? why not
+local function pluginSetPhases(session, phases, result)
+    if session.state ~= "GRID" or session.placing then return false, "only while the lobby is open" end
+    local race = getRace(session)
+    if not race then return false, "the race is gone" end
+    local checked, why = services_racePhases.sanitize(phases, race)
+    if not checked then return false, why end
+    session.phases = checked
+    if result ~= nil then session.result = services_racePhases.sanitizeResult(result) end
+    session.settings = services_racePhases.effectiveSettings(session.baseSettings, checked[1])
+    session.settingsRev = (session.settingsRev or 0) + 1
+    session.participants:forEach(function(p)
+        p.ready, p.readyChecking = false, nil
+        p.readyBlockReason, p.readyBlockBy = nil, nil
+    end)
+    updateAllReadyState(session)
+    pushSessionUpdate(session)
+    return true
+end
+
+--- the plugin API's race.endPhase : the phase under way ends now (a red flag, a judged run over)
+---@param session BJRaceSession
+---@return boolean ok, string? why not
+local function pluginEndPhase(session)
+    if session.state ~= "RACE" then return false, "no phase is running" end
+    if session.judging then return false, "its result is being decided" end
+    endPhaseNow(session)
+    return true
+end
+
+--- the plugin API's race.extendPhase : more time for a timed phase (less, with a negative), its
+--- time not up yet
+---@param session BJRaceSession
+---@param minutes number
+---@return boolean ok, string? why not
+local function pluginExtendPhase(session, minutes)
+    if session.state ~= "RACE" or not session.phaseEndsAtMs then return false, "no timed phase is running" end
+    if session.flagAtMs then return false, "its time is already up" end
+    local now = services_clockSync.nowMs()
+    session.phaseEndsAtMs = math.max(now, session.phaseEndsAtMs + math.floor(minutes * 60000))
+    pushSessionUpdate(session)
+    return true
+end
+
+--- the plugin API's race.nextPhase : no more break, the next phase's countdown now
+---@param session BJRaceSession
+---@return boolean ok, string? why not
+local function pluginNextPhase(session)
+    if session.state ~= "BREAK" or session.placing then return false, "not between two phases" end
+    M.nextPhase(session.id)
+    return true
+end
+
+--- the plugin API's race.startRacer : in a plugin's phase (start = "plugin"), this racer goes, after a
+--- countdown, from their grid slot or the first one
+---@param session BJRaceSession
+---@param playerID integer
+---@param countdownS number?
+---@param from "grid"|"first"|nil
+---@return boolean ok, string? why not
+local function pluginStartRacer(session, playerID, countdownS, from)
+    if session.state ~= "RACE" then return false, "no phase is running" end
+    local p = session.participants[playerID]
+    if not p then return false, "that player isn't in this race" end
+    if not p.awaitingStart then return false, "that racer isn't waiting to start" end
+    local race = getRace(session)
+    if not race then return false, "the race is gone" end
+    local position = from == "first" and race.startPositions[1] or p.startPosition or race.startPositions[1]
+    personalStart(session, p, position, 0, false, math.floor(math.clamp(tonumber(countdownS) or 5, 0, 30) * 1000))
+    pushSessionUpdate(session)
+    return true
+end
+
+--- the plugin API's race.stopRacer : this racer's phase is over (a judged run done, a false start)
+--- : finished with the laps (runs) they completed, or out without any
+---@param session BJRaceSession
+---@param playerID integer
+---@return boolean ok, string? why not
+local function pluginStopRacer(session, playerID)
+    if session.state ~= "RACE" then return false, "no phase is running" end
+    local p = session.participants[playerID]
+    if not p then return false, "that player isn't in this race" end
+    if p.finished or p.dnf or p.sittingOut then return false, "that racer is already done" end
+    p.awaitingStart = nil
+    if #p.lapTimes > 0 then
+        finishParticipant(session, p)
+    else
+        p.dnf = true
+        apiEvent("racerOut", session, p, "stopped")
+        checkSessionComplete(session)
+    end
+    if session.state == "RACE" then pushSessionUpdate(session) end
+    return true
+end
+
+--- the plugin API's phase.setScores : a plugin's scores for this phase's racers (its ranking
+--- "plugin" places them by these) or, `event`, for the event (its result "plugin")
+---@param session BJRaceSession
+---@param scores table<integer, number> player ID -> score
+---@param better "high"|"low"
+---@param display table<integer, string>? player ID -> the text shown ("86 pts")
+---@param event boolean?
+---@return boolean ok, string? why not
+local function pluginSetScores(session, scores, better, display, event)
+    for id in pairs(scores) do
+        if not session.participants[id] then return false, string.format("player %d isn't in this race", id) end
+    end
+    for id, score in pairs(scores) do
+        local p = session.participants[id]
+        local key = better == "high" and -score or score
+        local text = display and display[id] or nil
+        if event then
+            session.eventScores = session.eventScores or {}
+            session.eventScores[p.joinIndex] = { score = score, key = key, display = text }
+        else
+            p.score, p.scoreKey, p.scoreDisplay = score, key, text
+        end
+    end
+    if event then
+        session.eventStandings = services_racePhases.eventStandings(session.phases, session.phaseResults,
+            session.result, session.eventScores)
+    end
+    fieldsChanged[session.id] = true
+    return true
+end
+
 local function onUpdate()
+    local now = services_clockSync.nowMs()
+    M.sessions:forEach(function(session)
+        if session.state ~= "RACE" then return end
+        if session.phaseEndsAtMs and not session.flagAtMs and now >= session.phaseEndsAtMs then
+            timeUp(session, now)
+        elseif session.overtimeEndsAtMs and now >= session.overtimeEndsAtMs then
+            endPhaseNow(session)
+        end
+    end)
     if next(fieldsChanged) == nil then return end
     local ids = fieldsChanged
     fieldsChanged = {}
@@ -1597,8 +2117,10 @@ end
 local function raceStartNow(ctxt, sessionId)
     if not ctxt.sender then return end
     local session = M.sessions[sessionId]
-    if not session or session.state ~= "GRID" or session.starterID ~= ctxt.senderID then return end
-    if session.placing then return end
+    if not session or session.starterID ~= ctxt.senderID or session.placing then return end
+    -- between phases : the next one now
+    if session.state == "BREAK" then return M.nextPhase(session.id) end
+    if session.state ~= "GRID" then return end
     local leader = session.participants[ctxt.senderID]
     if leader and not leader.ready then
         if leader.readyChecking then return end
@@ -1618,6 +2140,48 @@ local function editableOpts(opts)
     local copy = table.clone(opts)
     for _, k in ipairs(CAPTURE_KEYS) do copy[k] = nil end
     return copy
+end
+
+--- a racer's state for a new phase : their laps, their result, any penalty or disqualification
+--- were the last phase's
+---@param p BJRaceParticipant
+local function resetForPhase(p)
+    p.currentGate, p.lastCrossedGate, p.currentLap = 0, 0, 1
+    p.gateTimes, p.lapTimes = {}, {}
+    p.finishOrder, p.discordResult = nil, nil
+    p.bestLapMs, p.bestLapAtMs, p.bestLapGateTimes, p.liveDeltaMs = nil, nil, nil, nil
+    p.currentSector, p.sectorStartMs = 1, 0
+    p.lapSectors, p.lapSectorHistory, p.bestSectorMs = {}, {}, {}
+    p.finished, p.dnf = false, false
+    p.disqualified, p.penaltyMs, p.lastResetPenaltyMs = nil, 0, nil
+    p.isNewPB, p.isNewRecord, p.leaderboardKey, p.replacedEntry = nil, nil, nil, nil
+    p.startPosition, p.gridPosition = nil, nil
+    p.score, p.scoreKey, p.scoreDisplay, p.awaitingStart = nil, nil, nil, nil
+    p.startAtMs, p.clockBaseMs, p.runStartPosition, p.elapsedOffsetMs = nil, nil, nil, nil
+    p.lastProgressTime = GetCurrentTime()
+end
+
+--- the break is over (or the leader skipped it) : the next phase, its rules, who races it, its grid
+---@param sessionId string
+function M.nextPhase(sessionId)
+    local session = M.sessions[sessionId]
+    if not session or session.state ~= "BREAK" or session.placing then return end
+    utils_async.removeTask("BJRaceGrid-" .. session.id .. "-break")
+    session.breakEndsAtMs = nil
+    session.phaseIndex = session.phaseIndex + 1
+    local phase = currentPhase(session)
+    session.settings = services_racePhases.effectiveSettings(session.baseSettings, phase)
+    session.goAtMs = nil
+    local takers
+    if phase.takes then
+        local rows = phase.takes.from and session.phaseResults[phase.takes.from] or session.eventStandings
+        takers = services_racePhases.topOf(rows, phase.takes.top)
+    end
+    session.participants:forEach(function(p)
+        resetForPhase(p)
+        p.sittingOut = (p.eventOut or p.lateJoining or (takers ~= nil and not takers[p.joinIndex])) or nil
+    end)
+    beginCountdown(session)
 end
 
 ---@param ctxt BJSContext
@@ -1660,11 +2224,15 @@ local function raceStart(ctxt, raceId, opts)
             if opts.joinable ~= nil then return opts.joinable == true end
             return race.defaults ~= nil and race.defaults.joinable == true
         end)(),
-        settings = buildSettings(race, opts),
+        baseSettings = buildSettings(race, opts),
         state = "GRID",
         createdAt = ctxt.time,
         participants = Table(),
+        phaseIndex = 1,
+        phaseResults = {},
     }
+    session.phases, session.result, session.format = services_racePhases.fromStart(race, opts)
+    session.settings = services_racePhases.effectiveSettings(session.baseSettings, session.phases[1])
     -- a private lobby : joinable by invitation only, never listed (so never announced). While
     -- nobody else is in it, it behaves like a solo start (see tryStartFromGrid)
     session.private = session.joinable and opts.private == true
@@ -1696,12 +2264,29 @@ local function raceStart(ctxt, raceId, opts)
     return session.id
 end
 
+--- whether players may join this event now : its lobby, or (services/racePhases.lua's `lateJoin`)
+--- while the phase allowing it runs, or in the break before one that does
+---@param session BJRaceSession
+---@return boolean lobby, boolean midway
+joinableNow = function(session)
+    if not session.joinable then return false, false end
+    if session.state == "GRID" then return true, false end
+    if session.state == "RACE" then return false, currentPhase(session).lateJoin == true end
+    if session.state == "BREAK" then
+        local next = session.phases[session.phaseIndex + 1]
+        return false, next ~= nil and next.lateJoin == true
+    end
+    return false, false
+end
+
 ---@param ctxt BJSContext
 ---@param sessionId string
 local function raceJoin(ctxt, sessionId)
     if not ctxt.sender then return end
     local session = M.sessions[sessionId]
-    if not session or session.state ~= "GRID" or not session.joinable then return end
+    if not session then return end
+    local lobby, midway = joinableNow(session)
+    if not lobby and not midway then return end
     -- the grid's being placed (the gridOrder hook) : about to start
     if session.placing then return end
     if session.participants[ctxt.senderID] then return end
@@ -1723,11 +2308,48 @@ local function raceJoin(ctxt, sessionId)
     if not race or session.participants:length() >= #race.startPositions then return end
 
     addParticipant(session, ctxt.senderID, ctxt.sender.playerName)
+    if midway then
+        -- they sit out until they're ready (raceReady), then start on their own
+        local p = session.participants[ctxt.senderID]
+        p.lateJoining, p.sittingOut = true, true
+        pushSessionUpdate(session)
+        return pushOpenSessionsList()
+    end
     -- a fresh joiner always starts unready (addParticipant), so this only ever clears an
     -- already-set session.allReadyAt (and its scheduled start) - see its own doc comment
     updateAllReadyState(session)
     pushSessionUpdate(session)
     pushOpenSessionsList()
+end
+
+--- a racer who joined mid-event is ready : between phases, they're in the next one ; during one,
+--- they start on their own now, from a free slot (the first, for a phase of personal starts). In a
+--- race, their time counts from its green light like everyone's
+---@param session BJRaceSession
+---@param p BJRaceParticipant
+local function lateJoinReady(session, p)
+    p.ready, p.lateJoining = true, nil
+    if session.state == "BREAK" then
+        -- nextPhase decides (its `takes`)
+        return pushSessionUpdate(session)
+    end
+    local race = getRace(session)
+    if session.state ~= "RACE" or not race then return pushSessionUpdate(session) end
+    local phase = currentPhase(session)
+    resetForPhase(p)
+    p.sittingOut = nil
+    local position = race.startPositions[1]
+    if phase.start == services_racePhases.START.GRID then
+        -- the grid slot after the last one placed
+        local used = 0
+        session.participants:forEach(function(o) if o.gridPosition and o ~= p then used = math.max(used, o.gridPosition) end end)
+        position = race.startPositions[(used % #race.startPositions) + 1]
+        p.gridPosition = used + 1
+    end
+    p.startPosition = position
+    personalStart(session, p, position, 1000, phase.ranking == services_racePhases.RANKING.POSITION)
+    apiEvent("racerJoinedPhase", session, p)
+    pushSessionUpdate(session)
 end
 
 --- watch a session without becoming a participant in it: a plain camera-follow + info-panel feed,
@@ -1833,11 +2455,13 @@ local function raceUpdateSettings(ctxt, sessionId, opts)
     local race = getRace(session)
     if not race then return end
 
-    local previous = session.settings
+    local previous = session.baseSettings
     local settings = buildSettings(race, opts)
     settings.gridTimeout = previous.gridTimeout
     settings.gridReadyTimeout = previous.gridReadyTimeout
-    session.settings = settings
+    session.baseSettings = settings
+    session.phases, session.result, session.format = services_racePhases.fromStart(race, opts)
+    session.settings = services_racePhases.effectiveSettings(settings, session.phases[1])
     opts.gridTimeout = previous.gridTimeout
     opts.gridReadyTimeout = previous.gridReadyTimeout
     session.startOpts = editableOpts(opts)
@@ -1880,9 +2504,16 @@ end
 local function raceReady(ctxt, sessionId, ready, model)
     if not ctxt.sender then return end
     local session = M.sessions[sessionId]
-    if not session or session.state ~= "GRID" then return end
+    if not session then return end
     local participant = session.participants[ctxt.senderID]
     if not participant then return end
+    -- joined mid-event (raceJoin) : ready once, then in
+    if participant.lateJoining and (session.state == "RACE" or session.state == "BREAK") then
+        if ready ~= true or participant.readyChecking then return end
+        if type(model) == "string" and model ~= "" then participant.vehicleModel = model end
+        return requestReady(session, participant, lateJoinReady)
+    end
+    if session.state ~= "GRID" then return end
     -- the grid's being placed (the gridOrder hook) : it goes with who's ready now
     if session.placing then return end
 
@@ -1985,7 +2616,7 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
     end
     if not session or session.state ~= "RACE" then return end
     local participant = session.participants[ctxt.senderID]
-    if not participant or participant.finished or participant.dnf then return end
+    if not participant or participant.finished or participant.dnf or participant.sittingOut then return end
     local race = getRace(session)
     if not race then return end
 
@@ -2003,8 +2634,12 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         return LogWarn(string.format("raceGateCrossed : %s reported gate %d from %dm away, ignored",
             ctxt.sender.playerName, gateIndex, math.floor(gateDistance)))
     end
-    if session.goAtMs then
-        local serverElapsedMs = services_clockSync.nowMs() - session.goAtMs
+    -- not off yet (their turn, their next run, a plugin's start) : nothing to count
+    if participant.awaitingStart then return end
+    if participant.startAtMs and services_clockSync.nowMs() < participant.startAtMs - GO_GRACE_MS then return end
+    local clockBase = participant.clockBaseMs or session.goAtMs
+    if clockBase then
+        local serverElapsedMs = services_clockSync.nowMs() - clockBase
         if elapsedMs < serverElapsedMs - REPORT_LAG_MAX_MS then
             LogWarn(string.format("raceGateCrossed : %s reported %dms, the server measured %dms",
                 ctxt.sender.playerName, elapsedMs, serverElapsedMs))
@@ -2078,7 +2713,8 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
     -- cumulative since race start, so subtract off everything already elapsed as of the
     -- previous lap boundary. Computed once here (not just at the final gate) since the live
     -- delta below needs this same lap-relative baseline at every gate, not only lap ends.
-    local previousLapsElapsed = 0
+    -- (a personal start's clock starts at 0 : the laps before it don't count here)
+    local previousLapsElapsed = -(participant.elapsedOffsetMs or 0)
     table.forEach(participant.lapTimes, function(t) previousLapsElapsed = previousLapsElapsed + t end)
     local lapRelativeNow = elapsedMs - previousLapsElapsed
 
@@ -2132,6 +2768,7 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
 
         if not participant.bestLapMs or lapRelativeNow < participant.bestLapMs then
             participant.bestLapMs = lapRelativeNow
+            participant.bestLapAtMs = services_clockSync.nowMs()
             -- snapshot this lap's own step splits, lap-relative, before the next lap's crossings
             -- start overwriting these same gateTimes indices. Bounded by totalSteps(race), not
             -- the raw gate array length, since gateTimes is keyed by step and a branching race's
@@ -2153,13 +2790,23 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         participant.sectorStartMs = 0
         apiEvent("racerLap", session, participant)
 
-        if participant.currentLap >= (session.settings.laps or 1) then
+        if lapEndsPhase(session, participant) then
             finishParticipant(session, participant)
         else
             -- currentGate deliberately not reset here, see its own doc comment above. The
             -- `expected` calc at the top of this function already wraps 1..#race.gates via plain
             -- modulo regardless of whether currentGate sits at 0 or at its last real value
             participant.currentLap = participant.currentLap + 1
+            -- a point-to-point track's runs : back to the first slot for the next one ; a plugin's
+            -- phase : held there until it starts them again
+            if services_racePhases.runs(currentPhase(session), race) then
+                personalStart(session, participant, race.startPositions[1], RUN_ROLL_MS)
+            elseif not race.loopable and currentPhase(session).start == services_racePhases.START.PLUGIN then
+                participant.awaitingStart = true
+                participant.currentGate, participant.lastCrossedGate, participant.gateTimes = 0, 0, {}
+                participant.currentSector, participant.sectorStartMs, participant.lapSectors = 1, 0, {}
+                participant.elapsedOffsetMs = services_racePhases.timeOf(participant) - (participant.penaltyMs or 0)
+            end
         end
     end
 
@@ -2174,7 +2821,7 @@ local function raceDNF(ctxt, sessionId)
     local session = M.sessions[sessionId]
     if not session or session.state ~= "RACE" then return end
     local participant = session.participants[ctxt.senderID]
-    if not participant or participant.finished or participant.dnf then return end
+    if not participant or participant.finished or participant.dnf or participant.sittingOut then return end
 
     participant.dnf = true
     if participant.bestLapMs then
@@ -2188,7 +2835,7 @@ local function raceDNF(ctxt, sessionId)
     -- duplicate) but at worst can double-fire the client's own flip-detection logic (onSessionUpdate
     -- diffs old vs new state per call) right at the exact moment it matters most. Only pushing here
     -- when the session isn't complete yet keeps this consistent with finishParticipant's pattern.
-    if session.state ~= "FINISHED" then
+    if session.state == "RACE" then
         pushSessionUpdate(session)
     end
 end
@@ -2218,6 +2865,24 @@ end
 ---@param targetID integer the racer's playerID
 ---@param action "penalty"|"clearPenalties"|"disqualify"|"reinstate"
 ---@param seconds number? "penalty" : 0.1 to STAFF_PENALTY_MAX_SEC, to the tenth (the half-second button)
+--- race control for staff (watching the race, or in it) : the phase under way ends now, or gets 5
+--- more minutes
+---@param ctxt BJSContext
+---@param sessionId string
+---@param action "endPhase"|"extendPhase"
+local function raceStaffPhase(ctxt, sessionId, action)
+    if not ctxt.sender or not services_permissions.isStaff(ctxt.sender.playerName) then return end
+    local session = M.sessions[sessionId]
+    if not session then return end
+    if M.spectators[ctxt.senderID] ~= sessionId and not session.participants[ctxt.senderID] then return end
+    local ok
+    if action == "endPhase" then ok = pluginEndPhase(session)
+    elseif action == "extendPhase" then ok = pluginExtendPhase(session, 5) end
+    if ok then
+        LogInfo(string.format("raceGrid: %s : %s (session %s)", ctxt.sender.playerName, action, session.id))
+    end
+end
+
 local function raceStaffAction(ctxt, sessionId, targetID, action, seconds)
     if not ctxt.sender or not services_permissions.isStaff(ctxt.sender.playerName) then return end
     local session = M.sessions[sessionId]
@@ -2274,7 +2939,7 @@ local function raceStaffAction(ctxt, sessionId, targetID, action, seconds)
 
     -- a disqualification can be what ends the race (the last one still racing)
     checkSessionComplete(session)
-    if session.state ~= "FINISHED" then
+    if session.state == "RACE" then
         pushSessionUpdate(session)
     end
 end
@@ -2294,7 +2959,7 @@ local function raceResetPenalty(ctxt, sessionId)
     local s = session.settings
     if not s.resetPenaltyEnabled or s.resetPenaltyMode ~= "time" or s.respawnStrategy == "norespawn" then return end
     local p = session.participants[ctxt.senderID]
-    if not p or p.finished or p.dnf or p.disqualified then return end
+    if not p or p.finished or p.dnf or p.disqualified or p.sittingOut then return end
     local now = services_clockSync.nowMs()
     if p.lastResetPenaltyMs and now - p.lastResetPenaltyMs < RESET_PENALTY_DEBOUNCE_MS then return end
     p.lastResetPenaltyMs = now
@@ -2383,6 +3048,7 @@ local function onInit()
     communications_rx.addHandler("raceStartNow", M.raceStartNow)
     communications_rx.addHandler("raceUpdateSettings", M.raceUpdateSettings)
     communications_rx.addHandler("raceStaffAction", M.raceStaffAction)
+    communications_rx.addHandler("raceStaffPhase", M.raceStaffPhase)
     communications_rx.addHandler("raceResetPenalty", M.raceResetPenalty)
 
     services_chatCommands.addCommand("race", "chat.command.race.desc", M.chatRace,
@@ -2438,7 +3104,7 @@ local function onInit()
             end
             fake.dnf = true
             checkSessionComplete(session)
-            if session.state ~= "FINISHED" then
+            if session.state == "RACE" then
                 pushSessionUpdate(session)
             end
             print("[BJ raceGrid] racedebugcomplete: DebugGhost DNF'd, session.state=" .. session.state)
@@ -2456,24 +3122,33 @@ function rejoinTaskKey(sessionId, playerName)
     return "BJRaceGrid-" .. sessionId .. "-rejoin-" .. playerName
 end
 
+--- an event under way : a racer who disconnects keeps their place for a while
+local RUNNING = { COUNTDOWN = true, RACE = true, BREAK = true }
+
 --- a disconnected racer's grace period ran out : retired, as a disconnect used to do at once
 ---@param sessionId string
 ---@param playerName string
 local function expireRejoin(sessionId, playerName)
     local session = M.sessions[sessionId]
-    if not session or session.state ~= "RACE" then return end
+    if not session or not RUNNING[session.state] then return end
     local participant = session.participants:find(function(p)
         return p.disconnected and p.playerName == playerName
     end)
     if not participant then return end
     participant.disconnected, participant.rejoinBy, participant.rejoinSecondsLeft = nil, nil, nil
+    -- out of the event : the phases still to come go on without them
+    participant.eventOut = true
+    if session.state == "COUNTDOWN" then participant.sittingOut = true end
+    if session.state ~= "RACE" or participant.finished or participant.dnf or participant.sittingOut then
+        return pushSessionUpdate(session)
+    end
     participant.dnf = true
     if participant.bestLapMs then
         trySubmitTime(session, participant, participant.bestLapMs)
     end
     apiEvent("racerOut", session, participant, "disconnected")
     checkSessionComplete(session)
-    if session.state ~= "FINISHED" then
+    if session.state == "RACE" then
         pushSessionUpdate(session)
     end
 end
@@ -2498,7 +3173,7 @@ end
 local function raceRejoin(ctxt)
     if not ctxt.sender then return end
     M.sessions:forEach(function(session)
-        if session.state ~= "RACE" or session.participants[ctxt.senderID] then return end
+        if not RUNNING[session.state] or session.participants[ctxt.senderID] then return end
         local awayKey, participant
         for key, p in pairs(session.participants) do
             if p.disconnected and isReturningRacer(p, ctxt.sender) then
@@ -2549,9 +3224,11 @@ local function onPlayerDisconnect(playerID)
             tryStartFromGrid(session)
             pushSessionUpdate(session)
             pushOpenSessionsList()
-        elseif session.state == "RACE" then
+        elseif RUNNING[session.state] then
             local participant = session.participants[playerID]
-            if participant.finished or participant.dnf then return end
+            local done = participant.finished or participant.dnf or participant.sittingOut
+            -- done, and nothing after : their result stands as it is
+            if done and session.phaseIndex >= #session.phases then return end
             -- a crash, a launcher hiccup or a short drop shouldn't throw away hours of an
             -- endurance race : the racer keeps their place for a while, the race clock running on
             -- for them (time lost away is the penalty), and gets back in where they were
@@ -2571,6 +3248,12 @@ local function onPlayerDisconnect(playerID)
                     rejoinTaskKey(sessionId, playerName))
                 return pushSessionUpdate(session)
             end
+            -- no grace period : out of the event
+            participant.eventOut = true
+            if session.state == "COUNTDOWN" then participant.sittingOut = true end
+            if session.state ~= "RACE" or done or participant.sittingOut then
+                return pushSessionUpdate(session)
+            end
             participant.dnf = true
             if participant.bestLapMs then
                 trySubmitTime(session, participant, participant.bestLapMs)
@@ -2581,7 +3264,7 @@ local function onPlayerDisconnect(playerID)
             -- again here if checkSessionComplete didn't already do so itself (it pushes once, on
             -- its own, exactly when this disconnect happens to be the one that completes the
             -- session)
-            if session.state ~= "FINISHED" then
+            if session.state == "RACE" then
                 pushSessionUpdate(session)
             end
         end
@@ -2618,6 +3301,15 @@ M.racerInfo = racerInfo
 M.pluginUnready = pluginUnready
 M.pluginSetGridOrder = pluginSetGridOrder
 M.pluginSetFields = pluginSetFields
+M.pluginSetPhases = pluginSetPhases
+M.pluginEndPhase = pluginEndPhase
+M.pluginExtendPhase = pluginExtendPhase
+M.pluginNextPhase = pluginNextPhase
+M.pluginStartRacer = pluginStartRacer
+M.pluginStopRacer = pluginStopRacer
+M.pluginSetScores = pluginSetScores
+M.raceStaffPhase = raceStaffPhase
+M.provisionalResults = function(session) return select(2, buildResults(session)) end
 M.chatRace = chatRace
 
 return M
