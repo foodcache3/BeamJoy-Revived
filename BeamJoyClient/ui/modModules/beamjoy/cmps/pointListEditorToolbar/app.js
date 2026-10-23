@@ -10,7 +10,7 @@
 // between the two components at all.
 angular.module("beamjoy").component("bjPointListEditorToolbar", {
     bindings: {
-        // {snapToGround, snapMethod, setSnapToGround, setSnapMethod}: only the subset of
+        // {snapToGround, snapMethod, setSnapToGround, setSnapMethod, turnAll?}: only the subset of
         // bjPointListEditor's own `events` binding this toolbar actually needs
         events: "<",
     },
@@ -43,6 +43,16 @@ angular.module("beamjoy").component("bjPointListEditorToolbar", {
             } else {
                 beamjoyStore.send(this.events.setSnapToGround, [false]);
             }
+        };
+
+        // the whole arena turned round its middle (events.turnAll) : anticlockwise seen from above
+        // for sign 1, by the angle typed between the two buttons
+        this.turnAngle = 90;
+        this.turnAll = (event, sign) => {
+            event.stopPropagation();
+            const angle = Math.min(180, Math.max(1, Math.round(Number(this.turnAngle) || 90)));
+            this.turnAngle = angle;
+            beamjoyStore.send(this.events.turnAll, [sign * angle]);
         };
 
         this.changeTool = (event, tool) => {

@@ -739,6 +739,70 @@ local function varsMatch(a, b)
     return true
 end
 
+--- "<model>/<config>" -> that saved configuration's {parts, vars} as its file has them, or false
+--- when it can't be read (a vehicle collection, a missing file) ; a game session's files don't change
+---@type table<string, table|false>
+local configFileCache = {}
+
+---@param model string
+---@param config string
+---@return table? {parts: table<string, string>, vars: table<string, number>}
+local function configFile(model, config)
+    local key = model .. "/" .. config
+    if configFileCache[key] == nil then
+        local ok, data = pcall(jsonReadFile, string.format("vehicles/%s/%s.pc", model, config))
+        local out = false
+        if ok and type(data) == "table" then
+            if data.format == 2 and type(data.parts) == "table" then
+                out = { parts = data.parts, vars = type(data.vars) == "table" and data.vars or {} }
+            elseif data.format == nil and data.parts == nil then
+                -- the oldest files : the parts map is the whole file
+                out = { parts = data, vars = {} }
+            end
+        end
+        configFileCache[key] = out
+    end
+    return configFileCache[key] or nil
+end
+
+--- a pool entry's configuration as the game has it now, against the car (direct report : vehicle
+--- presets saved before the preset updates never matched, "This race requires <preset>"). An
+--- entry's own parts snapshot is missing on entries saved before it was captured, and goes stale
+--- when a game update renames a vehicle's parts ; the configuration itself (its .pc file, or a
+--- shared build's) doesn't. Every slot the file sets that the car has must hold the same part
+--- (empty or not) ; slots it leaves out are the game's defaults, and a different parent part shows
+--- in its own slot. Tuning too when the race doesn't allow it
+---@param veh NGVehicle
+---@param entry table
+---@param allowTuning boolean
+---@return boolean
+local function matchesConfigFile(veh, entry, allowTuning)
+    if type(entry.model) ~= "string" or type(entry.config) ~= "string" then return false end
+    local saved
+    local buildId = tonumber(entry.buildId) or beamjoy_vehicleBuilds.idOf(entry.config)
+    if buildId then
+        local build = beamjoy_vehicleBuilds.getById(buildId)
+        saved = build and type(build.pc) == "table" and type(build.pc.parts) == "table" and build.pc or nil
+    else
+        saved = configFile(entry.model, entry.config)
+    end
+    if not saved then return false end
+    local data = extensions.core_vehicle_manager.getVehicleData(veh:getID())
+    local cfg = data and data.config
+    if not cfg or not cfg.partsTree or cfg.model ~= entry.model then return false end
+    local mine = extensions.core_vehicle_partmgmt.partsTreeToPartsMap(cfg.partsTree)
+    local compared = 0
+    for slot, part in pairs(saved.parts) do
+        if mine[slot] ~= nil then
+            if tostring(mine[slot] or "") ~= tostring(part or "") then return false end
+            compared = compared + 1
+        end
+    end
+    -- nothing in common : not this vehicle's configuration at all
+    if compared == 0 then return false end
+    return allowTuning or varsMatch(cfg.vars or {}, saved.vars or {})
+end
+
 ---@param veh NGVehicle
 ---@param restriction BJVehicleRestriction
 ---@return boolean
@@ -771,6 +835,11 @@ local function vehicleMatchesRestriction(veh, restriction)
             return v.model == full.model and v.parts ~= nil and
                 table.deepcompare(full.parts or {}, v.parts) and
                 (restriction.allowTuning or (v.vars ~= nil and varsMatch(full.vars, v.vars)))
+        end) or table.find(restriction.pool, function(v)
+            -- no snapshot, or an outdated one : the entry's configuration as the game has it now
+            if v.model ~= full.model then return false end
+            local ok, matches = pcall(matchesConfigFile, veh, v, restriction.allowTuning == true)
+            return ok and matches == true
         end)
         if not match then
             -- Diagnostic only, same technique that found the real varsMatch float-precision bug

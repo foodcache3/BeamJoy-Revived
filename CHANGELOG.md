@@ -8,7 +8,28 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2478, client build 2743.
+Server build 2478, client build 2749.
+
+- **Turn a whole Derby arena (2749)** (direct request). The Derby arena editor's toolbar has two
+  turn buttons with an angle between them (90 by default, 1 to 180). They turn the whole arena
+  round its zone's centre (the middle of its start positions without a zone) : every start
+  position with its facing, the zone's facing, and every prop, lines, curbs and painted lines
+  included. With snapping on, each keeps its height above the ground under it, and props that
+  follow the ground are laid on it again. An ordinary unsaved edit until you save ; the other
+  button turns it back. *(client only)*
+
+- **Fix (2749) : older vehicle presets refused the right car in races** (reported : "This race
+  requires <preset>"). A pool entry was matched only against the parts it captured when it was
+  added. Entries saved before that capture existed have none, and a game update that renames a
+  vehicle's parts makes the capture stale. When the capture doesn't match, the entry's
+  configuration is now checked as the game has it today : its `.pc` file (or a shared build's own
+  parts). Every slot the file sets that the car has must hold the same part, plus the same tuning
+  when the race doesn't allow tuning. Lobbies and freeroam runs alike. *(client only)*
+
+- **Fix (2749) : an error message stayed on screen until the game was restarted** (reported :
+  enabling an arena without 2 start positions). Error toasts were sent with no timeout, and the
+  game's toasts can't be clicked away. They now fade after 10 seconds (other toasts after 5 as
+  before). This was every editor's "couldn't save" message. *(client only)*
 
 - **Fix : one player saving a vehicle preset crashed another player's BeamMP launcher (2478,
   2743)** (direct report). Every game then downloads the new shared builds' photos (up to 200 KB
