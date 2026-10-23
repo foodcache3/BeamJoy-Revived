@@ -540,8 +540,13 @@ local function startCountdownTimer(session)
     if session.countdownTicking then return end
     session.countdownTicking = true
     utils_async.removeTask("BJHunterGrid-" .. session.id .. "-vehicleConfirm")
-    utils_async.delayTask(function() M.beginHunt(session.id) end,
-        session.settings.countdown, "BJHunterGrid-" .. session.id .. "-countdown")
+    -- the start on the shared clock, as races do (raceGrid.lua's goAtMs) : each game lets go of
+    -- its car at "GO" itself, and the server's tick follows. utils_async.delayTask's whole-second
+    -- clock started the hunt up to ~2s after the "GO" the players saw (reported)
+    session.goAtMs = services_clockSync.nowMs() + math.floor(session.settings.countdown * 1000)
+    utils_async.task(function()
+        return services_clockSync.nowMs() >= session.goAtMs
+    end, function() M.beginHunt(session.id) end, "BJHunterGrid-" .. session.id .. "-countdown")
 end
 
 --- fallback so one player stuck without a matching vehicle (mod not installed, alt-tabbed, etc.)
@@ -583,6 +588,7 @@ local function beginCountdown(session)
     assignRoles(session)
     assignSpawns(session)
     session.countdownTicking = false
+    session.goAtMs = nil
     session.participants:forEach(function(p) p.vehicleConfirmed = false end)
     utils_async.delayTask(function() M.onVehicleConfirmTimeout(session.id) end,
         session.settings.vehicleConfirmTimeout, "BJHunterGrid-" .. session.id .. "-vehicleConfirm")

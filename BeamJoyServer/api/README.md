@@ -500,7 +500,7 @@ A phase is :
 | Field | |
 |---|---|
 | `name` | shown on the HUD and results ("Q2", "Heat 1") |
-| `start` | `"grid"` everyone together ; `"individual"` one at a time from the first slot, `intervalS` apart, in grid order ; `"open"` together, and on a point-to-point track each finish sends the racer back for another run ; `"plugin"` each waits until you `race.startRacer` them |
+| `start` | `"grid"` everyone together ; `"individual"` (the start menu's "Time offset") from the first slot, `intervalS` apart, in grid order, several on track at once ; `"sequential"` ("One at a time") from the first slot in grid order, alone : each racer's whole phase (its laps or runs, a time limit counted from their own start) before the next is released ; `"open"` together, and on a point-to-point track each finish sends the racer back for another run ; `"plugin"` each waits until you `race.startRacer` them |
 | `laps` | laps on a circuit, runs on a point-to-point track (not raced from the grid) ; left out : no limit |
 | `timeLimitMin` | left out : no limit. Laps and time : whichever comes first. Neither : only with `start = "plugin"`, you end it |
 | `afterTime` | once the time's up : `"leader"` the leader's next crossing ends their race, then everyone's own (racing rules, `ranking = "position"` only) ; `"own"` everyone finishes the lap they're on, it counts ; `"stop"` it ends at once |

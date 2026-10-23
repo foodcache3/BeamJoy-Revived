@@ -34,11 +34,12 @@ M.show = function(typeToast, msg, title, fadeSecs)
     local finalType = table.includes(M.TYPES, typeToast) and typeToast or M.TYPES.INFO
     local finalTime = fadeSecs
     if not finalTime then
-        if finalType ~= M.TYPES.ERROR then
-            finalTime = 5000
-        else
-            finalTime = -1
-        end
+        -- an error stays longer, but never for good : the game's toasts can't be clicked away, so
+        -- one without a timeout (it used to be -1) stayed on screen until the game was restarted
+        -- (direct report : an arena editor's refused save)
+        finalTime = finalType == M.TYPES.ERROR and 10000 or 5000
+    elseif finalTime <= 0 then
+        finalTime = 5000
     else
         finalTime = finalTime * 1000
     end

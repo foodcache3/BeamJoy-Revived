@@ -57,7 +57,6 @@ angular.module("beamjoy").component("bjConfigHunterArena", {
             setSnapToGround: "BJEditorHunterArenaSetSnapToGround",
             setSnapMethod: "BJEditorHunterArenaSetSnapMethod",
             requestState: "BJEditorHunterArenaRequestState",
-            turnAll: "BJEditorHunterArenaTurnAll",
         };
 
         // per direct request : the "Respawn hubs" strategy button is greyed out (not hidden) with

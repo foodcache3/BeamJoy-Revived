@@ -93,6 +93,7 @@
         ng-blur="$ctrl.toggleMode()"
         ng-keydown="$event.key === 'Enter' && $event.target.blur()"
         ng-model="$ctrl.ngModel"
+        ng-model-options="{allowInvalid: true}"
     />
 
     <button

@@ -109,7 +109,10 @@ angular.module("beamjoy").component("bjRaceHud", {
                 : null;
             const v = {
                 raceName: data.raceName,
-                eyebrow: phaseLabel || translate("beamjoy.raceHud.racing"),
+                // one at a time : still waiting for their turn
+                eyebrow: typeof data.waitingAhead === "number"
+                    ? fill("beamjoy.raceHud.waitingTurn", { n: data.waitingAhead })
+                    : phaseLabel || translate("beamjoy.raceHud.racing"),
                 phaseLabel,
                 spectating: data.spectatingPlayerName
                     ? fill("beamjoy.raceHud.spectating", { name: nameOf(self) })

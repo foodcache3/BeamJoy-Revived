@@ -835,7 +835,27 @@ local function pushSpectateStatus()
 end
 
 ---@param session BJInfectedSession
+--- this countdown's start, as startAtGo keys it
+---@param session table
+---@return string?
+local function goKey(session)
+    return session.goAtMs and (tostring(session.id) .. ":" .. tostring(session.goAtMs)) or nil
+end
+
+--- "GO" on screen for a second as the car is let go, as races show it
+local function flashGo()
+    beamjoy_communications_ui.send("BJInfectedCountdown", { active = true, seconds = 0 })
+    async.delayTask(function()
+        beamjoy_communications_ui.send("BJInfectedCountdown", { active = false })
+    end, 1000, "BJInfectedCountdownGoHide")
+end
+
 local function onSessionUpdate(session)
+    -- this game already started on its own at "GO" (startAtGo) : a push the server sent before
+    -- its own GAME transition can still arrive afterwards, and would rerun the countdown setup
+    if session.state == "COUNTDOWN" and M.goStartedFor ~= nil and M.goStartedFor == goKey(session) then
+        session.state = "GAME"
+    end
     local wasInSession = M.session ~= nil
     local wasCountdown = M.session ~= nil and M.session.state == "COUNTDOWN"
     local wasGame = M.session ~= nil and M.session.state == "GAME"
@@ -1002,7 +1022,7 @@ local function onSessionUpdate(session)
             M.lastSentSeconds = nil
         elseif M.scenarioLocked then
             unlockScenario()
-            beamjoy_communications_ui.send("BJInfectedCountdown", { active = false })
+            flashGo()
         end
         if myVeh then
             beamjoy_vehicles.setFreeze(myVeh.vid, true)
@@ -1018,7 +1038,7 @@ local function onSessionUpdate(session)
             -- never re-freeze on the very next frame
             if M.scenarioLocked then
                 unlockScenario()
-                beamjoy_communications_ui.send("BJInfectedCountdown", { active = false })
+                flashGo()
             end
             M.countdownDisplayOnly = false
             local vid = currVeh and currVeh.vid or (myVeh and myVeh.vid)
@@ -1113,8 +1133,17 @@ local function updateCountdown()
         end
     end
 
-    local elapsedSec = (GetCurrentTimeMillis() - M.countdownStartMs) / 1000
-    local remaining = math.max(0, math.ceil(M.countdownTotal - elapsedSec))
+    local remaining
+    -- the pre-game countdown runs to the shared start, so every player sees the same number at
+    -- once ; the infected's start delay after it (countdownDisplayOnly) is counted locally
+    local serverNow = not M.countdownDisplayOnly and M.session and M.session.state == "COUNTDOWN" and
+        M.session.goAtMs and beamjoy_clockSync.serverNowMs()
+    if serverNow then
+        remaining = math.max(0, math.ceil((M.session.goAtMs - serverNow) / 1000))
+    else
+        local elapsedSec = (GetCurrentTimeMillis() - M.countdownStartMs) / 1000
+        remaining = math.max(0, math.ceil(M.countdownTotal - elapsedSec))
+    end
     if remaining ~= M.lastSentSeconds then
         M.lastSentSeconds = remaining
         beamjoy_communications_ui.send("BJInfectedCountdown", { active = true, seconds = remaining })
@@ -1539,10 +1568,28 @@ local function updateResetGate()
     end
 end
 
+--- starts this player's game at the shared start (session.goAtMs on the server's clock), the
+--- moment "GO" shows, rather than when the server's GAME push arrives (reported : infected games
+--- didn't start on "GO" like races). Runs the same GAME transition a push would, as
+--- raceRunner.lua's startAtGreenLight does ; the infected's start delay runs from here. Without a
+--- clock estimate or a goAtMs (older server) the push starts it as before.
+local function startAtGo()
+    local session = M.session
+    if not session or session.state ~= "COUNTDOWN" or not session.goAtMs then return end
+    local serverNow = beamjoy_clockSync.serverNowMs()
+    if not serverNow or serverNow < session.goAtMs then return end
+    M.goStartedFor = goKey(session)
+    local started = {}
+    for k, v in pairs(session) do started[k] = v end
+    started.state = "GAME"
+    M.onSessionUpdate(started)
+end
+
 local function onUpdate()
     if M.scenarioLocked then
         updateCountdown()
     end
+    startAtGo()
     updateTagDetection()
     updateResetGate()
 end

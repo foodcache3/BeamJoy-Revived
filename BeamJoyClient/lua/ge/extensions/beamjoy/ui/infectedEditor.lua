@@ -52,7 +52,6 @@ local listEditor = pointListEditor.new({
         setSnapToGround = "BJEditorInfectedArenaSetSnapToGround",
         setSnapMethod = "BJEditorInfectedArenaSetSnapMethod",
         requestState = "BJEditorInfectedArenaRequestState",
-        turnAll = "BJEditorInfectedArenaTurnAll",
     },
     isActive = function() return parent ~= nil and parent.activeEditor == M end,
     props = function() return M.props end,

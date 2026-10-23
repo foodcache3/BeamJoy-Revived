@@ -22,6 +22,9 @@
 --- design: nothing to compare against alone.
 
 local CAMERA_RELEASE_SECONDS = 3
+-- M.personalAt while waiting for their turn in a "sequential" phase : a start that never comes
+-- until the server gives them one, so updatePersonalStart holds them on their slot meanwhile
+local WAITING_TURN = math.huge
 local DNF_WARNING_SECONDS = 10
 local FINISH_POPUP_SECONDS = 8 -- was 4 ; reported as disappearing too fast to actually read
 
@@ -791,9 +794,9 @@ local function configFile(model, config)
         local ok, data = pcall(jsonReadFile, string.format("vehicles/%s/%s.pc", model, config))
         local out = false
         if ok and type(data) == "table" then
-            if data.format == 2 and type(data.parts) == "table" then
+            if type(data.parts) == "table" then
                 out = { parts = data.parts, vars = type(data.vars) == "table" and data.vars or {} }
-            elseif data.format == nil and data.parts == nil then
+            elseif data.format == nil then
                 -- the oldest files : the parts map is the whole file
                 out = { parts = data, vars = {} }
             end
@@ -810,12 +813,21 @@ end
 --- shared build's) doesn't. Every slot the file sets that the car has must hold the same part
 --- (empty or not) ; slots it leaves out are the game's defaults, and a different parent part shows
 --- in its own slot. Tuning too when the race doesn't allow it
+--- a slot's part as the game means it : configuration files write an empty slot "none", the
+--- vehicle's own parts map has it "" (the game's slotSystem reads "none" as "")
+---@param part any
+---@return string
+local function partName(part)
+    part = tostring(part or "")
+    return part == "none" and "" or part
+end
+
 ---@param veh NGVehicle
 ---@param entry table
 ---@param allowTuning boolean
----@return boolean
+---@return boolean matches, string? why not (for the diagnostic)
 local function matchesConfigFile(veh, entry, allowTuning)
-    if type(entry.model) ~= "string" or type(entry.config) ~= "string" then return false end
+    if type(entry.model) ~= "string" or type(entry.config) ~= "string" then return false, "no config" end
     local saved
     local buildId = tonumber(entry.buildId) or beamjoy_vehicleBuilds.idOf(entry.config)
     if buildId then
@@ -824,21 +836,26 @@ local function matchesConfigFile(veh, entry, allowTuning)
     else
         saved = configFile(entry.model, entry.config)
     end
-    if not saved then return false end
+    if not saved then return false, string.format("no readable file for %s/%s", entry.model, entry.config) end
     local data = extensions.core_vehicle_manager.getVehicleData(veh:getID())
     local cfg = data and data.config
-    if not cfg or not cfg.partsTree or cfg.model ~= entry.model then return false end
+    if not cfg or not cfg.partsTree or cfg.model ~= entry.model then return false, "no vehicle data" end
     local mine = extensions.core_vehicle_partmgmt.partsTreeToPartsMap(cfg.partsTree)
     local compared = 0
     for slot, part in pairs(saved.parts) do
         if mine[slot] ~= nil then
-            if tostring(mine[slot] or "") ~= tostring(part or "") then return false end
+            -- real report : the stock ETK I-Series files leave slots "none", which never equalled
+            -- the car's "" and refused the very configuration the player had picked
+            if partName(mine[slot]) ~= partName(part) then
+                return false, string.format("%s: live=%s file=%s", slot, partName(mine[slot]), partName(part))
+            end
             compared = compared + 1
         end
     end
     -- nothing in common : not this vehicle's configuration at all
-    if compared == 0 then return false end
-    return allowTuning or varsMatch(cfg.vars or {}, saved.vars or {})
+    if compared == 0 then return false, "no slot in common" end
+    if allowTuning or varsMatch(cfg.vars or {}, saved.vars or {}) then return true end
+    return false, "tuning differs"
 end
 
 ---@param veh NGVehicle
@@ -898,6 +915,12 @@ local function vehicleMatchesRestriction(veh, restriction)
                     end
                     LogWarn(string.format("pool match failed for '%s' (%d part diffs): %s",
                         tostring(v.label), #diffs, table.concat(diffs, " | ")))
+                end
+                if v.model == full.model then
+                    -- and why its configuration file didn't match either
+                    local ok, _, why = pcall(matchesConfigFile, veh, v, restriction.allowTuning == true)
+                    LogWarn(string.format("pool file match failed for '%s' (%s/%s): %s", tostring(v.label),
+                        tostring(v.model), tostring(v.config), ok and tostring(why) or "error: " .. tostring(_)))
                 end
             end
         end
@@ -1201,6 +1224,8 @@ end
 ---@return number?
 local function raceElapsedNowMs()
     if not M.session or M.session.state ~= "RACE" then return nil end
+    -- waiting for their turn (one at a time) : no clock of theirs yet
+    if M.personalAt == WAITING_TURN then return 0 end
     if M.raceUsesSharedClock then
         local serverNow = beamjoy_clockSync.serverNowMs()
         -- a start of their own (a run, a staggered start, a mid-phase join) counts from its own base
@@ -1368,6 +1393,18 @@ local function pushHud()
 
     local phase = currentPhase(session)
     local timeLeftMs = phaseTimeLeftMs(session)
+    -- one at a time : waiting for their turn, behind how many (the one on track and those queued
+    -- before them)
+    local waitingAhead
+    if M.personalAt == WAITING_TURN and not M.spectatingPlayerName then
+        waitingAhead = 0
+        for _, p in pairs(session.participants) do
+            if p.playerName ~= participant.playerName and not (p.finished or p.dnf or p.sittingOut) and
+                (not p.awaitingStart or (p.gridPosition or math.huge) < (participant.gridPosition or math.huge)) then
+                waitingAhead = waitingAhead + 1
+            end
+        end
+    end
     beamjoy_communications_ui.send("BJRaceHud", {
         active = true,
         raceName = race.name,
@@ -1386,6 +1423,7 @@ local function pushHud()
         timeLeftMs = timeLeftMs,
         timeUp = session.flagAtMs ~= nil,
         afterTime = session.settings.afterTime,
+        waitingAhead = waitingAhead,
         self = {
             playerName = participant.playerName,
             displayName = participant.displayName,
@@ -2298,8 +2336,12 @@ local function onSessionUpdate(session)
     end
 
     -- a start of their own later than the green light (their turn in a staggered start) : the green
-    -- light isn't theirs
-    local personalLater = participant.startAtMs ~= nil and session.goAtMs ~= nil and participant.startAtMs > session.goAtMs
+    -- light isn't theirs. One at a time (start "sequential") : waiting for their turn, with no start
+    -- time until the server releases them (services/raceGrid.lua's releaseNextTurn)
+    local waitingTurn = participant.awaitingStart == true and session.settings.start == "sequential"
+    local personalLater = waitingTurn or
+        (participant.startAtMs ~= nil and session.goAtMs ~= nil and participant.startAtMs > session.goAtMs)
+    local personalTarget = waitingTurn and WAITING_TURN or participant.startAtMs
     if session.state == "RACE" and not wasRacing and not resuming and not participant.sittingOut then
         M.raceStartLocalMs = beamjoy_clockSync.localMs()
         M.raceUsesSharedClock = session.goAtMs ~= nil and beamjoy_clockSync.isSynced()
@@ -2480,9 +2522,9 @@ local function onSessionUpdate(session)
 
     -- a start of their own (their turn, their next run, a mid-phase join) : updatePersonalStart takes
     -- it from here, every frame
-    if session.state == "RACE" and personalLater and M.personalAt ~= participant.startAtMs and
+    if session.state == "RACE" and personalLater and M.personalAt ~= personalTarget and
         not participant.finished and not participant.dnf and not participant.sittingOut then
-        M.personalAt = participant.startAtMs
+        M.personalAt = personalTarget
         M.personalStage = "waiting"
         M.personalPos = participant.runStartPosition or participant.startPosition
         -- a first start (their turn, a join) is held where they are ; a run's car rolls to a stop

@@ -8,7 +8,7 @@
 ---
 --- A race started as before is a single phase ending on laps : it behaves exactly as it always did.
 
----@alias BJRacePhaseStart "grid"|"individual"|"open"|"plugin"
+---@alias BJRacePhaseStart "grid"|"individual"|"sequential"|"open"|"plugin"
 ---@alias BJRacePhaseRanking "position"|"best"|"total"|"plugin"
 ---@alias BJRacePhaseAfterTime "leader"|"own"|"stop"
 ---@alias BJRaceEventResult "last"|"sum"|"plugin"
@@ -27,8 +27,11 @@
 ---@field name string? shown on the HUD and results ("Practice", "Q2", "Heat 1") ; nil : the
 ---client names it from its place and ranking
 ---@field start BJRacePhaseStart "grid" : everyone together from the grid, a standing start ;
----"individual" : one at a time from the first slot, every `intervalS`, in grid order (a time trial,
----a rally stage) ; "open" : together from the grid, and on a point-to-point track each racer's next
+---"individual" (the start menu's "Time offset") : each from the first slot, every `intervalS`, in
+---grid order, several on track at once (a time trial, a rally stage) ; "sequential" (its "One at a
+---time") : each from the first slot in grid order, alone : their whole phase (its laps or runs, its
+---time limit counted from their own start) before the next is released ; "open" : together from
+---the grid, and on a point-to-point track each racer's next
 ---run starts on its own once they're through the finish (practice, runs) ; "plugin" : each waits
 ---on their grid slot until a plugin starts them (the plugin API's race.startRacer)
 ---@field intervalS integer? "individual" : seconds between two racers' starts
@@ -53,7 +56,7 @@
 local M = {
     dependencies = { "services_races", "services_pluginOverlay" },
 
-    START = { GRID = "grid", INDIVIDUAL = "individual", OPEN = "open", PLUGIN = "plugin" },
+    START = { GRID = "grid", INDIVIDUAL = "individual", SEQUENTIAL = "sequential", OPEN = "open", PLUGIN = "plugin" },
     RANKING = { POSITION = "position", BEST = "best", TOTAL = "total", PLUGIN = "plugin" },
     AFTER_TIME = { LEADER = "leader", OWN = "own", STOP = "stop" },
     RESULT = { LAST = "last", SUM = "sum", PLUGIN = "plugin" },
@@ -73,7 +76,7 @@ local M = {
 }
 
 -- the starts raceGrid runs
-local STARTS_RUN = { grid = true, individual = true, open = true, plugin = true }
+local STARTS_RUN = { grid = true, individual = true, sequential = true, open = true, plugin = true }
 
 --- a phase's rules : settings of the session's (raceGrid's BJRaceSessionSettings) a phase may set
 --- for itself. The rest (vehicle restriction, anti-cheat, display, the lobby's) is the event's
@@ -174,8 +177,9 @@ local function sanitizePhase(raw, index, race)
 
     phase.afterTime = oneOf(raw.afterTime, M.AFTER_TIME) or
         (phase.ranking == M.RANKING.POSITION and M.AFTER_TIME.LEADER or M.AFTER_TIME.OWN)
-    -- "the leader" means something in a race only
-    if phase.afterTime == M.AFTER_TIME.LEADER and phase.ranking ~= M.RANKING.POSITION then
+    -- "the leader" means something in a race only, and alone on track there's no leader to follow
+    if phase.afterTime == M.AFTER_TIME.LEADER and
+        (phase.ranking ~= M.RANKING.POSITION or phase.start == M.START.SEQUENTIAL) then
         phase.afterTime = M.AFTER_TIME.OWN
     end
 

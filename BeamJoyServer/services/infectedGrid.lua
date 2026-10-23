@@ -424,10 +424,15 @@ local function beginCountdown(session)
     session.state = "COUNTDOWN"
     assignRoles(session)
     assignSpawns(session)
+    -- the start on the shared clock, as races do (raceGrid.lua's goAtMs) : each game lets go of
+    -- its car at "GO" itself, and the server's tick follows. utils_async.delayTask's whole-second
+    -- clock started the game up to ~2s after the "GO" the players saw (reported)
+    session.goAtMs = services_clockSync.nowMs() + math.floor(session.settings.countdown * 1000)
     pushSessionUpdate(session)
     pushOpenSessionsList()
-    utils_async.delayTask(function() M.beginGame(session.id) end,
-        session.settings.countdown, "BJInfectedGrid-" .. session.id .. "-countdown")
+    utils_async.task(function()
+        return services_clockSync.nowMs() >= session.goAtMs
+    end, function() M.beginGame(session.id) end, "BJInfectedGrid-" .. session.id .. "-countdown")
 end
 
 ---@param sessionId string

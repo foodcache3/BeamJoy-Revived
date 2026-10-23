@@ -11,6 +11,11 @@
     bj-config-races-editor .start-row.active {
         background-color: rgba(0, 0, 0, 0.25);
     }
+    /* the start list's drop spots before the first and after the last : a sliver with no line,
+       opened up only while a start position is dragged */
+    bj-config-races-editor bj-sort-separator.start-edge .bj-sort-separator:not(.active) {
+        padding: 0.1em 0 !important;
+    }
     bj-config-races-editor .gate-row.active .gate-name {
         color: #edff00;
     }
@@ -580,12 +585,29 @@
     </div>
 
     <div class="section-panel" ng-if="$ctrl.activeSection === 'starts'">
+        <bj-sort-separator
+            class="start-edge"
+            ng-if="$ctrl.race.startPositions.length > 1"
+            group="race-starts-order"
+            value="0"
+        ></bj-sort-separator>
         <div ng-repeat="start in $ctrl.race.startPositions track by $index">
+            <bj-sort-separator
+                ng-hide="$index === 0"
+                group="race-starts-order"
+                value="{{$index}}"
+            >
+                <hr class="w-100 my-1" />
+            </bj-sort-separator>
             <div
                 class="start-row d-flex p-1 px-2 gap-1 cursor-pointer align-center"
                 ng-class="{active: $index === $ctrl.activeStart}"
                 ng-click="$ctrl.selectStart($event, $index)"
             >
+                <bj-sort-draggable
+                    group="race-starts-order"
+                    ng-update="$ctrl.sortStarts($index, newValue)"
+                ></bj-sort-draggable>
                 <span class="flex-grow-1">
                     {{'beamjoy.window.config.tabs.races.start' | translate}} {{$index + 1}}
                 </span>
@@ -621,6 +643,12 @@
                 </button>
             </div>
         </div>
+        <bj-sort-separator
+            class="start-edge"
+            ng-if="$ctrl.race.startPositions.length > 1"
+            group="race-starts-order"
+            value="{{$ctrl.race.startPositions.length}}"
+        ></bj-sort-separator>
         <div ng-if="$ctrl.race.startPositions.length === 0" class="p-2 opacity-70">
             {{'beamjoy.window.config.tabs.races.noStarts' | translate}}
         </div>

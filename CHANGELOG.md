@@ -8,15 +8,52 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2482, client build 2747.
+Server build 2483, client build 2754 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
 
-- **Turn a whole arena (2747)** (direct request). The Derby, Hunter and Infected arena editors'
-  toolbars have two turn buttons with an angle between them (90 by default, 1 to 180). They turn
-  the whole arena round its middle (a derby arena's zone centre, otherwise the middle of its
-  points) : every spawn, waypoint and hub with its facing, a derby zone's facing, and every prop,
-  lines, curbs and painted lines included. With snapping on, each point and prop keeps its height
-  above the ground under it, and lines and props that follow the ground are laid on it again. It's
-  an ordinary unsaved edit until you save, and the other button turns it back. *(client only)*
+- **Fix (2483, 2754) : Derby, Hunter and Infected didn't start on "GO" like races** (reported).
+  Their start was a server timer counting whole seconds (utils_async.delayTask), fired up to ~2 s
+  after the countdown the players saw, and each game's countdown began whenever the server's
+  message reached it. They now start the way races do : the server sets the start on the shared
+  clock (`goAtMs`, services_clockSync), every game counts down to it and lets go of its own car
+  the moment "GO" shows, and the server's tick follows. "GO" stays on screen for a second as the
+  car is let go, also at the end of a role's start delay (Hunter's hunters, Infected's
+  infected). A countdown message arriving after a game started on its own no longer re-runs the
+  countdown. Also fixed : Hunter's start-delay countdown (hunters held back while the fugitive
+  gets away) stood still instead of counting down. *(server + client : update both)*
+
+- **Race editor : drag start positions into order (2754)** (direct request). The Start positions
+  list has the same drag handles as the gates : the first is pole, so this is the grid's order.
+  A start position can be dropped first or last too. *(client only)*
+
+- **Fix (2754) : a number typed past a slider's maximum was lost** (reported : a race time of
+  86400 "broke the slider and defaulted to three laps"). The game's number box empties its value
+  past its own maximum, so the slider was left with none and the start menu sent no time at all
+  (the server then fell back to the race's laps). A typed value past the maximum is now brought
+  down to it (1440 minutes for a time limit) when you leave the box, and an empty box goes back
+  to the value it had. Every slider with a typed value. *(client only)*
+
+
+- **Fix (2752) : an error message stayed on screen until the game was restarted** (reported :
+  enabling an arena without 2 start positions). Error toasts were sent with no timeout, and the
+  game's toasts can't be clicked away. They now fade after 10 seconds (other toasts after 5 as
+  before), and a toast asked for with no time at all gets 5. This was every editor's "couldn't
+  save" message (arenas, safe zones, stations, bus lines, deliveries, dragstrips, drift
+  spots). *(client only)*
+
+- **Fix (2752) : the delivery HUD's buttons were squashed** (reported). With the HUD focused,
+  the "B to go back to driving" hint shared the buttons' row instead of taking its own line, and
+  crushed Hold to abandon into a sliver. *(client only)*
+
+- **Turn a whole Derby arena with the Rotate tool (2747, 2752)** (direct request). In the Derby
+  arena editor, pick the Rotate tool with nothing selected : the gizmo sits on the arena's middle
+  (its zone's centre, otherwise the middle of its start positions), and turning it round the
+  vertical turns the whole arena : every start position with its facing, the zone's facing, and
+  every prop, lines, curbs and painted lines included. The game's gizmo reads a turn when it's let
+  go, so the arena follows then. With snapping on, each point and prop keeps its height above the
+  ground under it, and lines and props that follow the ground are laid on it again. It's an
+  ordinary unsaved edit until you save. A start position, the zone or a prop selected still turns
+  on its own. 2747's turn buttons (in the Hunter and Infected editors too) were taken out
+  (direct request). *(client only)*
 
 - **Deliveries can have no time limit (2482, 2747)** (direct request). Config > General >
   Deliveries has a new "Jobs can run out of time" switch (`Deliveries.Timeouts`, on by default).
@@ -31,7 +68,10 @@ Server build 2482, client build 2747.
   doesn't match, the entry's configuration is now checked as the game has it today : its `.pc`
   file (or a shared build's own parts). Every slot the file sets that the car has must hold the
   same part, plus the same tuning when the race doesn't allow tuning. Applies to lobbies and
-  freeroam runs alike. *(client only)*
+  freeroam runs alike. 2752 : the stock configurations still never matched (reported again : a
+  2.0.1 ETK I-Series preset). Their files write an empty slot "none" where the car has it "" ;
+  both now count as empty. The log now also says why a configuration file didn't match.
+  *(client only)*
 
 - **Race phases : events of practice, qualifying, races, heats, runs... (2481, 2746)** (direct
   request). A race session is now an event of one or more phases, as many as the starter likes
@@ -53,8 +93,18 @@ Server build 2482, client build 2747.
     event), the next phase's countdown, the leader's "Next phase now". Cars taken away (out,
     finished and watching) come back. Racers left out of a phase watch it.
   - **Point-to-point tracks** : practice and qualifying are repeat runs, each from the first slot
-    on its own clock, until the time or the runs are up. "One at a time" starts every racer alone,
-    a set interval apart (time trials, hill climbs).
+    on its own clock, until the time or the runs are up. "Time offset" starts every racer from the
+    first slot, a set interval apart, several on track at once (time trials, hill climbs).
+  - **One at a time (2483, 2754)** (direct request, the start that used to be called "One at a
+    time" is now "Time offset") : each racer does their whole phase alone, all their laps or runs
+    or their time limit, before the next is released from the first slot, in grid order. The
+    others wait frozen on their slot, the HUD saying how many are ahead. A time limit is each
+    one's own, counted from their start, and the HUD counts the one on track down ; "Leader's
+    lap" means nothing alone and becomes "Finish the lap". A late joiner queues at the back. The
+    one on track leaving ends their turn (their laps kept) instead of making everyone wait out
+    their reconnect time. API : start `"sequential"`.
+  - Fixes (2754) : the phase rules' dropdowns (respawn, collisions, stall DNF, reset penalty)
+    showed empty instead of "As the event" (reported).
   - **Joining mid-event** (per phase) : a player joining while a phase runs readies up and starts on
     their own after a short countdown ; in a race their time counts from its green light.
   - HUD : the phase's name, a timed phase's time left, standings by its ranking. Staff race control

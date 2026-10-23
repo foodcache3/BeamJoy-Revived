@@ -27,11 +27,13 @@ angular.module("beamjoy").component("bjSlider", {
         // toggle button switches between them. Neither input ever has to coexist/sync with the
         // other, so there's nothing left for them to fight over.
         this.mode = "slider";
+        let valueBeforeTyping;
         this.toggleMode = () => {
             if (this.disabled) return;
             const leavingNumberMode = this.mode === "number";
             this.mode = this.mode === "slider" ? "number" : "slider";
             if (this.mode === "number") {
+                valueBeforeTyping = this.ngModel;
                 $timeout(() => {
                     const input = $element[0].querySelector("input[type=number]");
                     if (input) {
@@ -50,6 +52,14 @@ angular.module("beamjoy").component("bjSlider", {
                 // here, the moment number mode is actually left (blur, Enter, or the mode-toggle
                 // button - all three already route through this same call), lets the field hold
                 // the raw typed text untouched the whole time it's being edited.
+                // Real bug (reported : a race time of 86400 "broke the slider and defaulted to
+                // three laps") : AngularJS's number input sets the model to undefined past its own
+                // max, so the value was lost and the start form sent no time at all. The input
+                // allows out-of-range values now (ng-model-options allowInvalid) for roundModel to
+                // clamp here ; a field left empty or unreadable gets its value from before typing.
+                if (typeof this.ngModel !== "number" || Number.isNaN(this.ngModel)) {
+                    this.ngModel = valueBeforeTyping;
+                }
                 roundModel();
                 updatePercent();
                 // the range input is a new element again (ng-if)

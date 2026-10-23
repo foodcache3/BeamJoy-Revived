@@ -1150,6 +1150,24 @@ local function onReorderGates(fromIndex, toIndex)
     extensions.hook("onBJRaceMarkersRefresh")
 end
 
+--- moves a start position to another place in the grid order (direct request : drag to reorder,
+--- as gates are). The first start position is pole, so this is the grid's order
+---@param fromIndex integer
+---@param toIndex integer the index it's dropped before, as onReorderGates takes it
+local function onReorderStarts(fromIndex, toIndex)
+    if not M.race or not M.race.startPositions[fromIndex] then return end
+    local start = table.remove(M.race.startPositions, fromIndex)
+    local finalIndex = toIndex > fromIndex and (toIndex - 1) or toIndex
+    finalIndex = math.max(1, math.min(finalIndex, #M.race.startPositions + 1))
+    table.insert(M.race.startPositions, finalIndex, start)
+    M.activeStartIndex = nil
+    updateGizmo("start", nil)
+    markDirty()
+    pushUpdate()
+    pushActive()
+    extensions.hook("onBJRaceMarkersRefresh")
+end
+
 --- flips the whole gate sequence : reverses gate order and flips each gate's own facing (negated
 --- horizontal dir, matching the "always horizontal" invariant the rotate gizmo's own onChange
 --- already enforces elsewhere in this file) so driving through in the new order faces the right
@@ -1431,6 +1449,7 @@ local function onInit(activityEditor)
     beamjoy_communications_ui.addHandler("BJEditorRaceDeleteGate", onDeleteGate)
     beamjoy_communications_ui.addHandler("BJEditorRaceDeleteStart", onDeleteStart)
     beamjoy_communications_ui.addHandler("BJEditorRaceReorderGates", onReorderGates)
+    beamjoy_communications_ui.addHandler("BJEditorRaceReorderStarts", onReorderStarts)
     beamjoy_communications_ui.addHandler("BJEditorRaceReverseGates", onReverseGates)
     beamjoy_communications_ui.addHandler("BJEditorRaceSetSnapToGround", onSetSnapToGround)
     beamjoy_communications_ui.addHandler("BJEditorRaceSetSnapMethod", onSetSnapMethod)

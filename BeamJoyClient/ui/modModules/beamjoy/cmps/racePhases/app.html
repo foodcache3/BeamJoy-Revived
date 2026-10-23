@@ -182,7 +182,7 @@
             <span class="name" title="{{'beamjoy.racePhases.start.tooltip' | translate}}">{{'beamjoy.racePhases.start' | translate}}</span>
             <span class="bjr-chip" ng-if="p.start === 'plugin'">{{'beamjoy.racePhases.starts.plugin' | translate}}</span>
             <div class="bjr-seg" ng-if="p.start !== 'plugin'">
-                <button type="button" ng-repeat="st in $ctrl.STARTS" ng-class="{on: p.start === st}" ng-click="p.start = st"
+                <button type="button" ng-repeat="st in $ctrl.STARTS" ng-class="{on: p.start === st}" ng-click="$ctrl.setStart(p, st)"
                     title="{{('beamjoy.racePhases.starts.' + st + '.tooltip') | translate}}">
                     {{('beamjoy.racePhases.starts.' + st) | translate}}
                 </button>
@@ -224,7 +224,7 @@
         <div class="bjr-field" ng-if="$ctrl.repeats(p) && p.lengthMode !== 'laps'" ng-class="{locked: $ctrl.isLocked('length')}">
             <span class="name" title="{{'beamjoy.racePhases.afterTime.tooltip' | translate}}">{{'beamjoy.racePhases.afterTime' | translate}}</span>
             <div class="bjr-seg">
-                <button type="button" ng-repeat="a in $ctrl.AFTER_TIMES" ng-if="a !== 'leader' || p.ranking === 'position'"
+                <button type="button" ng-repeat="a in $ctrl.AFTER_TIMES" ng-if="a !== 'leader' || $ctrl.leaderMeans(p)"
                     ng-class="{on: p.afterTime === a}" ng-click="p.afterTime = a"
                     title="{{('beamjoy.racePhases.afterTimes.' + a + '.tooltip') | translate}}">
                     {{('beamjoy.racePhases.afterTimes.' + a) | translate}}

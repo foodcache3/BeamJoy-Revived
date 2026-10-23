@@ -1233,6 +1233,15 @@ local function startCountdown(session, race, grid, orderedBy)
             p.startAtMs = session.goAtMs + (i - 1) * (phase.intervalS or 10) * 1000
             p.clockBaseMs = p.startAtMs
             p.runStartPosition = race.startPositions[1]
+        elseif phase.start == services_racePhases.START.SEQUENTIAL then
+            -- "sequential" : the first in grid order goes now, the others wait their turn on their
+            -- slot (releaseNextTurn) ; the phase's time limit is each one's own, from this start
+            if i == 1 then
+                p.startAtMs, p.clockBaseMs, p.runStartPosition = session.goAtMs, session.goAtMs, race.startPositions[1]
+            else
+                p.startAtMs, p.clockBaseMs, p.runStartPosition = nil, nil, nil
+                p.awaitingStart = true
+            end
         else
             p.startAtMs, p.clockBaseMs, p.runStartPosition = nil, nil, nil
             -- a plugin's phase : on their slot until the plugin starts them (race.startRacer)
@@ -1626,8 +1635,13 @@ local function completePhase(session)
     end)
 end
 
+--- a "sequential" phase's next turn, released once nobody's on track (defined below personalStart)
+local releaseNextTurn
+
 local function checkSessionComplete(session)
     if session.state ~= "RACE" or session.judging then return end
+    -- one at a time : the last one's turn is over, the next one goes (the phase isn't)
+    if releaseNextTurn(session) then return end
     -- a disconnected racer is neither finished nor out : the race waits for their grace period,
     -- but only while someone else is still racing. Real bug (direct report) : one racer left
     -- mid-race and, once everyone still there had finished, the race went on for the rest of the
@@ -1698,6 +1712,62 @@ local function personalStart(session, p, position, delayMs, clockFromGreen, coun
     apiEvent("racerStarted", session, p)
 end
 
+---@param session BJRaceSession
+---@return boolean
+local function isSequential(session)
+    return currentPhase(session).start == services_racePhases.START.SEQUENTIAL
+end
+
+--- on track in a "sequential" phase : started, not done
+---@param p BJRaceParticipant
+---@return boolean
+local function onTurn(p)
+    return not (p.finished or p.dnf or p.sittingOut or p.awaitingStart)
+end
+
+--- a "sequential" phase (one at a time) : once nobody's on track, the next one waiting, in grid
+--- order, goes from the first slot after a short countdown. The phase's clock is theirs now : its
+--- time limit counted from their start, the time's up flag and overtime cleared, so the HUD counts
+--- their time down and a time limit is the same for each. A racer away (disconnected) is passed
+--- over ; back in time, they're still waiting
+---@param session BJRaceSession
+---@return boolean whether a turn started
+releaseNextTurn = function(session)
+    if session.state ~= "RACE" or not isSequential(session) then return false end
+    if session.participants:any(onTurn) then return false end
+    local nextUp
+    session.participants:forEach(function(p)
+        if not p.awaitingStart or p.disconnected or p.finished or p.dnf or p.sittingOut then return end
+        if not nextUp or (p.gridPosition or math.huge) < (nextUp.gridPosition or math.huge) then nextUp = p end
+    end)
+    local race = getRace(session)
+    if not nextUp or not race then return false end
+    personalStart(session, nextUp, race.startPositions[1], RUN_ROLL_MS)
+    local minutes = currentPhase(session).timeLimitMin
+    session.phaseEndsAtMs = minutes and nextUp.startAtMs + math.floor(minutes * 60000) or nil
+    session.flagAtMs, session.chequered, session.overtimeEndsAtMs = nil, nil, nil
+    pushSessionUpdate(session)
+    return true
+end
+
+--- a "sequential" phase's turn is over now (its time's up and afterTime "stop", its overtime's over)
+--- : the one on track is done with the laps they completed, or out without any, and the next goes
+---@param session BJRaceSession
+local function endTurnNow(session)
+    if session.state ~= "RACE" then return end
+    session.participants:forEach(function(p)
+        if not onTurn(p) then return end
+        if #p.lapTimes > 0 then
+            finishParticipant(session, p, true)
+        else
+            p.dnf = true
+            apiEvent("racerOut", session, p, "timeUp")
+        end
+    end)
+    checkSessionComplete(session)
+    if session.state == "RACE" then pushSessionUpdate(session) end
+end
+
 --- whether the lap a racer just completed ends their phase : its laps done, or, once its time is
 --- up, its afterTime : "own" their lap counts and they're done ; "leader" the leader's lap ends
 --- their race, then everyone's next. ("stop" ends it at once, see timeUp)
@@ -1744,7 +1814,10 @@ end
 ---@param now integer the shared clock
 local function timeUp(session, now)
     session.flagAtMs = now
-    if session.settings.afterTime == services_racePhases.AFTER_TIME.STOP then return endPhaseNow(session) end
+    if session.settings.afterTime == services_racePhases.AFTER_TIME.STOP then
+        if isSequential(session) then return endTurnNow(session) end
+        return endPhaseNow(session)
+    end
     -- the ones waiting for a start (their next run, their turn) : no run under way, they're done
     local waiting = false
     session.participants:forEach(function(p)
@@ -2098,7 +2171,7 @@ local function onUpdate()
         if session.phaseEndsAtMs and not session.flagAtMs and now >= session.phaseEndsAtMs then
             timeUp(session, now)
         elseif session.overtimeEndsAtMs and now >= session.overtimeEndsAtMs then
-            endPhaseNow(session)
+            if isSequential(session) then endTurnNow(session) else endPhaseNow(session) end
         end
     end)
     if next(fieldsChanged) == nil then return end
@@ -2338,6 +2411,18 @@ local function lateJoinReady(session, p)
     local phase = currentPhase(session)
     resetForPhase(p)
     p.sittingOut = nil
+    if phase.start == services_racePhases.START.SEQUENTIAL then
+        -- one at a time : the back of the queue, on the first slot when it's their turn (now, when
+        -- nobody's on track)
+        local used = 0
+        session.participants:forEach(function(o) if o.gridPosition and o ~= p then used = math.max(used, o.gridPosition) end end)
+        p.gridPosition = used + 1
+        p.startPosition = race.startPositions[1]
+        p.awaitingStart = true
+        apiEvent("racerJoinedPhase", session, p)
+        if not releaseNextTurn(session) then pushSessionUpdate(session) end
+        return
+    end
     local position = race.startPositions[1]
     if phase.start == services_racePhases.START.GRID then
         -- the grid slot after the last one placed
@@ -3226,6 +3311,18 @@ local function onPlayerDisconnect(playerID)
             pushOpenSessionsList()
         elseif RUNNING[session.state] then
             local participant = session.participants[playerID]
+            -- one at a time : everyone else waits on the one on track, so their turn ends here (the
+            -- laps they completed kept) and the next goes, rather than holding the phase for their
+            -- grace period
+            if session.state == "RACE" and isSequential(session) and onTurn(participant) then
+                if #participant.lapTimes > 0 then
+                    finishParticipant(session, participant, true)
+                else
+                    participant.dnf = true
+                    apiEvent("racerOut", session, participant, "disconnected")
+                end
+                checkSessionComplete(session)
+            end
             local done = participant.finished or participant.dnf or participant.sittingOut
             -- done, and nothing after : their result stands as it is
             if done and session.phaseIndex >= #session.phases then return end

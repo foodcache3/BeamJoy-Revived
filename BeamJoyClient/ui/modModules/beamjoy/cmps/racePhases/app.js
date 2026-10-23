@@ -57,7 +57,11 @@ angular.module("beamjoy").factory("beamjoyRacePhases", function ($filter) {
             ],
         },
     ];
-    const STARTS = ["grid", "individual", "open"];
+    // "individual" is the editor's "Time offset" (a start every few seconds, several on track),
+    // "sequential" its "One at a time" (each racer's whole phase before the next is released)
+    const STARTS = ["grid", "individual", "sequential", "open"];
+    // the rules a phase's editor sets over the event's
+    const RULES = ["respawnStrategy", "disableCollisions", "dnfEnabled", "resetPenaltyEnabled"];
 
     // a phase as edited : every setting there, the length's laps and minutes kept while switched off
     const newPhase = (base, laps) => {
@@ -85,6 +89,12 @@ angular.module("beamjoy").factory("beamjoyRacePhases", function ($filter) {
         if (base && base.key) p.name = name(base.key);
         delete p.key;
         p.order = Object.assign({ from: "lobby", phase: 1, reverse: 0 }, p.order);
+        // each rule its dropdown shows, null ("as the event") when the phase doesn't set it : an
+        // undefined one matched no option, and the dropdown showed empty (reported)
+        p.rules = Object.assign({}, p.rules);
+        RULES.forEach((k) => {
+            if (p.rules[k] === undefined) p.rules[k] = null;
+        });
         if (!p.afterTime) p.afterTime = p.ranking === "position" ? "leader" : "own";
         return p;
     };
@@ -253,6 +263,13 @@ angular.module("beamjoy").component("bjRacePhases", {
             // "the leader" only means something in a race
             if (ranking !== "position" && p.afterTime === "leader") p.afterTime = "own";
         };
+        this.setStart = (p, start) => {
+            p.start = start;
+            // alone on track, there's no leader to follow
+            if (start === "sequential" && p.afterTime === "leader") p.afterTime = "own";
+        };
+        // "the leader" : a race, with others on track
+        this.leaderMeans = (p) => p.ranking === "position" && p.start !== "sequential";
 
         // an order or takes pointing at a phase that moved or went : back to the lobby / everyone
         const repoint = (map) => {

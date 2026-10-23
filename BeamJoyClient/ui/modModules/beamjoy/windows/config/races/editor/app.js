@@ -560,6 +560,10 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         this.sortUpdate = (index, newIndex) => {
             beamjoyStore.send("BJEditorRaceReorderGates", [index + 1, newIndex + 1]);
         };
+        // start positions dragged into another grid order (the first is pole)
+        this.sortStarts = (index, newIndex) => {
+            beamjoyStore.send("BJEditorRaceReorderStarts", [index + 1, newIndex + 1]);
+        };
         this.reverseGates = (event) => {
             event.stopPropagation();
             beamjoyStore.send("BJEditorRaceReverseGates");
