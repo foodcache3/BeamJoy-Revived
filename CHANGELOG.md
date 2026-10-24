@@ -8,7 +8,18 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2488, client build 2760 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2488, client build 2761 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **Italian (2761)** (direct request : "can you make a script so I can add an italian translation too").
+  Client and server `it_IT.json`, machine-translated with `Tools/translate.py --add it_IT` (new : starts
+  a language's files and translates just it), then the mute wording, ordinals ("{n}°") and console
+  command arguments fixed by hand. BeamNG has no Italian of its own : players see it with an Italian
+  language pack mod (the game lists a mod's language folder), and a server's console with
+  `Console.Lang = "it_IT"`. Default Italian welcome message.
+  - `translate.py` keeps the words typed in console command arguments (`set|add|remove`, `true|false`,
+    a leading `time`) in English : Azure had translated them, so the hint showed commands that don't
+    exist.
+  - A BeamJoy language the game doesn't have is a debug line in the log, not a warning.
 
 - **Fix (2488, 2760) : no Join button on a running race open to join mid-race** (direct report).
   The sessions list the games show was last sent at the countdown, when nobody could join yet, and

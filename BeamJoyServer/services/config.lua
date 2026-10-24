@@ -183,6 +183,7 @@ local M = {
                 ["es_419"] = "¡Bienvenido al servidor!",
                 ["es_ES"] = "¡Bienvenido al servidor!",
                 ["fr_FR"] = "Bienvenue sur le serveur !",
+                ["it_IT"] = "Benvenuto sul server!",
                 ["ja_JP"] = "サーバーへようこそ！",
                 ["ko_KR"] = "서버에 오신 것을 환영합니다!",
                 ["pl_PL"] = "Witamy na serwerze!",

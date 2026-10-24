@@ -25,7 +25,8 @@ local function onExtensionLoaded()
                 extensions.core_locales.onFilesChanged({ { filename = targetPath } })
             end
         else
-            LogWarn(string.format("BeamJoy locale '%s' has no matching core locale folder (%s), skipping", langId, targetPath))
+            -- expected : BeamJoy ships languages the game doesn't (Italian, with a language pack mod)
+            LogDebug(string.format("BeamJoy locale '%s' has no matching core locale folder (%s), skipping", langId, targetPath))
         end
     end
 end

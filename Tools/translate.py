@@ -10,7 +10,8 @@ Each file is rewritten in en-US's order and layout ; keys en-US no longer has ar
 
 Placeholders ({name}, <map>), slash commands, file paths, HTML entities, line breaks and the names in
 KEEP are sent as "don't translate" and checked to come back intact ; a string that loses one stays
-English and is retried on the next run.
+English and is retried on the next run. In console command arguments (keys ending ".args") the words
+typed as they are (set|add|remove, true|false, a leading "time") are kept too.
 
 Setup : an Azure "Translator" resource on the F0 (free) pricing tier, then set
     AZURE_TRANSLATOR_KEY     (Keys and Endpoint : KEY 1)
@@ -22,6 +23,9 @@ Usage :
     python Tools/translate.py --only de_DE,fr_FR   just these languages
     python Tools/translate.py --group server     just the client or the server files
     python Tools/translate.py --check            check every file against en-US, send nothing
+    python Tools/translate.py --add it_IT        start a new language (client and server files) and translate it
+A new language needs its Azure code in LANGS first. --add creates its empty files, so all of it is due ;
+with --dry-run it only creates them and shows the size.
 Progress is saved after every request : if it stops (quota, network), run it again to carry on.
 """
 import argparse, hashlib, html, json, os, re, sys, time, urllib.error, urllib.request
@@ -40,7 +44,8 @@ GROUPS = {
 # locale file -> Azure language code
 LANGS = {
     "de_DE": "de", "es_419": "es-MX", "es_ES": "es", "fr_FR": "fr", "ja_JP": "ja", "ko_KR": "ko",
-    "pl_PL": "pl", "pt_BR": "pt", "pt_PT": "pt-PT", "ru_RU": "ru", "zh_Hans": "zh-Hans", "zh_Hant": "zh-Hant",
+    "it_IT": "it", "pl_PL": "pl", "pt_BR": "pt", "pt_PT": "pt-PT", "ru_RU": "ru", "zh_Hans": "zh-Hans",
+    "zh_Hant": "zh-Hant",
 }
 
 # names never translated (whole words, case-sensitive)
@@ -57,6 +62,18 @@ PROTECT = re.compile("|".join([
     r"(?<![^\s(])/[a-z]{2,}\b(?!/)",                      # /bjupdate /login
     r"[\w.<>-]*(?:/[\w.<>*-]+){2,}/?|[\w.<>-]+/[\w.<>-]+\.[a-z]{2,4}\b|[\w.-]+/(?=\s|$)",  # paths
 ] + [r"(?<!\w)" + re.escape(t) + r"(?!\w)" for t in KEEP]))
+# console command arguments : the keywords typed as they are, `a|b` choices and a leading word
+ARGS_PROTECT = re.compile(PROTECT.pattern + "|" + "|".join([
+    r"<[^<>]*>",                                          # <password...>
+    r"[\w.-]+(?=\s*\|)|(?<=\|)\s*[\w.-]+",              # set|add|remove, check | channel
+    r"^[a-z]+\b",                                         # time [dawn|noon] ; help
+]))
+
+
+def protect_for(key):
+    return ARGS_PROTECT if key and key.endswith(".args") else PROTECT
+
+
 LINE = re.compile(r'^(\s*)"((?:[^"\\]|\\.)*)"\s*:\s*"((?:[^"\\]|\\.)*)"(\s*,?)\s*$')
 SPAN = re.compile(r'<span[^>]*\bid="p(\d+)"[^>]*>.*?</span>', re.S)
 
@@ -103,14 +120,14 @@ def tokens_of(text):
     return sorted(PLACEHOLDER.findall(text)) + ["\n"] * text.count("\n")
 
 
-def needs_translation(text):
-    return re.search(r"[A-Za-z]", PROTECT.sub("", text)) is not None
+def needs_translation(text, key=None):
+    return re.search(r"[A-Za-z]", protect_for(key).sub("", text)) is not None
 
 
-def prepare(text):
+def prepare(text, key=None):
     """-> (html sent to Azure, protected tokens)"""
     parts, tokens, last = [], [], 0
-    for m in PROTECT.finditer(text):
+    for m in protect_for(key).finditer(text):
         parts.append(html.escape(text[last:m.start()], quote=False))
         parts.append('<span class="notranslate" id="p%d">%s</span>' % (len(tokens), html.escape(m.group(0), quote=False)))
         tokens.append(m.group(0))
@@ -210,7 +227,7 @@ def check(groups):
             missing = [k for k in en if k not in values]
             extra = [k for k in values if k not in en]
             broken = [k for k in en if k in values and tokens_of(values[k]) != tokens_of(en[k])]
-            english = [k for k in en if k in values and values[k] == en[k] and needs_translation(en[k])]
+            english = [k for k in en if k in values and values[k] == en[k] and needs_translation(en[k], k)]
             print("%-6s %-8s missing %4d  extra %3d  placeholders differ %3d  still English %4d" % (
                 group, stem, len(missing), len(extra), len(broken), len(english)))
             for k in broken[:5]:
@@ -225,11 +242,21 @@ def main():
     ap.add_argument("--check", action="store_true", help="compare every file with en-US, send nothing")
     ap.add_argument("--only", help="comma-separated locale files, e.g. de_DE,es_419")
     ap.add_argument("--group", choices=sorted(GROUPS), help="just the client or the server files")
+    ap.add_argument("--add", metavar="LOCALE", help="start a new language (e.g. it_IT) and translate just it")
     args = ap.parse_args()
 
     groups = [args.group] if args.group else [g for g in GROUPS if group_dir(g)]
     if args.check:
         sys.exit(1 if check(groups) else 0)
+    if args.add:
+        if args.add not in LANGS:
+            sys.exit("Add %s to LANGS first, with its Azure language code" % args.add)
+        for group in groups:
+            path = group_dir(group) / (args.add + ".json")
+            if not path.exists():
+                path.write_text("{}\n", encoding="utf-8", newline="\n")
+                print("created %s" % path.relative_to(ROOT))
+        args.only = args.add
     stems = args.only.split(",") if args.only else list(LANGS)
     for s in stems:
         if s not in LANGS:
@@ -252,10 +279,10 @@ def main():
                 fp = fingerprint(text)
                 if key in values and seen.get(key, fp) == fp:
                     seen[key] = fp  # translated, English unchanged
-                elif not needs_translation(text):
+                elif not needs_translation(text, key):
                     values[key], seen[key] = text, fp  # nothing to translate ("{1} / {2}", "")
                 else:
-                    due.append((key, prepare(text)[0]))
+                    due.append((key, prepare(text, key)[0]))
             # counted with the don't-translate markup, in case Azure bills it
             chars = sum(len(h) for _, h in due)
             total_chars += chars
@@ -268,7 +295,7 @@ def main():
             for batch in batches(due):
                 results = call_azure(LANGS[stem], [h for _, h in batch])
                 for (key, _), translated in zip(batch, results):
-                    text = restore(translated, prepare(en[key])[1], en[key])
+                    text = restore(translated, prepare(en[key], key)[1], en[key])
                     if text is None:
                         failed += 1
                         print("    kept English (a placeholder got lost) : %s" % key)
