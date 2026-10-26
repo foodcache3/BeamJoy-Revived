@@ -437,24 +437,34 @@
         color: #ffc768;
     }
 
-    /* FOCUSED : Race info / Retire, only while the HUD has the pad */
+    /* FOCUSED : the HUD has the pad (the Focus control) */
     #beamjoy-race-hud.focused {
-        pointer-events: auto;
         box-shadow: 0 0 0 2px rgba(255, 102, 0, 0.55);
     }
+
+    /* ACTIONS : the button that opens the row, and the row ; clickable whatever the rest */
+    #beamjoy-race-hud .actbar,
     #beamjoy-race-hud .hud-actions {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 0.4em;
-        padding: 0.6em 0.75em 0.75em;
+        pointer-events: auto;
         border-top: 1px solid rgba(255, 255, 255, 0.08);
     }
+    #beamjoy-race-hud .actbar {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.5em 0.75em 0.6em;
+    }
+    #beamjoy-race-hud.compact .actbar,
     #beamjoy-race-hud.compact .hud-actions {
         margin: 0.1em -0.9em -0.75em;
     }
-    #beamjoy-race-hud .hud-actions button {
+    #beamjoy-race-hud .actbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5em;
         min-height: 2.3em;
-        padding: 0 0.6em;
+        padding: 0 0.75em;
         border: 0;
         border-radius: 0.25em;
         background: #363a45;
@@ -463,17 +473,52 @@
         font-size: 0.85em;
         cursor: pointer;
     }
-    #beamjoy-race-hud .hud-actions button.danger {
+    #beamjoy-race-hud .actbtn:hover {
+        background: #414653;
+    }
+    #beamjoy-race-hud .key {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.05em 0.4em;
+        border-radius: 0.25em;
+        background: #ebebeb;
+        color: #0a0b0e;
+        font-size: 0.7em;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    #beamjoy-race-hud .hud-actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.4em;
+        padding: 0.6em 0.75em 0.75em;
+    }
+    #beamjoy-race-hud .hud-actions .actbtn {
+        width: 100%;
+    }
+    #beamjoy-race-hud .hud-actions .pit {
+        background: #24476e;
+        color: #e4f0ff;
+    }
+    #beamjoy-race-hud .hud-actions .pit:hover {
+        background: #2c5584;
+    }
+    #beamjoy-race-hud .hud-actions .danger {
         background: transparent;
         box-shadow: inset 0 0 0 1px rgba(255, 110, 100, 0.5);
         color: #ff9a8f;
     }
-    /* Retire is a 5 s hold : the fill shows how far along it is */
-    #beamjoy-race-hud .hud-actions button.hold {
+    #beamjoy-race-hud .hud-actions .tow {
+        background: transparent;
+        box-shadow: inset 0 0 0 1px rgba(77, 163, 255, 0.6);
+        color: #9ccbff;
+    }
+    /* Tow and Retire are holds : the fill shows how far along */
+    #beamjoy-race-hud .hud-actions .hold {
         position: relative;
         overflow: hidden;
     }
-    #beamjoy-race-hud .hud-actions button.hold .fill {
+    #beamjoy-race-hud .hud-actions .hold .fill {
         position: absolute;
         top: 0;
         bottom: 0;
@@ -481,18 +526,91 @@
         background: rgba(255, 110, 100, 0.35);
         pointer-events: none;
     }
-    #beamjoy-race-hud .hud-actions button.hold .label {
+    #beamjoy-race-hud .hud-actions .tow .fill {
+        background: rgba(77, 163, 255, 0.35);
+    }
+    #beamjoy-race-hud .hud-actions .hold .label {
         position: relative;
     }
-    #beamjoy-race-hud .hud-actions button.cursor {
+    #beamjoy-race-hud .hud-actions .cursor {
         outline: 2px solid #ffffff;
         outline-offset: -2px;
         box-shadow: inset 0 0 0 4px rgba(10, 11, 14, 0.85);
     }
     #beamjoy-race-hud .hud-actions .hint {
         grid-column: 1 / -1;
+        display: flex;
+        justify-content: space-between;
+        gap: 0.5em;
         font-size: 0.72em;
         color: #a7aebf;
+    }
+
+    /* THE PITS : the P (in the pit lane), a racer's stops, your own pit line in the pits' blue */
+    #beamjoy-race-hud .pbadge {
+        flex-shrink: 0;
+    }
+    #beamjoy-race-hud .stops {
+        flex-shrink: 0;
+        padding: 0 0.4em;
+        border: 1px solid rgba(200, 206, 220, 0.35);
+        border-radius: 0.25em;
+        color: #c8cedc;
+        font-size: 0.75em;
+        font-weight: 600;
+        line-height: 1.5;
+        white-space: nowrap;
+    }
+    #beamjoy-race-hud .pitline {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45em;
+        padding: 0.5em 0.65em;
+        border-radius: 0 0.375em 0.375em 0;
+        background: rgba(77, 163, 255, 0.12);
+        box-shadow: inset 3px 0 0 #4da3ff;
+        font-size: 0.82em;
+    }
+    #beamjoy-race-hud .pitline .top {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        min-width: 0;
+    }
+    #beamjoy-race-hud .pitline b {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 900;
+        font-style: italic;
+        letter-spacing: 0.02em;
+        color: #9ccbff;
+        white-space: nowrap;
+    }
+    #beamjoy-race-hud .pitline .t {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    #beamjoy-race-hud .pitline .r {
+        margin-left: auto;
+        color: #c8cedc;
+        white-space: nowrap;
+    }
+    #beamjoy-race-hud .pitline .foot {
+        display: flex;
+        justify-content: flex-end;
+        font-size: 0.9em;
+        color: #a7aebf;
+    }
+    #beamjoy-race-hud .pitbar {
+        height: 0.375em;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.1);
+        overflow: hidden;
+    }
+    #beamjoy-race-hud .pitbar > div {
+        height: 100%;
+        background: #4da3ff;
     }
 
     /* FULL STANDINGS */
@@ -606,6 +724,25 @@
     <svg class="flag" width="15" height="11" viewBox="0 0 15 11" aria-hidden="true"><g transform="skewX(-10) translate(2 0)"><rect x="0" y="0" width="13" height="11" fill="#ebebeb"></rect><rect x="0" y="0" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="6.5" y="0" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="3.25" y="3.67" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="9.75" y="3.67" width="3.25" height="3.67" fill="#2a2d33"></rect><rect x="0" y="7.34" width="3.25" height="3.66" fill="#2a2d33"></rect><rect x="6.5" y="7.34" width="3.25" height="3.66" fill="#2a2d33"></rect></g></svg>
 </script>
 
+<!-- the P : in the pit lane (a race with pits), at the plates' slant like the flag -->
+<script type="text/ng-template" id="bjRaceHudPit.html">
+    <svg class="pbadge" width="15" height="11" viewBox="0 0 15 11" role="img" aria-label="{{'beamjoy.raceHud.pit.inPits' | translate}}"><g transform="skewX(-10) translate(2 0)"><rect x="0" y="0" width="13" height="11" rx="1.5" fill="#2f7fe0"></rect><text x="6.5" y="9" text-anchor="middle" font-family="Overpass, sans-serif" font-weight="900" font-style="italic" font-size="9.5" fill="#ffffff">P</text></g></svg>
+</script>
+
+<!-- your own pit line : the lane, your stop (its bar), a tow's hold, back in the box, the stops owed -->
+<script type="text/ng-template" id="bjRaceHudPitLine.html">
+    <div class="pitline">
+        <div class="top">
+            <span ng-include="'bjRaceHudPit.html'"></span>
+            <b ng-if="$ctrl.pitLine.title">{{$ctrl.pitLine.title}}</b>
+            <span class="t" ng-if="$ctrl.pitLine.text">{{$ctrl.pitLine.text}}</span>
+            <span class="r" ng-if="$ctrl.pitLine.right">{{$ctrl.pitLine.right}}</span>
+        </div>
+        <div class="pitbar" ng-if="$ctrl.pitLine.barPct" aria-hidden="true"><div ng-style="{width: $ctrl.pitLine.barPct}"></div></div>
+        <div class="foot" ng-if="$ctrl.pitLine.foot">{{$ctrl.pitLine.foot}}</div>
+    </div>
+</script>
+
 <section id="beamjoy-race-hud" ng-if="$ctrl.active && $ctrl.layout !== 'off' && !$ctrl.pluginHidden" ng-class="[$ctrl.layout, {focused: $ctrl.focused}]" aria-label="{{$ctrl.v.raceName}}">
 
     <!-- STANDARD -->
@@ -627,12 +764,12 @@
                     <div class="gap" ng-if="$ctrl.v.ahead">
                         <svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><polygon points="6,0 12,10 0,10" fill="#ff8955"></polygon></svg>
                         <span class="num">{{$ctrl.v.ahead.num}}<small>{{$ctrl.v.ahead.unit}}</small></span>
-                        <span class="nm"><span class="sr">{{'beamjoy.raceHud.carAhead' | translate}}</span><span class="t">{{$ctrl.v.ahead.name}}</span><span class="lbl" ng-if="$ctrl.v.ahead.lbl" ng-style="$ctrl.v.ahead.lbl.style" title="{{$ctrl.v.ahead.lbl.title}}">{{$ctrl.v.ahead.lbl.text}}</span><span ng-if="$ctrl.v.ahead.fin" ng-include="'bjRaceHudFlag.html'"></span></span>
+                        <span class="nm"><span class="sr">{{'beamjoy.raceHud.carAhead' | translate}}</span><span class="t">{{$ctrl.v.ahead.name}}</span><span ng-if="$ctrl.v.ahead.pit" ng-include="'bjRaceHudPit.html'"></span><span class="lbl" ng-if="$ctrl.v.ahead.lbl" ng-style="$ctrl.v.ahead.lbl.style" title="{{$ctrl.v.ahead.lbl.title}}">{{$ctrl.v.ahead.lbl.text}}</span><span ng-if="$ctrl.v.ahead.fin" ng-include="'bjRaceHudFlag.html'"></span></span>
                     </div>
                     <div class="gap" ng-if="$ctrl.v.behind">
                         <svg width="12" height="10" viewBox="0 0 12 10" aria-hidden="true"><polygon points="0,0 12,0 6,10" fill="#6b7180"></polygon></svg>
                         <span class="num soft">{{$ctrl.v.behind.num}}<small>{{$ctrl.v.behind.unit}}</small></span>
-                        <span class="nm"><span class="sr">{{'beamjoy.raceHud.carBehind' | translate}}</span><span class="t">{{$ctrl.v.behind.name}}</span><span class="lbl" ng-if="$ctrl.v.behind.lbl" ng-style="$ctrl.v.behind.lbl.style" title="{{$ctrl.v.behind.lbl.title}}">{{$ctrl.v.behind.lbl.text}}</span></span>
+                        <span class="nm"><span class="sr">{{'beamjoy.raceHud.carBehind' | translate}}</span><span class="t">{{$ctrl.v.behind.name}}</span><span ng-if="$ctrl.v.behind.pit" ng-include="'bjRaceHudPit.html'"></span><span class="lbl" ng-if="$ctrl.v.behind.lbl" ng-style="$ctrl.v.behind.lbl.style" title="{{$ctrl.v.behind.lbl.title}}">{{$ctrl.v.behind.lbl.text}}</span></span>
                     </div>
                 </div>
             </div>
@@ -653,6 +790,7 @@
                     <span class="pb">{{'beamjoy.raceHud.best' | translate}} {{$ctrl.v.best}}</span>
                 </div>
             </div>
+            <div ng-if="$ctrl.pitLine && !$ctrl.v.spectating" ng-include="'bjRaceHudPitLine.html'"></div>
             <div ng-if="$ctrl.v.short.length > 0">
                 <div ng-repeat="r in $ctrl.v.short track by $index">
                     <div class="fold" ng-if="r.kind === 'fold'">{{r.text}}</div>
@@ -663,6 +801,8 @@
                             <span class="lbl" ng-repeat="l in r.labels track by $index" ng-style="l.style" title="{{l.title}}">{{l.text}}</span>
                         </span>
                         <span ng-if="r.fin" ng-include="'bjRaceHudFlag.html'"></span>
+                        <span ng-if="r.pit" ng-include="'bjRaceHudPit.html'"></span>
+                        <span class="stops" ng-if="r.stops">{{r.stops}}</span>
                         <span class="pen" ng-if="r.pen">+{{r.pen}}s</span>
                         <span class="g">{{r.gap || ('beamjoy.raceHud.leader' | translate)}}</span>
                     </div>
@@ -695,16 +835,17 @@
         <div class="secs" ng-if="$ctrl.v.secs.length > 0" aria-hidden="true">
             <div class="sec" ng-repeat="s in $ctrl.v.secs track by $index" ng-class="s"></div>
         </div>
+        <div ng-if="$ctrl.pitLine && !$ctrl.v.spectating" ng-include="'bjRaceHudPitLine.html'"></div>
         <div class="gaps" ng-if="$ctrl.v.ahead || $ctrl.v.behind">
             <div class="gap" ng-if="$ctrl.v.ahead">
                 <svg width="10" height="9" viewBox="0 0 12 10" aria-hidden="true"><polygon points="6,0 12,10 0,10" fill="#ff8955"></polygon></svg>
                 <span class="num">{{$ctrl.v.ahead.num}}<small>{{$ctrl.v.ahead.unit}}</small></span>
-                <span class="nm"><span class="sr">{{'beamjoy.raceHud.carAhead' | translate}}</span><span class="t">{{$ctrl.v.ahead.name}}</span><span class="lbl" ng-if="$ctrl.v.ahead.lbl" ng-style="$ctrl.v.ahead.lbl.style" title="{{$ctrl.v.ahead.lbl.title}}">{{$ctrl.v.ahead.lbl.text}}</span><span ng-if="$ctrl.v.ahead.fin" ng-include="'bjRaceHudFlag.html'"></span></span>
+                <span class="nm"><span class="sr">{{'beamjoy.raceHud.carAhead' | translate}}</span><span class="t">{{$ctrl.v.ahead.name}}</span><span ng-if="$ctrl.v.ahead.pit" ng-include="'bjRaceHudPit.html'"></span><span class="lbl" ng-if="$ctrl.v.ahead.lbl" ng-style="$ctrl.v.ahead.lbl.style" title="{{$ctrl.v.ahead.lbl.title}}">{{$ctrl.v.ahead.lbl.text}}</span><span ng-if="$ctrl.v.ahead.fin" ng-include="'bjRaceHudFlag.html'"></span></span>
             </div>
             <div class="gap" ng-if="$ctrl.v.behind">
                 <svg width="10" height="9" viewBox="0 0 12 10" aria-hidden="true"><polygon points="0,0 12,0 6,10" fill="#6b7180"></polygon></svg>
                 <span class="num soft">{{$ctrl.v.behind.num}}<small>{{$ctrl.v.behind.unit}}</small></span>
-                <span class="nm"><span class="sr">{{'beamjoy.raceHud.carBehind' | translate}}</span><span class="t">{{$ctrl.v.behind.name}}</span><span class="lbl" ng-if="$ctrl.v.behind.lbl" ng-style="$ctrl.v.behind.lbl.style" title="{{$ctrl.v.behind.lbl.title}}">{{$ctrl.v.behind.lbl.text}}</span></span>
+                <span class="nm"><span class="sr">{{'beamjoy.raceHud.carBehind' | translate}}</span><span class="t">{{$ctrl.v.behind.name}}</span><span ng-if="$ctrl.v.behind.pit" ng-include="'bjRaceHudPit.html'"></span><span class="lbl" ng-if="$ctrl.v.behind.lbl" ng-style="$ctrl.v.behind.lbl.style" title="{{$ctrl.v.behind.lbl.title}}">{{$ctrl.v.behind.lbl.text}}</span></span>
             </div>
         </div>
         <div class="laps" ng-if="$ctrl.v.showLaps">
@@ -730,7 +871,7 @@
                         <span class="lbl" ng-repeat="l in r.labels track by $index" ng-style="l.style" title="{{l.title}}">{{l.text}}</span>
                     </span>
                 </span>
-                <span class="fl"><span ng-if="r.fin" ng-include="'bjRaceHudFlag.html'"></span><span class="pen" ng-if="r.pen">+{{r.pen}}s</span></span>
+                <span class="fl"><span ng-if="r.fin" ng-include="'bjRaceHudFlag.html'"></span><span ng-if="r.pit" ng-include="'bjRaceHudPit.html'"></span><span class="stops" ng-if="r.stops">{{r.stops}}</span><span class="pen" ng-if="r.pen">+{{r.pen}}s</span></span>
                 <span class="tg" ng-class="r.gapCls">{{r.gap}}</span>
             </li>
         </ol>
@@ -741,16 +882,35 @@
         </div>
     </div>
 
-    <!-- the Focus control's buttons (hidden otherwise) -->
-    <div class="hud-actions" ng-if="$ctrl.focused">
-        <button type="button" ng-class="{cursor: $ctrl.cursor === 0}" ng-click="$ctrl.openRaceInfo()">
-            {{'beamjoy.window.main.tabs.races.raceInfo.info' | translate}}
+    <!-- ACTIONS : the button (always there while there's something to do), or the row it opens -->
+    <div class="actbar" ng-if="$ctrl.hasActions() && !$ctrl.rowOpen()">
+        <button type="button" class="actbtn" ng-click="$ctrl.openActions()">
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="#ebebeb" stroke-width="1.8" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"></path></svg>
+            {{'beamjoy.raceHud.actions' | translate}}
         </button>
-        <button type="button" class="danger hold" ng-if="$ctrl.v.canRetire" ng-class="{cursor: $ctrl.cursor === 1}"
-            ng-mousedown="$ctrl.startRetire()" ng-mouseup="$ctrl.stopRetire()" ng-mouseleave="$ctrl.stopRetire()">
-            <span class="fill" ng-style="$ctrl.retireFill()" aria-hidden="true"></span>
-            <span class="label">{{($ctrl.retireProgress > 0 ? 'beamjoy.raceHud.retireHolding' : 'beamjoy.raceHud.retireHold') | translate}}</span>
+        <span class="key">{{$ctrl.focusLabel || 'RB + X'}}</span>
+    </div>
+    <div class="hud-actions" ng-if="$ctrl.hasActions() && $ctrl.rowOpen()">
+        <button type="button" class="actbtn tow hold" ng-if="$ctrl.canTow()" ng-class="{cursor: $ctrl.isCursor('tow')}"
+            ng-mousedown="$ctrl.startHold('tow')" ng-mouseup="$ctrl.stopHold()" ng-mouseleave="$ctrl.stopHold()">
+            <span class="fill" ng-style="$ctrl.holdFill('tow')" aria-hidden="true"></span>
+            <span class="label">{{$ctrl.towLabel()}}</span>
         </button>
-        <span class="hint">{{'beamjoy.raceHud.focusHint' | translate}}</span>
+        <button type="button" class="actbtn pit" ng-if="$ctrl.canPit()" ng-class="{cursor: $ctrl.isCursor('pit')}" ng-click="$ctrl.openPit()">
+            {{'beamjoy.raceHud.pitMenu' | translate}}
+        </button>
+        <button type="button" class="actbtn danger hold" ng-if="$ctrl.v.canRetire" ng-class="{cursor: $ctrl.isCursor('retire')}"
+            ng-mousedown="$ctrl.startHold('retire')" ng-mouseup="$ctrl.stopHold()" ng-mouseleave="$ctrl.stopHold()">
+            <span class="fill" ng-style="$ctrl.holdFill('retire')" aria-hidden="true"></span>
+            <span class="label">{{($ctrl.holding === 'retire' ? 'beamjoy.raceHud.retireHolding' : 'beamjoy.raceHud.retireHold') | translate}}</span>
+        </button>
+        <button type="button" class="actbtn" ng-class="{cursor: $ctrl.isCursor('close')}" ng-click="$ctrl.closeActions()"
+            aria-label="{{'beamjoy.raceHud.closeActions' | translate}}">
+            ✕ {{'beamjoy.common.close' | translate}}
+        </button>
+        <span class="hint" ng-if="$ctrl.focused">
+            <span>{{'beamjoy.raceHud.padHint' | translate}}</span>
+            <span>{{'beamjoy.raceHud.holdHint' | translate}}</span>
+        </span>
     </div>
 </section>

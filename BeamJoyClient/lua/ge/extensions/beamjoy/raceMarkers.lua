@@ -12,7 +12,21 @@
 -- file-top-level), since it's a "game util" global not guaranteed initialized yet while
 -- extensions are still being loaded. Colors are built lazily here for the same reason.
 local GATE_COLOR, GATE_NEXT_COLOR, GATE_SELECTED_COLOR, START_COLOR, START_SELECTED_COLOR,
-TEXT_COLOR, TEXT_BG_COLOR, PATH_COLOR, HANDLE_COLOR
+TEXT_COLOR, TEXT_BG_COLOR, PATH_COLOR, HANDLE_COLOR, PIT_COLOR, PIT_LINE_COLOR
+
+-- the pit boxes' colours (beamjoy_pits.setBoxes, the parking-spot marker's own {r, g, b, a}) : white
+-- in the editor, the one selected yellow ; in a race your own green, the others faint
+local BOX_EDITOR = { 1, 1, 1, 1 }
+local BOX_SELECTED = { 1, .85, .1, 1 }
+local BOX_OWN = { .29, .89, .54, 1 }
+local BOX_OTHER = { .55, .58, .65, .45 }
+-- your own during your stop : the pits' blue
+local BOX_STOP = { .18, .5, .88, 1 }
+-- the outline's height (m) of the boxes not picked out (direct request : your own easier to see) ;
+-- yours a little lower than the marker's own 1.2 (direct request : less in the way sat in it), the
+-- editor's selected one keeps it
+local BOX_LOW_HEIGHT = .3
+local BOX_OWN_HEIGHT = .7
 
 -- shares the same cached module table `ui/activityEditor.lua` holds in its `editors` list (Lua's
 -- `require` caches by resolved path) rather than needing raceEditor registered as its own global
@@ -20,7 +34,7 @@ TEXT_COLOR, TEXT_BG_COLOR, PATH_COLOR, HANDLE_COLOR
 local raceEditor = require("ge/extensions/beamjoy/ui/raceEditor")
 
 local M = {
-    dependencies = { "shape", "beamjoy_races", "beamjoy_raceRunner", "beamjoy_props" },
+    dependencies = { "shape", "beamjoy_races", "beamjoy_raceRunner", "beamjoy_props", "beamjoy_pits" },
 
     visible = false,
     ---@type {left: vec3, right: vec3, color: integer, next: boolean}[] the live race's drawn gates,
@@ -45,6 +59,9 @@ local function onInit()
     TEXT_BG_COLOR = BJColor(0, 0, 0, .4)
     PATH_COLOR = BJColor(1, 1, 1, .35)
     HANDLE_COLOR = BJColor(0, 1, 1, .9)
+    -- the pits' blue (#2f7fe0)
+    PIT_COLOR = BJColor(.18, .5, .88, .45)
+    PIT_LINE_COLOR = BJColor(.3, .64, 1, .8)
     MINIMAP_NEXT = color(0, 255, 0, 255)
     MINIMAP_GATE = color(255, 204, 0, 255)
     MINIMAP_START = color(0, 153, 255, 255)
@@ -355,6 +372,93 @@ local function drawGateHandles(gate)
     draw.addLine(topLeft, .25, topRight, .25, HANDLE_COLOR)
 end
 
+--- a pit lane's PIT IN or PIT OUT line (PIT_SYSTEM_PLAN.md), drawn like a gate, in the pits' blue
+---@param line BJRacePitLine
+---@param label string
+---@param color table
+---@param edgesOnly boolean? its two posts only (racing)
+---@param labelled boolean? its name above it (the editor's only : direct request)
+local function drawPitLine(line, label, color, edgesOnly, labelled)
+    local pos = vec3(line.pos.x, line.pos.y, line.pos.z)
+    local dir = vec3(line.dir.x, line.dir.y, line.dir.z):normalized()
+    local up = vec3(0, 0, 1)
+    local right = dir:cross(up) * (line.width / 2)
+    local bl, br = pos - right, pos + right
+    local tl, tr = bl + up * line.height, br + up * line.height
+    if edgesOnly then
+        draw.addLine(bl, .15, tl, .15, color)
+        draw.addLine(br, .15, tr, .15, color)
+    else
+        draw.addQuad(bl, br, tr, tl, color)
+        draw.addArrow(pos + up * (line.height / 2) + dir * 2, dir, 2, color)
+    end
+    if labelled then draw.addText(label, pos + up * (line.height + .5), TEXT_COLOR, TEXT_BG_COLOR) end
+end
+
+--- the start/finish line where it counts across the pit lane (raceGrid.lua's racePit "line" : the
+--- step-1 gate's plane, sideways without limit) : dashed, from the gate's edge out past the farther of
+--- the lane's two lines, on their side. Not drawn when the lane doesn't reach past the gate
+---@param race BJRace
+local function drawPitExtendedLine(race)
+    local pit, g = race.pit, race.gates[1]
+    if not pit or not g or (not pit.entry and not pit.exit) then return end
+    local pos = vec3(g.pos.x, g.pos.y, g.pos.z)
+    local up = vec3(0, 0, 1)
+    local right = vec3(g.dir.x, g.dir.y, g.dir.z):normalized():cross(up)
+    local reach = 0
+    for _, line in ipairs({ pit.entry, pit.exit }) do
+        if line then
+            local off = (vec3(line.pos.x, line.pos.y, line.pos.z) - pos):dot(right)
+            if math.abs(off) > math.abs(reach) then reach = off end
+        end
+    end
+    local from = g.width / 2
+    if math.abs(reach) <= from then return end
+    local side = right * (reach > 0 and 1 or -1)
+    local to = math.min(math.abs(reach) + 6, 150)
+    local lift = up * .15
+    for d = from, to, 4 do
+        draw.addLine(pos + side * d + lift, .1, pos + side * math.min(d + 2, to) + lift, .1, PIT_LINE_COLOR)
+    end
+end
+
+--- the lane's two lines (labelled in the editor) and the line across it
+---@param race BJRace
+---@param selected {kind: string}? the editor's selection
+---@param edgesOnly boolean?
+---@param labelled boolean?
+local function drawPitLane(race, selected, edgesOnly, labelled)
+    local pit = race.pit
+    if not pit then return end
+    if pit.entry then
+        drawPitLine(pit.entry, "PIT IN", selected and selected.kind == "entry" and GATE_SELECTED_COLOR or PIT_COLOR,
+            edgesOnly, labelled)
+    end
+    if pit.exit then
+        drawPitLine(pit.exit, "PIT OUT", selected and selected.kind == "exit" and GATE_SELECTED_COLOR or PIT_COLOR,
+            edgesOnly, labelled)
+    end
+    drawPitExtendedLine(race)
+end
+
+--- the race's pit boxes, for beamjoy_pits.setBoxes, coloured per slot
+---@param race BJRace
+---@param colorOf fun(slot: integer): table
+---@return table[]
+local function pitBoxes(race, colorOf)
+    local boxes = {}
+    for i, sp in ipairs(race.startPositions or {}) do
+        local box = sp.pit
+        if box and box.pos and box.dir then
+            local color = colorOf(i)
+            boxes[#boxes + 1] = { pos = box.pos, dir = box.dir, width = box.width, length = box.length, color = color,
+                height = (color == BOX_EDITOR or color == BOX_OTHER) and BOX_LOW_HEIGHT
+                    or (color == BOX_OWN or color == BOX_STOP) and BOX_OWN_HEIGHT or nil }
+        end
+    end
+    return boxes
+end
+
 ---@param startPosition {pos: {x:number,y:number,z:number}, dir: {x:number,y:number,z:number}}
 ---@param index integer
 ---@param color table
@@ -472,9 +576,10 @@ local function computeRenderSignature()
         -- watching nobody in particular : every gate, whatever anyone's progress
         return string.format("spectate:%s:%s", session.id, session.state)
     end
-    return string.format("%s:%s:%s:%s:%s:%s:%s", session.id, session.state, participant.playerName,
+    return string.format("%s:%s:%s:%s:%s:%s:%s:%s:%s:%s", session.id, session.state, participant.playerName,
         tostring(participant.lastCrossedGate), tostring(participant.currentGate),
-        tostring(participant.finished), tostring(participant.dnf))
+        tostring(participant.finished), tostring(participant.dnf), tostring(participant.pitSlot),
+        tostring(participant.inPit), tostring(beamjoy_racePits ~= nil and beamjoy_racePits.stop ~= nil))
 end
 
 local lastRenderSignature = nil
@@ -492,6 +597,8 @@ local function render()
     draw = shape
     M.minimapGates = {}
     local hasContent = false
+    -- the pit boxes shown once this is drawn (beamjoy_pits.setBoxes) ; none unless set below
+    local boxes = nil
 
     if raceEditor.race then
         local race = raceEditor.race
@@ -506,6 +613,23 @@ local function render()
         table.forEach(race.startPositions, function(s, i)
             drawStart(s, i, i == raceEditor.activeStartIndex and START_SELECTED_COLOR or START_COLOR)
         end)
+        -- the pit lane and boxes (a circuit's), each box named after its slot
+        if race.loopable then
+            local sel = raceEditor.activePit
+            drawPitLane(race, sel, false, true)
+            -- PIT IN / PIT OUT selected : its edges to drag, as a gate's (raceEditor.lua handleLine)
+            local selLine = sel and (sel.kind == "entry" or sel.kind == "exit") and race.pit and race.pit[sel.kind]
+            if selLine then drawGateHandles(selLine) end
+            boxes = pitBoxes(race, function(i)
+                return sel and sel.kind == "box" and sel.index == i and BOX_SELECTED or BOX_EDITOR
+            end)
+            for i, sp in ipairs(race.startPositions) do
+                if sp.pit and sp.pit.pos then
+                    draw.addText(string.format("Box %d", i), vec3(sp.pit.pos.x, sp.pit.pos.y, sp.pit.pos.z + 1.5),
+                        TEXT_COLOR, TEXT_BG_COLOR)
+                end
+            end
+        end
         -- its props' handles are the props editor's own (ui/propEditor.lua drawOverlays)
         hasContent = #race.gates > 0 or #race.startPositions > 0
     else
@@ -606,17 +730,30 @@ local function render()
                     drawPath(race.gates, race.loopable, race.branchingEnabled)
                     table.forEach(race.startPositions, function(s, i) drawStart(s, i, START_COLOR) end)
                 end
+                -- the pits (a race whose pits are usable) : the lane's lines, the line across it in
+                -- the lobby, every box ; your own green once you have one
+                if settings.pits then
+                    drawPitLane(race, nil, racing)
+                    local slot = participant and participant.pitSlot
+                    boxes = pitBoxes(race, function(i)
+                        if not slot then return BOX_EDITOR end
+                        if i ~= slot then return BOX_OTHER end
+                        return beamjoy_racePits and beamjoy_racePits.stop and BOX_STOP or BOX_OWN
+                    end)
+                end
                 hasContent = true
             end
         end
     end
 
+    beamjoy_pits.setBoxes(boxes)
     M.visible = hasContent
 end
 
 local function hide()
     shape.reset()
     shape.layer(FREEROAM_LAYER).reset()
+    beamjoy_pits.setBoxes(nil)
     M.visible = false
     M.minimapGates = {}
     lastRenderSignature = nil

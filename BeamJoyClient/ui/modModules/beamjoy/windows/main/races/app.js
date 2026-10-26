@@ -426,6 +426,20 @@ angular.module("beamjoy").component("bjMainRaces", {
                 allowTuning: d.allowTuning !== false,
                 // server plugins' own options : the race's values to start from
                 plugins: angular.copy(d.plugins && typeof d.plugins === "object" ? d.plugins : {}),
+                // the pits (a race whose pits are usable : race.pits) : the race's, else the server's
+                // defaults (services/races.lua PIT_SETTINGS)
+                pitStart: d.pitStart === true,
+                pitGhost: d.pitGhost !== false,
+                pitStops: d.pitStops ?? 0,
+                pitMissingPenaltyS: d.pitMissingPenaltyS ?? 30,
+                pitRefuel: d.pitRefuel !== false,
+                pitRepair: d.pitRepair !== false,
+                pitFuelRatePct: d.pitFuelRatePct ?? 5,
+                pitRepairMaxS: d.pitRepairMaxS ?? 60,
+                startFuelPct: d.startFuelPct ?? 100,
+                pitTow: d.pitTow !== false,
+                pitTowSpeed: d.pitTowSpeed ?? 50,
+                pitReturn: d.pitReturn === true,
             };
         };
 

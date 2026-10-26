@@ -52,6 +52,7 @@ const raceShareStrip = (race) => {
         oneWayGates: race.oneWayGates,
         gates: race.gates,
         startPositions: race.startPositions,
+        pit: race.pit,
         props: race.props,
         defaults: race.defaults,
     });
@@ -174,7 +175,8 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         this.RESET_PENALTY_MODES = ["hold", "time"];
         // mirrors services/races.lua's PLACEMENT_MODES (grid slot assignment at countdown time)
         this.PLACEMENT_MODES = ["deterministic", "random", "manual"];
-        this.SECTIONS = ["info", "waypoints", "starts", "props", "settings"];
+        // "pits" : a circuit's pit lane and its boxes (PIT_SYSTEM_PLAN.md), shown for a circuit only
+        this.SECTIONS = ["info", "waypoints", "starts", "pits", "props", "settings"];
         this.activeSection = "info";
 
         // registers/unregisters with the shared nav guard so switching config tabs or closing
@@ -304,6 +306,21 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             }
         };
 
+        // the pit lane's fields edited in the sidebar (the rest of race.pit is Lua's) : the steps it
+        // joins, its limit, its lines' widths
+        const PIT_FIELDS = ["fromStep", "toStep", "speedLimitKmh", "entryWidth", "exitWidth"];
+        const pitField = (pit, k) => {
+            if (!pit) return undefined;
+            if (k === "entryWidth") return pit.entry ? pit.entry.width : undefined;
+            if (k === "exitWidth") return pit.exit ? pit.exit.width : undefined;
+            return pit[k];
+        };
+        const setPitField = (pit, k, v) => {
+            if (k === "entryWidth") { if (pit.entry) pit.entry.width = v; }
+            else if (k === "exitWidth") { if (pit.exit) pit.exit.width = v; }
+            else pit[k] = v;
+        };
+
         // Lua is the source of truth (mirrors the safe-zone editor's architecture): gate/start
         // position+direction only ever change through the gizmo and are never diffed/sent back
         // from here. Every other field (name/mode/loopable/defaults/gate width-height-lap)
@@ -377,6 +394,17 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
                 // gate moved via the gizmo) to take wholesale from the echo
                 this.race.author = race.author;
                 this.race.startPositions = race.startPositions;
+                // the pit lane : its lines are placed in the world (Lua's), its steps, limit and line
+                // widths edited here, merged as the gates' fields are
+                const localPit = this.race.pit;
+                const prevPit = previous.pit;
+                this.race.pit = race.pit;
+                if (race.pit && localPit && prevPit) {
+                    PIT_FIELDS.forEach((k) => {
+                        const now = pitField(localPit, k);
+                        if (!angular.equals(now, pitField(prevPit, k))) setPitField(this.race.pit, k, now);
+                    });
+                }
                 // edited by the props editor (cmps/propEditor), which has its own copy : this one
                 // only follows
                 this.race.props = race.props;
@@ -463,6 +491,17 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             }
             if (Object.keys(metaPartial).length > 0) {
                 beamjoyStore.send("BJEditorRaceSetMeta", [metaPartial]);
+            }
+
+            if (race.pit && previous.pit) {
+                const pitPartial = {};
+                PIT_FIELDS.forEach((k) => {
+                    const v = pitField(race.pit, k);
+                    if (v != null && !angular.equals(v, pitField(previous.pit, k))) pitPartial[k] = Number(v);
+                });
+                if (Object.keys(pitPartial).length > 0) {
+                    beamjoyStore.send("BJEditorRacePitSet", [pitPartial]);
+                }
             }
 
             (race.gates || []).forEach((gate, i) => {
@@ -739,6 +778,91 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
         this.resetStart = (event, idx) => {
             event.stopPropagation();
             beamjoyStore.send("BJEditorRaceResetStart", [idx + 1]);
+        };
+
+        // PITS (PIT_SYSTEM_PLAN.md) : PIT IN / PIT OUT and each slot's box, placed where your car is,
+        // then moved with the gizmo like a gate or a start
+        this.activePit = null;
+        $rootScope.$on("BJEditorRaceActivePit", (_, sel) => {
+            this.activePit = sel && sel.kind ? sel : null;
+        });
+        this.isPitActive = (kind, index) =>
+            !!this.activePit && this.activePit.kind === kind && (kind !== "box" || this.activePit.index === index + 1);
+        // placed with the mouse (Lua's ghost follows it) : what's being placed, null when nothing is
+        this.pitPlacing = null;
+        $rootScope.$on("BJEditorRacePitPlacing", (_, p) => {
+            this.pitPlacing = p && p.kind ? p : null;
+        });
+        this.isPitPlacing = (kind, index) =>
+            !!this.pitPlacing && this.pitPlacing.kind === kind && (kind !== "box" || this.pitPlacing.index === index + 1);
+        this.pitArm = (event, kind, index) => {
+            if (event) event.stopPropagation();
+            // the props' Fixed rotation (the same switch, direct request) : Lua has this PC's
+            // choice even when the props section was never opened
+            beamjoyStore.send("BJEditorPropsSetFixedRotation", [!!this.props.fixedRotation]);
+            beamjoyStore.send("BJEditorRacePitArm", [kind, index != null ? index + 1 : null]);
+        };
+        this.pitPlacingLabel = () => {
+            const p = this.pitPlacing;
+            if (!p) return "";
+            if (p.kind === "box") return `${translate("beamjoy.window.config.tabs.races.pits.box")} ${p.index}`;
+            return translate(`beamjoy.window.config.tabs.races.pits.${p.kind}`);
+        };
+        this.pitPlace = (event, kind, index) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRacePitPlace", [kind, index != null ? index + 1 : null]);
+        };
+        this.pitSelect = (event, kind, index) => {
+            event.stopPropagation();
+            if (this.isPitActive(kind, index)) return beamjoyStore.send("BJEditorRaceSelectStart", [null]);
+            beamjoyStore.send("BJEditorRacePitSelect", [kind, index != null ? index + 1 : null]);
+        };
+        this.pitTeleport = (event, kind, index) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRacePitTeleport", [kind, index != null ? index + 1 : null]);
+        };
+        this.pitClearBox = (event, index) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJEditorRacePitClearBox", [index + 1]);
+        };
+        this.pitDelete = (event) => {
+            event.stopPropagation();
+            beamjoyConfirm.ask(translate("beamjoy.window.config.tabs.races.pits.deleteConfirm"),
+                () => beamjoyStore.send("BJEditorRacePitDelete"));
+        };
+        // the route's gates, for the steps the lane joins : one list, rebuilt only when the gate count
+        // changes (bj-select's options is a one-way binding : a new array every digest never settles)
+        this.pitStepList = [];
+        this.pitStepOptions = () => {
+            const count = this.race ? this.race.gates.length : 0;
+            if (this.pitStepList.length !== count) {
+                this.pitStepList = Array.from({ length: count }, (_, i) => ({
+                    value: i + 1,
+                    label: `${translate("beamjoy.window.config.tabs.races.gate")} ${i + 1}`,
+                }));
+            }
+            return this.pitStepList;
+        };
+        // the slots without a box (1-based), while pits stay off
+        this.pitMissingBoxes = () => (this.race ? this.race.startPositions : [])
+            .map((sp, i) => (sp.pit ? null : i + 1)).filter((n) => n !== null);
+        // why the pits can't be used yet (null : they can), as services/races.lua's pitsUsable
+        this.pitProblem = () => {
+            const r = this.race;
+            if (!r || !r.loopable) return "circuitOnly";
+            if (r.branchingEnabled) return "branching";
+            const pit = r.pit;
+            if (!pit || !pit.entry || !pit.exit) return "lines";
+            if (!pit.fromStep || !pit.toStep || pit.fromStep === pit.toStep) return "steps";
+            if (r.startPositions.length === 0) return "noStarts";
+            if (this.pitMissingBoxes().length > 0) return "boxes";
+            return null;
+        };
+        this.pitProblemText = () => {
+            const why = this.pitProblem();
+            if (!why) return "";
+            return translate(`beamjoy.window.config.tabs.races.pits.problem.${why}`)
+                .replace("{slots}", this.pitMissingBoxes().join(", "));
         };
 
         this.save = (event) => {

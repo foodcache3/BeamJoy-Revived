@@ -1,0 +1,391 @@
+<style>
+    /* fixed + viewport units, as the other BJS windows (<beamjoy> has no size of its own) ; the
+       race HUD's and the delivery board's tokens : near-black surface, #f60 selection, pit blue */
+    /* on the race HUD's left, as wide as its standard layout (22em) : app.js places it against the
+       HUD itself ; this is where it goes without one */
+    #beamjoy-pit-control {
+        position: fixed;
+        top: 2vh;
+        right: calc(1vw + 22.5em);
+        z-index: 6;
+        width: 22em;
+        max-height: 94vh;
+        overflow-y: auto;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        background: rgba(10, 11, 14, 0.92);
+        border-radius: 0.5em;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08), 0 1.5em 3.5em rgba(0, 0, 0, 0.5);
+        color: #ebebeb;
+        font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;
+        font-variant-numeric: tabular-nums;
+        outline: none;
+    }
+    #beamjoy-pit-control .pc-head {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.7em 0.7em 0.6em 1em;
+    }
+    #beamjoy-pit-control .pc-titles {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.25em;
+    }
+    #beamjoy-pit-control .pc-eyebrow {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 900;
+        font-style: italic;
+        font-size: 0.75em;
+        line-height: 1;
+        color: #9ccbff;
+    }
+    #beamjoy-pit-control h2 {
+        margin: 0;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-style: italic;
+        font-size: 1.2em;
+        line-height: 1.2;
+    }
+    #beamjoy-pit-control .pc-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.2em 0.65em;
+        border-radius: 0.25em;
+        background: #282b33;
+        color: #c8cedc;
+        font-size: 0.78em;
+        white-space: nowrap;
+    }
+    #beamjoy-pit-control .pc-chip.warn {
+        color: #ffc768;
+    }
+    #beamjoy-pit-control .pc-x {
+        flex-shrink: 0;
+        width: 2.2em;
+        height: 2.2em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 0;
+        border-radius: 0.25em;
+        background: transparent;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+        cursor: pointer;
+    }
+    #beamjoy-pit-control .pc-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4em;
+        padding: 0.1em 0.75em 0.75em;
+    }
+    #beamjoy-pit-control .pc-row {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45em;
+        padding: 0.55em 0.65em 0.55em 0.8em;
+        border-radius: 0.375em;
+        background: rgba(255, 255, 255, 0.04);
+        cursor: pointer;
+    }
+    #beamjoy-pit-control .pc-row:hover {
+        background: rgba(255, 255, 255, 0.07);
+    }
+    /* the pad's row : the delivery board's orange */
+    #beamjoy-pit-control .pc-row.sel {
+        background: rgba(255, 102, 0, 0.12);
+        box-shadow: inset 3px 0 0 #f60, 0 0 0 2px rgba(255, 102, 0, 0.55);
+    }
+    #beamjoy-pit-control .pc-row.dis {
+        opacity: 0.42;
+        cursor: default;
+    }
+    /* the name and its control on a line, what goes with them on the next */
+    #beamjoy-pit-control .pc-line {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 9.5em;
+        align-items: center;
+        gap: 0.4em 0.6em;
+    }
+    #beamjoy-pit-control .pc-line.after {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+    #beamjoy-pit-control .pc-lab {
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 700;
+        font-style: italic;
+        font-size: 1em;
+    }
+    #beamjoy-pit-control .pc-val {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 2.2em;
+        border-radius: 0.25em;
+        background: #1f2229;
+    }
+    #beamjoy-pit-control .pc-arr {
+        flex-shrink: 0;
+        width: 2.2em;
+        height: 2.2em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: 0;
+        border-radius: 0.25em;
+        background: transparent;
+        color: #6b7180;
+        cursor: pointer;
+    }
+    #beamjoy-pit-control .pc-row.sel .pc-arr {
+        color: #ffb08a;
+    }
+    #beamjoy-pit-control .pc-arr:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+    }
+    #beamjoy-pit-control .pc-v {
+        flex: 1;
+        text-align: center;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        font-size: 1em;
+        white-space: nowrap;
+    }
+    #beamjoy-pit-control .pc-v.on {
+        color: #4da3ff;
+    }
+    #beamjoy-pit-control .pc-v.off {
+        color: #8b919e;
+    }
+    #beamjoy-pit-control .pc-side {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6em;
+        font-size: 0.85em;
+        color: #c8cedc;
+        white-space: nowrap;
+    }
+    #beamjoy-pit-control .pc-line.after .pc-side {
+        grid-column: auto;
+    }
+    #beamjoy-pit-control .pc-secs {
+        min-width: 3.6em;
+        text-align: right;
+        color: #ebebeb;
+        font-weight: 600;
+    }
+    #beamjoy-pit-control .pc-btn {
+        min-height: 2em;
+        padding: 0 0.9em;
+        border: 0;
+        border-radius: 0.25em;
+        background: #363a45;
+        color: #ebebeb;
+        font: inherit;
+        cursor: pointer;
+    }
+    #beamjoy-pit-control .pc-btn:hover {
+        background: #414653;
+    }
+    #beamjoy-pit-control .pc-tank {
+        position: relative;
+        height: 0.75em;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+    }
+    #beamjoy-pit-control .pc-tank .now {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        background: #6b7180;
+    }
+    #beamjoy-pit-control .pc-tank .add {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        background: #4da3ff;
+    }
+    #beamjoy-pit-control .pc-small {
+        font-size: 0.78em;
+        color: #a7aebf;
+    }
+    #beamjoy-pit-control .pc-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4em;
+    }
+    #beamjoy-pit-control .pc-off {
+        font-size: 0.85em;
+        color: #a7aebf;
+    }
+    #beamjoy-pit-control .pc-done {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.6em;
+        min-height: 2.6em;
+        border: 0;
+        border-radius: 0.375em;
+        background: #363a45;
+        color: #ebebeb;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        font-size: 1em;
+        cursor: pointer;
+    }
+    #beamjoy-pit-control .pc-done.sel {
+        background: #c24b00;
+        box-shadow: 0 0 0 2px rgba(255, 102, 0, 0.55);
+    }
+    #beamjoy-pit-control .pc-done small {
+        font-family: "Noto Sans", sans-serif;
+        font-style: normal;
+        font-weight: 600;
+        font-size: 0.78em;
+        color: #c8cedc;
+    }
+    #beamjoy-pit-control .pc-foot {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.45em 0.9em;
+        padding: 0.6em 1em;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        font-size: 0.72em;
+        color: #c8cedc;
+    }
+    #beamjoy-pit-control .pc-hint {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45em;
+    }
+    /* the pad's glyphs : a face button round, the D-pad outlined */
+    #beamjoy-pit-control .pc-g {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.5em;
+        height: 1.5em;
+        padding: 0 0.2em;
+        box-sizing: border-box;
+        border-radius: 0.75em;
+        background: #ebebeb;
+        color: #0a0b0e;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-size: 0.95em;
+    }
+    #beamjoy-pit-control .pc-g.wide {
+        border-radius: 0.25em;
+        background: transparent;
+        box-shadow: inset 0 0 0 1px #8b919e;
+        color: #c8cedc;
+        padding: 0 0.4em;
+    }
+</style>
+
+<!-- the arrows, one template -->
+<script type="text/ng-template" id="bjPitArrowL.html">
+    <svg width="10" height="14" viewBox="0 0 10 14" aria-hidden="true"><path d="M8 1L2 7l6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</script>
+<script type="text/ng-template" id="bjPitArrowR.html">
+    <svg width="10" height="14" viewBox="0 0 10 14" aria-hidden="true"><path d="M2 1l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+</script>
+
+<section id="beamjoy-pit-control" ng-if="$ctrl.open && $ctrl.v" ng-style="$ctrl.placeStyle" role="dialog" tabindex="0" aria-label="{{'beamjoy.race.pitMenu.title' | translate}}">
+    <header class="pc-head">
+        <div class="pc-titles">
+            <span class="pc-eyebrow">{{$ctrl.v.eyebrow}}</span>
+            <h2>{{'beamjoy.race.pitMenu.title' | translate}}</h2>
+        </div>
+        <span class="pc-chip">{{$ctrl.v.stops}}</span>
+        <button type="button" class="pc-x" ng-click="$ctrl.close()" aria-label="{{'beamjoy.common.close' | translate}}">
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="#c8cedc" stroke-width="2" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"></path></svg>
+        </button>
+    </header>
+
+    <div class="pc-list">
+        <!-- REFUEL (a battery : recharge) -->
+        <div class="pc-row" ng-if="$ctrl.d.refuelAllowed" ng-class="{sel: $ctrl.cursor === 0}" ng-click="$ctrl.select(0)">
+            <div class="pc-line">
+                <span class="pc-lab">{{$ctrl.v.fuelLabel}}</span>
+                <span class="pc-val">
+                    <button type="button" class="pc-arr" ng-click="$ctrl.toggleFuel(); $event.stopPropagation()" aria-label="{{$ctrl.v.fuelLabel}}"><span ng-include="'bjPitArrowL.html'"></span></button>
+                    <span class="pc-v" ng-class="$ctrl.v.fuelOn ? 'on' : 'off'">{{($ctrl.v.fuelOn ? 'beamjoy.race.pitMenu.on' : 'beamjoy.race.pitMenu.off') | translate}}</span>
+                    <button type="button" class="pc-arr" ng-click="$ctrl.toggleFuel(); $event.stopPropagation()" aria-label="{{$ctrl.v.fuelLabel}}"><span ng-include="'bjPitArrowR.html'"></span></button>
+                </span>
+                <span class="pc-side">{{'beamjoy.race.pitMenu.tank' | translate}} {{$ctrl.v.tankText}}</span>
+            </div>
+        </div>
+        <div class="pc-row dis" ng-if="!$ctrl.d.refuelAllowed">
+            <span class="pc-off">{{'beamjoy.race.pitMenu.refuelOff' | translate}}</span>
+        </div>
+
+        <!-- THE AMOUNT -->
+        <div class="pc-row" ng-if="$ctrl.d.refuelAllowed" ng-class="{sel: $ctrl.cursor === 1, dis: !$ctrl.v.fuelOn}" ng-click="$ctrl.select(1)">
+            <div class="pc-line">
+                <span class="pc-lab">{{'beamjoy.race.pitMenu.fuelToAdd' | translate}}</span>
+                <span class="pc-val">
+                    <button type="button" class="pc-arr" ng-click="$ctrl.step(-1); $event.stopPropagation()" aria-label="{{'beamjoy.race.pitMenu.less' | translate}}"><span ng-include="'bjPitArrowL.html'"></span></button>
+                    <span class="pc-v">{{$ctrl.v.addText}}</span>
+                    <button type="button" class="pc-arr" ng-click="$ctrl.step(1); $event.stopPropagation()" aria-label="{{'beamjoy.race.pitMenu.more' | translate}}"><span ng-include="'bjPitArrowR.html'"></span></button>
+                </span>
+                <span class="pc-side">
+                    <button type="button" class="pc-btn" ng-click="$ctrl.fillUp(); $event.stopPropagation()">{{'beamjoy.race.pitMenu.fillUp' | translate}}</button>
+                    <span class="pc-secs">{{$ctrl.v.fuelSText}}</span>
+                </span>
+            </div>
+            <div class="pc-line after" ng-if="$ctrl.v.fuelOn">
+                <span class="pc-small">{{'beamjoy.race.pitMenu.afterStop' | translate}}</span>
+                <div class="pc-tank" aria-hidden="true">
+                    <div class="now" ng-style="{width: $ctrl.v.nowPct}"></div>
+                    <div class="add" ng-style="{left: $ctrl.v.nowPct, width: $ctrl.v.addPct}"></div>
+                </div>
+                <span class="pc-side" style="justify-content: flex-start">{{$ctrl.v.afterText}}</span>
+            </div>
+        </div>
+
+        <!-- REPAIR -->
+        <div class="pc-row" ng-if="$ctrl.d.repairAllowed" ng-class="{sel: $ctrl.cursor === 2}" ng-click="$ctrl.select(2)">
+            <div class="pc-line">
+                <span class="pc-lab">{{'beamjoy.race.pitMenu.repair' | translate}}</span>
+                <span class="pc-val">
+                    <button type="button" class="pc-arr" ng-click="$ctrl.toggleRepair(); $event.stopPropagation()" aria-label="{{'beamjoy.race.pitMenu.repair' | translate}}"><span ng-include="'bjPitArrowL.html'"></span></button>
+                    <span class="pc-v" ng-class="$ctrl.v.repairOn ? 'on' : 'off'">{{($ctrl.v.repairOn ? 'beamjoy.race.pitMenu.on' : 'beamjoy.race.pitMenu.off') | translate}}</span>
+                    <button type="button" class="pc-arr" ng-click="$ctrl.toggleRepair(); $event.stopPropagation()" aria-label="{{'beamjoy.race.pitMenu.repair' | translate}}"><span ng-include="'bjPitArrowR.html'"></span></button>
+                </span>
+                <span class="pc-side">{{$ctrl.v.damageText}}<span class="pc-secs" ng-if="$ctrl.v.repairOn">{{$ctrl.v.repairSText}}</span></span>
+            </div>
+            <div class="pc-chips" ng-if="$ctrl.v.chips.length > 0">
+                <span class="pc-chip" ng-repeat="c in $ctrl.v.chips track by c.key" ng-class="{warn: c.warn}">{{c.text}}</span>
+            </div>
+        </div>
+        <div class="pc-row dis" ng-if="!$ctrl.d.repairAllowed">
+            <span class="pc-off">{{'beamjoy.race.pitMenu.repairOff' | translate}}</span>
+        </div>
+
+        <button type="button" class="pc-done" ng-class="{sel: $ctrl.cursor === 3}" ng-click="$ctrl.close()">
+            {{'beamjoy.race.pitMenu.done' | translate}}<small>{{$ctrl.v.doneText}}</small>
+        </button>
+    </div>
+
+    <footer class="pc-foot">
+        <span class="pc-hint"><span class="pc-g wide">▲▼</span>{{'beamjoy.race.pitMenu.hints.select' | translate}}</span>
+        <span class="pc-hint"><span class="pc-g wide">◀▶</span>{{$ctrl.v.lrHint}}</span>
+        <span class="pc-hint"><span class="pc-g">A</span>{{$ctrl.v.aHint}}</span>
+        <span class="pc-hint"><span class="pc-g">B</span>{{'beamjoy.race.pitMenu.hints.close' | translate}}</span>
+        <span class="pc-small">{{'beamjoy.race.pitMenu.saved' | translate}}</span>
+    </footer>
+</section>

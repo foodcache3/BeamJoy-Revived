@@ -135,6 +135,22 @@
 ---"pool": when true, each participant is automatically force-spawned a random entry from the pool
 ---the moment they join the lobby, instead of being steered to the native vehicle selector to pick
 ---one themselves ; default false
+---@field pitStart boolean? and the other `pit*` keys, and `startFuelPct` : the pits' (M.PIT_SETTINGS),
+---only used on a race whose pits are usable (M.pitsUsable)
+
+---@class BJRacePitLine a pit lane's PIT IN or PIT OUT line, shaped like a gate
+---@field pos {x: number, y: number, z: number}
+---@field dir {x: number, y: number, z: number}
+---@field width number
+---@field height number
+
+---@class BJRacePit a circuit's pit lane (PIT_SYSTEM_PLAN.md). Racers in it are `inPit` (raceGrid.lua's
+---racePit) : the steps it skips are credited to them, and the start/finish line counts across it
+---@field entry BJRacePitLine "PIT IN"
+---@field exit BJRacePitLine "PIT OUT"
+---@field fromStep integer the last route step before PIT IN : it counts only right after it
+---@field toStep integer the first route step after PIT OUT
+---@field speedLimitKmh integer the lane's limiter, [20, 150]
 
 ---@class BJRace
 ---@field id integer
@@ -166,7 +182,9 @@
 ---behavior. Purely about which crossings register as valid progress at all; no penalty of any kind
 ---is attached to a "wrong-way" crossing in either state, since a wrong-way crossing while this is
 ---on simply never registers as anything, same as before this option existed.
----@field startPositions {pos: {x: number, y: number, z: number}, dir: {x: number, y: number, z: number}}[]
+---@field startPositions {pos: {x: number, y: number, z: number}, dir: {x: number, y: number, z: number}, pit: {pos: table, dir: table, width: number?, length: number?}?}[]
+---each slot's own pit box (`pit`) : a racer's box is their first slot's, for the whole event
+---@field pit BJRacePit? a circuit's pit lane
 ---@field freeroam boolean? also run from freeroam : driving through its start gate starts a
 ---one-lap run against the clock, no lobby (services/raceFreeroam.lua). Its times go on their own
 ---board, `freeroamLeaderboard` (a rolling start isn't comparable with a grid's standing one)
@@ -268,6 +286,27 @@ local M = {
         GRID = "grid",
         PASSIVE = "passive",
     },
+
+    --- the pits' settings : race defaults, start options and phase rules alike (racePhases.lua's
+    --- RULE_KEYS takes them too). `int` ones are clamped to [min, max]
+    PIT_SETTINGS = {
+        pitStart = { kind = "boolean", default = false },
+        pitGhost = { kind = "boolean", default = true },
+        pitStops = { kind = "int", min = 0, max = 20, default = 0 },
+        pitMissingPenaltyS = { kind = "int", min = 0, max = 600, default = 30 },
+        pitRefuel = { kind = "boolean", default = true },
+        pitRepair = { kind = "boolean", default = true },
+        pitFuelRatePct = { kind = "int", min = 1, max = 100, default = 5 },
+        pitRepairMaxS = { kind = "int", min = 0, max = 600, default = 60 },
+        startFuelPct = { kind = "int", min = 5, max = 100, default = 100 },
+        pitTow = { kind = "boolean", default = true },
+        -- km/h a tow to the pits is held at, for the route back (raceGrid.lua's racePit "tow")
+        pitTowSpeed = { kind = "int", min = 10, max = 200, default = 50 },
+        pitReturn = { kind = "boolean", default = false },
+    },
+    PIT_SPEED_MIN = 20,
+    PIT_SPEED_MAX = 150,
+    PIT_SPEED_DEFAULT = 60,
 
     ---@type BJRace[] races for the current map
     data = {},
@@ -417,6 +456,82 @@ local function sanePoint(v) return services_props.sanePoint(v) end
 ---@return table[]? props, string? err
 local function sanitizeProps(props) return services_props.sanitize(props, "A race") end
 
+--- one pit setting's value, checked (nil : not a valid one)
+---@param key string a M.PIT_SETTINGS key
+---@param v any
+---@return boolean|integer|nil
+function M.pitSettingValue(key, v)
+    local spec = M.PIT_SETTINGS[key]
+    if not spec or v == nil then return nil end
+    if spec.kind == "boolean" then
+        if type(v) == "boolean" then return v end
+        return nil
+    end
+    v = tonumber(v)
+    if not v or v ~= v then return nil end
+    return math.clamp(math.floor(v), spec.min, spec.max)
+end
+
+---@param v any
+---@return BJRacePitLine?
+local function sanitizePitLine(v)
+    if type(v) ~= "table" then return nil end
+    local pos, dir = sanePoint(v.pos), sanePoint(v.dir)
+    local width, height = tonumber(v.width), tonumber(v.height)
+    if not pos or not dir or not width or not height then return nil end
+    return { pos = pos, dir = dir, width = math.clamp(width, 1, 100), height = math.clamp(height, 1, 50) }
+end
+
+--- a race's pit lane, checked : nil when it isn't one (no lines yet is no pit lane)
+---@param pit any
+---@param gateCount integer
+---@return BJRacePit?
+local function sanitizePit(pit, gateCount)
+    if type(pit) ~= "table" then return nil end
+    local entry, exit = sanitizePitLine(pit.entry), sanitizePitLine(pit.exit)
+    if not entry and not exit then return nil end
+    local function step(v)
+        v = tonumber(v)
+        if not v or v ~= v then return nil end
+        return math.clamp(math.floor(v), 1, gateCount)
+    end
+    return {
+        entry = entry,
+        exit = exit,
+        fromStep = step(pit.fromStep),
+        toStep = step(pit.toStep),
+        speedLimitKmh = math.clamp(math.floor(tonumber(pit.speedLimitKmh) or M.PIT_SPEED_DEFAULT),
+            M.PIT_SPEED_MIN, M.PIT_SPEED_MAX),
+    }
+end
+
+---@param v any
+---@return {pos: table, dir: table, width: number?, length: number?}?
+local function sanitizePitBox(v)
+    if type(v) ~= "table" then return nil end
+    local pos, dir = sanePoint(v.pos), sanePoint(v.dir)
+    if not pos or not dir then return nil end
+    local width, length = tonumber(v.width), tonumber(v.length)
+    return { pos = pos, dir = dir, width = width and math.clamp(width, 1.5, 10) or nil,
+        length = length and math.clamp(length, 3, 30) or nil }
+end
+
+--- the pits can be used : a circuit (not a branching one) with both lines, the steps they join,
+--- and a box for every start slot. Otherwise a race runs without them, as before
+---@param race BJRace?
+---@return boolean
+function M.pitsUsable(race)
+    local pit = race and race.pit
+    if not pit or not race.loopable or race.branchingEnabled then return false end
+    if not pit.entry or not pit.exit or not pit.fromStep or not pit.toStep then return false end
+    if pit.fromStep > #race.gates or pit.toStep > #race.gates or pit.fromStep == pit.toStep then return false end
+    if not table.isArray(race.startPositions) or #race.startPositions == 0 then return false end
+    for _, sp in ipairs(race.startPositions) do
+        if type(sp.pit) ~= "table" then return false end
+    end
+    return true
+end
+
 ---@param race BJRace
 ---@param existingRaces BJRace[]? defaults to M.data (the current map's own races): only ever
 ---passed explicitly by the legacy race importer below, which may be preparing a race for a
@@ -452,6 +567,12 @@ local function sanitizeRace(race, existingRaces)
     local props, propsErr = sanitizeProps(race.props)
     if not props then return propsErr end
     race.props = props
+
+    -- the pit lane, and each slot's box (the slot's other fields as they were)
+    race.pit = sanitizePit(race.pit, #race.gates)
+    for _, sp in ipairs(race.startPositions) do
+        sp.pit = sanitizePitBox(sp.pit)
+    end
 
     race.sectorCount = math.max(1, math.min(math.floor(tonumber(race.sectorCount) or 3), #race.gates, 12))
     race.manualSectors = race.manualSectors == true
@@ -526,6 +647,11 @@ local function sanitizeRace(race, existingRaces)
     race.defaults.waypointBeams = race.defaults.waypointBeams ~= false
     race.defaults.allowTuning = race.defaults.allowTuning ~= false
     race.defaults.randomizeVehiclePool = race.defaults.randomizeVehiclePool == true
+    for key, spec in pairs(M.PIT_SETTINGS) do
+        local v = M.pitSettingValue(key, race.defaults[key])
+        if v == nil then v = spec.default end
+        race.defaults[key] = v
+    end
     if race.defaults.laps ~= nil then
         race.defaults.laps = math.max(1, math.floor(tonumber(race.defaults.laps) or 1))
     end
@@ -1217,7 +1343,7 @@ local BUNDLED_COURSE_UPDATES = {
     { map = "west_coast_usa", name = "Street Course 2 Reverse", revision = 1, force = true },
 }
 local COURSE_FIELDS = { "mode", "gates", "startPositions", "distance", "loopable", "branchingEnabled",
-    "oneWayGates", "sectorCount", "manualSectors" }
+    "oneWayGates", "sectorCount", "manualSectors", "pit" }
 
 ---@param race table
 ---@param shape {gates: integer, distance: number}

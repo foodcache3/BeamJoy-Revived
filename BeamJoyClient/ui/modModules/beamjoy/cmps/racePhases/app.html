@@ -309,6 +309,71 @@
                     <bj-select ng-model="p.rules.resetPenaltyEnabled" options="$ctrl.onOffOptions"></bj-select>
                 </div>
             </div>
+
+            <!-- the pits' (a race with usable pits) : e.g. qualifying from the pits on little fuel, the
+                 race from the grid with a stop -->
+            <span class="bjr-muted" ng-if="$ctrl.pits">{{'beamjoy.window.config.tabs.races.sections.pits' | translate}}</span>
+            <div class="row2" ng-if="$ctrl.pits">
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitStart.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitStart' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitStart" options="$ctrl.pitStartOptions"></bj-select>
+                </div>
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitGhost.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitGhost' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitGhost" options="$ctrl.onOffOptions"></bj-select>
+                </div>
+            </div>
+            <div class="row2" ng-if="$ctrl.pits">
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitStops.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitStops' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitStops" options="$ctrl.pitStopsOptions"></bj-select>
+                </div>
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitMissingPenaltyS.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitMissingPenaltyS' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitMissingPenaltyS" options="$ctrl.pitPenaltyOptions"></bj-select>
+                </div>
+            </div>
+            <div class="row2" ng-if="$ctrl.pits">
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitRefuel.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitRefuel' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitRefuel" options="$ctrl.onOffOptions"></bj-select>
+                </div>
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitFuelRatePct.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitFuelRatePct' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitFuelRatePct" options="$ctrl.pitRateOptions"></bj-select>
+                </div>
+            </div>
+            <div class="row2" ng-if="$ctrl.pits">
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitTow.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitTow' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitTow" options="$ctrl.onOffOptions"></bj-select>
+                </div>
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitTowSpeed.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitTowSpeed' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitTowSpeed" options="$ctrl.pitTowSpeedOptions"></bj-select>
+                </div>
+            </div>
+            <div class="row2" ng-if="$ctrl.pits">
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitRepair.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitRepair' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitRepair" options="$ctrl.onOffOptions"></bj-select>
+                </div>
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitRepairMaxS.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitRepairMaxS' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitRepairMaxS" options="$ctrl.pitRepairOptions"></bj-select>
+                </div>
+            </div>
+            <div class="row2" ng-if="$ctrl.pits">
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.startFuelPct.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.startFuelPct' | translate}}</span>
+                    <bj-select ng-model="p.rules.startFuelPct" options="$ctrl.startFuelOptions"></bj-select>
+                </div>
+                <!-- not after the last phase : there's no next one to be ready for -->
+                <div class="bjr-field" ng-if="!$last">
+                    <span class="name" title="{{'beamjoy.racePhases.rules.pitReturn.tooltip' | translate}}">{{'beamjoy.racePhases.rules.pitReturn' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitReturn" options="$ctrl.onOffOptions"></bj-select>
+                </div>
+            </div>
         </div>
     </div>
 </div>

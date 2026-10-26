@@ -51,6 +51,8 @@ await import(`/ui/modModules/beamjoy/windows/hud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceCountdown/app.js`);
+// the pit menu first : its formatter (beamjoyPitFormat) is the race HUD's too
+await import(`/ui/modModules/beamjoy/windows/pitControl/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceHud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/hunterCountdown/app.js`);
 await import(`/ui/modModules/beamjoy/windows/hunterHud/app.js`);
@@ -100,6 +102,7 @@ beamjoyModule.component("beamjoy", {
                         <bj-config></bj-config>
                         <bj-race-countdown></bj-race-countdown>
                         <bj-race-hud></bj-race-hud>
+                        <bj-pit-control></bj-pit-control>
                         <bj-plugin-overlays></bj-plugin-overlays>
                         <bj-hunter-countdown></bj-hunter-countdown>
                         <bj-hunter-hud></bj-hunter-hud>

@@ -69,6 +69,7 @@ local function sendConfigToUI()
         Freeroam = M.data.Freeroam,
         Voting = M.data.Voting,
         Deliveries = M.data.Deliveries,
+        RacePits = M.data.RacePits,
         -- SetConfig holders only (the server leaves it out of everyone else's cache)
         Discord = M.data.Discord,
     })

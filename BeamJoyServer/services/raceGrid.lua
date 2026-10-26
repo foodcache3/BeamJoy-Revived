@@ -119,6 +119,20 @@
 ---@field eventOut boolean? out of the event : they disconnected and didn't come back in time. They
 ---keep their earlier phases' results, and sit out the rest
 ---@field lastResetMs integer? the shared clock at their last reset counted (raceReset)
+---@field pitSlot integer? their pit box (PIT_SYSTEM_PLAN.md) : race.startPositions[pitSlot].pit, the
+---same for the whole event (ensurePitSlot)
+---@field inPit true? in the pit lane : the limiter on, ghosted (settings.pitGhost), the steps it skips
+---being credited (racePit)
+---@field pitPending integer[]? while inPit : the route steps still to credit, in order. Not sent
+---@field pitEntryMs integer? their race time at PIT IN this pass (the transit check). Not sent
+---@field pitPenalized true? the pit entry penalty given this pass. Not sent
+---@field pitStoppedPass true? their stop this pass counted
+---@field pitStops integer? stops made this phase
+---@field pitLaps integer[]? the laps the pit lane touched this phase (the one they went in on and the
+---next) : left out of best lap, best sectors and the leaderboard
+---@field towUntilMs integer? towed to the pits : held in their box until then (the shared clock)
+---@field pitReturnPending true? finished, asked back to their box before the next phase (pitReturn)
+---@field pitReturned true? back in their box after the phase
 
 ---@class BJRaceSessionSettings host-configurable at start time, seeded from BJRaceDefaults
 ---@field laps integer?
@@ -207,6 +221,9 @@
 ---BJRaceDefaults.allowTuning). Default true
 ---@field randomizeVehiclePool boolean only meaningful while vehicleRestrictionStartMode == "pool"
 ---(see BJRaceDefaults.randomizeVehiclePool). Default false
+---@field pits boolean the race's pits are usable (services_races.pitsUsable) : without, every pit
+---setting below is its default and nothing pit-related happens
+---@field pitStart boolean and the other pit settings (services_races.PIT_SETTINGS), per phase too
 
 ---@class BJRaceSession
 ---@field id string
@@ -379,6 +396,26 @@ local function buildCumulativeDistances(race)
     return cum
 end
 
+--- whether the pit lane touched one of a racer's laps (PIT_SYSTEM_PLAN.md) : it doesn't count for
+--- their best lap, best sectors or the leaderboard
+---@param p BJRaceParticipant
+---@param lap integer
+---@return boolean
+local function isPitLap(p, lap)
+    for _, l in ipairs(p.pitLaps or {}) do
+        if l == lap then return true end
+    end
+    return false
+end
+
+---@param p BJRaceParticipant
+---@param lap integer
+local function markPitLap(p, lap)
+    if isPitLap(p, lap) then return end
+    p.pitLaps = p.pitLaps or {}
+    table.insert(p.pitLaps, lap)
+end
+
 --- records the participant's currently in-progress sector as complete, at lapRelativeNow, and
 --- advances currentSector. The one piece of work shared between however many sectors a single
 --- gate crossing might complete (see raceGateCrossed's own comment on why that can be more than
@@ -388,8 +425,8 @@ end
 local function completeCurrentSector(participant, lapRelativeNow)
     local sectorDuration = lapRelativeNow - participant.sectorStartMs
     participant.lapSectors[participant.currentSector] = sectorDuration
-    if not participant.bestSectorMs[participant.currentSector] or
-        sectorDuration < participant.bestSectorMs[participant.currentSector] then
+    if not isPitLap(participant, participant.currentLap) and (not participant.bestSectorMs[participant.currentSector] or
+        sectorDuration < participant.bestSectorMs[participant.currentSector]) then
         participant.bestSectorMs[participant.currentSector] = sectorDuration
     end
     participant.sectorStartMs = lapRelativeNow
@@ -568,7 +605,7 @@ local SLIM_DROPPED = { settings = true, phases = true, phaseResults = true, even
 -- track with hundreds of gates it was most of every session update, and it was only ever read to
 -- work out the gaps between racers, which the server now does itself (gapBetween below)
 local PAYLOAD_DROPPED_FIELDS = { gateTimes = true, bestLapGateTimes = true, leaderboardKey = true, replacedEntry = true,
-    lastResetMs = true, pluginFields = true }
+    lastResetMs = true, pluginFields = true, pitPending = true, pitEntryMs = true, pitPenalized = true }
 
 --- a session's own tables never sent to clients (an entry list's player IDs, the last places)
 local SESSION_PRIVATE = { participants = true, baseSettings = true, lastPositions = true, entrants = true }
@@ -596,6 +633,17 @@ local function lapTimesTotal(p)
     local total = 0
     for _, t in ipairs(p.lapTimes or {}) do total = total + t end
     return total
+end
+
+--- a racer's best lap that counts : not one the pit lane touched (nil : none)
+---@param p BJRaceParticipant
+---@return integer?
+local function countedBestLap(p)
+    local best
+    for lap, t in ipairs(p.lapTimes or {}) do
+        if not isPitLap(p, lap) and (not best or t < best) then best = t end
+    end
+    return best
 end
 
 --- a finisher's race time : their laps plus any staff penalties
@@ -1144,6 +1192,18 @@ local function buildSettings(race, overrides)
     if settings.laps then
         settings.laps = math.max(1, math.floor(settings.laps))
     end
+    -- the pits' (PIT_SYSTEM_PLAN.md) : the start's, else the race's, else the default. A race whose
+    -- pits can't be used gets the defaults, and `pits` off
+    settings.pits = services_races.pitsUsable(race)
+    for key, spec in pairs(services_races.PIT_SETTINGS) do
+        local v
+        if settings.pits then
+            v = services_races.pitSettingValue(key, overrides[key])
+            if v == nil then v = services_races.pitSettingValue(key, defaults[key]) end
+        end
+        if v == nil then v = spec.default end
+        settings[key] = v
+    end
     return settings
 end
 
@@ -1192,6 +1252,79 @@ local function addParticipant(session, playerID, playerName)
         penaltyMs = 0,
         lastProgressTime = GetCurrentTime(),
     }
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- pits (PIT_SYSTEM_PLAN.md) : the helpers the grid needs. The pit lane itself : racePit, below
+
+---@param session BJRaceSession
+---@return boolean
+local function pitsOn(session)
+    return session.settings.pits == true
+end
+
+--- a racer's pit box : their own once they have one, else `wanted` (their slot) when it's free,
+--- else the first free one. Theirs for the whole event
+---@param session BJRaceSession
+---@param race BJRace
+---@param p BJRaceParticipant
+---@param wanted integer?
+---@return integer? slot
+local function ensurePitSlot(session, race, p, wanted)
+    if p.pitSlot and race.startPositions[p.pitSlot] then return p.pitSlot end
+    local taken = {}
+    session.participants:forEach(function(o)
+        if o ~= p and o.pitSlot then taken[o.pitSlot] = true end
+    end)
+    if wanted and race.startPositions[wanted] and not taken[wanted] then
+        p.pitSlot = wanted
+        return wanted
+    end
+    for slot = 1, #race.startPositions do
+        if not taken[slot] then
+            p.pitSlot = slot
+            return slot
+        end
+    end
+end
+
+--- the route steps a racer in the pit lane is credited, in order : the ones after `from` (0 :
+--- from the start, the line first) up to the lane's toStep, not included
+---@param race BJRace
+---@param from integer
+---@return integer[]
+local function pitSteps(race, from)
+    local n, out, step = #race.gates, {}, from
+    for _ = 1, n do
+        step = step % n + 1
+        if step == race.pit.toStep then break end
+        out[#out + 1] = step
+    end
+    return out
+end
+
+--- a racer's pass through the pit lane is over (out through PIT OUT, back on track, a new phase)
+---@param p BJRaceParticipant
+local function endPitPass(p)
+    p.inPit, p.pitPending, p.pitEntryMs, p.pitPenalized, p.pitStoppedPass, p.towUntilMs = nil, nil, nil, nil, nil, nil
+end
+
+--- a start from the pits (settings.pitStart) : the racer's box, and them in the pit lane, its steps
+--- (the line's first) credited as they go. nil : not one
+---@param session BJRaceSession
+---@param race BJRace
+---@param p BJRaceParticipant
+---@return table? the box, a start position
+local function pitStartBox(session, race, p)
+    if not pitsOn(session) or not session.settings.pitStart then return nil end
+    local slot = ensurePitSlot(session, race, p)
+    if not slot then return nil end
+    endPitPass(p)
+    p.inPit = true
+    p.pitPending = pitSteps(race, 0)
+    -- the lap from the box isn't a flying one
+    markPitLap(p, 1)
+    return race.startPositions[slot].pit
 end
 
 --- the grid in BeamJoy's own order (the session's placementMode) : participants by slot
@@ -1291,8 +1424,11 @@ local function startCountdown(session, race, grid, orderedBy)
     session.pluginGridOrder, session.pluginGridOrderBy = nil, nil
     local placed = {}
     for i, e in ipairs(grid) do
-        e.p.startPosition = race.startPositions[((e.slot - 1) % #race.startPositions) + 1]
+        local slot = ((e.slot - 1) % #race.startPositions) + 1
+        e.p.startPosition = race.startPositions[slot]
         e.p.gridPosition = i
+        -- their pit box : their first slot's, theirs for the event
+        if pitsOn(session) then ensurePitSlot(session, race, e.p, slot) end
         placed[i] = e.p
     end
 
@@ -1328,6 +1464,12 @@ local function startCountdown(session, race, grid, orderedBy)
             p.startAtMs, p.clockBaseMs, p.runStartPosition = nil, nil, nil
             -- a plugin's phase : on their slot until the plugin starts them (race.startRacer)
             if phase.start == services_racePhases.START.PLUGIN then p.awaitingStart = true end
+        end
+        -- a start from the pits : each from their own box
+        local box = pitStartBox(session, race, p)
+        if box then
+            p.startPosition = box
+            if p.runStartPosition then p.runStartPosition = box end
         end
     end
     session.flagAtMs, session.chequered, session.overtimeEndsAtMs = nil, nil, nil
@@ -1523,7 +1665,8 @@ local function buildResults(session, order)
             r.disqualified = p.disqualified == true
             r.penaltyMs = (p.penaltyMs or 0) > 0 and p.penaltyMs or nil
             r.totalMs = placed and ranking ~= services_racePhases.RANKING.BEST and raceTimeMs(p) or nil
-            r.bestLapMs = #p.lapTimes > 0 and math.min(table.unpack(p.lapTimes)) or nil
+            r.bestLapMs = countedBestLap(p)
+            r.pitStops = pitsOn(session) and (p.pitStops or 0) or nil
             r.lapsDone = #p.lapTimes
             r.order = p.finishOrder
             -- a plugin's score (phase.setScores)
@@ -1759,6 +1902,9 @@ local function checkSessionComplete(session)
     end
 end
 
+-- the pits' part of a finish (missing stops, the way back to the box) : defined with racePit
+local pitOnFinish
+
 ---@param session BJRaceSession
 ---@param participant BJRaceParticipant
 ---@param noCheck boolean? the caller checks whether the phase is over itself (several at once)
@@ -1766,9 +1912,9 @@ local function finishParticipant(session, participant, noCheck)
     participant.finished = true
     session.finishCounter = (session.finishCounter or 0) + 1
     participant.finishOrder = session.finishCounter
-    if #participant.lapTimes > 0 then
-        trySubmitTime(session, participant, math.min(table.unpack(participant.lapTimes)))
-    end
+    pitOnFinish(session, participant)
+    local best = countedBestLap(participant)
+    if best then trySubmitTime(session, participant, best) end
     apiEvent("racerFinished", session, participant)
     if not noCheck then checkSessionComplete(session) end
 end
@@ -1831,7 +1977,7 @@ releaseNextTurn = function(session)
     end)
     local race = getRace(session)
     if not nextUp or not race then return false end
-    personalStart(session, nextUp, race.startPositions[1], RUN_ROLL_MS)
+    personalStart(session, nextUp, pitStartBox(session, race, nextUp) or race.startPositions[1], RUN_ROLL_MS)
     local minutes = currentPhase(session).timeLimitMin
     session.phaseEndsAtMs = minutes and nextUp.startAtMs + math.floor(minutes * 60000) or nil
     session.flagAtMs, session.chequered, session.overtimeEndsAtMs = nil, nil, nil
@@ -2371,6 +2517,9 @@ local function resetForPhase(p)
     p.score, p.scoreKey, p.scoreDisplay, p.awaitingStart = nil, nil, nil, nil
     p.startAtMs, p.clockBaseMs, p.runStartPosition, p.elapsedOffsetMs = nil, nil, nil, nil
     p.outLapPending = nil
+    -- the pits : their box (pitSlot) is theirs for the event, the rest was the last phase's
+    endPitPass(p)
+    p.pitStops, p.pitLaps, p.pitReturnPending, p.pitReturned = nil, nil, nil, nil
     p.lastProgressTime = GetCurrentTime()
 end
 
@@ -2691,7 +2840,7 @@ local function lateJoinReady(session, p)
         local used = 0
         session.participants:forEach(function(o) if o.gridPosition and o ~= p then used = math.max(used, o.gridPosition) end end)
         p.gridPosition = used + 1
-        p.startPosition = race.startPositions[1]
+        p.startPosition = pitStartBox(session, race, p) or race.startPositions[1]
         p.awaitingStart = true
         apiEvent("racerJoinedPhase", session, p)
         if not releaseNextTurn(session) then pushSessionUpdate(session) end
@@ -2705,6 +2854,7 @@ local function lateJoinReady(session, p)
         position = race.startPositions[(used % #race.startPositions) + 1]
         p.gridPosition = used + 1
     end
+    position = pitStartBox(session, race, p) or position
     p.startPosition = position
     personalStart(session, p, position, 1000, phase.ranking == services_racePhases.RANKING.POSITION)
     apiEvent("racerJoinedPhase", session, p)
@@ -2956,6 +3106,165 @@ local function unreadyOnVehicleChange(playerID)
     pushSessionUpdate(session)
 end
 
+--- a crossing counted for a racer, already checked : a gate they drove through, or a step their pit
+--- lane skips (`pit`, racePit) : their progress, lap, sectors and best lap. The caller pushes the update
+---@param session BJRaceSession
+---@param race BJRace
+---@param participant BJRaceParticipant
+---@param gateIndex integer
+---@param elapsedMs integer
+---@param pit true? credited by the pits
+local function applyCrossing(session, race, participant, gateIndex, elapsedMs, pit)
+    local gate = race.gates[gateIndex]
+    -- "has step 1 already been crossed once this lap cycle": captured before this crossing
+    -- overwrites it, used below to tell the race-opening crossing of step 1 apart from every
+    -- later *re*-crossing of it (which is what actually completes a lap on a loopable race).
+    -- Keyed by step (progress number), not the raw gate index, so this stays correct even when
+    -- several different physical gates share step 1 as parallel starting alternates
+    local gateAlreadyCrossed = participant.gateTimes[gate.step] ~= nil
+    -- a flying start (a point-to-point track) : their time (this run's) starts here, at the first
+    -- checkpoint, instead of at their release
+    local flyingFrom = session.settings.flyingStart == true and not race.loopable and participant.currentGate == 0
+
+    participant.currentGate = gate.step
+    participant.lastCrossedGate = gateIndex
+    participant.gateTimes[gate.step] = elapsedMs
+    participant.lastProgressTime = GetCurrentTime()
+
+    -- lapTimes stores each lap's own duration, not cumulative race time: elapsedMs is
+    -- cumulative since race start, so subtract off everything already elapsed as of the
+    -- previous lap boundary. Computed once here (not just at the final gate) since the live
+    -- delta below needs this same lap-relative baseline at every gate, not only lap ends.
+    -- (a personal start's clock starts at 0 : the laps before it don't count here)
+    local previousLapsElapsed = -(participant.elapsedOffsetMs or 0)
+    table.forEach(participant.lapTimes, function(t) previousLapsElapsed = previousLapsElapsed + t end)
+    if flyingFrom then
+        -- the run up to the line doesn't count : the lap (run) is timed from now
+        participant.elapsedOffsetMs = (participant.elapsedOffsetMs or 0) - (elapsedMs - previousLapsElapsed)
+        previousLapsElapsed = elapsedMs
+    end
+    local lapRelativeNow = elapsedMs - previousLapsElapsed
+
+    -- live delta vs this participant's own best lap at the same STEP: nil (nothing to show)
+    -- until a best lap actually exists, i.e. from the second lap onward
+    participant.liveDeltaMs = (participant.bestLapGateTimes and participant.bestLapGateTimes[gate.step])
+        and (lapRelativeNow - participant.bestLapGateTimes[gate.step]) or nil
+
+    -- A loopable race's step 1 is the start/finish line: raceMarkers.lua already draws the
+    -- closing "last gate -> gate 1" segment as real, drivable track for exactly this reason, so a
+    -- lap only actually completes once that closing segment has been driven, i.e. on *re*-crossing
+    -- step 1 (gateAlreadyCrossed, above), not on merely reaching the last placed gate. Treating
+    -- "last gate reached" as the finish (the old behavior) silently dropped that closing segment
+    -- from lap 1's own timing: lap 1 measured grid-start -> step 1 as its first split instead of
+    -- the real step-N -> step-1 segment every later lap uses, while folding the real segment into
+    -- the start of lap 2 instead, corrupting every step-indexed comparison (liveDeltaMs,
+    -- bestLapGateTimes, sectors) between lap 1 and any later lap. A non-loopable (point-to-point)
+    -- race has no closing segment at all; step 1 is just its first checkpoint, so it still
+    -- finishes once a real finish gate is crossed instead (gate.isFinish: for a non-branching race
+    -- this is only ever true on the last gate, sanitizeRace's own force-normalization, matching the
+    -- old `gateIndex == #race.gates` check exactly).
+    local lapComplete
+    if race.loopable then
+        lapComplete = gate.step == 1 and gateAlreadyCrossed
+    else
+        lapComplete = gate.isFinish == true
+    end
+
+    -- an out lap (a circuit, direct request) : the lap from the grid isn't one, nor its sectors.
+    -- Their time starts as they cross the line at its end, as a flying start's at its line
+    if participant.outLapPending then
+        participant.liveDeltaMs = nil
+        if lapComplete then
+            participant.outLapPending = nil
+            participant.elapsedOffsetMs = (participant.elapsedOffsetMs or 0) - lapRelativeNow
+            -- the line crossed : the next time over it closes their first lap
+            participant.gateTimes = { [gate.step] = elapsedMs }
+            participant.currentSector, participant.sectorStartMs, participant.lapSectors = 1, 0, {}
+        end
+        apiEvent("racerGate", session, participant, { gate = gateIndex, step = gate.step,
+            lap = participant.currentLap, outLap = true, lapComplete = lapComplete, pit = pit })
+        return
+    end
+
+    -- sector tracking: a sector completes whenever its own last gate is crossed, except the final
+    -- sector of a loopable race, whose real endpoint is that same closing segment. It closes
+    -- exactly when the lap does, not when sectorEndGates's own index-based math reaches the last
+    -- placed gate (which is the second-to-last crossing on a loopable race, not the last).
+    --
+    -- sectorEndGates guarantees every sector's gate is distinct and strictly increasing (see its
+    -- own comment for why that matters), so in practice this loop only ever runs once per
+    -- crossing now. Kept as a loop rather than a single if-check anyway as a defensive backstop,
+    -- not the primary fix. A single if-check silently drops a sector's timing entirely if it ever
+    -- gets skipped this way again; a repeatable loop just quietly catches up instead.
+    local sectorGates = sectorEndGates(race, session.settings.flyingStart)
+    local sectorCount = #sectorGates
+    local sectorBefore = participant.currentSector
+    while participant.currentSector < sectorCount and
+        gateIndex == sectorGates[participant.currentSector] do
+        completeCurrentSector(participant, lapRelativeNow)
+    end
+    if participant.currentSector >= sectorCount and lapComplete then
+        completeCurrentSector(participant, lapRelativeNow)
+    end
+    -- what this crossing was, for the plugin API's RacerGate (sent once the lap's dealt with)
+    local crossing = { gate = gateIndex, step = gate.step, lap = participant.currentLap, lapMs = lapRelativeNow,
+        deltaMs = participant.liveDeltaMs, lapComplete = lapComplete, sectors = {}, pit = pit }
+    for s = sectorBefore, participant.currentSector - 1 do
+        crossing.sectors[#crossing.sectors + 1] = { sector = s, ms = participant.lapSectors[s] }
+    end
+
+    if lapComplete then
+        table.insert(participant.lapTimes, lapRelativeNow)
+
+        -- a lap the pit lane touched isn't one to beat (PIT_SYSTEM_PLAN.md)
+        if not isPitLap(participant, participant.currentLap) and
+            (not participant.bestLapMs or lapRelativeNow < participant.bestLapMs) then
+            participant.bestLapMs = lapRelativeNow
+            participant.bestLapAtMs = services_clockSync.nowMs()
+            -- snapshot this lap's own step splits, lap-relative, before the next lap's crossings
+            -- start overwriting these same gateTimes indices. Bounded by totalSteps(race), not
+            -- the raw gate array length, since gateTimes is keyed by step and a branching race's
+            -- array can hold more physical gates than there are real progress steps
+            local snapshot = {}
+            for g = 1, totalSteps(race) do
+                if participant.gateTimes[g] then
+                    snapshot[g] = participant.gateTimes[g] - previousLapsElapsed
+                end
+            end
+            participant.bestLapGateTimes = snapshot
+        end
+
+        -- snapshot this lap's completed sector breakdown (the results panel's per-lap history)
+        -- before resetting for the next lap
+        participant.lapSectorHistory[participant.currentLap] = participant.lapSectors
+        participant.lapSectors = {}
+        participant.currentSector = 1
+        participant.sectorStartMs = 0
+        apiEvent("racerLap", session, participant)
+
+        if lapEndsPhase(session, participant) then
+            finishParticipant(session, participant)
+        else
+            -- currentGate deliberately not reset here, see its own doc comment above. The
+            -- `expected` calc at the top of this function already wraps 1..#race.gates via plain
+            -- modulo regardless of whether currentGate sits at 0 or at its last real value
+            participant.currentLap = participant.currentLap + 1
+            -- a point-to-point track's runs : back to the first slot for the next one ; a plugin's
+            -- phase : held there until it starts them again
+            if services_racePhases.runs(currentPhase(session), race) then
+                personalStart(session, participant, race.startPositions[1], RUN_ROLL_MS)
+            elseif not race.loopable and currentPhase(session).start == services_racePhases.START.PLUGIN then
+                participant.awaitingStart = true
+                participant.currentGate, participant.lastCrossedGate, participant.gateTimes = 0, 0, {}
+                participant.currentSector, participant.sectorStartMs, participant.lapSectors = 1, 0, {}
+                participant.elapsedOffsetMs = services_racePhases.timeOf(participant) - (participant.penaltyMs or 0)
+            end
+        end
+    end
+
+    apiEvent("racerGate", session, participant, crossing)
+end
+
 --- metres past a gate's half-width a reported crossing may be from (BeamMP's positions lag a little
 --- behind, more at speed)
 local GATE_POSITION_MARGIN = 100
@@ -3057,151 +3366,10 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         if gateIndex ~= expected then return end -- out of order / duplicate report, ignore
     end
 
-    -- "has step 1 already been crossed once this lap cycle": captured before this crossing
-    -- overwrites it, used below to tell the race-opening crossing of step 1 apart from every
-    -- later *re*-crossing of it (which is what actually completes a lap on a loopable race).
-    -- Keyed by step (progress number), not the raw gate index, so this stays correct even when
-    -- several different physical gates share step 1 as parallel starting alternates
-    local gateAlreadyCrossed = participant.gateTimes[gate.step] ~= nil
-    -- a flying start (a point-to-point track) : their time (this run's) starts here, at the first
-    -- checkpoint, instead of at their release
-    local flyingFrom = session.settings.flyingStart == true and not race.loopable and participant.currentGate == 0
-
-    participant.currentGate = gate.step
-    participant.lastCrossedGate = gateIndex
-    participant.gateTimes[gate.step] = elapsedMs
-    participant.lastProgressTime = ctxt.time
-
-    -- lapTimes stores each lap's own duration, not cumulative race time: elapsedMs is
-    -- cumulative since race start, so subtract off everything already elapsed as of the
-    -- previous lap boundary. Computed once here (not just at the final gate) since the live
-    -- delta below needs this same lap-relative baseline at every gate, not only lap ends.
-    -- (a personal start's clock starts at 0 : the laps before it don't count here)
-    local previousLapsElapsed = -(participant.elapsedOffsetMs or 0)
-    table.forEach(participant.lapTimes, function(t) previousLapsElapsed = previousLapsElapsed + t end)
-    if flyingFrom then
-        -- the run up to the line doesn't count : the lap (run) is timed from now
-        participant.elapsedOffsetMs = (participant.elapsedOffsetMs or 0) - (elapsedMs - previousLapsElapsed)
-        previousLapsElapsed = elapsedMs
-    end
-    local lapRelativeNow = elapsedMs - previousLapsElapsed
-
-    -- live delta vs this participant's own best lap at the same STEP: nil (nothing to show)
-    -- until a best lap actually exists, i.e. from the second lap onward
-    participant.liveDeltaMs = (participant.bestLapGateTimes and participant.bestLapGateTimes[gate.step])
-        and (lapRelativeNow - participant.bestLapGateTimes[gate.step]) or nil
-
-    -- A loopable race's step 1 is the start/finish line: raceMarkers.lua already draws the
-    -- closing "last gate -> gate 1" segment as real, drivable track for exactly this reason, so a
-    -- lap only actually completes once that closing segment has been driven, i.e. on *re*-crossing
-    -- step 1 (gateAlreadyCrossed, above), not on merely reaching the last placed gate. Treating
-    -- "last gate reached" as the finish (the old behavior) silently dropped that closing segment
-    -- from lap 1's own timing: lap 1 measured grid-start -> step 1 as its first split instead of
-    -- the real step-N -> step-1 segment every later lap uses, while folding the real segment into
-    -- the start of lap 2 instead, corrupting every step-indexed comparison (liveDeltaMs,
-    -- bestLapGateTimes, sectors) between lap 1 and any later lap. A non-loopable (point-to-point)
-    -- race has no closing segment at all; step 1 is just its first checkpoint, so it still
-    -- finishes once a real finish gate is crossed instead (gate.isFinish: for a non-branching race
-    -- this is only ever true on the last gate, sanitizeRace's own force-normalization, matching the
-    -- old `gateIndex == #race.gates` check exactly).
-    local lapComplete
-    if race.loopable then
-        lapComplete = gate.step == 1 and gateAlreadyCrossed
-    else
-        lapComplete = gate.isFinish == true
-    end
-
-    -- an out lap (a circuit, direct request) : the lap from the grid isn't one, nor its sectors.
-    -- Their time starts as they cross the line at its end, as a flying start's at its line
-    if participant.outLapPending then
-        participant.liveDeltaMs = nil
-        if lapComplete then
-            participant.outLapPending = nil
-            participant.elapsedOffsetMs = (participant.elapsedOffsetMs or 0) - lapRelativeNow
-            -- the line crossed : the next time over it closes their first lap
-            participant.gateTimes = { [gate.step] = elapsedMs }
-            participant.currentSector, participant.sectorStartMs, participant.lapSectors = 1, 0, {}
-        end
-        apiEvent("racerGate", session, participant, { gate = gateIndex, step = gate.step,
-            lap = participant.currentLap, outLap = true, lapComplete = lapComplete })
-        return pushSessionUpdate(session, true)
-    end
-
-    -- sector tracking: a sector completes whenever its own last gate is crossed, except the final
-    -- sector of a loopable race, whose real endpoint is that same closing segment. It closes
-    -- exactly when the lap does, not when sectorEndGates's own index-based math reaches the last
-    -- placed gate (which is the second-to-last crossing on a loopable race, not the last).
-    --
-    -- sectorEndGates guarantees every sector's gate is distinct and strictly increasing (see its
-    -- own comment for why that matters), so in practice this loop only ever runs once per
-    -- crossing now. Kept as a loop rather than a single if-check anyway as a defensive backstop,
-    -- not the primary fix. A single if-check silently drops a sector's timing entirely if it ever
-    -- gets skipped this way again; a repeatable loop just quietly catches up instead.
-    local sectorGates = sectorEndGates(race, session.settings.flyingStart)
-    local sectorCount = #sectorGates
-    local sectorBefore = participant.currentSector
-    while participant.currentSector < sectorCount and
-        gateIndex == sectorGates[participant.currentSector] do
-        completeCurrentSector(participant, lapRelativeNow)
-    end
-    if participant.currentSector >= sectorCount and lapComplete then
-        completeCurrentSector(participant, lapRelativeNow)
-    end
-    -- what this crossing was, for the plugin API's RacerGate (sent once the lap's dealt with)
-    local crossing = { gate = gateIndex, step = gate.step, lap = participant.currentLap, lapMs = lapRelativeNow,
-        deltaMs = participant.liveDeltaMs, lapComplete = lapComplete, sectors = {} }
-    for s = sectorBefore, participant.currentSector - 1 do
-        crossing.sectors[#crossing.sectors + 1] = { sector = s, ms = participant.lapSectors[s] }
-    end
-
-    if lapComplete then
-        table.insert(participant.lapTimes, lapRelativeNow)
-
-        if not participant.bestLapMs or lapRelativeNow < participant.bestLapMs then
-            participant.bestLapMs = lapRelativeNow
-            participant.bestLapAtMs = services_clockSync.nowMs()
-            -- snapshot this lap's own step splits, lap-relative, before the next lap's crossings
-            -- start overwriting these same gateTimes indices. Bounded by totalSteps(race), not
-            -- the raw gate array length, since gateTimes is keyed by step and a branching race's
-            -- array can hold more physical gates than there are real progress steps
-            local snapshot = {}
-            for g = 1, totalSteps(race) do
-                if participant.gateTimes[g] then
-                    snapshot[g] = participant.gateTimes[g] - previousLapsElapsed
-                end
-            end
-            participant.bestLapGateTimes = snapshot
-        end
-
-        -- snapshot this lap's completed sector breakdown (the results panel's per-lap history)
-        -- before resetting for the next lap
-        participant.lapSectorHistory[participant.currentLap] = participant.lapSectors
-        participant.lapSectors = {}
-        participant.currentSector = 1
-        participant.sectorStartMs = 0
-        apiEvent("racerLap", session, participant)
-
-        if lapEndsPhase(session, participant) then
-            finishParticipant(session, participant)
-        else
-            -- currentGate deliberately not reset here, see its own doc comment above. The
-            -- `expected` calc at the top of this function already wraps 1..#race.gates via plain
-            -- modulo regardless of whether currentGate sits at 0 or at its last real value
-            participant.currentLap = participant.currentLap + 1
-            -- a point-to-point track's runs : back to the first slot for the next one ; a plugin's
-            -- phase : held there until it starts them again
-            if services_racePhases.runs(currentPhase(session), race) then
-                personalStart(session, participant, race.startPositions[1], RUN_ROLL_MS)
-            elseif not race.loopable and currentPhase(session).start == services_racePhases.START.PLUGIN then
-                participant.awaitingStart = true
-                participant.currentGate, participant.lastCrossedGate, participant.gateTimes = 0, 0, {}
-                participant.currentSector, participant.sectorStartMs, participant.lapSectors = 1, 0, {}
-                participant.elapsedOffsetMs = services_racePhases.timeOf(participant) - (participant.penaltyMs or 0)
-            end
-        end
-    end
-
-    apiEvent("racerGate", session, participant, crossing)
+    -- a gate driven through while in the pit lane : they're back on track (a reset to their last
+    -- checkpoint, out the way they came in) : that pass is over
+    if participant.inPit then endPitPass(participant) end
+    applyCrossing(session, race, participant, gateIndex, elapsedMs)
     -- slim : gate crossings are by far the most frequent pushes (see buildSessionPayload)
     pushSessionUpdate(session, true)
 end
@@ -3435,6 +3603,277 @@ local function raceReset(ctxt, sessionId)
     if addedMs and addedMs > 0 then pushSessionUpdate(session, true) end
 end
 
+-- ---------------------------------------------------------------------------------------------
+-- the pit lane (PIT_SYSTEM_PLAN.md). The racer's game reports what it sees (PIT IN, the start/finish
+-- line across the lane, a stop in their box, PIT OUT, a tow) ; the server checks each against the
+-- car's position and the race's state, and credits the route steps the lane skips
+
+--- a tow's hold on top of the drive back
+local PIT_TOW_BASE_MS = 10000
+--- how far from their box a stop or a return may be reported, metres (BeamMP's positions lag)
+local PIT_BOX_MARGIN = 25
+--- how far from the start/finish gate its line across the pit lane counts, metres
+local PIT_LINE_REACH = 150
+
+---@param a {x: number, y: number, z: number}
+---@param b {x: number, y: number, z: number}
+---@return number
+local function pointDistance(a, b)
+    local dx, dy, dz = b.x - a.x, b.y - a.y, b.z - a.z
+    return math.sqrt(dx * dx + dy * dy + dz * dz)
+end
+
+---@return {EntrySpeedPenalty: integer, SpeedTolerance: integer}
+local function pitConfig()
+    return services_config.data.RacePits or { EntrySpeedPenalty = 5, SpeedTolerance = 5 }
+end
+
+--- the racer's car is within `reach` metres of a point (true when BeamMP doesn't know where it is)
+---@param playerID integer
+---@param point table
+---@param reach number
+---@return boolean
+local function near(playerID, point, reach)
+    local d = services_vehicles.distanceToPoint(playerID, point)
+    return not d or d <= reach
+end
+
+--- a pit time penalty : on their race time, with any others, the racer told why
+---@param session BJRaceSession
+---@param p BJRaceParticipant
+---@param ms integer
+---@param reason "entrySpeed"|"transit"|"missingStops"
+---@param vars table? the message's
+local function pitPenalty(session, p, ms, reason, vars)
+    if ms <= 0 then return end
+    local before = p.penaltyMs or 0
+    p.penaltyMs = math.min(STAFF_PENALTY_TOTAL_MAX_MS, before + ms)
+    apiEvent("racerPit", session, p, "penalty", { reason = reason, penaltyMs = p.penaltyMs - before })
+    local target = services_players.players:find(function(pl) return pl.playerID == p.playerID end)
+    if target then
+        local all = { seconds = penaltySecondsText(ms) }
+        for k, v in pairs(vars or {}) do all[k] = v end
+        communications_tx.sendToPlayer(p.playerID, "toast", "warning",
+            services_lang.get("race.pit." .. reason, target.lang):var(all))
+    end
+end
+
+--- the route from where a racer is to PIT IN : the steps on the way (credited by a tow) and its
+--- length, gate to gate as the sectors measure it
+---@param race BJRace
+---@param p BJRaceParticipant
+---@return integer[] steps, number metres
+local function routeToPit(race, p)
+    local n, pit = #race.gates, race.pit
+    local step = p.currentGate or 0
+    local last = step >= 1 and race.gates[step].pos or (p.startPosition or race.startPositions[1]).pos
+    local steps, d = {}, 0
+    while step ~= pit.fromStep do
+        step = step % n + 1
+        steps[#steps + 1] = step
+        d = d + pointDistance(last, race.gates[step].pos)
+        last = race.gates[step].pos
+    end
+    return steps, d + pointDistance(last, pit.entry.pos)
+end
+
+--- credits a racer in the pit lane the steps it skips, in order, at `elapsedMs` : up to and
+--- including `upTo` (the line), or all of them
+---@param session BJRaceSession
+---@param race BJRace
+---@param p BJRaceParticipant
+---@param elapsedMs integer
+---@param upTo integer?
+local function creditPitSteps(session, race, p, elapsedMs, upTo)
+    while p.pitPending and #p.pitPending > 0 and not p.finished do
+        local step = table.remove(p.pitPending, 1)
+        applyCrossing(session, race, p, step, elapsedMs, true)
+        if step == upTo then break end
+    end
+end
+
+--- a racer's reported race time, checked as raceGateCrossed checks a gate's (nil : not a time)
+---@param session BJRaceSession
+---@param p BJRaceParticipant
+---@param elapsedMs any
+---@return integer?
+local function checkedElapsedMs(session, p, elapsedMs)
+    elapsedMs = tonumber(elapsedMs)
+    if not elapsedMs or elapsedMs < 0 or elapsedMs ~= elapsedMs then return nil end
+    local clockBase = p.clockBaseMs or session.goAtMs
+    if clockBase then
+        local serverElapsedMs = services_clockSync.nowMs() - clockBase
+        if elapsedMs < serverElapsedMs - REPORT_LAG_MAX_MS then
+            elapsedMs = serverElapsedMs - REPORT_LAG_MAX_MS
+        end
+    end
+    return math.floor(elapsedMs)
+end
+
+--- a finished racer, after the phase : back to their box before the next one (pitReturn). PIT IN
+--- and PIT OUT only switch the lane's limiter and ghost ; nothing's timed or penalised any more
+---@param session BJRaceSession
+---@param race BJRace
+---@param p BJRaceParticipant
+---@param action string
+---@param playerID integer
+local function pitAfterFinish(session, race, p, action, playerID)
+    if action == "exit" then
+        if not p.inPit then return end
+        p.inPit = nil
+    elseif not p.pitReturnPending then
+        return
+    elseif action == "entry" then
+        if not near(playerID, race.pit.entry.pos, race.pit.entry.width / 2 + GATE_POSITION_MARGIN) then return end
+        p.inPit = true
+    elseif action == "returned" or action == "tow" then
+        if action == "returned" and not near(playerID, race.startPositions[p.pitSlot].pit.pos, PIT_BOX_MARGIN) then
+            return
+        end
+        p.pitReturnPending, p.pitReturned, p.inPit = nil, true, true
+        apiEvent("racerPit", session, p, "returned", { towed = action == "tow" })
+    else
+        return
+    end
+    pushSessionUpdate(session, true)
+end
+
+--- the pit lane, reported by a racer's game :
+--- "entry" (PIT IN, right after the lane's fromStep : `data.speedKmh`), "line" (the start/finish
+--- line across the lane), "stop" (done in their box : `data.fuelL`, `data.repair`, `data.durationMs`),
+--- "exit" (PIT OUT), "tow" (to their box, held there for the drive back), "returned" (back in their
+--- box after the phase, pitReturn)
+---@param ctxt BJSContext
+---@param sessionId string
+---@param action string
+---@param elapsedMs integer? their race time, as a gate crossing's
+---@param data table?
+local function racePit(ctxt, sessionId, action, elapsedMs, data)
+    if not ctxt.sender then return end
+    local session = M.sessions[sessionId]
+    if not session or not pitsOn(session) then return end
+    if session.state ~= "RACE" and session.state ~= "BREAK" then return end
+    local p = session.participants[ctxt.senderID]
+    if not p or p.sittingOut or p.dnf or p.disqualified then return end
+    local race = getRace(session)
+    if not race or not services_races.pitsUsable(race) then return end
+    local slot = ensurePitSlot(session, race, p)
+    if not slot then return end
+    data = type(data) == "table" and data or {}
+    local pit, cfg = race.pit, pitConfig()
+
+    if p.finished then return pitAfterFinish(session, race, p, action, ctxt.senderID) end
+    if session.state ~= "RACE" or p.awaitingStart then return end
+    if p.startAtMs and services_clockSync.nowMs() < p.startAtMs - GO_GRACE_MS then return end
+    local now = services_clockSync.nowMs()
+
+    if action == "entry" then
+        -- only from the step before it ; again after a reset back to it
+        if p.currentGate ~= pit.fromStep then return end
+        if not near(ctxt.senderID, pit.entry.pos, pit.entry.width / 2 + GATE_POSITION_MARGIN) then return end
+        local elapsed = checkedElapsedMs(session, p, elapsedMs)
+        if not elapsed then return end
+        local again = p.inPit
+        p.inPit = true
+        p.pitPending = pitSteps(race, pit.fromStep)
+        p.pitEntryMs = elapsed
+        if not again then
+            p.pitStoppedPass = nil
+            markPitLap(p, p.currentLap)
+            markPitLap(p, p.currentLap + 1)
+            apiEvent("racerPit", session, p, "entry", { speedKmh = tonumber(data.speedKmh) })
+        end
+        local speed, limit = tonumber(data.speedKmh), pit.speedLimitKmh + cfg.SpeedTolerance
+        if speed and speed > limit and cfg.EntrySpeedPenalty > 0 and not p.pitPenalized then
+            p.pitPenalized = true
+            pitPenalty(session, p, cfg.EntrySpeedPenalty * 1000, "entrySpeed",
+                { speed = math.floor(speed), limit = pit.speedLimitKmh })
+        end
+    elseif action == "line" then
+        if not p.inPit or not p.pitPending or not table.includes(p.pitPending, 1) then return end
+        if not near(ctxt.senderID, race.gates[1].pos, PIT_LINE_REACH + GATE_POSITION_MARGIN) then return end
+        local elapsed = checkedElapsedMs(session, p, elapsedMs)
+        if not elapsed then return end
+        creditPitSteps(session, race, p, elapsed, 1)
+    elseif action == "stop" then
+        if not p.inPit or p.pitStoppedPass then return end
+        if p.towUntilMs and now < p.towUntilMs - GO_GRACE_MS then return end
+        if not near(ctxt.senderID, race.startPositions[slot].pit.pos, PIT_BOX_MARGIN) then return end
+        p.pitStoppedPass = true
+        p.pitStops = (p.pitStops or 0) + 1
+        apiEvent("racerPit", session, p, "stop", {
+            fuelL = math.max(0, tonumber(data.fuelL) or 0),
+            repair = data.repair == true,
+            durationMs = math.max(0, math.floor(tonumber(data.durationMs) or 0)),
+            towed = p.towUntilMs ~= nil or nil,
+        })
+    elseif action == "exit" then
+        if not p.inPit then return end
+        if p.towUntilMs and now < p.towUntilMs - GO_GRACE_MS then return end
+        if not near(ctxt.senderID, pit.exit.pos, pit.exit.width / 2 + GATE_POSITION_MARGIN) then return end
+        local elapsed = checkedElapsedMs(session, p, elapsedMs)
+        if not elapsed then return end
+        -- through the lane quicker than its straight length at the limit : the limiter wasn't on
+        if p.pitEntryMs and not p.pitPenalized and cfg.EntrySpeedPenalty > 0 then
+            local mps = (pit.speedLimitKmh + cfg.SpeedTolerance) / 3.6
+            local fastestMs = pointDistance(pit.entry.pos, pit.exit.pos) / mps * 1000
+            if elapsed - p.pitEntryMs < fastestMs then
+                p.pitPenalized = true
+                pitPenalty(session, p, cfg.EntrySpeedPenalty * 1000, "transit")
+            end
+        end
+        local stopped = p.pitStoppedPass == true
+        creditPitSteps(session, race, p, elapsed)
+        endPitPass(p)
+        apiEvent("racerPit", session, p, "exit", { stopped = stopped })
+    elseif action == "tow" then
+        if not session.settings.pitTow or p.inPit then return end
+        local elapsed = checkedElapsedMs(session, p, elapsedMs)
+        if not elapsed then return end
+        local steps, metres = routeToPit(race, p)
+        local holdMs = PIT_TOW_BASE_MS + math.floor(metres / (math.max(10, session.settings.pitTowSpeed or 50) / 3.6) * 1000)
+        -- the drive back, done by the tow truck : the steps on the way are theirs as they'd have
+        -- driven them, at the end of the hold. Those laps don't count for their best
+        markPitLap(p, p.currentLap)
+        for _, step in ipairs(steps) do
+            if p.finished then break end
+            applyCrossing(session, race, p, step, elapsed + holdMs, true)
+        end
+        markPitLap(p, p.currentLap)
+        markPitLap(p, p.currentLap + 1)
+        apiEvent("racerPit", session, p, "tow", { holdMs = holdMs, metres = math.floor(metres) })
+        if p.finished then
+            -- the tow ended their race : it's their way back to the box too
+            if p.pitReturnPending then p.pitReturnPending, p.pitReturned = nil, true end
+            p.inPit = true
+        else
+            endPitPass(p)
+            p.inPit = true
+            p.pitPending = pitSteps(race, pit.fromStep)
+            p.towUntilMs = now + holdMs
+        end
+    else
+        return
+    end
+    if session.state == "RACE" then pushSessionUpdate(session, true) end
+end
+
+--- a racer finished : a required stop not made costs pitMissingPenaltyS each ; and after a phase
+--- with pitReturn (not the last), they're asked back to their box
+---@param session BJRaceSession
+---@param p BJRaceParticipant
+pitOnFinish = function(session, p)
+    if not pitsOn(session) then return end
+    local s = session.settings
+    local missing = (s.pitStops or 0) - (p.pitStops or 0)
+    if missing > 0 and (s.pitMissingPenaltyS or 0) > 0 then
+        pitPenalty(session, p, missing * s.pitMissingPenaltyS * 1000, "missingStops", { missing = missing })
+    end
+    if s.pitReturn and session.phaseIndex < #session.phases and not p.pitReturned then
+        p.pitReturnPending = true
+    end
+end
+
 --- chat-command front door for ready/leave/cancel/retire. All four act on "whichever session I'm
 --- currently in", resolved here rather than requiring the player to type a session UUID. No
 --- permission requirement, matching raceReady/raceLeave's own design (any participant may act on
@@ -3517,11 +3956,16 @@ local function onInit()
     communications_rx.addHandler("raceStaffAction", M.raceStaffAction)
     communications_rx.addHandler("raceStaffPhase", M.raceStaffPhase)
     communications_rx.addHandler("raceReset", M.raceReset)
+    communications_rx.addHandler("racePit", M.racePit)
     -- games before client build 2759
     communications_rx.addHandler("raceResetPenalty", M.raceReset)
 
     services_chatCommands.addCommand("race", "chat.command.race.desc", M.chatRace,
         { commandKey = "chat.command.race.command" })
+    -- TEMPORARY, for the pit repair-time tests (PIT_SYSTEM_PLAN.md §6) : your car's damage readings
+    services_chatCommands.addCommand("bjdamage", "chat.command.bjdamage.desc", function(ctxt)
+        communications_tx.sendToPlayer(ctxt.senderID, "debugDamage")
+    end, { hidden = true })
 
     -- TEMPORARY debug tooling, for testing multiplayer-only race-completion paths (DNF/finish
     -- teardown while another participant is still active) with only one real connected client.
@@ -3774,6 +4218,7 @@ M.raceSpectate = raceSpectate
 M.raceStopSpectate = raceStopSpectate
 M.raceStaffAction = raceStaffAction
 M.raceReset = raceReset
+M.racePit = racePit
 M.raceStartNow = raceStartNow
 M.findSessionByParticipant = findSessionByParticipant
 M.summarize = summarize

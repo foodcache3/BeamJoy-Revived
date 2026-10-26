@@ -436,7 +436,7 @@
             <!-- AN EVENT : its phases (a plugin's format : what it says, and what it locks) -->
             <span class="bjr-muted" ng-if="$ctrl.formatInfo()">{{$ctrl.formatInfo()}}</span>
             <bj-race-phases ng-if="$ctrl.startOptions.phaseList" phases="$ctrl.startOptions.phaseList"
-                result="$ctrl.startOptions.result" loopable="race.loopable" laps="$ctrl.startOptions.laps"
+                result="$ctrl.startOptions.result" loopable="race.loopable" laps="$ctrl.startOptions.laps" pits="race.pits"
                 locked="$ctrl.formatLocked()"></bj-race-phases>
 
             <!-- a point-to-point track (a sprint) : the time from the release, or from the first checkpoint -->
@@ -602,6 +602,65 @@
                 <div class="bjr-toggle-row" ng-if="race.loopable">
                     <span title="{{'beamjoy.window.config.tabs.races.ghostBackmarkers.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.ghostBackmarkers' | translate}}</span>
                     <bj-toggle ng-model="$ctrl.startOptions.ghostBackmarkers"></bj-toggle>
+                </div>
+
+                <!-- the pits (PIT_SYSTEM_PLAN.md) : a circuit whose pits are usable ; with phases, each can
+                     set its own (the phase's rules) -->
+                <h4 ng-if="race.pits">{{'beamjoy.window.config.tabs.races.sections.pits' | translate}}</h4>
+                <div class="bjr-field" ng-if="race.pits">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitStart.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitStart' | translate}}</span>
+                    <div class="bjr-seg">
+                        <button type="button" ng-class="{on: !$ctrl.startOptions.pitStart}" ng-click="$ctrl.startOptions.pitStart = false">
+                            {{'beamjoy.window.config.tabs.races.pitStartModes.grid' | translate}}
+                        </button>
+                        <button type="button" ng-class="{on: $ctrl.startOptions.pitStart}" ng-click="$ctrl.startOptions.pitStart = true">
+                            {{'beamjoy.window.config.tabs.races.pitStartModes.pits' | translate}}
+                        </button>
+                    </div>
+                </div>
+                <div class="bjr-toggle-row" ng-if="race.pits">
+                    <span title="{{'beamjoy.window.config.tabs.races.pitGhost.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitGhost' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.pitGhost"></bj-toggle>
+                </div>
+                <div class="bjr-field" ng-if="race.pits">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitStops.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitStops' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.pitStops" min="0" max="5" hard-max="20" step="1"></bj-slider>
+                </div>
+                <div class="bjr-field" ng-if="race.pits && $ctrl.startOptions.pitStops > 0">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitMissingPenaltyS.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitMissingPenaltyS' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.pitMissingPenaltyS" min="0" max="120" hard-max="600" step="5"></bj-slider>
+                </div>
+                <div class="bjr-toggle-row" ng-if="race.pits">
+                    <span title="{{'beamjoy.window.config.tabs.races.pitRefuel.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitRefuel' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.pitRefuel"></bj-toggle>
+                </div>
+                <div class="bjr-field" ng-if="race.pits && $ctrl.startOptions.pitRefuel">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitFuelRatePct.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitFuelRatePct' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.pitFuelRatePct" min="1" max="20" hard-max="100" step="1"></bj-slider>
+                </div>
+                <div class="bjr-field" ng-if="race.pits">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.startFuelPct.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.startFuelPct' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.startFuelPct" min="5" max="100" step="5"></bj-slider>
+                </div>
+                <div class="bjr-toggle-row" ng-if="race.pits">
+                    <span title="{{'beamjoy.window.config.tabs.races.pitRepair.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitRepair' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.pitRepair"></bj-toggle>
+                </div>
+                <div class="bjr-field" ng-if="race.pits && $ctrl.startOptions.pitRepair">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitRepairMaxS.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitRepairMaxS' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.pitRepairMaxS" min="0" max="180" hard-max="600" step="5"></bj-slider>
+                </div>
+                <div class="bjr-toggle-row" ng-if="race.pits">
+                    <span title="{{'beamjoy.window.config.tabs.races.pitTow.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitTow' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.pitTow"></bj-toggle>
+                </div>
+                <div class="bjr-field" ng-if="race.pits && $ctrl.startOptions.pitTow">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitTowSpeed.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitTowSpeed' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.pitTowSpeed" min="10" max="120" hard-max="200" step="5"></bj-slider>
+                </div>
+                <div class="bjr-toggle-row" ng-if="race.pits && $ctrl.startOptions.phaseList && $ctrl.startOptions.phaseList.length > 1">
+                    <span title="{{'beamjoy.window.config.tabs.races.pitReturn.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitReturn' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.pitReturn"></bj-toggle>
                 </div>
 
                 <h4>{{'beamjoy.window.main.tabs.races.sections.anticheat' | translate}}</h4>

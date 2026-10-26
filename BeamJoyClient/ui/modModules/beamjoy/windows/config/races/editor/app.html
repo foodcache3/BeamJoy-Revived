@@ -25,6 +25,51 @@
     bj-config-races-editor .opacity-70 {
         opacity: 0.7;
     }
+    /* the pits (PIT_SYSTEM_PLAN.md), in their blue */
+    bj-config-races-editor .pit-row {
+        transition: background-color 0.2s ease-in-out;
+    }
+    bj-config-races-editor .pit-row:hover {
+        background-color: rgba(0, 0, 0, 0.15);
+    }
+    bj-config-races-editor .pit-row.active {
+        background-color: rgba(47, 127, 224, 0.22);
+        box-shadow: inset 3px 0 0 #4da3ff;
+    }
+    bj-config-races-editor .pit-tag {
+        min-width: 5em;
+        font-weight: bold;
+        font-style: italic;
+        color: #9ccbff;
+    }
+    bj-config-races-editor .pit-warn {
+        border-radius: 0.3em;
+        background: rgba(255, 199, 104, 0.12);
+        color: #ffc768;
+    }
+    bj-config-races-editor .pit-ok {
+        border-radius: 0.3em;
+        background: rgba(47, 127, 224, 0.15);
+        color: #9ccbff;
+    }
+    bj-config-races-editor .pit-set {
+        color: #73eb9d;
+    }
+    bj-config-races-editor .pit-missing {
+        color: #ffc768;
+    }
+    bj-config-races-editor .pit-placing {
+        border-radius: 0.3em;
+        background: rgba(102, 217, 255, 0.14);
+        box-shadow: inset 3px 0 0 #66d9ff;
+        color: #d6f4ff;
+    }
+    bj-config-races-editor .pit-kbd {
+        padding: 0 0.35em;
+        border-radius: 0.25em;
+        background: rgba(255, 255, 255, 0.14);
+        font-weight: 600;
+    }
     bj-config-races-editor .startfinish-badge {
         color: #4fc3f7;
         font-weight: bold;
@@ -162,6 +207,7 @@
             <div
                 class="section-tab cursor-pointer"
                 ng-repeat="section in $ctrl.SECTIONS"
+                ng-if="section !== 'pits' || $ctrl.race.loopable || $ctrl.activeSection === 'pits'"
                 ng-class="{active: $ctrl.activeSection === section}"
                 ng-click="$ctrl.changeSection($event, section)"
             >
@@ -262,6 +308,57 @@
                 <icon name="add"></icon>
             </button>
             <span class="flex-grow-1"></span>
+        </div>
+        <div class="d-flex gap-1 mt-2 mb-2 align-center" ng-if="$ctrl.activeSection === 'pits'">
+            <button
+                class="btn neutral"
+                ng-class="{success: $ctrl.tool === 'translate'}"
+                ng-click="$ctrl.changeTool($event, 'translate')"
+                title="{{'beamjoy.window.config.editor.gizmo.translate' | translate}}"
+            >
+                <icon name="translate"></icon>
+            </button>
+            <button
+                class="btn neutral"
+                ng-class="{success: $ctrl.tool === 'rotate'}"
+                ng-click="$ctrl.changeTool($event, 'rotate')"
+                title="{{'beamjoy.window.config.editor.gizmo.rotate' | translate}}"
+            >
+                <icon name="rotate"></icon>
+            </button>
+            <button
+                class="btn"
+                ng-class="{
+                    success: $ctrl.snapToGroundEnabled && $ctrl.snapMethod !== 'raycast',
+                    info: $ctrl.snapToGroundEnabled && $ctrl.snapMethod === 'raycast',
+                    danger: !$ctrl.snapToGroundEnabled
+                }"
+                ng-click="$ctrl.cycleSnapMode()"
+                title="{{'beamjoy.window.config.tabs.races.snapToGround.tooltip' | translate}}"
+            >
+                <icon name="snapToGround"></icon>
+            </button>
+            <!-- the props' Fixed rotation (the same switch, direct request) : one placed with the mouse
+                 keeps the turn the wheel gives it, or turns with the camera -->
+            <button
+                class="btn"
+                ng-if="$ctrl.race.loopable && !$ctrl.race.branchingEnabled"
+                ng-class="$ctrl.props.fixedRotation ? 'success' : 'neutral'"
+                ng-click="$ctrl.props.toggleFixedRotation($event)"
+                title="{{($ctrl.props.fixedRotation
+                    ? 'beamjoy.window.config.tabs.races.pits.fixed.on'
+                    : 'beamjoy.window.config.tabs.races.pits.fixed.off') | translate}}"
+            >
+                <icon name="fixedRotation"></icon>
+            </button>
+            <span class="flex-grow-1"></span>
+            <button
+                class="btn danger"
+                ng-if="$ctrl.race.pit"
+                ng-click="$ctrl.pitDelete($event)"
+            >
+                {{'beamjoy.window.config.tabs.races.pits.delete' | translate}}
+            </button>
         </div>
         <div class="d-flex gap-1 mt-2 mb-2 align-center" ng-if="$ctrl.activeSection === 'props'">
             <button
@@ -654,6 +751,155 @@
         </div>
     </div>
 
+    <!-- the pit lane (PIT_SYSTEM_PLAN.md) : PIT IN and PIT OUT, the steps they join, the limiter, and
+         each start slot's box (the game's parking-spot marker in the world) -->
+    <div class="section-panel" ng-if="$ctrl.activeSection === 'pits'">
+        <div class="pit-warn p-2 mb-2" ng-if="$ctrl.pitProblem()">
+            {{$ctrl.pitProblemText()}}
+        </div>
+        <div class="pit-ok p-2 mb-2" ng-if="!$ctrl.pitProblem()">
+            {{'beamjoy.window.config.tabs.races.pits.ready' | translate}}
+        </div>
+        <!-- placing with the mouse : what the mouse does -->
+        <div class="pit-placing p-2 mb-2" ng-if="$ctrl.pitPlacing">
+            <div><strong>{{'beamjoy.window.config.tabs.races.pits.placing' | translate}} {{$ctrl.pitPlacingLabel()}}</strong></div>
+            <div class="small mt-1">
+                <span class="pit-kbd">{{'beamjoy.window.config.tabs.races.pits.keys.click' | translate}}</span>
+                {{'beamjoy.window.config.tabs.races.pits.hints.click' | translate}} ·
+                <span class="pit-kbd">{{'beamjoy.window.config.tabs.races.pits.keys.wheel' | translate}}</span>
+                {{'beamjoy.window.config.tabs.races.pits.hints.turn' | translate}} ·
+                <span class="pit-kbd">Ctrl + {{'beamjoy.window.config.tabs.races.pits.keys.wheel' | translate}}</span>
+                {{'beamjoy.window.config.tabs.races.pits.hints.fineTurn' | translate}}
+            </div>
+            <div class="small mt-1" ng-if="$ctrl.pitPlacing.kind === 'box'">
+                <span class="pit-kbd">Ctrl + {{'beamjoy.window.config.tabs.races.pits.keys.click' | translate}}</span>
+                {{'beamjoy.window.config.tabs.races.pits.hints.next' | translate}}
+            </div>
+            <div class="small mt-1">
+                <span class="pit-kbd">{{'beamjoy.window.config.tabs.races.pits.keys.rightClick' | translate}}</span> /
+                <span class="pit-kbd">Esc</span>
+                {{'beamjoy.window.config.tabs.races.pits.hints.stop' | translate}}
+            </div>
+        </div>
+        <div ng-if="$ctrl.race.loopable && !$ctrl.race.branchingEnabled">
+            <div
+                class="pit-row d-flex p-1 px-2 gap-1 align-center cursor-pointer"
+                ng-repeat="kind in ['entry', 'exit']"
+                ng-class="{active: $ctrl.isPitActive(kind)}"
+                ng-click="$ctrl.race.pit[kind] && $ctrl.pitSelect($event, kind)"
+            >
+                <span class="pit-tag">{{('beamjoy.window.config.tabs.races.pits.' + kind) | translate}}</span>
+                <span class="flex-grow-1 small opacity-70" ng-if="!$ctrl.race.pit[kind]">
+                    {{'beamjoy.window.config.tabs.races.pits.notSet' | translate}}
+                </span>
+                <span class="flex-grow-1" ng-if="$ctrl.race.pit[kind]"></span>
+                <button
+                    class="btn"
+                    ng-class="$ctrl.isPitPlacing(kind) ? 'warning' : 'info'"
+                    ng-click="$ctrl.pitArm($event, kind)"
+                    title="{{'beamjoy.window.config.tabs.races.pits.placeMouse.tooltip' | translate}}"
+                >
+                    <icon name="mouse"></icon>
+                </button>
+                <button
+                    class="btn"
+                    ng-class="$ctrl.race.pit[kind] ? 'info' : 'success'"
+                    ng-click="$ctrl.pitPlace($event, kind)"
+                    title="{{'beamjoy.window.config.tabs.races.pits.placeHere.tooltip' | translate}}"
+                >
+                    <icon name="car"></icon>
+                </button>
+                <button
+                    class="btn info"
+                    ng-if="$ctrl.race.pit[kind]"
+                    ng-click="$ctrl.pitTeleport($event, kind)"
+                    title="{{'beamjoy.window.config.tabs.races.teleportToHere' | translate}}"
+                >
+                    <icon name="eye"></icon>
+                </button>
+            </div>
+            <table class="w-100 mt-2" ng-if="$ctrl.race.pit">
+                <tr ng-if="$ctrl.race.pit.entry">
+                    <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pits.joinsAfter.tooltip' | translate}}">
+                        {{'beamjoy.window.config.tabs.races.pits.joinsAfter' | translate}}
+                    </td>
+                    <td><bj-select options="$ctrl.pitStepOptions()" ng-model="$ctrl.race.pit.fromStep"></bj-select></td>
+                </tr>
+                <tr ng-if="$ctrl.race.pit.exit">
+                    <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pits.rejoinsBefore.tooltip' | translate}}">
+                        {{'beamjoy.window.config.tabs.races.pits.rejoinsBefore' | translate}}
+                    </td>
+                    <td><bj-select options="$ctrl.pitStepOptions()" ng-model="$ctrl.race.pit.toStep"></bj-select></td>
+                </tr>
+                <tr ng-if="$ctrl.race.pit.entry">
+                    <td class="text-right">{{'beamjoy.window.config.tabs.races.pits.entryWidth' | translate}}</td>
+                    <td><bj-slider ng-model="$ctrl.race.pit.entry.width" min="3" max="20" hard-max="100" step="0.5"></bj-slider></td>
+                </tr>
+                <tr ng-if="$ctrl.race.pit.exit">
+                    <td class="text-right">{{'beamjoy.window.config.tabs.races.pits.exitWidth' | translate}}</td>
+                    <td><bj-slider ng-model="$ctrl.race.pit.exit.width" min="3" max="20" hard-max="100" step="0.5"></bj-slider></td>
+                </tr>
+                <tr>
+                    <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pits.speedLimit.tooltip' | translate}}">
+                        {{'beamjoy.window.config.tabs.races.pits.speedLimit' | translate}}
+                    </td>
+                    <td><bj-slider ng-model="$ctrl.race.pit.speedLimitKmh" min="20" max="120" hard-max="150" step="5"></bj-slider></td>
+                </tr>
+            </table>
+
+            <h5 class="mt-3 mb-1">{{'beamjoy.window.config.tabs.races.pits.boxes' | translate}}</h5>
+            <div class="small opacity-70 mb-1">{{'beamjoy.window.config.tabs.races.pits.boxesHint' | translate}}</div>
+            <div
+                class="pit-row d-flex p-1 px-2 gap-1 align-center cursor-pointer"
+                ng-repeat="start in $ctrl.race.startPositions track by $index"
+                ng-class="{active: $ctrl.isPitActive('box', $index)}"
+                ng-click="start.pit && $ctrl.pitSelect($event, 'box', $index)"
+            >
+                <span class="flex-grow-1">
+                    {{'beamjoy.window.config.tabs.races.start' | translate}} {{$index + 1}}
+                    <span class="small" ng-class="start.pit ? 'pit-set' : 'pit-missing'">
+                        · {{(start.pit ? 'beamjoy.window.config.tabs.races.pits.boxSet' : 'beamjoy.window.config.tabs.races.pits.noBox') | translate}}
+                    </span>
+                </span>
+                <button
+                    class="btn"
+                    ng-class="$ctrl.isPitPlacing('box', $index) ? 'warning' : 'info'"
+                    ng-click="$ctrl.pitArm($event, 'box', $index)"
+                    title="{{'beamjoy.window.config.tabs.races.pits.placeMouse.tooltip' | translate}}"
+                >
+                    <icon name="mouse"></icon>
+                </button>
+                <button
+                    class="btn"
+                    ng-class="start.pit ? 'info' : 'success'"
+                    ng-click="$ctrl.pitPlace($event, 'box', $index)"
+                    title="{{'beamjoy.window.config.tabs.races.pits.placeHere.tooltip' | translate}}"
+                >
+                    <icon name="car"></icon>
+                </button>
+                <button
+                    class="btn info"
+                    ng-if="start.pit"
+                    ng-click="$ctrl.pitTeleport($event, 'box', $index)"
+                    title="{{'beamjoy.window.config.tabs.races.teleportToHere' | translate}}"
+                >
+                    <icon name="eye"></icon>
+                </button>
+                <button
+                    class="btn danger"
+                    ng-if="start.pit"
+                    ng-click="$ctrl.pitClearBox($event, $index)"
+                    title="{{'beamjoy.window.config.tabs.races.pits.clearBox' | translate}}"
+                >
+                    <icon name="delete"></icon>
+                </button>
+            </div>
+            <div ng-if="$ctrl.race.startPositions.length === 0" class="p-2 opacity-70">
+                {{'beamjoy.window.config.tabs.races.noStarts' | translate}}
+            </div>
+        </div>
+    </div>
+
     <div class="section-panel" ng-if="$ctrl.activeSection === 'props'">
         <!-- the props list and drawer, shared with the arena editors (cmps/propEditor) -->
         <bj-prop-editor></bj-prop-editor>
@@ -995,6 +1241,101 @@
             </accordion-content>
         </bj-accordion>
 
+        <!-- the pits' defaults (PIT_SYSTEM_PLAN.md), a circuit's : the start menu and each phase's
+             rules start from these -->
+        <bj-accordion id="race-editor-settings-pits" no-border-bottom="true" ng-if="$ctrl.race.loopable">
+            <accordion-title>
+                <h5>{{'beamjoy.window.config.tabs.races.sections.pits' | translate}}</h5>
+            </accordion-title>
+            <accordion-content>
+                <table class="w-100">
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitStart.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitStart' | translate}}
+                        </td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <button class="btn info" ng-class="{success: !$ctrl.race.defaults.pitStart}"
+                                    ng-click="$ctrl.race.defaults.pitStart = false">
+                                    {{'beamjoy.window.config.tabs.races.pitStartModes.grid' | translate}}
+                                </button>
+                                <button class="btn info" ng-class="{success: $ctrl.race.defaults.pitStart}"
+                                    ng-click="$ctrl.race.defaults.pitStart = true">
+                                    {{'beamjoy.window.config.tabs.races.pitStartModes.pits' | translate}}
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitGhost.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitGhost' | translate}}
+                        </td>
+                        <td><bj-toggle ng-model="$ctrl.race.defaults.pitGhost"></bj-toggle></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitStops.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitStops' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.race.defaults.pitStops" min="0" max="5" hard-max="20" step="1"></bj-slider></td>
+                    </tr>
+                    <tr ng-if="$ctrl.race.defaults.pitStops > 0">
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitMissingPenaltyS.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitMissingPenaltyS' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.race.defaults.pitMissingPenaltyS" min="0" max="120" hard-max="600" step="5"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitRefuel.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitRefuel' | translate}}
+                        </td>
+                        <td><bj-toggle ng-model="$ctrl.race.defaults.pitRefuel"></bj-toggle></td>
+                    </tr>
+                    <tr ng-if="$ctrl.race.defaults.pitRefuel">
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitFuelRatePct.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitFuelRatePct' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.race.defaults.pitFuelRatePct" min="1" max="20" hard-max="100" step="1"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.startFuelPct.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.startFuelPct' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.race.defaults.startFuelPct" min="5" max="100" step="5"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitRepair.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitRepair' | translate}}
+                        </td>
+                        <td><bj-toggle ng-model="$ctrl.race.defaults.pitRepair"></bj-toggle></td>
+                    </tr>
+                    <tr ng-if="$ctrl.race.defaults.pitRepair">
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitRepairMaxS.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitRepairMaxS' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.race.defaults.pitRepairMaxS" min="0" max="180" hard-max="600" step="5"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitTow.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitTow' | translate}}
+                        </td>
+                        <td><bj-toggle ng-model="$ctrl.race.defaults.pitTow"></bj-toggle></td>
+                    </tr>
+                    <tr ng-if="$ctrl.race.defaults.pitTow">
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitTowSpeed.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitTowSpeed' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.race.defaults.pitTowSpeed" min="10" max="120" hard-max="200" step="5"></bj-slider></td>
+                    </tr>
+                    <tr>
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitReturn.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitReturn' | translate}}
+                        </td>
+                        <td><bj-toggle ng-model="$ctrl.race.defaults.pitReturn"></bj-toggle></td>
+                    </tr>
+                </table>
+            </accordion-content>
+        </bj-accordion>
+
         <bj-accordion id="race-editor-settings-anticheat" no-border-bottom="true">
             <accordion-title>
                 <h5>{{'beamjoy.window.config.tabs.races.sections.anticheat' | translate}}</h5>
@@ -1152,7 +1493,7 @@
                         {{'beamjoy.racePhases.editPhases' | translate}}
                     </button>
                     <bj-race-phases ng-if="$ctrl.phaseUi.list" phases="$ctrl.phaseUi.list" result="$ctrl.phaseUi.result"
-                        loopable="$ctrl.race.loopable" laps="$ctrl.race.defaults.laps"></bj-race-phases>
+                        loopable="$ctrl.race.loopable" laps="$ctrl.race.defaults.laps" pits="!$ctrl.pitProblem()"></bj-race-phases>
                     <button class="btn" ng-if="$ctrl.phaseUi.list" ng-click="$ctrl.usePhases(false)" style="align-self: flex-start">
                         {{'beamjoy.racePhases.oneRace' | translate}}
                     </button>

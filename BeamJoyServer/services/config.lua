@@ -57,6 +57,9 @@
 ---ThresholdPercent : percentage (1-100) of eligible voters needed to pass ; Timeout : seconds a
 ---vote stays open before it's automatically considered failed. Defaults (51%, 30s) match what
 ---mapVote.lua/kickVote.lua originally hardcoded before this became configurable.
+---@field RacePits {EntrySpeedPenalty: integer, SpeedTolerance: integer} race pits (raceGrid.lua's
+---racePit) : EntrySpeedPenalty, seconds added for crossing PIT IN faster than the lane's limit plus
+---SpeedTolerance (km/h), 0 off. The tow's speed is a race's own (services/races.lua's pitTowSpeed)
 
 local M = {
     ---@class BJSConfig
@@ -164,6 +167,10 @@ local M = {
         },
         RaceAuthorshipRestriction = false,
         RaceEditorShowOnlyEditable = false,
+        RacePits = {
+            EntrySpeedPenalty = 5,
+            SpeedTolerance = 5,
+        },
         ForceHud = true,
         Voting = {
             MapVoteThresholdPercent = 51,
@@ -290,6 +297,8 @@ local function onBJRequestCache(caches, targetID)
         -- main window opens forced/at-start), not just editable by an admin.
         RaceAuthorshipRestriction = M.data.RaceAuthorshipRestriction,
         RaceEditorShowOnlyEditable = M.data.RaceEditorShowOnlyEditable,
+        -- every racer's HUD shows a tow's time and the lane's tolerance
+        RacePits = M.data.RacePits,
         ForceHud = M.data.ForceHud,
     }
     if targetID and services_permissions.hasAllPermissions(targetID,
@@ -471,6 +480,21 @@ local function sanitizeConfigValue(key, value)
         end
         for k in pairs(value) do
             if not bounds[k] and not switches[k] then value[k] = nil end
+        end
+    elseif key == "RacePits" then
+        if type(value) ~= "table" then return nil, "Value must be a table" end
+        -- same string coercion + backfill as Deliveries above
+        local bounds = { EntrySpeedPenalty = { 0, 60 }, SpeedTolerance = { 0, 30 } }
+        for k, b in pairs(bounds) do
+            local v = tonumber(value[k])
+            if v == nil then v = M.data.RacePits[k] end
+            if v < b[1] or v > b[2] then
+                return nil, string.format("%s must be a number between %d and %d", k, b[1], b[2])
+            end
+            value[k] = math.round(v)
+        end
+        for k in pairs(value) do
+            if not bounds[k] then value[k] = nil end
         end
     elseif key == "Voting" then
         if type(value) ~= "table" then

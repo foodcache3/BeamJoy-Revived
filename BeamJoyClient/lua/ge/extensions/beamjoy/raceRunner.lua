@@ -1492,7 +1492,9 @@ local function pushHud()
                 -- a plugin's score (a phase ranked by a plugin)
                 score = row.score, scoreDisplay = row.scoreDisplay,
                 penaltyMs = row.penaltyMs, disqualified = row.disqualified,
-                labels = hudLabels(row.fields) }
+                labels = hudLabels(row.fields),
+                -- the pits (a race with them) : in the lane now (the P badge), stops made
+                inPit = row.inPit == true or nil, pitStops = session.settings.pits and (row.pitStops or 0) or nil }
         end
         for i, row in ipairs(leaderboard) do
             if row.playerName == participant.playerName then
@@ -1570,6 +1572,9 @@ local function pushHud()
         timeUp = session.flagAtMs ~= nil,
         afterTime = session.settings.afterTime,
         waitingAhead = waitingAhead,
+        -- the pits : the race has them, and the stops each racer must make (the standings' "1/1")
+        pits = session.settings.pits == true,
+        pitStopsRequired = session.settings.pits and session.settings.pitStops or 0,
         self = {
             playerName = participant.playerName,
             displayName = participant.displayName,
@@ -2133,14 +2138,17 @@ local function onSessionUpdate(session)
     local wasBreak = M.session ~= nil and M.session.state == "BREAK"
     local wasSessionFinished = M.session ~= nil and M.session.state == "FINISHED"
     local previousSettingsRev = M.session ~= nil and M.session.id == session.id and M.session.settingsRev or nil
+    local previousState = M.session ~= nil and M.session.state or nil
     local wasDnf = false
     local wasFinished = false
     local wasDisqualified = false
+    local wasPitReturned = false
     if M.session then
         local previousParticipant = getSelfParticipant()
         wasDnf = previousParticipant ~= nil and previousParticipant.dnf == true
         wasFinished = previousParticipant ~= nil and previousParticipant.finished == true
         wasDisqualified = previousParticipant ~= nil and previousParticipant.disqualified == true
+        wasPitReturned = previousParticipant ~= nil and previousParticipant.pitReturned == true
     end
     M.session = session
 
@@ -2699,8 +2707,10 @@ local function onSessionUpdate(session)
     -- raceGrid.lua's buildSettings). Unlike DNF, staying in your own car after finishing is a
     -- perfectly reasonable thing to want (e.g. just driving back to the pits), so this is the one
     -- of the two that's actually configurable rather than always-on.
-    if participant.finished and not wasFinished and session.settings.autoSpectateOnFinish and
-        #session.participants > 1 and session.state == "RACE" then
+    -- asked back to the pit box after the phase (pitReturn) : once back there
+    local backInBox = participant.pitReturned == true and not wasPitReturned
+    if participant.finished and session.settings.autoSpectateOnFinish and #session.participants > 1 and
+        session.state == "RACE" and ((not wasFinished and not participant.pitReturnPending) or backInBox) then
         saveCurrentVehicleForRespawn()
         beamjoy_vehicles.deleteCurrentOwnVehicle()
         if not spectateAnotherRacer(session) then
@@ -2818,6 +2828,8 @@ local function onSessionUpdate(session)
         beamjoy_communications_ui.send("BJRaceInfoAutoOpen", { raceName = race and race.name })
     end
 
+    -- the pits (a phase's start fuel, the HUD's pit line)
+    if beamjoy_racePits then beamjoy_racePits.onSessionUpdate(previousState) end
     extensions.hook("onBJRaceMarkersRefresh")
 end
 
@@ -3298,6 +3310,12 @@ local function onUpdate()
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if not myVeh then return end
 
+    -- in the pit lane : its own lines count (racePits.lua), the server credits the gates it skips
+    if beamjoy_racePits and beamjoy_racePits.skipsGates() then
+        M.lastLy = {}
+        return
+    end
+
     local vPos = beamjoy_vehicles.getVehiclePositionRotation(myVeh.veh) +
         vec3(0, 0, myVeh.veh:getInitialHeight() / 2)
 
@@ -3320,7 +3338,9 @@ local function onUpdate()
             end
         end
     else
-        candidates = { (participant.currentGate % #race.gates) + 1 }
+        -- just out of the pit lane, the server's echo may not be here yet (racePits.lua)
+        local current = beamjoy_racePits and beamjoy_racePits.currentGate(participant) or participant.currentGate
+        candidates = { (current % #race.gates) + 1 }
     end
 
     -- clear any stale M.lastLy entry for a gate that ISN'T a candidate this frame, otherwise a
@@ -3373,6 +3393,7 @@ local function onUpdate()
                 local crossingMs = nowMs - overshoot * (nowMs - (M.prevFrameElapsedMs or nowMs))
                 beamjoy_communications.send("raceGateCrossed", M.session.id, gateIdx,
                     math.max(0, math.round(crossingMs)))
+                if beamjoy_racePits then beamjoy_racePits.onGateSent(gate.step or gateIdx) end
                 M.lastLy[gateIdx] = nil -- fresh start for this gate index next lap
                 break -- only one candidate can actually be crossed in a single frame
             else
@@ -3396,6 +3417,11 @@ local function checkDnfStall()
     if not M.session.settings.dnfEnabled then return end
     -- waiting for a start of their own (held, or a run's car rolling to a stop) : not a stall
     if M.personalAt and M.personalStage ~= "go" then
+        M.lastProgressPos = nil
+        return
+    end
+    -- in the pit lane (a stop, a tow's hold, choosing the plan) : standing still is the point
+    if beamjoy_racePits and beamjoy_racePits.holdsCar() then
         M.lastProgressPos = nil
         return
     end
@@ -3446,6 +3472,14 @@ end
 -- player-initiated" flag set right before moving the vehicle).
 local ignoreNextReset = {} ---@type table<integer, true> vid -> true
 
+--- a reset of this player's car coming that isn't theirs (racePits.lua : into the box, a pit repair) :
+--- nothing's redirected. Forgotten after a moment, should the game not count it as a reset
+---@param vid integer
+function M.expectReset(vid)
+    ignoreNextReset[vid] = true
+    async.delayTask(function() ignoreNextReset[vid] = nil end, 2000, "BJRaceExpectReset-" .. vid)
+end
+
 --- picks the lastcheckpoint respawn target : the last gate actually crossed, wherever the race
 --- currently is in its lap cycle, or the assigned start position if nothing's been crossed yet
 --- this whole race. `lastCrossedGate` never gets force-reset on a lap boundary (see its own doc
@@ -3454,6 +3488,9 @@ local ignoreNextReset = {} ---@type table<integer, true> vid -> true
 ---@param race BJRace
 ---@return {pos:table, dir:table}?
 local function lastCheckpointTarget(participant, race)
+    -- in the pit lane : its box (racePits.lua)
+    local box = beamjoy_racePits and beamjoy_racePits.resetTarget()
+    if box then return box end
     -- lastCrossedGate (actual gate array index/identity), not currentGate (the progress/step
     -- number). Several physical gates can share one step in a branching race, so indexing
     -- race.gates by currentGate could land on the wrong physical gate entirely. Identical to
@@ -3674,7 +3711,13 @@ local function onBJRequestCurrentVehicleReset(req, resetType, mpVeh)
     if strategy == "flipupright" or strategy == "lastroad" then
         req.state = false
         applyResetPenalty(mpVeh.vid)
-        forceResetAction(strategy, mpVeh)
+        -- in the pit lane, its "last road" is the box (the road found could be the track beside it),
+        -- the damage kept as the recovery keeps it
+        if strategy == "lastroad" and beamjoy_racePits and beamjoy_racePits.resetTarget() then
+            beamjoy_racePits.toBox(mpVeh, false)
+        else
+            forceResetAction(strategy, mpVeh)
+        end
         return
     end
     -- "all" (free respawn) still lets a plain Recover behave exactly like vanilla BeamNG: that's
@@ -3993,6 +4036,9 @@ M.onBJActiveVehiclePools = function(pools)
     if restriction and restriction.mode == "pool" then table.insert(pools, restriction.pool) end
 end
 M.isRaceLocked = isRaceLocked
+M.getSelfParticipant = getSelfParticipant
+M.getRace = getRace
+M.raceElapsedNowMs = raceElapsedNowMs
 
 M.onSessionUpdate = onSessionUpdate
 M.onSessionsList = onSessionsList

@@ -350,6 +350,10 @@ end
 -- GE side to know it needs re-sending ; re-sending it every tick self-heals from that instead.
 local function pushResetPreserveFlags(v)
     local fr = beamjoy_config.data.Freeroam or {}
+    -- a race with pits keeps it too, whatever the server's setting : the tanks are the pits' to fill
+    -- (beamjoy_racePits.keepsFuel)
+    local keep = fr.PreserveFuelOnReset == true or
+        (beamjoy_racePits ~= nil and beamjoy_racePits.keepsFuel() == true)
     v.veh:queueLuaCommand(string.var([[
 if not _bjResetPreserveInstalled then
     _bjResetPreserveInstalled = true
@@ -373,7 +377,14 @@ if not _bjResetPreserveInstalled then
     end
 end
 _bjPreserveFuelOnReset={1}
-]], { tostring(fr.PreserveFuelOnReset == true) }))
+]], { tostring(keep) }))
+end
+
+--- the reset-preserve flags sent now, not at the next tick (a race's countdown, before its first reset)
+local function refreshResetPreserveFlags()
+    M.vehicles:filter(function(v)
+        return v.isLocal and not v.isAi and v.isVehicle
+    end):forEach(pushResetPreserveFlags)
 end
 
 local function onVehicleDestroyed(vid)
@@ -1731,6 +1742,7 @@ M.launch = launch
 M.switchToNextVehicle = switchToNextVehicle
 M.setGhost = setGhost
 M.setGhostReason = setGhostReason
+M.refreshResetPreserveFlags = refreshResetPreserveFlags
 M.applyRespawnProtection = applyRespawnProtection
 M.computeDisplayAlpha = computeDisplayAlpha
 M.applyDisplayAlpha = applyDisplayAlpha

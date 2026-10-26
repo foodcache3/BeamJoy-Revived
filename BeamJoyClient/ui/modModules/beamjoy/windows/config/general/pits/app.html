@@ -1,0 +1,18 @@
+<table ng-if="$ctrl.init">
+    <tr>
+        <td class="text-right" title="{{'beamjoy.window.config.tabs.general.pits.entrySpeedPenalty.tooltip'|translate}}">
+            {{"beamjoy.window.config.tabs.general.pits.entrySpeedPenalty"|translate}}
+        </td>
+        <td>
+            <bj-slider ng-model="$ctrl.data.EntrySpeedPenalty" min="0" max="30" hard-max="60" step="1"></bj-slider>
+        </td>
+    </tr>
+    <tr>
+        <td class="text-right" title="{{'beamjoy.window.config.tabs.general.pits.speedTolerance.tooltip'|translate}}">
+            {{"beamjoy.window.config.tabs.general.pits.speedTolerance"|translate}}
+        </td>
+        <td>
+            <bj-slider ng-model="$ctrl.data.SpeedTolerance" min="0" max="20" hard-max="30" step="1"></bj-slider>
+        </td>
+    </tr>
+</table>

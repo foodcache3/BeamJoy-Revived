@@ -60,8 +60,11 @@ angular.module("beamjoy").factory("beamjoyRacePhases", function ($filter) {
     // "individual" is the editor's "Time offset" (a start every few seconds, several on track),
     // "sequential" its "One at a time" (each racer's whole phase before the next is released)
     const STARTS = ["grid", "individual", "sequential", "open"];
-    // the rules a phase's editor sets over the event's
-    const RULES = ["respawnStrategy", "disableCollisions", "dnfEnabled", "resetPenaltyEnabled"];
+    // the rules a phase's editor sets over the event's ; the pits' too (services/races.lua PIT_SETTINGS,
+    // a race with usable pits only)
+    const PIT_RULES = ["pitStart", "pitGhost", "pitStops", "pitMissingPenaltyS", "pitRefuel", "pitFuelRatePct",
+        "startFuelPct", "pitRepair", "pitRepairMaxS", "pitTow", "pitTowSpeed", "pitReturn"];
+    const RULES = ["respawnStrategy", "disableCollisions", "dnfEnabled", "resetPenaltyEnabled", ...PIT_RULES];
 
     // a phase as edited : every setting there, the length's laps and minutes kept while switched off
     const newPhase = (base, laps) => {
@@ -179,6 +182,8 @@ angular.module("beamjoy").component("bjRacePhases", {
         // a plugin's format : what the starter can't change (true : all of it ; or a list, "phases"
         // for the list itself, else a setting of every phase)
         locked: "<?",
+        // the race's pits are usable : each phase's own pit rules
+        pits: "<?",
     },
     templateUrl: "/ui/modModules/beamjoy/cmps/racePhases/app.html",
     controller: function ($scope, $filter, beamjoyRacePhases, beamjoyPluginUi) {
@@ -245,6 +250,20 @@ angular.module("beamjoy").component("bjRacePhases", {
                 { value: false, label: translate("beamjoy.racePhases.rules.solid") },
                 { value: true, label: translate("beamjoy.racePhases.rules.ghosted") },
             ];
+            // the pits' : a choice each, as the event, or a value of its own
+            const same = { value: null, label: translate("beamjoy.racePhases.rules.same") };
+            const numbers = (list, key) => [same, ...list.map((n) => ({ value: n, label: fill(key, { n }) }))];
+            this.pitStartOptions = [
+                same,
+                { value: false, label: translate("beamjoy.window.config.tabs.races.pitStartModes.grid") },
+                { value: true, label: translate("beamjoy.window.config.tabs.races.pitStartModes.pits") },
+            ];
+            this.pitStopsOptions = numbers([0, 1, 2, 3, 4, 5], "beamjoy.racePhases.rules.n");
+            this.pitPenaltyOptions = numbers([0, 10, 15, 20, 30, 45, 60, 120], "beamjoy.racePhases.rules.seconds");
+            this.pitRateOptions = numbers([1, 2, 3, 5, 8, 10, 15, 20], "beamjoy.racePhases.rules.percentPerSecond");
+            this.startFuelOptions = numbers([10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 100], "beamjoy.racePhases.rules.percent");
+            this.pitRepairOptions = numbers([0, 15, 30, 45, 60, 90, 120, 180], "beamjoy.racePhases.rules.seconds");
+            this.pitTowSpeedOptions = numbers([20, 30, 40, 50, 60, 80, 100, 120], "beamjoy.racePhases.rules.kmh");
             // the order and takes pickers' own values ("phase:2"), kept beside the phase's
             phases.forEach((p, i) => {
                 p.orderPick = i === 0 || !p.order || p.order.from === "lobby" ? "lobby"

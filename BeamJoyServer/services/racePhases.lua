@@ -82,7 +82,8 @@ local M = {
 local STARTS_RUN = { grid = true, individual = true, sequential = true, open = true, plugin = true }
 
 --- a phase's rules : settings of the session's (raceGrid's BJRaceSessionSettings) a phase may set
---- for itself. The rest (vehicle restriction, anti-cheat, display, the lobby's) is the event's
+--- for itself. The rest (vehicle restriction, anti-cheat, display, the lobby's) is the event's.
+--- Every pit setting (services_races.PIT_SETTINGS) is one too (sanitizeRules)
 local RULE_KEYS = {
     respawnStrategy = "respawn",
     dnfEnabled = "boolean",
@@ -134,6 +135,9 @@ local function sanitizeRules(rules)
                 out[key] = oneOf(v, kind)
             end
         end
+    end
+    for key in pairs(services_races.PIT_SETTINGS) do
+        out[key] = services_races.pitSettingValue(key, rules[key])
     end
     return out
 end

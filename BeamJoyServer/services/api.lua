@@ -41,6 +41,7 @@ local RESPONSE_EVENT = "BJAPI_Response"
 local EVENTS = { "Ready", "LeaderboardChanged", "RacesChanged", "MapChanged", "PlayerJoined", "PlayerLeft",
     "RaceGridOpened", "RaceCountdown", "RaceGreenLight", "RacerLap", "RacerFinished", "RacerOut",
     "RacerStarted", "RacerJoinedPhase", "RacerGate", "RacerReset", "RacePositionsChanged", "RaceControl",
+    "RacerPitEntry", "RacerPitStop", "RacerPitExit", "RacerPitPenalty", "RacerPitTow", "RacerPitReturned",
     "RacePhaseFinished", "RaceFinished", "RaceClosed", "EnvironmentChanged", "ConfigChanged", "ConfigAction",
     "PageOpened", "PageAction", "Hook" }
 local LEADERBOARD_LIMIT_DEFAULT = 100
@@ -283,6 +284,9 @@ local function racerOut(p, session)
         startAt = p.startAtMs and stamp(p.startAtMs) or nil,
         -- a plugin's phase : waiting for the plugin to start them (race.startRacer)
         awaitingStart = p.awaitingStart == true or nil,
+        -- the pits (PIT_SYSTEM_PLAN.md) : in the pit lane, stops made this phase
+        inPit = p.inPit == true or nil,
+        pitStops = p.pitStops,
         -- a plugin's score this phase (phase.setScores)
         score = p.score,
         scoreDisplay = p.scoreDisplay,
@@ -1645,6 +1649,28 @@ function M.racerReset(session, p, addedMs)
     data.penaltyMs = addedMs and addedMs > 0 and addedMs or nil
     data.holdS = s.resetPenaltyEnabled and s.resetPenaltyMode ~= "time" and s.resetPenaltySeconds or nil
     emit("RacerReset", data)
+end
+
+local PIT_EVENTS = { entry = "RacerPitEntry", stop = "RacerPitStop", exit = "RacerPitExit",
+    penalty = "RacerPitPenalty", tow = "RacerPitTow", returned = "RacerPitReturned" }
+
+--- a racer and the pits (raceGrid.lua's racePit) : in through PIT IN (`speedKmh`), a stop made
+--- (`fuelL`, `repair`, `durationMs`, `towed`), out through PIT OUT (`stopped`), a pit penalty
+--- (`reason` "entrySpeed"|"transit"|"missingStops", `penaltyMs`), a tow (`holdMs`, `metres`), back
+--- in their box after the phase (`towed`)
+---@param session table BJRaceSession
+---@param p table BJRaceParticipant
+---@param kind "entry"|"stop"|"exit"|"penalty"|"tow"|"returned"
+---@param fields table?
+function M.racerPit(session, p, kind, fields)
+    local name = PIT_EVENTS[kind]
+    if not name then return end
+    local data = sessionBase(session)
+    data.at = stamp()
+    data.racer = racerOut(p, session)
+    data.lap = p.currentLap
+    for k, v in pairs(fields or {}) do data[k] = v end
+    emit(name, data)
 end
 
 --- places changed during a phase (an overtake, a finish, a penalty) : who, from where to where

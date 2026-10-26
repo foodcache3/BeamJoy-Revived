@@ -39,6 +39,9 @@ local M = {
     activeGateIndex = nil,
     ---@type integer?
     activeStartIndex = nil,
+    ---@type {kind: "entry"|"exit"|"box", index: integer?}? the pit lane's PIT IN / PIT OUT line, or a
+    ---start slot's pit box (PIT_SYSTEM_PLAN.md)
+    activePit = nil,
     dirty = false,
     -- editor-session preference, not saved to the race itself. When on, dragging a gate/start
     -- with the gizmo re-snaps it to the ground the moment the drag ends, replacing the old
@@ -249,6 +252,87 @@ local function pushActive()
     end
     beamjoy_communications_ui.send("BJEditorRaceActiveGate", M.activeGateIndex)
     beamjoy_communications_ui.send("BJEditorRaceActiveStart", M.activeStartIndex)
+    beamjoy_communications_ui.send("BJEditorRaceActivePit", M.activePit)
+end
+
+--- the pit lane's line ("entry" / "exit") or a slot's box ("box", index) being edited, if it's there
+---@param kind "entry"|"exit"|"box"
+---@param index integer?
+---@return table?
+local function pitItem(kind, index)
+    if not M.race then return nil end
+    if kind == "box" then
+        local sp = index and M.race.startPositions[index]
+        return sp and sp.pit or nil
+    end
+    return M.race.pit and M.race.pit[kind] or nil
+end
+
+--- the line whose edges the handles resize (raceMarkers.lua's drawGateHandles) : the gate selected,
+--- or the pit lane's PIT IN / PIT OUT (direct request), with updateGizmo's kind for it
+---@return table? line, string? gizmoKind
+local function handleLine()
+    if not M.race then return nil end
+    if M.activeGateIndex then
+        local gate = M.race.gates[M.activeGateIndex]
+        return gate, gate and "gate" or nil
+    end
+    local sel = M.activePit
+    if sel and (sel.kind == "entry" or sel.kind == "exit") then
+        local line = pitItem(sel.kind)
+        return line, line and (sel.kind == "entry" and "pitEntry" or "pitExit") or nil
+    end
+    return nil
+end
+
+-- PIT IN / PIT OUT or a slot's box placed with the mouse (updatePitPlacing below) : what, which way
+-- it faced before the wheel turned it, the turn, where the mouse's ray hit the world
+---@type {kind: "entry"|"exit"|"box", index: integer?, base: vec3, rot: number, hit: vec3?}?
+M.pitPlacing = nil
+
+local function pushPitPlacing()
+    local p = M.pitPlacing
+    beamjoy_communications_ui.send("BJEditorRacePitPlacing", p and { kind = p.kind, index = p.index } or nil)
+end
+
+local function stopPitPlacing()
+    if not M.pitPlacing then return end
+    M.pitPlacing = nil
+    beamjoy_pits.setGhost(nil)
+    pushPitPlacing()
+end
+
+---@param p vec3
+---@param a vec3
+---@param b vec3
+---@return number
+local function pointSegmentDistance(p, a, b)
+    local ab = b - a
+    local len2 = ab:squaredLength()
+    if len2 < 1e-6 then return p:distance(a) end
+    local t = math.max(0, math.min(1, (p - a):dot(ab) / len2))
+    return p:distance(a + ab * t)
+end
+
+--- the route steps the pit lane joins, from where its lines are : PIT IN's the start of the route
+--- segment (gate to gate, a circuit's last back to the first) it's nearest to, PIT OUT's its end
+---@param which "entry"|"exit"
+local function autoPitSteps(which)
+    local race = M.race
+    local line = race and race.pit and race.pit[which]
+    if not line or #race.gates < 2 then return end
+    local pos = vec3(line.pos.x, line.pos.y, line.pos.z)
+    local best, bestD
+    for i, g in ipairs(race.gates) do
+        local n = race.gates[i % #race.gates + 1]
+        local d = pointSegmentDistance(pos, vec3(g.pos.x, g.pos.y, g.pos.z), vec3(n.pos.x, n.pos.y, n.pos.z))
+        if not bestD or d < bestD then best, bestD = i, d end
+    end
+    if which == "entry" then
+        race.pit.fromStep = best
+    else
+        race.pit.toStep = best % #race.gates + 1
+    end
 end
 
 --- ground-height query for snapping, routed through M.snapMethod (see its own comment above for
@@ -297,8 +381,9 @@ local propHost = {
     positionDirection = function() return currentPositionDirection() end,
     onSelect = function()
         draggingHandle = nil
-        if M.activeGateIndex or M.activeStartIndex then
-            M.activeGateIndex, M.activeStartIndex = nil, nil
+        stopPitPlacing()
+        if M.activeGateIndex or M.activeStartIndex or M.activePit then
+            M.activeGateIndex, M.activeStartIndex, M.activePit = nil, nil, nil
             pushActive()
             extensions.hook("onBJRaceMarkersRefresh")
         end
@@ -333,11 +418,20 @@ local function snapGateToLowestPoint(gate)
     if lowest then gate.pos.z = lowest end
 end
 
----@param kind "gate"|"start"
+---@param kind "gate"|"start"|"pitEntry"|"pitExit"|"pitBox"
 ---@param index integer?
 local function updateGizmo(kind, index)
     gizmo.hide()
-    local item = index and (kind == "gate" and M.race.gates[index] or M.race.startPositions[index])
+    local item
+    if kind == "pitEntry" then
+        item = pitItem("entry")
+    elseif kind == "pitExit" then
+        item = pitItem("exit")
+    elseif kind == "pitBox" then
+        item = pitItem("box", index)
+    else
+        item = index and (kind == "gate" and M.race.gates[index] or M.race.startPositions[index])
+    end
     if not item then return end
     gizmo.show({
         pos = vec3(item.pos.x, item.pos.y, item.pos.z),
@@ -372,11 +466,16 @@ local function updateGizmo(kind, index)
         -- onDragEnd. Auto-snap-to-ground toggle (position only), replacing the old manual button.
         local wasRotate = gizmo.tool == "rotate"
         if M.snapToGroundEnabled then
-            if kind == "gate" then
+            if kind == "gate" or kind == "pitEntry" or kind == "pitExit" then
                 snapGateToLowestPoint(item)
             else
                 item.pos.z = groundHeightAt(vec3(item.pos.x, item.pos.y, item.pos.z))
             end
+        end
+        -- a pit line moved : the steps it joins follow it
+        if kind == "pitEntry" or kind == "pitExit" then
+            autoPitSteps(kind == "pitEntry" and "entry" or "exit")
+            pushUpdate()
         end
         if not M.snapToGroundEnabled and not wasRotate then return end
         -- Re-show: ground-snap just moved the position (if enabled), and/or a rotate drag's dir
@@ -503,8 +602,7 @@ local HANDLE_HIT_TOLERANCE = .5
 ---@param rayDir vec3
 ---@return "left"|"right"|"top"|nil
 local function hitTestHandles(camPos, rayDir)
-    if not M.race or not M.activeGateIndex then return nil end
-    local gate = M.race.gates[M.activeGateIndex]
+    local gate = handleLine()
     if not gate then return nil end
     local f = gateFrame(gate)
     local candidates = {
@@ -524,13 +622,15 @@ end
 
 ---@param kind "left"|"right"|"top"
 local function beginHandleDrag(kind)
-    local gate = M.race and M.race.gates[M.activeGateIndex]
+    local gate, gizmoKind = handleLine()
     if not gate then return end
     local f = gateFrame(gate)
+    -- a pit line spans the lane (its sidebar slider goes to 100 m)
+    local maxWidth = gizmoKind == "gate" and 30 or 100
     if kind == "left" then
-        draggingHandle = { kind = "left", anchor = f.bottomRight, axis = f.right, min = 2, max = 30 }
+        draggingHandle = { kind = "left", anchor = f.bottomRight, axis = f.right, min = 2, max = maxWidth }
     elseif kind == "right" then
-        draggingHandle = { kind = "right", anchor = f.bottomLeft, axis = f.right, min = 2, max = 30 }
+        draggingHandle = { kind = "right", anchor = f.bottomLeft, axis = f.right, min = 2, max = maxWidth }
     else
         draggingHandle = {
             kind = "top", anchor = f.pos, axis = vec3(0, 0, 1), min = 1, max = 30,
@@ -540,13 +640,14 @@ local function beginHandleDrag(kind)
             lastMouseY = nil,
         }
     end
+    draggingHandle.line, draggingHandle.gizmoKind = gate, gizmoKind
 end
 
 ---@param camPos vec3
 ---@param rayDir vec3
 local function updateHandleDrag(camPos, rayDir)
-    local gate = M.race and M.race.gates[M.activeGateIndex]
-    if not gate or not draggingHandle then return end
+    local gate = draggingHandle and draggingHandle.line
+    if not gate then return end
     if draggingHandle.kind == "top" then
         local u = verticalDragParam(camPos, rayDir, draggingHandle.anchor)
         if u then
@@ -598,7 +699,7 @@ end
 
 local function endHandleDrag()
     if not draggingHandle then return end
-    local kind = draggingHandle.kind
+    local kind, gate, gizmoKind = draggingHandle.kind, draggingHandle.line, draggingHandle.gizmoKind
     draggingHandle = nil
     -- Ground-snapping the width handles too, per direct request. Previously only the sidebar
     -- slider (onSetGate) and the translate gizmo's own drag-end auto-snapped. Dragging a gate's
@@ -609,15 +710,223 @@ local function endHandleDrag()
     -- every frame while the width is still actively changing would be wasteful and risks the
     -- sampled span not matching the width the drag actually settles on. left/right changes
     -- gate.width (what the scan spans); top (height) doesn't, so skip it there.
-    if kind ~= "top" and M.snapToGroundEnabled then
-        local gate = M.race and M.race.gates[M.activeGateIndex]
-        if gate then snapGateToLowestPoint(gate) end
+    if kind ~= "top" and M.snapToGroundEnabled then snapGateToLowestPoint(gate) end
+    -- a pit line's middle moved : the steps the lane joins follow it
+    if kind ~= "top" and gizmoKind ~= "gate" then
+        autoPitSteps(gizmoKind == "pitEntry" and "entry" or "exit")
     end
     markDirty()
     pushUpdate()
     -- Left/right drags can shift gate.pos; re-sync the translate/rotate gizmo's transform to it.
-    updateGizmo("gate", M.activeGateIndex)
+    updateGizmo(gizmoKind, M.activeGateIndex)
     extensions.hook("onBJRaceMarkersRefresh")
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- PIT IN / PIT OUT and the slots' boxes placed with the mouse (direct request), as the props are : a
+-- ghost follows the mouse over the world (one ray against the static collision, so not your car),
+-- the wheel turns it (Ctrl + wheel a degree at a time), a click places it, a right-click or Esc
+-- stops. A box placed with Ctrl held goes on to the next slot without one. The buttons with the car
+-- place them where your car is (onPitPlace)
+
+local PIT_LINE_WIDTH, PIT_LINE_HEIGHT = 8, 4
+local PIT_PLACE_RAY = 1000
+local PIT_ROTATE_STEP, PIT_ROTATE_FINE = 15, 1
+-- the ghost's colours : a box's (the parking-spot marker's {r, g, b, a}), a line's quad (0..255)
+local PIT_GHOST_BOX = { .4, .85, 1, 1 }
+local PIT_GHOST_QUAD = { 102, 217, 255, 90 }
+local pitGhostColor = nil -- its arrow and label (BJColor, made the first time)
+local UP = vec3(0, 0, 1)
+-- the click that placed one is the placing's, not a selection's (onWorldClick may hear it after)
+local pitPlacedAtMs = 0
+
+--- PIT IN / PIT OUT, or a slot's box, put there facing `dir` : a new one, or the one there moved. A
+--- line sets the steps the lane joins
+---@param kind "entry"|"exit"|"box"
+---@param index integer? the slot, a box
+---@param pos vec3
+---@param dir vec3
+---@param grounded boolean? `pos` is on the ground already (the mouse's ray hit it there)
+---@return boolean placed
+local function placePitItem(kind, index, pos, dir, grounded)
+    local flat = vec3(dir.x, dir.y, 0)
+    flat = flat:length() > 1e-4 and flat:normalized() or vec3(0, 1, 0)
+    if kind == "box" then
+        local sp = index and M.race.startPositions[index]
+        if not sp then return false end
+        local z = (M.snapToGroundEnabled and not grounded) and groundHeightAt(pos) or pos.z
+        sp.pit = sp.pit or {}
+        sp.pit.pos = { x = pos.x, y = pos.y, z = z }
+        sp.pit.dir = { x = flat.x, y = flat.y, z = 0 }
+    else
+        M.race.pit = M.race.pit or { speedLimitKmh = 60 }
+        local line = M.race.pit[kind] or { width = PIT_LINE_WIDTH, height = PIT_LINE_HEIGHT }
+        line.pos = { x = pos.x, y = pos.y, z = pos.z }
+        line.dir = { x = flat.x, y = flat.y, z = 0 }
+        M.race.pit[kind] = line
+        if M.snapToGroundEnabled then snapGateToLowestPoint(line) end
+        autoPitSteps(kind)
+    end
+    markDirty()
+    pushUpdate()
+    return true
+end
+
+--- which way one placed with the mouse faces before the wheel turns it, with the props' Fixed
+--- rotation on (propEditor.fixedRotation, direct request : the same switch) : the one there already,
+--- else (a box) the nearest slot's box (a pit lane's boxes stand side by side), else north. Off, it
+--- turns with the camera instead, as a prop does (updatePitPlacing)
+---@param kind "entry"|"exit"|"box"
+---@param index integer?
+---@return vec3 unit, flat
+local function pitPlacingBase(kind, index)
+    local item = pitItem(kind, index)
+    local dir = item and item.dir
+    if not dir and kind == "box" then
+        local bestGap
+        for i, sp in ipairs(M.race.startPositions) do
+            if i ~= index and sp.pit and sp.pit.dir and (not bestGap or math.abs(i - index) < bestGap) then
+                dir, bestGap = sp.pit.dir, math.abs(i - index)
+            end
+        end
+    end
+    local flat = dir and vec3(dir.x, dir.y, 0) or vec3(0, 1, 0)
+    return flat:length() > 1e-4 and flat:normalized() or vec3(0, 1, 0)
+end
+
+--- the camera's way, flat (a ghost placed without Fixed rotation turns with it)
+---@return vec3
+local function cameraFlatDir()
+    local _, dir = camera.getPositionRotation(false)
+    local flat = dir and vec3(dir.x, dir.y, 0) or vec3(0, 1, 0)
+    return flat:length() > 1e-4 and flat:normalized() or vec3(0, 1, 0)
+end
+
+--- the sidebar's mouse button : PIT IN / PIT OUT or a slot's box placed with the mouse ; the same
+--- again stops. Nothing stays selected meanwhile (the gizmo would take the clicks), no prop armed
+---@param kind "entry"|"exit"|"box"
+---@param index integer? the slot, a box
+local function onPitArm(kind, index)
+    if not M.race or not (kind == "entry" or kind == "exit" or kind == "box") then return end
+    if kind == "box" and not (index and M.race.startPositions[index]) then return end
+    local p = M.pitPlacing
+    if p and p.kind == kind and p.index == index then return stopPitPlacing() end
+    propEditor.clearSelection()
+    draggingHandle = nil
+    gizmo.hide()
+    if M.activeGateIndex or M.activeStartIndex or M.activePit then
+        M.activeGateIndex, M.activeStartIndex, M.activePit = nil, nil, nil
+        pushActive()
+        extensions.hook("onBJRaceMarkersRefresh")
+    end
+    M.pitPlacing = { kind = kind, index = index, base = pitPlacingBase(kind, index), rot = 0 }
+    pushPitPlacing()
+end
+
+--- the slot after `index` (round to the first) without a box, nil when every one has one
+---@param index integer
+---@return integer?
+local function nextSlotWithoutBox(index)
+    local n = #M.race.startPositions
+    for k = 1, n - 1 do
+        local i = (index + k - 1) % n + 1
+        if not M.race.startPositions[i].pit then return i end
+    end
+    return nil
+end
+
+--- the ghost where it would go : a box as the parking-spot marker itself (beamjoy_pits.setGhost), a
+--- line as its quad ; both with the way it faces and its name. Drawn every frame, it follows the mouse
+---@param p table M.pitPlacing
+---@param dir vec3
+local function drawPitGhost(p, dir)
+    pitGhostColor = pitGhostColor or BJColor(.4, .85, 1, .9)
+    local pos, label, height = p.hit, nil, 1.5
+    if p.kind == "box" then
+        beamjoy_pits.setGhost({ pos = pos, dir = dir, color = PIT_GHOST_BOX })
+        label = string.format("Box %d", p.index)
+    else
+        beamjoy_pits.setGhost(nil)
+        local line = M.race.pit and M.race.pit[p.kind]
+        local width = line and tonumber(line.width) or PIT_LINE_WIDTH
+        height = line and tonumber(line.height) or PIT_LINE_HEIGHT
+        local right = dir:cross(UP) * (width / 2)
+        local bl, br = pos - right, pos + right
+        local tl, tr = bl + UP * height, br + UP * height
+        local c = PIT_GHOST_QUAD
+        local packed = color(c[1], c[2], c[3], c[4])
+        -- both faces, so it shows from either side
+        debugDrawer:drawTriSolid(bl, br, tr, packed)
+        debugDrawer:drawTriSolid(bl, tr, tl, packed)
+        debugDrawer:drawTriSolid(tr, br, bl, packed)
+        debugDrawer:drawTriSolid(tl, tr, bl, packed)
+        label = p.kind == "entry" and "PIT IN" or "PIT OUT"
+    end
+    -- as raceMarkers.lua draws a gate's (its head lands on the middle)
+    shape.Arrow(pos + UP * math.min(height / 2, 1) + dir * 2, dir, 2, pitGhostColor)
+    shape.Text(label, pos + UP * (height + .5))
+end
+
+---@return boolean
+local function escPressed()
+    local ok, pressed = pcall(function()
+        return ui_imgui.IsKeyPressed(ui_imgui.GetKeyIndex(ui_imgui.Key_Escape))
+    end)
+    return ok and pressed == true
+end
+
+--- per frame while one's being placed with the mouse ; false when none is (the editor's own mouse
+--- handling runs)
+---@return boolean
+local function updatePitPlacing()
+    local p = M.pitPlacing
+    if not p then return false end
+    if not M.race or not parent or parent.activeEditor ~= M then
+        stopPitPlacing()
+        return false
+    end
+    if escPressed() then
+        stopPitPlacing()
+        return true
+    end
+    local io = ui_imgui.GetIO()
+    local overUI = (getCEFFocusMouse and getCEFFocusMouse() == true) or (io ~= nil and io.WantCaptureMouse == true)
+    local ctrl = io ~= nil and io.KeyCtrl == true
+    p.hit = nil
+    if not overUI then
+        local camPos, rayDir = camera.mouseRay()
+        if camPos then
+            local dist = castRayStatic(camPos, rayDir, PIT_PLACE_RAY)
+            if dist and dist > 0 and dist < PIT_PLACE_RAY then p.hit = camPos + rayDir * dist end
+        end
+        local ok, wheel = pcall(function() return io.MouseWheel end)
+        wheel = ok and tonumber(wheel) or 0
+        if wheel ~= 0 then
+            p.rot = (p.rot + (wheel > 0 and 1 or -1) * (ctrl and PIT_ROTATE_FINE or PIT_ROTATE_STEP)) % 360
+        end
+    end
+    if not p.hit then
+        beamjoy_pits.setGhost(nil)
+        return true
+    end
+    local dir = beamjoy_props.turn(propEditor.fixedRotation and p.base or cameraFlatDir(), p.rot)
+    if ui_imgui.IsMouseClicked(ui_imgui.MouseButton_Left) and not (gizmo.isHovered and gizmo.isHovered()) then
+        pitPlacedAtMs = GetCurrentTimeMillis()
+        local kind, index, at = p.kind, p.index, p.hit
+        stopPitPlacing()
+        placePitItem(kind, index, at, dir, true)
+        local nextSlot = kind == "box" and ctrl and nextSlotWithoutBox(index)
+        if nextSlot then
+            onPitArm("box", nextSlot)
+            -- the box just placed shows (onPitSelect redraws otherwise)
+            extensions.hook("onBJRaceMarkersRefresh")
+        else
+            M.onPitSelect(kind, index)
+        end
+        return true
+    end
+    drawPitGhost(p, dir)
+    return true
 end
 
 -- camera-ray computation (hit-independent, unlike `cameraMouseRayCast`) lives in camera.lua's own
@@ -629,11 +938,11 @@ end
 --- geometry though, not a real engine gizmo, so there's no native widget to ask "was this click on
 --- you" ; raw `ui_imgui` mouse state + `camera.mouseRay()` stand in for that.
 local function onUpdate()
-    if propEditor.onUpdate() then
+    if updatePitPlacing() or propEditor.onUpdate() then
         draggingHandle = nil
         return
     end
-    if not parent or parent.activeEditor ~= M or not M.race or not M.activeGateIndex then
+    if not parent or parent.activeEditor ~= M or not M.race or not handleLine() then
         draggingHandle = nil
         return
     end
@@ -790,6 +1099,8 @@ local function onOpen(raceId)
     end
     M.activeGateIndex = nil
     M.activeStartIndex = nil
+    M.activePit = nil
+    stopPitPlacing()
     M.dirty = false
     propEditor.attach(propHost)
     pushUpdate()
@@ -893,8 +1204,10 @@ local function onSelectGate(index)
     if not M.race then return end
     if index then propEditor.clearSelection() end
     draggingHandle = nil
+    stopPitPlacing()
     M.activeGateIndex = (index and M.race.gates[index]) and index or nil
     M.activeStartIndex = nil
+    M.activePit = nil
     updateGizmo("gate", M.activeGateIndex)
     pushActive()
     pushUpdate() -- picks up anything a throttled scale-drag push may have missed
@@ -905,8 +1218,10 @@ local function onSelectStart(index)
     if not M.race then return end
     if index then propEditor.clearSelection() end
     draggingHandle = nil
+    stopPitPlacing()
     M.activeStartIndex = (index and M.race.startPositions[index]) and index or nil
     M.activeGateIndex = nil
+    M.activePit = nil
     updateGizmo("start", M.activeStartIndex)
     pushActive()
     extensions.hook("onBJRaceMarkersRefresh")
@@ -926,6 +1241,12 @@ end
 ---@param data onBJClickData
 local function onWorldClick(clickType, data)
     if not parent or parent.activeEditor ~= M or not M.race then return end
+    -- a pit line or box being placed with the mouse (or just placed) : the click is the placing's, a
+    -- right-click stops it
+    if M.pitPlacing or GetCurrentTimeMillis() - pitPlacedAtMs < 300 then
+        if clickType == "right" then stopPitPlacing() end
+        return
+    end
     -- a prop armed : the click is the placing's
     if propEditor.onBJClick(clickType) then return end
     if clickType ~= "left" then return end
@@ -985,7 +1306,21 @@ local function onWorldClick(clickType, data)
         if t and t < bestT then
             bestT, bestKind, bestIndex = t, "start", i
         end
+        -- its pit box, by the box's middle (2 m round it)
+        if s.pit then
+            t = rayHitsSphere(s.pit.pos, 2)
+            if t and t < bestT then
+                bestT, bestKind, bestIndex = t, "box", i
+            end
+        end
     end)
+    for _, kind in ipairs({ "entry", "exit" }) do
+        local line = pitItem(kind)
+        local t = line and rayHitsQuad(line.pos, line.dir, line.width, line.height)
+        if t and t < bestT then
+            bestT, bestKind, bestIndex = t, kind, nil
+        end
+    end
 
     -- A hit on whatever's already selected is ignored, not reselected. That gate/start's own
     -- gizmo/handles are drawn right on top of it, so a click landing there is far more likely
@@ -1002,11 +1337,14 @@ local function onWorldClick(clickType, data)
 
     if bestKind == "gate" and bestIndex == M.activeGateIndex then return end
     if bestKind == "start" and bestIndex == M.activeStartIndex then return end
+    if M.activePit and M.activePit.kind == bestKind and M.activePit.index == bestIndex then return end
 
     if bestKind == "gate" then
         onSelectGate(bestIndex)
     elseif bestKind == "start" then
         onSelectStart(bestIndex)
+    elseif bestKind then
+        M.onPitSelect(bestKind, bestIndex)
     end
 end
 
@@ -1105,6 +1443,8 @@ local function onDeleteStart(index)
     if not M.race or not M.race.startPositions[index] then return end
     table.remove(M.race.startPositions, index)
     M.activeStartIndex = nil
+    if M.activePit and M.activePit.kind == "box" then M.activePit = nil end
+    if M.pitPlacing and M.pitPlacing.kind == "box" then stopPitPlacing() end
     updateGizmo("start", nil)
     markDirty()
     pushUpdate()
@@ -1165,6 +1505,8 @@ local function onReorderStarts(fromIndex, toIndex)
     finalIndex = math.max(1, math.min(finalIndex, #M.race.startPositions + 1))
     table.insert(M.race.startPositions, finalIndex, start)
     M.activeStartIndex = nil
+    if M.activePit and M.activePit.kind == "box" then M.activePit = nil end
+    if M.pitPlacing and M.pitPlacing.kind == "box" then stopPitPlacing() end
     updateGizmo("start", nil)
     markDirty()
     pushUpdate()
@@ -1301,6 +1643,103 @@ end
 local function onResetGate(index) onReset("gate", index) end
 local function onResetStart(index) onReset("start", index) end
 
+-- ---------------------------------------------------------------------------------------------
+-- the pit lane (PIT_SYSTEM_PLAN.md) : its PIT IN and PIT OUT lines (gate-like, `race.pit`) and each
+-- start slot's pit box (`startPositions[i].pit`, the game's parking-spot marker in the world)
+
+local PIT_KINDS = { entry = "pitEntry", exit = "pitExit", box = "pitBox" }
+
+--- selects the pit lane's PIT IN / PIT OUT line, or a slot's box ; anything else selected is dropped
+---@param kind "entry"|"exit"|"box"
+---@param index integer? the slot, a box
+function M.onPitSelect(kind, index)
+    if not M.race or not PIT_KINDS[kind] then return end
+    propEditor.clearSelection()
+    draggingHandle = nil
+    stopPitPlacing()
+    M.activeGateIndex, M.activeStartIndex = nil, nil
+    M.activePit = pitItem(kind, index) and { kind = kind, index = index } or nil
+    updateGizmo(PIT_KINDS[kind], index)
+    pushActive()
+    extensions.hook("onBJRaceMarkersRefresh")
+end
+
+--- places PIT IN / PIT OUT, or a slot's box, where your car (or the free camera) is, facing its way
+--- : a new one, or the one there moved. A line sets the steps the lane joins
+---@param kind "entry"|"exit"|"box"
+---@param index integer? the slot, a box
+local function onPitPlace(kind, index)
+    if not M.race or not PIT_KINDS[kind] then return end
+    local pos, dir = currentPositionDirection()
+    if not pos then return end
+    stopPitPlacing()
+    if placePitItem(kind, index, pos, dir) then M.onPitSelect(kind, index) end
+end
+
+---@param kind "entry"|"exit"|"box"
+---@param index integer?
+local function onPitTeleport(kind, index)
+    local item = pitItem(kind, index)
+    local current = beamjoy_vehicles.getCurrentOwn()
+    if not item or not current then return end
+    beamjoy_vehicles.setVehiclePositionRotation(current.veh, vec3(item.pos.x, item.pos.y, item.pos.z),
+        vec3(item.dir.x, item.dir.y, item.dir.z), vec3(0, 0, 1))
+end
+
+--- a slot's box removed
+---@param index integer
+local function onPitClearBox(index)
+    local sp = M.race and M.race.startPositions[index]
+    if not sp or not sp.pit then return end
+    sp.pit = nil
+    if M.pitPlacing and M.pitPlacing.kind == "box" and M.pitPlacing.index == index then stopPitPlacing() end
+    if M.activePit and M.activePit.kind == "box" and M.activePit.index == index then
+        M.activePit = nil
+        gizmo.hide()
+        pushActive()
+    end
+    markDirty()
+    pushUpdate()
+    extensions.hook("onBJRaceMarkersRefresh")
+end
+
+--- the pit lane removed, its lines and every box
+local function onPitDelete()
+    if not M.race then return end
+    M.race.pit = nil
+    for _, sp in ipairs(M.race.startPositions) do sp.pit = nil end
+    stopPitPlacing()
+    if M.activePit then
+        M.activePit = nil
+        gizmo.hide()
+        pushActive()
+    end
+    markDirty()
+    pushUpdate()
+    extensions.hook("onBJRaceMarkersRefresh")
+end
+
+--- the lane's own settings from the sidebar : the steps it joins, its limit, its lines' widths
+---@param partial {fromStep: integer?, toStep: integer?, speedLimitKmh: number?, entryWidth: number?, exitWidth: number?}
+local function onPitSet(partial)
+    if not M.race or type(partial) ~= "table" then return end
+    M.race.pit = M.race.pit or { speedLimitKmh = 60 }
+    local pit = M.race.pit
+    for _, k in ipairs({ "fromStep", "toStep", "speedLimitKmh" }) do
+        if partial[k] ~= nil then pit[k] = tonumber(partial[k]) end
+    end
+    for kind, k in pairs({ entry = "entryWidth", exit = "exitWidth" }) do
+        local w = tonumber(partial[k])
+        if w and pit[kind] then
+            pit[kind].width = w
+            if M.snapToGroundEnabled then snapGateToLowestPoint(pit[kind]) end
+        end
+    end
+    markDirty()
+    pushUpdate()
+    extensions.hook("onBJRaceMarkersRefresh")
+end
+
 --- the opened race's props are in (see M.propsPending) : any added meanwhile kept after them, and
 --- what it was saved with
 ---@param raceId integer
@@ -1372,6 +1811,8 @@ local function onSaveAsNew(name)
         M.race = copy
         M.activeGateIndex = nil
         M.activeStartIndex = nil
+        M.activePit = nil
+        stopPitPlacing()
         M.dirty = false
         gizmo.hide()
         propEditor.reset()
@@ -1409,6 +1850,8 @@ local function onImportCode(race)
 
     M.id = nil
     M.propsPending = nil
+    M.activePit = nil
+    stopPitPlacing()
     M.race = {
         name = type(race.name) == "string" and race.name or "",
         mode = type(race.mode) == "string" and race.mode or "grid",
@@ -1422,6 +1865,7 @@ local function onImportCode(race)
         vehicleRestrictionMode = nil, -- never travels in a code (an author-local capture/preset ref)
         gates = race.gates,
         startPositions = race.startPositions,
+        pit = type(race.pit) == "table" and race.pit or nil,
         props = race.props,
         defaults = race.defaults,
     }
@@ -1466,6 +1910,13 @@ local function onInit(activityEditor)
     beamjoy_communications_ui.addHandler("BJEditorRaceSave", onSave)
     beamjoy_communications_ui.addHandler("BJEditorRaceSaveAsNew", onSaveAsNew)
     beamjoy_communications_ui.addHandler("BJEditorRaceImportCode", onImportCode)
+    beamjoy_communications_ui.addHandler("BJEditorRacePitPlace", onPitPlace)
+    beamjoy_communications_ui.addHandler("BJEditorRacePitArm", onPitArm)
+    beamjoy_communications_ui.addHandler("BJEditorRacePitSelect", M.onPitSelect)
+    beamjoy_communications_ui.addHandler("BJEditorRacePitTeleport", onPitTeleport)
+    beamjoy_communications_ui.addHandler("BJEditorRacePitClearBox", onPitClearBox)
+    beamjoy_communications_ui.addHandler("BJEditorRacePitDelete", onPitDelete)
+    beamjoy_communications_ui.addHandler("BJEditorRacePitSet", onPitSet)
 end
 
 local function onClose()
@@ -1474,12 +1925,14 @@ local function onClose()
         propEditor.detach(propHost)
         gizmo.hide()
         draggingHandle = nil
+        stopPitPlacing()
         M.race = nil
         M.savedRace = nil
         M.id = nil
         M.propsPending = nil
         M.activeGateIndex = nil
         M.activeStartIndex = nil
+        M.activePit = nil
         M.dirty = false
         extensions.hook("onBJRaceMarkersRefresh")
     end
