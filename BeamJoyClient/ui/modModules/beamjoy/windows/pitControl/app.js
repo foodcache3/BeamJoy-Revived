@@ -1,12 +1,13 @@
 // The pit menu (PIT_SYSTEM_PLAN.md §7) : this racer's pit stop plan, what their next stop in their box
 // does. Opened from the race HUD's Pit button, and shown on the HUD's left, as wide as it (direct
 // request) ; all state comes from beamjoy/racePits.lua
-// (BJRacePitMenu), saved there as it's changed (BJRacePitSetPlan) and kept for the race.
-// Pad-first : while it's open racePits.lua lends it the pad's menu buttons (beamjoy/uiNav.lua). One
-// row is selected at a time (the delivery board's orange) : D-pad up / down between the rows (the
-// fuel amount skipped while refuelling is off), left / right changes the row (held on the amount,
-// it repeats and speeds up), A toggles, fills up on the amount, closes on Done, B closes. Only the
-// D-pad, A and B : LB is the clutch. The mouse clicks any row, arrow or button ; with the window
+// (BJRacePitMenu), and kept for the race. What's changed here only goes to Lua (BJRacePitSetPlan)
+// when it's confirmed ; cancelling closes the menu without it.
+// Pad-first, and the D-pad only (direct request : the face buttons stay the car's) : while it's open
+// racePits.lua lends it the D-pad (beamjoy/uiNav.lua). One row is selected at a time (the delivery
+// board's orange) : up / down between the rows (the fuel amount skipped while refuelling is off),
+// a tap on left / right changes the row (when it's let go), right held 0.5 s confirms, left held 1 s
+// cancels. The mouse clicks any row, arrow or button (Confirm, the ✕ cancels) ; with the window
 // focused the arrow keys, Enter and Esc work too.
 // The fuel's in the player's own unit (the game's volume setting : litres or US gallons), a
 // battery's in kWh. The plan keeps a share of the tank (racePits.lua's plan.fuelAdd, 1 : fill up).
@@ -24,7 +25,11 @@ angular.module("beamjoy").service("beamjoyPitFormat", function () {
         if (!plan || !status) return "";
         const parts = [];
         if (status.refuel && plan.refuel && plan.fuelAdd > 0) {
-            if (plan.fuelAdd >= 1) parts.push(translate("beamjoy.race.pitMenu.planFill"));
+            const t = status.tank;
+            // more than the room left (the tank read) : it fills up
+            const fills = plan.fuelAdd >= 1 || (t && t.capacity > 0 && typeof t.stored === "number"
+                && plan.fuelAdd * t.capacity >= t.capacity - t.stored);
+            if (fills) parts.push(translate("beamjoy.race.pitMenu.planFill"));
             else if (status.tank && status.tank.capacity > 0) parts.push(`+${this.amount(plan.fuelAdd * status.tank.capacity, status.tank, status.gallons)}`);
             else parts.push(`+${Math.round(plan.fuelAdd * 100)}%`);
         }
@@ -35,7 +40,7 @@ angular.module("beamjoy").service("beamjoyPitFormat", function () {
 
 angular.module("beamjoy").component("bjPitControl", {
     templateUrl: "/ui/modModules/beamjoy/windows/pitControl/app.html",
-    controller: function ($rootScope, $scope, $filter, $interval, $timeout, beamjoyStore, beamjoyDelivery, beamjoyPitFormat) {
+    controller: function ($rootScope, $scope, $filter, $interval, beamjoyStore, beamjoyDelivery, beamjoyPitFormat) {
         const translate = (key) => $filter("translate")(key);
         const fill = (key, values) =>
             Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, v), translate(key));
@@ -43,7 +48,7 @@ angular.module("beamjoy").component("bjPitControl", {
 
         this.open = false;
         this.d = null;
-        // the plan as edited here (sent as it changes) : taken from Lua once, when the menu opens
+        // the plan as edited here (sent when it's confirmed) : taken from Lua once, when the menu opens
         this.plan = { refuel: true, fuelAdd: 1, repair: true };
         // the rows : refuel, the amount, repair, Done
         this.cursor = 0;
@@ -52,8 +57,10 @@ angular.module("beamjoy").component("bjPitControl", {
 
         const tank = () => (this.d && this.d.tank) || null;
         const battery = () => !!tank() && tank().kind === "battery";
-        // a step on the amount : 1 L, 0.25 gal, 1 kWh (in the tank's own unit : litres or kWh)
-        const unitStep = () => (battery() ? 1 : this.d && this.d.gallons ? 0.25 * PIT_GALLON_L : 1);
+        // a step on the amount (in the tank's own unit : litres or kWh) : 1 L, 0.25 gal, 1 kWh with the
+        // mouse or the keyboard ; a pad's tap 5 L, 1 gal, 5 kWh (no held count with the pad)
+        const unitStep = (pad) => (battery() ? (pad ? 5 : 1)
+            : this.d && this.d.gallons ? (pad ? 1 : 0.25) * PIT_GALLON_L : pad ? 5 : 1);
         const refuelOn = () => !!this.d && this.d.refuelAllowed && this.plan.refuel;
         // the rows the cursor stops on
         const rows = () => {
@@ -85,7 +92,8 @@ angular.module("beamjoy").component("bjPitControl", {
                 const now = Math.max(0, Math.min(1, t.stored / t.capacity));
                 const added = Math.min(add, 1 - now);
                 v.tankText = `${fmt.amount(t.stored, t, gal)} / ${fmt.amount(t.capacity, t, gal)}`;
-                v.addText = !refuelOn() ? "—" : add >= 1 ? translate("beamjoy.race.pitMenu.full") : `+${fmt.amount(add * t.capacity, t, gal)}`;
+                // a plan bigger than the room (kept from before the last stop) : it fills the tank
+                v.addText = !refuelOn() ? "—" : add >= 1 - now ? translate("beamjoy.race.pitMenu.full") : `+${fmt.amount(add * t.capacity, t, gal)}`;
                 v.afterText = fmt.amount((now + added) * t.capacity, t, gal);
                 v.nowPct = `${(now * 100).toFixed(1)}%`;
                 v.addPct = `${(added * 100).toFixed(1)}%`;
@@ -120,7 +128,6 @@ angular.module("beamjoy").component("bjPitControl", {
             v.doneText = fill("beamjoy.race.pitMenu.doneTime", { n: v.totalS.toFixed(1) });
             // the footer's hints follow the row
             v.lrHint = translate(this.cursor === 1 ? "beamjoy.race.pitMenu.hints.amount" : this.cursor === 3 ? "beamjoy.race.pitMenu.hints.none" : "beamjoy.race.pitMenu.hints.onOff");
-            v.aHint = translate(this.cursor === 1 ? "beamjoy.race.pitMenu.hints.fillUp" : this.cursor === 3 ? "beamjoy.race.pitMenu.hints.done" : "beamjoy.race.pitMenu.hints.toggle");
             this.v = v;
         };
 
@@ -154,7 +161,7 @@ angular.module("beamjoy").component("bjPitControl", {
                     placeTick = $interval(place, 500);
                 }
                 if (!this.open) {
-                    stopRepeat();
+                    endHold();
                     stopPlacing();
                 }
                 beamjoyDelivery.setNavOwner("pitControl", this.open);
@@ -163,11 +170,15 @@ angular.module("beamjoy").component("bjPitControl", {
         });
         this.$onInit = () => beamjoyStore.send("BJRacePitMenuRequest");
 
-        const save = () => {
+        // a change : shown at once, kept here until it's confirmed
+        const save = () => build();
+        // Confirm (right held, the button, Enter on it) : the plan to Lua, then closed ; Cancel (left
+        // held, the ✕, Esc) : closed, Lua's plan as it was (the next open starts from it)
+        this.confirm = () => {
             beamjoyStore.send("BJRacePitSetPlan", [angular.copy(this.plan)]);
-            build();
+            beamjoyStore.send("BJRacePitMenuClose");
         };
-        this.close = () => beamjoyStore.send("BJRacePitMenuClose");
+        this.cancel = () => beamjoyStore.send("BJRacePitMenuClose");
         this.select = (row) => {
             if (!rows().includes(row)) return;
             this.cursor = row;
@@ -191,43 +202,28 @@ angular.module("beamjoy").component("bjPitControl", {
             this.cursor = 1;
             save();
         };
-        // `dir` steps of the amount (`mult` of the unit's step, a held press speeding up), snapped to
-        // the unit's grid ; the whole tank reads as Fill up
-        this.step = (dir, mult = 1) => {
+        // `dir` steps of the amount (a pad's tap : its bigger step), onto the step's grid, never past the
+        // room left in the tank (direct report : +50 L offered on a nearly full one) : reaching it reads
+        // as Fill up, and stepping down from Fill up starts from the room
+        this.step = (dir, pad = false) => {
             if (!refuelOn()) return;
             this.cursor = 1;
             const t = tank();
             if (!t || !(t.capacity > 0)) {
-                this.plan.fuelAdd = Math.max(0, Math.min(1, Math.round((this.plan.fuelAdd * 20) + dir * mult) / 20));
+                const parts = pad ? 10 : 20;
+                this.plan.fuelAdd = Math.max(0, Math.min(1, Math.round((this.plan.fuelAdd * parts) + dir) / parts));
             } else {
-                const s = unitStep();
-                const q = Math.round((this.plan.fuelAdd * t.capacity) / s) + dir * mult;
-                this.plan.fuelAdd = Math.max(0, Math.min(1, (q * s) / t.capacity));
+                const s = unitStep(pad);
+                const room = Math.max(0, t.capacity - (Number(t.stored) || 0));
+                const cur = Math.min(room, this.plan.fuelAdd * t.capacity) / s;
+                const q = dir > 0 ? Math.floor(cur + 1e-6) + dir : Math.ceil(cur - 1e-6) + dir;
+                this.plan.fuelAdd = q * s >= room - 1e-6 ? 1 : Math.max(0, (q * s) / t.capacity);
             }
             save();
         };
 
-        // left / right held on the amount : repeats, faster the longer it's held (up to 5 steps)
-        let repeat = null;
-        let repeatDelay = null;
-        const stopRepeat = () => {
-            $timeout.cancel(repeatDelay);
-            $interval.cancel(repeat);
-            repeat = repeatDelay = null;
-        };
-        const startRepeat = (dir) => {
-            stopRepeat();
-            const started = Date.now();
-            repeatDelay = $timeout(() => {
-                repeat = $interval(() => {
-                    const held = Date.now() - started;
-                    this.step(dir, Math.min(5, 1 + Math.floor((held - 400) / 600)));
-                }, 90);
-            }, 400);
-        };
-
-        // one input, from the pad or the keyboard
-        const press = (name) => {
+        // one input, from the pad (`pad`) or the keyboard
+        const press = (name, pad = false) => {
             const list = rows();
             const at = Math.max(0, list.indexOf(this.cursor));
             if (name === "focus_u") this.select(list[Math.max(0, at - 1)]);
@@ -235,30 +231,74 @@ angular.module("beamjoy").component("bjPitControl", {
             else if (name === "focus_l" || name === "focus_r") {
                 const dir = name === "focus_l" ? -1 : 1;
                 if (this.cursor === 0) this.toggleFuel();
-                else if (this.cursor === 1) this.step(dir);
+                else if (this.cursor === 1) this.step(dir, pad);
                 else if (this.cursor === 2) this.toggleRepair();
-                return dir;
             } else if (name === "ok") {
                 if (this.cursor === 0) this.toggleFuel();
                 else if (this.cursor === 1) this.fillUp();
                 else if (this.cursor === 2) this.toggleRepair();
-                else this.close();
-            } else if (name === "back") this.close();
-            return 0;
+                else this.confirm();
+            } else if (name === "back") this.cancel();
         };
+
+        // left / right on the pad : a tap acts when it's let go ; held, right confirms (half a second,
+        // direct request : quicker) and left cancels (a second) instead. padHold ("confirm" /
+        // "cancel") and padHoldProgress (0..1) fill the bar under the rows once it's held past a tap
+        // (TAP_MS : let go before, it's a tap)
+        const PAD_HOLD_MS = { focus_r: 500, focus_l: 1000 };
+        const TAP_MS = 200;
+        this.padHold = null;
+        this.padHoldProgress = 0;
+        let held = null;
+        let holdTick = null;
+        const endHold = () => {
+            $interval.cancel(holdTick);
+            holdTick = null;
+            held = null;
+            this.padHold = null;
+            this.padHoldProgress = 0;
+        };
+        const startHold = (name) => {
+            endHold();
+            const hold = { name, start: Date.now() };
+            held = hold;
+            holdTick = $interval(() => {
+                // a tick already queued when the hold ended (seen in game : held was null)
+                if (held !== hold) return;
+                const elapsed = Date.now() - hold.start;
+                const progress = Math.min(1, elapsed / PAD_HOLD_MS[name]);
+                this.padHoldProgress = progress;
+                this.padHold = elapsed >= TAP_MS ? (name === "focus_r" ? "confirm" : "cancel") : null;
+                if (progress >= 1) {
+                    const confirm = name === "focus_r";
+                    endHold();
+                    if (confirm) this.confirm();
+                    else this.cancel();
+                }
+            }, 50);
+        };
+        this.holdFill = () => ({ width: `${Math.round(this.padHoldProgress * 100)}%` });
 
         const isRising = beamjoyDelivery.pressTracker();
         const offNav = $rootScope.$on("UINavigation", (_, name, value) => {
             const rising = isRising(name, value);
-            // letting go of left / right ends a held amount
-            if ((name === "focus_l" || name === "focus_r") && Number(value) <= 0.5) {
-                $scope.$applyAsync(stopRepeat);
+            const side = name === "focus_l" || name === "focus_r";
+            // let go : a tap if it was pressed here (not the hold that opened the menu) and let go before
+            // its bar showed ; a hold let go early does nothing
+            if (side && Number(value) <= 0.5) {
+                if (held && held.name === name) {
+                    $scope.$applyAsync(() => {
+                        const tap = this.padHold === null;
+                        endHold();
+                        if (tap && this.open) press(name, true);
+                    });
+                }
                 return;
             }
             if (!this.open || !rising) return;
             $scope.$applyAsync(() => {
-                const dir = press(name);
-                if (dir && this.cursor === 1) startRepeat(dir);
+                if (side) startHold(name);
+                else press(name, true);
             });
         });
         // the keyboard, while the window has it (a click on it) : the browser repeats a held key itself
@@ -272,7 +312,7 @@ angular.module("beamjoy").component("bjPitControl", {
         window.addEventListener("keydown", onKey, true);
         $scope.$on("$destroy", () => {
             offNav();
-            stopRepeat();
+            endHold();
             stopPlacing();
             window.removeEventListener("keydown", onKey, true);
             beamjoyDelivery.setNavOwner("pitControl", false);

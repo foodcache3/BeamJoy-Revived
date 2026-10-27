@@ -487,9 +487,10 @@
         font-weight: 700;
         white-space: nowrap;
     }
+    /* one under the other : the pad's up / down */
     #beamjoy-race-hud .hud-actions {
         display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: minmax(0, 1fr);
         gap: 0.4em;
         padding: 0.6em 0.75em 0.75em;
     }
@@ -513,7 +514,7 @@
         box-shadow: inset 0 0 0 1px rgba(77, 163, 255, 0.6);
         color: #9ccbff;
     }
-    /* Tow and Retire are holds : the fill shows how far along */
+    /* the holds (every pick on the pad, Tow and Retire with the mouse too) : the fill shows how far along */
     #beamjoy-race-hud .hud-actions .hold {
         position: relative;
         overflow: hidden;
@@ -528,6 +529,10 @@
     }
     #beamjoy-race-hud .hud-actions .tow .fill {
         background: rgba(77, 163, 255, 0.35);
+    }
+    #beamjoy-race-hud .hud-actions .pit .fill,
+    #beamjoy-race-hud .hud-actions .close .fill {
+        background: rgba(255, 255, 255, 0.2);
     }
     #beamjoy-race-hud .hud-actions .hold .label {
         position: relative;
@@ -896,17 +901,19 @@
             <span class="fill" ng-style="$ctrl.holdFill('tow')" aria-hidden="true"></span>
             <span class="label">{{$ctrl.towLabel()}}</span>
         </button>
-        <button type="button" class="actbtn pit" ng-if="$ctrl.canPit()" ng-class="{cursor: $ctrl.isCursor('pit')}" ng-click="$ctrl.openPit()">
-            {{'beamjoy.raceHud.pitMenu' | translate}}
+        <button type="button" class="actbtn pit hold" ng-if="$ctrl.canPit()" ng-class="{cursor: $ctrl.isCursor('pit')}" ng-click="$ctrl.openPit()">
+            <span class="fill" ng-style="$ctrl.holdFill('pit')" aria-hidden="true"></span>
+            <span class="label">{{'beamjoy.raceHud.pitMenu' | translate}}</span>
         </button>
         <button type="button" class="actbtn danger hold" ng-if="$ctrl.v.canRetire" ng-class="{cursor: $ctrl.isCursor('retire')}"
             ng-mousedown="$ctrl.startHold('retire')" ng-mouseup="$ctrl.stopHold()" ng-mouseleave="$ctrl.stopHold()">
             <span class="fill" ng-style="$ctrl.holdFill('retire')" aria-hidden="true"></span>
             <span class="label">{{($ctrl.holding === 'retire' ? 'beamjoy.raceHud.retireHolding' : 'beamjoy.raceHud.retireHold') | translate}}</span>
         </button>
-        <button type="button" class="actbtn" ng-class="{cursor: $ctrl.isCursor('close')}" ng-click="$ctrl.closeActions()"
+        <button type="button" class="actbtn close hold" ng-class="{cursor: $ctrl.isCursor('close')}" ng-click="$ctrl.closeActions()"
             aria-label="{{'beamjoy.raceHud.closeActions' | translate}}">
-            ✕ {{'beamjoy.common.close' | translate}}
+            <span class="fill" ng-style="$ctrl.holdFill('close')" aria-hidden="true"></span>
+            <span class="label">✕ {{'beamjoy.common.close' | translate}}</span>
         </button>
         <span class="hint" ng-if="$ctrl.focused">
             <span>{{'beamjoy.raceHud.padHint' | translate}}</span>

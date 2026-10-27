@@ -266,6 +266,33 @@
         font-size: 0.72em;
         color: #c8cedc;
     }
+    /* in the footer's place while right / left is held : green to confirm, red to cancel */
+    #beamjoy-pit-control .pc-hold {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 2.4em;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+    }
+    #beamjoy-pit-control .pc-hold .fill {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        background: rgba(60, 200, 110, 0.4);
+    }
+    #beamjoy-pit-control .pc-hold.cancel .fill {
+        background: rgba(255, 110, 100, 0.4);
+    }
+    #beamjoy-pit-control .pc-hold .label {
+        position: relative;
+        font-family: "Overpass", "Noto Sans", sans-serif;
+        font-weight: 800;
+        font-style: italic;
+        font-size: 0.85em;
+    }
     #beamjoy-pit-control .pc-hint {
         display: inline-flex;
         align-items: center;
@@ -311,7 +338,7 @@
             <h2>{{'beamjoy.race.pitMenu.title' | translate}}</h2>
         </div>
         <span class="pc-chip">{{$ctrl.v.stops}}</span>
-        <button type="button" class="pc-x" ng-click="$ctrl.close()" aria-label="{{'beamjoy.common.close' | translate}}">
+        <button type="button" class="pc-x" ng-click="$ctrl.cancel()" aria-label="{{'beamjoy.common.cancel' | translate}}">
             <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" fill="none" stroke="#c8cedc" stroke-width="2" stroke-linecap="round"><path d="M2 2l10 10M12 2L2 12"></path></svg>
         </button>
     </header>
@@ -376,16 +403,20 @@
             <span class="pc-off">{{'beamjoy.race.pitMenu.repairOff' | translate}}</span>
         </div>
 
-        <button type="button" class="pc-done" ng-class="{sel: $ctrl.cursor === 3}" ng-click="$ctrl.close()">
+        <button type="button" class="pc-done" ng-class="{sel: $ctrl.cursor === 3}" ng-click="$ctrl.confirm()">
             {{'beamjoy.race.pitMenu.done' | translate}}<small>{{$ctrl.v.doneText}}</small>
         </button>
     </div>
 
-    <footer class="pc-foot">
+    <!-- right / left held on the pad : confirming or cancelling, how far along -->
+    <div class="pc-hold" ng-if="$ctrl.padHold" ng-class="$ctrl.padHold">
+        <span class="fill" ng-style="$ctrl.holdFill()" aria-hidden="true"></span>
+        <span class="label">{{($ctrl.padHold === 'confirm' ? 'beamjoy.race.pitMenu.confirming' : 'beamjoy.race.pitMenu.cancelling') | translate}}</span>
+    </div>
+    <footer class="pc-foot" ng-if="!$ctrl.padHold">
         <span class="pc-hint"><span class="pc-g wide">▲▼</span>{{'beamjoy.race.pitMenu.hints.select' | translate}}</span>
         <span class="pc-hint"><span class="pc-g wide">◀▶</span>{{$ctrl.v.lrHint}}</span>
-        <span class="pc-hint"><span class="pc-g">A</span>{{$ctrl.v.aHint}}</span>
-        <span class="pc-hint"><span class="pc-g">B</span>{{'beamjoy.race.pitMenu.hints.close' | translate}}</span>
-        <span class="pc-small">{{'beamjoy.race.pitMenu.saved' | translate}}</span>
+        <span class="pc-hint"><span class="pc-g wide">▶</span>{{'beamjoy.race.pitMenu.hints.holdConfirm' | translate}}</span>
+        <span class="pc-hint"><span class="pc-g wide">◀</span>{{'beamjoy.race.pitMenu.hints.holdCancel' | translate}}</span>
     </footer>
 </section>

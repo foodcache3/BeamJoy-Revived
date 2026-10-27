@@ -733,7 +733,8 @@ function M.openMenu()
     local ctx = context()
     if not ctx then return end
     M.menuOpen = true
-    beamjoy_uiNav.acquire(MENU_NAV_OWNER)
+    -- the d-pad only : held right confirms, held left cancels (windows/pitControl)
+    beamjoy_uiNav.acquire(MENU_NAV_OWNER, nil, beamjoy_uiNav.DPAD_ACTIONS)
     local myVeh = beamjoy_vehicles.getCurrentOwn()
     if myVeh then readForMenu(ctx, myVeh) end
     pushMenu()

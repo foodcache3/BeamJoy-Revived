@@ -68,7 +68,8 @@ local HUDS = {
                 and beamjoy_kickVote.data.active == true
         end,
     },
-    { key = "raceHud", event = "BJRaceHudFocus", active = racing },
+    -- the d-pad only (held right picks, held left closes) : the face buttons stay the car's
+    { key = "raceHud", event = "BJRaceHudFocus", active = racing, dpadOnly = true },
     {
         key = "busHud",
         event = "BJBusHudFocus",
@@ -121,7 +122,7 @@ local function setHudFocus(hud)
     end
     M.hudFocused = key
     if hud then
-        beamjoy_uiNav.acquire(hud.key)
+        beamjoy_uiNav.acquire(hud.key, nil, hud.dpadOnly and beamjoy_uiNav.DPAD_ACTIONS or nil)
         beamjoy_communications_ui.send(hud.event, { active = true })
     end
 end

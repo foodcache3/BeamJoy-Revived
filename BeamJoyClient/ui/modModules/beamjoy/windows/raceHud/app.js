@@ -18,8 +18,8 @@
 // when some are required, and your own pit line (the lane, your stop's progress, a tow's hold, the
 // plan) from beamjoy/racePits.lua (BJRacePitStatus).
 // ACTIONS : always there behind the Actions button (a click, or the Focus control, which also gives
-// the row the pad) : Tow to pits (a 2 s hold), Pit (the pit menu, windows/pitControl), Retire (a
-// 5 s hold), Close.
+// the list the D-pad) : Tow to pits (a 2 s hold), Pit (the pit menu, windows/pitControl), Retire (a
+// 5 s hold), Close, one under the other.
 const RACE_HUD_LAYOUT_KEY = "beamjoy.raceHud.layout";
 const RACE_HUD_LAYOUTS = ["standard", "compact", "full", "off"];
 
@@ -347,8 +347,10 @@ angular.module("beamjoy").component("bjRaceHud", {
         });
         beamjoyStore.send("BJRacePitStatusRequest");
 
-        // ACTIONS : the row opens with a click on Actions (no pad), or with the Focus control during a
-        // race (beamjoy/mainNav.lua), which gives it the pad ; B, Close or the control again closes it
+        // ACTIONS : the list opens with a click on Actions (no pad), or with the Focus control during a
+        // race (beamjoy/mainNav.lua), which gives it the D-pad alone (direct request : the face buttons
+        // stay the car's) : up / down move, right held picks, left held closes, as does Close or the
+        // control again
         this.focused = false;
         this.actionsOpen = false;
         this.cursor = 0;
@@ -382,17 +384,21 @@ angular.module("beamjoy").component("bjRaceHud", {
             if (this.focused) beamjoyStore.send("BJRaceHudRelease");
         };
 
-        // Tow and Retire are holds (A, or the mouse), so a stray press can't end a run or haul you
-        // in : letting go early cancels. holdProgress (0..1) fills the button
-        const HOLD_MS = { tow: 2000, retire: 5000 };
+        // every pick on the pad is a hold of right (left : Close), and Tow and Retire are with the mouse
+        // too, so a stray press can't end a run or haul you in : letting go early cancels.
+        // holdProgress (0..1) fills the button
+        const HOLD_MS = { tow: 2000, retire: 5000, pit: 1000, close: 1000 };
         this.holding = null;
         this.holdProgress = 0;
         let holdStart = null;
         let holdTick = null;
+        // the pad's direction holding (focus_r / focus_l), its letting go ending the hold
+        let padHeld = null;
         const cancelHold = () => {
             $interval.cancel(holdTick);
             holdTick = null;
             holdStart = null;
+            padHeld = null;
             this.holding = null;
             this.holdProgress = 0;
         };
@@ -405,7 +411,9 @@ angular.module("beamjoy").component("bjRaceHud", {
                 if (this.holdProgress >= 1) {
                     cancelHold();
                     if (kind === "retire") beamjoyStore.send("BJRaceRetire");
-                    else beamjoyStore.send("BJRacePitTow");
+                    else if (kind === "tow") beamjoyStore.send("BJRacePitTow");
+                    else if (kind === "pit") this.openPit();
+                    else this.closeActions();
                 }
             }, 50);
         };
@@ -423,8 +431,7 @@ angular.module("beamjoy").component("bjRaceHud", {
         const ownPits = () => !!this.v && !this.v.spectating && !!this.pit;
         this.canTow = () => ownPits() && !!this.pit.canTow;
         this.canPit = () => ownPits() && !this.v.dnf && !this.v.finished;
-        // the row's buttons, in order, laid out ACTION_COLUMNS to a line (app.html's .hud-actions) ;
-        // Close always last
+        // the list's buttons, top to bottom ; Close always last
         this.buttons = () => {
             const out = [];
             if (this.canTow()) out.push("tow");
@@ -436,24 +443,11 @@ angular.module("beamjoy").component("bjRaceHud", {
         // nothing to do (spectating, finished) : no Actions button at all
         this.hasActions = () => this.buttons().length > 1;
         this.isCursor = (kind) => this.focused && this.buttons()[this.cursor] === kind;
-        // the pad's cursor over the grid : left / right along a line, up / down between lines (down
-        // onto a shorter last line lands on its last button)
-        const ACTION_COLUMNS = 2;
-        const moveCursor = (name, count) => {
-            const col = this.cursor % ACTION_COLUMNS;
-            if (name === "focus_l" && col > 0) this.cursor -= 1;
-            else if (name === "focus_r" && col < ACTION_COLUMNS - 1 && this.cursor + 1 < count) this.cursor += 1;
-            else if (name === "focus_u" && this.cursor >= ACTION_COLUMNS) this.cursor -= ACTION_COLUMNS;
-            else if (name === "focus_d" && Math.floor(this.cursor / ACTION_COLUMNS) < Math.floor((count - 1) / ACTION_COLUMNS)) {
-                this.cursor = Math.min(count - 1, this.cursor + ACTION_COLUMNS);
-            }
-        };
-
         const isRising = beamjoyDelivery.pressTracker();
         const offNav = $rootScope.$on("UINavigation", (_, name, value) => {
             const rising = isRising(name, value);
-            // letting go of A ends a hold, whatever else is going on
-            if (name === "ok" && Number(value) <= 0.5 && holdStart !== null) {
+            // letting go of the direction holding ends its hold, whatever else is going on
+            if (Number(value) <= 0.5 && padHeld === name) {
                 $scope.$applyAsync(() => cancelHold());
                 return;
             }
@@ -461,15 +455,14 @@ angular.module("beamjoy").component("bjRaceHud", {
             if (!this.focused || !rising || beamjoyDelivery.otherNavOwner("raceHud")) return;
             $scope.$applyAsync(() => {
                 const list = this.buttons();
-                if (name === "focus_l" || name === "focus_r" || name === "focus_u" || name === "focus_d") {
+                if (name === "focus_u" || name === "focus_d") {
                     cancelHold();
-                    moveCursor(name, list.length);
-                } else if (name === "ok") {
-                    const kind = list[this.cursor];
-                    if (kind === "tow" || kind === "retire") this.startHold(kind);
-                    else if (kind === "pit") this.openPit();
-                    else this.closeActions();
-                } else if (name === "back") this.closeActions();
+                    this.cursor = Math.max(0, Math.min(list.length - 1, this.cursor + (name === "focus_u" ? -1 : 1)));
+                } else if (name === "focus_r" || name === "focus_l") {
+                    cancelHold();
+                    this.startHold(name === "focus_r" ? list[this.cursor] : "close");
+                    if (this.holding) padHeld = name;
+                }
             });
         });
         $scope.$on("$destroy", () => {

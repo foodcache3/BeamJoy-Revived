@@ -27,6 +27,9 @@ local M = {
     -- LB / RB, only for owners that ask for them (the main window's full view switches tabs) :
     -- LB is also the clutch, so it isn't taken by default
     TAB_ACTIONS = { "menu_tab_left", "menu_tab_right" },
+    -- the d-pad alone, for menus used while driving (the pit menu, the race HUD's actions) : the
+    -- face buttons stay the car's (direct request)
+    DPAD_ACTIONS = { "menu_item_up", "menu_item_down", "menu_item_left", "menu_item_right" },
     REASSERT_MS = 300,
 
     --- owner -> the actions it needs
@@ -83,10 +86,11 @@ local function assertAll()
 end
 
 ---@param owner string
----@param extraActions string[]? on top of M.ACTIONS (e.g. M.TAB_ACTIONS)
-local function acquire(owner, extraActions)
+---@param extraActions string[]? on top of the base ones (e.g. M.TAB_ACTIONS)
+---@param baseActions string[]? instead of M.ACTIONS (e.g. M.DPAD_ACTIONS)
+local function acquire(owner, extraActions, baseActions)
     local actions = {}
-    for _, a in ipairs(M.ACTIONS) do table.insert(actions, a) end
+    for _, a in ipairs(baseActions or M.ACTIONS) do table.insert(actions, a) end
     for _, a in ipairs(extraActions or {}) do table.insert(actions, a) end
     M.owners[owner] = actions
     -- taking the pad happens while driving : the menu is closed, even if its close went unheard
