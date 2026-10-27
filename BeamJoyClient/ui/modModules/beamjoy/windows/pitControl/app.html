@@ -61,7 +61,8 @@
         font-size: 0.78em;
         white-space: nowrap;
     }
-    #beamjoy-pit-control .pc-chip.warn {
+    #beamjoy-pit-control .pc-chip.warn,
+    #beamjoy-pit-control .pc-warn {
         color: #ffc768;
     }
     #beamjoy-pit-control .pc-x {
@@ -381,6 +382,22 @@
                     <div class="add" ng-style="{left: $ctrl.v.nowPct, width: $ctrl.v.addPct}"></div>
                 </div>
                 <span class="pc-side" style="justify-content: flex-start">{{$ctrl.v.afterText}}</span>
+            </div>
+        </div>
+
+        <!-- TYRES (the server's experimental tyre changes) -->
+        <div class="pc-row" ng-if="$ctrl.d.tyresAllowed" ng-class="{sel: $ctrl.cursor === 4}" ng-click="$ctrl.select(4)">
+            <div class="pc-line">
+                <span class="pc-lab">{{'beamjoy.race.pitMenu.tyres' | translate}}</span>
+                <span class="pc-val">
+                    <button type="button" class="pc-arr" ng-click="$ctrl.cycleTyres(-1); $event.stopPropagation()" aria-label="{{'beamjoy.race.pitMenu.tyres' | translate}}"><span ng-include="'bjPitArrowL.html'"></span></button>
+                    <span class="pc-v" ng-class="$ctrl.v.tyresOn ? 'on' : 'off'">{{$ctrl.v.tyreText}}</span>
+                    <button type="button" class="pc-arr" ng-click="$ctrl.cycleTyres(1); $event.stopPropagation()" aria-label="{{'beamjoy.race.pitMenu.tyres' | translate}}"><span ng-include="'bjPitArrowR.html'"></span></button>
+                </span>
+                <span class="pc-side"><span ng-class="{'pc-warn': $ctrl.v.tyreFlat}">{{$ctrl.v.tyreSide}}</span><span class="pc-secs" ng-if="$ctrl.v.tyresOn">{{$ctrl.v.tyreSText}}</span></span>
+            </div>
+            <div class="pc-chips" ng-if="$ctrl.v.tyreChips.length > 0">
+                <span class="pc-chip" ng-repeat="c in $ctrl.v.tyreChips track by c.key" ng-class="{warn: c.warn}">{{c.text}}</span>
             </div>
         </div>
 

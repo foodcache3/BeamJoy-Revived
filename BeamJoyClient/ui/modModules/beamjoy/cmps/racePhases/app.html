@@ -363,6 +363,16 @@
                     <bj-select ng-model="p.rules.pitRepairMaxS" options="$ctrl.pitRepairOptions"></bj-select>
                 </div>
             </div>
+            <div class="row2" ng-if="$ctrl.pits && $ctrl.experimentalTyres()">
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitTyres.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitTyres' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitTyres" options="$ctrl.onOffOptions"></bj-select>
+                </div>
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitTyreChangeS.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitTyreChangeS' | translate}}</span>
+                    <bj-select ng-model="p.rules.pitTyreChangeS" options="$ctrl.pitTyreOptions"></bj-select>
+                </div>
+            </div>
             <div class="row2" ng-if="$ctrl.pits">
                 <div class="bjr-field">
                     <span class="name" title="{{'beamjoy.window.config.tabs.races.startFuelPct.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.startFuelPct' | translate}}</span>

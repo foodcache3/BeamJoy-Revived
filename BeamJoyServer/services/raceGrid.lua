@@ -3623,7 +3623,7 @@ local function pointDistance(a, b)
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 end
 
----@return {EntrySpeedPenalty: integer, SpeedTolerance: integer}
+---@return {EntrySpeedPenalty: integer, SpeedTolerance: integer, ExperimentalTyres: boolean?}
 local function pitConfig()
     return services_config.data.RacePits or { EntrySpeedPenalty = 5, SpeedTolerance = 5 }
 end
@@ -3740,7 +3740,8 @@ end
 
 --- the pit lane, reported by a racer's game :
 --- "entry" (PIT IN, right after the lane's fromStep : `data.speedKmh`), "line" (the start/finish
---- line across the lane), "stop" (done in their box : `data.fuelL`, `data.repair`, `data.durationMs`),
+--- line across the lane), "stop" (done in their box : `data.fuelL`, `data.repair`, `data.tyres`,
+--- `data.tyreOption` (a plugin's, "plugin:id"), `data.durationMs`),
 --- "exit" (PIT OUT), "tow" (to their box, held there for the drive back), "returned" (back in their
 --- box after the phase, pitReturn)
 ---@param ctxt BJSContext
@@ -3801,9 +3802,15 @@ local function racePit(ctxt, sessionId, action, elapsedMs, data)
         if not near(ctxt.senderID, race.startPositions[slot].pit.pos, PIT_BOX_MARGIN) then return end
         p.pitStoppedPass = true
         p.pitStops = (p.pitStops or 0) + 1
+        -- new tyres : only with the experimental tyre changes on, and the race allowing them ; a
+        -- plugin's set only if a plugin running now offers it
+        local tyres = data.tyres == true and cfg.ExperimentalTyres == true and session.settings.pitTyres ~= false
+        local tyreOption = tyres and services_pluginUi.tyreOption(data.tyreOption) and data.tyreOption or nil
         apiEvent("racerPit", session, p, "stop", {
             fuelL = math.max(0, tonumber(data.fuelL) or 0),
             repair = data.repair == true,
+            tyres = tyres,
+            tyreOption = tyreOption,
             durationMs = math.max(0, math.floor(tonumber(data.durationMs) or 0)),
             towed = p.towUntilMs ~= nil or nil,
         })
@@ -3966,6 +3973,53 @@ local function onInit()
     services_chatCommands.addCommand("bjdamage", "chat.command.bjdamage.desc", function(ctxt)
         communications_tx.sendToPlayer(ctxt.senderID, "debugDamage")
     end, { hidden = true })
+    -- tyres and repair kept apart (a reset with the old shape put back, all but the wheels or the
+    -- wheels alone), on its own : /bjtyretest tyres|repair, your car where it stands. Only while the
+    -- experimental tyre changes are on (RacePits.ExperimentalTyres)
+    -- who ran the test last, and when (its shape may go out a moment later)
+    local tyreTestAt = {}
+    services_chatCommands.addCommand("bjtyretest", "chat.command.bjtyretest.desc", function(ctxt, args)
+        if not pitConfig().ExperimentalTyres then
+            return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
+                services_lang.get("chat.command.bjtyretest.off", ctxt.sender.lang))
+        end
+        tyreTestAt[ctxt.senderID] = GetCurrentTime()
+        local mode = args[1] and args[1]:lower()
+        communications_tx.sendToPlayer(ctxt.senderID, "debugTyres",
+            mode == "repair" and mode or "tyres")
+    end, { hidden = true })
+    -- a tyre change's or a repair's shape (the pit stop's, or the test's), relayed to the other
+    -- players so their copy of the car shows it (BeamMP resets copies pristine). Every other player
+    -- gets it, so it's held tight (a modified game could otherwise push megabytes a second through
+    -- the server) : only while the experimental tyre changes are on, from a racer in their race's pit
+    -- lane or a player who just ran the test, for their own car, bounded in size and rate
+    local TYRE_SHAPE_MAX_CHARS, TYRE_SHAPE_EVERY_S, TYRE_TEST_WINDOW_S = 200000, 5, 30
+    local tyreShapeLast = {}
+    communications_rx.addHandler("tyreShape", function(ctxt, serverVID, json)
+        if not pitConfig().ExperimentalTyres or not ctxt.sender then return end
+        if type(serverVID) ~= "string" or type(json) ~= "string" or #json > TYRE_SHAPE_MAX_CHARS then return end
+        local session = findSessionByParticipant(ctxt.senderID)
+        local p = session and session.participants[ctxt.senderID]
+        local inLane = p and p.inPit == true and pitsOn(session) and session.settings.pitTyres ~= false
+        local testing = tyreTestAt[ctxt.senderID] and GetCurrentTime() - tyreTestAt[ctxt.senderID] < TYRE_TEST_WINDOW_S
+        if not inLane and not testing then return end
+        -- "<ownerID>-<vehicleID>", the owner being the sender
+        local owns = ctxt.sender.vehicles and ctxt.sender.vehicles:any(function(v)
+            return v.serverVehicleID == serverVID and v.pid == ctxt.senderID
+        end)
+        local now = GetCurrentTime()
+        if tyreShapeLast[ctxt.senderID] and now - tyreShapeLast[ctxt.senderID] < TYRE_SHAPE_EVERY_S then return end
+        if not owns then
+            tyreShapeLast[ctxt.senderID] = now
+            return LogWarn(string.format("tyreShape from %s for a car not theirs (%s)", ctxt.sender.playerName, serverVID))
+        end
+        tyreShapeLast[ctxt.senderID] = now
+        local targets = {}
+        services_players.players:forEach(function(p)
+            if p.playerID ~= ctxt.senderID then targets[#targets + 1] = p.playerID end
+        end)
+        communications_tx.sendToPlayers(targets, "tyreShape", serverVID, json)
+    end)
 
     -- TEMPORARY debug tooling, for testing multiplayer-only race-completion paths (DNF/finish
     -- teardown while another participant is still active) with only one real connected client.

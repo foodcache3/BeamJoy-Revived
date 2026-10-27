@@ -10,6 +10,92 @@ the live server per the usual workflow: see each entry.
 
 Server build 2488, client build 2761 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
 
+- **Pits for circuit races (work in progress, no version bump yet)** (direct request). A race's pit
+  lane is drawn in the race editor (PIT IN and PIT OUT lines, where it leaves and rejoins the route,
+  a speed limit), with a pit box for every start slot that looks like the game's parking spot. A
+  race without a pit lane runs exactly as before. *(server + client : update both)*
+  - **On track** : the start/finish line carries on across the lane, so a lap ends there whether in
+    the pits or not, and the gates the lane skips are counted. A lap that touched the lane, and the
+    next, count for race time but not for best laps or the leaderboard. The game's own speed limiter
+    holds the lane's limit ; the car is ghosted in the lane (on by default).
+  - **The stop** : stopped in your own box, the car is held on the external camera while the plan's
+    work is done : fuel (5 % of the tank a second by default, any car), and a repair timed by the
+    car's damage (the share of its value the game counts as damaged, up to the race's repair time ;
+    provisional until the crash tests set the curve). Resets keep the fuel in a race with pits.
+  - **The pit menu**, from the race HUD : refuel (litres or gallons, as the game's units, kWh for a
+    battery ; never more than fits), repair, the stop's time, the parts behind the repair. D-pad only,
+    so the face buttons stay the car's : hold right to confirm, left to cancel, half a second each
+    (direct request : quicker).
+  - **The race HUD's Actions** are always shown (Shift + J by default, or a click) : Race info,
+    Pit, Tow to pits, Retire, one under the other ; a pick on the pad is a hold. Pit and Close (or
+    left held) are half a second (direct request : as quick as the menu's Confirm), Tow 2 s, Retire
+    5 s.
+  - **Race settings** (start menu, lobby, race editor and each phase) : start from the pits,
+    ghosting in the lane, required stops and the penalty for each missing one, refuelling and its
+    rate, repairs and their time, start fuel, tow to pits and its speed, back to the box after a
+    phase. **Server config** (Config > General > Pits) : the pit entry speed penalty and its
+    tolerance.
+  - **Plugin API** : `RacerPitEntry`, `RacerPitStop`, `RacerPitExit`, `RacerPitPenalty`,
+    `RacerPitTow`, `RacerPitReturned`.
+  - Start fuel at 100 % leaves the tank as the car's tuning set it.
+  - `/bjdamage` (hidden) shows the car's damage readings, for the repair-time tests.
+
+- **Drift spots : the signs at the finish face the way the spot runs** (direct request) :
+  the 3rd and 4th signs added by the finish line now show their printed side along the spot, the
+  start's still face the cars coming. Signs already placed keep their angle (turn them with the
+  gizmo). *(client only)*
+
+- **Fix : the game's own drift spots showed no UI any more** (direct report : "at some point the
+  vanilla drift zones UI stopped working"). Since BeamNG 0.40 the game draws drift and drag scores,
+  tasks and flash messages inside two container apps of the UI layout ; its freeroam layout has
+  them, BeamMP's multiplayer layout doesn't, so a drift spot ran with nowhere to show. When the
+  game shows one of these and the layout in use lacks the containers, they're added to it once,
+  where the freeroam layout has them (also the game's drag strips and drift cruising). *(client
+  only)*
+
+- **Fix : another player's car showed a driver after they got out to walk** (direct report : "on
+  other players screen, your unicycle appears but the occupant still remains in the vehicle").
+  The game's seat figures are this game's own players only (BeamMP doesn't pass seats on), so the
+  figure in another player's car was the viewer's own, seated there by looking at that car
+  (spectating, switching to it). Other players' cars show no seat figures now. Also : a car without
+  the game's seat data no longer shows a figure in every seat after a ghost change. *(client only)*
+
+- **Experimental tyre changes in the pits (off by default)** (direct request : "add tire changes to
+  the pit menu as well", repairs and tyres apart, for tyre mods and plugins with tyre sets). Turned
+  on in Config > General > Pits, **Experimental tyre changes** ; off, every pit stop works as
+  above. *(server + client : update both)*
+  - **The pit menu's Tyres row** : Keep or a new set, its time (Tyre change time, 10 s by default,
+    a new race setting with Tyre changes on / off). Flat tyres are the Tyres row's, no longer part
+    of the repair's time. A wheel torn off is shown : only a repair puts it back.
+  - **New tyres keep the damage, a repair keeps the old tyres.** The game only fits new tyres or
+    repairs a car through a reset, which does both. The car's shape is now taken before the reset
+    and put back during it, all but the wheels (new tyres), or the wheels alone (a repair). It goes
+    back at the very start of the game's reset, before the doors', hood's and trunk's latches are
+    set, so they still close (direct report : they opened and never caught again when it went back
+    after). Each new wheel is turned to its bent axle's angle (direct report : moved only, its hub
+    tore off and the wheel fell off). The game's damage record (dents, breaks, flats) is written
+    again after the reset. New tyres and a repair together are a plain reset, as before.
+  - **The other players see it** (direct report : "the damage doesnt sync correctly after the
+    reset") : BeamMP only tells them the car reset (their copy turns pristine), never its dents.
+    The change goes out as a compact plan (about 18 KB for a crashed car) through the BeamJoy
+    server, and each copy is reset with it put back, within a few frames of BeamMP's own reset
+    (direct report : it lagged ; now 30 ms in tests). Held tight, since every other player gets it
+    (from the security review) : the server relays only while the switch is on, from a racer in
+    their race's pit lane (or a player who ran the test in the last 30 s), for their own car, up to
+    200 KB, once every 5 s. Every copy checks the plan against the car before using it : its own
+    nodes and beams, no node moved more than 5 m from where the copy has it, none made more than
+    twice as heavy (a modified game could otherwise send its car as a 30 m, 100 t spike into the
+    others' physics).
+  - **Plugin API** : `BJ.tyreOptions` / `tyres.register` : tyre sets ("Soft", "Hard", their own
+    time if they like) the Tyres row offers. BeamJoy never changes the car's parts : it fits fresh
+    tyres and passes the choice on, in `RacerPitStop` (`tyres`, `tyreOption`) and in hooks in the
+    racer's game (`onBJPitService`) and car (`onBJPitServiceStart` / `onBJPitServiceDone`), for a tyre
+    mod to apply its compound, or keep its wear through a repair alone.
+  - `/bjtyretest tyres|repair` (hidden, switch on only) : a tyre change or a repair on its own, your
+    car where it stands, with its damage measured before and after.
+  - Known : in 1 test run of 3 a tyre change counted about 60 more broken beams than the car had
+    (5.4 % damage read as 10.2 %), the others matched. Under watch while it's experimental.
+
 - **Italian (2761)** (direct request : "can you make a script so I can add an italian translation too").
   Client and server `it_IT.json`, machine-translated with `Tools/translate.py --add it_IT` (new : starts
   a language's files and translates just it), then the mute wording, ordinals ("{n}°") and console

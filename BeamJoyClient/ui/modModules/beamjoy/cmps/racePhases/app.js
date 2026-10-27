@@ -63,7 +63,7 @@ angular.module("beamjoy").factory("beamjoyRacePhases", function ($filter) {
     // the rules a phase's editor sets over the event's ; the pits' too (services/races.lua PIT_SETTINGS,
     // a race with usable pits only)
     const PIT_RULES = ["pitStart", "pitGhost", "pitStops", "pitMissingPenaltyS", "pitRefuel", "pitFuelRatePct",
-        "startFuelPct", "pitRepair", "pitRepairMaxS", "pitTow", "pitTowSpeed", "pitReturn"];
+        "startFuelPct", "pitRepair", "pitRepairMaxS", "pitTyres", "pitTyreChangeS", "pitTow", "pitTowSpeed", "pitReturn"];
     const RULES = ["respawnStrategy", "disableCollisions", "dnfEnabled", "resetPenaltyEnabled", ...PIT_RULES];
 
     // a phase as edited : every setting there, the length's laps and minutes kept while switched off
@@ -186,7 +186,9 @@ angular.module("beamjoy").component("bjRacePhases", {
         pits: "<?",
     },
     templateUrl: "/ui/modModules/beamjoy/cmps/racePhases/app.html",
-    controller: function ($scope, $filter, beamjoyRacePhases, beamjoyPluginUi) {
+    controller: function ($scope, $filter, beamjoyStore, beamjoyRacePhases, beamjoyPluginUi) {
+        // the tyre rules show only while the server's experimental tyre changes are on
+        this.experimentalTyres = () => beamjoyStore.raceSettings.experimentalTyres === true;
         const translate = (key) => $filter("translate")(key);
         const fill = (key, values) =>
             Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, v), translate(key));
@@ -263,6 +265,7 @@ angular.module("beamjoy").component("bjRacePhases", {
             this.pitRateOptions = numbers([1, 2, 3, 5, 8, 10, 15, 20], "beamjoy.racePhases.rules.percentPerSecond");
             this.startFuelOptions = numbers([10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90, 100], "beamjoy.racePhases.rules.percent");
             this.pitRepairOptions = numbers([0, 15, 30, 45, 60, 90, 120, 180], "beamjoy.racePhases.rules.seconds");
+            this.pitTyreOptions = numbers([0, 5, 8, 10, 15, 20, 30, 45], "beamjoy.racePhases.rules.seconds");
             this.pitTowSpeedOptions = numbers([20, 30, 40, 50, 60, 80, 100, 120], "beamjoy.racePhases.rules.kmh");
             // the order and takes pickers' own values ("phase:2"), kept beside the phase's
             phases.forEach((p, i) => {

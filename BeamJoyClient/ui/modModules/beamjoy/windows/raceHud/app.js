@@ -304,7 +304,7 @@ angular.module("beamjoy").component("bjRaceHud", {
         const buildPitLine = (s) => {
             if (!s) return null;
             if (s.stage === "stop") {
-                const total = (Number(s.fuelMs) || 0) + (Number(s.repairMs) || 0);
+                const total = (Number(s.fuelMs) || 0) + (Number(s.tyreMs) || 0) + (Number(s.repairMs) || 0);
                 // the readings not back yet : the car's being looked at
                 if (typeof s.leftMs !== "number") return { kind: "stop", title: translate("beamjoy.raceHud.pit.inBox"), text: translate("beamjoy.raceHud.pit.checking") };
                 const done = total - s.leftMs;
@@ -312,6 +312,8 @@ angular.module("beamjoy").component("bjRaceHud", {
                 if (s.fuelMs > 0 && done < s.fuelMs) {
                     text = s.fuelL > 0 ? fill("beamjoy.raceHud.pit.refuellingL", { amount: beamjoyPitFormat.amount(s.fuelL, s.tank, s.gallons) })
                         : translate("beamjoy.raceHud.pit.refuelling");
+                } else if (s.tyreMs > 0 && done < (Number(s.fuelMs) || 0) + s.tyreMs) {
+                    text = translate("beamjoy.raceHud.pit.tyres");
                 } else if (s.repairMs > 0) text = translate("beamjoy.raceHud.pit.repairing");
                 return {
                     kind: "stop", title: translate("beamjoy.raceHud.pit.inBox"), text, right: secs(s.leftMs),
@@ -386,8 +388,9 @@ angular.module("beamjoy").component("bjRaceHud", {
 
         // every pick on the pad is a hold of right (left : Close), and Tow and Retire are with the mouse
         // too, so a stray press can't end a run or haul you in : letting go early cancels.
-        // holdProgress (0..1) fills the button
-        const HOLD_MS = { tow: 2000, retire: 5000, pit: 1000, close: 1000 };
+        // holdProgress (0..1) fills the button. Pit and Close are half a second, as the pit menu's
+        // Confirm (direct request : quicker) : neither changes anything on its own
+        const HOLD_MS = { tow: 2000, retire: 5000, pit: 500, close: 500 };
         this.holding = null;
         this.holdProgress = 0;
         let holdStart = null;

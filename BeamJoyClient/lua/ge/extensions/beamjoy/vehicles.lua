@@ -158,6 +158,14 @@ local function registerVehicle(vid, callback)
         elseif not mpVeh.isLocal and veh.jbeam == M.WALKING then
             veh.playerUsable = false
         end
+        -- another player's car : no seat figures. The game only seats this game's own players, and
+        -- BeamMP doesn't pass seats on, so a figure in it was this player's own, seated by looking at
+        -- it (focusVehicle / BeamMP's switching is be:enterVehicle) ; reported : "when leaving a car
+        -- to enter walk mode, on other players screen, your unicycle appears but the occupant still
+        -- remains in the vehicle"
+        if not mpVeh.isLocal and gameplay_seatOccupants and gameplay_seatOccupants.setVehicleOccupantsEnabledOverride then
+            pcall(gameplay_seatOccupants.setVehicleOccupantsEnabledOverride, vid, false)
+        end
         M.vehicles[vid] = {
             vid = vid,
             serverVID = mpVeh.serverVehicleID,
@@ -1252,7 +1260,9 @@ local OCCUPANT_MESHES = { character_torso = true, character_head = true }
 --- them. Real bug (reported : "vehicle presets sometimes fill every slot with occupants") :
 --- setMeshAlpha(alpha, "") reaches every mesh of the car, and the game hides an empty seat's
 --- occupant figure by its alpha (0), so every ghost change or vehicle switch showed a figure in
---- every seat. The empty seats' figures are hidden again, the occupied ones follow the car's alpha
+--- every seat. The empty seats' figures are hidden again, the occupied ones follow the car's alpha ;
+--- a car without the game's seats (no seat data, or not loaded yet) has every figure hidden, and
+--- another player's car never shows one (registerVehicle : the game only seats this game's players)
 ---@param veh NGVehicle
 ---@param isGhosted boolean? the vehicle's ghost state, its "ghost" field when omitted
 local function applyDisplayAlpha(veh, isGhosted)
@@ -1264,16 +1274,15 @@ local function applyDisplayAlpha(veh, isGhosted)
     local vehData = core_vehicle_manager.getVehicleData(vid)
     local vdata = vehData and vehData.vdata
     if not vdata then return end
-    local figuresShown = settings.getValue("enableSeatOccupants", true)
-    -- occupant part path -> whether its figure shows
+    local mpVeh = M.vehicles[vid]
+    local figuresShown = settings.getValue("enableSeatOccupants", true) and not (mpVeh and mpVeh.isLocal == false)
+    -- occupant part path -> whether its figure shows ; any other occupant figure : hidden
     local shown = {}
     for _, seat in ipairs(gameplay_seatOccupants.getSeats(vid) or {}) do
         if seat.partPath then shown[seat.partPath] = figuresShown and seat.occupied == true end
     end
-    if not next(shown) then return end
     local function apply(meshData)
-        if meshData.mesh and shown[meshData.partPath] ~= nil and
-            OCCUPANT_MESHES[meshData.originalMesh or meshData.mesh] then
+        if meshData.mesh and OCCUPANT_MESHES[meshData.originalMesh or meshData.mesh] then
             veh:setMeshAlpha(shown[meshData.partPath] and alpha or 0, meshData.mesh)
         end
     end

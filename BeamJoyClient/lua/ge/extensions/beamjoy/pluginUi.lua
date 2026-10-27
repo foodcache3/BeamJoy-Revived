@@ -1,12 +1,13 @@
 --- What the server's plugins add to BeamJoy's windows (the plugin API : the server's
 --- services/pluginUi.lua) : race option sections for the start menu and the race editor, and
---- config tabs, and event formats (services/racePhases.lua). Kept here as they come and handed to the UI (cmps/pluginOptions) whenever they change
+--- config tabs, event formats (services/racePhases.lua), and tyre options for the pit menu
+--- (`tyres` : {key = "plugin:id", label, seconds?} each, racePits.lua). Kept here as they come and handed to the UI (cmps/pluginOptions) whenever they change
 --- or it asks ; a config tab's values only reach staff allowed to edit them, on request.
 
 local M = {
     dependencies = { "beamjoy_communications", "beamjoy_communications_ui" },
-    ---@type {race: table[], config: table[], formats: table[]}
-    data = { race = {}, config = {}, formats = {} },
+    ---@type {race: table[], config: table[], formats: table[], tyres: table[]}
+    data = { race = {}, config = {}, formats = {}, tyres = {} },
 }
 
 local function push()
@@ -20,6 +21,7 @@ local function set(data)
         race = type(data.race) == "table" and data.race or {},
         config = type(data.config) == "table" and data.config or {},
         formats = type(data.formats) == "table" and data.formats or {},
+        tyres = type(data.tyres) == "table" and data.tyres or {},
     }
     push()
 end
@@ -54,7 +56,7 @@ local function onInit()
 end
 
 local function onServerLeave()
-    M.data = { race = {}, config = {}, formats = {} }
+    M.data = { race = {}, config = {}, formats = {}, tyres = {} }
     push()
 end
 

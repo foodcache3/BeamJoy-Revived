@@ -212,6 +212,9 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
             beamjoyStore.permissions.isStaff() ||
             this.race.author === beamjoyStore.players.self.playerName;
 
+        // the tyre settings show only while the server's experimental tyre changes are on
+        this.experimentalTyres = () => beamjoyStore.raceSettings.experimentalTyres === true;
+
         // server plugins' own race options (cmps/pluginOptions), in the Settings section
         this.pluginEditorSections = beamjoyPluginUi.state.editorSections;
         $scope.$on("$destroy", $rootScope.$on("BJPluginUiChanged", () => {

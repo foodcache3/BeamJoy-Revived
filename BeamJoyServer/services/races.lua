@@ -298,6 +298,10 @@ local M = {
         pitRepair = { kind = "boolean", default = true },
         pitFuelRatePct = { kind = "int", min = 1, max = 100, default = 5 },
         pitRepairMaxS = { kind = "int", min = 0, max = 600, default = 60 },
+        -- tyre changes, apart from repairs : only while the server's RacePits.ExperimentalTyres is on
+        -- (services/config.lua). The time is the set's, a plugin's tyre option can have its own
+        pitTyres = { kind = "boolean", default = true },
+        pitTyreChangeS = { kind = "int", min = 0, max = 120, default = 10 },
         startFuelPct = { kind = "int", min = 5, max = 100, default = 100 },
         pitTow = { kind = "boolean", default = true },
         -- km/h a tow to the pits is held at, for the route back (raceGrid.lua's racePit "tow")

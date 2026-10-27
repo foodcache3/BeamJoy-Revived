@@ -8,7 +8,10 @@
 --- - in the lane : the game's own speed limiter (vehicleController's temporary top speed), and the
 ---   car ghosted (settings.pitGhost) ; both reasserted, a reset turns the limiter off
 --- - the stop : stopped in your own box, the car is held while the plan's work is done (fuel at
----   settings.pitFuelRatePct of the tank a second, repair by the car's damage), then "stop"
+---   settings.pitFuelRatePct of the tank a second, repair by the car's damage, new tyres in
+---   settings.pitTyreChangeS), then "stop". Tyres are apart from repairs only with the server's
+---   experimental tyre changes on (beamjoy_pits.serviceCar keeps the damage, or the old tyres) ;
+---   otherwise a repair is the game's own reset, tyres and all, as before
 --- - towed to the pits ("tow") : put in your box, held for the drive back, then the stop as usual
 --- - after the phase (settings.pitReturn) : back to your box ("returned"), held there until the next
 ---   phase's countdown
@@ -20,9 +23,10 @@ local M = {
     dependencies = { "beamjoy_vehicles", "beamjoy_pits", "beamjoy_communications", "beamjoy_raceRunner", "beamjoy_uiNav",
         "camera", "toast" },
 
-    ---@type {refuel: boolean, fuelAdd: number, repair: boolean} what a stop does : fuelAdd is a share of
-    ---the tank (1 : fill it up), capped at what fits when you stop
-    plan = { refuel = true, fuelAdd = 1, repair = true },
+    ---@type {refuel: boolean, fuelAdd: number, repair: boolean, tyres: boolean|string} what a stop does :
+    ---fuelAdd is a share of the tank (1 : fill it up), capped at what fits when you stop ; tyres false
+    ---(kept), true (a new set), or a plugin's tyre option ("plugin:id")
+    plan = { refuel = true, fuelAdd = 1, repair = true, tyres = false },
 
     --- in the pit lane, as this game sees it (ahead of the server's echo after a crossing)
     inPit = false,
@@ -83,6 +87,38 @@ local TOW_BASE_MS = 10000
 local function pitConfig()
     local cfg = beamjoy_config and beamjoy_config.data and beamjoy_config.data.RacePits
     return type(cfg) == "table" and cfg or { EntrySpeedPenalty = 5, SpeedTolerance = 5 }
+end
+
+--- tyre changes apart from repairs : the server's experimental tyre changes on, and the race allowing them
+---@param settings table
+---@return boolean
+local function tyresApart(settings)
+    return beamjoy_pits.experimentalTyres() and settings.pitTyres ~= false
+end
+
+--- the server's plugins' tyre options : {key = "plugin:id", label, seconds?} each
+---@return table[]
+local function tyreOptions()
+    local data = beamjoy_pluginUi and beamjoy_pluginUi.data
+    return data and type(data.tyres) == "table" and data.tyres or {}
+end
+
+--- the plan's tyres as a stop does them : nil (kept), or the set and how long fitting it takes
+---@param settings table
+---@return {option: string?, label: string?, seconds: number}?
+local function tyreChoice(settings)
+    local choice = M.plan.tyres
+    if not choice or not tyresApart(settings) then return nil end
+    local seconds = settings.pitTyreChangeS or 10
+    if type(choice) == "string" then
+        for _, t in ipairs(tyreOptions()) do
+            if t.key == choice then
+                return { option = t.key, label = t.label, seconds = tonumber(t.seconds) or seconds }
+            end
+        end
+    end
+    -- a plain new set (or a plugin's that's gone since)
+    return { seconds = seconds }
 end
 
 --- this player's race with usable pits, nil otherwise
@@ -253,16 +289,13 @@ local function placeInBox(myVeh, box, repair)
         nil, nil, nil, true, repair)
 end
 
---- repairs the car where it stands, as the game's own recovery prompt does (its damage gone, the fuel
---- kept : the race keeps it on resets, beamjoy_vehicles)
+--- resets the car where it stands, as the game's own recovery prompt does (its damage gone, the fuel
+--- kept : the race keeps it on resets, beamjoy_vehicles) ; raceRunner's told it's the pits' (no reset
+--- penalty, no checkpoint)
 ---@param myVeh table
 local function repairInPlace(myVeh)
-    local base = beamjoy_inputs and beamjoy_inputs.baseFunctions and beamjoy_inputs.baseFunctions.extensions and
-        beamjoy_inputs.baseFunctions.extensions.spawn
-    local safeTeleport = base and base.safeTeleport or spawn.safeTeleport
     beamjoy_raceRunner.expectReset(myVeh.vid)
-    local veh = myVeh.veh
-    safeTeleport(veh, veh:getPosition(), quatFromDir(veh:getDirectionVector()), nil, nil, nil, nil, true)
+    beamjoy_pits.resetInPlace(myVeh.veh)
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -353,9 +386,10 @@ end
 ---@param settings table
 ---@param tanks table[]
 ---@param damage table? beamjoy_pits.measureDamage's
----@return {energies: table<string, number>, fuelL: number, fuelMs: integer, repair: boolean, repairMs: integer, damage: table?}
+---@return {energies: table<string, number>, fuelL: number, fuelMs: integer, repair: boolean, repairMs: integer, tyres: boolean, tyreOption: string?, tyreMs: integer, apart: boolean, damage: table?}
 function M.planWork(settings, tanks, damage)
-    local work = { energies = {}, fuelL = 0, fuelMs = 0, repair = false, repairMs = 0, damage = damage }
+    local work = { energies = {}, fuelL = 0, fuelMs = 0, repair = false, repairMs = 0, tyres = false, tyreMs = 0,
+        apart = tyresApart(settings), damage = damage }
     local plan = M.plan
     if settings.pitRefuel ~= false and plan.refuel then
         local add = math.max(0, math.min(1, tonumber(plan.fuelAdd) or 0))
@@ -371,11 +405,16 @@ function M.planWork(settings, tanks, damage)
         end
     end
     if settings.pitRepair ~= false and plan.repair and damage then
-        local seconds = beamjoy_pits.repairSeconds(damage, settings.pitRepairMaxS or 60)
+        local seconds = beamjoy_pits.repairSeconds(damage, settings.pitRepairMaxS or 60, work.apart)
         if seconds > 0 then
             work.repair = true
             work.repairMs = math.ceil(seconds * 1000)
         end
+    end
+    local tyres = tyreChoice(settings)
+    if tyres then
+        work.tyres, work.tyreOption = true, tyres.option
+        work.tyreMs = math.ceil(math.max(0, tyres.seconds) * 1000)
     end
     return work
 end
@@ -483,7 +522,7 @@ local function startStop(ctx, myVeh)
         local function measured(damage)
             if M.stop ~= stop then return end
             stop.work = M.planWork(ctx.settings, tanks, damage)
-            stop.endMs = GetCurrentTimeMillis() + stop.work.fuelMs + stop.work.repairMs
+            stop.endMs = GetCurrentTimeMillis() + stop.work.fuelMs + stop.work.tyreMs + stop.work.repairMs
         end
         if ctx.settings.pitRepair ~= false and M.plan.repair then
             beamjoy_pits.measureDamage(myVeh, measured)
@@ -494,30 +533,52 @@ local function startStop(ctx, myVeh)
     -- the readings never came back (the car went) : nothing to do then
     async.delayTask(function()
         if M.stop == stop and not stop.work then
-            stop.work = { energies = {}, fuelL = 0, fuelMs = 0, repair = false, repairMs = 0 }
+            stop.work = { energies = {}, fuelL = 0, fuelMs = 0, repair = false, repairMs = 0, tyres = false, tyreMs = 0 }
             stop.endMs = GetCurrentTimeMillis()
         end
     end, 3000, "BJRacePitStopReadings")
 end
 
---- the stop's time is up : the repair, then the fuel (after the repair's reset), "stop", the car let go
+--- the work on the car, for a tyre mod (the experimental tyre changes only) : the car's Lua hook
+--- `name` gets {tyres, repair, tyreOption} (what happens to the car : a plain reset fits fresh tyres
+--- too), before its reset ("onBJPitServiceStart") and after it ("onBJPitServiceDone")
+---@param veh userdata
+---@param name string
+---@param work table
+local function serviceHook(veh, name, work)
+    veh:queueLuaCommand(string.format("extensions.hook(%q, {tyres = %s, repair = %s, tyreOption = %s})", name,
+        tostring(work.tyres == true), tostring(work.repair == true),
+        work.tyreOption and string.format("%q", work.tyreOption) or "nil"))
+end
+
+--- the stop's work is done (or given up) : the fuel (`fuelDelayMs` after the car's reset), the hooks
+--- (`done` : what happened to the car, nil for none), "stop", the car let go
 ---@param myVeh table
-local function finishStop(myVeh)
-    local stop = M.stop
+---@param stop table
+---@param fuelDelayMs integer
+---@param done table?
+local function completeStop(myVeh, stop, fuelDelayMs, done)
     M.stop = nil
     local work = stop.work
-    if work.repair then repairInPlace(myVeh) end
     local energies = work.energies
     async.delayTask(function()
         local own = beamjoy_vehicles.getCurrentOwn()
-        if own and own.vid == myVeh.vid and next(energies) then setTankEnergies(own.veh, energies) end
-    end, work.repair and 400 or 0, "BJRacePitStopFuel")
+        if not own or own.vid ~= myVeh.vid then return end
+        if next(energies) then setTankEnergies(own.veh, energies) end
+        if done then
+            serviceHook(own.veh, "onBJPitServiceDone", done)
+            extensions.hook("onBJPitService", own.vid, done)
+        end
+    end, fuelDelayMs, "BJRacePitStopFuel")
+    local durationMs = work.fuelMs + work.tyreMs + work.repairMs
     send("stop", elapsedMs, {
         fuelL = math.floor(work.fuelL * 10 + .5) / 10,
         repair = work.repair,
-        durationMs = work.fuelMs + work.repairMs,
+        tyres = work.tyres or nil,
+        tyreOption = work.tyreOption,
+        durationMs = durationMs,
     })
-    if work.fuelMs + work.repairMs > 0 then
+    if durationMs > 0 then
         Engine.Audio.playOnce('AudioGui', 'event:>UI>Career>Fueling_Petrol_Simple')
     end
     toast.info(beamjoy_lang.translate("beamjoy.race.pit.stopDone"), nil, 3)
@@ -526,6 +587,47 @@ local function finishStop(myVeh)
         camera.setCamera(stop.previousCamera)
     end
     extensions.hook("onBJRaceMarkersRefresh")
+end
+
+--- the stop's time is up : the work on the car, then the fuel (after its reset), "stop", the car let
+--- go. A repair and new tyres together (or a repair with tyres not apart) : the game's own reset. One
+--- of them alone, tyres apart : beamjoy_pits.serviceCar keeps the rest as it was, the car let go once
+--- its shape is back
+---@param myVeh table
+local function finishStop(myVeh)
+    local stop = M.stop
+    local work = stop.work
+    local mode = work.apart and (work.repair ~= work.tyres) and (work.repair and "repair" or "tyres") or nil
+    if mode then
+        -- the car's being worked on : no second finish
+        stop.endMs = nil
+        serviceHook(myVeh.veh, "onBJPitServiceStart", work)
+        local started = beamjoy_pits.serviceCar(myVeh, mode, function()
+            repairInPlace(myVeh)
+        end, function(ok, err)
+            if M.stop ~= stop then return end
+            if not ok then
+                LogWarn("[BJRacePits] the " .. mode .. " work failed : " .. tostring(err))
+                toast.warn(beamjoy_lang.translate("beamjoy.race.pit.workFailed"), nil, 5)
+                work.repair, work.tyres, work.tyreOption = false, false, nil
+            end
+            completeStop(myVeh, stop, 0, ok and { tyres = work.tyres, repair = work.repair, tyreOption = work.tyreOption } or nil)
+        end)
+        if not started then
+            work.repair, work.tyres, work.tyreOption = false, false, nil
+            completeStop(myVeh, stop, 0)
+        end
+        return
+    end
+    local reset = work.repair or work.tyres
+    -- the game's own reset : fresh tyres whatever the plan (the hooks are told so)
+    local done = reset and beamjoy_pits.experimentalTyres() and
+        { tyres = true, repair = true, tyreOption = work.tyreOption } or nil
+    if reset then
+        if done then serviceHook(myVeh.veh, "onBJPitServiceStart", done) end
+        repairInPlace(myVeh)
+    end
+    completeStop(myVeh, stop, reset and 400 or 0, done)
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -644,12 +746,15 @@ local function statusOf(ctx)
         plan = M.plan,
         refuel = s.pitRefuel ~= false,
         repair = s.pitRepair ~= false,
+        tyres = tyresApart(s),
     }
+    local tyres = tyreChoice(s)
+    status.tyreLabel = tyres and tyres.label or nil
     if M.stop then
         status.stage = "stop"
         local w = M.stop.work
         if w then
-            status.fuelMs, status.repairMs, status.fuelL = w.fuelMs, w.repairMs, w.fuelL
+            status.fuelMs, status.repairMs, status.tyreMs, status.fuelL = w.fuelMs, w.repairMs, w.tyreMs, w.fuelL
             status.leftMs = math.max(0, (M.stop.endMs or now) - now)
         end
     elseif M.holding == "tow" then
@@ -700,6 +805,10 @@ local function pushMenu()
         repairAllowed = s.pitRepair ~= false,
         ratePct = s.pitFuelRatePct or 5,
         repairMaxS = s.pitRepairMaxS or 60,
+        -- the Tyres row : only with tyres apart from repairs (the server's experimental tyre changes)
+        tyresAllowed = tyresApart(s),
+        tyreS = s.pitTyreChangeS or 10,
+        tyreOptions = tyreOptions(),
         plan = M.plan,
         tank = M.tankVid == (beamjoy_vehicles.getCurrentOwn() or {}).vid and M.tank or nil,
         damage = M.menuDamage,
@@ -716,13 +825,15 @@ local function readForMenu(ctx, myVeh)
     menuReading, menuReadAtMs = true, now
     local maxS = ctx.settings.pitRepairMaxS or 60
     M.readTanks(myVeh, function()
-        if ctx.settings.pitRepair == false then
+        -- the Tyres row shows the flats and the wheels torn off too
+        local apart = tyresApart(ctx.settings)
+        if ctx.settings.pitRepair == false and not apart then
             menuReading = false
             return pushMenu()
         end
         beamjoy_pits.measureDamage(myVeh, function(r)
             menuReading = false
-            M.menuDamage = not r.error and beamjoy_pits.damageSummary(r, maxS) or nil
+            M.menuDamage = not r.error and beamjoy_pits.damageSummary(r, maxS, apart) or nil
             pushMenu()
         end)
     end)
@@ -751,10 +862,16 @@ end
 ---@param plan table
 function M.setPlan(plan)
     if type(plan) ~= "table" then return end
+    local tyres = plan.tyres == true
+    -- a plugin's set : "plugin:id"
+    if type(plan.tyres) == "string" and #plan.tyres <= 100 and plan.tyres:find("^[%w_%-]+:[%w_%-]+$") then
+        tyres = plan.tyres
+    end
     M.plan = {
         refuel = plan.refuel ~= false,
         fuelAdd = math.max(0, math.min(1, tonumber(plan.fuelAdd) or 1)),
         repair = plan.repair ~= false,
+        tyres = tyres,
     }
     M.pushStatus(true)
 end

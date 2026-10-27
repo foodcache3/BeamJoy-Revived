@@ -1086,6 +1086,22 @@ M.methods["raceOptions.unregister"] = function(_, ctx)
     return {}
 end
 
+--- the tyre sets racers can pick in the pit menu (the server's experimental tyre changes)
+M.methods["tyres.register"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local ok, why = services_pluginUi.registerTyreOptions(plugin, params)
+    if not ok then return nil, "badParams", why end
+    return { options = #params.options }
+end
+
+M.methods["tyres.unregister"] = function(_, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    services_pluginUi.unregisterTyreOptions(plugin)
+    return {}
+end
+
 --- labels on a racer's result in a race being run (and on the leaderboard entry it set, if it did),
 --- or on several racers' at once (`racers`)
 M.methods["results.setFields"] = function(params, ctx)
@@ -1655,7 +1671,7 @@ local PIT_EVENTS = { entry = "RacerPitEntry", stop = "RacerPitStop", exit = "Rac
     penalty = "RacerPitPenalty", tow = "RacerPitTow", returned = "RacerPitReturned" }
 
 --- a racer and the pits (raceGrid.lua's racePit) : in through PIT IN (`speedKmh`), a stop made
---- (`fuelL`, `repair`, `durationMs`, `towed`), out through PIT OUT (`stopped`), a pit penalty
+--- (`fuelL`, `repair`, `tyres`, `tyreOption`, `durationMs`, `towed`), out through PIT OUT (`stopped`), a pit penalty
 --- (`reason` "entrySpeed"|"transit"|"missingStops", `penaltyMs`), a tow (`holdMs`, `metres`), back
 --- in their box after the phase (`towed`)
 ---@param session table BJRaceSession

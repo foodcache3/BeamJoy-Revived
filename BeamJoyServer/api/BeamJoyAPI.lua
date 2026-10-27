@@ -325,6 +325,7 @@ local hooks = {}    -- hook name -> {fn, timeoutMs}
 local hookEventRegistered = false
 local raceOptions = nil -- what BJ.raceOptions registered (again after BeamJoy restarts)
 local formats = nil     -- what BJ.formats registered (again after BeamJoy restarts)
+local tyreOptions = nil -- what BJ.tyreOptions registered (again after BeamJoy restarts)
 local configTab = nil   -- what BJ.configTab registered, and its callback
 local pages = {}        -- id -> what BJ.page registered (with BJ.updatePage's latest blocks)
 local pageOrder = {}    -- their ids, in the order they were first registered
@@ -366,6 +367,13 @@ local function registerFormats()
     end)
 end
 
+local function registerTyreOptions()
+    if not tyreOptions then return end
+    send("tyres.register", { options = tyreOptions }, function(ok, err)
+        if not ok then print("[BeamJoyAPI] couldn't add the tyre options : " .. tostring(err.message)) end
+    end)
+end
+
 local function registerConfigTab()
     if not configTab then return end
     send("config.register", configTab.tab, function(ok, result)
@@ -391,6 +399,7 @@ local function becomeReady(info)
     for name in pairs(hooks) do registerHook(name) end
     registerRaceOptions()
     registerFormats()
+    registerTyreOptions()
     registerConfigTab()
     for _, pageId in ipairs(pageOrder) do registerPage(pageId) end
     for _, fn in ipairs(readyFns) do
@@ -582,6 +591,18 @@ function BJ.formats(list)
     assert(BJ.name, "call BeamJoyAPI.init first")
     formats = list
     if BJ.ready then registerFormats() end
+end
+
+--- the tyre sets racers can pick in the pit menu's Tyres row (again whenever BeamJoy starts again),
+--- replacing the ones this plugin added before : {id, label, seconds?} each, at most 8 ; `seconds`
+--- is that set's fitting time instead of the race's. BeamJoy fits fresh tyres either way and passes
+--- the choice on ("yourPlugin:id" : RacerPitStop's `tyreOption`, and hooks in the racer's game).
+--- Only while the server's experimental tyre changes are on (Config > General > Pits)
+---@param list {id: string, label: string, seconds: number?}[]
+function BJ.tyreOptions(list)
+    assert(BJ.name, "call BeamJoyAPI.init first")
+    tyreOptions = list
+    if BJ.ready then registerTyreOptions() end
 end
 
 --- adds a tab of this plugin's settings to BeamJoy's config window, for staff with

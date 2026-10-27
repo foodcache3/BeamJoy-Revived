@@ -552,9 +552,9 @@ local function onDeletePoint(zi, pi)
     changed()
 end
 
---- a drift sign beside a gate, facing the cars coming to it : the first two on the right then the
---- left of the start's line, the next two the same at the finish (direct request : the 3rd and 4th
---- stood on the 1st and 2nd)
+--- a drift sign beside a gate : the first two on the right then the left of the start's line, facing
+--- the cars coming to it ; the next two the same at the finish (direct request : the 3rd and 4th
+--- stood on the 1st and 2nd), facing the way the spot runs (direct request)
 ---@param zi integer
 local function onAddSign(zi)
     if not isActive() then return end
@@ -562,12 +562,15 @@ local function onAddSign(zi)
     if not zone then return end
     zone.signs = zone.signs or {}
     if #zone.signs >= MAX_SIGNS then return end
-    local p, dir, right = pointFrame(zone, #zone.signs < 2 and 1 or #zone.points)
+    local atStart = #zone.signs < 2
+    local p, dir, right = pointFrame(zone, atStart and 1 or #zone.points)
     local out = right:normalized() * (right:length() + SIGN_SIDE_GAP)
     local pos = p - dir * SIGN_BEFORE + (#zone.signs % 2 == 0 and out or -out)
     pos = vec3(pos.x, pos.y, groundHeightAt(pos))
-    -- its face (the mesh's -Y) towards them : its +Y along the route
-    table.insert(zone.signs, { x = pos.x, y = pos.y, z = pos.z, dir = { x = dir.x, y = dir.y } })
+    -- its face is the mesh's -Y : at the start towards the cars coming (+Y along the route), at the
+    -- finish along the route (+Y back along it)
+    local face = atStart and dir or -dir
+    table.insert(zone.signs, { x = pos.x, y = pos.y, z = pos.z, dir = { x = face.x, y = face.y } })
     state.activeZone, state.activePoint, state.activeSign = tonumber(zi), nil, #zone.signs
     changed()
 end

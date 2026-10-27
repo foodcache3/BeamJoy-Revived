@@ -650,6 +650,14 @@
                     <span class="name" title="{{'beamjoy.window.config.tabs.races.pitRepairMaxS.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitRepairMaxS' | translate}}</span>
                     <bj-slider ng-model="$ctrl.startOptions.pitRepairMaxS" min="0" max="180" hard-max="600" step="5"></bj-slider>
                 </div>
+                <div class="bjr-toggle-row" ng-if="race.pits && $ctrl.experimentalTyres()">
+                    <span title="{{'beamjoy.window.config.tabs.races.pitTyres.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitTyres' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.pitTyres"></bj-toggle>
+                </div>
+                <div class="bjr-field" ng-if="race.pits && $ctrl.experimentalTyres() && $ctrl.startOptions.pitTyres">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.pitTyreChangeS.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitTyreChangeS' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.pitTyreChangeS" min="0" max="60" hard-max="120" step="1"></bj-slider>
+                </div>
                 <div class="bjr-toggle-row" ng-if="race.pits">
                     <span title="{{'beamjoy.window.config.tabs.races.pitTow.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitTow' | translate}}</span>
                     <bj-toggle ng-model="$ctrl.startOptions.pitTow"></bj-toggle>

@@ -43,6 +43,8 @@ local function retrieveCache(caches)
         beamjoy_communications_ui.send("BJRaceSettings", {
             authorshipRestriction = M.data.RaceAuthorshipRestriction == true,
             editorShowOnlyEditable = M.data.RaceEditorShowOnlyEditable == true,
+            -- the start menu, the race editor and the phases show the tyre settings only then
+            experimentalTyres = type(M.data.RacePits) == "table" and M.data.RacePits.ExperimentalTyres == true,
         })
     end
     if caches.core then

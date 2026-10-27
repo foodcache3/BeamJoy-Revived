@@ -250,6 +250,8 @@
     "chat.command.race.command": "/race <ready|leave|cancel|retire>",
     "chat.command.race.desc": "Manages the race session you're currently in",
     "chat.command.bjdamage.desc": "Shows your car's damage readings (pit repair-time tests)",
+    "chat.command.bjtyretest.desc": "Tests a tyre change or a repair on its own (tyres or repair)",
+    "chat.command.bjtyretest.off": "Tyre changes are off : turn on Experimental tyre changes in Config > General > Pits first",
     "chat.command.race.notInSession": "You are not in a race session",
     "chat.command.race.readyOn": "You are now ready",
     "chat.command.race.readyOff": "You are no longer ready",

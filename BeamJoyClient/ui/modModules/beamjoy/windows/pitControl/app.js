@@ -6,11 +6,14 @@
 // Pad-first, and the D-pad only (direct request : the face buttons stay the car's) : while it's open
 // racePits.lua lends it the D-pad (beamjoy/uiNav.lua). One row is selected at a time (the delivery
 // board's orange) : up / down between the rows (the fuel amount skipped while refuelling is off),
-// a tap on left / right changes the row (when it's let go), right held 0.5 s confirms, left held 1 s
+// a tap on left / right changes the row (when it's let go), right held 0.5 s confirms, left held 0.5 s
 // cancels. The mouse clicks any row, arrow or button (Confirm, the ✕ cancels) ; with the window
 // focused the arrow keys, Enter and Esc work too.
 // The fuel's in the player's own unit (the game's volume setting : litres or US gallons), a
 // battery's in kWh. The plan keeps a share of the tank (racePits.lua's plan.fuelAdd, 1 : fill up).
+// The Tyres row only shows with the server's experimental tyre changes on (and the race allowing
+// them) : Keep or a new set, or Keep and each of the server's plugins' sets (plan.tyres : false, true,
+// or "plugin:id").
 const PIT_GALLON_L = 3.785411784;
 
 angular.module("beamjoy").service("beamjoyPitFormat", function () {
@@ -33,6 +36,10 @@ angular.module("beamjoy").service("beamjoyPitFormat", function () {
             else if (status.tank && status.tank.capacity > 0) parts.push(`+${this.amount(plan.fuelAdd * status.tank.capacity, status.tank, status.gallons)}`);
             else parts.push(`+${Math.round(plan.fuelAdd * 100)}%`);
         }
+        if (status.tyres && plan.tyres) {
+            parts.push(status.tyreLabel ? translate("beamjoy.race.pitMenu.planTyresSet").replace("{name}", status.tyreLabel)
+                : translate("beamjoy.race.pitMenu.planTyres"));
+        }
         if (status.repair && plan.repair) parts.push(translate("beamjoy.race.pitMenu.planRepair"));
         return parts.length > 0 ? parts.join(", ") : translate("beamjoy.race.pitMenu.planNothing");
     };
@@ -49,8 +56,8 @@ angular.module("beamjoy").component("bjPitControl", {
         this.open = false;
         this.d = null;
         // the plan as edited here (sent when it's confirmed) : taken from Lua once, when the menu opens
-        this.plan = { refuel: true, fuelAdd: 1, repair: true };
-        // the rows : refuel, the amount, repair, Done
+        this.plan = { refuel: true, fuelAdd: 1, repair: true, tyres: false };
+        // the rows : refuel (0), the amount (1), tyres (4), repair (2), Done (3)
         this.cursor = 0;
         // what's shown, built once per change (never in template getters)
         this.v = null;
@@ -62,11 +69,19 @@ angular.module("beamjoy").component("bjPitControl", {
         const unitStep = (pad) => (battery() ? (pad ? 5 : 1)
             : this.d && this.d.gallons ? (pad ? 1 : 0.25) * PIT_GALLON_L : pad ? 5 : 1);
         const refuelOn = () => !!this.d && this.d.refuelAllowed && this.plan.refuel;
+        // the plugins' tyre sets ({key, label, seconds?}) ; an empty list comes from Lua as {}
+        const tyreOptions = () => (this.d && Array.isArray(this.d.tyreOptions) ? this.d.tyreOptions : []);
+        // what the Tyres row steps through : Keep, then a new set or each plugin's set
+        const tyreChoices = () => {
+            const options = tyreOptions();
+            return options.length > 0 ? [false, ...options.map((o) => o.key)] : [false, true];
+        };
         // the rows the cursor stops on
         const rows = () => {
             const out = [];
             if (this.d && this.d.refuelAllowed) out.push(0);
             if (refuelOn()) out.push(1);
+            if (this.d && this.d.tyresAllowed) out.push(4);
             if (this.d && this.d.repairAllowed) out.push(2);
             out.push(3);
             return out;
@@ -85,6 +100,7 @@ angular.module("beamjoy").component("bjPitControl", {
                 fuelLabel: translate(battery() ? "beamjoy.race.pitMenu.recharge" : "beamjoy.race.pitMenu.refuel"),
                 fuelOn: refuelOn(),
                 repairOn: d.repairAllowed && this.plan.repair,
+                tyresOn: !!d.tyresAllowed && !!this.plan.tyres,
             };
             // the fuel : what's in, what this stop adds (capped at the room left), how long
             const add = refuelOn() ? Math.max(0, Math.min(1, this.plan.fuelAdd)) : 0;
@@ -110,24 +126,39 @@ angular.module("beamjoy").component("bjPitControl", {
             // the repair : the damage, the parts behind its time
             const dmg = d.damage;
             v.repairS = v.repairOn && dmg ? Number(dmg.seconds) || 0 : 0;
+            // the tyres : the set, its time, the flats, a wheel torn off (new tyres don't put it back)
+            const option = typeof this.plan.tyres === "string" ? tyreOptions().find((o) => o.key === this.plan.tyres) : null;
+            v.tyreText = !this.plan.tyres ? translate("beamjoy.race.pitMenu.tyresKeep")
+                : option ? option.label : translate("beamjoy.race.pitMenu.tyresNew");
+            v.tyreS = v.tyresOn ? Number(option && option.seconds != null ? option.seconds : d.tyreS) || 0 : 0;
+            v.tyreSText = `+${v.tyreS.toFixed(1)} s`;
+            const flats = dmg ? Number(dmg.flatTyres) || 0 : 0;
+            v.tyreSide = !dmg ? translate("beamjoy.race.pitMenu.reading")
+                : flats > 0 ? fill(flats === 1 ? "beamjoy.race.pitMenu.flatTyre" : "beamjoy.race.pitMenu.flatTyres", { n: flats })
+                : translate("beamjoy.race.pitMenu.noFlats");
+            v.tyreFlat = flats > 0;
+            const off = dmg ? Number(dmg.brokenWheels) || 0 : 0;
+            v.tyreChips = off > 0 ? [{ key: "off", warn: true, text: fill(off === 1 ? "beamjoy.race.pitMenu.wheelOff" : "beamjoy.race.pitMenu.wheelsOff", { n: off }) }] : [];
             v.damageText = dmg ? fill("beamjoy.race.pitMenu.damage", { n: Math.round((Number(dmg.share) || 0) * 100) })
                 : d.repairAllowed ? translate("beamjoy.race.pitMenu.reading") : "";
             v.chips = [];
             if (dmg) {
                 // an empty list comes from Lua as {} : no parts then
                 (Array.isArray(dmg.parts) ? dmg.parts : []).forEach((p, i) => v.chips.push({ key: `p${i}`, text: `${p.name} ${p.pct}%` }));
-                if (dmg.flatTyres > 0) {
+                // tyres apart : the flats are the Tyres row's
+                if (dmg.flatTyres > 0 && !d.tyresAllowed) {
                     v.chips.push({ key: "tyres", warn: true, text: fill(dmg.flatTyres === 1 ? "beamjoy.race.pitMenu.flatTyre" : "beamjoy.race.pitMenu.flatTyres", { n: dmg.flatTyres }) });
                 }
                 if (dmg.fault) v.chips.push({ key: "fault", warn: true, text: translate("beamjoy.race.pitMenu.fault") });
                 if (v.chips.length === 0) v.chips.push({ key: "none", text: translate("beamjoy.race.pitMenu.noDamage") });
             }
-            v.totalS = (v.fuelS || 0) + v.repairS;
+            v.totalS = (v.fuelS || 0) + v.tyreS + v.repairS;
             v.fuelSText = `+${(v.fuelS || 0).toFixed(1)} s`;
             v.repairSText = `+${v.repairS.toFixed(1)} s`;
             v.doneText = fill("beamjoy.race.pitMenu.doneTime", { n: v.totalS.toFixed(1) });
             // the footer's hints follow the row
-            v.lrHint = translate(this.cursor === 1 ? "beamjoy.race.pitMenu.hints.amount" : this.cursor === 3 ? "beamjoy.race.pitMenu.hints.none" : "beamjoy.race.pitMenu.hints.onOff");
+            v.lrHint = translate(this.cursor === 1 ? "beamjoy.race.pitMenu.hints.amount" : this.cursor === 4 ? "beamjoy.race.pitMenu.hints.tyres"
+                : this.cursor === 3 ? "beamjoy.race.pitMenu.hints.none" : "beamjoy.race.pitMenu.hints.onOff");
             this.v = v;
         };
 
@@ -156,6 +187,7 @@ angular.module("beamjoy").component("bjPitControl", {
                 this.d = this.open ? data : null;
                 if (this.open && !wasOpen) {
                     if (data.plan) this.plan = angular.copy(data.plan);
+                    if (this.plan.tyres === undefined) this.plan.tyres = false;
                     this.cursor = rows()[0];
                     place();
                     placeTick = $interval(place, 500);
@@ -196,6 +228,15 @@ angular.module("beamjoy").component("bjPitControl", {
             this.cursor = 2;
             save();
         };
+        // `dir` steps through the tyre choices (a set no plugin offers any more : from Keep)
+        this.cycleTyres = (dir) => {
+            if (!this.d || !this.d.tyresAllowed) return;
+            const list = tyreChoices();
+            const at = Math.max(0, list.indexOf(this.plan.tyres));
+            this.plan.tyres = list[(at + dir + list.length) % list.length];
+            this.cursor = 4;
+            save();
+        };
         this.fillUp = () => {
             if (!refuelOn()) return;
             this.plan.fuelAdd = 1;
@@ -232,20 +273,22 @@ angular.module("beamjoy").component("bjPitControl", {
                 const dir = name === "focus_l" ? -1 : 1;
                 if (this.cursor === 0) this.toggleFuel();
                 else if (this.cursor === 1) this.step(dir, pad);
+                else if (this.cursor === 4) this.cycleTyres(dir);
                 else if (this.cursor === 2) this.toggleRepair();
             } else if (name === "ok") {
                 if (this.cursor === 0) this.toggleFuel();
                 else if (this.cursor === 1) this.fillUp();
+                else if (this.cursor === 4) this.cycleTyres(1);
                 else if (this.cursor === 2) this.toggleRepair();
                 else this.confirm();
             } else if (name === "back") this.cancel();
         };
 
         // left / right on the pad : a tap acts when it's let go ; held, right confirms (half a second,
-        // direct request : quicker) and left cancels (a second) instead. padHold ("confirm" /
+        // direct request : quicker) and left cancels (as quick, direct request) instead. padHold ("confirm" /
         // "cancel") and padHoldProgress (0..1) fill the bar under the rows once it's held past a tap
         // (TAP_MS : let go before, it's a tap)
-        const PAD_HOLD_MS = { focus_r: 500, focus_l: 1000 };
+        const PAD_HOLD_MS = { focus_r: 500, focus_l: 500 };
         const TAP_MS = 200;
         this.padHold = null;
         this.padHoldProgress = 0;

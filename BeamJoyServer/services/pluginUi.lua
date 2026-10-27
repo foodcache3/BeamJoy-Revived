@@ -9,6 +9,10 @@
 ---   pit stop, never kept on a result or an entry)
 --- - config tabs : a tab of the plugin's own settings in BeamJoy's config window, stored by BeamJoy
 ---   (BeamJoyData/db/pluginConfig.json), for staff holding EditPluginConfig
+--- - tyre options : the sets a racer can pick in the pit menu's Tyres row ("Soft", "Hard"), with
+---   their own fitting time if they like. BeamJoy fits fresh tyres either way (it never changes the
+---   car's parts) and passes the choice on : RacerPitStop, and hooks in the racer's game and car for
+---   a tyre mod. Only while the server's experimental tyre changes are on (RacePits.ExperimentalTyres)
 --- Plugins only ever describe these : BeamJoy draws them, as plain text, and checks every value
 --- that comes back against the description.
 
@@ -20,6 +24,8 @@ local M = {
     raceSections = {},
     ---@type table<string, table> plugin -> its config tab
     configTabs = {},
+    ---@type table<string, {id: string, label: string, seconds: integer?}[]> plugin -> its tyre options, in order
+    tyreOptions = {},
     ---@type table<string, table>? plugin -> its stored config values (loaded on first use)
     configValues = nil,
 
@@ -34,6 +40,8 @@ local MAX_CONFIG_OPTIONS = 40
 local MAX_CHOICES = 24
 local MAX_FIELDS = 8
 local TEXT_MAX_DEFAULT = 100
+local MAX_TYRE_OPTIONS = 8
+local TYRE_SECONDS_MAX = 120
 local TEXT_MAX = 500
 --- where a race option shows : both (its value set per race in the editor, changeable at start),
 --- only the start menu, only the editor (fixed per race), or on every phase of an event (its own
@@ -242,7 +250,17 @@ local function clientShape()
     end
     -- plugins' event formats (services/racePhases.lua, formats.register) : the start menu's too
     local formats = services_racePhases and services_racePhases.formatsForClient() or {}
-    return { race = race, config = config, formats = formats }
+    -- tyre options, "plugin:id" each
+    local tyres = {}
+    plugins = {}
+    for plugin in pairs(M.tyreOptions) do plugins[#plugins + 1] = plugin end
+    table.sort(plugins)
+    for _, plugin in ipairs(plugins) do
+        for _, t in ipairs(M.tyreOptions[plugin]) do
+            tyres[#tyres + 1] = { key = plugin .. ":" .. t.id, label = t.label, seconds = t.seconds }
+        end
+    end
+    return { race = race, config = config, formats = formats, tyres = tyres }
 end
 
 local function pushDefinitions()
@@ -706,6 +724,59 @@ local function onConfigAction(ctxt, plugin, action)
 end
 
 -- ---------------------------------------------------------------------------------------------
+-- tyre options
+
+---@param plugin string
+---@param params table tyres.register's params : {options = [{id, label, seconds?}]}
+---@return boolean ok, string? why not
+local function registerTyreOptions(plugin, params)
+    local list = type(params) == "table" and params.options
+    if type(list) ~= "table" or #list == 0 then return false, "options must be a non-empty list" end
+    if #list > MAX_TYRE_OPTIONS then return false, "at most " .. MAX_TYRE_OPTIONS .. " tyre options" end
+    local out, seen = {}, {}
+    for i, o in ipairs(list) do
+        if type(o) ~= "table" then return false, "tyre option " .. i .. " must be an object" end
+        local oid = id(o.id)
+        if not oid then return false, "tyre option " .. i .. " needs an id (a letter, then letters, digits, _ or -)" end
+        if seen[oid] then return false, "tyre option id " .. oid .. " is used twice" end
+        seen[oid] = true
+        local label = text(o.label, 32)
+        if not label then return false, "tyre option " .. oid .. " needs a label" end
+        local seconds
+        if o.seconds ~= nil then
+            seconds = tonumber(o.seconds)
+            if not seconds or seconds < 0 or seconds > TYRE_SECONDS_MAX then
+                return false, "tyre option " .. oid .. " : seconds must be between 0 and " .. TYRE_SECONDS_MAX
+            end
+            seconds = math.floor(seconds + .5)
+        end
+        out[i] = { id = oid, label = label, seconds = seconds }
+    end
+    M.tyreOptions[plugin] = out
+    pushDefinitions()
+    return true
+end
+
+---@param plugin string
+local function unregisterTyreOptions(plugin)
+    if not M.tyreOptions[plugin] then return end
+    M.tyreOptions[plugin] = nil
+    pushDefinitions()
+end
+
+--- a tyre option by its key ("plugin:id"), as a racer's game reports it ; nil when no plugin running
+--- now has it
+---@param key any
+---@return {id: string, label: string, seconds: integer?}?, string? plugin
+local function tyreOption(key)
+    if type(key) ~= "string" or #key > 100 then return nil end
+    local plugin, oid = key:match("^([^:]+):(.+)$")
+    for _, t in ipairs(plugin and M.tyreOptions[plugin] or {}) do
+        if t.id == oid then return t, plugin end
+    end
+end
+
+-- ---------------------------------------------------------------------------------------------
 
 local function onInit()
     communications_rx.addHandler("pluginConfigValuesRequest", onConfigValuesRequest)
@@ -733,6 +804,9 @@ M.fieldList = fieldList
 M.keptFields = keptFields
 M.withoutHudOnly = withoutHudOnly
 M.registerConfigTab = registerConfigTab
+M.registerTyreOptions = registerTyreOptions
+M.unregisterTyreOptions = unregisterTyreOptions
+M.tyreOption = tyreOption
 M.unregisterConfigTab = unregisterConfigTab
 M.configOf = configOf
 M.setConfig = setConfig

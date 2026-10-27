@@ -13,6 +13,13 @@
 ---
 --- Both are off in the game outside career unless its "Drift in freeroam" / "Drag racing in
 --- freeroam" settings are on : the window offers to turn them on.
+---
+--- Their UI (direct report : the game's drift spots showed nothing any more) : since BeamNG 0.40
+--- the game draws drift and drag scores, tasks and flash messages inside two container apps of the
+--- UI layout (topLeftApps, topCenterApps). The game's freeroam layout has them, BeamMP's multiplayer
+--- layout doesn't, so the UI had nowhere to show. When the game shows one of its gameplay apps and
+--- the current layout lacks the containers, they're added to it once (where the freeroam layout has
+--- them) ; they mount with the apps already showing.
 
 local M = {
     dependencies = {},
@@ -252,6 +259,66 @@ end
 
 -- WIRING ----------------------------------------------------------------------------------------
 
+-- the containers as the game's own freeroam layout places them (settings/ui_apps/originalLayouts)
+local GAMEPLAY_CONTAINERS = {
+    { appName = "topLeftApps", placement = { bottom = "", height = "600px", left = "0px", position = "absolute",
+        right = "", top = "0px", width = "380px" } },
+    { appName = "topCenterApps", placement = { bottom = "", height = "350px", left = 0, margin = "auto",
+        position = "absolute", right = 0, top = "100px", width = "700px" } },
+}
+-- what the game shows in topLeft everywhere (its messages and tasks) : not a gameplay app
+local TOP_LEFT_DEFAULTS = { messages = true, tasks = true }
+local CONTAINER_CHECK_MS = 1000
+local containerCheckAt = 0
+-- the layouts already seen to (once each : addApp reads every layout from disk)
+local containersTried = {}
+
+---@return boolean the game shows a gameplay app (drift, drag, a flash message...) in its containers
+local function gameplayAppShown()
+    local containers = extensions.ui_appContainers
+    if not containers or not containers.getVisibleApps then return false end
+    for _, app in ipairs(containers.getVisibleApps("topCenter") or {}) do
+        if app then return true end
+    end
+    for _, app in ipairs(containers.getVisibleApps("topLeft") or {}) do
+        if not TOP_LEFT_DEFAULTS[app] then return true end
+    end
+    return false
+end
+
+--- the current layout gets the game's gameplay containers it lacks
+local function ensureGameplayContainers()
+    local layouts = extensions.ui_appLayouts
+    local layout = layouts and layouts.getCurrentLayout and layouts.getCurrentLayout()
+    if type(layout) ~= "table" or type(layout.filename) ~= "string" or type(layout.apps) ~= "table" then return end
+    if containersTried[layout.filename] then return end
+    containersTried[layout.filename] = true
+    local added = {}
+    for _, c in ipairs(GAMEPLAY_CONTAINERS) do
+        local has = false
+        for _, app in ipairs(layout.apps) do
+            if app.appName == c.appName then has = true end
+        end
+        if not has and layouts.addApp(layout.filename, c.appName, deepcopy(c.placement)) then
+            added[#added + 1] = c.appName
+            -- the layout table Lua holds too (addApp writes the file)
+            table.insert(layout.apps, { appName = c.appName, placement = deepcopy(c.placement) })
+        end
+    end
+    if #added > 0 then
+        LogInfo(string.format("[BJ] the game's gameplay UI added to the %s layout : %s", tostring(layout.type),
+            table.concat(added, ", ")))
+        if extensions.ui_apps and extensions.ui_apps.notifyLayoutsChanged then extensions.ui_apps.notifyLayoutsChanged() end
+    end
+end
+
+local function onUpdate()
+    local now = GetCurrentTimeMillis()
+    if now < containerCheckAt then return end
+    containerCheckAt = now + CONTAINER_CHECK_MS
+    if gameplayAppShown() then ensureGameplayContainers() end
+end
+
 local function onInit()
     beamjoy_communications_ui.addHandler("BJChallengeSpotsRequest", pushSpots)
     beamjoy_communications_ui.addHandler("BJChallengeBoardRequest", function(kind, spot)
@@ -275,6 +342,7 @@ local function onInit()
 end
 
 M.onInit = onInit
+M.onUpdate = onUpdate
 M.onDriftSpotStarted = onDriftSpotStarted
 M.onDriftSpotCompleted = onDriftSpotCompleted
 M.onDriftSpotFailed = onDriftSpotEnded

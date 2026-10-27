@@ -436,12 +436,17 @@ angular.module("beamjoy").component("bjMainRaces", {
                 pitRepair: d.pitRepair !== false,
                 pitFuelRatePct: d.pitFuelRatePct ?? 5,
                 pitRepairMaxS: d.pitRepairMaxS ?? 60,
+                pitTyres: d.pitTyres !== false,
+                pitTyreChangeS: d.pitTyreChangeS ?? 10,
                 startFuelPct: d.startFuelPct ?? 100,
                 pitTow: d.pitTow !== false,
                 pitTowSpeed: d.pitTowSpeed ?? 50,
                 pitReturn: d.pitReturn === true,
             };
         };
+
+        // the tyre settings show only while the server's experimental tyre changes are on
+        this.experimentalTyres = () => beamjoyStore.raceSettings.experimentalTyres === true;
 
         // per direct request: hovering the pool count (browse list and start-options panel
         // alike) shows every allowed vehicle, not just the bare number. Resolved through the

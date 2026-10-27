@@ -100,6 +100,8 @@ end
   stops.
 - `BJ.raceOptions(sections)`: your options in the race start menu and race editor (see
   [Race options](#race-options)). Registered again by itself whenever BeamJoy restarts.
+- `BJ.tyreOptions(list)`: the tyre sets racers can pick at a pit stop (see
+  [Tyre options](#tyre-options)). Registered again by itself whenever BeamJoy restarts.
 - `BJ.configTab(tab, onChange)`: your tab in the config window (see [Config tabs](#config-tabs)).
   `onChange(values, changed, by)` gets the values once registered (`changed` and `by` nil then),
   and again whenever someone saves the tab. `BJ.onConfigAction(fn)`: `fn(action, by)` when one of
@@ -143,7 +145,7 @@ Every `map` param is optional and defaults to the map the server is on. Another 
 read from BeamJoy's saved files.
 
 Methods that change something (`race.*`, `phase.*`, `formats.*`, `environment.set`, `overlay.*`,
-`hud.message`, `hooks.*`, `raceOptions.*`, `results.setFields`, `leaderboard.setFields`,
+`hud.message`, `hooks.*`, `raceOptions.*`, `tyres.*`, `results.setFields`, `leaderboard.setFields`,
 `config.*`, `pages.*`) need your plugin's name in the request's `from`. The helper always sends
 it.
 
@@ -310,6 +312,10 @@ Your formats in the race start menu, replacing the ones you registered before. S
 Your sections of options in the race start menu and race editor (replacing any you registered
 before). See [Race options](#race-options). → `{sections}`
 
+### `tyres.register` `{options}` / `tyres.unregister`
+Your tyre sets for the pit menu (replacing any you registered before). See
+[Tyre options](#tyre-options). → `{options}`
+
 ### `results.setFields` `{sessionId, playerId | racerKey, fields, replace?}` / `{sessionId, racers, replace?, by?}`
 Labels on a racer's result in a race being run, shown in the game's results and in the race
 events, and on the race HUD for the ones marked `hud`. When that race already put their time on
@@ -438,6 +444,12 @@ Names are display names, not permanent IDs: a guest can change their nickname.
 | `RacerOut` | `{sessionId, raceId, raceName, map, at, racer, reason, laps}` |
 | `RacerReset` | `{sessionId, ..., at, racer, lap, lastGate?, respawn, penaltyMs?, holdS?}` : a racer reset |
 | `RacePositionsChanged` | `{sessionId, ..., at, changes: [{racer, from, to}]}` : places changed |
+| `RacerPitEntry` | `{sessionId, ..., at, racer, lap, speedKmh}` : in through PIT IN |
+| `RacerPitStop` | `{sessionId, ..., at, racer, lap, fuelL, repair, tyres?, tyreOption?, durationMs, towed?}` : a stop made in their box. `tyres` : new tyres (experimental tyre changes only), `tyreOption` : your set's `"plugin:id"` |
+| `RacerPitExit` | `{sessionId, ..., at, racer, lap, stopped}` : out through PIT OUT |
+| `RacerPitPenalty` | `{sessionId, ..., at, racer, lap, reason, penaltyMs}` : `reason` `"entrySpeed"`, `"transit"` or `"missingStops"` |
+| `RacerPitTow` | `{sessionId, ..., at, racer, lap, holdMs, metres}` : towed to their box |
+| `RacerPitReturned` | `{sessionId, ..., at, racer, lap, towed}` : back in their box after the phase |
 | `RaceControl` | `{sessionId, ..., at, racer, action, ms?, penaltyMs, by, reason?}` : staff or a plugin stewarded a racer |
 | `RaceClosed` | `{sessionId, raceId, raceName, map, at, state}` |
 | `ConfigChanged` | `{plugin, values, changed, by}` : a plugin's config tab was saved |
@@ -762,6 +774,33 @@ BJ.raceOptions({
 | `{id, type = "button", label, confirm?}` | config tabs only: a click sends `ConfigAction` ; `confirm` asks first |
 
 Every option can have a `tooltip`. `id` is a word: a letter, then letters, digits, `_` or `-`.
+
+## Tyre options
+
+**Experimental**: only while the server's **Experimental tyre changes** are on (Config > General >
+Pits, off by default), and a race allows tyre changes. The pit menu then has a Tyres row, apart from
+the repair: Keep, or a new set. With your sets registered, the row offers Keep and each of them.
+
+```lua
+BJ.tyreOptions({
+    { id = "soft", label = "Soft", seconds = 12 },
+    { id = "medium", label = "Medium" },
+    { id = "hard", label = "Hard", seconds = 8 },
+})
+```
+
+At most 8 sets. `label` is up to 32 characters ; `seconds` (0 to 120) is that set's fitting time
+instead of the race's Tyre change time.
+
+BeamJoy never changes the car's parts. It fits fresh tyres (flats fixed, the game's tyre state new)
+and keeps the car's damage, then passes the choice on:
+
+- `RacerPitStop` has `tyres = true` and `tyreOption = "yourPlugin:soft"`.
+- In the racer's game, the game-engine hook `onBJPitService(vehicleId, work)`, and in the car's
+  own Lua `onBJPitServiceStart(work)` before its reset and `onBJPitServiceDone(work)` after it.
+  `work` is `{tyres, repair, tyreOption}`, what happened to the car: a repair together with new tyres
+  (or a repair with tyre changes off) is the game's own reset, so `tyres` is true then too. A tyre
+  mod can apply your set's compound there, or keep its wear through a repair alone (`tyres` false).
 
 ## Fields
 

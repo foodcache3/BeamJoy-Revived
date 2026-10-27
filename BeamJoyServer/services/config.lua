@@ -57,9 +57,11 @@
 ---ThresholdPercent : percentage (1-100) of eligible voters needed to pass ; Timeout : seconds a
 ---vote stays open before it's automatically considered failed. Defaults (51%, 30s) match what
 ---mapVote.lua/kickVote.lua originally hardcoded before this became configurable.
----@field RacePits {EntrySpeedPenalty: integer, SpeedTolerance: integer} race pits (raceGrid.lua's
----racePit) : EntrySpeedPenalty, seconds added for crossing PIT IN faster than the lane's limit plus
----SpeedTolerance (km/h), 0 off. The tow's speed is a race's own (services/races.lua's pitTowSpeed)
+---@field RacePits {EntrySpeedPenalty: integer, SpeedTolerance: integer, ExperimentalTyres: boolean} race pits
+---(raceGrid.lua's racePit) : EntrySpeedPenalty, seconds added for crossing PIT IN faster than the lane's
+---limit plus SpeedTolerance (km/h), 0 off. The tow's speed is a race's own (services/races.lua's
+---pitTowSpeed). ExperimentalTyres (off by default) : tyre changes in the pit menu, apart from repairs,
+---with the damage-keeping reset they need (the car's Lua, lua/vehicle/extensions/beamjoy/tyreChange.lua)
 
 local M = {
     ---@class BJSConfig
@@ -170,6 +172,7 @@ local M = {
         RacePits = {
             EntrySpeedPenalty = 5,
             SpeedTolerance = 5,
+            ExperimentalTyres = false,
         },
         ForceHud = true,
         Voting = {
@@ -493,8 +496,13 @@ local function sanitizeConfigValue(key, value)
             end
             value[k] = math.round(v)
         end
+        local switches = { ExperimentalTyres = true }
+        for k in pairs(switches) do
+            if value[k] == nil then value[k] = M.data.RacePits[k] == true end
+            if type(value[k]) ~= "boolean" then return nil, k .. " must be a boolean" end
+        end
         for k in pairs(value) do
-            if not bounds[k] then value[k] = nil end
+            if not bounds[k] and not switches[k] then value[k] = nil end
         end
     elseif key == "Voting" then
         if type(value) ~= "table" then

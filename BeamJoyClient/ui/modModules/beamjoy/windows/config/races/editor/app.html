@@ -1314,6 +1314,18 @@
                         </td>
                         <td><bj-slider ng-model="$ctrl.race.defaults.pitRepairMaxS" min="0" max="180" hard-max="600" step="5"></bj-slider></td>
                     </tr>
+                    <tr ng-if="$ctrl.experimentalTyres()">
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitTyres.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitTyres' | translate}}
+                        </td>
+                        <td><bj-toggle ng-model="$ctrl.race.defaults.pitTyres"></bj-toggle></td>
+                    </tr>
+                    <tr ng-if="$ctrl.experimentalTyres() && $ctrl.race.defaults.pitTyres">
+                        <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitTyreChangeS.tooltip' | translate}}">
+                            {{'beamjoy.window.config.tabs.races.pitTyreChangeS' | translate}}
+                        </td>
+                        <td><bj-slider ng-model="$ctrl.race.defaults.pitTyreChangeS" min="0" max="60" hard-max="120" step="1"></bj-slider></td>
+                    </tr>
                     <tr>
                         <td class="text-right" title="{{'beamjoy.window.config.tabs.races.pitTow.tooltip' | translate}}">
                             {{'beamjoy.window.config.tabs.races.pitTow' | translate}}
