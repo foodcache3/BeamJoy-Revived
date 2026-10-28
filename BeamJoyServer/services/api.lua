@@ -1671,8 +1671,8 @@ local PIT_EVENTS = { entry = "RacerPitEntry", stop = "RacerPitStop", exit = "Rac
     penalty = "RacerPitPenalty", tow = "RacerPitTow", returned = "RacerPitReturned" }
 
 --- a racer and the pits (raceGrid.lua's racePit) : in through PIT IN (`speedKmh`), a stop made
---- (`fuelL`, `repair`, `tyres`, `tyreOption`, `durationMs`, `towed`), out through PIT OUT (`stopped`), a pit penalty
---- (`reason` "entrySpeed"|"transit"|"missingStops", `penaltyMs`), a tow (`holdMs`, `metres`), back
+--- (`fuelL`, `repair`, `tyres`, `tyreOption`, `durationMs`, `servedMs`, `towed`), out through PIT OUT (`stopped`), a pit
+--- penalty (`reason` "entrySpeed"|"transit"|"missingStops"|"stopShort", `penaltyMs`), a tow (`holdMs`, `metres`), back
 --- in their box after the phase (`towed`)
 ---@param session table BJRaceSession
 ---@param p table BJRaceParticipant

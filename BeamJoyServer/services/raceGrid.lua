@@ -126,7 +126,11 @@
 ---@field pitPending integer[]? while inPit : the route steps still to credit, in order. Not sent
 ---@field pitEntryMs integer? their race time at PIT IN this pass (the transit check). Not sent
 ---@field pitPenalized true? the pit entry penalty given this pass. Not sent
----@field pitStoppedPass true? their stop this pass counted
+---@field pitStoppedPass true? their stop this pass reported (counted once settled : pitStopClaim)
+---@field pitStand {fromMs: integer, lastMs: integer}? while inPit : the car seen standing in its box,
+---from and until (the shared clock, watchPitStops). Not sent
+---@field pitStopClaim table? a stop reported, waiting for the server to see the car standing in its
+---box (settlePitStop). Not sent
 ---@field pitStops integer? stops made this phase
 ---@field pitLaps integer[]? the laps the pit lane touched this phase (the one they went in on and the
 ---next) : left out of best lap, best sectors and the leaderboard
@@ -605,7 +609,8 @@ local SLIM_DROPPED = { settings = true, phases = true, phaseResults = true, even
 -- track with hundreds of gates it was most of every session update, and it was only ever read to
 -- work out the gaps between racers, which the server now does itself (gapBetween below)
 local PAYLOAD_DROPPED_FIELDS = { gateTimes = true, bestLapGateTimes = true, leaderboardKey = true, replacedEntry = true,
-    lastResetMs = true, pluginFields = true, pitPending = true, pitEntryMs = true, pitPenalized = true }
+    lastResetMs = true, pluginFields = true, pitPending = true, pitEntryMs = true, pitPenalized = true,
+    pitStand = true, pitStopClaim = true }
 
 --- a session's own tables never sent to clients (an entry list's player IDs, the last places)
 local SESSION_PRIVATE = { participants = true, baseSettings = true, lastPositions = true, entrants = true }
@@ -1307,6 +1312,7 @@ end
 ---@param p BJRaceParticipant
 local function endPitPass(p)
     p.inPit, p.pitPending, p.pitEntryMs, p.pitPenalized, p.pitStoppedPass, p.towUntilMs = nil, nil, nil, nil, nil, nil
+    p.pitStand, p.pitStopClaim = nil, nil
 end
 
 --- a start from the pits (settings.pitStart) : the racer's box, and them in the pit lane, its steps
@@ -1902,8 +1908,9 @@ local function checkSessionComplete(session)
     end
 end
 
--- the pits' part of a finish (missing stops, the way back to the box) : defined with racePit
-local pitOnFinish
+-- the pits' part of a finish (missing stops, the way back to the box), a stop's check and the
+-- server's watch of the cars in their boxes : defined with racePit
+local pitOnFinish, settlePitStop, watchPitStops
 
 ---@param session BJRaceSession
 ---@param participant BJRaceParticipant
@@ -2457,6 +2464,9 @@ local function onUpdate()
             timeUp(session, now)
         elseif session.overtimeEndsAtMs and now >= session.overtimeEndsAtMs then
             if isSequential(session) then endTurnNow(session) else endPhaseNow(session) end
+        end
+        if session.state == "RACE" and pitsOn(session) and watchPitStops(session, now) then
+            pushSessionUpdate(session, true)
         end
     end)
     if next(fieldsChanged) == nil then return end
@@ -3368,7 +3378,10 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
 
     -- a gate driven through while in the pit lane : they're back on track (a reset to their last
     -- checkpoint, out the way they came in) : that pass is over
-    if participant.inPit then endPitPass(participant) end
+    if participant.inPit then
+        settlePitStop(session, participant, services_clockSync.nowMs(), true)
+        endPitPass(participant)
+    end
     applyCrossing(session, race, participant, gateIndex, elapsedMs)
     -- slim : gate crossings are by far the most frequent pushes (see buildSessionPayload)
     pushSessionUpdate(session, true)
@@ -3614,6 +3627,24 @@ local PIT_TOW_BASE_MS = 10000
 local PIT_BOX_MARGIN = 25
 --- how far from the start/finish gate its line across the pit lane counts, metres
 local PIT_LINE_REACH = 150
+--- the bounds of what a racer's game reports of a stop and an entry : fuel (litres, a truck's
+--- tanks) and the speed
+local PIT_FUEL_MAX_L, PIT_SPEED_MAX_KMH = 2000, 1000
+-- the stop's check. The racer's game times its own stop, and only it knows the car's damage, so the
+-- work it reports is taken (the tyres' time, which the server knows, at least ; the race's longest
+-- at most). The server makes sure the car stood in its box that long : it watches with BeamMP's
+-- positions (read here, nothing more sent : watchPitStops) on its own clock. Lag, a sync or a game
+-- hitch only make its view later or staler (the car seen arriving a little late, or standing a
+-- little longer) : PIT_STOP_SLACK_MS covers it, and only what's short beyond it is a penalty
+--- how near its box's centre (metres) and how slow (m/s) a car counts as standing in it
+local PIT_STAND_REACH, PIT_STAND_SPEED = 8, 2
+--- a standing that broke off for less than this goes on (the server's ticks, BeamMP's updates)
+local PIT_STAND_GAP_MS = 600
+--- how much shorter than its work a stop may be before it costs anything
+local PIT_STOP_SLACK_MS = 3000
+--- the car must be seen standing in its box this close to the stop's report, before (or after :
+--- a stop with nothing to do can be over before the server's view catches up)
+local PIT_STOP_SEEN_MS = 3000
 
 ---@param a {x: number, y: number, z: number}
 ---@param b {x: number, y: number, z: number}
@@ -3656,6 +3687,93 @@ local function pitPenalty(session, p, ms, reason, vars)
         communications_tx.sendToPlayer(p.playerID, "toast", "warning",
             services_lang.get("race.pit." .. reason, target.lang):var(all))
     end
+end
+
+---@param v table {x, y, z} or {1, 2, 3}
+---@return {x: number, y: number, z: number}
+local function xyz(v)
+    return { x = tonumber(v.x or v[1]) or 0, y = tonumber(v.y or v[2]) or 0, z = tonumber(v.z or v[3]) or 0 }
+end
+
+--- whether a racer's car stands in their box (nil : the server can't see it)
+---@param playerID integer
+---@param box table
+---@return boolean?
+local function carStanding(playerID, box)
+    local raws = services_vehicles.playerPositions(playerID)
+    if not raws or #raws == 0 or type(box.pos) ~= "table" then return nil end
+    local bestD, bestRaw = math.huge, nil
+    for _, raw in ipairs(raws) do
+        local d = pointDistance(xyz(raw.pos), box.pos)
+        if d < bestD then bestD, bestRaw = d, raw end
+    end
+    if bestD > PIT_STAND_REACH then return false end
+    local v = type(bestRaw.vel) == "table" and xyz(bestRaw.vel) or { x = 0, y = 0, z = 0 }
+    return math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) <= PIT_STAND_SPEED
+end
+
+--- a stop reported : counted once the car's been seen standing in its box (`final` : now or never),
+--- what it came up short of its work a penalty. Its RacerPitStop then
+---@param session BJRaceSession
+---@param p BJRaceParticipant
+---@param now integer
+---@param final boolean?
+---@return boolean settled
+settlePitStop = function(session, p, now, final)
+    local claim = p.pitStopClaim
+    if not claim then return false end
+    local st = p.pitStand
+    local seen = claim.unchecked or (st ~= nil and st.lastMs >= claim.atMs - PIT_STOP_SEEN_MS)
+    if not seen and not final then return false end
+    p.pitStopClaim = nil
+    if not seen then
+        -- reported, never seen : not a stop (another may come this pass)
+        p.pitStoppedPass = nil
+        LogWarn(string.format("racePit : %s reported a stop the server never saw", tostring(p.playerName)))
+        local target = services_players.players:find(function(pl) return pl.playerID == p.playerID end)
+        if target then
+            communications_tx.sendToPlayer(p.playerID, "toast", "warning",
+                services_lang.get("race.pit.stopNotSeen", target.lang))
+        end
+        return true
+    end
+    p.pitStops = (p.pitStops or 0) + 1
+    local servedMs = claim.unchecked and claim.data.durationMs or
+        math.max(0, math.min(claim.atMs, st.lastMs) - st.fromMs)
+    claim.data.servedMs = servedMs
+    apiEvent("racerPit", session, p, "stop", claim.data)
+    local shortMs = claim.data.durationMs - servedMs - PIT_STOP_SLACK_MS
+    if shortMs > 0 then pitPenalty(session, p, math.ceil(shortMs / 100) * 100, "stopShort") end
+    return true
+end
+
+--- every 100 ms in a race with pits : each racer's car in the lane seen standing in its box or not
+--- (BeamMP's positions, read here), and the stops waiting on it settled
+---@param session BJRaceSession
+---@param now integer
+---@return boolean changed a stop settled
+watchPitStops = function(session, now)
+    local race, changed = nil, false
+    for playerID, p in pairs(session.participants) do
+        if type(p) == "table" and p.inPit and not p.finished and not p.awaitingStart and
+            not (p.towUntilMs and now < p.towUntilMs) then
+            race = race or getRace(session)
+            local sp = race and p.pitSlot and race.startPositions[p.pitSlot]
+            if sp and type(sp.pit) == "table" and carStanding(playerID, sp.pit) then
+                local st = p.pitStand
+                if st and now - st.lastMs <= PIT_STAND_GAP_MS then
+                    st.lastMs = now
+                else
+                    p.pitStand = { fromMs = now, lastMs = now }
+                end
+            end
+        end
+        if type(p) == "table" and p.pitStopClaim and
+            settlePitStop(session, p, now, now >= p.pitStopClaim.atMs + PIT_STOP_SEEN_MS) then
+            changed = true
+        end
+    end
+    return changed
 end
 
 --- the route from where a racer is to PIT IN : the steps on the way (credited by a tow) and its
@@ -3782,14 +3900,19 @@ local function racePit(ctxt, sessionId, action, elapsedMs, data)
             p.pitStoppedPass = nil
             markPitLap(p, p.currentLap)
             markPitLap(p, p.currentLap + 1)
-            apiEvent("racerPit", session, p, "entry", { speedKmh = tonumber(data.speedKmh) })
+            local speedKmh = tonumber(data.speedKmh)
+            apiEvent("racerPit", session, p, "entry", { speedKmh = speedKmh and math.clamp(speedKmh, 0, PIT_SPEED_MAX_KMH) })
         end
         local speed, limit = tonumber(data.speedKmh), pit.speedLimitKmh + cfg.SpeedTolerance
+        local penalized = false
         if speed and speed > limit and cfg.EntrySpeedPenalty > 0 and not p.pitPenalized then
-            p.pitPenalized = true
+            p.pitPenalized, penalized = true, true
             pitPenalty(session, p, cfg.EntrySpeedPenalty * 1000, "entrySpeed",
                 { speed = math.floor(speed), limit = pit.speedLimitKmh })
         end
+        -- the same entry again changes nothing the others see : no update to everyone (repeated, it
+        -- would be one per message)
+        if again and not penalized then return end
     elseif action == "line" then
         if not p.inPit or not p.pitPending or not table.includes(p.pitPending, 1) then return end
         if not near(ctxt.senderID, race.gates[1].pos, PIT_LINE_REACH + GATE_POSITION_MARGIN) then return end
@@ -3799,21 +3922,40 @@ local function racePit(ctxt, sessionId, action, elapsedMs, data)
     elseif action == "stop" then
         if not p.inPit or p.pitStoppedPass then return end
         if p.towUntilMs and now < p.towUntilMs - GO_GRACE_MS then return end
-        if not near(ctxt.senderID, race.startPositions[slot].pit.pos, PIT_BOX_MARGIN) then return end
+        local box = race.startPositions[slot].pit
+        if not near(ctxt.senderID, box.pos, PIT_BOX_MARGIN) then return end
         p.pitStoppedPass = true
-        p.pitStops = (p.pitStops or 0) + 1
+        local s = session.settings
         -- new tyres : only with the experimental tyre changes on, and the race allowing them ; a
         -- plugin's set only if a plugin running now offers it
-        local tyres = data.tyres == true and cfg.ExperimentalTyres == true and session.settings.pitTyres ~= false
-        local tyreOption = tyres and services_pluginUi.tyreOption(data.tyreOption) and data.tyreOption or nil
-        apiEvent("racerPit", session, p, "stop", {
-            fuelL = math.max(0, tonumber(data.fuelL) or 0),
-            repair = data.repair == true,
-            tyres = tyres,
-            tyreOption = tyreOption,
-            durationMs = math.max(0, math.floor(tonumber(data.durationMs) or 0)),
-            towed = p.towUntilMs ~= nil or nil,
-        })
+        local tyres = data.tyres == true and cfg.ExperimentalTyres == true and s.pitTyres ~= false
+        local option = tyres and services_pluginUi.tyreOption(data.tyreOption) or nil
+        local tyreOption = option and data.tyreOption or nil
+        -- the stop's time : the racer's game's (the damage only it knows), at least the tyres' (the
+        -- server knows that one) and at most the longest work the race allows
+        local tyreMs = tyres and math.floor((tonumber(option and option.seconds) or s.pitTyreChangeS or 10) * 1000) or 0
+        local maxMs = tyreMs +
+            (s.pitRefuel ~= false and math.ceil(100000 / math.max(1, s.pitFuelRatePct or 5)) or 0) +
+            (s.pitRepair ~= false and (s.pitRepairMaxS or 60) * 1000 or 0)
+        local claimedMs = tonumber(data.durationMs) or 0
+        if claimedMs ~= claimedMs then claimedMs = 0 end
+        -- the rest of the racer's game's report : bounded, and only the work the race allows
+        -- (plugins may trust it)
+        p.pitStopClaim = {
+            atMs = now,
+            -- the server can't see the car : taken as reported, as the pit lane's other checks do
+            unchecked = carStanding(ctxt.senderID, box) == nil,
+            data = {
+                fuelL = s.pitRefuel ~= false and math.clamp(tonumber(data.fuelL) or 0, 0, PIT_FUEL_MAX_L) or 0,
+                repair = data.repair == true and s.pitRepair ~= false,
+                tyres = tyres,
+                tyreOption = tyreOption,
+                durationMs = math.clamp(math.floor(claimedMs), tyreMs, maxMs),
+                towed = p.towUntilMs ~= nil or nil,
+            },
+        }
+        -- not seen standing yet (a quick stop, the positions behind) : settled by watchPitStops
+        if not settlePitStop(session, p, now) then return end
     elseif action == "exit" then
         if not p.inPit then return end
         if p.towUntilMs and now < p.towUntilMs - GO_GRACE_MS then return end
@@ -3829,6 +3971,8 @@ local function racePit(ctxt, sessionId, action, elapsedMs, data)
                 pitPenalty(session, p, cfg.EntrySpeedPenalty * 1000, "transit")
             end
         end
+        -- a stop still waiting to be seen : now or never
+        settlePitStop(session, p, now, true)
         local stopped = p.pitStoppedPass == true
         creditPitSteps(session, race, p, elapsed)
         endPitPass(p)
@@ -3871,6 +4015,7 @@ end
 ---@param p BJRaceParticipant
 pitOnFinish = function(session, p)
     if not pitsOn(session) then return end
+    settlePitStop(session, p, services_clockSync.nowMs(), true)
     local s = session.settings
     local missing = (s.pitStops or 0) - (p.pitStops or 0)
     if missing > 0 and (s.pitMissingPenaltyS or 0) > 0 then
@@ -3975,10 +4120,15 @@ local function onInit()
     end, { hidden = true })
     -- tyres and repair kept apart (a reset with the old shape put back, all but the wheels or the
     -- wheels alone), on its own : /bjtyretest tyres|repair, your car where it stands. Only while the
-    -- experimental tyre changes are on (RacePits.ExperimentalTyres)
+    -- experimental tyre changes are on (RacePits.ExperimentalTyres), and for staff only (it's a
+    -- repair or new tyres anywhere)
     -- who ran the test last, and when (its shape may go out a moment later)
     local tyreTestAt = {}
     services_chatCommands.addCommand("bjtyretest", "chat.command.bjtyretest.desc", function(ctxt, args)
+        if not services_permissions.isStaff(ctxt.sender.playerName) then
+            return services_chat.directSend(ctxt.senderID,
+                services_lang.get("chat.command.error.noPermission", ctxt.sender.lang), services_chat.COLORS.ERROR)
+        end
         if not pitConfig().ExperimentalTyres then
             return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
                 services_lang.get("chat.command.bjtyretest.off", ctxt.sender.lang))

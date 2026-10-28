@@ -576,10 +576,11 @@ local function computeRenderSignature()
         -- watching nobody in particular : every gate, whatever anyone's progress
         return string.format("spectate:%s:%s", session.id, session.state)
     end
-    return string.format("%s:%s:%s:%s:%s:%s:%s:%s:%s:%s", session.id, session.state, participant.playerName,
+    return string.format("%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s", session.id, session.state, participant.playerName,
         tostring(participant.lastCrossedGate), tostring(participant.currentGate),
         tostring(participant.finished), tostring(participant.dnf), tostring(participant.pitSlot),
-        tostring(participant.inPit), tostring(beamjoy_racePits ~= nil and beamjoy_racePits.stop ~= nil))
+        tostring(participant.inPit), tostring(beamjoy_racePits ~= nil and beamjoy_racePits.stop ~= nil),
+        tostring(beamjoy_racePits ~= nil and beamjoy_racePits.inPit == true))
 end
 
 local lastRenderSignature = nil
@@ -731,15 +732,17 @@ local function render()
                     table.forEach(race.startPositions, function(s, i) drawStart(s, i, START_COLOR) end)
                 end
                 -- the pits (a race whose pits are usable) : the lane's lines, the line across it in
-                -- the lobby, every box ; your own green once you have one
+                -- the lobby ; the boxes only while your own car's in the lane (each is a marker the
+                -- game updates every frame), your own green
                 if settings.pits then
                     drawPitLane(race, nil, racing)
                     local slot = participant and participant.pitSlot
-                    boxes = pitBoxes(race, function(i)
+                    local inLane = beamjoy_racePits ~= nil and beamjoy_racePits.inPit == true
+                    boxes = inLane and pitBoxes(race, function(i)
                         if not slot then return BOX_EDITOR end
                         if i ~= slot then return BOX_OTHER end
-                        return beamjoy_racePits and beamjoy_racePits.stop and BOX_STOP or BOX_OWN
-                    end)
+                        return beamjoy_racePits.stop and BOX_STOP or BOX_OWN
+                    end) or nil
                 end
                 hasContent = true
             end

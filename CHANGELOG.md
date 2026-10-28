@@ -22,6 +22,15 @@ Server build 2488, client build 2761 (main got its own 2749, 2751, then 2752 for
     work is done : fuel (5 % of the tank a second by default, any car), and a repair timed by the
     car's damage (the share of its value the game counts as damaged, up to the race's repair time ;
     provisional until the crash tests set the curve). Resets keep the fuel in a race with pits.
+  - **The server checks the stop** (from the security review : the racer's game times its own
+    stop). Only the racer's game knows the car's damage, so the work's time it reports is taken
+    (never under the tyre change's time, never over the race's longest stop), and the server makes
+    sure the car stood in its box that long, from BeamMP's positions (nothing more is sent). Lag or
+    a game hitch only make the server see the car arrive a little late or stand a little longer, so
+    a stop may come up to 3 s short ; beyond that, what's missing is added as a penalty. A stop the
+    server never sees the car stand for doesn't count.
+  - **Pit boxes are only shown while your car is in the pit lane** (direct request ; each box is a
+    marker the game updates every frame).
   - **The pit menu**, from the race HUD : refuel (litres or gallons, as the game's units, kWh for a
     battery ; never more than fits), repair, the stop's time, the parts behind the repair. D-pad only,
     so the face buttons stay the car's : hold right to confirm, left to cancel, half a second each
@@ -36,7 +45,12 @@ Server build 2488, client build 2761 (main got its own 2749, 2751, then 2752 for
     phase. **Server config** (Config > General > Pits) : the pit entry speed penalty and its
     tolerance.
   - **Plugin API** : `RacerPitEntry`, `RacerPitStop`, `RacerPitExit`, `RacerPitPenalty`,
-    `RacerPitTow`, `RacerPitReturned`.
+    `RacerPitTow`, `RacerPitReturned`. A stop's numbers in `RacerPitStop` are bounded, and say
+    refuel or repair only when the race allows them (they come from the racer's game) ;
+    `servedMs` is how long the server saw the car stand in its box. `RacerPitPenalty`'s reason
+    `stopShort` for a stop short of its work.
+  - The same pit entry reported again no longer sends every racer an update (from the security
+    review : a modified game could repeat it).
   - Start fuel at 100 % leaves the tank as the car's tuning set it.
   - `/bjdamage` (hidden) shows the car's damage readings, for the repair-time tests.
 
@@ -91,7 +105,7 @@ Server build 2488, client build 2761 (main got its own 2749, 2751, then 2752 for
     tyres and passes the choice on, in `RacerPitStop` (`tyres`, `tyreOption`) and in hooks in the
     racer's game (`onBJPitService`) and car (`onBJPitServiceStart` / `onBJPitServiceDone`), for a tyre
     mod to apply its compound, or keep its wear through a repair alone.
-  - `/bjtyretest tyres|repair` (hidden, switch on only) : a tyre change or a repair on its own, your
+  - `/bjtyretest tyres|repair` (hidden, staff only, switch on only) : a tyre change or a repair on its own, your
     car where it stands, with its damage measured before and after.
   - Known : in 1 test run of 3 a tyre change counted about 60 more broken beams than the car had
     (5.4 % damage read as 10.2 %), the others matched. Under watch while it's experimental.

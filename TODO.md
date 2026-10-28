@@ -9,6 +9,9 @@ belongs in CHANGELOG.md, not here.
 
 Built (see CHANGELOG), not yet tried live. Newest first.
 
+- pit stop check (server, no bump yet) : a stop with fuel and a repair : no penalty, no "not
+  counted" toast, also with a laggy connection ; the pit boxes show only once you're through PIT IN
+  (and from the green light on a start from the pits), gone after PIT OUT ;
 - plugin API race control (server 2487, client 2759) : `api/example/BJRaceDirector` with RACE_ID set
   and EVERY_MIN at 1 : its lobby listed under "Open race", joinable, held till its time's up, then
   started ; a reset past the two free ones gives a 5 s penalty (the red tag on the HUD, the toast
@@ -151,6 +154,17 @@ paste are built ; this is the part left.
 
 A profile's side (a kerb sloped toward the track only), tilting with the ground across the path
 (it's sunk 0.4 m instead), a tyre-wall profile, eyedropping a whole sweep.
+
+## Races: pits: the lane's speed, checked by the server
+
+From the pit system's security review (2026-10-28). The lane's speed is the racer's game's : its
+reported speed at PIT IN (`racePit` "entry", `speedKmh`) and the game's own limiter, both in the
+racer's game. The server only checks the average from PIT IN to PIT OUT over their straight-line
+distance (the "transit" penalty), which a curved lane leaves slack in. BeamMP's positions carry the
+car's velocity (`MP.GetPositionRaw`'s `vel`) : `watchPitStops` in raceGrid.lua already reads them
+every 100 ms for racers in the lane, so it could also note a car over `speedLimitKmh +
+SpeedTolerance` for more than about a second (BeamMP's updates lag and jitter : a single sample
+mustn't count) and give the entry speed penalty once a pass, as the transit check does.
 
 ## Vehicle presets: shared builds: if wanted
 

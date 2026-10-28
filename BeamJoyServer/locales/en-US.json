@@ -288,6 +288,8 @@
     "race.pit.entrySpeed": "Pit entry too fast ({speed} km/h, the limit is {limit}) : a {seconds} s penalty",
     "race.pit.transit": "Too fast through the pit lane : a {seconds} s penalty",
     "race.pit.missingStops": "Required pit stops missed ({missing}) : a {seconds} s penalty",
+    "race.pit.stopShort": "Pit stop shorter than its work : a {seconds} s penalty",
+    "race.pit.stopNotSeen": "Pit stop not counted : your car wasn't seen standing in its box",
     "race.cancelledByHost": "This race was cancelled",
     "race.cancelledByHostReason": "This race was cancelled : {reason}",
     "race.joinBlocked": "You can't join this race : {reason}",

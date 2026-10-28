@@ -445,9 +445,9 @@ Names are display names, not permanent IDs: a guest can change their nickname.
 | `RacerReset` | `{sessionId, ..., at, racer, lap, lastGate?, respawn, penaltyMs?, holdS?}` : a racer reset |
 | `RacePositionsChanged` | `{sessionId, ..., at, changes: [{racer, from, to}]}` : places changed |
 | `RacerPitEntry` | `{sessionId, ..., at, racer, lap, speedKmh}` : in through PIT IN |
-| `RacerPitStop` | `{sessionId, ..., at, racer, lap, fuelL, repair, tyres?, tyreOption?, durationMs, towed?}` : a stop made in their box. `tyres` : new tyres (experimental tyre changes only), `tyreOption` : your set's `"plugin:id"` |
+| `RacerPitStop` | `{sessionId, ..., at, racer, lap, fuelL, repair, tyres?, tyreOption?, durationMs, servedMs, towed?}` : a stop made in their box, once the server saw the car standing there. `durationMs` : the work's time the racer's game reported (at least the tyres', at most the race's longest), `servedMs` : how long the server saw the car stand in its box. `tyres` : new tyres (experimental tyre changes only), `tyreOption` : your set's `"plugin:id"` |
 | `RacerPitExit` | `{sessionId, ..., at, racer, lap, stopped}` : out through PIT OUT |
-| `RacerPitPenalty` | `{sessionId, ..., at, racer, lap, reason, penaltyMs}` : `reason` `"entrySpeed"`, `"transit"` or `"missingStops"` |
+| `RacerPitPenalty` | `{sessionId, ..., at, racer, lap, reason, penaltyMs}` : `reason` `"entrySpeed"`, `"transit"`, `"missingStops"` or `"stopShort"` (a stop more than 3 s shorter than its work) |
 | `RacerPitTow` | `{sessionId, ..., at, racer, lap, holdMs, metres}` : towed to their box |
 | `RacerPitReturned` | `{sessionId, ..., at, racer, lap, towed}` : back in their box after the phase |
 | `RaceControl` | `{sessionId, ..., at, racer, action, ms?, penaltyMs, by, reason?}` : staff or a plugin stewarded a racer |
