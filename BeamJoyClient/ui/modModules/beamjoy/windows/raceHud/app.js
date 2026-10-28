@@ -18,7 +18,7 @@
 // when some are required, and your own pit line (the lane, your stop's progress, a tow's hold, the
 // plan) from beamjoy/racePits.lua (BJRacePitStatus).
 // ACTIONS : always there behind the Actions button (a click, or the Focus control, which also gives
-// the list the D-pad) : Tow to pits (a 2 s hold), Pit (the pit menu, windows/pitControl), Retire (a
+// the list the D-pad) : Pit (the pit menu, windows/pitControl), Tow to pits (a 2 s hold), Retire (a
 // 5 s hold), Close, one under the other.
 const RACE_HUD_LAYOUT_KEY = "beamjoy.raceHud.layout";
 const RACE_HUD_LAYOUTS = ["standard", "compact", "full", "off"];
@@ -330,6 +330,11 @@ angular.module("beamjoy").component("bjRaceHud", {
                 return { kind: "lane", title: translate("beamjoy.raceHud.pit.lane"), right: fill("beamjoy.raceHud.pit.limit", { n: s.limitKmh || 60 }) };
             }
             if (s.returnPending) return { kind: "return", title: translate("beamjoy.raceHud.pit.returnTitle"), text: translate("beamjoy.raceHud.pit.returnText") };
+            // on track, the lane closed by a plugin (pit.setLane) : going in costs a penalty
+            if (typeof s.closed === "number") {
+                return { kind: "closed", title: translate("beamjoy.raceHud.pit.closedTitle"),
+                    text: translate(s.closed > 0 ? "beamjoy.raceHud.pit.closedText" : "beamjoy.raceHud.pit.closedStayOut") };
+            }
             // on track : the stops still owed, and what the next one does
             if (s.required > 0) {
                 return {
@@ -437,8 +442,8 @@ angular.module("beamjoy").component("bjRaceHud", {
         // the list's buttons, top to bottom ; Close always last
         this.buttons = () => {
             const out = [];
-            if (this.canTow()) out.push("tow");
             if (this.canPit()) out.push("pit");
+            if (this.canTow()) out.push("tow");
             if (this.v && this.v.canRetire) out.push("retire");
             out.push("close");
             return out;

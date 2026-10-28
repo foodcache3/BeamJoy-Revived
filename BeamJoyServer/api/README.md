@@ -145,7 +145,7 @@ Every `map` param is optional and defaults to the map the server is on. Another 
 read from BeamJoy's saved files.
 
 Methods that change something (`race.*`, `phase.*`, `formats.*`, `environment.set`, `overlay.*`,
-`hud.message`, `hooks.*`, `raceOptions.*`, `tyres.*`, `results.setFields`, `leaderboard.setFields`,
+`hud.message`, `hooks.*`, `raceOptions.*`, `tyres.*`, `pit.*`, `results.setFields`, `leaderboard.setFields`,
 `config.*`, `pages.*`) need your plugin's name in the request's `from`. The helper always sends
 it.
 
@@ -168,6 +168,7 @@ it.
 | `gates` | how many gates |
 | `freeroam` | whether it can also be run from freeroam |
 | `vehicleRestriction` | `"free"`, `"single"` or `"pool"` |
+| `pits` | `{speedLimitKmh, boxes}` : its pit lane, when the race has one it can use (a circuit with both lines and a box for every grid slot) ; left out otherwise |
 | `options` | plugins' [race options](#race-options) as set for this race in the editor: `{plugin: {option: value}}` |
 | `times` | `{grid, freeroam}` : how many players have a time on each board |
 | `records` | `{grid, freeroam}` : each board's best entry, if any |
@@ -190,7 +191,7 @@ Every race of a map, with both boards in full (or only `board` when given). Made
 A session is `{sessionId, raceId, raceName, map, options, state, joinable, private, laps,
 timeLimitMin?, placementMode, gridSlots, greenAt?, endsAt?, timeUpAt?, breakEndsAt?, starter?,
 hostedBy?, hostName?, holdStart?, phaseIndex, phase, phaseCount, format?, phases, result,
-phaseResults, eventStandings?, racers: [racer]}`. `format` is a plugin's [format](#formats) it
+phaseResults, eventStandings?, pits?, racers: [racer]}`. `format` is a plugin's [format](#formats) it
 runs (`"plugin:id"`), if it does. `hostedBy` is the plugin whose lobby it is (`race.open`) : it has
 no `starter`.
 
@@ -202,8 +203,8 @@ no `starter`.
   the ones run so far (`[{phase, results}]`), `eventStandings` the event's result so far.
 - `racers` come in the phase's standings order. Each racer is `{id, racerKey, name, identity, away, vehicle,
   ready, readyChecking, readyBlock?, gridPosition?, position?, lap, finished, dnf, disqualified,
-  penaltyMs?, bestLapMs?, totalMs?, inPhase, startAt?, awaitingStart?, score?, scoreDisplay?,
-  fields}`. `inPhase` is false for a racer sitting the phase out (its `takes` left them out, or
+  penaltyMs?, bestLapMs?, totalMs?, inPhase, startAt?, awaitingStart?, inPit?, pitStops?, pitSlot?,
+  pitLaps?, tyreSet?, tyreSets?, score?, scoreDisplay?, fields}`. `inPhase` is false for a racer sitting the phase out (its `takes` left them out, or
   they're out of the event) ; `startAt` is a start of their own (a staggered start, their next
   run, a mid-phase join).
 - `options` is the plugins' [race options](#race-options) for this race: `{plugin: {option:
@@ -217,6 +218,16 @@ no `starter`.
   "racerKey"` : use it for anything you keep across a disconnect (points, resets, penalties). It's
   only that session's : another event starts its own.
 - `readyBlock` is `{reason, by}` when a plugin refused their last ready-up.
+- `pits` (a race with pits only) is `{speedLimitKmh, boxes, open, closedPenaltyMs?, experimentalTyres,
+  settings}` : the lane's limiter and boxes, whether it's open ([`pit.setLane`](#pitsetlane-sessionid-open-penaltys)),
+  whether the server's experimental tyre changes are on, and the phase under way's pit settings
+  (the [start's](#raceopen-raceid-options-name-holdstart-entrants) `pit*` keys and `startFuelPct`).
+- The racers' pit fields (a race with pits) : `inPit` in the pit lane now ; `pitStops` stops made
+  this phase ; `pitSlot` their box (a grid slot's number, theirs for the event) ; `pitLaps` the laps
+  the lane touched this phase (left out of best laps and the leaderboard) ; `tyreSet` `{option?,
+  fittedLap}` the tyres last fitted at a stop this phase (`option` your set's `"plugin:id"`, left out
+  for a plain new set) ; `tyreSets` the sets left to them ([`tyres.setAvailable`](#tyressetavailable-sessionid-playerid--racerkey-options)),
+  left out when they may fit any.
 - `greenAt`, and every `at` in the race events, is a moment as `{unixMs, clockMs}` (see
   [Times](#times)).
 
@@ -288,6 +299,13 @@ its time runs out. Then it starts with whoever's ready, or closes when nobody is
   `"raceDefined"`, `"pool"` with `vehicleRestrictionPoolPresetId`), `disableCollisions`,
   `lateJoin`, your [race options](#race-options) under `plugins`... What's left out is the race's
   own, as for any start.
+- The pits' (a race with pits ; ignored otherwise) : `pitStart` (start from the boxes), `pitGhost`
+  (cars ghosted in the lane), `pitStops` (stops required, 0 to 20) and `pitMissingPenaltyS` (each
+  missing one, 0 to 600), `pitRefuel`, `pitFuelRatePct` (% of the tank a second, 1 to 100),
+  `pitRepair`, `pitRepairMaxS` (a wrecked car's repair, 0 to 600), `pitTyres` and `pitTyreChangeS`
+  (0 to 120 ; the experimental tyre changes), `pitTow` (Tow to pits) and `pitTowSpeed` (km/h the tow's hold counts the way back at, 10 to 200),
+  `pitReturn` (back to the boxes after each phase), `startFuelPct` (the tank at the start, 5 to
+  100). A [phase](#phases)'s `rules` take them too.
 - `name`: what the lobby lists show instead of a leader's name ("League night"; your plugin's name
   by default).
 - `holdStart = true`: it starts only when its time's up or you say (`race.startNow`), not once
@@ -315,6 +333,22 @@ before). See [Race options](#race-options). → `{sections}`
 ### `tyres.register` `{options}` / `tyres.unregister`
 Your tyre sets for the pit menu (replacing any you registered before). See
 [Tyre options](#tyre-options). → `{options}`
+
+### `tyres.setAvailable` `{sessionId, playerId | racerKey, options?}`
+The sets one racer may fit at their stops (an allocation, a compound used up, one required for this
+stint) : `options` the sets' keys (`"plugin:id"`, or a bare id for one of yours), registered sets
+only ; an empty list leaves them none (Keep only). Left out (or `null`), they may fit any again.
+Their pit menu offers Keep and these only, and a stop with another set (or a plain new one) keeps
+their tyres. Kept for the whole event, the lobby included. → `{sessionId, playerId, racerKey,
+options}`. Error `refused` when the race has no pits or is over.
+
+### `pit.setLane` `{sessionId, open, penaltyS?}`
+Opens or closes the pit lane (a first lap, a safety car). Closed, going in through PIT IN costs
+`penaltyS` (0 to 600, default 10 ; 0 : no penalty, only shown) once each time in : a
+`RacerPitPenalty` with `reason` `"closed"`. A stop in the lane is made as usual. The session's racers
+are told, and their HUD shows it until it's open again. It stays as you set it until you change it,
+phases included. → `{sessionId, open, penaltyS?}`. Error `refused` when the race has no pits or is
+over.
 
 ### `results.setFields` `{sessionId, playerId | racerKey, fields, replace?}` / `{sessionId, racers, replace?, by?}`
 Labels on a racer's result in a race being run, shown in the game's results and in the race
@@ -447,7 +481,7 @@ Names are display names, not permanent IDs: a guest can change their nickname.
 | `RacerPitEntry` | `{sessionId, ..., at, racer, lap, speedKmh}` : in through PIT IN |
 | `RacerPitStop` | `{sessionId, ..., at, racer, lap, fuelL, repair, tyres?, tyreOption?, durationMs, servedMs, towed?}` : a stop made in their box, once the server saw the car standing there. `durationMs` : the work's time the racer's game reported (at least the tyres', at most the race's longest), `servedMs` : how long the server saw the car stand in its box. `tyres` : new tyres (experimental tyre changes only), `tyreOption` : your set's `"plugin:id"` |
 | `RacerPitExit` | `{sessionId, ..., at, racer, lap, stopped}` : out through PIT OUT |
-| `RacerPitPenalty` | `{sessionId, ..., at, racer, lap, reason, penaltyMs}` : `reason` `"entrySpeed"`, `"transit"`, `"missingStops"` or `"stopShort"` (a stop more than 3 s shorter than its work) |
+| `RacerPitPenalty` | `{sessionId, ..., at, racer, lap, reason, penaltyMs}` : `reason` `"entrySpeed"`, `"transit"`, `"missingStops"`, `"stopShort"` (a stop more than 3 s shorter than its work) or `"closed"` (in while [closed](#pitsetlane-sessionid-open-penaltys)) |
 | `RacerPitTow` | `{sessionId, ..., at, racer, lap, holdMs, metres}` : towed to their box |
 | `RacerPitReturned` | `{sessionId, ..., at, racer, lap, towed}` : back in their box after the phase |
 | `RaceControl` | `{sessionId, ..., at, racer, action, ms?, penaltyMs, by, reason?}` : staff or a plugin stewarded a racer |
@@ -631,7 +665,7 @@ A phase is :
 | `leaderboard` | its laps go on the race's leaderboard (default true) |
 | `countsToEvent` | part of the event's result (default true ; off for practice and qualifying) |
 | `breakS` | seconds of results after it (default 30) ; the leader can start the next one sooner |
-| `rules` | this phase's own `respawnStrategy`, `dnfEnabled`, `dnfTimeout`, `resetPenaltyEnabled`, `resetPenaltySeconds`, `resetPenaltyMode`, `ghostOnCountdown`, `disableCollisions`, `ghostBackmarkers`, `autoSpectateOnFinish` ; the rest are the event's |
+| `rules` | this phase's own `respawnStrategy`, `dnfEnabled`, `dnfTimeout`, `resetPenaltyEnabled`, `resetPenaltySeconds`, `resetPenaltyMode`, `ghostOnCountdown`, `disableCollisions`, `ghostBackmarkers`, `autoSpectateOnFinish`, and every pit setting (`pitStart`, `pitStops`... see [`race.open`](#raceopen-raceid-options-name-holdstart-entrants)) ; the rest are the event's |
 | `options` | your [race options](#race-options) `where = "phase"` (`plugins` when you send phases) |
 
 Up to 20 phases. The vehicle restriction, the anti-cheat settings and the lobby's are the event's.
@@ -795,7 +829,11 @@ instead of the race's Tyre change time.
 BeamJoy never changes the car's parts. It fits fresh tyres (flats fixed, the game's tyre state new)
 and keeps the car's damage, then passes the choice on:
 
-- `RacerPitStop` has `tyres = true` and `tyreOption = "yourPlugin:soft"`.
+- `RacerPitStop` has `tyres = true` and `tyreOption = "yourPlugin:soft"`, and the racer's `tyreSet`
+  in `races.sessions` is `{option = "yourPlugin:soft", fittedLap}` (the laps on it : their `lap`
+  minus `fittedLap`).
+- To limit what each racer may fit (allocations, a compound used up), use
+  [`tyres.setAvailable`](#tyressetavailable-sessionid-playerid--racerkey-options).
 - In the racer's game, the game-engine hook `onBJPitService(vehicleId, work)`, and in the car's
   own Lua `onBJPitServiceStart(work)` before its reset and `onBJPitServiceDone(work)` after it.
   `work` is `{tyres, repair, tyreOption}`, what happened to the car: a repair together with new tyres

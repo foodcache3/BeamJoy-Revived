@@ -896,14 +896,14 @@
         <span class="key">{{$ctrl.focusLabel || 'RB + X'}}</span>
     </div>
     <div class="hud-actions" ng-if="$ctrl.hasActions() && $ctrl.rowOpen()">
+        <button type="button" class="actbtn pit hold" ng-if="$ctrl.canPit()" ng-class="{cursor: $ctrl.isCursor('pit')}" ng-click="$ctrl.openPit()">
+            <span class="fill" ng-style="$ctrl.holdFill('pit')" aria-hidden="true"></span>
+            <span class="label">{{'beamjoy.raceHud.pitMenu' | translate}}</span>
+        </button>
         <button type="button" class="actbtn tow hold" ng-if="$ctrl.canTow()" ng-class="{cursor: $ctrl.isCursor('tow')}"
             ng-mousedown="$ctrl.startHold('tow')" ng-mouseup="$ctrl.stopHold()" ng-mouseleave="$ctrl.stopHold()">
             <span class="fill" ng-style="$ctrl.holdFill('tow')" aria-hidden="true"></span>
             <span class="label">{{$ctrl.towLabel()}}</span>
-        </button>
-        <button type="button" class="actbtn pit hold" ng-if="$ctrl.canPit()" ng-class="{cursor: $ctrl.isCursor('pit')}" ng-click="$ctrl.openPit()">
-            <span class="fill" ng-style="$ctrl.holdFill('pit')" aria-hidden="true"></span>
-            <span class="label">{{'beamjoy.raceHud.pitMenu' | translate}}</span>
         </button>
         <button type="button" class="actbtn danger hold" ng-if="$ctrl.v.canRetire" ng-class="{cursor: $ctrl.isCursor('retire')}"
             ng-mousedown="$ctrl.startHold('retire')" ng-mouseup="$ctrl.stopHold()" ng-mouseleave="$ctrl.stopHold()">

@@ -96,27 +96,51 @@ local function tyresApart(settings)
     return beamjoy_pits.experimentalTyres() and settings.pitTyres ~= false
 end
 
---- the server's plugins' tyre options : {key = "plugin:id", label, seconds?} each
+--- the sets a plugin left this racer (participant.pitTyreSets, the API's tyres.setAvailable), nil : all
+---@param participant table?
+---@return string[]?
+local function tyreSetsLeft(participant)
+    return participant and type(participant.pitTyreSets) == "table" and participant.pitTyreSets or nil
+end
+
+--- the server's plugins' tyre options : {key = "plugin:id", label, seconds?} each, only the ones left
+--- to this racer when a plugin chose them
+---@param participant table?
 ---@return table[]
-local function tyreOptions()
+local function tyreOptions(participant)
     local data = beamjoy_pluginUi and beamjoy_pluginUi.data
-    return data and type(data.tyres) == "table" and data.tyres or {}
+    local all = data and type(data.tyres) == "table" and data.tyres or {}
+    local left = tyreSetsLeft(participant)
+    if not left then return all end
+    local out = {}
+    for _, t in ipairs(all) do
+        for _, key in ipairs(left) do
+            if key == t.key then
+                out[#out + 1] = t
+                break
+            end
+        end
+    end
+    return out
 end
 
 --- the plan's tyres as a stop does them : nil (kept), or the set and how long fitting it takes
 ---@param settings table
+---@param participant table?
 ---@return {option: string?, label: string?, seconds: number}?
-local function tyreChoice(settings)
+local function tyreChoice(settings, participant)
     local choice = M.plan.tyres
     if not choice or not tyresApart(settings) then return nil end
     local seconds = settings.pitTyreChangeS or 10
     if type(choice) == "string" then
-        for _, t in ipairs(tyreOptions()) do
+        for _, t in ipairs(tyreOptions(participant)) do
             if t.key == choice then
                 return { option = t.key, label = t.label, seconds = tonumber(t.seconds) or seconds }
             end
         end
     end
+    -- the sets left to this racer only : none of them, the tyres kept (the server wouldn't count it)
+    if tyreSetsLeft(participant) then return nil end
     -- a plain new set (or a plugin's that's gone since)
     return { seconds = seconds }
 end
@@ -386,8 +410,9 @@ end
 ---@param settings table
 ---@param tanks table[]
 ---@param damage table? beamjoy_pits.measureDamage's
+---@param participant table? this racer (the tyre sets left to them)
 ---@return {energies: table<string, number>, fuelL: number, fuelMs: integer, repair: boolean, repairMs: integer, tyres: boolean, tyreOption: string?, tyreMs: integer, apart: boolean, damage: table?}
-function M.planWork(settings, tanks, damage)
+function M.planWork(settings, tanks, damage, participant)
     local work = { energies = {}, fuelL = 0, fuelMs = 0, repair = false, repairMs = 0, tyres = false, tyreMs = 0,
         apart = tyresApart(settings), damage = damage }
     local plan = M.plan
@@ -411,7 +436,7 @@ function M.planWork(settings, tanks, damage)
             work.repairMs = math.ceil(seconds * 1000)
         end
     end
-    local tyres = tyreChoice(settings)
+    local tyres = tyreChoice(settings, participant)
     if tyres then
         work.tyres, work.tyreOption = true, tyres.option
         work.tyreMs = math.ceil(math.max(0, tyres.seconds) * 1000)
@@ -521,7 +546,7 @@ local function startStop(ctx, myVeh)
     M.readTanks(myVeh, function(tanks)
         local function measured(damage)
             if M.stop ~= stop then return end
-            stop.work = M.planWork(ctx.settings, tanks, damage)
+            stop.work = M.planWork(ctx.settings, tanks, damage, ctx.participant)
             stop.endMs = GetCurrentTimeMillis() + stop.work.fuelMs + stop.work.tyreMs + stop.work.repairMs
         end
         if ctx.settings.pitRepair ~= false and M.plan.repair then
@@ -747,8 +772,10 @@ local function statusOf(ctx)
         refuel = s.pitRefuel ~= false,
         repair = s.pitRepair ~= false,
         tyres = tyresApart(s),
+        -- a plugin closed the pit lane (the API's pit.setLane) : going in costs this penalty (ms, maybe 0)
+        closed = type(ctx.session.pitClosed) == "table" and (tonumber(ctx.session.pitClosed.penaltyMs) or 0) or nil,
     }
-    local tyres = tyreChoice(s)
+    local tyres = tyreChoice(s, p)
     status.tyreLabel = tyres and tyres.label or nil
     if M.stop then
         status.stage = "stop"
@@ -808,7 +835,9 @@ local function pushMenu()
         -- the Tyres row : only with tyres apart from repairs (the server's experimental tyre changes)
         tyresAllowed = tyresApart(s),
         tyreS = s.pitTyreChangeS or 10,
-        tyreOptions = tyreOptions(),
+        tyreOptions = tyreOptions(p),
+        -- a plugin chose this racer's sets : Keep and those only (none : Keep alone)
+        tyreRestricted = tyreSetsLeft(p) ~= nil,
         plan = M.plan,
         tank = M.tankVid == (beamjoy_vehicles.getCurrentOwn() or {}).vid and M.tank or nil,
         damage = M.menuDamage,

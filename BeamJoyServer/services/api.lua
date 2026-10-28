@@ -189,6 +189,9 @@ local function raceOut(race)
         gates = type(race.gates) == "table" and #race.gates or 0,
         freeroam = race.freeroam == true,
         vehicleRestriction = race.vehicleRestrictionMode or "free",
+        -- its pit lane, when the pits can be used (services_races.pitsUsable) : the limiter, the boxes
+        pits = services_races.pitsUsable(race) and
+            { speedLimitKmh = race.pit.speedLimitKmh, boxes = #race.startPositions } or nil,
         -- plugins' own race options as set for this race in the editor : plugin -> option -> value
         options = race.defaults and type(race.defaults.plugins) == "table" and race.defaults.plugins or {},
         times = { grid = #grid, freeroam = #freeroam },
@@ -284,9 +287,15 @@ local function racerOut(p, session)
         startAt = p.startAtMs and stamp(p.startAtMs) or nil,
         -- a plugin's phase : waiting for the plugin to start them (race.startRacer)
         awaitingStart = p.awaitingStart == true or nil,
-        -- the pits (PIT_SYSTEM_PLAN.md) : in the pit lane, stops made this phase
+        -- the pits (PIT_SYSTEM_PLAN.md) : in the pit lane, stops made this phase, their box, the laps
+        -- the lane touched, the tyres last fitted (a plugin's set, on that lap) and the sets a plugin
+        -- left them (tyres.setAvailable)
         inPit = p.inPit == true or nil,
         pitStops = p.pitStops,
+        pitSlot = p.pitSlot,
+        pitLaps = p.pitLaps and table.clone(p.pitLaps) or nil,
+        tyreSet = p.pitTyreSet and { option = p.pitTyreSet.option, fittedLap = p.pitTyreSet.lap } or nil,
+        tyreSets = p.pitTyreSets and table.clone(p.pitTyreSets) or nil,
         -- a plugin's score this phase (phase.setScores)
         score = p.score,
         scoreDisplay = p.scoreDisplay,
@@ -390,6 +399,28 @@ local function phaseResultsOut(session)
     return out
 end
 
+--- a session's pits, when its race has them : the lane (its limiter, open or closed by a plugin), the
+--- phase under way's pit settings (services_races.PIT_SETTINGS), and whether the server's experimental
+--- tyre changes are on
+---@param session table BJRaceSession
+---@param race table? BJRace
+---@return table?
+local function pitsOut(session, race)
+    local s = session.settings
+    if not s or s.pits ~= true or not race or not race.pit then return nil end
+    local settings = {}
+    for key in pairs(services_races.PIT_SETTINGS) do settings[key] = s[key] end
+    local cfg = services_config.data.RacePits or {}
+    return {
+        speedLimitKmh = race.pit.speedLimitKmh,
+        boxes = #race.startPositions,
+        open = session.pitClosed == nil,
+        closedPenaltyMs = session.pitClosed and session.pitClosed.penaltyMs or nil,
+        experimentalTyres = cfg.ExperimentalTyres == true,
+        settings = settings,
+    }
+end
+
 ---@param session table BJRaceSession
 ---@return table
 local function sessionOut(session)
@@ -418,6 +449,7 @@ local function sessionOut(session)
     out.hostedBy = session.hostedBy
     out.hostName = session.hostedBy and session.hostName or nil
     out.holdStart = session.holdStart == true or nil
+    out.pits = pitsOut(session, race)
     out.racers = {}
     local racing = session.state == "RACE" or session.state == "BREAK" or session.state == "FINISHED"
     for i, p in ipairs(services_raceGrid.computeLeaderboard(session)) do
@@ -1102,6 +1134,61 @@ M.methods["tyres.unregister"] = function(_, ctx)
     return {}
 end
 
+local TYRE_SETS_MAX = 32
+
+--- the tyre sets one racer may fit at their stops (allocations, a compound used up) : `options` the
+--- sets' keys ("plugin:id", a bare id being the asking plugin's), registered ones only ; an empty list
+--- none ; left out (or null), every set again
+M.methods["tyres.setAvailable"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local session = findSession(params.sessionId)
+    if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
+    local playerID, code, err = racerIdParam(session, params)
+    if not playerID then return nil, code, err end
+    local keys
+    -- not absent() : an empty list is "none" here (null, or left out, decodes to nil)
+    if params.options ~= nil then
+        if type(params.options) ~= "table" or not (next(params.options) == nil or table.isArray(params.options)) then
+            return nil, "badParams", "options must be a list of tyre set keys"
+        end
+        if #params.options > TYRE_SETS_MAX then return nil, "badParams", "at most " .. TYRE_SETS_MAX .. " options" end
+        keys = {}
+        for i, key in ipairs(params.options) do
+            if type(key) ~= "string" then return nil, "badParams", "option " .. i .. " must be text" end
+            if not key:find(":", 1, true) then key = plugin .. ":" .. key end
+            if not services_pluginUi.tyreOption(key) then
+                return nil, "badParams", "option " .. i .. " (" .. key .. ") isn't a registered tyre set"
+            end
+            if not table.includes(keys, key) then keys[#keys + 1] = key end
+        end
+    end
+    local ok, why, p = services_raceGrid.pluginSetTyreSets(session, playerID, keys)
+    if not ok then return nil, "refused", why end
+    return { sessionId = session.id, playerId = p.playerID >= 0 and p.playerID or nil, racerKey = p.joinIndex,
+        options = keys }
+end
+
+--- the pit lane opened, or closed (a first lap, a safety car) : going in then costs `penaltyS`
+M.methods["pit.setLane"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local session = findSession(params.sessionId)
+    if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
+    if type(params.open) ~= "boolean" then return nil, "badParams", "open must be true or false" end
+    local penaltyS = 10
+    if not absent(params.penaltyS) then
+        penaltyS = tonumber(params.penaltyS)
+        if not penaltyS or penaltyS ~= penaltyS or penaltyS < 0 or penaltyS > 600 then
+            return nil, "badParams", "penaltyS must be between 0 and 600"
+        end
+    end
+    local penaltyMs = math.floor(penaltyS * 1000 + .5)
+    local ok, why = services_raceGrid.pluginSetPitLane(session, params.open, penaltyMs, plugin)
+    if not ok then return nil, "refused", why end
+    return { sessionId = session.id, open = params.open, penaltyS = not params.open and penaltyMs / 1000 or nil }
+end
+
 --- labels on a racer's result in a race being run (and on the leaderboard entry it set, if it did),
 --- or on several racers' at once (`racers`)
 M.methods["results.setFields"] = function(params, ctx)
@@ -1672,7 +1759,7 @@ local PIT_EVENTS = { entry = "RacerPitEntry", stop = "RacerPitStop", exit = "Rac
 
 --- a racer and the pits (raceGrid.lua's racePit) : in through PIT IN (`speedKmh`), a stop made
 --- (`fuelL`, `repair`, `tyres`, `tyreOption`, `durationMs`, `servedMs`, `towed`), out through PIT OUT (`stopped`), a pit
---- penalty (`reason` "entrySpeed"|"transit"|"missingStops"|"stopShort", `penaltyMs`), a tow (`holdMs`, `metres`), back
+--- penalty (`reason` "entrySpeed"|"transit"|"missingStops"|"stopShort"|"closed", `penaltyMs`), a tow (`holdMs`, `metres`), back
 --- in their box after the phase (`towed`)
 ---@param session table BJRaceSession
 ---@param p table BJRaceParticipant

@@ -13,7 +13,7 @@
 // battery's in kWh. The plan keeps a share of the tank (racePits.lua's plan.fuelAdd, 1 : fill up).
 // The Tyres row only shows with the server's experimental tyre changes on (and the race allowing
 // them) : Keep or a new set, or Keep and each of the server's plugins' sets (plan.tyres : false, true,
-// or "plugin:id").
+// or "plugin:id"), or Keep and the sets a plugin left this racer (the API's tyres.setAvailable).
 const PIT_GALLON_L = 3.785411784;
 
 angular.module("beamjoy").service("beamjoyPitFormat", function () {
@@ -71,11 +71,15 @@ angular.module("beamjoy").component("bjPitControl", {
         const refuelOn = () => !!this.d && this.d.refuelAllowed && this.plan.refuel;
         // the plugins' tyre sets ({key, label, seconds?}) ; an empty list comes from Lua as {}
         const tyreOptions = () => (this.d && Array.isArray(this.d.tyreOptions) ? this.d.tyreOptions : []);
-        // what the Tyres row steps through : Keep, then a new set or each plugin's set
+        // what the Tyres row steps through : Keep, then a new set or each plugin's set ; the sets a
+        // plugin left this racer only when it chose them (tyreRestricted : none, Keep alone)
         const tyreChoices = () => {
             const options = tyreOptions();
+            if (this.d && this.d.tyreRestricted) return [false, ...options.map((o) => o.key)];
             return options.length > 0 ? [false, ...options.map((o) => o.key)] : [false, true];
         };
+        // the plan's tyres as this racer can have them (a set no longer theirs : Keep)
+        const tyresPick = () => (this.d && this.d.tyreRestricted && !tyreChoices().includes(this.plan.tyres) ? false : this.plan.tyres);
         // the rows the cursor stops on
         const rows = () => {
             const out = [];
@@ -100,7 +104,7 @@ angular.module("beamjoy").component("bjPitControl", {
                 fuelLabel: translate(battery() ? "beamjoy.race.pitMenu.recharge" : "beamjoy.race.pitMenu.refuel"),
                 fuelOn: refuelOn(),
                 repairOn: d.repairAllowed && this.plan.repair,
-                tyresOn: !!d.tyresAllowed && !!this.plan.tyres,
+                tyresOn: !!d.tyresAllowed && !!tyresPick(),
             };
             // the fuel : what's in, what this stop adds (capped at the room left), how long
             const add = refuelOn() ? Math.max(0, Math.min(1, this.plan.fuelAdd)) : 0;
@@ -127,8 +131,9 @@ angular.module("beamjoy").component("bjPitControl", {
             const dmg = d.damage;
             v.repairS = v.repairOn && dmg ? Number(dmg.seconds) || 0 : 0;
             // the tyres : the set, its time, the flats, a wheel torn off (new tyres don't put it back)
-            const option = typeof this.plan.tyres === "string" ? tyreOptions().find((o) => o.key === this.plan.tyres) : null;
-            v.tyreText = !this.plan.tyres ? translate("beamjoy.race.pitMenu.tyresKeep")
+            const pick = tyresPick();
+            const option = typeof pick === "string" ? tyreOptions().find((o) => o.key === pick) : null;
+            v.tyreText = !pick ? translate("beamjoy.race.pitMenu.tyresKeep")
                 : option ? option.label : translate("beamjoy.race.pitMenu.tyresNew");
             v.tyreS = v.tyresOn ? Number(option && option.seconds != null ? option.seconds : d.tyreS) || 0 : 0;
             v.tyreSText = `+${v.tyreS.toFixed(1)} s`;

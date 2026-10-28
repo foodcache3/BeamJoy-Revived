@@ -36,7 +36,7 @@ Server build 2488, client build 2761 (main got its own 2749, 2751, then 2752 for
     so the face buttons stay the car's : hold right to confirm, left to cancel, half a second each
     (direct request : quicker).
   - **The race HUD's Actions** are always shown (Shift + J by default, or a click) : Race info,
-    Pit, Tow to pits, Retire, one under the other ; a pick on the pad is a hold. Pit and Close (or
+    Pit (first, where the pad starts), Tow to pits, Retire, one under the other ; a pick on the pad is a hold. Pit and Close (or
     left held) are half a second (direct request : as quick as the menu's Confirm), Tow 2 s, Retire
     5 s.
   - **Race settings** (start menu, lobby, race editor and each phase) : start from the pits,
@@ -49,6 +49,17 @@ Server build 2488, client build 2761 (main got its own 2749, 2751, then 2752 for
     refuel or repair only when the race allows them (they come from the racer's game) ;
     `servedMs` is how long the server saw the car stand in its box. `RacerPitPenalty`'s reason
     `stopShort` for a stop short of its work.
+  - **Plugin API, more for pits and tyres** (direct request : "do 1-4") :
+    - `races.list` races have `pits` (the lane's limit, the boxes) ; `races.sessions` sessions have
+      `pits` (open or closed, the phase's pit settings, the experimental tyre changes) and racers
+      `pitSlot`, `pitLaps`, `tyreSet` (the tyres last fitted, on which lap) and `tyreSets`.
+    - `tyres.setAvailable` : the sets one racer may fit (allocations, a compound used up). Their pit
+      menu offers Keep and those only ; the server keeps the tyres on a stop with any other.
+    - `pit.setLane` : a plugin closes the pit lane (a first lap, a safety car) ; going in then costs
+      its penalty (`RacerPitPenalty` reason `closed`), the racers are told and their HUD shows
+      PIT CLOSED.
+    - The README now lists the pit settings `race.open` and a phase's `rules` already took, and the
+      racers' `inPit` and `pitStops`.
   - The same pit entry reported again no longer sends every racer an update (from the security
     review : a modified game could repeat it).
   - Start fuel at 100 % leaves the tank as the car's tuning set it.

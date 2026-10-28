@@ -134,6 +134,10 @@
 ---@field pitStops integer? stops made this phase
 ---@field pitLaps integer[]? the laps the pit lane touched this phase (the one they went in on and the
 ---next) : left out of best lap, best sectors and the leaderboard
+---@field pitTyreSet {option: string?, lap: integer}? the tyres last fitted at a stop this phase : a
+---plugin's set ("plugin:id", nil a plain one), on that lap
+---@field pitTyreSets string[]? the plugins' sets this racer may fit ("plugin:id" each), set by a plugin
+---(the API's tyres.setAvailable) ; nil : every set. Kept for the event
 ---@field towUntilMs integer? towed to the pits : held in their box until then (the shared clock)
 ---@field pitReturnPending true? finished, asked back to their box before the next phase (pitReturn)
 ---@field pitReturned true? back in their box after the phase
@@ -270,6 +274,8 @@
 ---@field hostedBy string? a lobby a plugin opened (the plugin API's race.open) : no leader, and it
 ---stays open while empty, until its time runs out
 ---@field hostName string? that lobby's name where a leader's would be ("League night")
+---@field pitClosed {penaltyMs: integer}? the pit lane closed by a plugin (the API's pit.setLane) : going
+---in costs penaltyMs. Kept until it's opened again
 ---@field holdStart boolean? that lobby starts only when its time's up or the plugin says
 ---(race.startNow), not once everyone's been ready a moment
 ---@field entrants table<integer, true>? that lobby's entry list (player IDs) : only they may join
@@ -2529,7 +2535,7 @@ local function resetForPhase(p)
     p.outLapPending = nil
     -- the pits : their box (pitSlot) is theirs for the event, the rest was the last phase's
     endPitPass(p)
-    p.pitStops, p.pitLaps, p.pitReturnPending, p.pitReturned = nil, nil, nil, nil
+    p.pitStops, p.pitLaps, p.pitReturnPending, p.pitReturned, p.pitTyreSet = nil, nil, nil, nil, nil
     p.lastProgressTime = GetCurrentTime()
 end
 
@@ -3585,6 +3591,53 @@ local function pluginControlRacer(session, playerID, action, ms, plugin, reason)
     return true, nil, p, change
 end
 
+--- the plugins' tyre sets a racer may fit at their stops (the plugin API's tyres.setAvailable) :
+--- `keys` ("plugin:id" each, checked by the API ; empty : none), nil every set. Kept for the event
+---@param session BJRaceSession
+---@param playerID integer
+---@param keys string[]?
+---@return boolean ok, string? why not, BJRaceParticipant? p
+local function pluginSetTyreSets(session, playerID, keys)
+    if not pitsOn(session) then return false, "this race has no pits" end
+    if session.state == "FINISHED" then return false, "the race is over" end
+    local p = session.participants[playerID]
+    if not p then return false, "that player isn't in this race" end
+    p.pitTyreSets = keys
+    pushSessionUpdate(session, true)
+    return true, nil, p
+end
+
+--- the pit lane opened or closed by a plugin (the plugin API's pit.setLane) : closed, going in costs
+--- `penaltyMs` (the entry, once a pass). Its racers told
+---@param session BJRaceSession
+---@param open boolean
+---@param penaltyMs integer
+---@param plugin string
+---@return boolean ok, string? why not
+local function pluginSetPitLane(session, open, penaltyMs, plugin)
+    if not pitsOn(session) then return false, "this race has no pits" end
+    if session.state == "FINISHED" then return false, "the race is over" end
+    local was = session.pitClosed ~= nil
+    session.pitClosed = not open and { penaltyMs = penaltyMs } or nil
+    if was == not open then
+        -- the same state : only the penalty may have changed, nobody told again
+        pushSessionUpdate(session, true)
+        return true
+    end
+    LogInfo(string.format("raceGrid: %s : pit lane %s (session %s)", plugin, open and "opened" or "closed", session.id))
+    session.participants:forEach(function(p)
+        local target = services_players.players:find(function(pl) return pl.playerID == p.playerID end)
+        if target then
+            communications_tx.sendToPlayer(p.playerID, "toast", open and "info" or "warning",
+                services_lang.get(open and "race.pit.laneOpened" or
+                    penaltyMs > 0 and "race.pit.laneClosed" or "race.pit.laneClosedFree", target.lang)
+                :var({ seconds = penaltySecondsText(penaltyMs) }))
+        end
+    end)
+    pushSessionUpdate(session, true)
+    return true
+end
+
 -- one reset, however many times the client reports it (a held key, the reset settling)
 local RESET_DEBOUNCE_MS = 1500
 
@@ -3673,7 +3726,7 @@ end
 ---@param session BJRaceSession
 ---@param p BJRaceParticipant
 ---@param ms integer
----@param reason "entrySpeed"|"transit"|"missingStops"
+---@param reason "entrySpeed"|"transit"|"missingStops"|"stopShort"|"closed"
 ---@param vars table? the message's
 local function pitPenalty(session, p, ms, reason, vars)
     if ms <= 0 then return end
@@ -3738,6 +3791,7 @@ settlePitStop = function(session, p, now, final)
         return true
     end
     p.pitStops = (p.pitStops or 0) + 1
+    if claim.data.tyres then p.pitTyreSet = { option = claim.data.tyreOption, lap = p.currentLap } end
     local servedMs = claim.unchecked and claim.data.durationMs or
         math.max(0, math.min(claim.atMs, st.lastMs) - st.fromMs)
     claim.data.servedMs = servedMs
@@ -3902,6 +3956,8 @@ local function racePit(ctxt, sessionId, action, elapsedMs, data)
             markPitLap(p, p.currentLap + 1)
             local speedKmh = tonumber(data.speedKmh)
             apiEvent("racerPit", session, p, "entry", { speedKmh = speedKmh and math.clamp(speedKmh, 0, PIT_SPEED_MAX_KMH) })
+            -- the lane closed by a plugin (pit.setLane) : going in costs its penalty
+            if session.pitClosed then pitPenalty(session, p, session.pitClosed.penaltyMs, "closed") end
         end
         local speed, limit = tonumber(data.speedKmh), pit.speedLimitKmh + cfg.SpeedTolerance
         local penalized = false
@@ -3931,6 +3987,10 @@ local function racePit(ctxt, sessionId, action, elapsedMs, data)
         local tyres = data.tyres == true and cfg.ExperimentalTyres == true and s.pitTyres ~= false
         local option = tyres and services_pluginUi.tyreOption(data.tyreOption) or nil
         local tyreOption = option and data.tyreOption or nil
+        -- a plugin chose this racer's sets (tyres.setAvailable) : one of them, or the tyres kept
+        if tyres and p.pitTyreSets and not (tyreOption and table.includes(p.pitTyreSets, tyreOption)) then
+            tyres, option, tyreOption = false, nil, nil
+        end
         -- the stop's time : the racer's game's (the damage only it knows), at least the tyres' (the
         -- server knows that one) and at most the longest work the race allows
         local tyreMs = tyres and math.floor((tonumber(option and option.seconds) or s.pitTyreChangeS or 10) * 1000) or 0
@@ -4442,6 +4502,8 @@ M.pluginStopRacer = pluginStopRacer
 M.pluginSetScores = pluginSetScores
 M.participantByKey = participantByKey
 M.pluginControlRacer = pluginControlRacer
+M.pluginSetTyreSets = pluginSetTyreSets
+M.pluginSetPitLane = pluginSetPitLane
 M.pluginOpen = pluginOpen
 M.pluginClose = pluginClose
 M.pluginStartNow = pluginStartNow
