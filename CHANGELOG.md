@@ -8,7 +8,7 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2488, client build 2761 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2489, client build 2762 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
 
 - **Pits for circuit races (work in progress, no version bump yet)** (direct request). A race's pit
   lane is drawn in the race editor (PIT IN and PIT OUT lines, where it leaves and rejoins the route,
