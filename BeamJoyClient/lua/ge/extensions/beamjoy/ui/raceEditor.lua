@@ -1004,7 +1004,8 @@ local function backfillRaceDefaults(race)
     if race.defaults.randomizeVehiclePool == nil then race.defaults.randomizeVehiclePool = false end
     -- mirrors services/races.lua's own RESPAWN_STRATEGIES values (no shared constant across the
     -- Lua/JS split here, same as this file's other hand-synced mirrors, e.g. deriveStepsFromParents)
-    if not table.includes({ "all", "norespawn", "lastcheckpoint" }, race.defaults.respawnStrategy) then
+    if not table.includes({ "all", "norespawn", "lastcheckpoint", "inplace", "flipupright", "lastroad" },
+            race.defaults.respawnStrategy) then
         race.defaults.respawnStrategy = "lastcheckpoint"
     end
     if race.defaults.placementMode == nil then race.defaults.placementMode = "random" end

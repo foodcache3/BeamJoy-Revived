@@ -1,5 +1,5 @@
 ---@alias BJRaceMode "grid"|"passive"
----@alias BJRaceRespawnStrategy "all"|"norespawn"|"lastcheckpoint"|"flipupright"|"lastroad"
+---@alias BJRaceRespawnStrategy "all"|"norespawn"|"lastcheckpoint"|"inplace"|"flipupright"|"lastroad"
 ---@alias BJRacePlacementMode "deterministic"|"random"|"manual"
 
 ---@class BJRaceGate
@@ -267,6 +267,10 @@ local M = {
         ALL = "all",
         NORESPAWN = "norespawn",
         LASTCHECKPOINT = "lastcheckpoint",
+        -- every reset or recover becomes the game's own reset where the car stands (direct
+        -- request) : rebuilt and repaired on the spot, facing the way it was, so no ground is
+        -- gained and no checkpoint is gone back to. Unlike FLIPUPRIGHT, which keeps the damage
+        INPLACE = "inplace",
         -- every reset or recover becomes the game's flip upright (where the car is) or its recover
         -- to last road, whatever was pressed (raceRunner.lua's onBJRequestCurrentVehicleReset)
         FLIPUPRIGHT = "flipupright",

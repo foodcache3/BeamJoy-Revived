@@ -55,10 +55,13 @@ local function getAuthReturnCode(playerName)
         end
     end
 
+    -- whitelist.json read again first, in case it was edited outside BeamJoy
+    services_config.refreshWhitelist()
     if services_config.data.Whitelist.Enabled then
         if not playerName then
-            services_lang.get("auth.guestNotWhitelisted", services_lang.defaultLang)
-        elseif not table.includes(services_config.data.Whitelist.PlayerNames, playerName) and
+            -- the return was missing, so guests got in with the whitelist on
+            return services_lang.get("auth.guestNotWhitelisted", services_lang.defaultLang)
+        elseif not services_config.isWhitelisted(playerName) and
             not groupWhitelisted and not staff then
             return services_lang.get("auth.notWhitelisted", services_lang.defaultLang)
         end

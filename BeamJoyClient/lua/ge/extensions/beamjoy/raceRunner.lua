@@ -3637,20 +3637,32 @@ local function onBJClientReady()
     beamjoy_communications.send("raceRejoin")
 end
 
---- the "flipupright" / "lastroad" respawn options : the one recovery every reset becomes. Both
---- keep the car's damage, like the pause menu's own buttons for them. The game's functions as they
---- were before beamjoy_inputs wrapped them, so this doesn't come back through the reset gate
----@param strategy "flipupright"|"lastroad"
+--- the "flipupright" / "lastroad" / "inplace" respawn options : the one recovery every reset
+--- becomes. "flipupright" and "lastroad" keep the car's damage, like the pause menu's own buttons
+--- for them ; "inplace" is the game's own reset where the car stands, so it repairs (safeTeleport's
+--- resetVehicle, as beamjoy_pits.resetInPlace does it). The game's functions as they were before
+--- beamjoy_inputs wrapped them, so this doesn't come back through the reset gate
+---@param strategy "flipupright"|"lastroad"|"inplace"
 ---@param mpVeh BJVehicle
 local function forceResetAction(strategy, mpVeh)
     local base = beamjoy_inputs.baseFunctions and beamjoy_inputs.baseFunctions.extensions and
         beamjoy_inputs.baseFunctions.extensions.spawn
     if not base then return end
     local veh = mpVeh.veh
-    if strategy == "flipupright" then
+    if strategy == "flipupright" or strategy == "inplace" then
         if base.safeTeleport then
-            base.safeTeleport(veh, veh:getPosition(), quatFromDir(veh:getDirectionVector()),
-                nil, nil, nil, nil, false)
+            local dir = veh:getDirectionVector()
+            if strategy == "inplace" then
+                -- flat, as recoveryPolicy's own in-place recovery does it : a reset puts the car
+                -- back at the rotation it's given, so a car nose-down in a ditch would be rebuilt
+                -- nose-down
+                dir = vec3(dir.x, dir.y, 0)
+                if dir:length() < 1e-4 then dir = vec3(0, 1, 0) end
+                dir = dir:normalized()
+            end
+            -- "inplace" resets the car (it repairs), "flipupright" only puts it back on its wheels
+            base.safeTeleport(veh, veh:getPosition(), quatFromDir(dir),
+                nil, nil, nil, nil, strategy == "inplace")
         end
     elseif base.teleportToLastRoad then
         base.teleportToLastRoad(veh, { resetVehicle = false })
@@ -3706,9 +3718,10 @@ local function onBJRequestCurrentVehicleReset(req, resetType, mpVeh)
     if not participant or participant.finished or participant.dnf or participant.sittingOut then return end
 
     local strategy = M.session.settings.respawnStrategy
-    -- "flipupright" / "lastroad" : whatever was pressed (a rewind, a physics reset, a reload, the
-    -- other recovery button...), the native one never runs, the forced recovery does instead
-    if strategy == "flipupright" or strategy == "lastroad" then
+    -- "flipupright" / "lastroad" / "inplace" : whatever was pressed (a rewind, a physics reset, a
+    -- reload, the other recovery button...), the native one never runs, the forced recovery does
+    -- instead
+    if strategy == "flipupright" or strategy == "lastroad" or strategy == "inplace" then
         req.state = false
         applyResetPenalty(mpVeh.vid)
         -- in the pit lane, its "last road" is the box (the road found could be the track beside it),

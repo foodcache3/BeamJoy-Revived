@@ -8,8 +8,8 @@
 --- shipped as part of the mod package itself (plain files, the exact same array-of-race/arena
 --- schema `BeamJoyData/db/activities/` already uses, no conversion needed unlike the Legacy Import
 --- path, which parses a different, older BJI schema). `sync()` mirrors that folder into
---- `BeamJoyData/db/bundled/` on every boot (always fully overwritten, never meant to be admin-
---- edited), so :
+--- `BeamJoyData/db/bundled/` on every boot (whatever differs is written again, never meant to be
+--- admin-edited), so :
 ---   - it survives independently of wherever the mod happens to be installed (BJSPluginPath),
 ---   - an admin can inspect exactly what the current mod version ships, right under their own
 ---     BeamJoyData folder, without digging into the plugin's own install directory,
@@ -128,23 +128,51 @@ local function listMapsForType(activityType)
     return maps
 end
 
+---@param path string
+---@return string? the whole file, or nil if it isn't there
+local function readAll(path)
+    local file = io.open(path, "rb")
+    if not file then return nil end
+    local text = file:read("*a")
+    file:close()
+    return text
+end
+
 --- mirrors every file from the mod's own shipped bundledContent/activities folder into
---- BeamJoyData/db/bundled/, fully overwriting the destination first : this folder is never meant
---- to be admin-edited, treat it as a pure reflection of whatever's currently installed, including
---- a file a newer mod version removed entirely (mirrored deletion, same "the package IS the
---- truth" convention this codebase's own BJ.zip client deploy already follows)
+--- BeamJoyData/db/bundled/ : this folder is never meant to be admin-edited, treat it as a pure
+--- reflection of whatever's currently installed, including a file a newer mod version removed
+--- entirely (mirrored deletion, same "the package IS the truth" convention this codebase's own
+--- BJ.zip client deploy already follows).
+---
+--- Each file is written in place, and only when its bytes differ (direct report : BeamMP's own
+--- plugin hot reload monitor watches every file under Resources/Server, BeamJoyData included, so
+--- emptying this folder first and copying the same files straight back made it warn
+--- `"...bundled/<map>_races.json" couldn't be accessed, so it was removed from plugin hot reload
+--- monitor` for every one of them, on every boot). The mirror ends up exactly as it did before,
+--- just without deleting what it's about to write again
 function sync()
     local dest = destPath()
-    if FS.Exists(dest) then
-        for _, filename in pairs(FS.ListFiles(dest)) do
-            FS.Remove(dest .. "/" .. filename)
+    if not FS.Exists(dest) then FS.CreateDirectory(dest) end
+    local shipped = {}
+    if FS.Exists(M.sourcePath) then
+        for _, filename in pairs(FS.ListFiles(M.sourcePath)) do
+            shipped[filename] = true
+            local text = readAll(M.sourcePath .. "/" .. filename)
+            local to = dest .. "/" .. filename
+            if text and text ~= readAll(to) then
+                local file = io.open(to, "wb")
+                if file then
+                    file:write(text)
+                    file:close()
+                else
+                    LogWarn(string.format("bundled content: %s not mirrored", filename))
+                end
+            end
         end
-    else
-        FS.CreateDirectory(dest)
     end
-    if not FS.Exists(M.sourcePath) then return end
-    for _, filename in pairs(FS.ListFiles(M.sourcePath)) do
-        FS.Copy(M.sourcePath .. "/" .. filename, dest .. "/" .. filename)
+    -- what this mod version doesn't ship any more
+    for _, filename in pairs(FS.ListFiles(dest)) do
+        if not shipped[filename] then FS.Remove(dest .. "/" .. filename) end
     end
 end
 

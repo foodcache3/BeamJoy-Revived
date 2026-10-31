@@ -12,7 +12,9 @@
 ---@field IntroPanel {enabled: boolean, title: string, content: string, image: string?, onlyFirstConnection: boolean}
 ---@field DiscordChatHookLang string?
 ---@field Broadcasts {enabled: boolean, delay: integer, messages: table<string, string>[]}
----@field Whitelist table?
+---@field Whitelist {Enabled: boolean, PlayerNames: string[]} kept in its own file,
+---BeamJoyData/db/whitelist.json (dao/whitelist.lua), never in config.json ; re-read when it
+---changes on disk (refreshWhitelist), so it can be edited there while the server runs
 ---@field Freeroam {TeleportDelay: integer, CollisionsMode: "forced"|"disabled"|"ghosts", RespawnGhostTimeoutEnabled: boolean, RespawnGhostTimeout: integer, RespawnGhostDistance: integer, RefuelDuration: integer, RepairDuration: integer, PreserveEnergyOnRefuel: boolean, StrictBusStops: boolean, PreserveFuelOnReset: boolean, EmergencyRefuelCooldown: integer, PlayerPursuits: boolean, RaceRuns: boolean, GhostNonRacers: boolean}
 ---CollisionsMode : "forced" = collisions always on, ghosting never happens ; "disabled" = every
 ---player vehicle permanently ghosted (free-for-all, no vehicle-vehicle collision at all) ;
@@ -64,6 +66,7 @@
 ---with the damage-keeping reset they need (the car's Lua, lua/vehicle/extensions/beamjoy/tyreChange.lua)
 
 local M = {
+    dependencies = { "dao_config", "dao_whitelist" },
     ---@class BJSConfig
     data = {
         AllowClientMods = false,
@@ -206,11 +209,104 @@ local M = {
         },
     },
     default = nil,
+    ---@type string? whitelist.json's text when last read or written, to tell an edit made outside
+    whitelistText = nil,
+    whitelistCheckTimer = 0,
+    ---@type table? a whitelist still in config.json at start (from before it had its own file, or
+    ---written there by an older BeamJoy after a downgrade) : its names are added to whitelist.json
+    ---on the next save, and config.json keeps it until then, so nothing is lost meanwhile
+    legacyWhitelist = nil,
 }
+
+--- seconds between two looks at whitelist.json for an edit made outside BeamJoy
+local WHITELIST_CHECK_INTERVAL = 5
+local WHITELIST_NAME_MAX_LENGTH = 64
 
 local function saveData()
     local data = table.clone(M.data)
+    data.Whitelist = M.legacyWhitelist -- its own file, once config.json's is moved there
     dao_config.save(data)
+end
+
+--- a whitelist name as typed, trimmed ; nil when it can't be one
+---@param name any
+---@return string?
+local function cleanWhitelistName(name)
+    if type(name) ~= "string" then return nil end
+    name = name:trim()
+    if #name == 0 or #name > WHITELIST_NAME_MAX_LENGTH or name:find("%c") then return nil end
+    return name
+end
+
+--- a whitelist from a file or a request : unknown fields dropped, names cleaned and once each
+---@param data any
+---@return {Enabled: boolean, PlayerNames: string[]}
+local function normalizeWhitelist(data)
+    data = type(data) == "table" and data or {}
+    local names, seen = Table(), {}
+    for _, name in ipairs(type(data.PlayerNames) == "table" and data.PlayerNames or {}) do
+        name = cleanWhitelistName(name)
+        if name and not seen[name:lower()] then
+            seen[name:lower()] = true
+            names:insert(name)
+        end
+    end
+    return { Enabled = data.Enabled == true, PlayerNames = names }
+end
+
+--- config.json's whitelist added to the one in memory : every name not already on it, and on if
+--- either was (the safer of the two)
+local function mergeLegacyWhitelist()
+    local legacy = normalizeWhitelist(M.legacyWhitelist)
+    local wl = M.data.Whitelist
+    local listed = {}
+    for _, name in ipairs(wl.PlayerNames) do listed[name:lower()] = true end
+    for _, name in ipairs(legacy.PlayerNames) do
+        if not listed[name:lower()] then
+            listed[name:lower()] = true
+            table.insert(wl.PlayerNames, name)
+        end
+    end
+    wl.Enabled = wl.Enabled or legacy.Enabled
+end
+
+local function saveWhitelist()
+    local moved = M.legacyWhitelist ~= nil
+    if moved then mergeLegacyWhitelist() end
+    dao_whitelist.save({ Enabled = M.data.Whitelist.Enabled, PlayerNames = M.data.Whitelist.PlayerNames })
+    M.whitelistText = dao_whitelist.read()
+    if moved then
+        -- in whitelist.json now : config.json loses it (written in that order, so it's never in
+        -- neither)
+        M.legacyWhitelist = nil
+        saveData()
+    end
+end
+
+--- re-reads whitelist.json when its text changed since BeamJoy last read or wrote it
+---@return boolean changed
+local function loadWhitelist()
+    local text = dao_whitelist.read()
+    if text == nil then
+        -- deleted (or the first start) : written from memory, so there's always a file to edit
+        saveWhitelist()
+        return false
+    end
+    if text == M.whitelistText then return false end
+    M.whitelistText = text
+    local ok, parsed = pcall(utils_json.parse, text)
+    if not ok or type(parsed) ~= "table" then
+        -- logged once per edit (the text is kept), the whitelist in memory stays as it was
+        LogError(string.format("whitelist.json isn't valid JSON, the whitelist stays as it was : %s",
+            tostring(parsed)))
+        return false
+    end
+    local current = M.data.Whitelist
+    M.data.Whitelist = normalizeWhitelist(parsed)
+    -- config.json's names are only moved into a file that reads well
+    if M.legacyWhitelist then saveWhitelist() end
+    local wl = M.data.Whitelist
+    return wl.Enabled ~= current.Enabled or not table.compare(wl.PlayerNames, current.PlayerNames)
 end
 
 local function sanitizeOnStart()
@@ -269,7 +365,14 @@ end
 
 local function onInit()
     M.default = table.clone(M.data)
-    M.data = table.assign(M.data, dao_config.get() or {})
+    local stored = dao_config.get() or {}
+    -- the whitelist has its own file : names still in config.json are added to it, every start
+    -- (see legacyWhitelist). Until whitelist.json reads well, they're the whitelist
+    M.legacyWhitelist = stored.Whitelist
+    stored.Whitelist = nil
+    M.data = table.assign(M.data, stored)
+    M.data.Whitelist = normalizeWhitelist(M.legacyWhitelist)
+    loadWhitelist()
     sanitizeOnStart()
 
     communications_rx.addHandler("setConfig", M.set)
@@ -522,7 +625,8 @@ local function sanitizeConfigValue(key, value)
         elseif type(value.Enabled) ~= "boolean" then
             return nil, "Enabled must be a boolean"
         end
-        value.PlayerNames = M.data.Whitelist.PlayerNames -- do not override playernames here
+        -- do not override playernames here
+        return { Enabled = value.Enabled, PlayerNames = M.data.Whitelist.PlayerNames }
     end
     return value
 end
@@ -539,6 +643,7 @@ local function set(ctxt, key, value)
             return
         end
     end
+    if key == "Whitelist" then M.refreshWhitelist() end
     if value == nil then
         -- reset value
         value = M.default[key]
@@ -548,8 +653,15 @@ local function set(ctxt, key, value)
         value, err = sanitizeConfigValue(key, value)
         if err then return LogError(err) end
     end
-    M.data[key] = value
-    saveData()
+    if key == "Whitelist" then
+        -- a copy, so later changes never reach the defaults
+        M.data.Whitelist = normalizeWhitelist(value)
+        saveWhitelist()
+        pcall(services_api.whitelistChanged, M.data.Whitelist, ctxt.sender and ctxt.sender.playerName or "console")
+    else
+        M.data[key] = value
+        saveData()
+    end
 
     services_players.players:forEach(function(p)
         local caches = {}
@@ -573,6 +685,43 @@ local function sendWhitelistCaches()
     end)
 end
 
+--- the whitelist changed : saved, its holders' caches and the plugin API told
+---@param by string a player's name, "console", "plugin:<name>" or "file"
+local function whitelistChanged(by)
+    if by ~= "file" then saveWhitelist() end
+    sendWhitelistCaches()
+    pcall(services_api.whitelistChanged, M.data.Whitelist, by)
+end
+
+---@param ctxt BJSContext
+---@return string
+local function changedBy(ctxt)
+    if ctxt.apiSource then return ctxt.apiSource end
+    return ctxt.sender and ctxt.sender.playerName or "console"
+end
+
+--- picks up an edit made to whitelist.json outside BeamJoy (called before every read or change of
+--- the whitelist, and every few seconds)
+local function refreshWhitelist()
+    if loadWhitelist() then whitelistChanged("file") end
+end
+
+--- where a name is on the whitelist, in any case (BeamMP names are unique whatever their case)
+---@param name string
+---@return integer?
+local function whitelistIndexOf(name)
+    local wanted = name:lower()
+    for i, listed in ipairs(M.data.Whitelist.PlayerNames) do
+        if listed:lower() == wanted then return i end
+    end
+end
+
+---@param playerName string
+---@return boolean
+local function isWhitelisted(playerName)
+    return type(playerName) == "string" and whitelistIndexOf(playerName) ~= nil
+end
+
 ---@param ctxt BJSContext
 ---@param newState boolean?
 local function toggleWhitelist(ctxt, newState)
@@ -582,13 +731,48 @@ local function toggleWhitelist(ctxt, newState)
             return
         end
     end
+    refreshWhitelist()
     if newState == nil then
         newState = not M.data.Whitelist.Enabled
     end
-    M.data.Whitelist.Enabled = newState
-    saveData()
+    if M.data.Whitelist.Enabled == (newState == true) then return end
+    M.data.Whitelist.Enabled = newState == true
 
-    sendWhitelistCaches()
+    whitelistChanged(changedBy(ctxt))
+end
+
+--- adds names to the whitelist, whether or not they're connected
+---@param ctxt BJSContext
+---@param names string[]
+---@return string[] added the names added (not the ones already on it)
+local function addWhitelistNames(ctxt, names)
+    refreshWhitelist()
+    local added = {}
+    for _, name in ipairs(names) do
+        name = cleanWhitelistName(name)
+        if name and not whitelistIndexOf(name) then
+            M.data.Whitelist.PlayerNames:insert(name)
+            added[#added + 1] = name
+        end
+    end
+    if #added > 0 then whitelistChanged(changedBy(ctxt)) end
+    return added
+end
+
+---@param ctxt BJSContext
+---@param names string[]
+---@return string[] removed the names removed, as they were on the whitelist
+local function removeWhitelistNames(ctxt, names)
+    refreshWhitelist()
+    local removed = {}
+    for _, name in ipairs(names) do
+        local pos = type(name) == "string" and whitelistIndexOf(name:trim())
+        if pos then
+            removed[#removed + 1] = table.remove(M.data.Whitelist.PlayerNames, pos)
+        end
+    end
+    if #removed > 0 then whitelistChanged(changedBy(ctxt)) end
+    return removed
 end
 
 ---@param ctxt BJSContext
@@ -601,15 +785,21 @@ local function toggleWhitelistPlayerName(ctxt, playerName)
             return
         end
     end
-    local pos = table.indexOf(M.data.Whitelist.PlayerNames, playerName)
-    if pos then
-        table.remove(M.data.Whitelist.PlayerNames, pos)
+    if type(playerName) ~= "string" then return end
+    refreshWhitelist()
+    if whitelistIndexOf(playerName:trim()) then
+        removeWhitelistNames(ctxt, { playerName })
     else
-        table.insert(M.data.Whitelist.PlayerNames, playerName)
+        addWhitelistNames(ctxt, { playerName })
     end
-    saveData()
+end
 
-    sendWhitelistCaches()
+local function onSlowUpdate()
+    M.whitelistCheckTimer = M.whitelistCheckTimer + 1
+    if M.whitelistCheckTimer >= WHITELIST_CHECK_INTERVAL then
+        M.whitelistCheckTimer = 0
+        refreshWhitelist()
+    end
 end
 
 local function stopServer()
@@ -640,6 +830,7 @@ end
 ---@param args string[]
 ---@param printUsage fun()
 local function consoleWhitelist(args, printUsage)
+    refreshWhitelist()
     if not args[1] then -- bj whitelist > display status
         local whitelistedGroups = table.filter(services_groups.data, function(g)
             return g.whitelisted or g.staff
@@ -669,32 +860,29 @@ local function consoleWhitelist(args, printUsage)
             print("\n" ..
                 string.format("\n%s : bj whitelist add <playername>", services_lang.get("commands.usage")))
         else
-            local targets = services_players.getConnectedByName(args[2])
-            if #targets == 0 then
-                local out = "\n" .. services_lang.get("commands.bjwhitelist.playerNotFound")
-                out = out .. "\n" .. (services_players.players:length() > 0 and
-                    services_players.players:keys():join(" ") or
-                    services_lang.get("common.none"))
-                print(out)
-            elseif #targets > 1 then
-                local out = "\n" .. services_lang.get("commands.bjwhitelist.playerAmbiguity")
-                out = out .. "\n" .. targets:map(function(p) return p.playerName end):join(" ")
-                print(out)
+            -- the BeamMP name as typed, connected or not (direct report : only connected players
+            -- could be added) ; a connected player's own spelling when it's theirs in another case
+            local name = cleanWhitelistName(args[2])
+            local connected = name and services_players.players:find(function(p)
+                return p.playerName:lower() == name:lower()
+            end)
+            if connected then name = connected.playerName end
+            if not name then
+                print("\n" ..
+                    string.format("\n%s : bj whitelist add <playername>", services_lang.get("commands.usage")))
+            elseif whitelistIndexOf(name) then
+                print("\n" .. services_lang.get("commands.bjwhitelist.alreadyWhitelisted"))
             else
-                if M.data.Whitelist.PlayerNames:includes(targets[1].playerName) then
-                    print("\n" .. services_lang.get("commands.bjwhitelist.alreadyWhitelisted"))
-                else
-                    toggleWhitelistPlayerName(InitContext(), targets[1].playerName)
-                    print("\n" .. services_lang.get("commands.bjwhitelist.add")
-                        :var({ playername = targets[1].playerName }))
-                end
+                addWhitelistNames(InitContext(), { name })
+                print("\n" .. services_lang.get("commands.bjwhitelist.add")
+                    :var({ playername = name }))
             end
             print()
         end
     elseif args[1] == "remove" then -- bj whitelist remove <playername>
         if not args[2] then
             print("\n" ..
-                string.format("\n%s : bj whitelist add <playername>", services_lang.get("commands.usage")))
+                string.format("\n%s : bj whitelist remove <playername>", services_lang.get("commands.usage")))
         else
             local exactMatch = table.find(M.data.Whitelist.PlayerNames, function(name) return name == args[2] end)
             local targets = exactMatch and Table({ exactMatch }) or
@@ -723,11 +911,17 @@ local function consoleWhitelist(args, printUsage)
 end
 
 M.onInit = onInit
+M.onSlowUpdate = onSlowUpdate
 M.onBJRequestCache = onBJRequestCache
 
 M.set = set
 M.toggleWhitelist = toggleWhitelist
 M.toggleWhitelistPlayerName = toggleWhitelistPlayerName
+M.addWhitelistNames = addWhitelistNames
+M.removeWhitelistNames = removeWhitelistNames
+M.refreshWhitelist = refreshWhitelist
+M.isWhitelisted = isWhitelisted
+M.cleanWhitelistName = cleanWhitelistName
 M.save = saveData
 M.stopServer = stopServer
 M.consoleWhitelist = consoleWhitelist

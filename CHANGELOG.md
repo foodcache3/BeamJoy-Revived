@@ -65,6 +65,26 @@ Server build 2488, client build 2761 (main got its own 2749, 2751, then 2752 for
   - Start fuel at 100 % leaves the tank as the car's tuning set it.
   - `/bjdamage` (hidden) shows the car's damage readings, for the repair-time tests.
 
+- **The whitelist has a file of its own** (direct request : "easier to edit via api") :
+  `BeamJoyData/db/whitelist.json` (`{"Enabled": ..., "PlayerNames": [...]}`), no longer inside
+  `config.json`. *(server only)*
+  - Names found in `config.json` are moved there on every start (on the first, or after a downgrade
+    to an older BeamJoy wrote some there) : added to the file's, the whitelist on if either was,
+    written to the new file before they leave the old one. While `whitelist.json` doesn't read as
+    JSON, `config.json` keeps them, they're the whitelist, and they move in once the file is fixed.
+  - Edited by hand while the server runs, it's picked up within 5 s, and again whenever a player
+    connects ; staff's whitelist panel follows. A file left broken is logged once and the whitelist
+    stays as it was ; a deleted file is written again.
+  - Names match in any case (BeamMP names are unique whatever their case).
+  - Plugin API : `whitelist.get`, `whitelist.add` / `whitelist.remove` `{names}`,
+    `whitelist.setEnabled` `{enabled}`, and a `WhitelistChanged` event (`by` a player, `console`,
+    `plugin:<name>` or `file`).
+- **Fix : `bj whitelist add` only took connected players** (direct report). It now adds the name as
+  typed, connected or not (a connected player's own spelling when it's theirs in another case).
+  `bj whitelist remove`'s usage line said `add`.
+- **Fix : guests got in with the whitelist on** (found while there) : the refusal was built but never
+  returned. *(server only)*
+
 - **Drift spots : the signs at the finish face the way the spot runs** (direct request) :
   the 3rd and 4th signs added by the finish line now show their printed side along the spot, the
   start's still face the cars coming. Signs already placed keep their angle (turn them with the
@@ -120,6 +140,27 @@ Server build 2488, client build 2761 (main got its own 2749, 2751, then 2752 for
     car where it stands, with its damage measured before and after.
   - Known : in 1 test run of 3 a tyre change counted about 60 more broken beams than the car had
     (5.4 % damage read as 10.2 %), the others matched. Under watch while it's experimental.
+
+- **Fix : every boot warned about the bundled content files** (direct report : `File
+  "Resources/Server/BeamJoyData/db/bundled/utah_races.json" couldn't be accessed, so it was removed
+  from plugin hot reload monitor (probably got deleted)`, one line per file). The bundled mirror
+  emptied its folder and copied the same files straight back in, and BeamMP's own hot reload
+  monitor, which watches everything under `Resources/Server` (BeamJoyData included), caught them
+  mid-swap and stopped watching them. Each file is now written in place, and only when its bytes
+  differ ; one this version no longer ships is still removed. The folder ends up exactly as it did
+  before. *(server only)*
+
+- **A race can force a reset where the car stands** (direct request) : **Reset in place**, a new
+  respawn option beside Free respawn, No respawn, Last checkpoint, Flip upright and Last road.
+  Whatever a racer presses (a physics reset, a rewind, a reload, either recovery button), the game's
+  own reset runs on the spot instead : the car is rebuilt and repaired where it is, upright and
+  facing the way it was, so a crash costs its time but never sends anyone back to a checkpoint.
+  Flip upright, which only rights the car and keeps its damage, is unchanged. The race's reset
+  penalty applies as with the other forced options. Set in the editor's race defaults, the start
+  form, a lobby's settings and per phase. *(server + client : update both)*
+  - **Fix : a race's own default of Flip upright or Last road was lost in the editor.** It checked
+    the saved default against a list of three (never updated when those two were added) and put it
+    back to Last checkpoint the moment the race was opened for editing.
 
 - **Italian (2761)** (direct request : "can you make a script so I can add an italian translation too").
   Client and server `it_IT.json`, machine-translated with `Tools/translate.py --add it_IT` (new : starts

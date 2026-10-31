@@ -15,7 +15,7 @@ angular.module("beamjoy").component("bjMainRaces", {
         beamjoyRacePhases
     ) {
         const translate = $filter("translate");
-        this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint", "flipupright", "lastroad"];
+        this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint", "inplace", "flipupright", "lastroad"];
         // what a reset costs : the car held for the penalty, or the penalty added to the race time
         this.RESET_PENALTY_MODES = ["hold", "time"];
         // mirrors races.lua's PLACEMENT_MODES: how grid slots get assigned at countdown time

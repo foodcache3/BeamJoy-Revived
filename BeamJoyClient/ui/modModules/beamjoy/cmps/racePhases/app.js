@@ -204,7 +204,7 @@ angular.module("beamjoy").component("bjRacePhases", {
         this.LENGTHS = ["laps", "time", "both"];
         this.AFTER_TIMES = ["leader", "own", "stop"];
         this.RESULTS = ["last", "sum"];
-        this.RESPAWNS = ["all", "norespawn", "lastcheckpoint", "flipupright", "lastroad"];
+        this.RESPAWNS = ["all", "norespawn", "lastcheckpoint", "inplace", "flipupright", "lastroad"];
         this.label = (p, i) => beamjoyRacePhases.phaseLabel(p, i);
         this.open = {};
         // a plugin's format : what stays as it set it (the server keeps it so too)

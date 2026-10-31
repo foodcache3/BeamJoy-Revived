@@ -2562,6 +2562,7 @@
     "beamjoy.window.config.tabs.races.respawnStrategies.all": "Free respawn",
     "beamjoy.window.config.tabs.races.respawnStrategies.norespawn": "No respawn",
     "beamjoy.window.config.tabs.races.respawnStrategies.lastcheckpoint": "Last checkpoint",
+    "beamjoy.window.config.tabs.races.respawnStrategies.inplace": "Reset in place",
     "beamjoy.window.config.tabs.races.respawnStrategies.flipupright": "Flip upright",
     "beamjoy.window.config.tabs.races.respawnStrategies.lastroad": "Last road",
     "beamjoy.window.config.tabs.races.dnfEnabled": "DNF on stall",

@@ -42,7 +42,7 @@ local EVENTS = { "Ready", "LeaderboardChanged", "RacesChanged", "MapChanged", "P
     "RaceGridOpened", "RaceCountdown", "RaceGreenLight", "RacerLap", "RacerFinished", "RacerOut",
     "RacerStarted", "RacerJoinedPhase", "RacerGate", "RacerReset", "RacePositionsChanged", "RaceControl",
     "RacerPitEntry", "RacerPitStop", "RacerPitExit", "RacerPitPenalty", "RacerPitTow", "RacerPitReturned",
-    "RacePhaseFinished", "RaceFinished", "RaceClosed", "EnvironmentChanged", "ConfigChanged", "ConfigAction",
+    "RacePhaseFinished", "RaceFinished", "RaceClosed", "EnvironmentChanged", "WhitelistChanged", "ConfigChanged", "ConfigAction",
     "PageOpened", "PageAction", "Hook" }
 local LEADERBOARD_LIMIT_DEFAULT = 100
 
@@ -970,6 +970,76 @@ M.methods["players.online"] = function()
     return { players = players }
 end
 
+-- ---------------------------------------------------------------------------------------------
+-- the whitelist (services_config ; kept in BeamJoyData/db/whitelist.json)
+
+local WHITELIST_NAMES_MAX = 200
+
+---@param wl {Enabled: boolean, PlayerNames: string[]}
+local function whitelistOut(wl)
+    local names = {}
+    for i, name in ipairs(wl.PlayerNames) do names[i] = name end
+    return { enabled = wl.Enabled == true, playerNames = names }
+end
+
+--- a `names` param : one name, or a list of them
+---@param v any
+---@return string[]? names, string? error
+local function namesParam(v)
+    if type(v) == "string" then v = { v } end
+    if type(v) ~= "table" or #v == 0 then return nil, "names must be a name or a list of names" end
+    if #v > WHITELIST_NAMES_MAX then return nil, "at most " .. WHITELIST_NAMES_MAX .. " names at once" end
+    for _, name in ipairs(v) do
+        if not services_config.cleanWhitelistName(name) then
+            return nil, "each name must be text, 1 to 64 characters"
+        end
+    end
+    return v
+end
+
+---@param plugin string
+local function pluginContext(plugin)
+    local ctxt = InitContext()
+    ctxt.apiSource = "plugin:" .. plugin
+    return ctxt
+end
+
+M.methods["whitelist.get"] = function()
+    services_config.refreshWhitelist()
+    return whitelistOut(services_config.data.Whitelist)
+end
+
+M.methods["whitelist.setEnabled"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    if type(params.enabled) ~= "boolean" then return nil, "badParams", "enabled must be true or false" end
+    services_config.toggleWhitelist(pluginContext(plugin), params.enabled)
+    return whitelistOut(services_config.data.Whitelist)
+end
+
+--- names whether or not they're connected : BeamMP account names, matched in any case
+M.methods["whitelist.add"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local names, why = namesParam(params.names)
+    if not names then return nil, "badParams", why end
+    local added = services_config.addWhitelistNames(pluginContext(plugin), names)
+    local out = whitelistOut(services_config.data.Whitelist)
+    out.added = added
+    return out
+end
+
+M.methods["whitelist.remove"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local names, why = namesParam(params.names)
+    if not names then return nil, "badParams", why end
+    local removed = services_config.removeWhitelistNames(pluginContext(plugin), names)
+    local out = whitelistOut(services_config.data.Whitelist)
+    out.removed = removed
+    return out
+end
+
 local function environmentOut()
     local env = services_environment.data
     local tod = services_environment.currentToD()
@@ -1607,6 +1677,15 @@ end
 function M.environmentChanged(by)
     M.pendingEnvironmentChanged = M.pendingEnvironmentChanged or {}
     M.pendingEnvironmentChanged[by or "server"] = true
+end
+
+--- the whitelist changed (services_config), from BeamJoy or whitelist.json edited by hand
+---@param wl {Enabled: boolean, PlayerNames: string[]}
+---@param by string a player's name, "console", "plugin:<name>" or "file"
+function M.whitelistChanged(wl, by)
+    local out = whitelistOut(wl)
+    out.by = by
+    emit("WhitelistChanged", out)
 end
 
 --- a lobby opened

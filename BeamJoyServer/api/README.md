@@ -146,7 +146,7 @@ read from BeamJoy's saved files.
 
 Methods that change something (`race.*`, `phase.*`, `formats.*`, `environment.set`, `overlay.*`,
 `hud.message`, `hooks.*`, `raceOptions.*`, `tyres.*`, `pit.*`, `results.setFields`, `leaderboard.setFields`,
-`config.*`, `pages.*`) need your plugin's name in the request's `from`. The helper always sends
+`config.*`, `pages.*`, `whitelist.*` but `whitelist.get`) need your plugin's name in the request's `from`. The helper always sends
 it.
 
 ### `server.info`
@@ -382,6 +382,23 @@ away. See [Pages](#pages). → `{id}` (`pages.unregister` without `id`: `{remove
 - `nickname` is the BeamJoy nickname, if the player picked one. Only guests can: a player
   logged in to a BeamMP account keeps their account name.
 
+### `whitelist.get`
+→ `{enabled, playerNames[]}`
+
+The names on the whitelist. Groups marked whitelisted, and staff, get in too ; they're set in
+BeamJoy's groups, not here. The whitelist is kept in `BeamJoyData/db/whitelist.json`
+(`{"Enabled": false, "PlayerNames": []}`) : editing that file works too, BeamJoy picks it up
+within 5 s (and sends `WhitelistChanged` with `by` `"file"`).
+
+### `whitelist.add` / `whitelist.remove` `{names}`
+`names` is a name or a list of them (at most 200, each 1 to 64 characters). Players don't need to
+be connected : these are BeamMP account names, matched in any case. → `{enabled, playerNames[], added[]}`
+(`removed[]` for `whitelist.remove`) : the names that changed, as they're now (or were) listed. A
+name already listed, or not listed, is skipped.
+
+### `whitelist.setEnabled` `{enabled}`
+→ `{enabled, playerNames[]}`
+
 ### `environment.get`
 → `{timeOfDay, clock, timeSync, dayNightCycle, dayLengthS, date, simSpeed, simPause, gravity, gravitySync, weatherSync, weather}`
 
@@ -467,6 +484,7 @@ Names are display names, not permanent IDs: a guest can change their nickname.
 | `PlayerJoined` | `{id, name, guest, players}` |
 | `PlayerLeft` | `{id, name, players}` |
 | `EnvironmentChanged` | the same as `environment.get`, plus `by` |
+| `WhitelistChanged` | the same as `whitelist.get`, plus `by`: a player's name, `"console"`, `"plugin:<name>"` or `"file"` (whitelist.json edited by hand) |
 | `RaceGridOpened` | a session (see `races.sessions`) |
 | `RaceCountdown` | `{sessionId, raceId, raceName, map, at, greenAt, countdownS, orderedBy?, grid: [racer]}` |
 | `RaceGreenLight` | `{sessionId, raceId, raceName, map, at, greenAt, laps, timeLimitMin?, endsAt?, racers: [racer]}` |
@@ -548,7 +566,7 @@ race with many racers, that's several a second.
 
 **`RacerReset`**: the racer recovered or reset during a phase, as their game reports it (once per
 reset, however it was done). `respawn` is the race's respawn rule (`"lastcheckpoint"`, `"all"`,
-`"flipupright"`, `"lastroad"`...), `lastGate` the last gate they went through, `penaltyMs` the time
+`"inplace"`, `"flipupright"`, `"lastroad"`...), `lastGate` the last gate they went through, `penaltyMs` the time
 penalty the race's own reset rule added (`holdS` : the seconds it holds them instead). Your
 penalties come on top (`race.penalize`).
 
