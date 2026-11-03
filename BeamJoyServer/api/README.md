@@ -131,7 +131,10 @@ Complete example plugins. To try one, copy its folder into `Resources/Server/`, 
   race HUD's look, standing in for BeamJoy's) with the same labels.
 - `example/BJRallycross/` is a discipline of its own on [phases](#phases): a "Rallycross" format
   (two heats for points, the second on a reversed grid, then a final for the top 6 gridded on
-  points), the points beside the names on the HUD, and the event's result set by the plugin.
+  points), the points beside the names on the HUD, and the event's result set by the plugin. It
+  also enforces a **joker lap** on any race whose track has one (a branch, built in the race
+  editor): its gate and rules set in the editor and the start menu, each racer's count live on the
+  HUD, a warning on their last lap, and a time penalty for a missing one through `phaseResult`.
 - `example/BJShootout/` runs a phase itself: one lap each, alone on track, the plugin starting
   each racer in turn and scoring them, the 107% rule through the `phaseResult` hook, then the
   race on that grid.
@@ -563,6 +566,14 @@ point (negative : faster ; none before they have one), `sectors` the sectors thi
 lap has `lapComplete`, and comes after `RacerLap` (and `RacerFinished`, or `RacerStarted` for a
 next run). An out lap's gates have `outLap` and no times. One event per gate per racer : on a long
 race with many racers, that's several a second.
+
+**A branching race** (one whose route can fork, set per race in the editor) is how an alternative
+way round is built: a joker lane, a long way and a short way. Both alternates of a fork share one
+`step`, and each keeps its own `gate`, so `gate` is what tells you which way a racer went. A
+crossing is checked against the author's own parent links, so either way counts as real progress
+and neither can be skipped, and a gate already crossed raises no second event (a reset back onto
+it can't count twice). BeamJoy has no sectors on a branching race, so `sectors` is always empty
+there. `example/BJRallycross/` enforces a joker lap on this.
 
 **`RacerReset`**: the racer recovered or reset during a phase, as their game reports it (once per
 reset, however it was done). `respawn` is the race's respawn rule (`"lastcheckpoint"`, `"all"`,

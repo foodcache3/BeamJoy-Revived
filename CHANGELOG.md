@@ -8,7 +8,64 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2489, client build 2762 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2489, client build 2766 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **Your own car is yours to drive again** (direct reports : "losing all control of your own
+  vehicle", "right now I can't steer or anything using my wheel or keyboard controls. my occupant
+  is in the correct seat and the cameras are right", "my occupant was in the passenger seat for
+  some reason", "not being able to switch to your own driver cam"). One cause behind all of it.
+  Since 0.40 the game decides what a player may do in the car they're in from their **presence**
+  (`gameplay/seatOccupants.lua`) : a seat claim plus a permission mode of `driver`, `passenger` or
+  `unrestricted`. A passenger's driving inputs are masked out of the game's own action maps,
+  their driver camera is hidden, and their figure sits in whichever seat was claimed. Several of
+  the game's fallbacks land on `passenger`, and `vehiclePresencePolicy.defaultUnseatedMode` returns
+  `unrestricted` **only** in gamestate `freeroam` : BeamMP sets the gamestate to `multiplayer`
+  (`MPCoreNetwork`), so in a BeamMP session a presence the game couldn't seat properly is a
+  passenger instead. That happens when a car's seat data isn't readable at the moment it's entered
+  (every activity here spawns a car and enters it in the same tick), when a seat claim's own slot
+  can't be read back (the seat and cameras then look perfectly right and only the controls are
+  dead), or when something already holds the driver's seat. None of them had a way back : the game
+  only recomputes a presence when it changes, and re-entering the same car is a no-op, so the car
+  stayed undrivable. BeamJoy now checks its own player's presence every second and immediately on
+  every vehicle switch : a passenger in a car of **their own** goes back to `unrestricted`, and a
+  passenger seat with the driver's seat free (or held by a dummy occupant) is swapped for the
+  driver's. Another player's car is never touched, so riding along in one still works as it should.
+  *(client : 19 checks over the real file in a Lua harness)*
+
+- **BeamJoy speaks the game's language again on BeamNG 0.40** (direct report : "when I set it to
+  italian, it doesn't look like it switched", and Spanish no better). Not the languages : the file
+  name. BeamJoy drops its own translations into the game's per-language folder, and since 0.40 the
+  game reads only the files there named `*.translation.json` or `*.translations.json`
+  (`core/locales.lua`, `isTranslationFile`). Ours was `beamjoy.json`, so it was loaded up to 0.39
+  and quietly ignored from 0.40 on, leaving every window in English whatever the game was set to.
+  Written as `beamjoy.translation.json` now, with any older `beamjoy.json` cleared out on the way
+  past, and without the `FS:mount` on a .json that 0.40 logs as an invalid archive.
+  *(client : the game must be restarted once, the translations are read at load)*
+
+- **BeamJoy speaks the community translations too** (direct request, after the above : Italian is
+  one of them). A language the game has no translation of its own for comes from the Translations
+  mod, in a folder of its own (`it`, `eses_com`, `ruru_com`) holding one legacy `<id>.json` that
+  the game reads **only** while no `*.translation.json` sits beside it : BeamJoy's file alone would
+  have taken the whole language down with it. So the mod's own file is copied beside ours as a
+  translation file of its own, and the game loads both. Guarded on every side : only ever the
+  language actually in use, the copy made again at each load and each language change straight from
+  the mod's file (which is never written to, so an update of theirs is a restart away), our two
+  files taken back out of a folder the moment it stops being the language in use, and nothing
+  copied at all into a folder that already holds a real translation file — the day the mod ships
+  0.40-style files, BeamJoy steps out of the way instead of holding an old copy over them. A
+  community language BeamJoy has no strings for is left untouched. *(client)*
+
+- **Rallycross joker laps, in the `BJRallycross` example plugin** (direct question : whether the
+  plugin API could enforce one as it stands). It can, and now an example does : a joker lane is a
+  branch built in the race editor, and the plugin takes its gate number and its rules (how many per
+  phase, the penalty, which laps it may be taken on, whether an extra one costs the same) as race
+  options in the editor and the start menu. Each racer's count sits live on the race HUD beside
+  their name, the one who hasn't taken it is told as their last lap begins, and a missing or extra
+  joker is a time penalty on the phase's result through the `phaseResult` hook, with the reason on
+  the result. Counted per phase, so each heat and the final want their own, and kept by racer key
+  so a disconnect doesn't lose it. A race with no joker gate set behaves exactly as before. The API
+  README gains a note on what a branching race means for a plugin reading `RacerGate`. *(no mod
+  change : an example to copy into `Resources/Server`, and documentation)*
 
 - **Pits for circuit races (work in progress, no version bump yet)** (direct request). A race's pit
   lane is drawn in the race editor (PIT IN and PIT OUT lines, where it leaves and rejoins the route,
@@ -20,8 +77,17 @@ Server build 2489, client build 2762 (main got its own 2749, 2751, then 2752 for
     holds the lane's limit ; the car is ghosted in the lane (on by default).
   - **The stop** : stopped in your own box, the car is held on the external camera while the plan's
     work is done : fuel (5 % of the tank a second by default, any car), and a repair timed by the
-    car's damage (the share of its value the game counts as damaged, up to the race's repair time ;
-    provisional until the crash tests set the curve). Resets keep the fuel in a race with pits.
+    car's damage, up to the race's repair time. Resets keep the fuel in a race with pits.
+  - **The repair's time, from the crash tests** : half the share of the car's value the game counts
+    as damaged, half the share of its beams, square-rooted, times the race's repair time ; at least
+    5 s where anything is damaged at all, plus 4 s a flat tyre and 10 s for an engine or powertrain
+    fault. The root is what the tests settled : a headlight tap read 0.15 % of the car damaged and a
+    front end torn off with the radiator leaking 6.8 %, which the straight share charged 0.1 s and
+    4 s of a 60 s repair for. They now cost 5 s and 26 s, with a wrecked semi (37.5 %, cab and
+    engine gone) at 47 s. The two shares are averaged because value alone misses bodywork (a bumper
+    and a headlight cost little beside an engine and a unibody) while the beams count how much of
+    the car is actually bent. Every number scales with the race's repair time, so a server that
+    halves it halves every repair. The flat tyre's 4 s is the one figure no reading covered.
   - **The server checks the stop** (from the security review : the racer's game times its own
     stop). Only the racer's game knows the car's damage, so the work's time it reports is taken
     (never under the tyre change's time, never over the race's longest stop), and the server makes

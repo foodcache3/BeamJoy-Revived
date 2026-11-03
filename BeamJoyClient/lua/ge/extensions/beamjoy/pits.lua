@@ -8,8 +8,11 @@
 --- Earlier measures didn't hold up : deliveries counted parts at integrity 0 (dents never count),
 --- derby read map.objects' damage (dissipated energy : uncapped, grows with harmless hits, scales
 --- with the car). The game's own part damage (beamstate.getPartDamageData, each part 0..1 from its
---- broken and deformed beams) is normalised per part ; weighted by each part's value it is the
---- share of the car the game itself prices as damaged.
+--- broken and deformed beams) is normalised per part, and weighted two ways : by each part's value
+--- (what the game itself prices as damaged) and by its beam count (how much of the car is bent).
+--- The repair time takes half of each : the crash tests had a car with its front end off and its
+--- radiator leaking read 3.9 % by value alone (a bumper and a headlight cost little beside an
+--- engine and a unibody), where its beams read 9.6 % ; see M.repairSeconds.
 
 local M = {
     dependencies = { "beamjoy_communications", "beamjoy_vehicles", "toast" },
@@ -185,6 +188,26 @@ function M.onDamageMeasured(vid, json)
     for _, callback in ipairs(callbacks) do callback(result) end
 end
 
+-- the repair-time curve, set from the crash tests (PIT_SYSTEM_PLAN.md section 6). `maxS` (the
+-- race's pitRepairMaxS) is the whole scale : the share is a share of it, and the adders are against
+-- its 60 s default, so a server that halves it halves every repair
+local REPAIR_VALUE_WEIGHT = .5 -- the share by value against the share by beams (M.damageShare)
+local REPAIR_EXPONENT = .5     -- the square root : every reading came in far below how bad it looked
+local REPAIR_MIN_S = 5         -- any damage at all is worth this much of a mechanic's time
+local REPAIR_FLAT_S = 4        -- each flat tyre (no flat in the crash tests : still a guess)
+local REPAIR_FAULT_S = 10      -- an engine or powertrain fault
+
+--- how much of a car is damaged, 0 to 1 : half its value's share, half its beams' (the file's head).
+--- The pit menu shows this same number, so what it says is what the repair's time is built on
+---@param r table measureDamage's
+---@return number
+function M.damageShare(r)
+    if type(r) ~= "table" then return 0 end
+    local share = REPAIR_VALUE_WEIGHT * (tonumber(r.valueShare) or 0)
+        + (1 - REPAIR_VALUE_WEIGHT) * (tonumber(r.beamShare) or 0)
+    return math.max(0, math.min(1, share))
+end
+
 --- the readings as the pit menu shows them : the repair's time, the share damaged, the 3 worst parts
 --- (their names, % damaged), flat tyres, wheels torn off, an engine or powertrain fault
 ---@param r table measureDamage's
@@ -198,7 +221,7 @@ function M.damageSummary(r, maxS, tyresApart)
     end
     return {
         seconds = M.repairSeconds(r, maxS, tyresApart),
-        share = tonumber(r.valueShare) or 0,
+        share = M.damageShare(r),
         parts = parts,
         flatTyres = tonumber(r.flatTyres) or 0,
         brokenWheels = tonumber(r.brokenWheels) or 0,
@@ -206,18 +229,26 @@ function M.damageSummary(r, maxS, tyresApart)
     }
 end
 
---- a repair's time, seconds, from measureDamage's readings : the share of the car's value damaged
---- times `maxS`, 4 s a flat tyre (not with tyre changes apart : the tyres' own time then), 10 s for
---- an engine or powertrain fault, up to `maxS`. Provisional : the curve is set from the crash tests
---- (PIT_SYSTEM_PLAN.md §6)
+--- a repair's time, seconds, from measureDamage's readings : the square root of the share damaged
+--- (M.damageShare) times `maxS`, at least REPAIR_MIN_S where anything is damaged at all, plus each
+--- flat tyre (not with tyre changes apart : the tyres' own time covers them then) and an engine or
+--- powertrain fault, up to `maxS`.
+---
+--- The root, not the share itself : in the crash tests a headlight tap read 0.15 % damaged and a
+--- front end torn off with the radiator leaking 6.8 %, so the straight share charged 0.1 s and 4 s
+--- of a 60 s repair. The root turns those into 2 s (the floor lifts it to 5) and 16 s, and still
+--- leaves a wrecked semi (37.5 %) at 37 s. The flat tyre's 4 s is the one number no reading covers
 ---@param r table
 ---@param maxS number
 ---@param tyresApart boolean?
 ---@return number
 function M.repairSeconds(r, maxS, tyresApart)
     if type(r) ~= "table" or r.error or maxS <= 0 then return 0 end
-    local s = (tonumber(r.valueShare) or 0) * maxS + (tyresApart and 0 or 4 * (tonumber(r.flatTyres) or 0))
-    if #(r.engine or {}) > 0 or #(r.powertrain or {}) > 0 then s = s + 10 end
+    local scale = maxS / 60
+    local share = M.damageShare(r)
+    local s = share > 0 and math.max(share ^ REPAIR_EXPONENT * maxS, REPAIR_MIN_S * scale) or 0
+    if not tyresApart then s = s + REPAIR_FLAT_S * scale * (tonumber(r.flatTyres) or 0) end
+    if #(r.engine or {}) > 0 or #(r.powertrain or {}) > 0 then s = s + REPAIR_FAULT_S * scale end
     return math.min(maxS, s)
 end
 

@@ -307,6 +307,9 @@ local function onVehicleSwitched(previousVID, newVID)
             if v then
                 M.applyDisplayAlpha(v.veh)
             end
+            -- the game claims a seat for this player in the hook above ; by now that claim (and
+            -- the permission mode it fell back to) is in place to be checked
+            M.ensureOwnVehicleDriver()
         end)
     else
         beamjoy_communications.send("updateCurrentVehicle")
@@ -437,6 +440,11 @@ local function onSlowUpdate()
             lastShut[v.vid] = nil
         end
     end)
+
+    -- a passenger presence in this player's own car takes their controls away with no way back
+    -- (see ensureOwnVehicleDriver) : checked here so it can never outlast a second, whichever of
+    -- the game's fallbacks produced it
+    M.ensureOwnVehicleDriver()
 end
 
 local lastCollisionsMode = nil
@@ -1098,6 +1106,78 @@ local function focusVehicle(vid)
     end
 end
 
+--- 0.40's seat occupants : what a player may do in the car they're in comes from their "presence"
+--- (the game's own gameplay/seatOccupants.lua) -- a seat claim plus a permission mode of "driver",
+--- "passenger" or "unrestricted". A passenger's driving inputs are masked out of the game's action
+--- maps altogether (syncDrivingForPlayer -> applyDrivingActionMapMask), their driver camera is
+--- hidden (syncPresenceCameras) and their figure sits in whichever seat was claimed.
+---
+--- Three of the game's own fallbacks land on "passenger", and all three were reported here ("I
+--- can't steer or anything using my wheel or keyboard controls", "my occupant was in the passenger
+--- seat for some reason", "not being able to switch to your own driver cam") :
+---   * an UNSEATED presence -- the car's seat data isn't readable yet (every activity here spawns a
+---     car and be:enterVehicle's it in the same tick), or the car has no occupant slots at all --
+---     takes vehiclePresencePolicy.defaultUnseatedMode, which is "unrestricted" ONLY in gamestate
+---     "freeroam". BeamMP sets the gamestate to "multiplayer" (MPCoreNetwork :
+---     core_gamestate.setGameState('multiplayer', 'beammp', 'multiplayer')), so in a BeamMP session
+---     every unseated presence is a PASSENGER instead.
+---   * a seat claim whose slot can't be read back (getSeatPermissionMode's own fallback) is a
+---     passenger too, even when the seat it claimed IS the driver's : the figure and the cameras
+---     look right and the controls are simply dead.
+---   * the driver's seat held by someone else -- a dummy occupant from the vehicle config's own
+---     Occupants page, a claim left over -- hands the player a passenger seat instead
+---     (selectAvailableSeat).
+--- None of them has a way back : the game only recomputes a presence when it changes, and
+--- re-entering the same car is a no-op (occupyPlayerVehicle returns early), so the car stays
+--- undrivable until it's replaced.
+---
+--- Nobody else can drive this player's car here : BeamMP never hands another player the controls
+--- and nothing in this mod seats an AI driver. A passenger mode in a car of this player's OWN is
+--- therefore only ever one of the fallbacks above, so it's put back to "unrestricted", and a
+--- passenger seat with the driver's seat free (or held by a dummy) is swapped for the driver's.
+--- Another player's car is never touched : riding along in one as a passenger is exactly right.
+local function ensureOwnVehicleDriver()
+    local seats = gameplay_seatOccupants
+    if not seats or not seats.getPlayerPresence or not seats.setPlayerPermissionMode then return end
+    local own = M.getCurrentOwn()
+    if not own or own.isAi or own.jbeam == M.WALKING then return end
+    local ok, presence = pcall(seats.getPlayerPresence, 0)
+    if not ok or type(presence) ~= "table" or presence.vehicleId ~= own.vid then return end
+    if presence.permissionMode ~= "passenger" then return end
+
+    -- this car's driver seat, when it has the game's seats at all and it's this player's to take
+    local driverSeatId, driverHeldByDummy
+    if seats.getSeats then
+        local okSeats, list = pcall(seats.getSeats, own.vid)
+        for _, seat in ipairs(okSeats and type(list) == "table" and list or {}) do
+            if seat.isDriver then
+                driverSeatId = seat.seatId
+                driverHeldByDummy = seat.occupied and seat.occupantType == "dummy" or false
+                if seat.occupied and not driverHeldByDummy and seat.player ~= 0 then
+                    driverSeatId = nil -- another local player's (split screen) : left as it is
+                end
+                break
+            end
+        end
+    end
+
+    if driverSeatId and presence.seatId ~= driverSeatId then
+        if driverHeldByDummy and seats.clearOccupied then
+            pcall(seats.clearOccupied, own.vid, driverSeatId)
+        end
+        if seats.requestEnterSeat then
+            pcall(seats.requestEnterSeat, own.vid, driverSeatId, 0)
+        end
+    end
+    -- after the seat, not before : taking a seat sets the mode from that seat's own slot, which is
+    -- the fallback this is here to undo. permissionOverride sticks with it, so a later claim in
+    -- this same car can't quietly go back to being a passenger either
+    pcall(seats.setPlayerPermissionMode, 0, "unrestricted")
+    LogDebug(string.format(
+        "beamjoy_vehicles : was a passenger in own vehicle %d (seat %s), driving restored",
+        own.vid, tostring(presence.seatId)))
+end
+
 ---@param jbeam string
 ---@return string
 local function getLabelByModel(jbeam)
@@ -1743,6 +1823,7 @@ M.setFreeze = setFreeze
 M.setEngine = setEngine
 M.setLights = setLights
 M.focusVehicle = focusVehicle
+M.ensureOwnVehicleDriver = ensureOwnVehicleDriver
 M.getLabelByModel = getLabelByModel
 M.waitForSpawn = waitForSpawn
 M.updateVehAttribute = updateVehAttribute
