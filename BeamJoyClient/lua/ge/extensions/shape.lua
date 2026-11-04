@@ -2,6 +2,17 @@ local M = {}
 --- gc prevention
 local col, statusA, statusB, statusC, forward, up, right, base, tip
 
+local ffi = require("ffi")
+local okVec3Type, vec3Type = pcall(ffi.typeof, "struct __luaVec3_t")
+--- a real vec3, as opposed to anything else a caller might hand in : false for a plain table, for
+--- nil and for any other cdata. The pcall above means a game that ever renames that struct simply
+--- goes back to copying defensively, rather than breaking
+---@param v any
+---@return boolean
+local function isVec3(v)
+    return okVec3Type and ffi.istype(vec3Type, v) or false
+end
+
 ---@param pos vec3
 ---@param radius number
 ---@param shapeColor BJColor?
@@ -24,11 +35,16 @@ end
 ---@param shadow boolean?
 ---@param hideBehindObj boolean?
 local function Text(text, pos, textColor, bgColor, shadow, hideBehindObj)
-    statusA, pos = pcall(vec3, pos)
-    if not statusA then
-        -- invalid position
-        LogError("invalid text position")
-        return
+    -- a caller that already holds a vec3 (every per-frame drawing path in the mod) skips the
+    -- defensive copy : one more fresh vector for every text drawn, on every rendered frame, where
+    -- the debug drawer takes the point by value and is done with it
+    if not isVec3(pos) then
+        statusA, pos = pcall(vec3, pos)
+        if not statusA then
+            -- invalid position
+            LogError("invalid text position")
+            return
+        end
     end
     textColor = textColor or BJColor(1, 1, 1, 1)
     bgColor = bgColor or BJColor(0, 0, 0, 1)

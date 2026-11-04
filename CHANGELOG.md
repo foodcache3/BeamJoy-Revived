@@ -8,7 +8,40 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2490, client build 2768 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2490, client build 2770 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **Nametags cost a fraction of what they did too.** The same profiler dump had
+  `beamjoy_nametags.onUpdate` allocating more per frame than anything else in the mod, the race
+  included, and the reason was the same : work repeated per car, per rendered frame, that only ever
+  needed doing once. Every tag deep-cloned its two colours out of local storage (a closure built, a
+  `pcall` against every stored key to find the one it was handed, then a copy of the value), asked
+  the game which camera is active and asked who you are all over again, built its distance text
+  from scratch, and - for the spectator names under it - filtered the player list through a
+  `pcall`'d closure into a whole new table with a metatable of its own, walked it with a second
+  closure, and counted it with a third. Underneath, refreshing a car for drawing rebuilt that same
+  spectator list twice over, which is where most of the garbage actually came from. Now : the
+  colours are read when they change (and a colour picked in the UI still lands on the next frame),
+  the camera and your own player are read once a frame and handed down, " 42m" is built once per
+  whole metre, the spectator lines are plain loops, the set is rebuilt inside the table each car
+  already carries, the tag's position is one vector reused down the stack of names, and the forced
+  colours of a fugitive's tag are constants instead of eleven fresh tables a frame. The drawing
+  itself no longer copies a position it was already handed. Nothing about what a tag says, where it
+  sits or what colour it is changed. *(client)*
+
+- **The race's own per-frame work costs a fraction of what it did.** Reported from a profiler
+  dump : `beamjoy_raceRunner.onUpdate` was the heaviest extension in the frame and one of its
+  biggest allocators, and almost all of it was garbage it had no reason to make. Per rendered
+  frame of a race it was building roughly sixteen throwaway vectors and tables, asking who you
+  are three or four separate times over, and reaching for `table.find`/`table.includes` in the
+  crossing test - helpers that wrap their argument in a fresh metatable and `pcall` a freshly
+  built closure once per element, which is nothing on an event and real money sixty times a
+  second. Now : each gate's plane is worked out once from its authored position and direction
+  (and rebuilt by itself if an editor moves it), the car's position is written into one vector
+  that lives for the whole race instead of seven new ones a frame, the candidate-gate list is one
+  reused buffer, your own participant is looked up once a frame and handed to everything that
+  needs it, and the hot lookups are plain loops. Steady state is no allocation at all. Not one
+  rule of the crossing test changed : same leniency, same sub-frame crossing time, same branching
+  candidates. *(client)*
 
 - **The start lights hang near the top of the screen** (direct request) instead of sitting in the
   middle of it, over the stretch of track you're about to launch down. Only the gantry moved ; the
@@ -36,7 +69,13 @@ Server build 2490, client build 2768 (main got its own 2749, 2751, then 2752 for
   it, and a rejoin set it from another path, any of which left the old look in place. It's now
   recomputed from the race itself every second, the whole-race ghost is re-asserted on whatever car
   you're actually in, and another player's car that resets mid-race goes back to see-through
-  instead of quietly turning solid. *(client)*
+  instead of quietly turning solid. One more hole closed since : the solid car is whichever one
+  you're actually driving, read live, but a switch only ever recomputed the car you were leaving.
+  Swapping cars at the grid, rejoining in another one or spectating someone mid-race therefore
+  left the new car see-through - and so the whole field, yours included, which is exactly the
+  "it's still me who looks ghosted" that was reported. Both sides of a switch are recomputed now,
+  and the field once more a frame later, since whether the engine has finished the switch by the
+  time it tells us isn't ours to assume. *(client)*
 
 - **A garage repair leaves the car facing the way it was.** Reported : repairing at a map garage
   spun the car on the spot. The repair is an in-place reset through the game's own

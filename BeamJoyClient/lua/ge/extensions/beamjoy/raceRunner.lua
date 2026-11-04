@@ -316,11 +316,38 @@ local function restoreSpawnQueue()
     M.previousSpawnQueueSetting = nil
 end
 
+--- `el` is somewhere in the array `tab`.
+---
+--- A plain loop on purpose, not table.includes : that helper runs its argument through Table()
+--- (which builds a fresh metatable for it, every call) and then pcalls a freshly built closure
+--- once per element. Perfectly fine anywhere it's called on an event ; this one is called per
+--- candidate gate, per rendered frame, for the whole length of a race.
+---@param tab any[]?
+---@param el any
+---@return boolean
+local function arrayHas(tab, el)
+    if not tab then return false end
+    for i = 1, #tab do
+        if tab[i] == el then return true end
+    end
+    return false
+end
+
+--- this client's own participant.
+---
+--- Also a plain loop rather than table.find, for the same reason as arrayHas above (a closure per
+--- call and a pcall per participant) : onUpdate reaches for this on every rendered frame, and used
+--- to do it three or four times over in the same frame. It passes what it gets down to
+--- updateNodegrabberCamera / updatePersonalStart / raceElapsedNowMs now instead.
 ---@return BJRaceParticipant?
 local function getSelfParticipant()
-    if not M.session then return nil end
+    local session = M.session
+    if not session or not session.participants then return nil end
     local selfName = MPConfig.getNickname()
-    return table.find(M.session.participants, function(p) return p.playerName == selfName end)
+    for _, p in ipairs(session.participants) do
+        if p.playerName == selfName then return p end
+    end
+    return nil
 end
 
 --- which phase of which session (services/racePhases.lua : an event runs one or more, each with
@@ -397,7 +424,14 @@ end
 ---@return BJRace?
 local function getRaceForSession(session)
     if not session then return nil end
-    return table.find(beamjoy_races.data, function(r) return r.id == session.raceId end)
+    local races = beamjoy_races.data
+    if not races then return nil end
+    -- a plain loop (see arrayHas) : table.find pcalls its predicate once per race in the server's
+    -- whole list, and onUpdate asks for the running race on every rendered frame
+    for _, r in ipairs(races) do
+        if r.id == session.raceId then return r end
+    end
+    return nil
 end
 
 --- mirrors raceGrid.lua's own sectorEndGates COUNT (not the boundary gates themselves):
@@ -458,7 +492,9 @@ end
 local function isBranchEnd(race, index)
     if not index or not race.gates[index] then return false end
     for _, g in ipairs(race.gates) do
-        if g.step ~= 1 and table.includes(g.parents or {}, index) then return false end
+        -- arrayHas, not table.includes : this is reached from the per-frame crossing test of a
+        -- branching race, and `g.parents or {}` was allocating an empty table per gate besides
+        if g.step ~= 1 and arrayHas(g.parents, index) then return false end
     end
     return true
 end
@@ -1378,16 +1414,17 @@ local function releaseScenarioLock()
 end
 
 --- this player's race elapsed time right now, ms (see raceUsesSharedClock). nil outside RACE
+---@param own BJRaceParticipant? this client's own participant, when the caller already has it
 ---@return number?
-local function raceElapsedNowMs()
+local function raceElapsedNowMs(own)
     if not M.session or M.session.state ~= "RACE" then return nil end
     -- waiting for their turn (one at a time) : no clock of theirs yet
     if M.personalAt == WAITING_TURN then return 0 end
     if M.raceUsesSharedClock then
         local serverNow = beamjoy_clockSync.serverNowMs()
         -- a start of their own (a run, a staggered start, a mid-phase join) counts from its own base
-        local own = M.personalAt and getSelfParticipant()
-        local base = own and own.clockBaseMs or M.session.goAtMs
+        local participant = M.personalAt and (own or getSelfParticipant()) or nil
+        local base = participant and participant.clockBaseMs or M.session.goAtMs
         if serverNow and base then
             return math.max(0, serverNow - base)
         end
@@ -3040,16 +3077,41 @@ local function onSessionRemoved(sessionId)
     end
 end
 
+--- each gate's plane, derived from its authored pos/dir once instead of six fresh vectors every
+--- time a car is tested against it. Weak keys : a gate table the race list dropped goes with it.
+--- The authored numbers are kept alongside and compared, so a gate moved in the editor rebuilds
+--- its own plane on the next test rather than being tested against where it used to be.
+---@type table<table, table>
+local gateBasis = setmetatable({}, { __mode = "k" })
+
+--- the position the per-frame gate test works from, reused frame to frame (see onUpdate)
+local framePos = vec3()
+
+--- gate indices that could be crossed this frame, reused the same way (see onUpdate)
+local frameCandidates = {}
+
+--- a point in the gate's own frame : across it, through it (signed, the plane test below) and up
 ---@param gate BJRaceGate
 ---@param vPos vec3
 ---@return number lx, number ly, number lz
 local function gateLocalCoords(gate, vPos)
-    local pos = vec3(gate.pos.x, gate.pos.y, gate.pos.z)
-    local dir = vec3(gate.dir.x, gate.dir.y, gate.dir.z):normalized()
-    local up = vec3(0, 0, 1)
-    local right = dir:cross(up)
-    local d = vPos - pos
-    return d:dot(right), d:dot(dir), d:dot(up)
+    local gPos, gDir = gate.pos, gate.dir
+    local b = gateBasis[gate]
+    if not b or b.px ~= gPos.x or b.py ~= gPos.y or b.pz ~= gPos.z or
+        b.ax ~= gDir.x or b.ay ~= gDir.y or b.az ~= gDir.z then
+        local dir = vec3(gDir.x, gDir.y, gDir.z):normalized()
+        local right = dir:cross(vec3(0, 0, 1))
+        b = {
+            px = gPos.x, py = gPos.y, pz = gPos.z,
+            ax = gDir.x, ay = gDir.y, az = gDir.z,
+            dx = dir.x, dy = dir.y, dz = dir.z,
+            rx = right.x, ry = right.y, rz = right.z,
+        }
+        gateBasis[gate] = b
+    end
+    local ox, oy, oz = vPos.x - b.px, vPos.y - b.py, vPos.z - b.pz
+    -- up is (0, 0, 1), so the third coordinate is the offset's own z
+    return ox * b.rx + oy * b.ry + oz * b.rz, ox * b.dx + oy * b.dy + oz * b.dz, oz
 end
 
 --- a lights start's own moments, on the shared clock. Nil when this isn't one, or when there's
@@ -3302,9 +3364,9 @@ end
 --- frame, so the camera went haywire whenever someone grabbed. While the node grabber is in use
 --- those cameras are allowed ; once it's let go, back to the vehicle camera the racer was on, and
 --- blocked again. Only while actually racing (the countdown has its own camera lock)
-local function updateNodegrabberCamera()
+---@param own BJRaceParticipant? this client's own participant (onUpdate has it already)
+local function updateNodegrabberCamera(own)
     local s = M.session and M.session.settings
-    local own = M.session and getSelfParticipant()
     local applies = s ~= nil and M.session.state == "RACE" and s.disableCameras == true and
         s.disableNodegrabber ~= true and own ~= nil and not own.finished and not own.dnf and not own.sittingOut
     local inUse = applies and nodegrabberInUse()
@@ -3331,10 +3393,11 @@ end
 --- countdown (a first start ; a run's car rolls on), then put on its slot, held and ghosted for the
 --- countdown, then off. Their gates only count from then (onUpdate)
 ---@return boolean whether they're still waiting for it
-local function updatePersonalStart()
+---@param own BJRaceParticipant? this client's own participant (onUpdate has it already)
+local function updatePersonalStart(own)
     if not M.personalAt then return false end
     local session = M.session
-    local participant = getSelfParticipant()
+    local participant = own or getSelfParticipant()
     if not session or session.state ~= "RACE" or not participant or participant.finished or participant.dnf or
         participant.sittingOut then
         M.personalAt = nil
@@ -3409,8 +3472,12 @@ end
 
 local function onUpdate()
     M.prevFrameElapsedMs = M.frameElapsedMs
-    updateNodegrabberCamera()
-    M.frameElapsedMs = raceElapsedNowMs()
+    -- looked up once for the whole frame and handed to everything below that needs it : between
+    -- them these used to ask for it three or four separate times per rendered frame, each one a
+    -- fresh nickname read and a scan of the field (see getSelfParticipant)
+    local own = getSelfParticipant()
+    updateNodegrabberCamera(own)
+    M.frameElapsedMs = raceElapsedNowMs(own)
     -- the lobby's timers : the lobby's own, and a break's countdown to the next phase
     if M.session and (M.session.state == "GRID" or M.session.state == "BREAK") then
         updateGridCountdown()
@@ -3483,8 +3550,8 @@ local function onUpdate()
     if not M.session or M.session.state ~= "RACE" then return end
     if M.resumePending then return end
     -- waiting for a start of their own : nothing counts yet
-    if updatePersonalStart() then return end
-    local participant = getSelfParticipant()
+    if updatePersonalStart(own) then return end
+    local participant = own
     if not participant or participant.finished or participant.dnf or participant.sittingOut then return end
     local race = getRace()
     if not race then return end
@@ -3497,32 +3564,43 @@ local function onUpdate()
         return
     end
 
-    local vPos = beamjoy_vehicles.getVehiclePositionRotation(myVeh.veh) +
-        vec3(0, 0, myVeh.veh:getInitialHeight() / 2)
+    -- the same point as beamjoy_vehicles.getVehiclePositionRotation() + (0, 0, h/2), written
+    -- into one vector that's reused every frame rather than the seven fresh ones that expression
+    -- built on every rendered frame of every race. Nothing holds on to it : the gate tests below
+    -- read it and are done. checkDnfStall, which does keep its position from tick to tick, still
+    -- builds its own
+    local vPos = beamjoy_vehicles.writeVehiclePosition(myVeh.veh, framePos)
+    vPos.z = vPos.z + myVeh.veh:getInitialHeight() / 2
 
     -- branching paths : more than one physical gate can be a valid "next" at once (parallel
     -- alternates sharing the last-crossed gate as a parent). The player picks one just by driving
     -- through it, so every candidate needs its own local crossing test each frame instead of one
     -- fixed expected index. A non-branching race always has exactly one candidate here, identical
     -- to the old fixed `expectedIndex` computation.
-    local candidates
+    -- the same buffer each frame, trimmed below, instead of a fresh table per frame
+    local candidates = frameCandidates
+    local candidateCount = 0
     if race.branchingEnabled then
-        candidates = {}
         for i, g in ipairs(race.gates) do
             -- a loopable race's own step-1 gate closes the lap from the end of a branch, whether
             -- or not the author linked it back. Mirrors raceGrid.lua's own
             -- identical rule, see its comment for the real bugs this fixes (a forgotten backward
             -- link freezing progress ; the line closing a lap from anywhere on it)
             local isLoopClosing = race.loopable and g.step == 1 and isBranchEnd(race, participant.lastCrossedGate)
-            if isLoopClosing or table.includes(g.parents, participant.lastCrossedGate) then
-                table.insert(candidates, i)
+            if isLoopClosing or arrayHas(g.parents, participant.lastCrossedGate) then
+                candidateCount = candidateCount + 1
+                candidates[candidateCount] = i
             end
         end
     else
         -- just out of the pit lane, the server's echo may not be here yet (racePits.lua)
         local current = beamjoy_racePits and beamjoy_racePits.currentGate(participant) or participant.currentGate
-        candidates = { (current % #race.gates) + 1 }
+        candidateCount = 1
+        candidates[1] = (current % #race.gates) + 1
     end
+    -- whatever the last frame left past the end, so #candidates and the ipairs below still mean
+    -- what they say
+    for i = #candidates, candidateCount + 1, -1 do candidates[i] = nil end
 
     -- clear any stale M.lastLy entry for a gate that ISN'T a candidate this frame, otherwise a
     -- branch alternate's leftover sign from a previous lap/approach could falsely trigger (or
@@ -3530,7 +3608,7 @@ local function onUpdate()
     -- non-branching race only ever has one live candidate at a time by construction, so this is a
     -- no-op for it.
     for idx in pairs(M.lastLy) do
-        if not table.includes(candidates, idx) then
+        if not arrayHas(candidates, idx) then
             M.lastLy[idx] = nil
         end
     end

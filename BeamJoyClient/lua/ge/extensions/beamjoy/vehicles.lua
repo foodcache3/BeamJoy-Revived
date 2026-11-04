@@ -279,6 +279,21 @@ local function onVehicleSwitched(previousVID, newVID)
         -- so "is this vehicle itself ghosted" alone isn't enough to decide anymore either
         M.applyDisplayAlpha(v.veh)
     end
+    -- and the car being switched TO, which the previous side alone never covered. Under
+    -- M.soloGhostVisualReversed the solid one is whichever car this client is actually driving
+    -- (computeDisplayAlpha reads be:getPlayerVehicle(0) live), so a swap at the grid, a rejoin in
+    -- another car or spectating someone mid-race left the new one translucent and the whole field
+    -- translucent with it - exactly the "it's still me who looks ghosted" a collisions-off race
+    -- was reported to show. Its own ghost flag doesn't change just because the camera moved, so
+    -- nothing else was ever going to re-apply it
+    local newVeh = newVID ~= -1 and M.vehicles[newVID] or nil
+    if newVeh and newVeh.veh then M.applyDisplayAlpha(newVeh.veh) end
+    -- and once more a moment later, for the whole field at once : this hook comes from the engine,
+    -- and whether be:getPlayerVehicle(0) already answers the NEW car by the time it runs isn't
+    -- ours to rely on. Only under the reversal, where that answer is what decides the look
+    if M.soloGhostVisualReversed then
+        async.delayTask(function() M.reapplyDisplayAlpha() end, 50, "bjGhostVisualAfterSwitch")
+    end
     if newVID ~= -1 then
         local timeout = GetCurrentTimeMillis() + 2000
         async.task(function(job, ctxt)
@@ -642,11 +657,28 @@ end
 ---@return BJVehicle?
 local function getVehicle(vid, light)
     local v = M.vehicles[vid]
-    if M.vehicles[vid] and not light then
-        v.position, v.rotation = M.getVehiclePositionRotation(v.veh)
-        v.spectators = beamjoy_context.get().players
-            :filter(function(p) return p.currentVehicle == v.remoteVID end)
-            :map(function() return true end)
+    if v and not light then
+        -- position and rotation stay fresh vectors on purpose : callers keep hold of them
+        -- (derbyRunner's own stuck check holds a position from tick to tick as its anchor), so
+        -- writing them in place would quietly turn a snapshot into a live reference
+        v.position = M.writeVehiclePosition(v.veh, vec3())
+        v.rotation = v.veh:getDirectionVector()
+        -- the spectator set rebuilt inside the table this vehicle already carries. Filtering and
+        -- mapping the player list into two new ones instead (each with a metatable of its own,
+        -- each player run through a pcall'd closure twice) was the biggest per-frame allocator
+        -- left in the mod : nametags.lua asks for this, refreshed, for every car it draws
+        local specs = v.spectators
+        if type(specs) ~= "table" then
+            specs = Table()
+            v.spectators = specs
+        end
+        table.clear(specs)
+        local players = beamjoy_context.get().players
+        if type(players) == "table" then
+            for playerName, p in pairs(players) do
+                if p.currentVehicle == v.remoteVID then specs[playerName] = true end
+            end
+        end
     end
     return v
 end
@@ -662,12 +694,35 @@ local function getVehicleByRemoteID(remoteVID, withPosition)
     end
 end
 
+--- getVehiclePositionRotation's position alone, written into a vector the caller already has
+--- instead of returning fresh ones. For a caller that asks every rendered frame and keeps no
+--- reference to the answer (raceRunner.lua's own gate-crossing test), where the five vectors the
+--- expression below builds were pure per-frame garbage.
+---@param veh NGVehicle
+---@param out vec3 written in place
+---@param up vec3? the vehicle's up vector, when the caller already has it
+---@return vec3 out
+local function writeVehiclePosition(veh, out, up)
+    local ux, uy, uz
+    if up then
+        ux, uy, uz = up.x, up.y, up.z
+    else
+        -- three numbers, not a vector : a caller that asks every frame shouldn't be handed one
+        -- more throwaway vec3 just to read its three fields and drop it again
+        ux, uy, uz = veh:getDirectionVectorUpXYZ()
+    end
+    local half = veh:getInitialHeight() / 2
+    local x, y, z = be:getObjectOOBBCenterXYZ(veh:getID())
+    out:set(x - ux * half, y - uy * half, z - uz * half)
+    return out
+end
+
 ---@param veh NGVehicle
 ---@return vec3 pos, vec3 dir, vec3 up
 local function getVehiclePositionRotation(veh)
-    return vec3(be:getObjectOOBBCenterXYZ(veh:getID())) -
-        veh:getDirectionVectorUp() * veh:getInitialHeight() / 2,
-        veh:getDirectionVector(), veh:getDirectionVectorUp()
+    -- one piece of math for both (see writeVehiclePosition), same vectors out as always
+    local up = veh:getDirectionVectorUp()
+    return writeVehiclePosition(veh, vec3(), up), veh:getDirectionVector(), up
 end
 
 ---@param veh NGVehicle
@@ -1844,6 +1899,7 @@ M.getType = getType
 M.markVehicleAsAi = markVehicleAsAi
 M.getVehicleByRemoteID = getVehicleByRemoteID
 M.getVehiclePositionRotation = getVehiclePositionRotation
+M.writeVehiclePosition = writeVehiclePosition
 M.setVehiclePositionRotation = setVehiclePositionRotation
 M.getAllVehicleConfigs = getAllVehicleConfigs
 M.getAllVehicleLabels = getAllVehicleLabels
