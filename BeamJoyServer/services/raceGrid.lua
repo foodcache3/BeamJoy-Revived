@@ -215,6 +215,12 @@
 ---(a full lap of real gate-progress behind, not just a lower lap NUMBER; see
 ---buildSessionPayload's own backmarker computation) ghosts themselves for as long as that stays
 ---true (see BJRaceDefaults.ghostBackmarkers). Default false
+---@field startLights boolean the start sequence is a light gantry, and a jump start costs
+---jumpStartPenaltyS (see BJRaceDefaults.startLights). Default false
+---@field jumpStartPenaltyS number seconds a jump start adds to the race time. 0 : not penalised
+---@field hideOthers boolean every other racer's car hidden on each racer's own client, their
+---own ghosted with it (see BJRaceDefaults.hideOthers). A qualifying phase's rule, usually.
+---Default false
 ---@field showGateNametags boolean whether the "Gate N" text label renders above each gate once
 ---COUNTDOWN/RACE begins (see BJRaceDefaults.showGateNametags). Default false
 ---@field limitVisibleGates boolean only render the next visibleGateCount upcoming gates once
@@ -1080,6 +1086,20 @@ local function buildSettings(race, overrides)
         ghostBackmarkers = defaults.ghostBackmarkers == true
     end
 
+    local startLights = false
+    if overrides.startLights ~= nil then
+        startLights = overrides.startLights == true
+    elseif defaults.startLights ~= nil then
+        startLights = defaults.startLights == true
+    end
+
+    local hideOthers = false
+    if overrides.hideOthers ~= nil then
+        hideOthers = overrides.hideOthers == true
+    elseif defaults.hideOthers ~= nil then
+        hideOthers = defaults.hideOthers == true
+    end
+
     local showGateNametags = false
     if overrides.showGateNametags ~= nil then
         showGateNametags = overrides.showGateNametags == true
@@ -1187,6 +1207,10 @@ local function buildSettings(race, overrides)
         ghostOnCountdown = ghostOnCountdown,
         disableCollisions = disableCollisions,
         ghostBackmarkers = ghostBackmarkers,
+        hideOthers = hideOthers,
+        startLights = startLights,
+        jumpStartPenaltyS = math.clamp(tonumber(overrides.jumpStartPenaltyS) or
+            tonumber(defaults.jumpStartPenaltyS) or 5, 0, 60),
         showGateNametags = showGateNametags,
         limitVisibleGates = limitVisibleGates,
         visibleGateCount = math.max(1, math.min(math.floor(tonumber(overrides.visibleGateCount) or
@@ -1448,6 +1472,11 @@ local function startCountdown(session, race, grid, orderedBy)
     -- utils_async.delayTask, whose whole-second clock fired up to ~2s after the countdown the
     -- clients displayed
     session.goAtMs = services_clockSync.nowMs() + math.floor(session.settings.countdown * 1000)
+    -- a lights start : the five lights come on a second apart and then hold, lit, for a moment
+    -- nobody can time in advance before they go out together at goAtMs. The hold is the server's
+    -- to pick (every client has to run the same sequence, so it goes out with the session), and
+    -- it's picked fresh for each phase's own start - the whole point is that it can't be learnt
+    session.lightsHoldMs = session.settings.startLights and math.random(200, 3000) or nil
     local phase = currentPhase(session)
     session.phaseEndsAtMs = phase.timeLimitMin and session.goAtMs + math.floor(phase.timeLimitMin * 60000) or nil
     -- "individual" : one at a time from the first slot, in grid order, intervalS apart
@@ -1456,7 +1485,16 @@ local function startCountdown(session, race, grid, orderedBy)
         p.elapsedOffsetMs = 0
         p.awaitingStart = nil
         p.outLapPending = outLap
-        if phase.start == services_racePhases.START.INDIVIDUAL then
+        if phase.start == services_racePhases.START.GROUPS then
+            -- released in waves : the first groupSize cars at the green light, the next wave
+            -- intervalS later, and so on. Each car starts from its own grid slot (no
+            -- runStartPosition : the client keeps them where they already are), so a wave lines
+            -- up as a grid of its own rather than queueing at the first slot
+            local size = math.max(2, phase.groupSize or 2)
+            local wave = math.ceil(i / size) - 1
+            p.startAtMs = session.goAtMs + wave * (phase.intervalS or 10) * 1000
+            p.clockBaseMs = p.startAtMs
+        elseif phase.start == services_racePhases.START.INDIVIDUAL then
             p.startAtMs = session.goAtMs + (i - 1) * (phase.intervalS or 10) * 1000
             p.clockBaseMs = p.startAtMs
             p.runStartPosition = race.startPositions[1]
@@ -2528,6 +2566,7 @@ local function resetForPhase(p)
     p.lapSectors, p.lapSectorHistory, p.bestSectorMs = {}, {}, {}
     p.finished, p.dnf = false, false
     p.disqualified, p.penaltyMs, p.lastResetMs = nil, 0, nil
+    p.jumpStart = nil
     p.isNewPB, p.isNewRecord, p.leaderboardKey, p.replacedEntry = nil, nil, nil, nil
     p.startPosition, p.gridPosition = nil, nil
     p.score, p.scoreKey, p.scoreDisplay, p.awaitingStart = nil, nil, nil, nil
@@ -2550,6 +2589,7 @@ function M.nextPhase(sessionId)
     local phase = currentPhase(session)
     session.settings = services_racePhases.effectiveSettings(session.baseSettings, phase)
     session.goAtMs = nil
+    session.lightsHoldMs = nil
     local takers
     if phase.takes then
         local rows = phase.takes.from and session.phaseResults[phase.takes.from] or session.eventStandings
@@ -2564,7 +2604,7 @@ end
 
 ---@param ctxt BJSContext
 ---@param raceId integer
----@param opts {joinable: boolean?, laps: integer?, respawnStrategy: string?, placementMode: string?, gridTimeout: integer?, gridReadyTimeout: integer?, countdown: integer?, dnfEnabled: boolean?, dnfTimeout: integer?, resetPenaltyEnabled: boolean?, resetPenaltySeconds: integer?, autoSpectateOnFinish: boolean?, disableNodegrabber: boolean?, disableCameras: boolean?, disableGravityChange: boolean?, vehicleRestrictionMode: string?, vehicleRestrictionModel: string?, vehicleRestrictionParts: table?, vehicleRestrictionVars: table?, vehicleRestrictionPaints: table?, vehicleRestrictionLabel: string?, vehicleRestrictionPoolPresetId: integer?, ghostOnCountdown: boolean?, disableCollisions: boolean?, ghostBackmarkers: boolean?, showGateNametags: boolean?, limitVisibleGates: boolean?, visibleGateCount: integer?, showGates: boolean?, waypointBeams: boolean?, allowTuning: boolean?}?
+---@param opts {joinable: boolean?, laps: integer?, respawnStrategy: string?, placementMode: string?, gridTimeout: integer?, gridReadyTimeout: integer?, countdown: integer?, dnfEnabled: boolean?, dnfTimeout: integer?, resetPenaltyEnabled: boolean?, resetPenaltySeconds: integer?, autoSpectateOnFinish: boolean?, disableNodegrabber: boolean?, disableCameras: boolean?, disableGravityChange: boolean?, vehicleRestrictionMode: string?, vehicleRestrictionModel: string?, vehicleRestrictionParts: table?, vehicleRestrictionVars: table?, vehicleRestrictionPaints: table?, vehicleRestrictionLabel: string?, vehicleRestrictionPoolPresetId: integer?, ghostOnCountdown: boolean?, disableCollisions: boolean?, ghostBackmarkers: boolean?, hideOthers: boolean?, startLights: boolean?, jumpStartPenaltyS: number?, showGateNametags: boolean?, limitVisibleGates: boolean?, visibleGateCount: integer?, showGates: boolean?, waypointBeams: boolean?, allowTuning: boolean?}?
 local function raceStart(ctxt, raceId, opts)
     if not ctxt.sender then return end
     -- multiple independent sessions of the SAME race running concurrently (different players) is
@@ -3431,6 +3471,44 @@ local function penaltySecondsText(ms)
     return string.format("%.1f", tenths / 10)
 end
 
+--- a jump start reported by a racer's own client (raceRunner.lua : their car moved off its slot
+--- before the lights went out, a lights start only). Their own client is what sees it, the same
+--- trust model gate crossings already run on ; the checks here are the ones the server can make -
+--- the right session and state, a racer who's really in it, the rule really on, and once only.
+--- The penalty goes on their race time like any other, and they're told why
+---@param ctxt table
+---@param sessionId string
+local function raceJumpStart(ctxt, sessionId)
+    if not ctxt.sender then return end
+    local session = M.sessions[sessionId]
+    if not session then return end
+    -- the window it can be reported in : the countdown itself, or the first seconds of the race
+    -- (the report races the server's own RACE transition, and a client on a slow link can be late)
+    if session.state ~= "COUNTDOWN" and session.state ~= "RACE" then return end
+    if session.state == "RACE" and session.goAtMs and
+        services_clockSync.nowMs() > session.goAtMs + 10000 then
+        return
+    end
+    if session.settings.startLights ~= true then return end
+    local p = session.participants[ctxt.senderID]
+    if not p or p.finished or p.dnf or p.sittingOut or p.jumpStart then return end
+    -- recorded whether or not it costs anything, so it can't be reported twice and so the HUD and
+    -- the results can show it even with the penalty set to 0
+    p.jumpStart = true
+    local ms = math.floor(math.max(0, tonumber(session.settings.jumpStartPenaltyS) or 0) * 1000)
+    if ms > 0 then
+        p.penaltyMs = math.min(STAFF_PENALTY_TOTAL_MAX_MS, (p.penaltyMs or 0) + ms)
+    end
+    apiEvent("racerJumpStart", session, p, { penaltyMs = ms })
+    local target = services_players.players:find(function(pl) return pl.playerID == p.playerID end)
+    if target then
+        communications_tx.sendToPlayer(p.playerID, "toast", "warning",
+            services_lang.get(ms > 0 and "race.jumpStart" or "race.jumpStartFree", target.lang)
+            :var({ seconds = penaltySecondsText(ms) }))
+    end
+    pushSessionUpdate(session)
+end
+
 --- race control for staff watching a race (raceSpectate) : a time penalty on a racer, clearing
 --- their penalties, disqualifying them, or reinstating them. Only while the race is running, so
 --- the results (and the Discord post, at the end) are final once everyone's done.
@@ -4169,6 +4247,7 @@ local function onInit()
     communications_rx.addHandler("raceStaffPhase", M.raceStaffPhase)
     communications_rx.addHandler("raceReset", M.raceReset)
     communications_rx.addHandler("racePit", M.racePit)
+    communications_rx.addHandler("raceJumpStart", M.raceJumpStart)
     -- games before client build 2759
     communications_rx.addHandler("raceResetPenalty", M.raceReset)
 
@@ -4478,6 +4557,7 @@ M.raceSetGridSlot = raceSetGridSlot
 M.unreadyOnVehicleChange = unreadyOnVehicleChange
 M.raceGateCrossed = raceGateCrossed
 M.raceDNF = raceDNF
+M.raceJumpStart = raceJumpStart
 M.raceSpectate = raceSpectate
 M.raceStopSpectate = raceStopSpectate
 M.raceStaffAction = raceStaffAction

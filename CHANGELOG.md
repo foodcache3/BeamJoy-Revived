@@ -8,7 +8,88 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2489, client build 2766 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2490, client build 2768 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **The start lights hang near the top of the screen** (direct request) instead of sitting in the
+  middle of it, over the stretch of track you're about to launch down. Only the gantry moved ; the
+  counted countdown, the finish and phase popups are where they were. *(client)*
+
+- **Joining a race already under way takes you to its lobby** (direct report : the menu just closed
+  instead). A mid-race join sits you out until you ready up, and that "ready up to start" button
+  lives in the race lobby, which was easy to never find : the Join button in **Happening now** now
+  opens the lobby it just put you in, the same way joining from a notice always did, and the pad's
+  Focus control lands there too while you're waiting to ready up. The same goes for a hunt, an
+  infected game or a derby joined from that list. *(client + UI)*
+
+- **A late joiner's next gate turns green.** Reported : joining a race under way loaded the gates
+  but never lit the one to drive through. The marker layer only redraws when its own signature
+  changes, and that signature named neither `sittingOut` nor `lateJoining` - readying up mid-race
+  changes nothing else in it (same session, same state, still gate 0), so the route stayed drawn
+  exactly as it was while they were still sitting out. Both are part of the signature now, and the
+  route also leads the way while a late joiner is still waiting to ready up, rather than leaving
+  them a track full of plain gates with nothing green anywhere on it. *(client)*
+
+- **A race with collisions off ghosts everyone else, not you.** Reported again. The look itself
+  was already there (your own car solid, every other one see-through, since nothing on track can
+  touch you all race), but it was decided at the moment the ghost was applied and then left alone :
+  a car swapped or respawned at the grid never carried the reason over, a phase boundary cleared
+  it, and a rejoin set it from another path, any of which left the old look in place. It's now
+  recomputed from the race itself every second, the whole-race ghost is re-asserted on whatever car
+  you're actually in, and another player's car that resets mid-race goes back to see-through
+  instead of quietly turning solid. *(client)*
+
+- **A garage repair leaves the car facing the way it was.** Reported : repairing at a map garage
+  spun the car on the spot. The repair is an in-place reset through the game's own
+  `spawn.safeTeleport`, which turns whatever rotation it's handed by a half turn before setting it
+  (read its body : `rot = quat(0,0,1,0) * rot`, then `setPosRot`). Every one of the game's own
+  in-place calls passes `quatFromDir(veh:getDirectionVector())` for that reason ; this one passed
+  the car's raw `getRotation()`, which came back out turned - and on a settled, deformed car not
+  even by a clean half turn. It now passes what the game does, which also sets the car upright on
+  its wheels as a garage repair should.
+
+- **Qualifying on an empty track** (direct request : "need to be an option to hide other racers
+  for some quali sessions"). A new race setting, **Hide other racers** : every other racer's car
+  is not drawn at all on your client (not translucent : gone), their nametags with them, and your
+  own car is ghosted so you can't hit what you can't see. Cars that aren't in the race are left
+  alone - traffic is part of the track. Set it for the whole race in the start menu or the race
+  editor's defaults, or, as it's meant to be used, as one **phase's** rule, so qualifying runs on
+  an empty track and the race that follows doesn't. A spectator still sees the whole field.
+  *(server + client ; checked in the Lua harness at event and phase level)*
+
+- **A lights start, and jumping it costs you** (direct request : "add different style start with
+  lights instead of countdown where jumps can happen and be penalized"). **Start sequence:
+  Lights** replaces the counted countdown with a five-light gantry : the lights come on one a
+  second, hold lit for a moment the server picks fresh for every start (0.2 to 3 s, so it can't be
+  learnt or timed), then go out together - that's the green. Your car is released from its freeze
+  as the first light comes on, so holding it on the brake is your own job, and moving off your slot
+  before the lights go out is a jump start : **Jump start penalty** seconds on your race time
+  (0 leaves it unpunished, and it's still shown). The gantry is silent and reuses the drag tree's
+  own bulbs. A plugin hears `RacerJumpStart`. *(server + client + UI)*
+
+- **Group starts** (direct request : "add 'groups' starting option where x number of people are
+  released at a time"). A new start kind, **Waves** : the grid is released a few cars at a time,
+  each wave a set interval after the one before, every car from its own slot and timed from its
+  own start. It's a phase's start in the phase editor, and for a plain race the start menu's
+  **Release in waves of** does the same thing. A point-to-point track treats waves as a grid start,
+  not as solo runs. *(server ; the waves checked on a real six-slot grid in the Lua harness)*
+
+- **A plugin can set the GPS** (direct question : "let api set gps? is that already possible?" -
+  it wasn't). New API method **`gps.set`** : `pos {x, y, z}` puts the game's own route on a
+  player's screen, `clear: true` takes it away, targeted exactly like `hud.message` (everyone, a
+  list, one player, or a race's racers and / or spectators). It's the same native route BeamJoy's
+  own deliveries and fuel stations use, so the last one set is the one shown ; a race doesn't use
+  it at all, so it's free during one. *(server + client, with the API README)*
+
+- **The race list searches and sorts** (direct request : "add little sort + filter icons for the
+  race browser that lets you search by name and also sort by alphabetical or by date created").
+  Two small icons on the list's head : one opens a name box that filters as you type, the other
+  cycles the order between **A-Z**, **Newest** and **Oldest**. Closing the box clears it, so a
+  hidden filter can't make races look missing. There's no authored date on a race, but ids are
+  handed out in order, so "newest" is genuinely the order they were created in. *(UI)*
+
+- **Reordering start positions was already there** (direct request) : the race editor's **Starts**
+  section has a drag handle on every row, and dragging one changes the grid order (slot 1 is pole).
+  In the lobby, the **manual** placement mode lets racers pick their own slot instead.
 
 - **Your own car is yours to drive again** (direct reports : "losing all control of your own
   vehicle", "right now I can't steer or anything using my wheel or keyboard controls. my occupant

@@ -12,6 +12,45 @@
         z-index: 5;
     }
 
+    /* every other mode sits in the middle of the screen ; the gantry hangs near the top of it
+       (direct request), where a real one is and where it isn't sitting on top of the track you're
+       about to launch down. `justify-center` is applied from the template per mode rather than as
+       a static class, so neither rule has to fight the other */
+    #beamjoy-race-countdown.lights-top {
+        justify-content: flex-start;
+        padding-top: 7vh;
+    }
+
+    /* the start gantry (mode "lights") : five columns of two, lit red one column at a time,
+       all out together for the green. The bulbs are the drag tree's (windows/dragTree), scoped
+       here on their own so the two components stay independent */
+    #beamjoy-race-countdown .race-countdown-lights {
+        --bulb: min(8vh, 5.4vw);
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--bulb) * 0.16);
+        padding: calc(var(--bulb) * 0.22);
+        border-radius: calc(var(--bulb) * 0.3);
+        background: rgba(0, 0, 0, 0.42);
+        box-shadow: 0 0 0 calc(var(--bulb) * 0.03) rgba(255, 255, 255, 0.08);
+    }
+    #beamjoy-race-countdown .race-countdown-lights .rl-row {
+        display: flex;
+        gap: calc(var(--bulb) * 0.22);
+    }
+    #beamjoy-race-countdown .race-countdown-lights .rl-bulb {
+        width: var(--bulb);
+        height: var(--bulb);
+        border-radius: 50%;
+        background: radial-gradient(50% 50% at 50% 50%, rgba(0, 0, 0, 0) 52%, rgba(212, 212, 212, 0.07) 63%, rgba(0, 0, 0, 0) 100%),
+            radial-gradient(120% 120% at 50% -20%, rgba(255, 255, 255, 0.1) 0%, rgba(0, 0, 0, 0) 55%), #060607;
+        box-shadow: inset 0 0 0 calc(var(--bulb) * 0.03) rgba(255, 255, 255, 0.08);
+    }
+    #beamjoy-race-countdown .race-countdown-lights .rl-bulb.on {
+        background: radial-gradient(50% 50% at 50% 50%, rgba(255, 175, 63, 0.7) 0%, rgba(255, 154, 65, 0) 100%), #f00;
+        box-shadow: 0 0 0 calc(var(--bulb) * 0.04) #ff5900, 0 0 calc(var(--bulb) * 0.33) #f00;
+    }
+
     #beamjoy-race-countdown .race-countdown-name {
         font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC",
             sans-serif;
@@ -95,7 +134,8 @@
 
 <div
     id="beamjoy-race-countdown"
-    class="pointer-events-none d-flex flex-column align-center justify-center"
+    class="pointer-events-none d-flex flex-column align-center"
+    ng-class="$ctrl.mode === 'lights' ? 'lights-top' : 'justify-center'"
     ng-if="$ctrl.active"
 >
     <div class="race-countdown-name" ng-if="$ctrl.raceName">
@@ -103,6 +143,18 @@
     </div>
     <div class="race-countdown-name" ng-if="$ctrl.phaseName && $ctrl.mode === 'countdown'" style="font-size: 0.7em; opacity: 0.8">
         {{$ctrl.phaseName}}
+    </div>
+    <!-- the start gantry : lights out is the green, so there's no number and no "GO!" -->
+    <div class="race-countdown-lights" ng-if="$ctrl.mode === 'lights'" aria-hidden="true">
+        <div class="rl-row">
+            <div class="rl-bulb" ng-repeat="i in $ctrl.LIGHTS" ng-class="{on: $ctrl.lit(i)}"></div>
+        </div>
+        <div class="rl-row">
+            <div class="rl-bulb" ng-repeat="i in $ctrl.LIGHTS" ng-class="{on: $ctrl.lit(i)}"></div>
+        </div>
+    </div>
+    <div class="race-countdown-badge penalised" ng-if="$ctrl.mode === 'lights' && $ctrl.jumped">
+        <span>{{'beamjoy.race.jumpStart' | translate}}</span>
     </div>
     <div
         class="race-countdown-number"

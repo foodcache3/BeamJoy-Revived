@@ -27,12 +27,25 @@ local CAMERA_RELEASE_SECONDS = 3
 local WAITING_TURN = math.huge
 local DNF_WARNING_SECONDS = 10
 local FINISH_POPUP_SECONDS = 8 -- was 4 ; reported as disappearing too fast to actually read
+-- a lights start (BJRaceDefaults.startLights) : five lights come on a second apart, hold lit for
+-- a moment the server picked and nobody can learn (session.lightsHoldMs), then go out together -
+-- that's the green. The field is released from its freeze as the FIRST light comes on, so holding
+-- the car on the brake is the racer's own job and a jump start is a real thing that can happen
+local LIGHTS_COUNT = 5
+local LIGHTS_STEP_MS = 1000
+-- how far a car may creep off its slot before it counts as a jump start. Loose enough to forgive
+-- a car settling on its suspension (and a slope's inch of roll) the moment the freeze lifts,
+-- tight enough that a real launch is caught well before the line
+local JUMP_DISTANCE_M = 0.75
 
 local M = {
     dependencies = { "beamjoy_races", "beamjoy_vehicles", "beamjoy_players", "camera" },
 
     ---@type BJRaceSession?
     session = nil,
+    --- true while this client is hiding the other racers' cars (the hideOthers rule, see
+    --- applyHideOthers) : what it hides is beamjoy_vehicles.hiddenVids
+    hidingOthers = false,
     ---@type boolean? true when this race's times are measured on the server's shared clock
     ---(beamjoy_clockSync) from the shared green light (session.goAtMs), decided once at the RACE
     ---transition so a clock estimate arriving mid-race can't make the timer jump. Every racer on
@@ -2124,6 +2137,89 @@ local function spawnRejoinCar(config)
 end
 
 ---@param session BJRaceSession
+--- hideOthers (a phase's rule, usually a qualifying one) : every OTHER racer's car hidden on
+--- this client, and this racer's own ghosted so it can't hit a car nobody can see. Only while
+--- actually racing it (COUNTDOWN/RACE, this player taking part) : a spectator still sees the
+--- field, or there'd be nothing to spectate, and the lobby still shows who's on the grid.
+--- Cars that aren't in the race are left alone - traffic and bystanders are part of the track.
+--- Idempotent, and re-run every second (onSlowUpdate) so a racer who respawns or switches car
+--- mid-phase disappears again without waiting for a session push
+local function applyHideOthers()
+    local session = M.session
+    local active = session ~= nil and session.settings ~= nil and
+        session.settings.hideOthers == true and
+        (session.state == "COUNTDOWN" or session.state == "RACE")
+    if active then
+        local own = getSelfParticipant()
+        active = own ~= nil and not own.finished and not own.dnf and not own.sittingOut
+    end
+
+    if not active then
+        if M.hidingOthers then
+            M.hidingOthers = false
+            beamjoy_vehicles.clearHidden()
+            local myVeh = beamjoy_vehicles.getCurrentOwn()
+            if myVeh then beamjoy_vehicles.setGhostReason(myVeh.vid, "hideOthers", false) end
+        end
+        return
+    end
+
+    M.hidingOthers = true
+    local selfName = MPConfig.getNickname()
+    local racerNames = {}
+    for _, p in pairs(session.participants) do
+        if p.playerName and p.playerName ~= selfName then racerNames[p.playerName] = true end
+    end
+    beamjoy_vehicles.vehicles:forEach(function(mpVeh)
+        beamjoy_vehicles.setHidden(mpVeh.vid, racerNames[mpVeh.ownerName] == true)
+    end)
+    -- their cars are invisible to this client, so collisions with them have to go : the ghost is
+    -- this client's own car, the only one it can ghost (BeamNG has no "ghost against these cars
+    -- only"), on its own reason so it never fights ghostOnCountdown or disableCollisions
+    local myVeh = beamjoy_vehicles.getCurrentOwn()
+    if myVeh then beamjoy_vehicles.setGhostReason(myVeh.vid, "hideOthers", true) end
+end
+
+--- a car this client is hiding (hideOthers) : its nametag goes with it (nametags.lua)
+---@param v BJVehicle
+---@return boolean
+function M.isHiddenRacerVehicle(v)
+    return M.hidingOthers == true and v ~= nil and beamjoy_vehicles.hiddenVids[v.vid] == true
+end
+
+--- Who looks ghosted while this client is in a race whose ghost lasts the whole way : with
+--- collisions off (or a solo run), nothing on track can touch you, so it's the OTHER cars that
+--- are drawn see-through and your own that stays solid (vehicles.lua's own
+--- M.soloGhostVisualReversed).
+---
+--- Reported again : a collisions-off race still showed the player's own car as the ghosted one.
+--- setGhostReason decides this at the moment it happens to be called, which leaves it on whatever
+--- it last computed - a car swapped or respawned at the grid never carried the reason over, a
+--- phase boundary clears it, and a rejoin sets it from a different path. Recomputed from the
+--- session itself every second instead, so neither the reason nor the look can be left stale.
+--- Idempotent ; both setters already no-op when nothing actually changes.
+local function applyGhostVisual()
+    local session = M.session
+    local settings = session and session.settings or nil
+    local reversed = false
+    if settings and (session.state == "COUNTDOWN" or session.state == "RACE") then
+        local own = getSelfParticipant()
+        if own and not own.finished and not own.dnf and not own.sittingOut then
+            -- a solo run keeps the grid ghost for its whole duration (see the COUNTDOWN
+            -- transition), which is the other case this look was made for
+            reversed = settings.disableCollisions == true or
+                (settings.ghostOnCountdown ~= false and #session.participants <= 1)
+            -- the look follows a real ghost, it never stands in for one : a car that wasn't the
+            -- one the countdown ghosted gets the reason now rather than only looking solid
+            if settings.disableCollisions == true then
+                local myVeh = beamjoy_vehicles.getCurrentOwn()
+                if myVeh then beamjoy_vehicles.setGhostReason(myVeh.vid, "noCollisionRace", true) end
+            end
+        end
+    end
+    beamjoy_vehicles.setSoloGhostVisualReversed(reversed)
+end
+
 local function onSessionUpdate(session)
     adoptSession(session, M.session)
     -- this client already went green on its own (startAtGreenLight) : a push the server sent
@@ -2549,6 +2645,9 @@ local function onSessionUpdate(session)
         M.countdownStartMs = GetCurrentTimeMillis()
         M.countdownTotal = session.settings.countdown
         M.lastSentSeconds = nil
+        -- a lights start's own state, fresh for this phase's start (the hold is picked again for
+        -- each one, and a jump start in an earlier phase is already paid for)
+        M.lastSentLights, M.jumpStartFrom, M.jumpStartSent, M.lightsStartUsed = nil, nil, nil, nil
 
         -- per direct request (revised again) : still starts the countdown on the EXTERNAL
         -- camera, but no longer LOCKS it there. A plain one-time setCamera, not forceCamera
@@ -2654,7 +2753,11 @@ local function onSessionUpdate(session)
         camera.blockCameras(table.unpack(raceBlockedCameras()))
         extensions.hook("onBJScenarioChanged")
         -- waiting for their turn : no "GO!" for them (their own countdown comes)
-        beamjoy_communications_ui.send("BJRaceCountdown", personalLater and { active = false } or { active = true, seconds = 0 })
+        -- a lights start ends with the lights out, which IS the green : the big "GO!" would
+        -- only land on top of the gantry a moment after it said the same thing
+        beamjoy_communications_ui.send("BJRaceCountdown", personalLater and { active = false } or
+            (M.lightsStartUsed and { active = true, mode = "lights", lights = 0, green = true,
+                jumped = M.jumpStartSent == true } or { active = true, seconds = 0 }))
         -- async.delayTask takes MILLISECONDS (its own param is literally named delayMs, see
         -- async.lua), not seconds ; every delayTask call in this file used to pass a bare
         -- "seconds" value straight through unconverted, which was the actual root cause behind
@@ -2817,6 +2920,13 @@ local function onSessionUpdate(session)
         end
     end
 
+    -- qualifying on an empty track (see applyHideOthers) : re-checked on every push, since the
+    -- rule itself changes at a phase boundary and the field changes as racers join or drop
+    applyHideOthers()
+    -- who looks ghosted (see applyGhostVisual) : same reasoning, and this push is where a phase's
+    -- own collisions rule arrives
+    applyGhostVisual()
+
     pushHud()
     pushRaceInfo()
 
@@ -2942,14 +3052,85 @@ local function gateLocalCoords(gate, vPos)
     return d:dot(right), d:dot(dir), d:dot(up)
 end
 
+--- a lights start's own moments, on the shared clock. Nil when this isn't one, or when there's
+--- no shared clock to run it on (every client has to light the same light at the same instant, and
+--- a jump start has to be judged against the same green light for everyone : without the clock the
+--- race counts down in numbers as it always did)
+---@param session table?
+---@return integer? firstLightMs, integer? lastLightMs, integer? lightsOutMs, integer? stepMs
+local function lightsTiming(session)
+    if not session or not session.settings or session.settings.startLights ~= true then return end
+    if not session.goAtMs then return end
+    local hold = session.lightsHoldMs or LIGHTS_STEP_MS
+    local countdownMs = math.floor((tonumber(session.settings.countdown) or 10) * 1000)
+    -- the whole sequence has to fit inside the countdown this race is set to : a light a second
+    -- unless that leaves no room, in which case they come on quicker rather than starting before
+    -- the countdown did
+    local step = math.min(LIGHTS_STEP_MS,
+        math.max(200, math.floor((countdownMs - hold) / LIGHTS_COUNT)))
+    local out = session.goAtMs
+    local last = out - hold
+    return last - (LIGHTS_COUNT - 1) * step, last, out, step
+end
+
 --- ticks the countdown UI and hands camera control back ~3s before the green light (BJI
---- convention) while keeping the vehicle frozen until the actual start
+--- convention) while keeping the vehicle frozen until the actual start (a lights start : until the
+--- first light instead, see lightsTiming)
 local function updateCountdown()
     if not M.scenarioLocked or not M.countdownStartMs then return end
 
     local myVeh = beamjoy_vehicles.getCurrentOwn()
-    if myVeh and myVeh.veh.froze ~= "1" then
-        beamjoy_vehicles.setFreeze(myVeh.vid, true)
+    local firstLightMs, lastLightMs, lightsOutMs, stepMs = lightsTiming(M.session)
+    local clockNow = firstLightMs and beamjoy_clockSync.serverNowMs() or nil
+    local lights = clockNow ~= nil
+    local released = lights and clockNow >= firstLightMs
+    if myVeh and not released then
+        if myVeh.veh.froze ~= "1" then beamjoy_vehicles.setFreeze(myVeh.vid, true) end
+    elseif myVeh then
+        -- the lights are on and the car is theirs to hold : from here the freeze is gone, and
+        -- where it stands now is what a jump start is measured from. Taken whether or not the
+        -- freeze was still on, since a car that came late to the grid was never frozen at all
+        if myVeh.veh.froze == "1" then beamjoy_vehicles.setFreeze(myVeh.vid, false) end
+        if not M.jumpStartFrom then M.jumpStartFrom = vec3(myVeh.veh:getPosition()) end
+    end
+    if lights then M.lightsStartUsed = true end
+
+    -- moved off its slot before the lights went out : reported once, the server decides what it
+    -- costs (raceGrid.lua's raceJumpStart) and tells them
+    if lights and myVeh and M.jumpStartFrom and not M.jumpStartSent and clockNow < lightsOutMs then
+        if (vec3(myVeh.veh:getPosition()) - M.jumpStartFrom):length() > JUMP_DISTANCE_M then
+            M.jumpStartSent = true
+            beamjoy_communications.send("raceJumpStart", M.session.id)
+        end
+    end
+
+    if lights then
+        local lit = LIGHTS_COUNT
+        if clockNow >= lightsOutMs then
+            lit = 0
+        elseif clockNow < lastLightMs then
+            lit = math.max(0, math.min(LIGHTS_COUNT,
+                1 + math.floor((clockNow - firstLightMs) / stepMs)))
+        end
+        local key = string.format("%d|%s", lit, tostring(M.jumpStartSent))
+        if key ~= M.lastSentLights then
+            M.lastSentLights = key
+            -- the race/phase name the COUNTDOWN transition already sent is kept by the component
+            beamjoy_communications_ui.send("BJRaceCountdown", { active = true, mode = "lights",
+                lights = lit, green = clockNow >= lightsOutMs, jumped = M.jumpStartSent == true })
+        end
+        -- the camera goes back to the player as the first light comes on, which is also when
+        -- the car becomes theirs to hold : never later than the plain countdown's own handover
+        if not M.cameraReleased and released then
+            M.cameraReleased = true
+            if camera.getCamera() == camera.CAMERAS.EXTERNAL then
+                restorePreviousCamera()
+            else
+                M.previousCamera = nil
+            end
+            extensions.hook("onBJScenarioChanged")
+        end
+        return
     end
 
     local remaining
@@ -3457,6 +3638,8 @@ end
 
 local function onSlowUpdate()
     checkDnfStall()
+    applyHideOthers()
+    applyGhostVisual()
     followTurn(M.session or M.spectatingSession)
     if M.spawnQueueForced then
         flushSpawnQueue()

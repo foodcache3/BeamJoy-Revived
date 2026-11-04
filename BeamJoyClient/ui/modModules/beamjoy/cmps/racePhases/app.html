@@ -188,9 +188,14 @@
                 </button>
             </div>
         </div>
-        <div class="bjr-field" ng-if="p.start === 'individual'" ng-class="{locked: $ctrl.isLocked('start')}">
+        <div class="bjr-field" ng-if="p.start === 'individual' || p.start === 'groups'" ng-class="{locked: $ctrl.isLocked('start')}">
             <span class="name" title="{{'beamjoy.racePhases.intervalS.tooltip' | translate}}">{{'beamjoy.racePhases.intervalS' | translate}}</span>
             <bj-slider ng-model="p.intervalS" min="5" max="120" hard-max="600" step="5"></bj-slider>
+        </div>
+        <!-- released in waves : how many go together -->
+        <div class="bjr-field" ng-if="p.start === 'groups'" ng-class="{locked: $ctrl.isLocked('start')}">
+            <span class="name" title="{{'beamjoy.racePhases.groupSize.tooltip' | translate}}">{{'beamjoy.racePhases.groupSize' | translate}}</span>
+            <bj-slider ng-model="p.groupSize" min="2" max="12" hard-max="64" step="1"></bj-slider>
         </div>
         <!-- one at a time : the others watch (their cars put away), or wait on their slots -->
         <div class="bjr-field" ng-if="p.start === 'sequential'" ng-class="{locked: $ctrl.isLocked('start')}">
@@ -300,6 +305,14 @@
                 </div>
             </div>
             <div class="row2">
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.hideOthers.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.hideOthers' | translate}}</span>
+                    <bj-select ng-model="p.rules.hideOthers" options="$ctrl.onOffOptions"></bj-select>
+                </div>
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.startLights.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.startLights' | translate}}</span>
+                    <bj-select ng-model="p.rules.startLights" options="$ctrl.startLightsOptions"></bj-select>
+                </div>
                 <div class="bjr-field">
                     <span class="name" title="{{'beamjoy.window.config.tabs.races.dnfEnabled.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.dnfEnabled' | translate}}</span>
                     <bj-select ng-model="p.rules.dnfEnabled" options="$ctrl.onOffOptions"></bj-select>

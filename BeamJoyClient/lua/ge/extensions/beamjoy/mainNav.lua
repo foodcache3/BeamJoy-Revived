@@ -136,6 +136,12 @@ local function lobbySection()
         return runner ~= nil and runner.session ~= nil and runner.session.state == state
     end
     if inState(beamjoy_raceRunner, "GRID") then return "races" end
+    -- a race joined while it was already under way (a phase's lateJoin) : its lobby is where their
+    -- "ready up to start" is, so focusing lands there just as it does on a GRID lobby
+    if beamjoy_raceRunner and beamjoy_raceRunner.session then
+        local own = beamjoy_raceRunner.getSelfParticipant()
+        if own and own.lateJoining then return "races" end
+    end
     if inState(beamjoy_hunterRunner, "LOBBY") then return "hunter" end
     if inState(beamjoy_infectedRunner, "LOBBY") then return "infected" end
     if inState(beamjoy_derbyRunner, "LOBBY") then return "derby" end

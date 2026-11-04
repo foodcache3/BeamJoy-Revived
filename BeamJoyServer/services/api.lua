@@ -15,7 +15,7 @@
 local M = {
     dependencies = { "services_core", "services_maps", "services_races", "services_players",
         "services_identity", "services_permissions", "services_environment", "services_clockSync", "services_racePhases",
-        "dao_activity" },
+        "dao_activity", "communications_tx" },
 
     API_VERSION = 1,
     --- this server run's own id : a plugin seeing another knows BeamJoy started again
@@ -1169,6 +1169,64 @@ M.methods["hud.message"] = function(params, ctx)
     return {}
 end
 
+--- the game's own GPS route (the blue line on the road and the arrow on the minimap) on a
+--- player's client : set to a point, or cleared. Targeted like hud.message - everyone, a list of
+--- players, one player, or a race's racers and / or spectators
+M.methods["gps.set"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local clear = params.clear == true
+    local pos
+    if not clear then
+        local p = params.pos
+        if type(p) ~= "table" then return nil, "badParams", "pos {x, y, z}, or clear = true" end
+        local x, y, z = tonumber(p.x or p[1]), tonumber(p.y or p[2]), tonumber(p.z or p[3])
+        if not x or not y or not z then return nil, "badParams", "pos needs x, y and z" end
+        pos = { x = x, y = y, z = z }
+    end
+
+    local targets = (params.players ~= nil and 1 or 0) + (not absent(params.playerId) and 1 or 0) +
+        (not absent(params.sessionId) and 1 or 0)
+    if targets > 1 then return nil, "badParams", "players, playerId or sessionId : one of them" end
+    ---@type integer[]? nil : everyone on the server
+    local audience
+    if params.players ~= nil then
+        if type(params.players) ~= "table" then return nil, "badParams", "players must be a list of player IDs" end
+        audience = {}
+        for _, v in ipairs(params.players) do
+            local id = tonumber(v)
+            if not id then return nil, "badParams", "players must be a list of player IDs" end
+            audience[#audience + 1] = math.floor(id)
+        end
+    elseif not absent(params.playerId) then
+        local id = tonumber(params.playerId)
+        if not id then return nil, "badParams", "playerId must be a player ID" end
+        audience = { math.floor(id) }
+    elseif not absent(params.sessionId) then
+        local session = findSession(params.sessionId)
+        if not session then return nil, "notFound", "no race session " .. tostring(params.sessionId) end
+        if not absent(params.racerKey) then
+            local id, code, err = racerIdParam(session, params)
+            if not id then return nil, code, err end
+            audience = { id }
+        else
+            local which = absent(params.audience) and "all" or params.audience
+            if which ~= "all" and which ~= "racers" and which ~= "spectators" then
+                return nil, "badParams", "audience must be \"racers\", \"spectators\" or \"all\""
+            end
+            audience = services_raceGrid.audienceOf(session, which)
+        end
+    end
+
+    local payload = { pos = pos, plugin = plugin }
+    if audience then
+        if #audience > 0 then communications_tx.sendToPlayers(audience, "pluginGps", payload) end
+    else
+        communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "pluginGps", payload)
+    end
+    return { players = audience and #audience or nil }
+end
+
 -- ---------------------------------------------------------------------------------------------
 -- plugins' own options, fields and config tabs (services/pluginUi.lua)
 
@@ -1831,6 +1889,19 @@ function M.racerReset(session, p, addedMs)
     data.penaltyMs = addedMs and addedMs > 0 and addedMs or nil
     data.holdS = s.resetPenaltyEnabled and s.resetPenaltyMode ~= "time" and s.resetPenaltySeconds or nil
     emit("RacerReset", data)
+end
+
+--- a racer jumped the start (a lights start : their car moved before the lights went out), and
+--- what it cost them (`penaltyMs`, 0 when the race doesn't penalise it)
+---@param session table BJRaceSession
+---@param p table BJRaceParticipant
+---@param fields table?
+function M.racerJumpStart(session, p, fields)
+    local data = sessionBase(session)
+    data.at = stamp()
+    data.racer = racerOut(p, session)
+    for k, v in pairs(fields or {}) do data[k] = v end
+    emit("RacerJumpStart", data)
 end
 
 local PIT_EVENTS = { entry = "RacerPitEntry", stop = "RacerPitStop", exit = "RacerPitExit",

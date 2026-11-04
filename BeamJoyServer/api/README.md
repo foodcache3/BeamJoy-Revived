@@ -300,8 +300,11 @@ its time runs out. Then it starts with whoever's ready, or closes when nobody is
   `phases`, `format`, `result`, `respawnStrategy`, `placementMode`, `countdown`, `gridTimeout`
   (seconds the lobby stays open), `gridReadyTimeout`, `vehicleRestrictionMode` (`"free"`,
   `"raceDefined"`, `"pool"` with `vehicleRestrictionPoolPresetId`), `disableCollisions`,
-  `lateJoin`, your [race options](#race-options) under `plugins`... What's left out is the race's
-  own, as for any start.
+  `lateJoin`, `hideOthers` (every other racer's car hidden : qualifying on an empty track),
+  `startLights` (the five-light start gantry) with `jumpStartPenaltyS` (seconds a jump start
+  costs, 0 to 60), `start = "groups"` with `groupSize` and `intervalS` (the grid released in
+  waves, for a race without phases of its own), your [race options](#race-options) under
+  `plugins`... What's left out is the race's own, as for any start.
 - The pits' (a race with pits ; ignored otherwise) : `pitStart` (start from the boxes), `pitGhost`
   (cars ghosted in the lane), `pitStops` (stops required, 0 to 20) and `pitMissingPenaltyS` (each
   missing one, 0 to 600), `pitRefuel`, `pitFuelRatePct` (% of the tank a second, 1 to 100),
@@ -438,6 +441,21 @@ one of :
 Players connected now only : BeamMP gives a player's ID to the next one who connects after they
 leave.
 
+### `gps.set` `{pos | clear, players? | playerId? | sessionId?, audience?, racerKey?}`
+The game's own GPS route (the line on the road, the arrow on the minimap) on a player's client:
+`pos` `{x, y, z}` sets it, `clear: true` takes it away. Targeted exactly like `hud.message`
+above - everyone, `players`, one `playerId`, or a race's `sessionId` (with `audience` or
+`racerKey`).
+
+It's the same native route BeamJoy's own deliveries and fuel stations set, so a route of yours and
+one of those replace each other: the last one set is the one shown. A BeamJoy race doesn't use it
+(it draws its own gates), so a route is yours to use during one.
+
+```lua
+BJ.call("gps.set", { playerId = id, pos = { x = 120.5, y = -344.0, z = 71.2 } })
+BJ.call("gps.set", { playerId = id, clear = true })
+```
+
 ### Leaderboard entries
 
 `{rank, name, timeMs, model, date, identity, fields}`
@@ -498,6 +516,7 @@ Names are display names, not permanent IDs: a guest can change their nickname.
 | `RacerFinished` | `{sessionId, raceId, raceName, map, at, racer, finishOrder, raceMs, totalMs, laps, newPB, newRecord}` |
 | `RacerOut` | `{sessionId, raceId, raceName, map, at, racer, reason, laps}` |
 | `RacerReset` | `{sessionId, ..., at, racer, lap, lastGate?, respawn, penaltyMs?, holdS?}` : a racer reset |
+| `RacerJumpStart` | `{sessionId, ..., at, racer, penaltyMs}` : a lights start jumped (`penaltyMs` 0 when the race doesn't penalise it) |
 | `RacePositionsChanged` | `{sessionId, ..., at, changes: [{racer, from, to}]}` : places changed |
 | `RacerPitEntry` | `{sessionId, ..., at, racer, lap, speedKmh}` : in through PIT IN |
 | `RacerPitStop` | `{sessionId, ..., at, racer, lap, fuelL, repair, tyres?, tyreOption?, durationMs, servedMs, towed?}` : a stop made in their box, once the server saw the car standing there. `durationMs` : the work's time the racer's game reported (at least the tyres', at most the race's longest), `servedMs` : how long the server saw the car stand in its box. `tyres` : new tyres (experimental tyre changes only), `tyreOption` : your set's `"plugin:id"` |
@@ -683,7 +702,8 @@ A phase is :
 | Field | |
 |---|---|
 | `name` | shown on the HUD and results ("Q2", "Heat 1") |
-| `start` | `"grid"` everyone together ; `"individual"` (the start menu's "Time offset") from the first slot, `intervalS` apart, in grid order, several on track at once ; `"sequential"` ("One at a time") from the first slot in grid order, alone : each racer's whole phase (its laps or runs, a time limit counted from their own start) before the next is released ; `"open"` together, and on a point-to-point track each finish sends the racer back for another run ; `"plugin"` each waits until you `race.startRacer` them |
+| `start` | `"grid"` everyone together ; `"groups"` the grid released `groupSize` cars at a time, `intervalS` apart, each from its own slot (a big field let go in waves) ; `"individual"` (the start menu's "Time offset") from the first slot, `intervalS` apart, in grid order, several on track at once ; `"sequential"` ("One at a time") from the first slot in grid order, alone : each racer's whole phase (its laps or runs, a time limit counted from their own start) before the next is released ; `"open"` together, and on a point-to-point track each finish sends the racer back for another run ; `"plugin"` each waits until you `race.startRacer` them |
+| `groupSize` | `"groups"` : how many cars are released together (2 to 64) |
 | `laps` | laps on a circuit, runs on a point-to-point track (not raced from the grid) ; left out : no limit |
 | `timeLimitMin` | left out : no limit. Laps and time : whichever comes first. Neither : only with `start = "plugin"`, you end it |
 | `afterTime` | once the time's up : `"leader"` the leader's next crossing ends their race, then everyone's own (racing rules, `ranking = "position"` only) ; `"own"` everyone finishes the lap they're on, it counts ; `"stop"` it ends at once |
@@ -694,7 +714,7 @@ A phase is :
 | `leaderboard` | its laps go on the race's leaderboard (default true) |
 | `countsToEvent` | part of the event's result (default true ; off for practice and qualifying) |
 | `breakS` | seconds of results after it (default 30) ; the leader can start the next one sooner |
-| `rules` | this phase's own `respawnStrategy`, `dnfEnabled`, `dnfTimeout`, `resetPenaltyEnabled`, `resetPenaltySeconds`, `resetPenaltyMode`, `ghostOnCountdown`, `disableCollisions`, `ghostBackmarkers`, `autoSpectateOnFinish`, and every pit setting (`pitStart`, `pitStops`... see [`race.open`](#raceopen-raceid-options-name-holdstart-entrants)) ; the rest are the event's |
+| `rules` | this phase's own `respawnStrategy`, `dnfEnabled`, `dnfTimeout`, `resetPenaltyEnabled`, `resetPenaltySeconds`, `resetPenaltyMode`, `ghostOnCountdown`, `disableCollisions`, `ghostBackmarkers`, `hideOthers` (every other racer's car hidden : qualifying on an empty track), `startLights` (a five-light start gantry), `jumpStartPenaltyS`, `autoSpectateOnFinish`, and every pit setting (`pitStart`, `pitStops`... see [`race.open`](#raceopen-raceid-options-name-holdstart-entrants)) ; the rest are the event's |
 | `options` | your [race options](#race-options) `where = "phase"` (`plugins` when you send phases) |
 
 Up to 20 phases. The vehicle restriction, the anti-cheat settings and the lobby's are the event's.

@@ -112,6 +112,48 @@ angular.module("beamjoy").component("bjMainRaces", {
         // passive races aren't listed here: there's no ambient/drive-up discovery built yet, so
         // there'd be nothing meaningful for a "Start" button on one to actually do
         this.races = [];
+        // the list as shown : this.races put through the search box and the sort below. Kept as a
+        // field rather than worked out in the template, so the repeat isn't rebuilding a list on
+        // every digest of a window that's often open with a race running behind it
+        this.shown = [];
+        this.search = "";
+        this.searchOpen = false;
+        // "name" A to Z, "newest" / "oldest" by when the race was made. There's no authored date
+        // on a race, but ids are hand-out-in-order (services/races.lua), so the id IS the order
+        // they were created in
+        this.SORTS = ["name", "newest", "oldest"];
+        this.sort = "name";
+        const applyList = () => {
+            const needle = (this.search || "").trim().toLowerCase();
+            const list = (this.races || []).filter(
+                (r) => !needle || (r.name || "").toLowerCase().includes(needle)
+            );
+            list.sort((a, b) =>
+                this.sort === "name"
+                    ? (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
+                    : this.sort === "oldest"
+                        ? (a.id || 0) - (b.id || 0)
+                        : (b.id || 0) - (a.id || 0)
+            );
+            this.shown = list;
+        };
+        this.refreshList = applyList;
+        this.toggleSearch = (event) => {
+            event.stopPropagation();
+            this.searchOpen = !this.searchOpen;
+            // closing it clears what it was filtering by : a hidden box still filtering the list
+            // reads as races having gone missing
+            if (!this.searchOpen && this.search) {
+                this.search = "";
+                applyList();
+            }
+        };
+        this.cycleSort = (event) => {
+            event.stopPropagation();
+            this.sort = this.SORTS[(this.SORTS.indexOf(this.sort) + 1) % this.SORTS.length];
+            applyList();
+        };
+        this.sortLabel = () => translate("beamjoy.window.main.tabs.races.sorts." + this.sort);
         // a race marker's "Open race" in the world (lua beamjoy/races.lua) : that race's start form
         const openPendingStart = () => {
             const pending = beamjoyStore.pendingActivityStart;
@@ -127,6 +169,7 @@ angular.module("beamjoy").component("bjMainRaces", {
         // request, leaving the copy on screen with nothing : it worked the first time only
         $scope.$on("$destroy", $rootScope.$on("BJEditorRaceList", (_, races) => {
             this.races = (races || []).filter((r) => r.mode === "grid");
+            applyList();
             openPendingStart();
         }));
         $scope.$on("$destroy", $rootScope.$on("BJOpenActivityStart", openPendingStart));
@@ -416,6 +459,16 @@ angular.module("beamjoy").component("bjMainRaces", {
                 ghostOnCountdown: d.ghostOnCountdown !== false,
                 disableCollisions: d.disableCollisions === true,
                 ghostBackmarkers: d.ghostBackmarkers === true,
+                // qualifying on an empty track : every other racer's car hidden, own car ghosted
+                hideOthers: d.hideOthers === true,
+                // the start sequence : a counted countdown, or the five-light gantry (a jump
+                // start then costs jumpStartPenaltyS seconds)
+                startLights: d.startLights === true,
+                jumpStartPenaltyS: d.jumpStartPenaltyS ?? 5,
+                // released in waves, for a race run without phases of its own : 0 is everyone
+                // together, as always. With phases, each phase's own start says this instead
+                groupSize: d.groupSize ?? 0,
+                groupIntervalS: d.intervalS ?? 10,
                 showGateNametags: d.showGateNametags === true,
                 limitVisibleGates: d.limitVisibleGates !== false,
                 visibleGateCount: d.visibleGateCount || 2,
@@ -584,6 +637,16 @@ angular.module("beamjoy").component("bjMainRaces", {
                 delete o.phases;
                 if (!race.loopable || o.lengthMode === "laps") delete o.timeLimitMin;
                 if (race.loopable && o.lengthMode === "time") delete o.laps;
+                // released in waves : the start kind of the server's own implicit single phase
+                // (services/racePhases.lua's fromStart). Everyone together (0) sends nothing of
+                // the sort, so a plain race start is exactly what it always was
+                if (Number(o.groupSize) >= 2) {
+                    o.start = "groups";
+                    o.intervalS = Number(o.groupIntervalS) || 10;
+                } else {
+                    delete o.start;
+                    delete o.groupSize;
+                }
             }
             return o;
         };

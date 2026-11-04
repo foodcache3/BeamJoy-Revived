@@ -576,11 +576,18 @@ local function computeRenderSignature()
         -- watching nobody in particular : every gate, whatever anyone's progress
         return string.format("spectate:%s:%s", session.id, session.state)
     end
-    return string.format("%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s", session.id, session.state, participant.playerName,
+    -- sittingOut and lateJoining belong in the signature, not just in the draw below. Real bug
+    -- (reported : joining a race under way loaded the gates but never turned the next one green) :
+    -- readying up mid-race changes nothing else named here - same session, same state, same gate 0
+    -- - so the cached render was never invalidated and the route stayed drawn as it was while they
+    -- were still sitting out
+    return string.format("%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s:%s", session.id, session.state,
+        participant.playerName,
         tostring(participant.lastCrossedGate), tostring(participant.currentGate),
         tostring(participant.finished), tostring(participant.dnf), tostring(participant.pitSlot),
         tostring(participant.inPit), tostring(beamjoy_racePits ~= nil and beamjoy_racePits.stop ~= nil),
-        tostring(beamjoy_racePits ~= nil and beamjoy_racePits.inPit == true))
+        tostring(beamjoy_racePits ~= nil and beamjoy_racePits.inPit == true),
+        tostring(participant.sittingOut), tostring(participant.lateJoining))
 end
 
 local lastRenderSignature = nil
@@ -667,7 +674,15 @@ local function render()
                 -- visibleGateSet below, moot for a branching race (see visibleGateSetBranching
                 -- instead). Kept separate rather than reverse-deriving a single index out of the set.
                 local nextGateSet, expectedIndex
-                if participant and not participant.finished and not participant.dnf and not participant.sittingOut then
+                -- a racer who joined while the event was under way sits out until they ready up
+                -- (raceGrid.lua's lateJoinReady), and their run starts from gate 1 : the route
+                -- leads the way for them meanwhile too, rather than leaving them a track full of
+                -- plain gates with nothing green anywhere on it. Every other kind of sitting out
+                -- (a phase that isn't taking them) still has no position to draw from
+                local hasPosition = participant ~= nil and not participant.finished and
+                    not participant.dnf and
+                    (not participant.sittingOut or participant.lateJoining == true)
+                if hasPosition then
                     if race.branchingEnabled then
                         nextGateSet = {}
                         for _, i in ipairs(branchingStep(race, { participant.lastCrossedGate })) do

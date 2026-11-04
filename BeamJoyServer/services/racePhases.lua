@@ -8,7 +8,7 @@
 ---
 --- A race started as before is a single phase ending on laps : it behaves exactly as it always did.
 
----@alias BJRacePhaseStart "grid"|"individual"|"sequential"|"open"|"plugin"
+---@alias BJRacePhaseStart "grid"|"groups"|"individual"|"sequential"|"open"|"plugin"
 ---@alias BJRacePhaseRanking "position"|"best"|"total"|"plugin"
 ---@alias BJRacePhaseAfterTime "leader"|"own"|"stop"
 ---@alias BJRaceEventResult "last"|"sum"|"plugin"
@@ -27,6 +27,8 @@
 ---@field name string? shown on the HUD and results ("Practice", "Q2", "Heat 1") ; nil : the
 ---client names it from its place and ranking
 ---@field start BJRacePhaseStart "grid" : everyone together from the grid, a standing start ;
+---"groups" : the grid released `groupSize` at a time, `intervalS` apart, each car from its own
+---grid slot (a big field let go in waves, a rolling-start heat) ;
 ---"individual" (the start menu's "Time offset") : each from the first slot, every `intervalS`, in
 ---grid order, several on track at once (a time trial, a rally stage) ; "sequential" (its "One at a
 ---time") : each from the first slot in grid order, alone : their whole phase (its laps or runs, its
@@ -34,7 +36,8 @@
 ---the grid, and on a point-to-point track each racer's next
 ---run starts on its own once they're through the finish (practice, runs) ; "plugin" : each waits
 ---on their grid slot until a plugin starts them (the plugin API's race.startRacer)
----@field intervalS integer? "individual" : seconds between two racers' starts
+---@field intervalS integer? "individual", "groups" : seconds between two starts
+---@field groupSize integer? "groups" : how many are released together
 ---@field waiting "watch"|"grid"|nil "sequential" : the racers waiting their turn watch the one on
 ---track, their cars put away, and each starts from the first slot ("watch", one car on track) ; or
 ---they wait in their cars on their grid slots ("grid")
@@ -59,7 +62,7 @@
 local M = {
     dependencies = { "services_races", "services_pluginOverlay" },
 
-    START = { GRID = "grid", INDIVIDUAL = "individual", SEQUENTIAL = "sequential", OPEN = "open", PLUGIN = "plugin" },
+    START = { GRID = "grid", GROUPS = "groups", INDIVIDUAL = "individual", SEQUENTIAL = "sequential", OPEN = "open", PLUGIN = "plugin" },
     RANKING = { POSITION = "position", BEST = "best", TOTAL = "total", PLUGIN = "plugin" },
     AFTER_TIME = { LEADER = "leader", OWN = "own", STOP = "stop" },
     RESULT = { LAST = "last", SUM = "sum", PLUGIN = "plugin" },
@@ -79,7 +82,7 @@ local M = {
 }
 
 -- the starts raceGrid runs
-local STARTS_RUN = { grid = true, individual = true, sequential = true, open = true, plugin = true }
+local STARTS_RUN = { grid = true, groups = true, individual = true, sequential = true, open = true, plugin = true }
 
 --- a phase's rules : settings of the session's (raceGrid's BJRaceSessionSettings) a phase may set
 --- for itself. The rest (vehicle restriction, anti-cheat, display, the lobby's) is the event's.
@@ -94,6 +97,9 @@ local RULE_KEYS = {
     ghostOnCountdown = "boolean",
     disableCollisions = "boolean",
     ghostBackmarkers = "boolean",
+    hideOthers = "boolean",
+    startLights = "boolean",
+    jumpStartPenaltyS = { 0, 60 },
     autoSpectateOnFinish = "boolean",
 }
 
@@ -160,7 +166,12 @@ local function sanitizePhase(raw, index, race)
         rules = sanitizeRules(raw.rules),
     }
     if not STARTS_RUN[phase.start] then phase.start = M.START.GRID end
-    if phase.start == M.START.INDIVIDUAL then phase.intervalS = int(raw.intervalS, 3, 600) or 10 end
+    if phase.start == M.START.INDIVIDUAL or phase.start == M.START.GROUPS then
+        phase.intervalS = int(raw.intervalS, 3, 600) or 10
+    end
+    -- released in waves : how many go together. 1 would be "individual" with every car on its own
+    -- slot instead of the first, which is a start of its own ; the floor is 2
+    if phase.start == M.START.GROUPS then phase.groupSize = int(raw.groupSize, 2, 64) or 2 end
     if phase.start == M.START.SEQUENTIAL then phase.waiting = raw.waiting == "grid" and "grid" or "watch" end
     -- collisions as the event (or the phase's own rule) says : they used to be switched off for any
     -- start of one's own, whatever the start menu said (reported : a time offset start ghosted
@@ -248,8 +259,14 @@ function M.fromStart(race, opts)
     -- open to join while under way : the start menu's switch, else the race's own
     local lateJoin = opts.lateJoin
     if lateJoin == nil then lateJoin = defaults.lateJoin end
+    -- the start kind for a race with no phases of its own : the start menu's (a group start),
+    -- else the race's own default. Anything else is the grid, as it always was
+    local start = opts.start or defaults.start
+    local groupSize = opts.groupSize or defaults.groupSize
+    local intervalS = opts.intervalS or defaults.intervalS
     return M.sanitize({ { laps = src.laps, timeLimitMin = src.timeLimitMin, afterTime = src.afterTime,
-        lateJoin = lateJoin == true } }, race), M.RESULT.LAST
+        lateJoin = lateJoin == true, start = start, groupSize = groupSize, intervalS = intervalS } }, race),
+        M.RESULT.LAST
 end
 
 --- the session's settings for a phase : the event's own, the phase's rules over them, and its length
@@ -266,6 +283,7 @@ function M.effectiveSettings(base, phase)
     s.ranking = phase.ranking
     s.start = phase.start
     s.intervalS = phase.intervalS
+    s.groupSize = phase.groupSize
     s.waiting = phase.waiting
     -- a personal start's countdown (a run, a staggered start, a mid-phase join) : short
     s.startCountdownMs = math.clamp(math.floor(tonumber(base.countdown) or 5), 3, 5) * 1000
@@ -278,7 +296,10 @@ end
 ---@param race BJRace
 ---@return boolean
 function M.runs(phase, race)
-    return not race.loopable and phase.start ~= M.START.GRID and phase.start ~= M.START.PLUGIN
+    -- "groups" is a grid start in waves : every car from its own slot, racing whoever it was
+    -- released with, so it's no more a set of solo runs than a grid start is
+    return not race.loopable and phase.start ~= M.START.GRID and phase.start ~= M.START.GROUPS and
+        phase.start ~= M.START.PLUGIN
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -540,7 +561,7 @@ local LOCKABLE = { phases = true, name = true, start = true, length = true, rank
     takes = true, lateJoin = true, leaderboard = true, countsToEvent = true, breakS = true, rules = true,
     plugins = true }
 -- a phase's fields each lockable setting covers
-local LOCK_FIELDS = { length = { "laps", "timeLimitMin", "afterTime" }, start = { "start", "intervalS", "waiting" } }
+local LOCK_FIELDS = { length = { "laps", "timeLimitMin", "afterTime" }, start = { "start", "intervalS", "groupSize", "waiting" } }
 
 --- a plugin's formats, checked (their phases against a circuit : each start checks them again
 --- against its own track)

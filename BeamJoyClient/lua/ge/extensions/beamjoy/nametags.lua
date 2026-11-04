@@ -273,6 +273,10 @@ local function isHiddenByMode(v)
     -- near-final-waypoint / post-reset, see hunterRunner.lua's own isHiddenFugitiveVehicle). Never
     -- hidden on the fugitive's own client, which already doesn't see its own tag while driving.
     if beamjoy_hunterRunner.isHiddenFugitiveVehicle(v) then return true end
+    -- A race phase run with the other racers hidden (hideOthers, qualifying on an empty track) :
+    -- their cars aren't drawn at all for this racer, so a tag floating where one would be would
+    -- give away exactly what the rule is there to take away
+    if beamjoy_raceRunner.isHiddenRacerVehicle(v) then return true end
     -- Infected mode, host-configurable (hideInfectedNametags, default off): an infected
     -- participant's whole nametag is hidden from a SURVIVOR viewer specifically (see
     -- infectedRunner.lua's own isHiddenInfectedVehicle for the exact scope) - staff/spectators/

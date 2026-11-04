@@ -105,6 +105,22 @@
 ---limitation as every other ghost option here : there's no selective "ghost against the leader
 ---only": a ghosted backmarker is ghosted against everyone, including other backmarkers ; default
 ---false
+---@field startLights boolean? the start sequence is a light gantry rather than a counted
+---countdown : five lights come on one a second, hold for a moment nobody can predict (the server
+---picks it, 0.2-3 s), then go out together - that's the green. The cars are released from their
+---freeze as the first light comes on, so a jump start is possible and is penalised
+---(jumpStartPenaltyS) ; default false
+---@field jumpStartPenaltyS number? seconds on the race time of a racer who moves off their slot
+---before the lights go out (startLights only). 0 : jump starts aren't penalised at all ; default 5
+---@field start BJRacePhaseStart? the start kind for a race run without phases of its own :
+---"groups" releases the grid in waves (see groupSize). Anything else is the grid together
+---@field groupSize integer? "groups" : how many cars are released together
+---@field intervalS integer? "groups" : seconds between two waves
+---@field hideOthers boolean? opt-in : every OTHER racer's car is hidden outright on this
+---client (not translucent : not drawn at all), and this racer's own car is ghosted so it can't
+---collide with a car nobody can see. A qualifying or practice phase run on an empty track, the
+---way a real session's out laps are judged ; typically set as one phase's rule rather than for a
+---whole event. Hides their nametags with them. Non-racers nearby are left alone ; default false
 ---@field showGateNametags boolean? whether the floating "Gate N (Start/Finish)" text label renders
 ---above each gate while actually racing (COUNTDOWN/RACE; the lobby/GRID phase always shows every
 ---label regardless of this setting). The gate quad/arrow themselves are unaffected, this only
@@ -646,6 +662,16 @@ local function sanitizeRace(race, existingRaces)
     race.defaults.ghostOnCountdown = race.defaults.ghostOnCountdown ~= false
     race.defaults.disableCollisions = race.defaults.disableCollisions == true
     race.defaults.ghostBackmarkers = race.defaults.ghostBackmarkers == true
+    race.defaults.hideOthers = race.defaults.hideOthers == true
+    race.defaults.startLights = race.defaults.startLights == true
+    race.defaults.jumpStartPenaltyS = math.clamp(tonumber(race.defaults.jumpStartPenaltyS) or 5, 0, 60)
+    -- a start kind of the race's own (a race run without phases) : checked by racePhases.sanitize
+    -- when the session's built, so only the shape is kept here
+    race.defaults.start = type(race.defaults.start) == "string" and race.defaults.start or nil
+    race.defaults.groupSize = race.defaults.groupSize and
+        math.clamp(math.floor(tonumber(race.defaults.groupSize) or 2), 2, 64) or nil
+    race.defaults.intervalS = race.defaults.intervalS and
+        math.clamp(math.floor(tonumber(race.defaults.intervalS) or 10), 3, 600) or nil
     race.defaults.flyingStart = race.defaults.flyingStart == true
     race.defaults.outLap = race.defaults.outLap == true
     race.defaults.showGateNametags = race.defaults.showGateNametags == true

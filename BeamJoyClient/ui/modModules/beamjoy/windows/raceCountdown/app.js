@@ -12,6 +12,12 @@ angular.module("beamjoy").component("bjRaceCountdown", {
         // "big transient message" primitive for the finish-line feedback a solo racer otherwise
         // never gets at all (the leaderboard HUD only sends once there's >1 participant)
         this.mode = "countdown";
+        // "lights" : the start gantry (BJRaceDefaults.startLights). How many of the five are lit,
+        // whether they've gone out (the green), and whether this racer jumped it
+        this.lights = 0;
+        this.green = false;
+        this.jumped = false;
+        this.LIGHTS = [1, 2, 3, 4, 5];
         this.timeMs = null;
         this.isBestLap = false;
         this.isNewPB = false;
@@ -21,6 +27,9 @@ angular.module("beamjoy").component("bjRaceCountdown", {
             this.active = !!data.active;
             if (!this.active) return;
             this.mode = data.mode || "countdown";
+            this.lights = typeof data.lights === "number" ? data.lights : 0;
+            this.green = data.green === true;
+            this.jumped = data.jumped === true;
             this.seconds = data.seconds;
             this.timeMs = data.timeMs ?? null;
             this.isBestLap = data.isBestLap ?? false;
@@ -61,6 +70,10 @@ angular.module("beamjoy").component("bjRaceCountdown", {
             const s = Math.round(ms / 100) / 10;
             return Number.isInteger(s) ? String(s) : s.toFixed(1);
         };
+
+        // a gantry light is lit until they all go out together : that moment IS the green, so
+        // nothing is lit from then on (see raceRunner.lua's lightsTiming)
+        this.lit = (i) => !this.green && i <= this.lights;
 
         // shared race time format (hours from an hour up), see beamjoyLeaderboardFormat
         this.formatTime = beamjoyLeaderboardFormat.time;

@@ -285,6 +285,8 @@
     "race.control.penaltiesCleared": "Race control cleared your penalties",
     "race.control.disqualified": "Race control disqualified you from this race",
     "race.control.reinstated": "Race control reinstated you in this race",
+    "race.jumpStart": "Jump start : a {seconds} s penalty",
+    "race.jumpStartFree": "Jump start",
     "race.pit.entrySpeed": "Pit entry too fast ({speed} km/h, the limit is {limit}) : a {seconds} s penalty",
     "race.pit.transit": "Too fast through the pit lane : a {seconds} s penalty",
     "race.pit.missingStops": "Required pit stops missed ({missing}) : a {seconds} s penalty",

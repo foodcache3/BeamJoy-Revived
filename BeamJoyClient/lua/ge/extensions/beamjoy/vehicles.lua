@@ -540,7 +540,13 @@ end
 
 local function onVehicleResetted(vid)
     local mpVeh = M.vehicles[vid]
-    if not mpVeh or not mpVeh.isLocal or mpVeh.isAi then return end
+    if not mpVeh then return end
+    -- a reset hands the car's meshes back at full alpha. Under the reversal (see
+    -- M.soloGhostVisualReversed) ANOTHER player's car has to go see-through again, and its own
+    -- ghost flag didn't change across the reset, so setGhost's early-return means nothing else
+    -- would ever re-apply it : the others would quietly turn solid one by one as they respawned
+    if M.soloGhostVisualReversed and mpVeh.veh then M.applyDisplayAlpha(mpVeh.veh) end
+    if not mpVeh.isLocal or mpVeh.isAi then return end
     if mpVeh.veh.froze then
         M.setFreeze(vid, false)
     end
@@ -1300,12 +1306,23 @@ M.soloGhostVisualReversed = false
 ---@type integer?
 M.photoVID = nil
 
+--- cars a game mode hides from this client outright : not drawn at all, rather than the ghost's
+--- translucency (raceRunner.lua's hideOthers, a qualifying phase on an empty track). A rule, not
+--- a look, so it beats every visual exemption in computeDisplayAlpha below, Settings > Visual's
+--- "disable ghost transparency" included. Nothing here touches collisions : the mode that hides a
+--- car is responsible for ghosting whoever can't see it
+---@type table<integer, true>
+M.hiddenVids = {}
+
 ---@param vid integer
 ---@param isGhosted boolean the vehicle's own real ghost/collision state, as already known by the
 ---caller (M.ghostReasons only ever tracks reasons for locally-owned vehicles, never a remote
 ---vehicle's ghost state, so this can't just be re-derived from it in general)
 ---@return number
 local function computeDisplayAlpha(vid, isGhosted)
+    -- hidden by a game mode (M.hiddenVids) : first, and with no exemption of its own. Every case
+    -- below is about how a ghost should LOOK ; this one is the mode saying the car isn't there
+    if M.hiddenVids[vid] then return 0 end
     -- Settings > Visual > Disable ghost transparency : everything solid, only the look changes
     if beamjoy_markerSettings and beamjoy_markerSettings.opaqueGhosts then return 1 end
     -- a car having its build photo taken : solid for the shot (see setPhotoSubject)
@@ -1388,6 +1405,30 @@ local function reapplyDisplayAlpha()
             applyDisplayAlpha(mpVeh.veh)
         end
     end)
+end
+
+--- hides a car from this client entirely, or shows it again (M.hiddenVids). Idempotent : the
+--- mode setting it can call this every tick without churning mesh alphas
+---@param vid integer
+---@param hidden boolean
+local function setHidden(vid, hidden)
+    hidden = hidden == true
+    if (M.hiddenVids[vid] == true) == hidden then return end
+    M.hiddenVids[vid] = hidden or nil
+    local mpVeh = M.vehicles[vid]
+    if mpVeh and mpVeh.veh then applyDisplayAlpha(mpVeh.veh) end
+end
+
+--- shows every car this client was hiding (a race ending, a leave). Safe to call when none are
+local function clearHidden()
+    if not next(M.hiddenVids) then return end
+    local vids = {}
+    for vid in pairs(M.hiddenVids) do table.insert(vids, vid) end
+    M.hiddenVids = {}
+    for _, vid in ipairs(vids) do
+        local mpVeh = M.vehicles[vid]
+        if mpVeh and mpVeh.veh then applyDisplayAlpha(mpVeh.veh) end
+    end
 end
 
 --- the car whose build photo is being taken (vehicleBuilds.takePhoto) : shown solid while it is,
@@ -1836,6 +1877,8 @@ M.refreshResetPreserveFlags = refreshResetPreserveFlags
 M.applyRespawnProtection = applyRespawnProtection
 M.computeDisplayAlpha = computeDisplayAlpha
 M.applyDisplayAlpha = applyDisplayAlpha
+M.setHidden = setHidden
+M.clearHidden = clearHidden
 M.setSoloGhostVisualReversed = setSoloGhostVisualReversed
 M.reapplyDisplayAlpha = reapplyDisplayAlpha
 M.setPhotoSubject = setPhotoSubject

@@ -993,6 +993,9 @@ local function backfillRaceDefaults(race)
     if race.defaults.ghostOnCountdown == nil then race.defaults.ghostOnCountdown = true end
     if race.defaults.disableCollisions == nil then race.defaults.disableCollisions = false end
     if race.defaults.ghostBackmarkers == nil then race.defaults.ghostBackmarkers = false end
+    if race.defaults.hideOthers == nil then race.defaults.hideOthers = false end
+    if race.defaults.startLights == nil then race.defaults.startLights = false end
+    if race.defaults.jumpStartPenaltyS == nil then race.defaults.jumpStartPenaltyS = 5 end
     if race.defaults.flyingStart == nil then race.defaults.flyingStart = false end
     if race.defaults.outLap == nil then race.defaults.outLap = false end
     if race.defaults.showGateNametags == nil then race.defaults.showGateNametags = false end
@@ -1086,6 +1089,9 @@ local function onOpen(raceId)
                 ghostOnCountdown = true,
                 disableCollisions = false,
                 ghostBackmarkers = false,
+                hideOthers = false,
+                startLights = false,
+                jumpStartPenaltyS = 5,
                 flyingStart = false,
                 outLap = false,
                 showGateNametags = false,

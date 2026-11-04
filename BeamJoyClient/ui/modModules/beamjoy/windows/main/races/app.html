@@ -10,6 +10,29 @@
         justify-content: space-between;
         gap: 0.5em;
     }
+    /* the list's own search and sort */
+    bj-main-races .races-tools {
+        display: flex;
+        align-items: center;
+        gap: 0.3em;
+        min-width: 0;
+    }
+    bj-main-races .races-tools input {
+        min-width: 0;
+        width: 9em;
+        padding: 0.15em 0.4em;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 0.2em;
+    }
+    bj-main-races .races-tools .btn.on {
+        color: var(--bjr-accent, #ffb300);
+    }
+    bj-main-races .races-tools .sort-label {
+        font-size: 0.8em;
+        color: var(--bjr-muted);
+    }
     bj-main-races .race-card .top {
         display: flex;
         align-items: flex-start;
@@ -218,7 +241,7 @@
 
     <div class="controls" ng-if="!$ctrl.inviting" aria-label="{{'beamjoy.delivery.controls' | translate}}">
         <!-- joined while it's under way : ready up, then start on your own -->
-        <button type="button" class="bjr-btn primary" data-pad-a ng-if="$ctrl.status.lateJoining && $ctrl.status.state !== 'GRID'"
+        <button type="button" class="bjr-btn primary" data-pad-a data-pad-ready ng-if="$ctrl.status.lateJoining && $ctrl.status.state !== 'GRID'"
             ng-disabled="$ctrl.status.readyChecking" ng-click="$ctrl.setReady($event, true)"
             title="{{'beamjoy.window.main.tabs.races.lateJoinReady.tooltip' | translate}}">
             {{($ctrl.status.readyChecking ? 'beamjoy.window.main.tabs.races.readyChecking' : 'beamjoy.window.main.tabs.races.lateJoinReady') | translate}}
@@ -351,13 +374,30 @@
     <span class="bjr-muted" ng-if="$ctrl.editing">{{'beamjoy.window.main.tabs.races.changeSettings.note' | translate}}</span>
     <div class="races-head" ng-if="!$ctrl.startingId">
         <span class="bjr-muted">{{'beamjoy.window.main.tabs.races.pickRace' | translate}}</span>
-        <button type="button" class="bjr-btn small ghost" ng-if="$ctrl.canEditRaces()" ng-click="$ctrl.openRaceEditor($event)"
-            title="{{'beamjoy.window.main.tabs.races.editRaces.tooltip' | translate}}">
-            {{'beamjoy.window.main.tabs.races.editRaces' | translate}}
-        </button>
+        <div class="races-tools">
+            <input type="text" ng-if="$ctrl.searchOpen" ng-model="$ctrl.search" ng-change="$ctrl.refreshList()"
+                maxlength="32" placeholder="{{'beamjoy.window.main.tabs.races.searchName' | translate}}">
+            <button type="button" class="btn icon-btn" ng-class="{on: $ctrl.searchOpen}"
+                ng-click="$ctrl.toggleSearch($event)"
+                title="{{'beamjoy.window.main.tabs.races.searchName.tooltip' | translate}}">
+                <icon name="search"></icon>
+            </button>
+            <button type="button" class="btn icon-btn" ng-click="$ctrl.cycleSort($event)"
+                title="{{'beamjoy.window.main.tabs.races.sort.tooltip' | translate}}">
+                <icon name="sort"></icon>
+            </button>
+            <span class="sort-label">{{$ctrl.sortLabel()}}</span>
+            <button type="button" class="bjr-btn small ghost" ng-if="$ctrl.canEditRaces()" ng-click="$ctrl.openRaceEditor($event)"
+                title="{{'beamjoy.window.main.tabs.races.editRaces.tooltip' | translate}}">
+                {{'beamjoy.window.main.tabs.races.editRaces' | translate}}
+            </button>
+        </div>
     </div>
+    <span class="bjr-muted" ng-if="!$ctrl.startingId && $ctrl.search && $ctrl.shown.length === 0">
+        {{'beamjoy.window.main.tabs.races.noMatch' | translate}}
+    </span>
 
-    <div class="bjr-card race-card" ng-repeat="race in $ctrl.races track by race.id"
+    <div class="bjr-card race-card" ng-repeat="race in $ctrl.shown track by race.id"
         ng-if="!$ctrl.startingId || $ctrl.startingId === race.id" ng-class="{hot: $ctrl.startingId === race.id}">
         <div class="top">
             <span class="info">
@@ -558,6 +598,33 @@
                     <bj-toggle ng-model="$ctrl.startOptions.allowTuning"></bj-toggle>
                 </div>
 
+                <h4>{{'beamjoy.window.main.tabs.races.sections.start' | translate}}</h4>
+                <div class="bjr-field">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.startLights.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.startLights' | translate}}</span>
+                    <div class="bjr-seg">
+                        <button type="button" ng-class="{on: !$ctrl.startOptions.startLights}" ng-click="$ctrl.startOptions.startLights = false">
+                            {{'beamjoy.window.config.tabs.races.startModes.countdown' | translate}}
+                        </button>
+                        <button type="button" ng-class="{on: $ctrl.startOptions.startLights}" ng-click="$ctrl.startOptions.startLights = true">
+                            {{'beamjoy.window.config.tabs.races.startModes.lights' | translate}}
+                        </button>
+                    </div>
+                </div>
+                <div class="bjr-field" ng-if="$ctrl.startOptions.startLights">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.jumpStartPenaltyS.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.jumpStartPenaltyS' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.jumpStartPenaltyS" min="0" max="30" hard-max="60" step="1"></bj-slider>
+                </div>
+                <!-- released in waves : a race without phases of its own (with phases, each phase's
+                     own start says this) -->
+                <div class="bjr-field" ng-if="!$ctrl.startOptions.phaseList && race.startPositions > 2">
+                    <span class="name" title="{{'beamjoy.window.config.tabs.races.groupSize.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.groupSize' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.groupSize" min="0" max="12" hard-max="64" step="1"></bj-slider>
+                </div>
+                <div class="bjr-field" ng-if="!$ctrl.startOptions.phaseList && $ctrl.startOptions.groupSize >= 2">
+                    <span class="name" title="{{'beamjoy.racePhases.intervalS.tooltip' | translate}}">{{'beamjoy.racePhases.intervalS' | translate}}</span>
+                    <bj-slider ng-model="$ctrl.startOptions.groupIntervalS" min="5" max="120" hard-max="600" step="5"></bj-slider>
+                </div>
+
                 <h4>{{'beamjoy.window.main.tabs.races.sections.rules' | translate}}</h4>
                 <div class="bjr-toggle-row">
                     <span title="{{'beamjoy.window.config.tabs.races.dnfEnabled.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.dnfEnabled' | translate}}</span>
@@ -602,6 +669,10 @@
                 <div class="bjr-toggle-row" ng-if="race.loopable">
                     <span title="{{'beamjoy.window.config.tabs.races.ghostBackmarkers.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.ghostBackmarkers' | translate}}</span>
                     <bj-toggle ng-model="$ctrl.startOptions.ghostBackmarkers"></bj-toggle>
+                </div>
+                <div class="bjr-toggle-row">
+                    <span title="{{'beamjoy.window.config.tabs.races.hideOthers.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.hideOthers' | translate}}</span>
+                    <bj-toggle ng-model="$ctrl.startOptions.hideOthers"></bj-toggle>
                 </div>
 
                 <!-- the pits (PIT_SYSTEM_PLAN.md) : a circuit whose pits are usable ; with phases, each can

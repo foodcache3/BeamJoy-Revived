@@ -59,12 +59,14 @@ angular.module("beamjoy").factory("beamjoyRacePhases", function ($filter) {
     ];
     // "individual" is the editor's "Time offset" (a start every few seconds, several on track),
     // "sequential" its "One at a time" (each racer's whole phase before the next is released)
-    const STARTS = ["grid", "individual", "sequential", "open"];
+    // "groups" releases the grid in waves, every car from its own slot
+    const STARTS = ["grid", "groups", "individual", "sequential", "open"];
     // the rules a phase's editor sets over the event's ; the pits' too (services/races.lua PIT_SETTINGS,
     // a race with usable pits only)
     const PIT_RULES = ["pitStart", "pitGhost", "pitStops", "pitMissingPenaltyS", "pitRefuel", "pitFuelRatePct",
         "startFuelPct", "pitRepair", "pitRepairMaxS", "pitTyres", "pitTyreChangeS", "pitTow", "pitTowSpeed", "pitReturn"];
-    const RULES = ["respawnStrategy", "disableCollisions", "dnfEnabled", "resetPenaltyEnabled", ...PIT_RULES];
+    const RULES = ["respawnStrategy", "disableCollisions", "hideOthers", "startLights", "dnfEnabled",
+        "resetPenaltyEnabled", ...PIT_RULES];
 
     // a phase as edited : every setting there, the length's laps and minutes kept while switched off
     const newPhase = (base, laps) => {
@@ -74,6 +76,8 @@ angular.module("beamjoy").factory("beamjoyRacePhases", function ($filter) {
                 plugins: {},
                 start: "grid",
                 intervalS: 10,
+                // released in waves ("groups") : how many go together
+                groupSize: 2,
                 // one at a time : the others watch (one car on track, all from the first slot), or
                 // wait on their slots
                 waiting: "watch",
@@ -140,7 +144,8 @@ angular.module("beamjoy").factory("beamjoyRacePhases", function ($filter) {
             const out = {
                 name: (p.name || "").trim() || undefined,
                 start: p.start || "grid",
-                intervalS: p.start === "individual" ? Number(p.intervalS) || 10 : undefined,
+                intervalS: p.start === "individual" || p.start === "groups" ? Number(p.intervalS) || 10 : undefined,
+                groupSize: p.start === "groups" ? Math.max(2, Number(p.groupSize) || 2) : undefined,
                 waiting: p.start === "sequential" ? (p.waiting === "grid" ? "grid" : "watch") : undefined,
                 lateJoin: p.lateJoin === true,
                 ranking: p.ranking,
@@ -246,6 +251,11 @@ angular.module("beamjoy").component("bjRacePhases", {
                 { value: null, label: translate("beamjoy.racePhases.rules.same") },
                 { value: true, label: translate("beamjoy.common.enabled") },
                 { value: false, label: translate("beamjoy.common.disabled") },
+            ];
+            this.startLightsOptions = [
+                { value: null, label: translate("beamjoy.racePhases.rules.same") },
+                { value: false, label: translate("beamjoy.window.config.tabs.races.startModes.countdown") },
+                { value: true, label: translate("beamjoy.window.config.tabs.races.startModes.lights") },
             ];
             this.collisionOptions = [
                 { value: null, label: translate("beamjoy.racePhases.rules.same") },
