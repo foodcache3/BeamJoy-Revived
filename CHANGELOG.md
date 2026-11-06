@@ -8,7 +8,33 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2490, client build 2776 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2492, client build 2776 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **East Coast USA's races, tidied up, and your times kept.** Eight of them get their props cleaned
+  up; "Street Stage" has its grid moved back onto the road, and "Street Course (reverse)" gets a
+  stray gate put back where it belongs along with the seven grid slots it was missing. A server that
+  already has these races takes the fix on its next start **and keeps its recorded times** - no lap
+  on any of them is run differently than before, so throwing a leaderboard away for it would be the
+  bigger loss. A race you've edited yourself on your own server is overwritten by this, as a shipped
+  course fix always is. *(server, needs a restart)*
+
+- **Saving a race no longer says a race with that name already exists when it's the same race.**
+  Reported. The races BeamJoy ships with could be added to a server a second time, under new ids,
+  leaving two of each: each one then counted as the other's duplicate name, so neither could be
+  saved from the editor. The cause was the check that stops two races sharing a name - it skips the
+  race being saved itself, told apart by its id, and a race arriving from the bundled set still
+  carried the id it ships under, which on a server set up from scratch is the id its own copy
+  already has. So the check skipped the very race it was about to duplicate. Fixed, and every extra
+  copy already on a server is removed once, on the next start: only an exact extra copy with no
+  recorded times goes, and the original keeps its id, times, settings and props. Two races an admin
+  named the same on purpose, and any copy since edited or driven, are left alone. *(server, needs a
+  restart)*
+
+- **A rejected race save no longer prints the whole race to the server console.** Reported: "when I
+  save a race it floods the server log". A refused save dumped the submitted race in full, which is
+  hundreds of lines of gate, grid and prop coordinates, burying the console and the log file. It
+  logs the reason and the race's shape - name, mode, and how many gates, start positions and props
+  - which is what actually diagnoses it. *(server)*
 
 - **No more repeating freeze in one particular spot.** Reported: "often times in the same spot it
   would freeze briefly and the lua usage would spike, and the camera ring hud would show in the top

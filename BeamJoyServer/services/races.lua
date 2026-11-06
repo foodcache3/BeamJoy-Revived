@@ -1318,6 +1318,16 @@ local function seedBundledRaces()
                     -- also ship for would be a real bug otherwise
                     local candidate = table.deepcopy(race)
                     candidate.formerNames = nil
+                    -- Real, confirmed bug (direct report: "a race with that name already exists"
+                    -- when saving one, with every bundled race listed twice). The bundled file
+                    -- ships its races with their own ids, 1..n, and a server seeded from empty
+                    -- gives its live races those same ids. sanitizeRace's duplicate-name check
+                    -- deliberately skips the race whose id matches the candidate's own (that is
+                    -- how an edit saves over itself), so a candidate still carrying its bundled id
+                    -- made that check skip the very race it was about to duplicate. The id a
+                    -- seeded race actually gets is assigned from targetList below, so the one it
+                    -- arrives with is never meaningful here.
+                    candidate.id = nil
                     local err = sanitizeRace(candidate, targetList)
                     if err then
                         if err == "A race with this name already exists" then
@@ -1369,12 +1379,29 @@ end
 --- on that server ; only its id and name stay. Its leaderboard is cleared (direct request : times
 --- set on the old course don't compare), as editing a race does. A race deleted on a server stays
 --- deleted.
+--- An entry with `keepTimes` as well (direct request) keeps that server's recorded times instead of
+--- clearing them, for an update that leaves every lap as comparable as it was : props tidied up, or
+--- a grid moved without the gates being touched. Both boards are then carried over, the race one
+--- and the freeroam one.
 local BUNDLED_COURSE_UPDATES = {
     -- one gate removed
     { map = "west_coast_usa", name = "Street Course 2", revision = 2, previous = { gates = 19, distance = 2472 } },
     -- one-time overwrite of both directions
     { map = "west_coast_usa", name = "Street Course 2", revision = 3, force = true },
     { map = "west_coast_usa", name = "Street Course 2 Reverse", revision = 1, force = true },
+    -- East Coast USA, props tidied up on six of these and the grid fixed on two (direct request) :
+    -- the times stay, since no lap on any of them is run differently than before. "Street Stage"
+    -- has its grid moved back onto the road, which is why its measured distance moves with it, and
+    -- "Street Course (reverse)" gets gate 7 put back where it belongs and the 7 grid slots it was
+    -- missing ; both still leave a lap timed between the same gates.
+    { map = "east_coast_usa", name = "Asphalt Stage 1", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Asphalt Stage 1 (reverse)", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Asphalt Stage 2", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Asphalt Stage 2 (reverse)", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Street Stage", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Street Stage (reverse)", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Street Course", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Street Course (reverse)", revision = 1, force = true, keepTimes = true },
 }
 local COURSE_FIELDS = { "mode", "gates", "startPositions", "distance", "loopable", "branchingEnabled",
     "oneWayGates", "sectorCount", "manualSectors", "pit" }
@@ -1399,6 +1426,59 @@ local function sameGates(a, b)
         if dx * dx + dy * dy + dz * dz > .25 then return false end
     end
     return true
+end
+
+--- a race anyone has set a time on, in a race or in freeroam
+---@param race table
+---@return boolean
+local function hasRecordedTimes(race)
+    return (type(race.leaderboard) == "table" and next(race.leaderboard) ~= nil) or
+        (type(race.freeroamLeaderboard) == "table" and next(race.freeroamLeaderboard) ~= nil)
+end
+
+--- One-time cleanup, once per server, of the extra copies seeding used to leave behind (see
+--- seedBundledRaces' own note on the bundled id it used to hand sanitizeRace). On a server that
+--- hit it, every bundled race that map ships came back a second time under a fresh id, and then
+--- neither copy could be saved from the editor at all : each one is the other's duplicate name.
+--- Only an exact extra copy goes : same name, same gates, and no recorded times. The first copy
+--- in the list stays - the one every raceNamed lookup, and so every ledger props/sync key, already
+--- resolves to - with its id, times, settings and props untouched. Two races an admin named the
+--- same on purpose, a copy since edited onto another course, and a copy with times on it are all
+--- left exactly as they are.
+local DEDUPE_KEY = "dedupe@1"
+
+local function dedupeBundledRaces()
+    if dao_bundled.isSeeded(SYNC_LEDGER_MAP, M.ACTIVITY_TYPE, DEDUPE_KEY) then return end
+    for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
+        local list = dao_activity.get(mapName, M.ACTIVITY_TYPE)
+        if table.isArray(list) then
+            local firstByName = {}
+            for _, r in ipairs(list) do
+                local key = type(r) == "table" and type(r.name) == "string" and r.name:trim():lower() or nil
+                if key and firstByName[key] == nil then firstByName[key] = r end
+            end
+            local removed = 0
+            -- backwards : removing as we go
+            for i = #list, 1, -1 do
+                local r = list[i]
+                local key = type(r) == "table" and type(r.name) == "string" and r.name:trim():lower() or nil
+                local first = key and firstByName[key] or nil
+                if first and first ~= r and not hasRecordedTimes(r) and sameGates(first, r) then
+                    table.remove(list, i)
+                    removed = removed + 1
+                    LogInfo(string.format(
+                        "bundled race de-duplicated: %s / %s (id %s), an extra copy of id %s",
+                        mapName, tostring(r.name), tostring(r.id), tostring(first.id)))
+                end
+            end
+            if removed > 0 then
+                dao_activity.save(mapName, M.ACTIVITY_TYPE, list)
+                LogInfo(string.format("bundled race de-duplication: %s, %d extra %s removed",
+                    mapName, removed, removed == 1 and "copy" or "copies"))
+            end
+        end
+    end
+    dao_bundled.markSeeded(SYNC_LEDGER_MAP, M.ACTIVITY_TYPE, DEDUPE_KEY)
 end
 
 ---@return boolean done false when a race failed, retried on the next boot
@@ -1463,8 +1543,13 @@ local function applyBundledCourseUpdates()
                     -- deleted on purpose, or never seeded here : nothing to fix
                 elseif update.force then
                     candidate = table.deepcopy(bundled)
-                    candidate.id, candidate.name, candidate.leaderboard = live.id, live.name, {}
+                    candidate.id, candidate.name = live.id, live.name
                     candidate.formerNames = nil
+                    -- both boards explicitly, not just the race one : `bundled` carries its own
+                    -- empty pair, so an unset field here would silently wipe that board whichever
+                    -- way the entry goes
+                    candidate.leaderboard = update.keepTimes and live.leaderboard or {}
+                    candidate.freeroamLeaderboard = update.keepTimes and live.freeroamLeaderboard or {}
                 elseif sameGates(live, bundled) then
                     -- already the fixed course (a fresh install seeds it directly)
                 elseif courseMatches(live, update.previous) then
@@ -1569,12 +1654,17 @@ local function raceSave(ctxt, race)
         -- always log server-side, not just when console-invoked : a player-triggered failure
         -- previously only ever reached the client as a toast, leaving nothing in the server
         -- console to actually diagnose what was wrong with the submitted data
-        LogError(string.format("raceSave rejected%s: %s",
-            ctxt.sender and (" from " .. ctxt.sender.playerName) or "", err))
-        -- dump unconditionally, not gated on IsDebug() : that depends on the server's own
-        -- MP.Settings.Debug flag, which may well be off, and this is exactly the situation
-        -- where seeing the actual rejected data matters
-        dump(race)
+        -- the race's shape, not the race itself (direct request) : this used to dump(race)
+        -- unconditionally, and a real race is hundreds of gate/start/prop lines, so one rejected
+        -- save buried the console and the log file under it. The counts are what actually
+        -- diagnoses a sanitation failure ; the data itself is already on the client that sent it.
+        LogError(string.format("raceSave rejected%s: %s (name %s, mode %s, %d gates, %d starts, %d props)",
+            ctxt.sender and (" from " .. ctxt.sender.playerName) or "", err,
+            type(race) == "table" and string.format("%q", tostring(race.name)) or "?",
+            type(race) == "table" and tostring(race.mode) or "?",
+            type(race) == "table" and table.isArray(race.gates) and #race.gates or 0,
+            type(race) == "table" and table.isArray(race.startPositions) and #race.startPositions or 0,
+            type(race) == "table" and table.isArray(race.props) and #race.props or 0))
         if ctxt.sender then
             return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error", err)
         end
@@ -2222,6 +2312,9 @@ local function onInit()
 
     -- before seeding : seeded races are marked synced, a pre-2.0 server would then look like 2.0
     local syncFromPre20 = bundledSyncNeeded()
+    -- before renaming and seeding : both resolve a bundled race by name, and that only means
+    -- anything once there's one race per name again
+    dedupeBundledRaces()
     renameBundledRaces()
     seedBundledRaces()
     applyBundledCourseUpdates()
