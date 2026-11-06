@@ -418,6 +418,7 @@ local function onVehicleDestroyed(vid)
     -- is cleared by BeamMP itself now : BeamMP/BeamMP#974)
     M.vehicles[vid] = nil
     M.ghostReasons[vid] = nil
+    M.occupantMeshAlphas[vid] = nil
 end
 
 local lastShut = {}
@@ -460,6 +461,10 @@ local function onSlowUpdate()
     -- (see ensureOwnVehicleDriver) : checked here so it can never outlast a second, whichever of
     -- the game's fallbacks produced it
     M.ensureOwnVehicleDriver()
+
+    -- and the seat figures of that same car, against whatever outside this mod last wrote their
+    -- mesh alphas (see verifyOccupantMeshes)
+    M.verifyOccupantMeshes()
 end
 
 local lastCollisionsMode = nil
@@ -589,9 +594,28 @@ end
 ---@param req RequestAuthorization
 ---@param model string
 ---@param config string?
+--- the two spawn permissions this hook asks about, answered at most once a frame.
+---
+--- The vehicle selector calls the hook once per GRID TILE (ui_vehicleSelector_general.passesFilters,
+--- wrapped in beamjoy/../vehicleSelector.lua) : 1572 tiles on a stock install, so one grid build or
+--- one keystroke in its search box used to run 3144 permission evaluations, and hasAllPermissions
+--- is not a lookup - each call reads the nickname, resolves the player's group, allocates a
+--- varargs Table plus a closure for :every(), and linear-scans that group's permission list. The
+--- profiler measured 23.6 ms of hook time in the single frame that builds the grid.
+---
+--- Both answers are the same for every tile, and neither can change within a frame, so they are
+--- read once and reused. The cache is keyed on the millisecond clock rather than held
+--- indefinitely, so a rank change still reaches the selector on its next rebuild ; the server
+--- enforces spawn permissions independently on the actual spawn either way.
+local permsCacheMs, cachedCanSpawnTrailers, cachedCanSpawnProps = -1, false, false
 local function onBJRequestCanSpawnVehicle(req, model, config)
-    local canSpawnTrailers = beamjoy_permissions.hasAllPermissions(nil, BJ_PERMISSIONS.SpawnTrailers)
-    local canSpawnProps = beamjoy_permissions.hasAllPermissions(nil, BJ_PERMISSIONS.SpawnProps)
+    local nowMs = GetCurrentTimeMillis()
+    if nowMs ~= permsCacheMs then
+        permsCacheMs = nowMs
+        cachedCanSpawnTrailers = beamjoy_permissions.hasAllPermissions(nil, BJ_PERMISSIONS.SpawnTrailers)
+        cachedCanSpawnProps = beamjoy_permissions.hasAllPermissions(nil, BJ_PERMISSIONS.SpawnProps)
+    end
+    local canSpawnTrailers, canSpawnProps = cachedCanSpawnTrailers, cachedCanSpawnProps
     if not M.allVehicleConfigs then
         M.getAllVehicleConfigs()
     end
@@ -1408,6 +1432,12 @@ end
 -- the game's seat occupant figures (gameplay/seatOccupants.lua's setOccupantMeshes)
 local OCCUPANT_MESHES = { character_torso = true, character_head = true }
 
+--- vid -> occupant mesh name -> the alpha applyDisplayAlpha last gave it : what the figures in a
+--- car are SUPPOSED to look like, so a write by anything else can be noticed. Pruned by
+--- onVehicleDestroyed, which is why it lives on M (see verifyOccupantMeshes)
+---@type table<integer, table<string, number>>
+M.occupantMeshAlphas = {}
+
 --- sets a vehicle's transparency (computeDisplayAlpha), its seat occupants kept as the game has
 --- them. Real bug (reported : "vehicle presets sometimes fill every slot with occupants") :
 --- setMeshAlpha(alpha, "") reaches every mesh of the car, and the game hides an empty seat's
@@ -1422,10 +1452,18 @@ local function applyDisplayAlpha(veh, isGhosted)
     local vid = veh:getID()
     local alpha = computeDisplayAlpha(vid, isGhosted)
     veh:setMeshAlpha(alpha, "")
-    if not gameplay_seatOccupants or not core_vehicle_manager then return end
+    -- the figures can't be managed at all, or this car's part data isn't readable yet : whatever
+    -- was expected of them is dropped rather than left to read as a drift forever
+    if not gameplay_seatOccupants or not core_vehicle_manager then
+        M.occupantMeshAlphas[vid] = nil
+        return
+    end
     local vehData = core_vehicle_manager.getVehicleData(vid)
     local vdata = vehData and vehData.vdata
-    if not vdata then return end
+    if not vdata then
+        M.occupantMeshAlphas[vid] = nil
+        return
+    end
     local mpVeh = M.vehicles[vid]
     local figuresShown = settings.getValue("enableSeatOccupants", true) and not (mpVeh and mpVeh.isLocal == false)
     -- occupant part path -> whether its figure shows ; any other occupant figure : hidden
@@ -1433,13 +1471,73 @@ local function applyDisplayAlpha(veh, isGhosted)
     for _, seat in ipairs(gameplay_seatOccupants.getSeats(vid) or {}) do
         if seat.partPath then shown[seat.partPath] = figuresShown and seat.occupied == true end
     end
+    local written
     local function apply(meshData)
         if meshData.mesh and OCCUPANT_MESHES[meshData.originalMesh or meshData.mesh] then
-            veh:setMeshAlpha(shown[meshData.partPath] and alpha or 0, meshData.mesh)
+            local meshAlpha = shown[meshData.partPath] and alpha or 0
+            veh:setMeshAlpha(meshAlpha, meshData.mesh)
+            written = written or {}
+            written[meshData.mesh] = meshAlpha
         end
     end
     for _, flexbody in pairs(vdata.flexbodies or {}) do apply(flexbody) end
     for _, prop in pairs(vdata.props or {}) do apply(prop) end
+    M.occupantMeshAlphas[vid] = written
+end
+
+--- the figures in this player's own car, put back when something outside this mod has moved them.
+---
+--- Real bug, reported twice over ("vehicle presets sometimes fill every slot with occupants", then
+--- "when I spawn traffic, my vehicle fills with occupants") : an empty seat's figure is hidden by
+--- nothing but its mesh alpha (setOccupantMeshes), and the game has several places that write a
+--- blanket alpha over every mesh a car has, none of which puts the figures back afterwards - the
+--- game's own occupant pass (applyVehicle) only ever runs on a spawn, a reset, a switch or a seat
+--- change. Each of those writes therefore seats a person in every seat at once, and takes a
+--- ghost's transparency with it :
+---   * the traffic table, on both sides (gameplay/traffic/vehicle.lua's C:init, "force vehicle to
+---     be visible", and traffic.lua's removeTraffic). This player's own car is taken in : traffic's
+---     startup walks the scene for the player-driven cars (checkPlayer, "the player vehicle should
+---     ideally be included in the traffic table at all times"), and does it again on every switch
+---     and reset while traffic runs. Caught the instant it happens by the hooks below as well.
+---   * the in-place vehicle editor (core/vehicle/inplaceEdit.lua), which the game's own parts and
+---     preset UI drives : it hides every mesh to highlight a part, and leaving the mode ends on a
+---     flat setMeshAlpha(1, ''). No hook, and no way to know a player went in there.
+---   * the parts selector's x-ray fade (core/vehicle/partmgmt.lua's clearXrayState), and the
+---     police and vehicle-pooling fades, which do the same to any car they reach.
+---
+--- Rather than chase each one (the list isn't ours, and can grow with any game update), the figures
+--- are compared against what this mod last gave them and put back when they don't match. Only this
+--- player's own car : every writer above either reaches nothing else, or fires a hook that already
+--- covers it. One native read per occupant mesh of that one car per second, against the game's own
+--- alphas, so a drift can never outlast a second whatever caused it.
+local function verifyOccupantMeshes()
+    local own = be:getPlayerVehicle(0)
+    local expected = own and M.occupantMeshAlphas[own:getID()]
+    if not expected then return end
+    for mesh, meshAlpha in pairs(expected) do
+        local ok, actual = pcall(own.getMeshAlpha, own, mesh)
+        if ok and type(actual) == "number" and math.abs(actual - meshAlpha) > .01 then
+            applyDisplayAlpha(own)
+            return
+        end
+    end
+end
+
+--- the look of a car the game's traffic system just took into, or let go of, its traffic table :
+--- both sides of it write a blanket mesh alpha over the car, which is one of the writers
+--- verifyOccupantMeshes exists for (see its own doc for what that does to the seat figures and to
+--- a ghost). Unlike the others this one has a hook, and it fires straight AFTER the write, so the
+--- look is simply re-applied on the spot instead of waiting for the next check a second later.
+---
+--- Any car, not only this player's own : beamjoy_playerPursuit hands the traffic table other
+--- players' cars too. It may not be tracked yet (registerVehicle waits on BeamMP's own list, and a
+--- freshly spawned traffic car reaches the traffic table first), so the scene object is used when
+--- it isn't ; applyDisplayAlpha reads that car's ghost state off the object either way.
+---@param vid integer
+local function onTrafficVehicleAdded(vid)
+    local mpVeh = M.vehicles[vid]
+    local veh = mpVeh and mpVeh.veh or be:getObjectByID(vid)
+    if veh then applyDisplayAlpha(veh) end
 end
 
 ---@param state boolean
@@ -1893,6 +1991,9 @@ M.onServerTick = onServerTick
 M.onVehicleResetted = onVehicleResetted
 M.onBJRequestCanSpawnVehicle = onBJRequestCanSpawnVehicle
 M.onBJVehicleModChanged = onBJVehicleModChanged
+M.onTrafficVehicleAdded = onTrafficVehicleAdded
+-- removeTraffic's own setMeshAlpha(1, '') : the same wipe, on the way back out
+M.onTrafficVehicleRemoved = onTrafficVehicleAdded
 
 M.getVehicle = getVehicle
 M.getType = getType
@@ -1933,6 +2034,7 @@ M.refreshResetPreserveFlags = refreshResetPreserveFlags
 M.applyRespawnProtection = applyRespawnProtection
 M.computeDisplayAlpha = computeDisplayAlpha
 M.applyDisplayAlpha = applyDisplayAlpha
+M.verifyOccupantMeshes = verifyOccupantMeshes
 M.setHidden = setHidden
 M.clearHidden = clearHidden
 M.setSoloGhostVisualReversed = setSoloGhostVisualReversed

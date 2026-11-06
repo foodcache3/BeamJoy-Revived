@@ -8,7 +8,53 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2490, client build 2770 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2490, client build 2776 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **No more repeating freeze in one particular spot.** Reported: "often times in the same spot it
+  would freeze briefly and the lua usage would spike, and the camera ring hud would show in the top
+  left". Parked cars are kept clear of bus stops two ways - never park one in a stop, and remove
+  one already sitting in a stop - and the two disagreed. Choosing a place measured the parking bay
+  marker; removing a car measured the car itself, which doesn't sit exactly on its marker. So a bay
+  just outside a stop could pass as free and then place a car just inside it, which was promptly
+  removed, replaced in the same handful of bays, and removed again - once a second, forever, each
+  turn costing a spawn and a camera reset. Removal is now limited to a car genuinely inside the
+  stop, leaving the parking buffer as breathing room between the two. *(client)*
+
+- **Opening the vehicle selector no longer hitches.** Found while profiling: this mod checks
+  whether you are allowed to spawn each vehicle, and the selector asks that question once for
+  every tile in the grid - over fifteen hundred of them on a stock install, every time the grid is
+  built or you type in its search box. Each question re-read your rank from scratch, so the same
+  answer was worked out thousands of times over in a single frame, which measured as a visible
+  stutter. The answer is worked out once now. *(client)*
+
+- **Less work repeated behind the scenes, every second of play.** Found while profiling: reading
+  one of this mod's own saved settings searched the whole list of setting names to find out where
+  that setting lived, every single read. The nametag colours alone are read six times a second, so
+  that search ran constantly and threw away a steady stream of short-lived memory, which is what
+  makes the game pause to collect it. The lookup is direct now. *(client)*
+
+- **A small stutter every five seconds is gone.** Spotted in the performance graph as a regular
+  spike of Lua time. This game tops its own share of traffic and parked cars back up every five
+  seconds, and the first thing that check did was count every node in the map's road network just
+  to find out whether the map had roads at all - thousands of them on a big map, every time. It
+  asks the question directly now. *(client)*
+
+- **Nothing fills your car with occupants any more, whatever set it off.** Reported twice over -
+  "vehicle presets sometimes fill every slot with occupants", and now "when I spawn traffic, my
+  vehicle fills with occupants" - and it turned out to be one cause with several triggers. An empty
+  seat's occupant figure is hidden by nothing but its transparency, and several parts of the game
+  write a blanket transparency across every mesh a car has, which reveals all of them at once (and
+  drops a ghosted car back to solid while it's at it). The game never puts them back : its own
+  occupant pass only runs on a spawn, a reset, a switch or a seat change, and none of these is any
+  of those. The traffic system does it on both sides of its traffic table, to your own car too,
+  because it takes the player-driven cars into that table the moment traffic starts and again on
+  every switch and reset while it runs. The vehicle editor behind the game's own parts and preset
+  UI does it to highlight a part and once more on the way out. So do the parts selector's x-ray
+  fade and the police and vehicle-pooling fades. Rather than chase each one - that list isn't ours
+  and can grow with any game update - the figures are now checked against what this mod last gave
+  them and put back when they don't match, once a second, for the car you're in. The traffic table
+  is also caught the instant it happens, since it's the one trigger that announces itself.
+  *(client)*
 
 - **Nametags cost a fraction of what they did too.** The same profiler dump had
   `beamjoy_nametags.onUpdate` allocating more per frame than anything else in the mod, the race
