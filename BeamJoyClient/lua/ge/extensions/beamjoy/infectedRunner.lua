@@ -654,6 +654,9 @@ local function pushSessionStatus_impl(session)
                 playerID = p.playerID,
                 ready = p.ready,
                 role = p.role,
+                -- staff's own "Pre-assign this player as infected" marker : the roster shows it so
+                -- a pre-assignment is visible before roles are committed at COUNTDOWN
+                forcedInfected = p.forcedInfected,
                 vehicleModel = p.vehicleModel,
                 tagCount = p.tagCount,
             }

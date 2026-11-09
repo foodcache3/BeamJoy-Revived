@@ -96,6 +96,12 @@ angular.module("beamjoy").component("bjConfigHunterArena", {
         $rootScope.$on("BJEditorHunterArenaMetaUpdate", (_, meta) => {
             this.enabled = meta.enabled === true;
             this.defaults = meta.defaults || {};
+            // an arena saved before the per-role station settings existed has neither field, which
+            // would leave both dropdowns blank : filled in with the value the server sanitizes a
+            // missing one to anyway, so what's shown is what's actually in force. Set before
+            // previousDefaults is snapshotted, so this never marks the editor dirty on its own.
+            if (!this.defaults.stationRefuelRoles) this.defaults.stationRefuelRoles = "both";
+            if (!this.defaults.stationRepairRoles) this.defaults.stationRepairRoles = "both";
             previousEnabled = this.enabled;
             previousDefaults = angular.copy(this.defaults);
         });
@@ -154,6 +160,16 @@ angular.module("beamjoy").component("bjConfigHunterArena", {
         });
 
         this.vehiclePresets = [];
+        // who an open station/garage is open to, per interaction kind. "both" is the default and is
+        // exactly what "Allow fuel stations & garages" did on its own, so an arena saved before
+        // these existed keeps behaving the same way.
+        this.stationRoleOptions = [
+            { value: "both", label: "beamjoy.window.config.tabs.hunterArena.stationRoles.both" },
+            { value: "hunted", label: "beamjoy.window.config.tabs.hunterArena.stationRoles.hunted" },
+            { value: "hunters", label: "beamjoy.window.config.tabs.hunterArena.stationRoles.hunters" },
+            { value: "none", label: "beamjoy.window.config.tabs.hunterArena.stationRoles.none" },
+        ];
+
         this.vehiclePresetOptions = [];
         const rebuildVehiclePresetOptions = () => {
             this.vehiclePresetOptions = [

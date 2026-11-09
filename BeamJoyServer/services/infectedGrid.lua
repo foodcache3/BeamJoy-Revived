@@ -25,6 +25,10 @@
 ---assignRoles actually commits it (a random draw at COUNTDOWN start, topped up by any staff
 ---force-assignment already made ; see BJInfectedSession.forcedInfectedIds)
 ---@field ready boolean
+---@field forcedInfected boolean? payload-only (buildBasePayload, never stored on the participant
+---itself) : true while staff have pre-assigned this one as one of the round's initial infected, so
+---the lobby roster can show that the pre-assignment took. The stored form is the session's own
+---forcedInfectedIds set
 ---@field spawnPos {x: number, y: number, z: number}?
 ---@field spawnDir {x: number, y: number, z: number}?
 ---@field vehicleModel string? reported at ready, same pattern as races'/hunter's own equivalent field
@@ -137,6 +141,29 @@ local function resolveInfectedCount(session)
         #session.arenaSnapshot.infectedSpawns, session.participants:length() - 1))
 end
 
+--- the roster ids staff pre-assigned (infectedForceInfected), resolved against the roster itself and
+--- compared as numbers rather than read straight back out as table keys.
+---
+--- Real, confirmed bug (direct report : "the setting does not take effect and it chooses randomly
+--- anyway"). The id a client sends arrives over JSON, so it reaches the handler as whatever
+--- utils_json made of it - a float, or a numeric string from a modified client - while the roster's
+--- own keys are the integer playerIDs the server assigned. A plain `forcedInfectedIds[id]` lookup
+--- found nothing whenever those two didn't land on the same key, with no error anywhere : the
+--- forced list came back empty and the random draw below quietly took the whole decision. Resolving
+--- it this way can't miss, whatever the write-side key ended up as.
+---@param session BJInfectedSession
+---@return integer[] playerIDs
+local function resolveForcedIds(session)
+    local out = {}
+    session.participants:forEach(function(_, playerID)
+        local isForced = table.some(session.forcedInfectedIds, function(v, k)
+            return v == true and tonumber(k) == tonumber(playerID)
+        end)
+        if isForced then table.insert(out, playerID) end
+    end)
+    return out
+end
+
 --- commits real BJInfectedParticipant.role values : any staff-forced ids first, topped up randomly
 --- from the rest of the field up to resolveInfectedCount, everyone else survivor. The ONE place role
 --- actually gets written, called exactly once (beginCountdown)
@@ -144,7 +171,14 @@ end
 local function assignRoles(session)
     local count = resolveInfectedCount(session)
     local ids = session.participants:keys()
-    local forced = table.filter(ids, function(id) return session.forcedInfectedIds[id] == true end)
+    local forced = resolveForcedIds(session)
+    -- an explicit staff pre-assignment is never silently dropped by a lower initialInfectedCount
+    -- (same request) : the count rises to cover every forced id, still inside the arena's own
+    -- infected-spawn count and the "at least one survivor" floor resolveInfectedCount enforces
+    if #forced > count then
+        count = math.min(#forced, math.max(1, math.min(#session.arenaSnapshot.infectedSpawns,
+            session.participants:length() - 1)))
+    end
     local infectedIds = {}
     for i = 1, math.min(#forced, count) do table.insert(infectedIds, forced[i]) end
     if #infectedIds < count then
@@ -217,9 +251,16 @@ end
 ---@return table
 local function buildBasePayload(session)
     local payload = table.clone(session)
+    local forced = resolveForcedIds(session)
+    -- the raw set never goes out : it's keyed by playerID, so json-encoded it came out as a sparse
+    -- array of nulls, and the one thing the UI actually needs from it is per-participant anyway
+    payload.forcedInfectedIds = nil
     payload.participants = table.map(session.participants:values(), function(p)
         local c = table.clone(p)
         c.displayName = resolveDisplayName(p.playerID, p.playerName)
+        -- what the roster's own "Pre-assign this player as infected" button reads back to show
+        -- whether the pre-assignment took (shown to staff only, client-side)
+        c.forcedInfected = table.includes(forced, p.playerID) or nil
         return c
     end)
     if session.state == "GAME" and session.startedAt then
@@ -819,9 +860,19 @@ local function infectedForceInfected(ctxt, sessionId, targetPlayerID)
     if not ctxt.sender or not services_permissions.isStaff(ctxt.sender.playerName) then return end
     local session = M.sessions[sessionId]
     if not session or session.state == "GAME" or session.state == "FINISHED" then return end
-    if not session.participants[targetPlayerID] then return end
+    -- the id comes in over JSON : normalised to the integer the roster is actually keyed by, so the
+    -- write lands on the same key resolveForcedIds reads back (see its own note for the real bug)
+    targetPlayerID = tonumber(targetPlayerID)
+    targetPlayerID = targetPlayerID and math.floor(targetPlayerID) or nil
+    if not targetPlayerID or not session.participants[targetPlayerID] then return end
 
-    session.forcedInfectedIds[targetPlayerID] = true
+    -- a toggle, not a one-way switch (same report) : there was no way to undo a misclick, and
+    -- nothing on screen said a pre-assignment had registered at all. The roster now marks it, fed
+    -- by BJInfectedParticipant.forcedInfected in the payload
+    session.forcedInfectedIds[targetPlayerID] = not session.forcedInfectedIds[targetPlayerID] or nil
+    LogInfo(string.format("infected: %s %s %s as initial infected (session %s)",
+        ctxt.sender.playerName, session.forcedInfectedIds[targetPlayerID] and "pre-assigned" or "cleared",
+        tostring(session.participants[targetPlayerID].playerName), session.id))
     if session.state == "COUNTDOWN" then
         -- roles were already committed once for this COUNTDOWN ; redo the whole draw so the new
         -- forced id actually takes effect immediately instead of only on some hypothetical next round

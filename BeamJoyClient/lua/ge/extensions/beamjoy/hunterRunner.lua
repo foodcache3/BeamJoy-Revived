@@ -1764,8 +1764,43 @@ M.onBJRequestCurrentVehicleReset = onBJRequestCurrentVehicleReset
 --- Also the gate beamjoy_stations uses for whether station/garage markers show at all during a
 --- round (called with kind == nil), not just whether an interaction may start. Denied for the
 --- whole locked window unless the host set the arena's `allowStations` default.
+---
+--- With stations open, each kind is then allowed per role (direct request : "an option to allow
+--- hunter or hunted to repair at garages"). `stationRefuelRoles` and `stationRepairRoles` are
+--- independent, both default "both" - exactly what `allowStations` did on its own before they
+--- existed - so only a host who narrows one sees any change. kind == nil is the marker-visibility
+--- question, answered yes while either kind is still open to this player : a hunted who may repair
+--- but not refuel still needs to see the garage.
+---@param roles BJHunterStationRoles?
+---@param role string? this participant's own "hunted"/"hunter"
+---@return boolean
+local function stationRoleAllowed(roles, role)
+    if roles == "none" then return false end
+    if roles == "hunted" then return role == "hunted" end
+    if roles == "hunters" then return role == "hunter" end
+    return true -- "both", and any unrecognised value (the server sanitizes to one of the four)
+end
+
 local function onBJRequestStationInteraction(req, kind)
-    if isHuntLocked() and not (M.session and M.session.settings and M.session.settings.allowStations) then
+    if not isHuntLocked() then return end
+    local settings = M.session and M.session.settings
+    if not (settings and settings.allowStations) then
+        req.state = false
+        return
+    end
+    -- a spectator, or anyone whose role isn't committed yet, is treated as neither side : a
+    -- role-restricted station stays shut for them rather than falling open
+    local participant = getSelfParticipant()
+    local role = participant and participant.role or nil
+    local refuel = stationRoleAllowed(settings.stationRefuelRoles, role)
+    local repair = stationRoleAllowed(settings.stationRepairRoles, role)
+    -- only ever denies, never un-denies : this hook's own contract, and another extension may
+    -- already have refused this same request for a reason of its own
+    if kind == "refuel" then
+        if not refuel then req.state = false end
+    elseif kind == "repair" then
+        if not repair then req.state = false end
+    elseif not (refuel or repair) then
         req.state = false
     end
 end
