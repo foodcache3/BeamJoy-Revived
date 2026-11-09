@@ -1,8 +1,13 @@
 <style>
     #beamjoy-hunter-hud {
         position: fixed;
-        top: 2vh;
-        right: 1vw;
+        /* the player's corner, from Settings > Menu (overlay-anchor.js). The fallbacks are the
+           top-right corner every activity overlay shipped in, so this still lands there if the
+           anchor service never ran */
+        top: var(--bj-ov-top, 2vh);
+        right: var(--bj-ov-right, 1vw);
+        bottom: var(--bj-ov-bottom, auto);
+        left: var(--bj-ov-left, auto);
         z-index: 4;
         width: 15em;
         font-family: "Noto Sans", "Noto Sans JP", "Noto Sans KR", "Noto Sans SC", sans-serif;

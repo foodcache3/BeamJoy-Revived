@@ -9,10 +9,14 @@
         gap: 0.6em;
         pointer-events: none;
     }
-    .bj-pov-stack.top-right { top: 2vh; right: 1vw; align-items: flex-end; }
-    .bj-pov-stack.top-left { top: 2vh; left: 1vw; align-items: flex-start; }
-    .bj-pov-stack.bottom-right { bottom: 2vh; right: 1vw; align-items: flex-end; flex-direction: column-reverse; }
-    .bj-pov-stack.bottom-left { bottom: 2vh; left: 1vw; align-items: flex-start; flex-direction: column-reverse; }
+    /* the four corners take the player's own edge gaps (overlay-anchor.js), since a panel with
+       no corner of its own is put in whichever of these the player picked, next to the activity
+       overlays it stands in for. The four edge stacks below keep their own spacing : the setting
+       can't land on them, and `bottom` deliberately sits clear of the game's own bottom UI */
+    .bj-pov-stack.top-right { top: var(--bj-ov-y, 2vh); right: var(--bj-ov-x, 1vw); align-items: flex-end; }
+    .bj-pov-stack.top-left { top: var(--bj-ov-y, 2vh); left: var(--bj-ov-x, 1vw); align-items: flex-start; }
+    .bj-pov-stack.bottom-right { bottom: var(--bj-ov-y, 2vh); right: var(--bj-ov-x, 1vw); align-items: flex-end; flex-direction: column-reverse; }
+    .bj-pov-stack.bottom-left { bottom: var(--bj-ov-y, 2vh); left: var(--bj-ov-x, 1vw); align-items: flex-start; flex-direction: column-reverse; }
     .bj-pov-stack.top { top: 2vh; left: 50%; transform: translateX(-50%); align-items: center; }
     .bj-pov-stack.bottom { bottom: 12vh; left: 50%; transform: translateX(-50%); align-items: center; flex-direction: column-reverse; }
     .bj-pov-stack.left { top: 50%; left: 1vw; transform: translateY(-50%); align-items: flex-start; }

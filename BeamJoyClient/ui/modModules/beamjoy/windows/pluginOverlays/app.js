@@ -8,7 +8,7 @@
 // An overlay can stand in for BeamJoy's race HUD while it's up (hides : ["race"], see raceHud).
 angular.module("beamjoy").component("bjPluginOverlays", {
     templateUrl: "/ui/modModules/beamjoy/windows/pluginOverlays/app.html",
-    controller: function ($rootScope, $scope, $interval, beamjoyStore, beamjoyLeaderboardFormat, beamjoyPluginUi) {
+    controller: function ($rootScope, $scope, $interval, beamjoyStore, beamjoyLeaderboardFormat, beamjoyPluginUi, beamjoyOverlayAnchor) {
         const f = beamjoyLeaderboardFormat;
         const POSITIONS = ["top-right", "top-left", "bottom-right", "bottom-left", "top", "bottom", "left", "right"];
         // the plugin API's colour names : the race HUD's own tokens
@@ -102,7 +102,11 @@ angular.module("beamjoy").component("bjPluginOverlays", {
             list = list.filter((o) => !o._expiresAt || o._expiresAt > now);
             const groups = {};
             POSITIONS.forEach((p) => (groups[p] = []));
-            list.forEach((o) => (groups[POSITIONS.includes(o.position) ? o.position : "top-right"] || groups["top-right"]).push(o));
+            // a plugin that named a corner keeps it ; one that didn't joins the player's own
+            // (overlay-anchor.js), so it still sits with the activity panels it stands in for
+            // wherever those have been moved to
+            const fallback = beamjoyOverlayAnchor.corner();
+            list.forEach((o) => (groups[POSITIONS.includes(o.position) ? o.position : fallback] || groups["top-right"]).push(o));
             this.groups = groups;
             // BeamJoy overlays one of these stands in for (raceHud listens)
             const hides = {};
@@ -110,6 +114,8 @@ angular.module("beamjoy").component("bjPluginOverlays", {
             $rootScope.$broadcast("BJPluginHides", hides);
         };
 
+        // the player moved the overlays : the panels with no corner of their own change stack
+        $rootScope.$on("BJOverlayAnchor", () => regroup());
         $rootScope.$on("BJPluginOverlays", (_, data) => {
             list = asList(data).map(prepare);
             regroup();

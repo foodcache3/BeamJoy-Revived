@@ -64,6 +64,62 @@
     </tr>
 
     <tr>
+        <td>
+            <span title="{{ 'beamjoy.window.main.tabs.settings.sections.menu.overlays.tooltip' | translate }}">
+                {{ "beamjoy.window.main.tabs.settings.sections.menu.overlays" | translate }}
+            </span>
+        </td>
+        <td>
+            <div class="d-flex align-center gap-1 w-fitcontent">
+                <button
+                    class="btn warning"
+                    title="{{ 'beamjoy.window.main.tabs.settings.sections.menu.overlays.reset' | translate }}"
+                    ng-click="$ctrl.resetOverlays()"
+                >
+                    <icon name="reset" class="small"></icon>
+                </button>
+                <bj-select
+                    ng-model="$ctrl.overlayCorner"
+                    options="$ctrl.overlayCorners"
+                    ng-change="$ctrl.setOverlayCorner(value)"
+                ></bj-select>
+            </div>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <span title="{{ 'beamjoy.window.main.tabs.settings.sections.menu.overlays.offsetX.tooltip' | translate }}">
+                {{ "beamjoy.window.main.tabs.settings.sections.menu.overlays.offsetX" | translate }}
+            </span>
+        </td>
+        <td>
+            <bj-slider
+                ng-model="$ctrl.overlayX"
+                min="0"
+                max="20"
+                hard-max="$ctrl.overlayLimit"
+                step="0.5"
+            ></bj-slider>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <span title="{{ 'beamjoy.window.main.tabs.settings.sections.menu.overlays.offsetY.tooltip' | translate }}">
+                {{ "beamjoy.window.main.tabs.settings.sections.menu.overlays.offsetY" | translate }}
+            </span>
+        </td>
+        <td>
+            <bj-slider
+                ng-model="$ctrl.overlayY"
+                min="0"
+                max="20"
+                hard-max="$ctrl.overlayLimit"
+                step="0.5"
+            ></bj-slider>
+        </td>
+    </tr>
+
+    <tr>
         <td colspan="3" class="settings-category d-flex align-center gap-2">
             <span>
                 <icon name="car" class="light"></icon>

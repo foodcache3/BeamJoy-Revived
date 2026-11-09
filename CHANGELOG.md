@@ -8,7 +8,20 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2494, client build 2779 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2494, client build 2782 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **The activity overlays can be moved to any corner.** Requested. Every one of them - the race,
+  bus, drag, derby, hunter, infected, delivery and drift zone panels - hardcoded the same top-right
+  corner in its own stylesheet, with the pit menu pinned beside the race HUD and a server plugin's
+  panels stacked on top. Settings > Menu gains "Activity overlay position": a corner for the whole
+  cluster, plus a gap from each edge for clearing whatever else you keep there. They all read the
+  corner from one set of CSS variables now, so the choice applies the moment it's made, with no
+  activity running and nothing to restart. A plugin's panel keeps whichever corner the plugin put
+  it in; one that never asked for a corner follows the player's, so it still sits with the panels
+  it stands in for. The pit menu used to be placed flatly "to the race HUD's left, level with its
+  top", which from a left-hand corner would have put it off the side of the screen - it measures
+  which side has room now, and hangs from the same edge the HUD does. Kept on this PC, like the
+  sidebar's position and the race HUD layout. *(client)*
 
 - **Teleporting to a player could quietly teleport you to yourself.** Reported as "admin can't
   teleport to owner", which turned out to have nothing to do with permissions - teleport isn't

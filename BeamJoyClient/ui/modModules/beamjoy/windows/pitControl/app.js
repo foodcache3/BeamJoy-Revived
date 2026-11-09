@@ -167,17 +167,32 @@ angular.module("beamjoy").component("bjPitControl", {
             this.v = v;
         };
 
-        // beside the race HUD (#beamjoy-race-hud) : level with its top, on its left ; app.html's own
-        // spot when it isn't showing. Followed while open, the HUD changing size with its layout
+        // beside the race HUD (#beamjoy-race-hud), hanging from the same edges it does ; app.html's
+        // own spot when it isn't showing. Followed while open, the HUD changing size with its layout.
+        // Measured rather than read from the player's chosen corner (overlay-anchor.js) so it also
+        // holds for a HUD moved by anything else - it used to be flatly "on its left, level with its
+        // top", which from a left-hand corner put this menu off the side of the screen
         const HUD_GAP_PX = 8;
         this.placeStyle = null;
         let placeTick = null;
         const place = () => {
             const hud = document.getElementById("beamjoy-race-hud");
             const r = hud ? hud.getBoundingClientRect() : null;
-            const next = r && r.width > 0
-                ? { top: `${Math.round(r.top)}px`, right: `${Math.round(window.innerWidth - r.left + HUD_GAP_PX)}px` }
-                : null;
+            let next = null;
+            if (r && r.width > 0) {
+                const w = window.innerWidth;
+                const h = window.innerHeight;
+                next = {};
+                // whichever side of the HUD has the screen on it
+                if (r.left + r.width / 2 < w / 2) next.left = `${Math.round(r.right + HUD_GAP_PX)}px`;
+                else next.right = `${Math.round(w - r.left + HUD_GAP_PX)}px`;
+                // and the edge the HUD hangs from, so from a bottom corner this grows upwards as
+                // the HUD does instead of running off the bottom of the screen
+                if (r.top + r.height / 2 < h / 2) next.top = `${Math.round(r.top)}px`;
+                else next.bottom = `${Math.round(h - r.bottom)}px`;
+            }
+            // ngStyle blanks a property it no longer holds, so the side that goes away falls back
+            // to app.html's rule (the corner's own `auto`) rather than sticking
             if (!angular.equals(next, this.placeStyle)) this.placeStyle = next;
         };
         const stopPlacing = () => {

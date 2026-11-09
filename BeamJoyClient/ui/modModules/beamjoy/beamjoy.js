@@ -22,6 +22,8 @@ await import(`/ui/modModules/beamjoy/directives/textareaAutoheight.js`);
 await import(`/ui/modModules/beamjoy/directives/fitText.js`);
 
 await import(`/ui/modModules/beamjoy/beamjoy-store.js`);
+// before the windows : every overlay's corner is applied from here as the UI comes up
+await import(`/ui/modModules/beamjoy/overlay-anchor.js`);
 
 await import(`/ui/modModules/beamjoy/cmps/beamjoy-style/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/icon/app.js`);

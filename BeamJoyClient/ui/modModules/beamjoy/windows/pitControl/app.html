@@ -5,8 +5,12 @@
        HUD itself ; this is where it goes without one */
     #beamjoy-pit-control {
         position: fixed;
-        top: 2vh;
-        right: calc(1vw + 22.5em);
+        /* beside the race HUD, on the player's own side (overlay-anchor.js). The 22.5em is that
+           HUD's width, which the service repeats to build the offset for either side */
+        top: var(--bj-ov-top, 2vh);
+        right: var(--bj-ov-beside-right, calc(1vw + 22.5em));
+        bottom: var(--bj-ov-bottom, auto);
+        left: var(--bj-ov-beside-left, auto);
         z-index: 6;
         width: 22em;
         max-height: 94vh;
