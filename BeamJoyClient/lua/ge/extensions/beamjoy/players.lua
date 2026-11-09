@@ -138,10 +138,17 @@ local function tryTeleportToPlayer(targetPlayerName, forced)
     end
 
     local target = M.players[targetPlayerName]
-    if not target or not target.currentVehicle then return end
+    if not target then return end
+    -- these used to return in silence. The button only shows for a target who is in a car, so this
+    -- is really the "/tp <player>" path, and nothing on screen said why it did nothing (reported)
+    if not target.currentVehicle then
+        return toast.warn(beamjoy_lang.translate("beamjoy.teleport.targetNoVehicle"))
+    end
 
     local myVeh = beamjoy_vehicles.getCurrentOwn()
-    if not myVeh then return end
+    if not myVeh then
+        return toast.warn(beamjoy_lang.translate("beamjoy.teleport.selfNoVehicle"))
+    end
 
     -- voluntary self-teleport during an active race would trivially let someone skip ahead.
     -- staff-forced summons (`forced == true`, a moderator using "Teleport From") are left
@@ -184,6 +191,22 @@ local function tryTeleportToPlayer(targetPlayerName, forced)
         end
     end
 
+    -- resolved before the cooldown below is armed : a lookup that can't succeed shouldn't cost a
+    -- player their 30 s. Matched on owner as well as remoteVID - see getPlayerCurrent's own note
+    -- for the real bug that fixes (it could return one of YOUR cars, teleporting you to where you
+    -- already were)
+    ---@type BJVehicle?
+    local targetMpVeh = beamjoy_vehicles.getPlayerCurrent(target)
+    if not targetMpVeh then
+        -- silent until now, and all of its causes look the same from the button : this game has no
+        -- copy of their car. Most often a vehicle mod this client doesn't have, which BeamMP never
+        -- spawns (its own checkIfVehiclenameInvalid) ; otherwise it's still arriving (BeamMP's
+        -- spawn queue, and registerVehicle's own poll in vehicles.lua), or they just changed car
+        -- and this cache hasn't caught up. There is no distance involved : BeamMP spawns every
+        -- remote car whatever the range, and only fades its nametag with distance
+        return toast.warn(beamjoy_lang.translate("beamjoy.teleport.targetNotLoaded"))
+    end
+
     if not forced and not staff then
         if teleportToLock then
             return toast.warn(beamjoy_lang.translate("beamjoy.teleport.onCooldown"))
@@ -192,12 +215,6 @@ local function tryTeleportToPlayer(targetPlayerName, forced)
         local delay = (beamjoy_config.data.Freeroam and beamjoy_config.data.Freeroam.TeleportDelay) or 30
         async.delayTask(function() teleportToLock = false end, delay * 1000, "BJTeleportToDelay")
     end
-
-    ---@type BJVehicle?
-    local targetMpVeh = beamjoy_vehicles.vehicles:find(function(v)
-        return v.remoteVID == target.currentVehicle
-    end)
-    if not targetMpVeh then return end
 
     local pos, dir, up = beamjoy_vehicles.getVehiclePositionRotation(targetMpVeh.veh)
     beamjoy_vehicles.setVehiclePositionRotation(myVeh.veh, pos, dir, up)
@@ -227,13 +244,16 @@ local function onPlayerAction(playerName, action)
     if action == "focus" then
         local self = M.getSelf()
         if self and target.playerName == self.playerName then
-            if self.currentVehicle and self.vehicles:some(function(v) ---@param v BJCPlayerVehicle
+            -- "focus me" is only worth anything while I'm watching someone else's car, which is
+            -- asked of the car I'm actually in rather than of a remoteVID match : that id is the
+            -- car's number in its owner's own game and isn't unique between players, so the old
+            -- test could be answered by an unrelated car (see getPlayerCurrent in vehicles.lua)
+            local current = beamjoy_vehicles.getCurrent()
+            local spectating = current ~= nil and not current.isLocal
+            if self.currentVehicle and spectating and self.vehicles:some(function(v) ---@param v BJCPlayerVehicle
                     -- I have playable vehicle(s)
                     local mpVeh = v.veh and v.veh or nil
                     return mpVeh ~= nil and not mpVeh.isAi
-                end) and beamjoy_vehicles.vehicles:any(function(v) ---@param v BJVehicle
-                    -- my current vehicle belongs to another player
-                    return v.remoteVID == self.currentVehicle and v.ownerName ~= self.playerName
                 end) then
                 self.vehicles:find(function(v) ---@param v BJCPlayerVehicle
                     local mpVeh = v.veh and v.veh or nil
@@ -243,8 +263,9 @@ local function onPlayerAction(playerName, action)
                 end)
             end
         else
-            local mpVeh = beamjoy_vehicles.vehicles
-                :find(function(v) return v.remoteVID == target.currentVehicle end)
+            -- their car, not merely one carrying the same number (getPlayerCurrent's own note) :
+            -- unmatched on owner this could focus one of your own cars instead of theirs
+            local mpVeh = beamjoy_vehicles.getPlayerCurrent(target)
             if mpVeh and mpVeh.veh.playerUsable then
                 beamjoy_vehicles.focusVehicle(mpVeh.vid)
             end

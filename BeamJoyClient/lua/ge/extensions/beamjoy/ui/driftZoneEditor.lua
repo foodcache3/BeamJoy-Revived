@@ -2,9 +2,9 @@
 --- by `freeroamEditor.lua` (the same host contract as `dragStripEditor.lua` : refresh / standUp /
 --- standDown / close / save / onBJClick).
 ---
---- A zone is a name, a corridor width and a route : its first point is the start gate, its last the
---- finish gate, any points between shape the corridor. Each gate faces along the route (from the
---- start to the next point, from the point before to the finish). A new zone starts at your car with
+--- A zone is a name, a corridor width and a route : its first and last points are its two gates, any
+--- points between shape the corridor. Each gate faces along the route (from the first point to the
+--- next, from the point before the last to it). A new zone starts at your car with
 --- its finish 60 m ahead ; a new point goes after the selected one (before the finish otherwise),
 --- at your car ; points move with the gizmo. Server side : services/driftZones.lua.
 ---
@@ -18,6 +18,13 @@
 --- (`signs`, direct request : at least one a spot, a save is refused without) are added beside the
 --- start and moved and turned with the gizmo. The spots being edited show their paint and signs
 --- in the world as they change (beamjoy_driftZones.setEditorZones).
+---
+--- "Both directions" (direct request) : on unless turned off, and the spot then runs either way -
+--- whichever gate you cross starts the run, the one at the other end ends it, and both ways share
+--- one leaderboard. Stored inverted, as `oneWay`, so a spot saved before this existed reads as
+--- two-way ; off, its first point is the start gate and its last the finish, as it always was. While
+--- it's on each gate draws an arrow both ways and both end rows read "Start / finish" instead of one
+--- of each.
 
 local M = {}
 
@@ -180,6 +187,10 @@ end
 ---@param i integer
 ---@return string the point's label : Start, Finish, or its number along the way
 local function pointLabel(zone, i)
+    -- a two-way spot is started at either end, so neither of them is "the start"
+    if (i == 1 or i == #zone.points) and zone.oneWay ~= true then
+        return beamjoy_lang.translate("beamjoy.driftZones.eitherEnd")
+    end
     if i == 1 then return beamjoy_lang.translate("beamjoy.driftZones.start") end
     if i == #zone.points then return beamjoy_lang.translate("beamjoy.driftZones.finish") end
     return tostring(i - 1)
@@ -211,6 +222,10 @@ local function renderAll()
                 local p, dir, right = pointFrame(zone, gate[1])
                 shape.addGroundLine(p - right, p + right, .25, gate[2], .05, 1.5)
                 shape.addArrow(p + vec3(0, 0, 1) + dir * 2, dir, 2, gate[2])
+                -- a two-way spot is run from either gate, so each one shows both ways through it
+                if zone.oneWay ~= true then
+                    shape.addArrow(p + vec3(0, 0, 1) - dir * 2, dir * -1, 2, gate[2])
+                end
             end
             for i, pt in ipairs(pts) do
                 local selected = state.activePoint == i
@@ -500,12 +515,17 @@ local function onDeleteZone(zi)
 end
 
 ---@param zi integer
----@param partial table name / width / edgePaint
+---@param partial table name / width / edgePaint / oneWay
 local function onSetZone(zi, partial)
     if not isActive() then return end
     local zone = zoneAt(zi)
     if not zone or type(partial) ~= "table" then return end
     if type(partial.name) == "string" then zone.name = partial.name:sub(1, MAX_NAME_LEN) end
+    if partial.oneWay ~= nil then
+        -- kept only when set, the way the server stores it ; the end rows' labels and the gates'
+        -- arrows follow from renderAll below, so there's nothing to push back
+        zone.oneWay = partial.oneWay == true or nil
+    end
     if type(partial.edgePaint) == "string" and (partial.edgePaint == "none" or
             (beamjoy_props and beamjoy_props.getPaint(partial.edgePaint))) then
         zone.edgePaint = partial.edgePaint
@@ -703,6 +723,7 @@ local function refresh()
             id = z.id,
             name = z.name or "",
             width = z.width or DEFAULT_WIDTH,
+            oneWay = z.oneWay == true or nil,
             edgePaint = type(z.edgePaint) == "string" and z.edgePaint or beamjoy_driftZones.DEFAULT_EDGE_PAINT,
             signs = table.map(type(z.signs) == "table" and z.signs or {}, function(s)
                 return { x = s.x, y = s.y, z = s.z, dir = type(s.dir) == "table" and { x = s.dir.x, y = s.dir.y } or nil }
@@ -766,6 +787,7 @@ local function save(onDone)
             id = z.id,
             name = z.name,
             width = math.round(tonumber(z.width) or DEFAULT_WIDTH, 1),
+            oneWay = z.oneWay == true or nil,
             edgePaint = z.edgePaint,
             signs = table.map(z.signs, function(s)
                 local d = beamjoy_driftZones.signDir(s)

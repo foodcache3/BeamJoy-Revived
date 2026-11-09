@@ -539,6 +539,8 @@ angular.module("beamjoy").component("bjConfigDriftZones", {
         this.paintOptions = [];
         // the widths last seen, to spot a slider move (bj-slider has no change callback)
         let widths = "";
+        // the same for the two-way toggles : bj-toggle has no change callback either
+        let ways = "";
 
         $rootScope.$on("BJEditorDriftZonesPaints", (_, options) => {
             this.paintOptions = Array.isArray(options) ? options : [];
@@ -551,8 +553,12 @@ angular.module("beamjoy").component("bjConfigDriftZones", {
                 if (!Array.isArray(z.points)) z.points = [];
                 if (!Array.isArray(z.signs)) z.signs = [];
                 if (!z.edgePaint) z.edgePaint = "sprayWhite";
+                // the toggle reads the positive form, while what's stored is `oneWay` : a spot
+                // without it - every one saved before two-way runs existed - is two-way
+                z.bothWays = z.oneWay !== true;
             });
             widths = this.zones.map((z) => z.width).join(",");
+            ways = this.zones.map((z) => (z.bothWays ? "1" : "0")).join(",");
         });
         $rootScope.$on("BJEditorDriftZonesActiveUpdate", (_, active) => {
             active = active || {};
@@ -577,6 +583,20 @@ angular.module("beamjoy").component("bjConfigDriftZones", {
                 });
             }
         );
+        $scope.$watch(
+            () => this.zones.map((z) => (z.bothWays ? "1" : "0")).join(","),
+            (now) => {
+                if (now === ways) return;
+                const before = ways.split(",");
+                ways = now;
+                this.zones.forEach((z, i) => {
+                    // sent inverted : the editor and the server both store the one-way exception
+                    if ((z.bothWays ? "1" : "0") !== before[i]) {
+                        send("BJEditorDriftZonesSetZone", [i + 1, { oneWay: !z.bothWays }]);
+                    }
+                });
+            }
+        );
 
         this.$onInit = () => {
             beamjoyStore.send("BJEditorDriftZonesRequestState");
@@ -585,6 +605,11 @@ angular.module("beamjoy").component("bjConfigDriftZones", {
         const send = (event, args) => beamjoyStore.send(event, args);
 
         this.pointLabel = (zone, i) => {
+            // either end of a two-way spot can be the start, so neither row claims to be it. Read
+            // from the toggle's own value, not `oneWay` : that one is only refreshed on a push back
+            if ((i === 1 || i === zone.points.length) && zone.bothWays) {
+                return translate("beamjoy.driftZones.eitherEnd");
+            }
             if (i === 1) return translate("beamjoy.driftZones.start");
             if (i === zone.points.length) return translate("beamjoy.driftZones.finish");
             return `${translate("beamjoy.driftZones.point")} ${i - 1}`;

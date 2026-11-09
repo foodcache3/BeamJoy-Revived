@@ -1931,6 +1931,27 @@ local function serverKey(mpVeh)
     return string.format("%s-%s", tostring(mpVeh.ownerID), vid)
 end
 
+--- the vehicle a player is driving : the one whose remoteVID they reported AND which is actually
+--- theirs.
+---
+--- Real bug, found while working out why a staff teleport sometimes did nothing. remoteVID alone
+--- isn't an identity - it's the car's id in its OWNER's game, and two games loading the same map
+--- hand out nearly the same ids, so another player's car often shares its number with one of yours
+--- (serverKey's own note just above says exactly this). Every caller used to match on it alone and
+--- take the first hit out of a pairs() walk, so the answer could be an unrelated car - one of your
+--- own among them. A teleport then moved you to where you already were, which from the button is
+--- indistinguishable from it being ignored, and a spectate focused your own car instead of theirs.
+--- Pinning the owner as well can't do that : serverVID + ownerID is what serverKey itself is built
+--- out of
+---@param player table? an entry of beamjoy_players.players
+---@return BJVehicle?
+local function getPlayerCurrent(player)
+    if not player or player.currentVehicle == nil or player.playerID == nil then return nil end
+    return M.vehicles:find(function(v)
+        return v.remoteVID == player.currentVehicle and v.ownerID == player.playerID
+    end)
+end
+
 ---@param key string?
 ---@return BJVehicle?
 local function getByServerKey(key)
@@ -2011,6 +2032,7 @@ M.getCurrentConfigDisplayLabel = getCurrentConfigDisplayLabel
 M.getCurrentConfigIdentity = getCurrentConfigIdentity
 M.isConfigShareable = isConfigShareable
 M.getCurrent = getCurrent
+M.getPlayerCurrent = getPlayerCurrent
 M.getCurrentOwn = getCurrentOwn
 M.getCurrentModel = getCurrentModel
 M.delete = delete

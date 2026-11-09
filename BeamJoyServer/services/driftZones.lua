@@ -9,6 +9,10 @@
 ---@field id integer unique per map
 ---@field name string
 ---@field width number metres : the width of a point without its own
+---@field oneWay boolean? true for a spot that can only be run from its first point to its last.
+---Absent - the default, and what every spot saved before this reads as - means either gate starts a
+---run and the one at the other end finishes it, as the game's own freeroam drift spots do with their
+---two lines
 ---@field points {x: number, y: number, z: number, w: number?}[] the route : the start gate, any
 ---number of points along the way, the finish gate (2 to MAX_POINTS). `w` : the corridor's width at
 ---that point (metres, the editor's width handles), the gates' own at the start and the finish
@@ -104,6 +108,9 @@ local function sanitize(list)
                 id = z.id,
                 name = name:sub(1, M.MAX_NAME_LEN),
                 width = math.clamp(tonumber(z.width) or M.DEFAULT_WIDTH, M.MIN_WIDTH, M.MAX_WIDTH),
+                -- only kept when set : a spot without it is two-way, which is what every spot saved
+                -- before two-way runs existed was already drawn as
+                oneWay = z.oneWay == true or nil,
                 edgePaint = edgePaint,
                 signs = signs,
                 points = points,

@@ -788,10 +788,11 @@ end
 local function findRemoteVehicle(playerName)
     local players = beamjoy_players and beamjoy_players.players
     local player = players and players[playerName]
-    if player and player.currentVehicle then
-        local current = beamjoy_vehicles.vehicles:find(function(v)
-            return v.remoteVID == player.currentVehicle
-        end)
+    if player then
+        -- owner-matched : remoteVID isn't unique between players, so on its own this could pick
+        -- another player's bus (or a car of your own) and mirror the run onto it - see
+        -- beamjoy_vehicles.getPlayerCurrent's own note for the bug that found
+        local current = beamjoy_vehicles.getPlayerCurrent(player)
         if current then return current end
     end
     return beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == playerName end)

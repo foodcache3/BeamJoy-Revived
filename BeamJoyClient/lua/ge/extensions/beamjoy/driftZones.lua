@@ -1,9 +1,17 @@
 --- BeamJoy's own drift zones (services/driftZones.lua, made in Config > Freeroam > Drift zones) : a
---- start gate, a route and a finish gate, with a corridor along the route. Drive through the start
---- gate the way the route goes and the zone starts ; your drifting is scored by the game's own drift
+--- gate at each end and a route between them, with a corridor along it. Drive through either gate
+--- the way the route goes there and the spot starts ; your drifting is scored by the game's own drift
 --- scorer (gameplay/drift : the same points, combos and tiers as its drift spots) until you cross the
---- finish gate, and the score goes on the zone's Drift board (beamjoy/freeroamChallenges.lua, under
+--- other gate, and the score goes on the zone's Drift board (beamjoy/freeroamChallenges.lua, under
 --- "bj:<id>"), beside the game's own spots.
+---
+--- Either way round, as the game's own freeroam drift spots are (direct request) : those are authored
+--- as two lines, whichever one you cross starting the run and the other ending it
+--- (gameplay/drift/freeroam/driftSpots.lua's own `correspondingLineName`), one shared highscore
+--- between them. Here the route's two ends are those lines, so the spot is run backwards by starting
+--- at its last point : the same spot, the same board, the corridor being the same either way
+--- (`twoWay`, and `gate`'s own `reverse`). A spot that genuinely only works one way is marked
+--- `oneWay` in the editor ; one saved before this existed isn't, so it reads as two-way.
 ---
 --- The scorer runs in its freeroam context : the zone resets it at the start and banks the drift
 --- still going at the finish, as the game's drift spots do (gameplay/drift/freeroam/driftSpots.lua).
@@ -26,7 +34,7 @@
 local M = {
     ---@type table[] the current map's zones (the server's cache)
     zones = {},
-    --- the zone being driven : {zone, startMs, outSince, vid}
+    --- the zone being driven : {zone, startMs, outSince, vid, reverse}
     ---@type table?
     run = nil,
     ---@type table[] zones drawn and watched (near you)
@@ -83,14 +91,31 @@ local function flatDir(a, b)
     return d:length() > 1e-4 and d:normalized() or vec3(0, 1, 0)
 end
 
---- the zone's start or finish gate : where it is and the way through it
+--- whether a spot can be run either way : all of them bar one marked one-way in the editor (direct
+--- request). A spot saved before that existed has no `oneWay`, so it reads as two-way
+---@param zone table
+---@return boolean
+local function twoWay(zone)
+    return zone.oneWay ~= true
+end
+M.twoWay = twoWay
+
+--- the gate a run starts or finishes at : where it is and the way through it. `reverse` is a run the
+--- other way round the route (its last point to its first), which swaps the two gates over and faces
+--- each the other way - the same two lines, crossed in the other order, which is all a two-way spot
+--- amounts to
 ---@param zone table
 ---@param which "start"|"finish"
+---@param reverse boolean? the run going from the last point to the first
 ---@return vec3 pos, vec3 dir
-local function gate(zone, which)
+local function gate(zone, which, reverse)
     local pts = zone.points
-    if which == "start" then return v3(pts[1]), flatDir(v3(pts[1]), v3(pts[2])) end
     local n = #pts
+    if reverse then
+        if which == "start" then return v3(pts[n]), flatDir(v3(pts[n]), v3(pts[n - 1])) end
+        return v3(pts[1]), flatDir(v3(pts[2]), v3(pts[1]))
+    end
+    if which == "start" then return v3(pts[1]), flatDir(v3(pts[1]), v3(pts[2])) end
     return v3(pts[n]), flatDir(v3(pts[n - 1]), v3(pts[n]))
 end
 M.gate = gate
@@ -106,6 +131,17 @@ local function pointWidth(zone, i)
     return math.max(MIN_WIDTH, math.min(MAX_WIDTH, w))
 end
 M.pointWidth = pointWidth
+
+--- the width of the line a run's start or finish gate is : its own point's
+---@param zone table
+---@param which "start"|"finish"
+---@param reverse boolean?
+---@return number
+local function gateWidth(zone, which, reverse)
+    local atFirstPoint = (which == "start") ~= (reverse == true)
+    return pointWidth(zone, atFirstPoint and 1 or #zone.points)
+end
+M.gateWidth = gateWidth
 
 --- a point's line across the route : the way the route goes there (halfway between its two
 --- segments' ways ; a gate's own way at the start and the finish) and its half width to the right
@@ -439,10 +475,11 @@ end
 
 ---@param zone table
 ---@param car BJVehicle
-local function start(zone, car)
+---@param reverse boolean? started at the spot's last point, so run the other way round its route
+local function start(zone, car, reverse)
     if not scorer() then return end
     pcall(extensions.gameplay_drift_general.reset)
-    M.run = { zone = zone, startMs = frameMs, vid = car.vid }
+    M.run = { zone = zone, startMs = frameMs, vid = car.vid, reverse = reverse or nil }
     result = nil
     lastLy = {}
     pushHud()
@@ -503,17 +540,29 @@ local function onUpdate()
             run.outSince = run.outSince or frameMs
             if frameMs - run.outSince > OUT_GRACE * 1000 then return fail("beamjoy.driftZones.failed.left") end
         end
-        local pos, dir = gate(run.zone, "finish")
-        if crossed("finish", pos, dir, pointWidth(run.zone, #run.zone.points), p) then return finish(car) end
+        local pos, dir = gate(run.zone, "finish", run.reverse)
+        if crossed("finish", pos, dir, gateWidth(run.zone, "finish", run.reverse), p) then return finish(car) end
         if frameMs - lastHud >= HUD_PUSH_MS then pushHud() end
         return
     end
 
     local speed = car.veh:getVelocity():length()
     for _, zone in ipairs(M.nearby) do
+        -- either gate starts a run on a two-way spot, the one at the other end then ending it. The
+        -- two planes keep their crossing state under keys of their own, and both are tested every
+        -- frame - even one too slow to start a run - so neither goes stale : crossed() answers from
+        -- which side of the plane the car was on last frame, and a skipped frame loses that
+        local id = tostring(zone.id)
         local pos, dir = gate(zone, "start")
-        if crossed("start" .. tostring(zone.id), pos, dir, pointWidth(zone, 1), p) and speed >= MIN_START_SPEED then
-            return start(zone, car)
+        local forward = crossed("start" .. id, pos, dir, gateWidth(zone, "start"), p)
+        local backward = false
+        if twoWay(zone) then
+            local rpos, rdir = gate(zone, "start", true)
+            backward = crossed("startBack" .. id, rpos, rdir, gateWidth(zone, "start", true), p)
+        end
+        if (forward or backward) and speed >= MIN_START_SPEED then
+            -- both at once only if the two gates sit on top of each other : the route's own way wins
+            return start(zone, car, backward and not forward)
         end
     end
 end
@@ -536,8 +585,11 @@ local function onSlowUpdate()
     local nearby = {}
     if pos and (M.run or free()) then
         for _, zone in ipairs(M.zones) do
+            -- either end : a two-way spot is entered at its last point as readily as its first, so
+            -- a long one has to be watched from both (its far gate can be well past NEAR_DISTANCE)
             if type(zone.points) == "table" and #zone.points >= 2 and
-                pos:distance(v3(zone.points[1])) <= NEAR_DISTANCE then
+                (pos:distance(v3(zone.points[1])) <= NEAR_DISTANCE or
+                    pos:distance(v3(zone.points[#zone.points])) <= NEAR_DISTANCE) then
                 nearby[#nearby + 1] = zone
             end
         end
@@ -581,7 +633,8 @@ local function onBJRequestBigmapPOIs(POIS)
             POIS["bjDriftZone_" .. tostring(zone.id)] = {
                 name = zone.name,
                 description = string.var(beamjoy_lang.translate("beamjoy.bigmap.driftDescription"),
-                    { math.floor(length + .5) }),
+                    { math.floor(length + .5) }) ..
+                    (twoWay(zone) and (" " .. beamjoy_lang.translate("beamjoy.bigmap.driftBothWays")) or ""),
                 icon = "drift01",
                 mapIcon = "mission_drift_triangle",
                 groupType = "other",

@@ -8,7 +8,48 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2492, client build 2776 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2494, client build 2779 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **Teleporting to a player could quietly teleport you to yourself.** Reported as "admin can't
+  teleport to owner", which turned out to have nothing to do with permissions - teleport isn't
+  rank-gated at all. A player's current vehicle was looked up by its `remoteVID` alone, and that id
+  is the car's number in its *owner's own* game, not an identity: two games loading the same map
+  hand out nearly the same ids, so another player's car routinely shares its number with one of
+  yours. The lookup took the first numeric match out of the vehicle table, which could be your own
+  car - and teleporting you onto your own car is indistinguishable from the button being ignored.
+  Every lookup of this shape now matches the owner as well: "Teleport To", the "Teleport From"
+  summon and the `/tp` command (one shared path), the player list's spectate/focus action, which
+  could focus your own car instead of theirs, and a bus run's mirroring, which could mirror
+  somebody's route onto the wrong bus. Teleport also stopped failing in silence: it now says when
+  they aren't in a vehicle, when you aren't in one yourself, and when their car has no copy in your
+  game - usually a vehicle mod you don't have, which BeamMP never spawns. That last one no longer
+  burns a non-staff player's 30 s cooldown on a teleport that couldn't have worked. *(client)*
+
+- **Drift spots run either way now.** Requested, after checking how the game's own freeroam drift
+  spots do it: those are authored as two lines, whichever one you cross starting the run and the
+  other ending it, with one shared highscore between them. BeamJoy's were one-way - both gates only
+  counted a car passing the way the route faces, so running a spot backwards did nothing and needed
+  a whole second spot with its own leaderboard. The route's two ends are now exactly those two
+  lines: cross either one and the run starts, the gate at the other end ends it, and both
+  directions share the one board. Each gate draws an arrow both ways in the editor, and the two end
+  rows read "Start / finish" instead of one of each. A spot that only works one way gets its "Both
+  directions" toggle turned off; every spot already saved reads as two-way, so they all gained a
+  direction. *(server + client)*
+
+- **Pre-assigning an Infected player as infected now actually takes, and says so.** Reported: the
+  button did nothing and the round still drew its infected at random. The pre-assignment was stored
+  under the playerID exactly as it arrived over the wire, and read back under the roster's own
+  integer id - two keys that don't always match, so the lookup found nothing and the random draw
+  quietly took the whole decision. The roster now marks a pre-assigned player ("Starts infected"),
+  clicking again cancels it, and more pre-assignments than the round's infected count raises that
+  count to fit them rather than dropping the extras - up to the arena's infected spawns, and never
+  so far that nobody is left to survive. *(server + client)*
+
+- **Hunter can let one side repair at garages, and not the other.** Requested. "Allow fuel stations
+  & garages" is now two settings underneath it: who may refuel, and who may repair, each of Both,
+  Fugitive only, Hunters only or Nobody. Both default to Both, which is exactly what the toggle did
+  on its own, so nothing changes until you narrow one. A side that may repair but not refuel still
+  sees the garage on the map. *(server + client)*
 
 - **East Coast USA's races, tidied up, and your times kept.** Eight of them get their props cleaned
   up; "Street Stage" has its grid moved back onto the road, and "Street Course (reverse)" gets a
