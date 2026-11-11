@@ -8,7 +8,20 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2494, client build 2782 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2494, client build 2783 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **A Hunter's parked car could give the fugitive away.** Reported: with the reveal distance set
+  to 150 m the fugitive kept getting shown for a few seconds at a time while the nearest hunter was
+  200-500 m off, over and over, with no reset or checkpoint involved. The proximity check walked
+  every vehicle on the map and took the nearest one belonging to a hunter - and a player's name is
+  on everything they own, so the car they arrived in and left at the lobby, a trailer, a walking
+  unicycle or any traffic they spawned all counted as "the hunter being right there". Each hunter's
+  own driven car is what's measured now. The same stray vehicles could hold the fugitive's reset
+  lock shut, and the same loose lookup decided which of the fugitive's vehicles got hidden from the
+  minimap and which one a hunter's GPS pointed at - picking a trailer there left the car they were
+  actually driving on the minimap. A reveal now also names its trigger and the distance behind it in
+  the log, since from outside the fugitive's own client a wrong reveal looks exactly like a right
+  one. *(client)*
 
 - **The activity overlays can be moved to any corner.** Requested. Every one of them - the race,
   bus, drag, derby, hunter, infected, delivery and drift zone panels - hardcoded the same top-right

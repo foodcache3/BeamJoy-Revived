@@ -317,6 +317,38 @@ local function nearestSpawnPoint(list, pos)
     return best
 end
 
+--- the vehicle a participant is actually driving right now, resolved by player name.
+---
+--- Reported: "if the hunter is in the range of 200-500m away (with 150m distance set to get shown)
+--- and with in-line sight, the hunted will get shown sometimes for some seconds. This can happen
+--- multiple times in a short period, until the hunted is over about 500m. Not reset, not a
+--- checkpoint." The lookups below used to take whichever vehicle an owner name matched first, and
+--- the proximity scan took the nearest of ALL of them - but a player's name is on every vehicle
+--- they own: a trailer, the car they arrived in and left at the lobby once the hunt force-spawned
+--- them a new one, a walking unicycle, any traffic they spawned. A hunter's parked car inside the
+--- reveal distance therefore revealed the fugitive while the hunter themself was hundreds of metres
+--- away, again and again for as long as the fugitive stayed near it, and the same stray vehicles
+--- could hold the fugitive's reset lock shut. Exactly the mistake, and the same symptom, as
+--- busRun.lua's own findRemoteVehicle bug ("the other players couldn't see it and only saw out of
+--- service").
+---
+--- `currentVehicle` (a remoteVID, owner-matched inside getPlayerCurrent since that id is not unique
+--- between players) is the "which one are they actually driving" field players.lua's own teleport
+--- and spectate lookups already key off.
+---@param playerName string
+---@return BJVehicle?
+local function driverVehicle(playerName)
+    local players = beamjoy_players and beamjoy_players.players
+    local player = players and players[playerName]
+    local current = player and beamjoy_vehicles.getPlayerCurrent(player)
+    if current then return current end
+    -- the cache entry hasn't landed yet : the nearest thing to it, but never a trailer, a prop, a
+    -- walking unicycle or a traffic car, so the fallback can't bring back what this exists to stop
+    return beamjoy_vehicles.vehicles:find(function(v) ---@param v BJVehicle
+        return v.ownerName == playerName and v.isVehicle and not v.isAi
+    end)
+end
+
 --- "nearestSpawn" strategy's own refinement, per direct request: prefer a hunter spawn that's also
 --- OUTSIDE the fugitive's own huntedResetDistanceThreshold, so respawning a hunter after their
 --- crash penalty doesn't just extend/renew the fugitive's own reset-lock the instant they reappear
@@ -336,12 +368,17 @@ local function nearestHunterSpawnClearOfFugitive(list, pos)
     if not threshold or threshold <= 0 or not hunted or hunted.eliminated then
         return nearestSpawnPoint(list, pos)
     end
-    local fugitiveVeh = beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == hunted.playerName end)
-    if not fugitiveVeh then
+    local fugitiveVeh = driverVehicle(hunted.playerName)
+    if not fugitiveVeh or not fugitiveVeh.veh then
         return nearestSpawnPoint(list, pos)
     end
+    -- computed, not fugitiveVeh.position : that cached field is only refreshed by getVehicle(vid)
+    -- without light=true, which for another player's car happens in nametags.lua's "draw all" loop
+    -- alone - and the fugitive's tag is precisely the one that loop skips while they're hidden, so
+    -- the cache here could be from wherever they were when they were last revealed
+    local fugitivePos = beamjoy_vehicles.getVehiclePositionRotation(fugitiveVeh.veh)
     local clear = table.filter(list, function(s)
-        return (vec3(s.pos.x, s.pos.y, s.pos.z) - fugitiveVeh.position):length() > threshold
+        return (vec3(s.pos.x, s.pos.y, s.pos.z) - fugitivePos):length() > threshold
     end)
     if #clear > 0 then
         return nearestSpawnPoint(clear, pos)
@@ -1243,7 +1280,10 @@ local function updateRevealVisuals()
     local hunted = session and getHunted(session)
     local hideVid
     if hunted and fugitiveHidden(session, hunted) then
-        local mpVeh = beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == hunted.playerName end)
+        -- the car they're driving, not the first one their name is on (driverVehicle) : picking a
+        -- trailer or a car they left at the lobby took its icon off the minimap and left the one
+        -- they're actually in on it
+        local mpVeh = driverVehicle(hunted.playerName)
         if mpVeh and not mpVeh.isLocal then hideVid = mpVeh.vid end
     end
     if M.minimapHiddenVid and M.minimapHiddenVid ~= hideVid then
@@ -1323,7 +1363,7 @@ local function updateHunterGpsGuidance()
     local hunted = active and getHunted(session) or nil
     active = active and hunted and hunted.revealed
     if active then
-        local mpVeh = beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == hunted.playerName end)
+        local mpVeh = driverVehicle(hunted.playerName)
         local pos = mpVeh and mpVeh.veh and beamjoy_vehicles.getVehiclePositionRotation(mpVeh.veh)
         if pos then
             M.hunterGpsActive = true
@@ -1346,22 +1386,26 @@ local function updateFugitiveState()
     local settings = M.session.settings
     local myPos = beamjoy_vehicles.getVehiclePositionRotation(myVeh.veh)
 
-    -- Proximity: closest currently-tracked hunter vehicle. v.position is a cached field, only
+    -- Proximity: the closest hunter, measured to the one car that hunter is actually driving
+    -- (driverVehicle, whose note has the reported bug this scan had - it walked every tracked
+    -- vehicle and took the nearest one whose owner was a hunter, parked cars, trailers and traffic
+    -- included). Positions are computed fresh rather than read from v.position, a cached field only
     -- refreshed by beamjoy_vehicles.getVehicle(vid) being called without light=true, and the only
     -- place that happens for another player's vehicle is nametags.lua's "draw all" loop (skipped
     -- once nametags are disabled). With nametags off, v.position for a hunter's vehicle never
-    -- updates past registration, so this proximity check was comparing against a frozen, stale
-    -- position instead of the hunter's real one, letting the prey reset with a hunter right next
-    -- to them. Computing position fresh here removes that accidental coupling.
+    -- updated past registration, so this check was comparing against a frozen position instead of
+    -- the hunter's real one, letting the prey reset with a hunter right next to them.
     local nearestHunterDist = math.huge
-    beamjoy_vehicles.vehicles:forEach(function(v) ---@param v BJVehicle
-        local isHunter = table.find(M.session.participants, function(p)
-            return p.role == "hunter" and p.playerName == v.ownerName
-        end) ~= nil
-        if not isHunter or not v.veh then return end
-        local pos = beamjoy_vehicles.getVehiclePositionRotation(v.veh)
-        local d = myPos:distance(pos)
-        if d < nearestHunterDist then nearestHunterDist = d end
+    local nearestHunterName
+    table.forEach(M.session.participants, function(p)
+        if p.role ~= "hunter" then return end
+        local v = driverVehicle(p.playerName)
+        if not v or not v.veh then return end
+        local d = myPos:distance(beamjoy_vehicles.getVehiclePositionRotation(v.veh))
+        if d < nearestHunterDist then
+            nearestHunterDist = d
+            nearestHunterName = p.playerName
+        end
     end)
 
     local proximityReveal = nearestHunterDist <= settings.revealProximityDistance
@@ -1372,6 +1416,17 @@ local function updateFugitiveState()
     local revealed = proximityReveal or finalWaypointReveal or resetReveal
     if revealed ~= M.revealedLocally then
         M.revealedLocally = revealed
+        -- which of the three triggers did it, and off what distance, in the fugitive's own log. A
+        -- reveal that shouldn't have happened is indistinguishable from a legitimate one from
+        -- outside the client that computed it, which is what made the report above (a hunter's
+        -- parked car revealing them) take a code read rather than a look at a log to find
+        LogDebug(string.format(
+            "beamjoy_hunterRunner: reveal %s - proximity %s (nearest hunter %s at %dm, threshold %dm)" ..
+            ", final waypoint %s, post-reset %s",
+            revealed and "ON" or "OFF", tostring(proximityReveal), tostring(nearestHunterName),
+            nearestHunterDist == math.huge and -1 or math.round(nearestHunterDist),
+            settings.revealProximityDistance or -1,
+            tostring(finalWaypointReveal), tostring(resetReveal)))
         beamjoy_communications.send("hunterRevealUpdate", M.session.id, revealed)
     end
 
