@@ -168,6 +168,12 @@
 ---@field resetPenaltySeconds integer seconds per reset when resetPenaltyEnabled is on
 ---@field resetPenaltyMode "hold"|"time" "hold" : the car is frozen for resetPenaltySeconds (client
 ---side) ; "time" : they're added to the racer's race time (raceResetPenalty), with any staff ones
+---@field resetSpeedLimitEnabled boolean the host's optional reset speed limit: every reset and
+---recover type is refused outright while the racer's own car is moving faster than
+---resetSpeedLimitKmh, so a reset can't be used as an airbrake. Default false. Client-enforced
+---(raceRunner.lua's own onBJRequestCurrentVehicleReset, which every reset type funnels through),
+---same as the reset penalty above, and equally moot under "norespawn"
+---@field resetSpeedLimitKmh integer km/h the limit sits at while resetSpeedLimitEnabled is on
 ---@field autoSpectateOnFinish boolean auto-switch a finisher to spectating another still-active
 ---participant. Default true
 ---@field disableNodegrabber boolean blocks BeamNG's node-grabber tool for active participants.
@@ -1001,6 +1007,16 @@ local function buildSettings(race, overrides)
         resetPenaltyEnabled = defaults.resetPenaltyEnabled == true
     end
 
+    -- the reset speed limit, same OFF-unless-asked-for treatment as resetPenaltyEnabled right
+    -- above and for the same reason: an existing race or a session built before this field existed
+    -- must not suddenly start refusing resets on its own
+    local resetSpeedLimitEnabled = false
+    if overrides.resetSpeedLimitEnabled ~= nil then
+        resetSpeedLimitEnabled = overrides.resetSpeedLimitEnabled == true
+    elseif defaults.resetSpeedLimitEnabled ~= nil then
+        resetSpeedLimitEnabled = defaults.resetSpeedLimitEnabled == true
+    end
+
     local autoSpectateOnFinish = true
     if overrides.autoSpectateOnFinish ~= nil then
         autoSpectateOnFinish = overrides.autoSpectateOnFinish == true
@@ -1193,6 +1209,10 @@ local function buildSettings(race, overrides)
         resetPenaltyEnabled = resetPenaltyEnabled,
         resetPenaltySeconds = math.max(1, tonumber(overrides.resetPenaltySeconds) or defaults.resetPenaltySeconds or 5),
         resetPenaltyMode = (overrides.resetPenaltyMode or defaults.resetPenaltyMode) == "time" and "time" or "hold",
+        resetSpeedLimitEnabled = resetSpeedLimitEnabled,
+        resetSpeedLimitKmh = math.clamp(math.floor(tonumber(overrides.resetSpeedLimitKmh) or
+                defaults.resetSpeedLimitKmh or services_races.RESET_SPEED_DEFAULT),
+            services_races.RESET_SPEED_MIN, services_races.RESET_SPEED_MAX),
         autoSpectateOnFinish = autoSpectateOnFinish,
         disableNodegrabber = disableNodegrabber,
         disableCameras = disableCameras,
@@ -2604,7 +2624,7 @@ end
 
 ---@param ctxt BJSContext
 ---@param raceId integer
----@param opts {joinable: boolean?, laps: integer?, respawnStrategy: string?, placementMode: string?, gridTimeout: integer?, gridReadyTimeout: integer?, countdown: integer?, dnfEnabled: boolean?, dnfTimeout: integer?, resetPenaltyEnabled: boolean?, resetPenaltySeconds: integer?, autoSpectateOnFinish: boolean?, disableNodegrabber: boolean?, disableCameras: boolean?, disableGravityChange: boolean?, vehicleRestrictionMode: string?, vehicleRestrictionModel: string?, vehicleRestrictionParts: table?, vehicleRestrictionVars: table?, vehicleRestrictionPaints: table?, vehicleRestrictionLabel: string?, vehicleRestrictionPoolPresetId: integer?, ghostOnCountdown: boolean?, disableCollisions: boolean?, ghostBackmarkers: boolean?, hideOthers: boolean?, startLights: boolean?, jumpStartPenaltyS: number?, showGateNametags: boolean?, limitVisibleGates: boolean?, visibleGateCount: integer?, showGates: boolean?, waypointBeams: boolean?, allowTuning: boolean?}?
+---@param opts {joinable: boolean?, laps: integer?, respawnStrategy: string?, placementMode: string?, gridTimeout: integer?, gridReadyTimeout: integer?, countdown: integer?, dnfEnabled: boolean?, dnfTimeout: integer?, resetPenaltyEnabled: boolean?, resetPenaltySeconds: integer?, resetSpeedLimitEnabled: boolean?, resetSpeedLimitKmh: integer?, autoSpectateOnFinish: boolean?, disableNodegrabber: boolean?, disableCameras: boolean?, disableGravityChange: boolean?, vehicleRestrictionMode: string?, vehicleRestrictionModel: string?, vehicleRestrictionParts: table?, vehicleRestrictionVars: table?, vehicleRestrictionPaints: table?, vehicleRestrictionLabel: string?, vehicleRestrictionPoolPresetId: integer?, ghostOnCountdown: boolean?, disableCollisions: boolean?, ghostBackmarkers: boolean?, hideOthers: boolean?, startLights: boolean?, jumpStartPenaltyS: number?, showGateNametags: boolean?, limitVisibleGates: boolean?, visibleGateCount: integer?, showGates: boolean?, waypointBeams: boolean?, allowTuning: boolean?}?
 local function raceStart(ctxt, raceId, opts)
     if not ctxt.sender then return end
     -- multiple independent sessions of the SAME race running concurrently (different players) is

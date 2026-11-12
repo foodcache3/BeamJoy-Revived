@@ -8,7 +8,20 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2494, client build 2783 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2495, client build 2784 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **A reset speed limit for races.** Requested: a tickbox and a speed. With it on, resetting or
+  recovering is only allowed below that speed, so a reset can't be used as an airbrake - press it
+  mid-crash and you keep the crash. It sits with the reset penalty in the start form, the lobby's
+  "Change settings", a race's own defaults in the editor and as a per-phase rule, and like the
+  penalty it's hidden whenever "No respawn" is the strategy, since every reset type is already
+  blocked outright there. Off by default, so nothing changes for an existing race. A refused reset
+  says so on screen instead of the key quietly doing nothing, and every way of asking for one is
+  covered - the hold-to-rewind recover, the physics resets, recover to last road, drop at camera,
+  and the pause menu's own Repair and Flip upright buttons, which reach past the input filter
+  entirely. Hunter and Infected have had the same gate for a while at a fixed 7 km/h; a race's is
+  the host's own number, since "only when you're stopped" and "anything under 40" are both
+  reasonable rules and only the host knows which they want. *(server and client)*
 
 - **A Hunter's parked car could give the fugitive away.** Reported: with the reveal distance set
   to 150 m the fugitive kept getting shown for a few seconds at a time while the nearest hunter was

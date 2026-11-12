@@ -302,7 +302,8 @@ its time runs out. Then it starts with whoever's ready, or closes when nobody is
   `"raceDefined"`, `"pool"` with `vehicleRestrictionPoolPresetId`), `disableCollisions`,
   `lateJoin`, `hideOthers` (every other racer's car hidden : qualifying on an empty track),
   `startLights` (the five-light start gantry) with `jumpStartPenaltyS` (seconds a jump start
-  costs, 0 to 60), `start = "groups"` with `groupSize` and `intervalS` (the grid released in
+  costs, 0 to 60), `resetSpeedLimitEnabled` with `resetSpeedLimitKmh` (resetting and recovering
+  refused above that speed, 1 to 300 km/h), `start = "groups"` with `groupSize` and `intervalS` (the grid released in
   waves, for a race without phases of its own), your [race options](#race-options) under
   `plugins`... What's left out is the race's own, as for any start.
 - The pits' (a race with pits ; ignored otherwise) : `pitStart` (start from the boxes), `pitGhost`
@@ -714,7 +715,7 @@ A phase is :
 | `leaderboard` | its laps go on the race's leaderboard (default true) |
 | `countsToEvent` | part of the event's result (default true ; off for practice and qualifying) |
 | `breakS` | seconds of results after it (default 30) ; the leader can start the next one sooner |
-| `rules` | this phase's own `respawnStrategy`, `dnfEnabled`, `dnfTimeout`, `resetPenaltyEnabled`, `resetPenaltySeconds`, `resetPenaltyMode`, `ghostOnCountdown`, `disableCollisions`, `ghostBackmarkers`, `hideOthers` (every other racer's car hidden : qualifying on an empty track), `startLights` (a five-light start gantry), `jumpStartPenaltyS`, `autoSpectateOnFinish`, and every pit setting (`pitStart`, `pitStops`... see [`race.open`](#raceopen-raceid-options-name-holdstart-entrants)) ; the rest are the event's |
+| `rules` | this phase's own `respawnStrategy`, `dnfEnabled`, `dnfTimeout`, `resetPenaltyEnabled`, `resetPenaltySeconds`, `resetPenaltyMode`, `resetSpeedLimitEnabled`, `resetSpeedLimitKmh`, `ghostOnCountdown`, `disableCollisions`, `ghostBackmarkers`, `hideOthers` (every other racer's car hidden : qualifying on an empty track), `startLights` (a five-light start gantry), `jumpStartPenaltyS`, `autoSpectateOnFinish`, and every pit setting (`pitStart`, `pitStops`... see [`race.open`](#raceopen-raceid-options-name-holdstart-entrants)) ; the rest are the event's |
 | `options` | your [race options](#race-options) `where = "phase"` (`plugins` when you send phases) |
 
 Up to 20 phases. The vehicle restriction, the anti-cheat settings and the lobby's are the event's.

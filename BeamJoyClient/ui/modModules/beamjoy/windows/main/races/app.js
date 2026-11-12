@@ -445,6 +445,9 @@ angular.module("beamjoy").component("bjMainRaces", {
                 resetPenaltyEnabled: d.resetPenaltyEnabled === true,
                 resetPenaltySeconds: d.resetPenaltySeconds || 5,
                 resetPenaltyMode: d.resetPenaltyMode === "time" ? "time" : "hold",
+                // the reset speed limit : the tickbox, and the km/h it allows a reset below
+                resetSpeedLimitEnabled: d.resetSpeedLimitEnabled === true,
+                resetSpeedLimitKmh: d.resetSpeedLimitKmh || 20,
                 disableNodegrabber: d.disableNodegrabber !== false,
                 disableCameras: d.disableCameras !== false,
                 disableGravityChange: d.disableGravityChange !== false,

@@ -987,6 +987,8 @@ local function backfillRaceDefaults(race)
     if race.defaults.resetPenaltyEnabled == nil then race.defaults.resetPenaltyEnabled = false end
     race.defaults.resetPenaltySeconds = race.defaults.resetPenaltySeconds or 5
     if race.defaults.resetPenaltyMode ~= "time" then race.defaults.resetPenaltyMode = "hold" end
+    if race.defaults.resetSpeedLimitEnabled == nil then race.defaults.resetSpeedLimitEnabled = false end
+    race.defaults.resetSpeedLimitKmh = race.defaults.resetSpeedLimitKmh or 20
     if race.defaults.disableNodegrabber == nil then race.defaults.disableNodegrabber = true end
     if race.defaults.disableCameras == nil then race.defaults.disableCameras = true end
     if race.defaults.disableGravityChange == nil then race.defaults.disableGravityChange = true end
@@ -1083,6 +1085,8 @@ local function onOpen(raceId)
                 resetPenaltyEnabled = false,
                 resetPenaltySeconds = 5,
                 resetPenaltyMode = "hold",
+                resetSpeedLimitEnabled = false,
+                resetSpeedLimitKmh = 20,
                 disableNodegrabber = true,
                 disableCameras = true,
                 disableGravityChange = true,

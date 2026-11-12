@@ -66,7 +66,7 @@ angular.module("beamjoy").factory("beamjoyRacePhases", function ($filter) {
     const PIT_RULES = ["pitStart", "pitGhost", "pitStops", "pitMissingPenaltyS", "pitRefuel", "pitFuelRatePct",
         "startFuelPct", "pitRepair", "pitRepairMaxS", "pitTyres", "pitTyreChangeS", "pitTow", "pitTowSpeed", "pitReturn"];
     const RULES = ["respawnStrategy", "disableCollisions", "hideOthers", "startLights", "dnfEnabled",
-        "resetPenaltyEnabled", ...PIT_RULES];
+        "resetPenaltyEnabled", "resetSpeedLimitEnabled", ...PIT_RULES];
 
     // a phase as edited : every setting there, the length's laps and minutes kept while switched off
     const newPhase = (base, laps) => {

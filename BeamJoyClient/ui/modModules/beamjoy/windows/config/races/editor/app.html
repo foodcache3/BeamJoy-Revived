@@ -1099,6 +1099,26 @@
                     <bj-slider ng-model="$ctrl.race.defaults.resetPenaltySeconds" min="1" max="30" hard-max="600" step="1"></bj-slider>
                 </td>
             </tr>
+            <tr ng-if="$ctrl.race.defaults.respawnStrategy !== 'norespawn'">
+                <td
+                    class="text-right"
+                    title="{{'beamjoy.window.config.tabs.races.resetSpeedLimitEnabled.tooltip' | translate}}"
+                >
+                    {{'beamjoy.window.config.tabs.races.resetSpeedLimitEnabled' | translate}}
+                </td>
+                <td><bj-toggle ng-model="$ctrl.race.defaults.resetSpeedLimitEnabled"></bj-toggle></td>
+            </tr>
+            <tr ng-if="$ctrl.race.defaults.respawnStrategy !== 'norespawn' && $ctrl.race.defaults.resetSpeedLimitEnabled">
+                <td
+                    class="text-right"
+                    title="{{'beamjoy.window.config.tabs.races.resetSpeedLimitKmh.tooltip' | translate}}"
+                >
+                    {{'beamjoy.window.config.tabs.races.resetSpeedLimitKmh' | translate}}
+                </td>
+                <td>
+                    <bj-slider ng-model="$ctrl.race.defaults.resetSpeedLimitKmh" min="5" max="100" hard-max="300" step="5"></bj-slider>
+                </td>
+            </tr>
         </table>
 
         <!-- topmost, per direct request, with its own bottom divider (no-border-bottom

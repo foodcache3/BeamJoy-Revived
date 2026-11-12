@@ -332,6 +332,12 @@ local M = {
     PIT_SPEED_MAX = 150,
     PIT_SPEED_DEFAULT = 60,
 
+    -- the reset speed limit's own bounds, km/h (resetSpeedLimitEnabled/resetSpeedLimitKmh): the
+    -- slider's hard range, and what an unset/garbage value falls back to
+    RESET_SPEED_MIN = 1,
+    RESET_SPEED_MAX = 300,
+    RESET_SPEED_DEFAULT = 20,
+
     ---@type BJRace[] races for the current map
     data = {},
 }
@@ -655,6 +661,15 @@ local function sanitizeRace(race, existingRaces)
     race.defaults.resetPenaltyEnabled = race.defaults.resetPenaltyEnabled == true
     race.defaults.resetPenaltySeconds = math.max(1, tonumber(race.defaults.resetPenaltySeconds) or 5)
     race.defaults.resetPenaltyMode = race.defaults.resetPenaltyMode == "time" and "time" or "hold"
+    -- the reset speed limit (a tickbox and a limit, per direct request) : a reset or recover is
+    -- refused outright while the car is moving faster than this, so one can't be used as an
+    -- airbrake - press it mid-crash and you keep the crash. Off by default, and moot under
+    -- "norespawn" (every reset type is already blocked outright there), which is why both fields
+    -- are hidden in the UI whenever that strategy is the one picked
+    race.defaults.resetSpeedLimitEnabled = race.defaults.resetSpeedLimitEnabled == true
+    race.defaults.resetSpeedLimitKmh = math.clamp(
+        math.floor(tonumber(race.defaults.resetSpeedLimitKmh) or M.RESET_SPEED_DEFAULT),
+        M.RESET_SPEED_MIN, M.RESET_SPEED_MAX)
     race.defaults.autoSpectateOnFinish = race.defaults.autoSpectateOnFinish ~= false
     race.defaults.disableNodegrabber = race.defaults.disableNodegrabber ~= false
     race.defaults.disableCameras = race.defaults.disableCameras ~= false

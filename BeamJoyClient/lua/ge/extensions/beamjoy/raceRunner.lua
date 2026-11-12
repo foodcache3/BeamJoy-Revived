@@ -106,6 +106,11 @@ local M = {
     ---client-side, no server round-trip, same as Hunter's own version.
     resetPenaltyLockedUntilMs = nil,
 
+    ---@type integer? last GetCurrentTimeMillis() the "too fast to reset" notice was shown at. A
+    ---held reset key re-fires the hook, and that notice is the only sign the reset was refused at
+    ---all, so it's worth repeating - just not several times a second
+    lastResetTooFastMs = nil,
+
     ---@type {model: string, parts: table, vars: table?, paints: table?}? captured by
     ---saveCurrentVehicleForRespawn() right before a DNF/auto-spectate-on-finish deletes the
     ---player's own vehicle, consumed by restoreSavedVehicle() once the race is actually over
@@ -3930,6 +3935,27 @@ local function forceResetAction(strategy, mpVeh)
     end
 end
 
+--- the host's optional reset speed limit (resetSpeedLimitEnabled/resetSpeedLimitKmh): true while
+--- a reset should be refused for being too quick. Hunter and Infected have had the same gate for a
+--- while as a plain on/off at a fixed 2 m/s (their own RESET_MAX_SPEED) ; a race's is the host's
+--- own number instead, since "only when you're stopped" and "anything under 40 km/h" are both
+--- legitimate rules for a race and only the host knows which one they want.
+---
+--- Deliberately false for a participant who's finished, dnf'd or sitting out (no attempt left to
+--- protect), and outside RACE: COUNTDOWN already blocks every reset type unconditionally, whatever
+--- the strategy, and gating a frozen grid slot on its own speed has nothing to add.
+---@param mpVeh BJVehicle the racer's own vehicle, as the reset hook was handed it
+---@return boolean
+local function resetBlockedBySpeed(mpVeh)
+    if not M.session or M.session.state ~= "RACE" then return false end
+    if not M.session.settings.resetSpeedLimitEnabled then return false end
+    if not mpVeh or not mpVeh.veh then return false end
+    local participant = getSelfParticipant()
+    if not participant or participant.finished or participant.dnf or participant.sittingOut then return false end
+    local limit = tonumber(M.session.settings.resetSpeedLimitKmh) or 20
+    return mpVeh.veh:getVelocity():length() > limit / 3.6
+end
+
 --- respawnStrategy enforcement for "lastcheckpoint" (always) and "all" (hard resets only,
 --- see below). Primary path : intercepts BEFORE the native reset/recover actually runs
 --- (`inputs.lua`'s `overrideResetInputs` routes every reset-ish keybind through `onReset`, which
@@ -3943,6 +3969,26 @@ end
 ---@param mpVeh BJVehicle?
 local function onBJRequestCurrentVehicleReset(req, resetType, mpVeh)
     if not M.session or not mpVeh or not mpVeh.isLocal then return end
+
+    -- The host's reset speed limit, ahead of every per-type policy below: whatever was pressed and
+    -- whatever the respawn strategy, a reset while moving faster than the limit is refused, and the
+    -- racer is told why rather than left wondering whether their key is broken. The gate lives here
+    -- and NOT in onBJRequestRestrictions on purpose - every reset type reaches this hook already
+    -- (inputs.lua's overrideResetInputs replaces resetGameplay, reloadVehicle/reloadAllVehicles,
+    -- teleportToLastRoad, dropPlayerAtCamera and safeTeleport, and its onReset checks req.state for
+    -- all of them), while an action the filter removes never reaches us at all, leaving nothing to
+    -- hang the notice on.
+    if resetBlockedBySpeed(mpVeh) then
+        req.state = false
+        local now = GetCurrentTimeMillis()
+        if not M.lastResetTooFastMs or now - M.lastResetTooFastMs > 1500 then
+            M.lastResetTooFastMs = now
+            beamjoy_communications_ui.uiBroadcast("beamjoy.race.resetTooFast", {
+                limit = tostring(math.floor(tonumber(M.session.settings.resetSpeedLimitKmh) or 20)),
+            }, "orange", 2)
+        end
+        return
+    end
 
     -- Repair (see beamjoy_inputs.lua's own M.RESET.REPAIR doc comment: the ESC-menu tile bypasses
     -- both the action filter AND resetGameplay entirely, reaching spawn.safeTeleport directly) has
