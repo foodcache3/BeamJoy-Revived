@@ -1319,9 +1319,38 @@ local function bundledSyncNeeded()
     return needed
 end
 
+--- Every bundled pass below reads its map's races through this, not dao_bundled.get directly.
+--- dao_bundled.get reads and parses the file every single call, in pure Lua (utils/jsonOld, since
+--- BeamMP issue #348 rules out Util.JsonDecode), and the three passes that run on every boot -
+--- renameBundledRaces, seedBundledRaces, mergeBundledProps - each walked every map again : the same
+--- ~14 MB of race JSON parsed three times over, west_coast_usa's 3.3 MB among it. Measured with the
+--- real parser over the 14 maps shipped here, that was 4.4 s of a 6 s onInit, and BeamMP waits 5 s
+--- for a plugin's onInit before logging "'onInit' in 'BeamJoyServer' failed to execute in time and
+--- was not waited for" and carrying on without it - which is exactly what it was doing.
+--- Held only while those passes run : onInit opens it and drops it again. All 14 maps
+--- parsed at once measured 18.7 MB against 3.9 MB for the largest single map, and nothing outside
+--- that window has any use for it. `false` marks a map whose file isn't there, so a miss isn't
+--- looked up again either.
+---@type table<string, table|false>?
+local bundledCache
+
+---@param mapName string
+---@return table? this map's bundled races, parsed at most once a boot
+local function bundledRaces(mapName)
+    if not bundledCache then
+        return dao_bundled.get(mapName, M.ACTIVITY_TYPE)
+    end
+    local hit = bundledCache[mapName]
+    if hit == nil then
+        hit = dao_bundled.get(mapName, M.ACTIVITY_TYPE) or false
+        bundledCache[mapName] = hit
+    end
+    return hit or nil
+end
+
 local function seedBundledRaces()
     for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
-        local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
+        local bundled = bundledRaces(mapName)
         if table.isArray(bundled) then
             local targetList = dao_activity.get(mapName, M.ACTIVITY_TYPE) or {}
             local changed = false
@@ -1500,7 +1529,7 @@ end
 local function syncBundledRaces()
     local done = true
     for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
-        local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
+        local bundled = bundledRaces(mapName)
         local list, changed
         for _, race in ipairs(table.isArray(bundled) and bundled or {}) do
             local name = type(race.name) == "string" and race.name or ""
@@ -1545,7 +1574,7 @@ local function applyBundledCourseUpdates()
         if not dao_bundled.isSeeded(update.map, M.ACTIVITY_TYPE, key) then
             -- a failed update is retried on the next boot
             local failed = false
-            local bundled = table.find(dao_bundled.get(update.map, M.ACTIVITY_TYPE) or {},
+            local bundled = table.find(bundledRaces(update.map) or {},
                 function(r) return r.name == update.name end)
             if bundled then
                 lists[update.map] = lists[update.map] or dao_activity.get(update.map, M.ACTIVITY_TYPE) or {}
@@ -2002,7 +2031,7 @@ end
 
 local function renameBundledRaces()
     for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
-        local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
+        local bundled = bundledRaces(mapName)
         local list, changed
         for _, race in ipairs(table.isArray(bundled) and bundled or {}) do
             local name = type(race.name) == "string" and race.name or ""
@@ -2042,7 +2071,7 @@ end
 
 local function mergeBundledProps()
     for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
-        local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
+        local bundled = bundledRaces(mapName)
         local list, changed
         for _, race in ipairs(table.isArray(bundled) and bundled or {}) do
             local name = type(race.name) == "string" and race.name or ""
@@ -2330,6 +2359,9 @@ local function onInit()
     -- before renaming and seeding : both resolve a bundled race by name, and that only means
     -- anything once there's one race per name again
     dedupeBundledRaces()
+    -- every pass from here reads the bundled files through bundledRaces : parsed once each, then
+    -- dropped (see its own note). dedupeBundledRaces works off live data alone and reads none
+    bundledCache = {}
     renameBundledRaces()
     seedBundledRaces()
     applyBundledCourseUpdates()
@@ -2337,6 +2369,7 @@ local function onInit()
         dao_bundled.markSeeded(SYNC_LEDGER_MAP, M.ACTIVITY_TYPE, syncKey("done"))
     end
     mergeBundledProps()
+    bundledCache = nil
     loadData()
 end
 

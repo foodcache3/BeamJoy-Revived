@@ -8,6 +8,30 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
+Server build 2498. Server-side only : deploy and restart, no client update, no cache clear.
+
+- **Startup : the bundled races are parsed once a boot instead of three times over.** The server
+  console logged `'onInit' in 'BeamJoyServer' failed to execute in time and was not waited for`
+  right after the server was marked as running, with BeamJoy's own "Loading" and "loaded" lines
+  about six seconds apart. BeamMP waits five seconds for a plugin's `onInit`, then logs that and
+  carries on without waiting, so the server was reported up while BeamJoy was still starting.
+  `dao_bundled.get` reads and parses its file on every single call, in pure Lua (`utils/jsonOld`,
+  since BeamMP issue #348 rules out `Util.JsonDecode`), and three passes run over every map on
+  every boot - `renameBundledRaces`, `seedBundledRaces` and `mergeBundledProps` - so the same
+  ~14 MB of bundled race JSON was parsed three times, `west_coast_usa`'s 3.3 MB among it. Measured
+  with the real parser over the 14 maps shipped here, that was 4.4 s of the 6 s. Each map's file is
+  now parsed at most once per boot, held only while those passes run and dropped straight after
+  (all 14 at once measured 18.7 MB, against 3.9 MB for the largest single map). A bundled course
+  update no longer re-parses its map's file either : up to 12 more parses on the first boot after
+  an update. Nothing about what gets seeded, renamed, de-duplicated or merged changes - the passes
+  run in the same order over the same data, they just stop re-reading it.
+  - Not a regression from 2.1.x : the bundled races have been this size since 2.0.0. The per-race
+    ledger checks already stopped the *work* from repeating, but they are tested after the file has
+    been parsed, so the parse happened regardless.
+  - Still open, as a second stage : a file that a boot found nothing to do for doesn't have to be
+    parsed at all, since `dao_bundled.sync()` already compares bytes and so knows exactly which
+    files changed. That would take a steady-state boot to near zero. See TODO.md.
+
 ## [2.1.1] - 2026-11-13 - Pits ready: the pit lane's speed checked by the server
 
 Server build 2497, client build 2785 (unchanged from 2.1.0 : this release's only code change is

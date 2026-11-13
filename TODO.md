@@ -116,6 +116,29 @@ Built (see CHANGELOG), not yet tried live. Newest first.
   conditions read in MP freeroam, garages refusing during the job ; a convoy with two clients end
   to end, cohesion getting positions, the interact chord while driving, Unstuck's landing spot.
 
+## Startup: skip the bundled files a boot has nothing to do for (stage 2)
+
+Stage 1 is in (server 2498) : each map's bundled race file is parsed at most once a boot instead of
+three times, which took the measured parse cost from 4.4 s to about 1.5 s of `onInit` and should
+clear BeamMP's five-second `onInit` warning. What's left is not parsing at all on a boot where
+nothing can come of it, which would take a steady-state boot to near zero.
+
+- The information is already there : `dao_bundled.sync()` compares each shipped file's bytes against
+  the mirror in `BeamJoyData/db/bundled/` to decide whether to rewrite it, so it knows exactly which
+  files changed on this boot. It just doesn't tell anybody.
+- Shape : `sync()` records the files it rewrote. A ledger marker per file ("every pass ran over this
+  and found nothing to do") is set at the end of a boot where that held, and ignored when `sync()`
+  saw different bytes. `bundledRaces(mapName)` then returns nil without reading anything.
+- The care needed is in deciding "nothing to do" honestly : `mergeBundledProps` leaves its marker
+  unset when the shipped props fail sanitation (it means to complain on every boot until they're
+  fixed), `syncBundledRaces` and `applyBundledCourseUpdates` both retry a failed entry on the next
+  boot, and `renameBundledRaces` has no gate of its own at all. A file is only quiet when every one
+  of those passes had nothing left, so the flag has to be collected from the passes rather than
+  assumed.
+- Worth doing together with the same treatment for the other activity types (hunter, infected,
+  derby, buslines, freeroam data each parse their own bundled files once per boot already, ~3 MB in
+  total, so the win there is small).
+
 ## Join loading: the pacing (fix 3)
 
 Fixes 1 and 2 are built (2713). Left : the paced sender (`communications/tx.lua`) sends half what
