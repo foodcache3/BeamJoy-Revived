@@ -5,13 +5,33 @@ open follow-ups flagged during other work. Not a backlog of every idea ever ment
 worth picking up later without re-deriving the design/investigation from scratch. Completed work
 belongs in CHANGELOG.md, not here.
 
+## PRIORITY: tyre changes count beams the car doesn't have
+
+The one thing still open on pits, and why the experimental tyre changes stay behind their switch and
+off by default. In 1 test run of 3 a tyre change counted about 60 more broken beams than the car had
+(5.4 % of the car damaged read as 10.2 %), the other 2 matched. A repair is timed from that reading
+(half the share of the car's value damaged, half the share of its beams), so when it misfires the
+racer is charged for damage that isn't there. Intermittent, so it needs several runs, not one.
+
+- The reading is taken in `lua/vehicle/extensions/beamjoy/tyreChange.lua`, which snapshots the car,
+  lets the game's reset run, puts the shape back during it and writes the damage record again. The
+  count that goes wrong is the broken-beam one in that last step.
+- `/bjtyretest tyres|repair` (hidden, staff, the switch on) runs the change on its own and measures
+  before and after, logging `[BJTyres] <mode> | ...` with the counts.
+- **2026-11-13, singleplayer:** one `repair` and one `tyres` run logged, both on an **undamaged**
+  car, both clean - `0 beams (0 broken)`, no dents, breaks or flats, every latch group shut as
+  before, no new breaks settling, no stray callbacks. A pristine car therefore reads correctly, and
+  the latch handling survives both paths. Neither run exercised the miscount: with no damage there is
+  nothing to miscount.
+- **Next:** crash the car properly first (a wall at 50-100 km/h, ideally with a tyre flattened), then
+  `/bjtyretest tyres`, about five times, and compare the broken-beam count the change reports against
+  what the car had before it. If that is too much of a grind, add the before/after beam counts to the
+  `[BJTyres]` line itself so ordinary pit stops record it and the bad run turns up on its own.
+
 ## To try in game
 
 Built (see CHANGELOG), not yet tried live. Newest first.
 
-- pit stop check (server, no bump yet) : a stop with fuel and a repair : no penalty, no "not
-  counted" toast, also with a laggy connection ; the pit boxes show only once you're through PIT IN
-  (and from the green light on a start from the pits), gone after PIT OUT ;
 - plugin API race control (server 2487, client 2759) : `api/example/BJRaceDirector` with RACE_ID set
   and EVERY_MIN at 1 : its lobby listed under "Open race", joinable, held till its time's up, then
   started ; a reset past the two free ones gives a 5 s penalty (the red tag on the HUD, the toast
@@ -154,17 +174,6 @@ paste are built ; this is the part left.
 
 A profile's side (a kerb sloped toward the track only), tilting with the ground across the path
 (it's sunk 0.4 m instead), a tyre-wall profile, eyedropping a whole sweep.
-
-## Races: pits: the lane's speed, checked by the server
-
-From the pit system's security review (2026-10-28). The lane's speed is the racer's game's : its
-reported speed at PIT IN (`racePit` "entry", `speedKmh`) and the game's own limiter, both in the
-racer's game. The server only checks the average from PIT IN to PIT OUT over their straight-line
-distance (the "transit" penalty), which a curved lane leaves slack in. BeamMP's positions carry the
-car's velocity (`MP.GetPositionRaw`'s `vel`) : `watchPitStops` in raceGrid.lua already reads them
-every 100 ms for racers in the lane, so it could also note a car over `speedLimitKmh +
-SpeedTolerance` for more than about a second (BeamMP's updates lag and jitter : a single sample
-mustn't count) and give the entry speed penalty once a pass, as the transit check does.
 
 ## Vehicle presets: shared builds: if wanted
 

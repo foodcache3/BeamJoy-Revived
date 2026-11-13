@@ -129,6 +129,8 @@
 ---@field pitStoppedPass true? their stop this pass reported (counted once settled : pitStopClaim)
 ---@field pitStand {fromMs: integer, lastMs: integer}? while inPit : the car seen standing in its box,
 ---from and until (the shared clock, watchPitStops). Not sent
+---@field pitOverspeed {fromMs: integer, lastMs: integer, topKmh: number}? while inPit : the car seen
+---over the lane's limit, from and until, and the fastest seen (watchPitStops). Not sent
 ---@field pitStopClaim table? a stop reported, waiting for the server to see the car standing in its
 ---box (settlePitStop). Not sent
 ---@field pitStops integer? stops made this phase
@@ -1362,7 +1364,7 @@ end
 ---@param p BJRaceParticipant
 local function endPitPass(p)
     p.inPit, p.pitPending, p.pitEntryMs, p.pitPenalized, p.pitStoppedPass, p.towUntilMs = nil, nil, nil, nil, nil, nil
-    p.pitStand, p.pitStopClaim = nil, nil
+    p.pitStand, p.pitStopClaim, p.pitOverspeed = nil, nil, nil
 end
 
 --- a start from the pits (settings.pitStart) : the racer's box, and them in the pit lane, its steps
@@ -3796,6 +3798,13 @@ local PIT_STOP_SLACK_MS = 3000
 --- the car must be seen standing in its box this close to the stop's report, before (or after :
 --- a stop with nothing to do can be over before the server's view catches up)
 local PIT_STOP_SEEN_MS = 3000
+--- the car must be seen over the lane's limit this long before it costs anything : BeamMP's position
+--- updates lag and jitter, and a car tipped off a kerb or shoved can read fast for one sample
+local PIT_SPEED_OVER_MS = 1000
+--- how far from either end of the lane a car still counts as being in it, on top of the lane's own
+--- straight length : a curved lane bulges away from that line, and a racer's other vehicles (one
+--- parked at the lobby, a trailer left behind) must not be what gets measured
+local PIT_LANE_REACH_EXTRA = 50
 
 ---@param a {x: number, y: number, z: number}
 ---@param b {x: number, y: number, z: number}
@@ -3863,6 +3872,31 @@ local function carStanding(playerID, box)
     return math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) <= PIT_STAND_SPEED
 end
 
+--- how fast a racer's car is going in the pit lane, km/h (nil : the server can't see it). Only the
+--- vehicles near the lane count, and of those the fastest : a player's name is on everything they
+--- own, so a car they left at the lobby or a trailer parked elsewhere would otherwise be a candidate,
+--- and the one they're driving down the lane is the one being judged
+---@param playerID integer
+---@param pit table race.pit
+---@return number?
+local function carLaneSpeed(playerID, pit)
+    local raws = services_vehicles.playerPositions(playerID)
+    if not raws or #raws == 0 or type(pit.entry) ~= "table" or type(pit.exit) ~= "table" then return nil end
+    local reach = pointDistance(pit.entry.pos, pit.exit.pos) + PIT_LANE_REACH_EXTRA
+    local best = nil
+    for _, raw in ipairs(raws) do
+        local pos = xyz(raw.pos)
+        if pointDistance(pos, pit.entry.pos) <= reach or pointDistance(pos, pit.exit.pos) <= reach then
+            local v = type(raw.vel) == "table" and xyz(raw.vel) or nil
+            if v then
+                local kmh = math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z) * 3.6
+                if not best or kmh > best then best = kmh end
+            end
+        end
+    end
+    return best
+end
+
 --- a stop reported : counted once the car's been seen standing in its box (`final` : now or never),
 --- what it came up short of its work a penalty. Its RacerPitStop then
 ---@param session BJRaceSession
@@ -3899,13 +3933,15 @@ settlePitStop = function(session, p, now, final)
     return true
 end
 
---- every 100 ms in a race with pits : each racer's car in the lane seen standing in its box or not
---- (BeamMP's positions, read here), and the stops waiting on it settled
+--- every 100 ms in a race with pits : each racer's car in the lane seen standing in its box or not,
+--- and seen keeping to the lane's speed limit or not (BeamMP's positions, read here), and the stops
+--- waiting on it settled
 ---@param session BJRaceSession
 ---@param now integer
----@return boolean changed a stop settled
+---@return boolean changed a stop settled, or a penalty given
 watchPitStops = function(session, now)
     local race, changed = nil, false
+    local cfg = pitConfig()
     for playerID, p in pairs(session.participants) do
         if type(p) == "table" and p.inPit and not p.finished and not p.awaitingStart and
             not (p.towUntilMs and now < p.towUntilMs) then
@@ -3917,6 +3953,34 @@ watchPitStops = function(session, now)
                     st.lastMs = now
                 else
                     p.pitStand = { fromMs = now, lastMs = now }
+                end
+            end
+            -- the lane's limit, watched from BeamMP's own positions. Both of the other checks are
+            -- the racer's game's word : the speed reported at PIT IN, and the limiter that holds the
+            -- limit, run there. The transit check only catches a lane driven flat out end to end,
+            -- which a curved lane leaves slack in, so this is what actually sees a car speeding
+            -- through part of the lane. Charged once a pass, as the transit check is (pitPenalized),
+            -- and never while the car is standing in its box or under tow
+            local pit = race and race.pit
+            if pit and cfg.EntrySpeedPenalty > 0 and not p.pitPenalized and not p.pitStand then
+                local kmh = carLaneSpeed(playerID, pit)
+                if kmh and kmh > pit.speedLimitKmh + cfg.SpeedTolerance then
+                    local ov = p.pitOverspeed
+                    if ov and now - ov.lastMs <= PIT_STAND_GAP_MS then
+                        ov.lastMs = now
+                        if kmh > ov.topKmh then ov.topKmh = kmh end
+                    else
+                        ov = { fromMs = now, lastMs = now, topKmh = kmh }
+                        p.pitOverspeed = ov
+                    end
+                    if now - ov.fromMs >= PIT_SPEED_OVER_MS then
+                        p.pitPenalized, p.pitOverspeed = true, nil
+                        pitPenalty(session, p, cfg.EntrySpeedPenalty * 1000, "entrySpeed",
+                            { speed = math.floor(ov.topKmh), limit = pit.speedLimitKmh })
+                        changed = true
+                    end
+                else
+                    p.pitOverspeed = nil
                 end
             end
         end
