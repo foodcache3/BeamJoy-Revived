@@ -60,6 +60,13 @@ This is an actively developed, upgraded version of BeamJoy Sandbox, updated to r
 BeamNG.drive 0.40 and BeamMP 4.23.1. On top of the sandbox/moderation feature set below, it's
 building toward a set of racing- and gameplay-focused features.
 
+**New in 2.1**: race events of up to 20 phases (practice, qualifying, heats, a final), five new
+start types including a five-light gantry with jump-start penalties, pit stops for circuit races,
+driving your own car fixed on BeamNG 0.40, translations working again on 0.40 with every language
+filled in and Italian added, two-way drift spots, framerate work, and a larger plugin API. See the
+[2.1.1 release notes](https://github.com/foodcache3/BeamJoy-Revived/releases/tag/v2.1.1) for
+everything that changed.
+
 **New in 2.0**: deliveries and convoys, Derby, crews, a redesigned main window with controller
 support, a props editor for races and arenas, passive races, drift spots and dragstrips, police
 chases between players, Discord webhooks, a plugin API and a self-updating server. See the
@@ -93,13 +100,40 @@ everything that changed.
   and configurable respawn strategies. Includes an in-world 3D gate/start editor (translate/rotate
   gizmos, edge-resize handles, a switchable terrain/raycast ground-snap, and a reverse-race
   button), manual sector boundaries, ghost backmarkers, a disable-collisions option, configurable
-  phase timers, and a live race-info panel (standings while racing, results and lap breakdown
-  after)
+  phase timers, an optional reset speed limit (so a reset can't be used as an airbrake), and a
+  live race-info panel (standings while racing, results and lap breakdown after)
+  - **Race events and phases**: a race can be an event of up to 20 phases - practice, qualifying,
+    heats, a final - each with its own start, length (laps, a time limit, or both), ranking, grid
+    (the lobby's, an earlier phase's result or the standings, reversed or not), who races it (the
+    top *n* of an earlier phase, for knockouts and finals), rules and break. Ready-made formats in
+    the start menu (qualifying + race, practice + qualifying + race, sprint + feature, time attack,
+    knockout qualifying, two runs added up), all editable in a phase editor and savable as your
+    own. Between phases there's a results break with a tab per phase, and staff can red-flag a
+    phase, add time or a lap, and hand out penalties. A race started the way it always was is one
+    phase and behaves exactly as before
+  - **Start types**: a five-light gantry, each light a second and held lit for a moment the server
+    picks fresh every time so it can't be learnt, with your car released on the first light and a
+    jump-start penalty if you move early. Or releases in waves, one racer at a time, every racer a
+    set interval apart, a flying start timed from the first checkpoint, and an untimed out lap
+  - **Pits for circuit races**: a PIT IN / PIT OUT lane drawn in the race editor, with its own
+    speed limit and a pit box per start slot that looks like the game's own parking spot. Laps
+    still close at the real start/finish line, which carries on sideways across the lane as on a
+    real circuit, and the route steps the lane skips are credited for you - a lap that touched the
+    lane counts for race time but not for best lap or the leaderboard, so a drive-through is never
+    a shortcut. The game's own limiter holds the lane's limit, entering too fast costs a time
+    penalty, and cars in the lane are ghosted so neighbours can't shove each other. Stopped in your
+    own box, the car is held on the external camera while it refuels and repairs, with repair time
+    taken from how badly it's damaged on a curve settled by crash tests. A pit menu on the race HUD
+    sets how much fuel to add (in your own units) and whether to repair; a race can require a
+    number of stops with a penalty for each one missed, and a car that can't move can be towed in.
+    Resets stop refilling the tank, so fuel is something to manage. The server confirms from the
+    BeamMP positions that the car really stood in its box, so a stop it never saw doesn't count.
+    **A race without a pit lane runs exactly as before**
   - **Props editor**: place props with the mouse in races and in Hunter, Infected and Derby arenas.
     Hundreds of curated props (barriers, cushions, guardrails, signs, lights, rocks, prefabs) plus
     every mesh in the game, lines that curve through any number of nodes, curbs and walls, road
     paint and skid marks, copy and paste between races. Up to 1000 props per race
-  - **316 bundled races on 14 maps**, most dressed with props, ready on a fresh install. **Import
+  - **315 bundled races on 14 maps**, most dressed with props, ready on a fresh install. **Import
     map races** brings in the map's own time trials and quick races, modded maps included
   - **Rejoin after a disconnect** (back at your last checkpoint, in your exact car), a shared
     green light, **race control** for staff (time penalties, disqualify), three HUD layouts built
@@ -176,8 +210,11 @@ everything that changed.
 - Customizable yet powerful welcome window
 - Support for replay mode (players watching replays and their vehicles are not visible by others until they play again)
 - Fixed and fully integrated vehicle selector (hide presets from disabled mods, filtered by permissions, fixed action buttons)
-- Messages and labels internationalization (English source plus 12 client and 7 server
-  translations, all kept at full key parity)
+- Messages and labels internationalization: English source plus 13 translations on both the
+  client and the server, all kept at full key parity - German, Spanish (Spain and Latin America),
+  French, Italian, Japanese, Korean, Polish, Portuguese (Portugal and Brazil), Russian and Chinese
+  (Simplified and Traditional). A language BeamNG ships none of its own for, Italian among them,
+  works with a community language pack
 - Disabled multiplayer-conflicting features (desynced pause, force field)
 - LocalStorage to keep personal data and settings between servers
 - Contextual menu when right-clicking another vehicle (disabled while nodegrabbing or dragging view)
@@ -235,9 +272,6 @@ Long-term roadmap: not scoped to any particular release, and not yet implemented
 will move into Features as things ship.
 
 **Racing**
-- Pit road / pit paddock options
-- Reset/teleport to pits option
-- Repair / refuel in pits, with configurable times for each
 - Per-race environment customization (time and weather planner)
 
 **Drag Racing**
