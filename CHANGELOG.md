@@ -8,9 +8,34 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-11-13 - Pits ready: the pit lane's speed checked by the server
+
+Server build 2497, client build 2785 (unchanged from 2.1.0 : this release's only code change is
+server-side).
+
+- **Pits : the pit lane's speed limit is now the server's to check** (from the pit system's security
+  review of 2026-10-28, the last thing holding pits back). Both of the existing checks were the
+  racer's own game's word : the speed reported at PIT IN, and the game's own limiter that holds the
+  limit. The only server-side check was the transit one - through the lane quicker than its straight
+  length at the limit - which a curved lane leaves plenty of slack in, since a curved lane is longer
+  than the line between its ends. So a modified game could speed through part of the lane and the
+  server would never know. `watchPitStops` already reads BeamMP's own positions every 100 ms for
+  racers in the lane, for the standing check ; it now reads their velocity too, and a car seen over
+  the limit plus the tolerance for more than a second costs the entry speed penalty, once a pass, as
+  the transit check does. A second is deliberate : BeamMP's updates lag and jitter, and a car tipped
+  off a kerb or shoved can read fast for one sample. Only vehicles near the lane are measured, and
+  of those the fastest - a player's name is on everything they own, so a car left at the lobby or a
+  trailer parked elsewhere would otherwise have been a candidate. Nothing is measured while the car
+  stands in its box or is under tow. *(server only)*
+  - **Tried in game and working**, which was the other thing holding pits back : the boxes show only
+    once you're through PIT IN and are gone after PIT OUT ; a stop with no refuel and no repair takes
+    no time, which is what it's meant to do (the stop still counts and you leave at once) ; a stop
+    with fuel and a repair ; and the lane's speed watched by the server. The experimental tyre
+    changes keep their own known issue and their own switch, so they stay off by default.
+
 ## [2.1.0] - 2026-11-13 - Race phases, new start types, BeamNG 0.40 fixes, every language filled in
 
-Server build 2496, client build 2785 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2497, client build 2785 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
 
 - **Every language is up to date, and the server speaks all thirteen.** The client has shipped 13
   languages and the server only 8, so Japanese, Korean, Russian and both Chinese players read the
