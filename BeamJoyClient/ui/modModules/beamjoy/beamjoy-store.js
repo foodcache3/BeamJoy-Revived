@@ -18,7 +18,7 @@ angular
         // request-gated like the admin-only General config tab's own data: every client needs to
         // read these, not just whoever has that tab open. Defaults here match the server's own
         // (services/config.lua) until the first real push arrives.
-        this.raceSettings = { authorshipRestriction: false, editorShowOnlyEditable: false };
+        this.raceSettings = { authorshipRestriction: false, editorShowOnlyEditable: false, experimentalTyres: false };
 
         // METHODS
 

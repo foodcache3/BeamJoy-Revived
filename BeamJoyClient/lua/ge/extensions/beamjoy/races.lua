@@ -179,6 +179,24 @@ end
 --- module) so it stays correct regardless of whether an editor is even open, and refreshes for
 --- free on every cache push (join, save, delete, map change), not just after actions taken
 --- through the editor itself
+--- the pits can be used (services/races.lua's pitsUsable, the same check) : a circuit, not a branching
+--- one, with both lines, the steps they join, and a box for every start slot. The start form shows
+--- its Pits section then
+---@param r BJRace
+---@return boolean
+local function pitsUsable(r)
+    local pit = r.pit
+    if type(pit) ~= "table" or not r.loopable or r.branchingEnabled then return false end
+    if not pit.entry or not pit.exit or not pit.fromStep or not pit.toStep then return false end
+    local n = type(r.gates) == "table" and #r.gates or 0
+    if pit.fromStep > n or pit.toStep > n or pit.fromStep == pit.toStep then return false end
+    if type(r.startPositions) ~= "table" or #r.startPositions == 0 then return false end
+    for _, sp in ipairs(r.startPositions) do
+        if type(sp.pit) ~= "table" then return false end
+    end
+    return true
+end
+
 local function pushListToUI()
     beamjoy_communications_ui.send("BJEditorRaceList", table.map(M.data, function(r)
         return {
@@ -217,6 +235,7 @@ local function pushListToUI()
             -- raceStart already forces joinable=false server-side too, this is just the matching
             -- UI hint) and lets the race list show grid-slot count without sending full positions
             startPositions = #r.startPositions,
+            pits = pitsUsable(r),
             distance = r.distance,
             -- the race list shows how many props a race has (direct request) : every prop a line
             -- or a prefab stands for, as the editor's prop limit counts them

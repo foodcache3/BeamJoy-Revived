@@ -17,10 +17,19 @@ end
 ---@param req RequestAuthorization
 ---@param model string
 ---@param config string?
+--- whether this player bypasses the model blacklist, answered at most once a frame : the vehicle
+--- selector calls this hook once per grid tile (see beamjoy_vehicles' own
+--- onBJRequestCanSpawnVehicle for the measurements), and both reads answer the same for every tile
+--- and cannot change within a frame. A rank change still reaches the selector on its next rebuild.
+local bypassCacheMs, cachedBypass = -1, false
 local function onBJRequestCanSpawnVehicle(req, model, config)
-    if beamjoy_permissions.isStaff() or
-        beamjoy_permissions.hasAllPermissions(nil,
-            BJ_PERMISSIONS.BypassModelBlacklist) then
+    local nowMs = GetCurrentTimeMillis()
+    if nowMs ~= bypassCacheMs then
+        bypassCacheMs = nowMs
+        cachedBypass = beamjoy_permissions.isStaff() or
+            beamjoy_permissions.hasAllPermissions(nil, BJ_PERMISSIONS.BypassModelBlacklist)
+    end
+    if cachedBypass then
         return
     end
     if table.includes(M.data.ModelBlacklist, model) then
@@ -43,6 +52,8 @@ local function retrieveCache(caches)
         beamjoy_communications_ui.send("BJRaceSettings", {
             authorshipRestriction = M.data.RaceAuthorshipRestriction == true,
             editorShowOnlyEditable = M.data.RaceEditorShowOnlyEditable == true,
+            -- the start menu, the race editor and the phases show the tyre settings only then
+            experimentalTyres = type(M.data.RacePits) == "table" and M.data.RacePits.ExperimentalTyres == true,
         })
     end
     if caches.core then
@@ -69,6 +80,7 @@ local function sendConfigToUI()
         Freeroam = M.data.Freeroam,
         Voting = M.data.Voting,
         Deliveries = M.data.Deliveries,
+        RacePits = M.data.RacePits,
         -- SetConfig holders only (the server leaves it out of everyone else's cache)
         Discord = M.data.Discord,
     })

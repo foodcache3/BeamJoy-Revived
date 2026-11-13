@@ -70,7 +70,8 @@ angular.module("beamjoy").service("beamjoyNow", function ($rootScope, beamjoySto
         if (s.bus) return "busLines";
         return null;
     };
-    const lobby = (s) => (s.state === "GRID" || s.state === "LOBBY") && s.joinable;
+    // a race under way can be open to join too (a phase's lateJoin)
+    const lobby = (s) => ((s.state === "GRID" || s.state === "LOBBY") && s.joinable) || s.lateJoinable === true;
     this.joinableCount = () =>
         this.busy()
             ? 0
@@ -205,14 +206,16 @@ angular.module("beamjoy").component("bjMainNow", {
             const rows = [];
             const add = (kind, s, title) => {
                 if (s.id === mineId) return;
-                const forming = (s.state === "GRID" || s.state === "LOBBY") && s.joinable;
+                const lobbyState = s.state === "GRID" || s.state === "LOBBY";
+                const forming = (lobbyState && s.joinable) || s.lateJoinable === true;
                 rows.push({
                     id: `${kind}:${s.id}`,
                     kind,
                     session: s,
                     forming,
+                    running: !lobbyState,
                     title,
-                    line: fill(`beamjoy.window.main.now.row.${forming ? "lobby" : "running"}`, {
+                    line: fill(`beamjoy.window.main.now.row.${lobbyState && forming ? "lobby" : "running"}`, {
                         name: s.starterName || "?",
                         count: s.participantCount || 0,
                         max: s.maxParticipants || 0,
@@ -246,12 +249,19 @@ angular.module("beamjoy").component("bjMainNow", {
         };
 
         this.canJoin = (row) => row.forming && !beamjoyNow.busy();
-        this.canSpectate = (row) => !row.forming && row.kind === "race" && !beamjoyNow.busy();
+        this.canSpectate = (row) => (!row.forming || row.running) && row.kind === "race" && !beamjoyNow.busy();
+        // the Activities section that manages each kind of session, for the lobby open below
+        const SECTION = { race: "races", hunter: "hunter", infected: "infected", derby: "derby" };
         this.join = (row) => {
             // joining a convoy works from anywhere : you're brought to the depot when it leaves
             if (row.kind === "convoy") return beamjoyStore.send("BJDeliveryJobsJoin", [row.session.id]);
             const event = { race: "BJRaceJoin", hunter: "BJHunterJoin", infected: "BJInfectedJoin", derby: "BJDerbyJoin" }[row.kind];
             beamjoyStore.send(event, [row.session.id]);
+            // straight to that lobby (direct request), the way joining from a notice already does
+            // (notices.lua's own mainNav.focusOn) : nothing starts until you ready up in it, and a
+            // race joined while it's under way (a phase's lateJoin) has its own "ready up to
+            // start" button sitting there, which is easy to never find if the menu just closes
+            $rootScope.$broadcast("BJMainOpenPanel", "play", SECTION[row.kind]);
         };
         this.spectate = (row) => beamjoyStore.send("BJRaceSpectate", [row.session.id]);
         // staff : cancel anyone's race, hunt or infected game (the server checks staff again)

@@ -6,6 +6,820 @@ session memory, then kept up to date as work continued. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/). Server-side entries need separate deployment to
 the live server per the usual workflow: see each entry.
 
+## [Unreleased]
+
+## [2.1.0] - 2026-11-13 - Race phases, new start types, BeamNG 0.40 fixes, every language filled in
+
+Server build 2496, client build 2785 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **Every language is up to date, and the server speaks all thirteen.** The client has shipped 13
+  languages and the server only 8, so Japanese, Korean, Russian and both Chinese players read the
+  server's own messages - joins, kicks, votes, command replies - in English. They have their files
+  now, and every language on both sides is filled in against the current en-US.
+  - `Tools/translate.py --add-missing` gives any language in the list a file in a group it's
+    missing from, then fills it. The script also re-adds the client's locale files to `BJ.zip`
+    at the end (`--no-zip` to skip) : a run used to write into `Client/BJ/beamjoy_locales/` and
+    stop there, so the translations never reached the game.
+  - **Fix : a literal brace could come back as a placeholder.** "A nickname is {min} to {max}
+    characters, without { or }" lost the spaces inside "{ or }" in Simplified Chinese, which turned
+    two braces the player is meant to read into a `{or}` the game would try to fill. A brace
+    standing on its own is now sent as don't-translate, like `{name}` itself, and the one string
+    this had already caught is fixed. `--check` reads every file against en-US and is what found
+    it. *(server and client)*
+
+- **A long translation broke the leaderboard's buttons, and cut-off text says what it says now.**
+  Reported from Italian, with screenshots. The section picker down the left of the leaderboards
+  (Races, Deliveries, Derby, Drift, Drag) is a row of five buttons that could neither shrink nor
+  wrap, so a language whose words are longer than English pushed the last of them out of the 20em
+  sidebar and across the board beside it. They take a second row now, which only happens when they
+  wouldn't have fitted anyway - the same for every other segmented row in the mod. The column heads
+  above the lists cut themselves off rather than push "You" off the edge.
+  - **Text the layout has to cut off says what it says in full** when you point at it : a race or
+    spot's name, a board's line, a player's name, a column head. One listener for the whole of
+    BeamJoy's UI, which measures only what's under the pointer and only while you hover, so nothing
+    is measured per frame. A tooltip something set deliberately (the settings rows' own) is never
+    replaced, and the one it adds goes away again when the text fits - a wider window, a shorter
+    language. *(client)*
+
+- **A reset speed limit for races.** Requested: a tickbox and a speed. With it on, resetting or
+  recovering is only allowed below that speed, so a reset can't be used as an airbrake - press it
+  mid-crash and you keep the crash. It sits with the reset penalty in the start form, the lobby's
+  "Change settings", a race's own defaults in the editor and as a per-phase rule, and like the
+  penalty it's hidden whenever "No respawn" is the strategy, since every reset type is already
+  blocked outright there. Off by default, so nothing changes for an existing race. A refused reset
+  says so on screen instead of the key quietly doing nothing, and every way of asking for one is
+  covered - the hold-to-rewind recover, the physics resets, recover to last road, drop at camera,
+  and the pause menu's own Repair and Flip upright buttons, which reach past the input filter
+  entirely. Hunter and Infected have had the same gate for a while at a fixed 7 km/h; a race's is
+  the host's own number, since "only when you're stopped" and "anything under 40" are both
+  reasonable rules and only the host knows which they want. *(server and client)*
+
+- **A Hunter's parked car could give the fugitive away.** Reported: with the reveal distance set
+  to 150 m the fugitive kept getting shown for a few seconds at a time while the nearest hunter was
+  200-500 m off, over and over, with no reset or checkpoint involved. The proximity check walked
+  every vehicle on the map and took the nearest one belonging to a hunter - and a player's name is
+  on everything they own, so the car they arrived in and left at the lobby, a trailer, a walking
+  unicycle or any traffic they spawned all counted as "the hunter being right there". Each hunter's
+  own driven car is what's measured now. The same stray vehicles could hold the fugitive's reset
+  lock shut, and the same loose lookup decided which of the fugitive's vehicles got hidden from the
+  minimap and which one a hunter's GPS pointed at - picking a trailer there left the car they were
+  actually driving on the minimap. A reveal now also names its trigger and the distance behind it in
+  the log, since from outside the fugitive's own client a wrong reveal looks exactly like a right
+  one. *(client)*
+
+- **The activity overlays can be moved to any corner.** Requested. Every one of them - the race,
+  bus, drag, derby, hunter, infected, delivery and drift zone panels - hardcoded the same top-right
+  corner in its own stylesheet, with the pit menu pinned beside the race HUD and a server plugin's
+  panels stacked on top. Settings > Menu gains "Activity overlay position": a corner for the whole
+  cluster, plus a gap from each edge for clearing whatever else you keep there. They all read the
+  corner from one set of CSS variables now, so the choice applies the moment it's made, with no
+  activity running and nothing to restart. A plugin's panel keeps whichever corner the plugin put
+  it in; one that never asked for a corner follows the player's, so it still sits with the panels
+  it stands in for. The pit menu used to be placed flatly "to the race HUD's left, level with its
+  top", which from a left-hand corner would have put it off the side of the screen - it measures
+  which side has room now, and hangs from the same edge the HUD does. Kept on this PC, like the
+  sidebar's position and the race HUD layout. *(client)*
+
+- **Teleporting to a player could quietly teleport you to yourself.** Reported as "admin can't
+  teleport to owner", which turned out to have nothing to do with permissions - teleport isn't
+  rank-gated at all. A player's current vehicle was looked up by its `remoteVID` alone, and that id
+  is the car's number in its *owner's own* game, not an identity: two games loading the same map
+  hand out nearly the same ids, so another player's car routinely shares its number with one of
+  yours. The lookup took the first numeric match out of the vehicle table, which could be your own
+  car - and teleporting you onto your own car is indistinguishable from the button being ignored.
+  Every lookup of this shape now matches the owner as well: "Teleport To", the "Teleport From"
+  summon and the `/tp` command (one shared path), the player list's spectate/focus action, which
+  could focus your own car instead of theirs, and a bus run's mirroring, which could mirror
+  somebody's route onto the wrong bus. Teleport also stopped failing in silence: it now says when
+  they aren't in a vehicle, when you aren't in one yourself, and when their car has no copy in your
+  game - usually a vehicle mod you don't have, which BeamMP never spawns. That last one no longer
+  burns a non-staff player's 30 s cooldown on a teleport that couldn't have worked. *(client)*
+
+- **Drift spots run either way now.** Requested, after checking how the game's own freeroam drift
+  spots do it: those are authored as two lines, whichever one you cross starting the run and the
+  other ending it, with one shared highscore between them. BeamJoy's were one-way - both gates only
+  counted a car passing the way the route faces, so running a spot backwards did nothing and needed
+  a whole second spot with its own leaderboard. The route's two ends are now exactly those two
+  lines: cross either one and the run starts, the gate at the other end ends it, and both
+  directions share the one board. Each gate draws an arrow both ways in the editor, and the two end
+  rows read "Start / finish" instead of one of each. A spot that only works one way gets its "Both
+  directions" toggle turned off; every spot already saved reads as two-way, so they all gained a
+  direction. *(server + client)*
+
+- **Pre-assigning an Infected player as infected now actually takes, and says so.** Reported: the
+  button did nothing and the round still drew its infected at random. The pre-assignment was stored
+  under the playerID exactly as it arrived over the wire, and read back under the roster's own
+  integer id - two keys that don't always match, so the lookup found nothing and the random draw
+  quietly took the whole decision. The roster now marks a pre-assigned player ("Starts infected"),
+  clicking again cancels it, and more pre-assignments than the round's infected count raises that
+  count to fit them rather than dropping the extras - up to the arena's infected spawns, and never
+  so far that nobody is left to survive. *(server + client)*
+
+- **Hunter can let one side repair at garages, and not the other.** Requested. "Allow fuel stations
+  & garages" is now two settings underneath it: who may refuel, and who may repair, each of Both,
+  Fugitive only, Hunters only or Nobody. Both default to Both, which is exactly what the toggle did
+  on its own, so nothing changes until you narrow one. A side that may repair but not refuel still
+  sees the garage on the map. *(server + client)*
+
+- **East Coast USA's races, tidied up, and your times kept.** Eight of them get their props cleaned
+  up; "Street Stage" has its grid moved back onto the road, and "Street Course (reverse)" gets a
+  stray gate put back where it belongs along with the seven grid slots it was missing. A server that
+  already has these races takes the fix on its next start **and keeps its recorded times** - no lap
+  on any of them is run differently than before, so throwing a leaderboard away for it would be the
+  bigger loss. A race you've edited yourself on your own server is overwritten by this, as a shipped
+  course fix always is. *(server, needs a restart)*
+
+- **Saving a race no longer says a race with that name already exists when it's the same race.**
+  Reported. The races BeamJoy ships with could be added to a server a second time, under new ids,
+  leaving two of each: each one then counted as the other's duplicate name, so neither could be
+  saved from the editor. The cause was the check that stops two races sharing a name - it skips the
+  race being saved itself, told apart by its id, and a race arriving from the bundled set still
+  carried the id it ships under, which on a server set up from scratch is the id its own copy
+  already has. So the check skipped the very race it was about to duplicate. Fixed, and every extra
+  copy already on a server is removed once, on the next start: only an exact extra copy with no
+  recorded times goes, and the original keeps its id, times, settings and props. Two races an admin
+  named the same on purpose, and any copy since edited or driven, are left alone. *(server, needs a
+  restart)*
+
+- **A rejected race save no longer prints the whole race to the server console.** Reported: "when I
+  save a race it floods the server log". A refused save dumped the submitted race in full, which is
+  hundreds of lines of gate, grid and prop coordinates, burying the console and the log file. It
+  logs the reason and the race's shape - name, mode, and how many gates, start positions and props
+  - which is what actually diagnoses it. *(server)*
+
+- **No more repeating freeze in one particular spot.** Reported: "often times in the same spot it
+  would freeze briefly and the lua usage would spike, and the camera ring hud would show in the top
+  left". Parked cars are kept clear of bus stops two ways - never park one in a stop, and remove
+  one already sitting in a stop - and the two disagreed. Choosing a place measured the parking bay
+  marker; removing a car measured the car itself, which doesn't sit exactly on its marker. So a bay
+  just outside a stop could pass as free and then place a car just inside it, which was promptly
+  removed, replaced in the same handful of bays, and removed again - once a second, forever, each
+  turn costing a spawn and a camera reset. Removal is now limited to a car genuinely inside the
+  stop, leaving the parking buffer as breathing room between the two. *(client)*
+
+- **Opening the vehicle selector no longer hitches.** Found while profiling: this mod checks
+  whether you are allowed to spawn each vehicle, and the selector asks that question once for
+  every tile in the grid - over fifteen hundred of them on a stock install, every time the grid is
+  built or you type in its search box. Each question re-read your rank from scratch, so the same
+  answer was worked out thousands of times over in a single frame, which measured as a visible
+  stutter. The answer is worked out once now. *(client)*
+
+- **Less work repeated behind the scenes, every second of play.** Found while profiling: reading
+  one of this mod's own saved settings searched the whole list of setting names to find out where
+  that setting lived, every single read. The nametag colours alone are read six times a second, so
+  that search ran constantly and threw away a steady stream of short-lived memory, which is what
+  makes the game pause to collect it. The lookup is direct now. *(client)*
+
+- **A small stutter every five seconds is gone.** Spotted in the performance graph as a regular
+  spike of Lua time. This game tops its own share of traffic and parked cars back up every five
+  seconds, and the first thing that check did was count every node in the map's road network just
+  to find out whether the map had roads at all - thousands of them on a big map, every time. It
+  asks the question directly now. *(client)*
+
+- **Nothing fills your car with occupants any more, whatever set it off.** Reported twice over -
+  "vehicle presets sometimes fill every slot with occupants", and now "when I spawn traffic, my
+  vehicle fills with occupants" - and it turned out to be one cause with several triggers. An empty
+  seat's occupant figure is hidden by nothing but its transparency, and several parts of the game
+  write a blanket transparency across every mesh a car has, which reveals all of them at once (and
+  drops a ghosted car back to solid while it's at it). The game never puts them back : its own
+  occupant pass only runs on a spawn, a reset, a switch or a seat change, and none of these is any
+  of those. The traffic system does it on both sides of its traffic table, to your own car too,
+  because it takes the player-driven cars into that table the moment traffic starts and again on
+  every switch and reset while it runs. The vehicle editor behind the game's own parts and preset
+  UI does it to highlight a part and once more on the way out. So do the parts selector's x-ray
+  fade and the police and vehicle-pooling fades. Rather than chase each one - that list isn't ours
+  and can grow with any game update - the figures are now checked against what this mod last gave
+  them and put back when they don't match, once a second, for the car you're in. The traffic table
+  is also caught the instant it happens, since it's the one trigger that announces itself.
+  *(client)*
+
+- **Nametags cost a fraction of what they did too.** The same profiler dump had
+  `beamjoy_nametags.onUpdate` allocating more per frame than anything else in the mod, the race
+  included, and the reason was the same : work repeated per car, per rendered frame, that only ever
+  needed doing once. Every tag deep-cloned its two colours out of local storage (a closure built, a
+  `pcall` against every stored key to find the one it was handed, then a copy of the value), asked
+  the game which camera is active and asked who you are all over again, built its distance text
+  from scratch, and - for the spectator names under it - filtered the player list through a
+  `pcall`'d closure into a whole new table with a metatable of its own, walked it with a second
+  closure, and counted it with a third. Underneath, refreshing a car for drawing rebuilt that same
+  spectator list twice over, which is where most of the garbage actually came from. Now : the
+  colours are read when they change (and a colour picked in the UI still lands on the next frame),
+  the camera and your own player are read once a frame and handed down, " 42m" is built once per
+  whole metre, the spectator lines are plain loops, the set is rebuilt inside the table each car
+  already carries, the tag's position is one vector reused down the stack of names, and the forced
+  colours of a fugitive's tag are constants instead of eleven fresh tables a frame. The drawing
+  itself no longer copies a position it was already handed. Nothing about what a tag says, where it
+  sits or what colour it is changed. *(client)*
+
+- **The race's own per-frame work costs a fraction of what it did.** Reported from a profiler
+  dump : `beamjoy_raceRunner.onUpdate` was the heaviest extension in the frame and one of its
+  biggest allocators, and almost all of it was garbage it had no reason to make. Per rendered
+  frame of a race it was building roughly sixteen throwaway vectors and tables, asking who you
+  are three or four separate times over, and reaching for `table.find`/`table.includes` in the
+  crossing test - helpers that wrap their argument in a fresh metatable and `pcall` a freshly
+  built closure once per element, which is nothing on an event and real money sixty times a
+  second. Now : each gate's plane is worked out once from its authored position and direction
+  (and rebuilt by itself if an editor moves it), the car's position is written into one vector
+  that lives for the whole race instead of seven new ones a frame, the candidate-gate list is one
+  reused buffer, your own participant is looked up once a frame and handed to everything that
+  needs it, and the hot lookups are plain loops. Steady state is no allocation at all. Not one
+  rule of the crossing test changed : same leniency, same sub-frame crossing time, same branching
+  candidates. *(client)*
+
+- **The start lights hang near the top of the screen** (direct request) instead of sitting in the
+  middle of it, over the stretch of track you're about to launch down. Only the gantry moved ; the
+  counted countdown, the finish and phase popups are where they were. *(client)*
+
+- **Joining a race already under way takes you to its lobby** (direct report : the menu just closed
+  instead). A mid-race join sits you out until you ready up, and that "ready up to start" button
+  lives in the race lobby, which was easy to never find : the Join button in **Happening now** now
+  opens the lobby it just put you in, the same way joining from a notice always did, and the pad's
+  Focus control lands there too while you're waiting to ready up. The same goes for a hunt, an
+  infected game or a derby joined from that list. *(client + UI)*
+
+- **A late joiner's next gate turns green.** Reported : joining a race under way loaded the gates
+  but never lit the one to drive through. The marker layer only redraws when its own signature
+  changes, and that signature named neither `sittingOut` nor `lateJoining` - readying up mid-race
+  changes nothing else in it (same session, same state, still gate 0), so the route stayed drawn
+  exactly as it was while they were still sitting out. Both are part of the signature now, and the
+  route also leads the way while a late joiner is still waiting to ready up, rather than leaving
+  them a track full of plain gates with nothing green anywhere on it. *(client)*
+
+- **A race with collisions off ghosts everyone else, not you.** Reported again. The look itself
+  was already there (your own car solid, every other one see-through, since nothing on track can
+  touch you all race), but it was decided at the moment the ghost was applied and then left alone :
+  a car swapped or respawned at the grid never carried the reason over, a phase boundary cleared
+  it, and a rejoin set it from another path, any of which left the old look in place. It's now
+  recomputed from the race itself every second, the whole-race ghost is re-asserted on whatever car
+  you're actually in, and another player's car that resets mid-race goes back to see-through
+  instead of quietly turning solid. One more hole closed since : the solid car is whichever one
+  you're actually driving, read live, but a switch only ever recomputed the car you were leaving.
+  Swapping cars at the grid, rejoining in another one or spectating someone mid-race therefore
+  left the new car see-through - and so the whole field, yours included, which is exactly the
+  "it's still me who looks ghosted" that was reported. Both sides of a switch are recomputed now,
+  and the field once more a frame later, since whether the engine has finished the switch by the
+  time it tells us isn't ours to assume. *(client)*
+
+- **A garage repair leaves the car facing the way it was.** Reported : repairing at a map garage
+  spun the car on the spot. The repair is an in-place reset through the game's own
+  `spawn.safeTeleport`, which turns whatever rotation it's handed by a half turn before setting it
+  (read its body : `rot = quat(0,0,1,0) * rot`, then `setPosRot`). Every one of the game's own
+  in-place calls passes `quatFromDir(veh:getDirectionVector())` for that reason ; this one passed
+  the car's raw `getRotation()`, which came back out turned - and on a settled, deformed car not
+  even by a clean half turn. It now passes what the game does, which also sets the car upright on
+  its wheels as a garage repair should.
+
+- **Qualifying on an empty track** (direct request : "need to be an option to hide other racers
+  for some quali sessions"). A new race setting, **Hide other racers** : every other racer's car
+  is not drawn at all on your client (not translucent : gone), their nametags with them, and your
+  own car is ghosted so you can't hit what you can't see. Cars that aren't in the race are left
+  alone - traffic is part of the track. Set it for the whole race in the start menu or the race
+  editor's defaults, or, as it's meant to be used, as one **phase's** rule, so qualifying runs on
+  an empty track and the race that follows doesn't. A spectator still sees the whole field.
+  *(server + client ; checked in the Lua harness at event and phase level)*
+
+- **A lights start, and jumping it costs you** (direct request : "add different style start with
+  lights instead of countdown where jumps can happen and be penalized"). **Start sequence:
+  Lights** replaces the counted countdown with a five-light gantry : the lights come on one a
+  second, hold lit for a moment the server picks fresh for every start (0.2 to 3 s, so it can't be
+  learnt or timed), then go out together - that's the green. Your car is released from its freeze
+  as the first light comes on, so holding it on the brake is your own job, and moving off your slot
+  before the lights go out is a jump start : **Jump start penalty** seconds on your race time
+  (0 leaves it unpunished, and it's still shown). The gantry is silent and reuses the drag tree's
+  own bulbs. A plugin hears `RacerJumpStart`. *(server + client + UI)*
+
+- **Group starts** (direct request : "add 'groups' starting option where x number of people are
+  released at a time"). A new start kind, **Waves** : the grid is released a few cars at a time,
+  each wave a set interval after the one before, every car from its own slot and timed from its
+  own start. It's a phase's start in the phase editor, and for a plain race the start menu's
+  **Release in waves of** does the same thing. A point-to-point track treats waves as a grid start,
+  not as solo runs. *(server ; the waves checked on a real six-slot grid in the Lua harness)*
+
+- **A plugin can set the GPS** (direct question : "let api set gps? is that already possible?" -
+  it wasn't). New API method **`gps.set`** : `pos {x, y, z}` puts the game's own route on a
+  player's screen, `clear: true` takes it away, targeted exactly like `hud.message` (everyone, a
+  list, one player, or a race's racers and / or spectators). It's the same native route BeamJoy's
+  own deliveries and fuel stations use, so the last one set is the one shown ; a race doesn't use
+  it at all, so it's free during one. *(server + client, with the API README)*
+
+- **The race list searches and sorts** (direct request : "add little sort + filter icons for the
+  race browser that lets you search by name and also sort by alphabetical or by date created").
+  Two small icons on the list's head : one opens a name box that filters as you type, the other
+  cycles the order between **A-Z**, **Newest** and **Oldest**. Closing the box clears it, so a
+  hidden filter can't make races look missing. There's no authored date on a race, but ids are
+  handed out in order, so "newest" is genuinely the order they were created in. *(UI)*
+
+- **Reordering start positions was already there** (direct request) : the race editor's **Starts**
+  section has a drag handle on every row, and dragging one changes the grid order (slot 1 is pole).
+  In the lobby, the **manual** placement mode lets racers pick their own slot instead.
+
+- **Your own car is yours to drive again** (direct reports : "losing all control of your own
+  vehicle", "right now I can't steer or anything using my wheel or keyboard controls. my occupant
+  is in the correct seat and the cameras are right", "my occupant was in the passenger seat for
+  some reason", "not being able to switch to your own driver cam"). One cause behind all of it.
+  Since 0.40 the game decides what a player may do in the car they're in from their **presence**
+  (`gameplay/seatOccupants.lua`) : a seat claim plus a permission mode of `driver`, `passenger` or
+  `unrestricted`. A passenger's driving inputs are masked out of the game's own action maps,
+  their driver camera is hidden, and their figure sits in whichever seat was claimed. Several of
+  the game's fallbacks land on `passenger`, and `vehiclePresencePolicy.defaultUnseatedMode` returns
+  `unrestricted` **only** in gamestate `freeroam` : BeamMP sets the gamestate to `multiplayer`
+  (`MPCoreNetwork`), so in a BeamMP session a presence the game couldn't seat properly is a
+  passenger instead. That happens when a car's seat data isn't readable at the moment it's entered
+  (every activity here spawns a car and enters it in the same tick), when a seat claim's own slot
+  can't be read back (the seat and cameras then look perfectly right and only the controls are
+  dead), or when something already holds the driver's seat. None of them had a way back : the game
+  only recomputes a presence when it changes, and re-entering the same car is a no-op, so the car
+  stayed undrivable. BeamJoy now checks its own player's presence every second and immediately on
+  every vehicle switch : a passenger in a car of **their own** goes back to `unrestricted`, and a
+  passenger seat with the driver's seat free (or held by a dummy occupant) is swapped for the
+  driver's. Another player's car is never touched, so riding along in one still works as it should.
+  *(client : 19 checks over the real file in a Lua harness)*
+
+- **BeamJoy speaks the game's language again on BeamNG 0.40** (direct report : "when I set it to
+  italian, it doesn't look like it switched", and Spanish no better). Not the languages : the file
+  name. BeamJoy drops its own translations into the game's per-language folder, and since 0.40 the
+  game reads only the files there named `*.translation.json` or `*.translations.json`
+  (`core/locales.lua`, `isTranslationFile`). Ours was `beamjoy.json`, so it was loaded up to 0.39
+  and quietly ignored from 0.40 on, leaving every window in English whatever the game was set to.
+  Written as `beamjoy.translation.json` now, with any older `beamjoy.json` cleared out on the way
+  past, and without the `FS:mount` on a .json that 0.40 logs as an invalid archive.
+  *(client : the game must be restarted once, the translations are read at load)*
+
+- **BeamJoy speaks the community translations too** (direct request, after the above : Italian is
+  one of them). A language the game has no translation of its own for comes from the Translations
+  mod, in a folder of its own (`it`, `eses_com`, `ruru_com`) holding one legacy `<id>.json` that
+  the game reads **only** while no `*.translation.json` sits beside it : BeamJoy's file alone would
+  have taken the whole language down with it. So the mod's own file is copied beside ours as a
+  translation file of its own, and the game loads both. Guarded on every side : only ever the
+  language actually in use, the copy made again at each load and each language change straight from
+  the mod's file (which is never written to, so an update of theirs is a restart away), our two
+  files taken back out of a folder the moment it stops being the language in use, and nothing
+  copied at all into a folder that already holds a real translation file — the day the mod ships
+  0.40-style files, BeamJoy steps out of the way instead of holding an old copy over them. A
+  community language BeamJoy has no strings for is left untouched. *(client)*
+
+- **Rallycross joker laps, in the `BJRallycross` example plugin** (direct question : whether the
+  plugin API could enforce one as it stands). It can, and now an example does : a joker lane is a
+  branch built in the race editor, and the plugin takes its gate number and its rules (how many per
+  phase, the penalty, which laps it may be taken on, whether an extra one costs the same) as race
+  options in the editor and the start menu. Each racer's count sits live on the race HUD beside
+  their name, the one who hasn't taken it is told as their last lap begins, and a missing or extra
+  joker is a time penalty on the phase's result through the `phaseResult` hook, with the reason on
+  the result. Counted per phase, so each heat and the final want their own, and kept by racer key
+  so a disconnect doesn't lose it. A race with no joker gate set behaves exactly as before. The API
+  README gains a note on what a branching race means for a plugin reading `RacerGate`. *(no mod
+  change : an example to copy into `Resources/Server`, and documentation)*
+
+- **Pits for circuit races (work in progress, no version bump yet)** (direct request). A race's pit
+  lane is drawn in the race editor (PIT IN and PIT OUT lines, where it leaves and rejoins the route,
+  a speed limit), with a pit box for every start slot that looks like the game's parking spot. A
+  race without a pit lane runs exactly as before. *(server + client : update both)*
+  - **On track** : the start/finish line carries on across the lane, so a lap ends there whether in
+    the pits or not, and the gates the lane skips are counted. A lap that touched the lane, and the
+    next, count for race time but not for best laps or the leaderboard. The game's own speed limiter
+    holds the lane's limit ; the car is ghosted in the lane (on by default).
+  - **The stop** : stopped in your own box, the car is held on the external camera while the plan's
+    work is done : fuel (5 % of the tank a second by default, any car), and a repair timed by the
+    car's damage, up to the race's repair time. Resets keep the fuel in a race with pits.
+  - **The repair's time, from the crash tests** : half the share of the car's value the game counts
+    as damaged, half the share of its beams, square-rooted, times the race's repair time ; at least
+    5 s where anything is damaged at all, plus 4 s a flat tyre and 10 s for an engine or powertrain
+    fault. The root is what the tests settled : a headlight tap read 0.15 % of the car damaged and a
+    front end torn off with the radiator leaking 6.8 %, which the straight share charged 0.1 s and
+    4 s of a 60 s repair for. They now cost 5 s and 26 s, with a wrecked semi (37.5 %, cab and
+    engine gone) at 47 s. The two shares are averaged because value alone misses bodywork (a bumper
+    and a headlight cost little beside an engine and a unibody) while the beams count how much of
+    the car is actually bent. Every number scales with the race's repair time, so a server that
+    halves it halves every repair. The flat tyre's 4 s is the one figure no reading covered.
+  - **The server checks the stop** (from the security review : the racer's game times its own
+    stop). Only the racer's game knows the car's damage, so the work's time it reports is taken
+    (never under the tyre change's time, never over the race's longest stop), and the server makes
+    sure the car stood in its box that long, from BeamMP's positions (nothing more is sent). Lag or
+    a game hitch only make the server see the car arrive a little late or stand a little longer, so
+    a stop may come up to 3 s short ; beyond that, what's missing is added as a penalty. A stop the
+    server never sees the car stand for doesn't count.
+  - **Pit boxes are only shown while your car is in the pit lane** (direct request ; each box is a
+    marker the game updates every frame).
+  - **The pit menu**, from the race HUD : refuel (litres or gallons, as the game's units, kWh for a
+    battery ; never more than fits), repair, the stop's time, the parts behind the repair. D-pad only,
+    so the face buttons stay the car's : hold right to confirm, left to cancel, half a second each
+    (direct request : quicker).
+  - **The race HUD's Actions** are always shown (Shift + J by default, or a click) : Race info,
+    Pit (first, where the pad starts), Tow to pits, Retire, one under the other ; a pick on the pad is a hold. Pit and Close (or
+    left held) are half a second (direct request : as quick as the menu's Confirm), Tow 2 s, Retire
+    5 s.
+  - **Race settings** (start menu, lobby, race editor and each phase) : start from the pits,
+    ghosting in the lane, required stops and the penalty for each missing one, refuelling and its
+    rate, repairs and their time, start fuel, tow to pits and its speed, back to the box after a
+    phase. **Server config** (Config > General > Pits) : the pit entry speed penalty and its
+    tolerance.
+  - **Plugin API** : `RacerPitEntry`, `RacerPitStop`, `RacerPitExit`, `RacerPitPenalty`,
+    `RacerPitTow`, `RacerPitReturned`. A stop's numbers in `RacerPitStop` are bounded, and say
+    refuel or repair only when the race allows them (they come from the racer's game) ;
+    `servedMs` is how long the server saw the car stand in its box. `RacerPitPenalty`'s reason
+    `stopShort` for a stop short of its work.
+  - **Plugin API, more for pits and tyres** (direct request : "do 1-4") :
+    - `races.list` races have `pits` (the lane's limit, the boxes) ; `races.sessions` sessions have
+      `pits` (open or closed, the phase's pit settings, the experimental tyre changes) and racers
+      `pitSlot`, `pitLaps`, `tyreSet` (the tyres last fitted, on which lap) and `tyreSets`.
+    - `tyres.setAvailable` : the sets one racer may fit (allocations, a compound used up). Their pit
+      menu offers Keep and those only ; the server keeps the tyres on a stop with any other.
+    - `pit.setLane` : a plugin closes the pit lane (a first lap, a safety car) ; going in then costs
+      its penalty (`RacerPitPenalty` reason `closed`), the racers are told and their HUD shows
+      PIT CLOSED.
+    - The README now lists the pit settings `race.open` and a phase's `rules` already took, and the
+      racers' `inPit` and `pitStops`.
+  - The same pit entry reported again no longer sends every racer an update (from the security
+    review : a modified game could repeat it).
+  - Start fuel at 100 % leaves the tank as the car's tuning set it.
+  - `/bjdamage` (hidden) shows the car's damage readings, for the repair-time tests.
+
+- **The whitelist has a file of its own** (direct request : "easier to edit via api") :
+  `BeamJoyData/db/whitelist.json` (`{"Enabled": ..., "PlayerNames": [...]}`), no longer inside
+  `config.json`. *(server only)*
+  - Names found in `config.json` are moved there on every start (on the first, or after a downgrade
+    to an older BeamJoy wrote some there) : added to the file's, the whitelist on if either was,
+    written to the new file before they leave the old one. While `whitelist.json` doesn't read as
+    JSON, `config.json` keeps them, they're the whitelist, and they move in once the file is fixed.
+  - Edited by hand while the server runs, it's picked up within 5 s, and again whenever a player
+    connects ; staff's whitelist panel follows. A file left broken is logged once and the whitelist
+    stays as it was ; a deleted file is written again.
+  - Names match in any case (BeamMP names are unique whatever their case).
+  - Plugin API : `whitelist.get`, `whitelist.add` / `whitelist.remove` `{names}`,
+    `whitelist.setEnabled` `{enabled}`, and a `WhitelistChanged` event (`by` a player, `console`,
+    `plugin:<name>` or `file`).
+- **Fix : `bj whitelist add` only took connected players** (direct report). It now adds the name as
+  typed, connected or not (a connected player's own spelling when it's theirs in another case).
+  `bj whitelist remove`'s usage line said `add`.
+- **Fix : guests got in with the whitelist on** (found while there) : the refusal was built but never
+  returned. *(server only)*
+
+- **Drift spots : the signs at the finish face the way the spot runs** (direct request) :
+  the 3rd and 4th signs added by the finish line now show their printed side along the spot, the
+  start's still face the cars coming. Signs already placed keep their angle (turn them with the
+  gizmo). *(client only)*
+
+- **Fix : the game's own drift spots showed no UI any more** (direct report : "at some point the
+  vanilla drift zones UI stopped working"). Since BeamNG 0.40 the game draws drift and drag scores,
+  tasks and flash messages inside two container apps of the UI layout ; its freeroam layout has
+  them, BeamMP's multiplayer layout doesn't, so a drift spot ran with nowhere to show. When the
+  game shows one of these and the layout in use lacks the containers, they're added to it once,
+  where the freeroam layout has them (also the game's drag strips and drift cruising). *(client
+  only)*
+
+- **Fix : another player's car showed a driver after they got out to walk** (direct report : "on
+  other players screen, your unicycle appears but the occupant still remains in the vehicle").
+  The game's seat figures are this game's own players only (BeamMP doesn't pass seats on), so the
+  figure in another player's car was the viewer's own, seated there by looking at that car
+  (spectating, switching to it). Other players' cars show no seat figures now. Also : a car without
+  the game's seat data no longer shows a figure in every seat after a ghost change. *(client only)*
+
+- **Experimental tyre changes in the pits (off by default)** (direct request : "add tire changes to
+  the pit menu as well", repairs and tyres apart, for tyre mods and plugins with tyre sets). Turned
+  on in Config > General > Pits, **Experimental tyre changes** ; off, every pit stop works as
+  above. *(server + client : update both)*
+  - **The pit menu's Tyres row** : Keep or a new set, its time (Tyre change time, 10 s by default,
+    a new race setting with Tyre changes on / off). Flat tyres are the Tyres row's, no longer part
+    of the repair's time. A wheel torn off is shown : only a repair puts it back.
+  - **New tyres keep the damage, a repair keeps the old tyres.** The game only fits new tyres or
+    repairs a car through a reset, which does both. The car's shape is now taken before the reset
+    and put back during it, all but the wheels (new tyres), or the wheels alone (a repair). It goes
+    back at the very start of the game's reset, before the doors', hood's and trunk's latches are
+    set, so they still close (direct report : they opened and never caught again when it went back
+    after). Each new wheel is turned to its bent axle's angle (direct report : moved only, its hub
+    tore off and the wheel fell off). The game's damage record (dents, breaks, flats) is written
+    again after the reset. New tyres and a repair together are a plain reset, as before.
+  - **The other players see it** (direct report : "the damage doesnt sync correctly after the
+    reset") : BeamMP only tells them the car reset (their copy turns pristine), never its dents.
+    The change goes out as a compact plan (about 18 KB for a crashed car) through the BeamJoy
+    server, and each copy is reset with it put back, within a few frames of BeamMP's own reset
+    (direct report : it lagged ; now 30 ms in tests). Held tight, since every other player gets it
+    (from the security review) : the server relays only while the switch is on, from a racer in
+    their race's pit lane (or a player who ran the test in the last 30 s), for their own car, up to
+    200 KB, once every 5 s. Every copy checks the plan against the car before using it : its own
+    nodes and beams, no node moved more than 5 m from where the copy has it, none made more than
+    twice as heavy (a modified game could otherwise send its car as a 30 m, 100 t spike into the
+    others' physics).
+  - **Plugin API** : `BJ.tyreOptions` / `tyres.register` : tyre sets ("Soft", "Hard", their own
+    time if they like) the Tyres row offers. BeamJoy never changes the car's parts : it fits fresh
+    tyres and passes the choice on, in `RacerPitStop` (`tyres`, `tyreOption`) and in hooks in the
+    racer's game (`onBJPitService`) and car (`onBJPitServiceStart` / `onBJPitServiceDone`), for a tyre
+    mod to apply its compound, or keep its wear through a repair alone.
+  - `/bjtyretest tyres|repair` (hidden, staff only, switch on only) : a tyre change or a repair on its own, your
+    car where it stands, with its damage measured before and after.
+  - Known : in 1 test run of 3 a tyre change counted about 60 more broken beams than the car had
+    (5.4 % damage read as 10.2 %), the others matched. Under watch while it's experimental.
+
+- **Fix : every boot warned about the bundled content files** (direct report : `File
+  "Resources/Server/BeamJoyData/db/bundled/utah_races.json" couldn't be accessed, so it was removed
+  from plugin hot reload monitor (probably got deleted)`, one line per file). The bundled mirror
+  emptied its folder and copied the same files straight back in, and BeamMP's own hot reload
+  monitor, which watches everything under `Resources/Server` (BeamJoyData included), caught them
+  mid-swap and stopped watching them. Each file is now written in place, and only when its bytes
+  differ ; one this version no longer ships is still removed. The folder ends up exactly as it did
+  before. *(server only)*
+
+- **A race can force a reset where the car stands** (direct request) : **Reset in place**, a new
+  respawn option beside Free respawn, No respawn, Last checkpoint, Flip upright and Last road.
+  Whatever a racer presses (a physics reset, a rewind, a reload, either recovery button), the game's
+  own reset runs on the spot instead : the car is rebuilt and repaired where it is, upright and
+  facing the way it was, so a crash costs its time but never sends anyone back to a checkpoint.
+  Flip upright, which only rights the car and keeps its damage, is unchanged. The race's reset
+  penalty applies as with the other forced options. Set in the editor's race defaults, the start
+  form, a lobby's settings and per phase. *(server + client : update both)*
+  - **Fix : a race's own default of Flip upright or Last road was lost in the editor.** It checked
+    the saved default against a list of three (never updated when those two were added) and put it
+    back to Last checkpoint the moment the race was opened for editing.
+
+- **Italian (2761)** (direct request : "can you make a script so I can add an italian translation too").
+  Client and server `it_IT.json`, machine-translated with `Tools/translate.py --add it_IT` (new : starts
+  a language's files and translates just it), then the mute wording, ordinals ("{n}°") and console
+  command arguments fixed by hand. BeamNG has no Italian of its own : players see it with an Italian
+  language pack mod (the game lists a mod's language folder), and a server's console with
+  `Console.Lang = "it_IT"`. Default Italian welcome message.
+  - `translate.py` keeps the words typed in console command arguments (`set|add|remove`, `true|false`,
+    a leading `time`) in English : Azure had translated them, so the hint showed commands that don't
+    exist.
+  - A BeamJoy language the game doesn't have is a debug line in the log, not a warning.
+
+- **Fix (2488, 2760) : no Join button on a running race open to join mid-race** (direct report).
+  The sessions list the games show was last sent at the countdown, when nobody could join yet, and
+  not again at the green light ; now it is. *(server)*
+- **The start form's Phases button sits right under the format list** (direct request), not after
+  the length settings. *(client)*
+
+- **Plugin API : running races and stewarding them (2487, 2759)** (direct request : "do everything
+  but 5 and 6", from the suggestions after race phases). See `BeamJoyServer/api/README.md`.
+  - **Racer keys** : every racer and result has a `racerKey`, theirs for the whole event (away,
+    back under a new player ID, every phase). Every method taking a racer's `playerId` takes a
+    `racerKey` instead ; grid orders, scores, field maps and hook answers take them with `by =
+    "racerKey"`. Points, resets and penalties a plugin keeps survive a disconnect.
+  - **Race control** : `race.penalize` (ms, taken off with a negative), `race.clearPenalties`,
+    `race.disqualify`, `race.reinstate`, while a phase runs, as staff watching can. On the HUD at
+    once, in the standings ; the racer told by "Race control" with the plugin's reason. Staff's
+    and plugins' actions both send the new `RaceControl` event.
+  - **A plugin's own lobbies** : `race.open` (a race of the current map, the start menu's options,
+    a name for the lists, `holdStart` : only when its time's up or the plugin says, `entrants` : an
+    entry list, invited, not listed), `race.startNow`, `race.close` (any session, with a reason).
+    No leader ; open while empty until its time runs out.
+  - **Finer events** : `RacerGate` (every gate : lap time so far, delta to their best, sectors
+    completed, place), `RacerReset` (every reset during a phase, with the race's own reset penalty),
+    `RacePositionsChanged` (the places that changed since the last update).
+  - **`raceJoin` hook** : a plugin may refuse a player joining a lobby or an event under way, with
+    a reason they see (entry lists, licences).
+  - **`hud.message`** to one player (`playerId`), or to a race's racers and / or spectators
+    (`sessionId`, `audience`), or one racer of it (`racerKey`).
+  - Example plugin `BJRaceDirector` : a lobby every half hour, penalties for resets past the free
+    ones, the new leader told on their HUD.
+  - The client reports every reset during a race (`raceReset`, was `raceResetPenalty` for the time
+    penalty only : still taken from older clients). *(server and client)*
+
+- **Fix (2755) : every seat showed an occupant** (reported : "vehicle presets sometimes fill every
+  slot with occupants"). The game hides an empty seat's occupant figure by making it fully
+  transparent, and BeamJoy's ghost look set the transparency of the whole car : every ghost
+  change (respawn protection, a race's countdown, a safe zone) and every switch between cars
+  showed a figure in every seat. The car's transparency now leaves the figures as the game has
+  them, an occupied seat's following the car's ghost look. *(client only)*
+
+- **Races with collisions off : the others look ghosted, not you (2755)** (direct request).
+  Nothing on track can touch you for the whole race, so your own car stays solid on your screen
+  and every other car is see-through, the way a solo race already looked. Only the look changes :
+  everyone else still sees your car see-through. *(client only)*
+
+- **Fix (2483, 2754) : Derby, Hunter and Infected didn't start on "GO" like races** (reported).
+  Their start was a server timer counting whole seconds (utils_async.delayTask), fired up to ~2 s
+  after the countdown the players saw, and each game's countdown began whenever the server's
+  message reached it. They now start the way races do : the server sets the start on the shared
+  clock (`goAtMs`, services_clockSync), every game counts down to it and lets go of its own car
+  the moment "GO" shows, and the server's tick follows. "GO" stays on screen for a second as the
+  car is let go, also at the end of a role's start delay (Hunter's hunters, Infected's
+  infected). A countdown message arriving after a game started on its own no longer re-runs the
+  countdown. Also fixed : Hunter's start-delay countdown (hunters held back while the fugitive
+  gets away) stood still instead of counting down. *(server + client : update both)*
+
+- **Race editor : drag start positions into order (2754)** (direct request). The Start positions
+  list has the same drag handles as the gates : the first is pole, so this is the grid's order.
+  A start position can be dropped first or last too. *(client only)*
+
+- **Fix (2754) : a number typed past a slider's maximum was lost** (reported : a race time of
+  86400 "broke the slider and defaulted to three laps"). The game's number box empties its value
+  past its own maximum, so the slider was left with none and the start menu sent no time at all
+  (the server then fell back to the race's laps). A typed value past the maximum is now brought
+  down to it (1440 minutes for a time limit) when you leave the box, and an empty box goes back
+  to the value it had. Every slider with a typed value. *(client only)*
+
+
+- **Fix (2752) : an error message stayed on screen until the game was restarted** (reported :
+  enabling an arena without 2 start positions). Error toasts were sent with no timeout, and the
+  game's toasts can't be clicked away. They now fade after 10 seconds (other toasts after 5 as
+  before), and a toast asked for with no time at all gets 5. This was every editor's "couldn't
+  save" message (arenas, safe zones, stations, bus lines, deliveries, dragstrips, drift
+  spots). *(client only)*
+
+- **Fix (2752) : the delivery HUD's buttons were squashed** (reported). With the HUD focused,
+  the "B to go back to driving" hint shared the buttons' row instead of taking its own line, and
+  crushed Hold to abandon into a sliver. *(client only)*
+
+- **Turn a whole Derby arena with the Rotate tool (2747, 2752)** (direct request). In the Derby
+  arena editor, pick the Rotate tool with nothing selected : the gizmo sits on the arena's middle
+  (its zone's centre, otherwise the middle of its start positions), and turning it round the
+  vertical turns the whole arena : every start position with its facing, the zone's facing, and
+  every prop, lines, curbs and painted lines included. The game's gizmo reads a turn when it's let
+  go, so the arena follows then. With snapping on, each point and prop keeps its height above the
+  ground under it, and lines and props that follow the ground are laid on it again. It's an
+  ordinary unsaved edit until you save. A start position, the zone or a prop selected still turns
+  on its own. 2747's turn buttons (in the Hunter and Infected editors too) were taken out
+  (direct request). *(client only)*
+
+- **Deliveries can have no time limit (2482, 2747)** (direct request). Config > General >
+  Deliveries has a new "Jobs can run out of time" switch (`Deliveries.Timeouts`, on by default).
+  Off, a job no longer fails at twice its target time ; a slow delivery still scores less (the
+  time factor still bottoms out at half). Turning it off also spares jobs already running ; jobs
+  started while it was off keep no deadline if it's turned back on. *(server + client)*
+
+- **Fix (2747) : older vehicle presets refused the right car in races** (reported : "This race
+  requires <preset>"). A pool entry was matched only against the parts it captured when it was
+  added. Entries saved before that capture existed have none, and a game update that renames a
+  vehicle's parts makes the capture stale, so the right car never matched. When the capture
+  doesn't match, the entry's configuration is now checked as the game has it today : its `.pc`
+  file (or a shared build's own parts). Every slot the file sets that the car has must hold the
+  same part, plus the same tuning when the race doesn't allow tuning. Applies to lobbies and
+  freeroam runs alike. 2752 : the stock configurations still never matched (reported again : a
+  2.0.1 ETK I-Series preset). Their files write an empty slot "none" where the car has it "" ;
+  both now count as empty. The log now also says why a configuration file didn't match.
+  *(client only)*
+
+- **Race phases : events of practice, qualifying, races, heats, runs... (2481, 2746)** (direct
+  request). A race session is now an event of one or more phases, as many as the starter likes
+  (20 at most), each with its own start (together from the grid, one at a time, or open runs),
+  length (laps, a time limit, or both), ranking (race order, best lap, total time), grid (the
+  lobby's, an earlier phase's result or the event's standings, reversed or not), who races it (the
+  top n of an earlier result : knockouts, finals), rules (respawns, collisions, stall DNF, reset
+  penalty), break, and leaderboard toggle. The event's result is its last counted phase, or every
+  counted phase's time added up. A race started as before is one phase and behaves as it always
+  did.
+  - **Timed races** : the start menu's Length is laps, time, or both (whichever comes first), with
+    what happens when the time's up (the leader's lap, everyone's own lap, or stop at once). The
+    HUD counts the time down.
+  - **Formats** in the start menu : race, qualifying + race, practice + qualifying + race, sprint +
+    feature (reversed grid), time attack, knockout qualifying + race, two runs added up ; edited
+    freely in a phase editor (cmps/racePhases). A race can have its own length and phases (race
+    editor > Phases), the start menu's starting point.
+  - **Between phases** : a break with the phase's results (results window : a tab per phase and the
+    event), the next phase's countdown, the leader's "Next phase now". Cars taken away (out,
+    finished and watching) come back. Racers left out of a phase watch it.
+  - **Point-to-point tracks** : practice and qualifying are repeat runs, each from the first slot
+    on its own clock, until the time or the runs are up. "Time offset" starts every racer from the
+    first slot, a set interval apart, several on track at once (time trials, hill climbs).
+  - **One at a time (2483, 2754)** (direct request, the start that used to be called "One at a
+    time" is now "Time offset") : each racer does their whole phase alone, all their laps or runs
+    or their time limit, before the next is released from the first slot, in grid order. The
+    others wait frozen on their slot, the HUD saying how many are ahead. A time limit is each
+    one's own, counted from their start, and the HUD counts the one on track down ; "Leader's
+    lap" means nothing alone and becomes "Finish the lap". A late joiner queues at the back. The
+    one on track leaving ends their turn (their laps kept) instead of making everyone wait out
+    their reconnect time. API : start `"sequential"`.
+  - Fixes (2754) : the phase rules' dropdowns (respawn, collisions, stall DNF, reset penalty)
+    showed empty instead of "As the event" (reported). 2755 : the lobby's countdown to the next
+    phase stood still during a break (reported) ; it ticks every second like the lobby's own.
+  - **Flying starts (2484, 2756)** (direct request) : on a point-to-point track (a sprint), the
+    start menu and the race editor's defaults choose when each racer's time starts : as they're
+    released ("Standing start", as before) or as they cross the first checkpoint ("Flying start" :
+    up to speed by then). Every run is timed so in open runs, one at a time and time offsets too.
+    The HUD's lap clock waits at 0 for the line, and no sector ends on it. Circuits don't show
+    it : their laps already run line to line. Race default `flyingStart`.
+  - **Race control : +1 lap (2484, 2756)** (direct request) : a phase on laps gets "+1 lap" ("+1
+    run" on a point-to-point track) beside "+5 min" for a timed one, both when it has both. Not
+    once someone has finished the phase : the others would race more than they did. API :
+    `race.extendPhase {sessionId, laps}` (fewer with a negative, never under what anyone's done).
+  - **Saved formats (2756)** (direct request) : the start menu's Format list has Save (asks a name ;
+    the same name replaces, asked first) and Delete (asked first) for a format of your own. They
+    are yours, kept in your game's settings folder (`settings/beamjoy_raceFormats.json`), 50 at most.
+  - **Knockouts (2756)** (direct request) : the finish popup says the place you finished in (racing
+    others ; "so far" while others are still out there) and, when a later phase takes only the top
+    n of this one, whether that puts you through. When the phase ends, a popup gives the final
+    word : your place, through to the next phase or eliminated. The results tab draws a line under
+    the ones going through ("Top 10 through to Q2"), their places outlined green, the ones out red.
+  - A point-to-point track's phases (a sprint) start on one run, unless the format says otherwise
+    (direct request).
+  - **One at a time : the others watch (2485, 2757)** (direct request) : a new "Waiting their turn"
+    choice. "Watching" (the default) : one car on track, the others' cars put away while they watch
+    the one racing, and every racer starts from the first slot, the first one too, to be fair. Their
+    car comes back on that slot when their turn comes. "On their slots" : as before, everyone waits in
+    their car on their grid slot. Watchers follow whoever's on track.
+  - **Out lap (2485, 2757)** (direct request) : a circuit's start menu and the race editor's defaults
+    have an "Out lap" switch : an untimed lap from the grid first, each racer's time starting as they
+    cross the start/finish line at its end. Its laps and sectors count for nothing ; the HUD says
+    "Out lap" with its clock at 0. Every start of one's own (one at a time, a time offset, a mid-race
+    join) has one too. Race default `outLap`. A flying start's single run and an out lap's single lap
+    now show the time from the line on the HUD, not from the release.
+  - **Joining mid-race, findable (2485, 2757)** (reported : no way to join a race under way, the Now
+    tab only offered Spectate) : the start menu has "Players can join mid-race", the race's own (with
+    phases, it sets every phase's ; each still has its own in the phase editor). Off by default, as
+    before. Start option `lateJoin`.
+  - **Fix (2486) : a plugin's points stopped when a racer left** (found looking into points per
+    phase) : `phase.setScores` refused the whole call when one player ID in it wasn't in the race
+    any more, so after a racer left between heats (the BJRallycross example's case) nobody's points
+    updated, and the one who left could never be scored. Event scores now reach a racer who left
+    (or came back under a new ID) by the ID an earlier phase's result had them under, and an ID
+    that's no racer is left out (returned as `skipped`) instead of failing everyone's.
+    *(server only)*
+  - **Fix (2485) : collisions off in time offset starts** (reported : with the option unticked) : any
+    phase where racers start on their own (time offset, one at a time, open runs) had collisions
+    switched off whatever the start menu said. They follow the option (or the phase's own rule) now.
+  - **The results close when the break's over (2757)** (direct request) : the results opened for a
+    break between phases close as the next phase's countdown starts (not at all when the leader
+    starts it within their 3 s delay).
+  - **One at a time : "You're up next" (2758)** (direct request) : the racer whose turn comes next
+    gets a toast while the one before them is on track, once a phase. They're picked as the server
+    picks the next turn : the first in grid order of those still waiting, one away passed over.
+  - **Knockouts' wording (2757)** (direct request) : "Through to Q2" gave way to "In the top 10 so far"
+    while others race, and "Advancing : you made the top 10" at the phase's end, like "Eliminated : the
+    top 10 go through".
+  - **Joining mid-event** (per phase) : a player joining while a phase runs readies up and starts on
+    their own after a short countdown ; in a race their time counts from its green light.
+  - HUD : the phase's name, a timed phase's time left, standings by its ranking. Staff race control
+    : End phase (a red flag), +5 min.
+  - **Plugin API** : formats of a plugin's own (formats.register, BJ.formats, with locked settings
+    kept server-side), race.setPhases, race.endPhase / extendPhase / nextPhase, phases a plugin
+    starts itself (start = "plugin", race.startRacer / stopRacer), rankings and event results by a
+    plugin's scores (phase.setScores), the phaseResult hook (time penalties, racers out, an order of
+    its own), the gridOrder hook asked before every phase (with the earlier results, and `take` :
+    who races it), race options with a value per phase (where = "phase"), and the events
+    RacePhaseFinished, RacerStarted, RacerJoinedPhase. Race events carry the phase ; an event of
+    several phases has several green lights. New examples api/example/BJRallycross (heats for
+    points, a final) and api/example/BJShootout (a plugin-run, plugin-scored phase, the 107% rule).
+    README : a Phases section. *(server + client : update both)*
+
+- **Plugin API : labels on the race HUD (2480, 2745)** (direct request). A plugin's field marked
+  `hud` (results.setFields) shows beside the racer's name on BeamJoy's race HUD : every standings
+  row, your own, and the first one beside the cars either side. `hud = true` keeps it on the
+  result and leaderboard entry too ; `hud = "only"` is live information (a tyre, places gained)
+  never kept. Two per racer, each cut past ~6 characters' width, the name giving way first.
+  results.setFields takes several racers at once (`racers`), and label changes made within 100 ms
+  go out as one race update (each used to send the race's standings to everyone straight away).
+  Default-layout overlays' rows take the same labels (`fields`), so a plugin's own HUD standing in
+  for BeamJoy's can show them too. Players can turn them off (Settings > Menu). New example plugin
+  `api/example/BJHudLabels` : class and places gained, on BeamJoy's HUD or an extended one of its
+  own, picked in its config tab. *(server + client : update both)*
+- **Plugin API : the chequered flag and penalty tags in custom overlays (2479, 2744)** (direct
+  request). A cell of a custom overlay's `table` or `row` takes `flag = true` (the chequered flag
+  after its text) and `pen = "+5s"` (the red penalty tag), as the default layout's standings rows
+  have them, so a plugin's own standings table (class and tyre columns, say) can look like the race
+  HUD's. Plugin pages' tables and rows too. *(server + client : update both)*
+- **Fix : one player saving a vehicle preset crashed another player's BeamMP launcher (2478,
+  2743)** (direct report). Every game then downloads the new shared builds' photos (up to 200 KB
+  each), and the server sent them at a fixed ~400 KB/s whatever the player's connection could take.
+  BeamMP's server writes to a player's connection from more than one thread with no lock between
+  them : once that connection is full, one write goes out in pieces, another slips in between, and
+  the launcher reads a broken packet and quits (the same "Decompression failed" crash as the old
+  join bursts). The server now
+  sends at each player's own pace : their game acknowledges what it got, and no more than 64 KB is
+  ever on its way to one player. Big messages to everyone go through the same per-player pacing
+  (small ones still go at once), order is kept, and a game that stops acknowledging slows down
+  rather than stalls. *(server + client : update both)*
+
+- **A game's own big messages are paced too (2742).** A message from a game to the server went out
+  in all its parts at once, and a preset carrying its shared builds' photos can be a megabyte or
+  more. A game's messages now queue and leave at about 400 KB/s, as the server's do ; small ones
+  still go at once when nothing is waiting, and order is kept. *(client)*
+
+- **Fix : no traffic while alone on the server, and traffic stuck off until a restart (2741)**
+  (direct report : none spawned alone, changing the settings or turning traffic off and on did
+  nothing, and it only came once a second player joined). A game spawned its share only when the
+  server's traffic settings for it changed, and on joining that lands during the loading screen,
+  with no road or car to place one by. The search for a spot then never ended and held the traffic
+  lock, so every later change waited behind it. A car's search now gives up after 3 s, and every
+  5 s each game tops its own share back up : traffic and parked cars it should have and doesn't,
+  including ones deleted since. The "waiting for traffic" message shows only once a car has
+  somewhere to go. *(client)*
+
+- **Fix : console and chat commands couldn't find some players (2476)** (direct report : `bj group
+  <name>` said the player wasn't connected, listing them as connected). A name holding "-", "(",
+  "[", "%", "+", "*" or "?" was only found typed in its exact case, since the typed part was read
+  as a pattern. Names now match as plain text, in any case, and also by a guest's nickname; "bob"
+  picks Bob over Bobby when only one is called that, and `<name>` typed with the usage line's
+  brackets works. Every command taking a player name uses this (`bj group`/`setgroup`, kick, ban,
+  mute, `/pm`, `/setgroup`, ...). `/votemap` had the same fault with map names. And a
+  player keeps the exact name they connected under : on Windows, saved data written under another
+  capitalisation of it renamed them, and commands then found them but couldn't act on them. *(server)*
+
+- **Bundled race authors** (direct request) : the 95 bundled races credited to a guest account
+  (`guest1728877`, ...) are now credited to BeamNG, and four Utah races to yep : Canyon Loop,
+  Canyon Loop (reverse), Overlook to Information Center and Information Center to Overlook. No
+  race was renamed. Servers seeding these races from now on, and servers updating from before
+  2.0 (see the sync below), get the new authors. A server that ran 2.0.0 keeps the authors it
+  has. *(server)*
+
+- **One-time bundled race sync, now only for servers updating from before 2.0 (2475, 2477)**
+  (direct request) : 2475 removed the sync 2.0.0 ran ; 2477 brings it back for a server whose last
+  version was older than 2.0, so one updating straight from 1.10.x to a later build gets every
+  bundled race as BeamJoy ships it now, as it would have with 2.0.0. A server that ran 2.0.0 already
+  had its sync and a new server seeds the races as they ship, so neither is touched. It's decided
+  once, the first boot on 2477 or later : a server whose saved data has bundled races but none
+  synced is updating from before 2.0. Renamed bundled races still follow their `formerNames`, and
+  new ones are still seeded once. *(server)*
+
 ## [2.0.1] - 2026-10-23 - Derby arena turning, fixes
 
 Server build 2478, client build 2752.

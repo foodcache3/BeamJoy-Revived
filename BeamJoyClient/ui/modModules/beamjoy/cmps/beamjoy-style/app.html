@@ -290,6 +290,10 @@
     }
     .lbx-seg {
         display: inline-flex;
+        /* a translation whose labels are longer than English (Italian, German) used to push the
+           last buttons straight out of the group and across whatever sat beside it. They take a
+           second row now, which only happens when they wouldn't have fitted anyway */
+        flex-wrap: wrap;
         gap: 2px;
         padding: 2px;
         background: #282b33;

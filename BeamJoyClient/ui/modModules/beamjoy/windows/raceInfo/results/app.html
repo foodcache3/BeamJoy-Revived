@@ -26,6 +26,28 @@
         background: rgba(73, 182, 114, 0.16);
         color: #73eb9d;
     }
+    /* an event's phases : one tab each, and the event's standings */
+    bj-race-info-results .views {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.3em;
+        padding-bottom: 0.7em;
+    }
+    bj-race-info-results .views button {
+        min-height: 2em;
+        padding: 0 0.75em;
+        background: #282b33;
+        border: 0;
+        border-radius: 0.25em;
+        color: #c8cedc;
+        font-size: 0.82em;
+        cursor: pointer;
+    }
+    bj-race-info-results .views button.on {
+        background: rgba(255, 102, 0, 0.16);
+        box-shadow: inset 0 0 0 1px rgba(255, 102, 0, 0.6);
+        color: #fff;
+    }
     bj-race-info-results .ov {
         font-family: "Overpass", "Noto Sans", sans-serif;
         font-weight: 800;
@@ -155,6 +177,33 @@
     }
     bj-race-info-results button.cl.out {
         color: #979dad;
+    }
+    /* a knockout : who goes through (green), who's out (red), and the line between */
+    bj-race-info-results button.cl.adv .plate:not(.p1) {
+        box-shadow: inset 0 0 0 1px rgba(76, 175, 80, 0.75);
+    }
+    bj-race-info-results button.cl.elim .plate:not(.dsq) {
+        background: rgba(214, 59, 59, 0.28);
+        box-shadow: inset 0 0 0 1px rgba(255, 110, 100, 0.55);
+    }
+    bj-race-info-results button.cl.elim .who b {
+        color: #f0a39b;
+    }
+    bj-race-info-results .cutline {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        padding: 0.2em 0.6em;
+        font-size: 0.72em;
+        font-weight: 600;
+        color: #8fd48f;
+        white-space: nowrap;
+    }
+    bj-race-info-results .cutline::before,
+    bj-race-info-results .cutline::after {
+        content: "";
+        flex: 1 1 auto;
+        border-top: 2px dashed rgba(76, 175, 80, 0.6);
     }
     bj-race-info-results .who {
         display: flex;
@@ -424,6 +473,11 @@
 
 <p class="empty" ng-if="!$ctrl.active">{{'beamjoy.window.main.tabs.races.raceInfo.noActiveRace' | translate}}</p>
 
+<div class="views" role="tablist" ng-if="$ctrl.active && $ctrl.v.views.length > 0">
+    <button type="button" role="tab" ng-repeat="w in $ctrl.v.views track by w.id" ng-class="{on: $ctrl.view === w.id}"
+        aria-selected="{{$ctrl.view === w.id}}" ng-click="$ctrl.setView(w.id)">{{w.label}}</button>
+</div>
+
 <div class="chips" ng-if="$ctrl.active">
     <span class="chip" ng-repeat="c in $ctrl.v.chips track by $index" ng-class="{ok: c.cls === 'ok'}">{{c.text}}</span>
 </div>
@@ -445,7 +499,7 @@
             <span class="r">{{'beamjoy.raceInfo.bestLap' | translate}}</span>
         </div>
         <div class="scroll">
-            <button type="button" class="cl" ng-repeat="p in $ctrl.v.rows track by p.playerName" ng-class="p.rowCls"
+            <button type="button" class="cl" ng-repeat-start="p in $ctrl.v.rows track by p.playerName" ng-class="p.rowCls"
                 aria-pressed="{{p.selected}}" ng-click="$ctrl.selectPlayer(p.playerName)">
                 <span style="display: flex; justify-content: center"><span class="plate" ng-class="p.plateCls"><span>{{p.pos}}</span></span></span>
                 <span class="who"><b>{{p.name}}<bj-plugin-fields ng-if="p.fields" fields="p.fields"></bj-plugin-fields></b><small ng-if="p.car">{{p.car}}</small></span>
@@ -453,6 +507,7 @@
                 <span class="r">{{p.gap}}</span>
                 <span class="r" ng-class="p.bestCls">{{p.best}}</span>
             </button>
+            <div class="cutline" ng-repeat-end ng-if="p.cutAfter"><span>{{$ctrl.v.cut.label}}</span></div>
         </div>
     </div>
 

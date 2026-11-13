@@ -11,15 +11,63 @@ angular.module("beamjoy").component("bjMainRaces", {
         beamjoyConfirm,
         $scope,
         beamjoyNow,
-        beamjoyPluginUi
+        beamjoyPluginUi,
+        beamjoyRacePhases
     ) {
         const translate = $filter("translate");
-        this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint", "flipupright", "lastroad"];
+        this.RESPAWN_STRATEGIES = ["all", "norespawn", "lastcheckpoint", "inplace", "flipupright", "lastroad"];
         // what a reset costs : the car held for the penalty, or the penalty added to the race time
         this.RESET_PENALTY_MODES = ["hold", "time"];
         // mirrors races.lua's PLACEMENT_MODES: how grid slots get assigned at countdown time
         // ("deterministic" = lobby join order, "random" = shuffled, "manual" = host-assigned)
         this.PLACEMENT_MODES = ["deterministic", "random", "manual"];
+        // a race's length : laps, a time limit, or both (whichever comes first)
+        this.LENGTHS = ["laps", "time", "both"];
+        this.AFTER_TIMES = ["leader", "own", "stop"];
+        // an event's format (cmps/racePhases) : one race as always, or phases ; "custom" once edited
+        // built in, then the plugins' own (formats.register) for this kind of track ; "custom" once edited
+        const pluginFormat = (ref) => (beamjoyPluginUi.state.formats || []).find((f) => f.ref === ref);
+        // this player's own saved formats (direct request) : "saved:<id>", kept by the game
+        // (lua beamjoy/raceRunner.lua's saveFormat, in their settings folder)
+        this.savedFormats = [];
+        const savedFormat = (value) => {
+            const m = /^saved:(\d+)$/.exec(value || "");
+            return m ? this.savedFormats.find((f) => Number(f.id) === Number(m[1])) || null : null;
+        };
+        let formatRace = null;
+        const buildFormatOptions = (race) => {
+            formatRace = race;
+            const fitting = (beamjoyPluginUi.state.formats || []).filter((f) =>
+                f.track === "any" || !f.track || (f.track === "loop") === !!(race && race.loopable));
+            this.formatOptions = beamjoyRacePhases.FORMATS.map((f) => ({ value: f.id, label: `beamjoy.racePhases.formats.${f.id}` }))
+                .concat(fitting.map((f) => ({ value: f.ref, label: f.name })))
+                .concat(this.savedFormats.map((f) => ({ value: `saved:${f.id}`, label: f.name })))
+                .concat([{ value: "custom", label: "beamjoy.racePhases.formats.custom" }]);
+        };
+        buildFormatOptions(null);
+        // a format just saved : picked once the list comes back with it
+        let pendingSaveName = null;
+        $scope.$on("$destroy", $rootScope.$on("BJRaceSavedFormats", (_, list) => {
+            this.savedFormats = Array.isArray(list) ? list : [];
+            buildFormatOptions(formatRace);
+            const o = this.startOptions;
+            const saved = pendingSaveName !== null && this.savedFormats.find((f) => f.name === pendingSaveName);
+            pendingSaveName = null;
+            if (o && saved && Array.isArray(o.phaseList)) {
+                o.format = `saved:${saved.id}`;
+                formatAsPicked = sent(o.phaseList);
+            }
+        }));
+        beamjoyStore.send("BJRaceSavedFormatsRequest");
+        // a plugin's format picked : what it says of itself, and what it locks
+        this.formatInfo = () => {
+            const f = this.startOptions && pluginFormat(this.startOptions.format);
+            return f ? f.description || "" : "";
+        };
+        this.formatLocked = () => {
+            const f = this.startOptions && pluginFormat(this.startOptions.format);
+            return f ? f.locked || null : null;
+        };
         // mirrors raceGrid.lua's own trySubmitTime gate exactly (all three must be enabled for a
         // time to count at all). Used here only to decide whether to warn before starting, not to
         // enforce anything; the server remains the real source of truth for that. Slow-mo/pause
@@ -64,6 +112,48 @@ angular.module("beamjoy").component("bjMainRaces", {
         // passive races aren't listed here: there's no ambient/drive-up discovery built yet, so
         // there'd be nothing meaningful for a "Start" button on one to actually do
         this.races = [];
+        // the list as shown : this.races put through the search box and the sort below. Kept as a
+        // field rather than worked out in the template, so the repeat isn't rebuilding a list on
+        // every digest of a window that's often open with a race running behind it
+        this.shown = [];
+        this.search = "";
+        this.searchOpen = false;
+        // "name" A to Z, "newest" / "oldest" by when the race was made. There's no authored date
+        // on a race, but ids are hand-out-in-order (services/races.lua), so the id IS the order
+        // they were created in
+        this.SORTS = ["name", "newest", "oldest"];
+        this.sort = "name";
+        const applyList = () => {
+            const needle = (this.search || "").trim().toLowerCase();
+            const list = (this.races || []).filter(
+                (r) => !needle || (r.name || "").toLowerCase().includes(needle)
+            );
+            list.sort((a, b) =>
+                this.sort === "name"
+                    ? (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
+                    : this.sort === "oldest"
+                        ? (a.id || 0) - (b.id || 0)
+                        : (b.id || 0) - (a.id || 0)
+            );
+            this.shown = list;
+        };
+        this.refreshList = applyList;
+        this.toggleSearch = (event) => {
+            event.stopPropagation();
+            this.searchOpen = !this.searchOpen;
+            // closing it clears what it was filtering by : a hidden box still filtering the list
+            // reads as races having gone missing
+            if (!this.searchOpen && this.search) {
+                this.search = "";
+                applyList();
+            }
+        };
+        this.cycleSort = (event) => {
+            event.stopPropagation();
+            this.sort = this.SORTS[(this.SORTS.indexOf(this.sort) + 1) % this.SORTS.length];
+            applyList();
+        };
+        this.sortLabel = () => translate("beamjoy.window.main.tabs.races.sorts." + this.sort);
         // a race marker's "Open race" in the world (lua beamjoy/races.lua) : that race's start form
         const openPendingStart = () => {
             const pending = beamjoyStore.pendingActivityStart;
@@ -79,6 +169,7 @@ angular.module("beamjoy").component("bjMainRaces", {
         // request, leaving the copy on screen with nothing : it worked the first time only
         $scope.$on("$destroy", $rootScope.$on("BJEditorRaceList", (_, races) => {
             this.races = (races || []).filter((r) => r.mode === "grid");
+            applyList();
             openPendingStart();
         }));
         $scope.$on("$destroy", $rootScope.$on("BJOpenActivityStart", openPendingStart));
@@ -86,6 +177,7 @@ angular.module("beamjoy").component("bjMainRaces", {
         this.pluginStartSections = beamjoyPluginUi.state.startSections;
         $scope.$on("$destroy", $rootScope.$on("BJPluginUiChanged", () => {
             this.pluginStartSections = beamjoyPluginUi.state.startSections;
+            buildFormatOptions(this.races.find((r) => r.id === this.startingId));
         }));
         this.sessions = [];
         $rootScope.$on("BJRaceOpenSessions", (_, sessions) => {
@@ -125,6 +217,17 @@ angular.module("beamjoy").component("bjMainRaces", {
         this.allReady = false;
         $rootScope.$on("BJRaceSessionStatus", (_, status) => {
             this.status = status || null;
+            // an event of several phases : one chip each, the one under way marked (built once per
+            // push : a fresh array per digest never settles)
+            const phases = this.status && Array.isArray(this.status.phases) ? this.status.phases : [];
+            this.phaseChips = phases.length > 1
+                ? phases.map((p, i) => ({
+                    key: i,
+                    text: `${i + 1}. ${beamjoyRacePhases.phaseLabel(p, i)}`,
+                    now: i + 1 === this.status.phaseIndex && this.status.state !== "GRID",
+                    done: i + 1 < this.status.phaseIndex || (i + 1 === this.status.phaseIndex && this.status.state === "BREAK"),
+                }))
+                : [];
             if (!this.status) {
                 this.showPlayers = false;
                 this.showPaint = false;
@@ -226,11 +329,14 @@ angular.module("beamjoy").component("bjMainRaces", {
         // one) actually finishes: auto-surfaces the results instead of requiring a manual click.
         // Delayed a few seconds per direct request, since popping the panel open the INSTANT the
         // race ends collides visually with the "Finished!"/"DNF" popup that's also on screen right then.
+        let autoOpen = null;
         $rootScope.$on("BJRaceInfoAutoOpen", (_, data) => {
-            $timeout(() => {
+            autoOpen = $timeout(() => {
                 this.openRaceInfoPanel(data && data.raceName, "results");
             }, 3000);
         });
+        // the break's over before they showed (the leader started the next phase) : not at all
+        $rootScope.$on("BJRaceInfoAutoClose", () => $timeout.cancel(autoOpen));
         // real, confirmed bug: this used to show a hardcoded "not implemented yet" line
         // regardless of the actual session, a leftover from before vehicle restrictions existed
         // as a feature at all. Now reflects the CURRENT session's own effective restriction
@@ -246,7 +352,7 @@ angular.module("beamjoy").component("bjMainRaces", {
                 vehicleLine = translate("beamjoy.window.main.tabs.races.noVehicleRestrictions");
             }
             return [
-                `${translate("beamjoy.window.config.tabs.races.laps")}: ${this.status.laps || 1}`,
+                this.lengthChip(),
                 `${translate("beamjoy.window.config.tabs.races.respawnStrategy")}: ${translate(
                     "beamjoy.window.config.tabs.races.respawnStrategies." +
                         this.status.respawnStrategy
@@ -296,14 +402,31 @@ angular.module("beamjoy").component("bjMainRaces", {
         );
         this.openStart = (event, race) => {
             event.stopPropagation();
+            buildFormatOptions(race);
             this.startingId = race.id;
             this.editing = false;
             this.showAdvanced = false;
             // seed from the race's own saved defaults (host-configurable per the plan; these
             // are just the starting point, not fixed), not generic hardcoded values
             const d = race.defaults || {};
+            const hasTime = typeof d.timeLimitMin === "number";
+            const defaultPhases = Array.isArray(d.phases) && d.phases.length > 0;
             this.startOptions = {
                 laps: d.laps || 3,
+                // laps, time, or both : the race's own length to start from
+                lengthMode: hasTime ? (typeof d.laps === "number" ? "both" : "time") : "laps",
+                timeLimitMin: hasTime ? d.timeLimitMin : 10,
+                afterTime: d.afterTime || "leader",
+                // one race, or phases (the race's own, or a format picked here)
+                format: defaultPhases ? "custom" : "race",
+                // a point-to-point track : the time from the first checkpoint (a flying start)
+                flyingStart: d.flyingStart === true,
+                // a circuit : an untimed out lap first
+                outLap: d.outLap === true,
+                // open to join while under way (each phase's own, with phases : lateJoinSwitch)
+                lateJoin: d.lateJoin === true,
+                phaseList: defaultPhases ? beamjoyRacePhases.fromServer(d.phases) : null,
+                result: d.result === "sum" ? "sum" : "last",
                 respawnStrategy: d.respawnStrategy || "lastcheckpoint",
                 placementMode: this.PLACEMENT_MODES.includes(d.placementMode)
                     ? d.placementMode
@@ -322,6 +445,9 @@ angular.module("beamjoy").component("bjMainRaces", {
                 resetPenaltyEnabled: d.resetPenaltyEnabled === true,
                 resetPenaltySeconds: d.resetPenaltySeconds || 5,
                 resetPenaltyMode: d.resetPenaltyMode === "time" ? "time" : "hold",
+                // the reset speed limit : the tickbox, and the km/h it allows a reset below
+                resetSpeedLimitEnabled: d.resetSpeedLimitEnabled === true,
+                resetSpeedLimitKmh: d.resetSpeedLimitKmh || 20,
                 disableNodegrabber: d.disableNodegrabber !== false,
                 disableCameras: d.disableCameras !== false,
                 disableGravityChange: d.disableGravityChange !== false,
@@ -336,6 +462,16 @@ angular.module("beamjoy").component("bjMainRaces", {
                 ghostOnCountdown: d.ghostOnCountdown !== false,
                 disableCollisions: d.disableCollisions === true,
                 ghostBackmarkers: d.ghostBackmarkers === true,
+                // qualifying on an empty track : every other racer's car hidden, own car ghosted
+                hideOthers: d.hideOthers === true,
+                // the start sequence : a counted countdown, or the five-light gantry (a jump
+                // start then costs jumpStartPenaltyS seconds)
+                startLights: d.startLights === true,
+                jumpStartPenaltyS: d.jumpStartPenaltyS ?? 5,
+                // released in waves, for a race run without phases of its own : 0 is everyone
+                // together, as always. With phases, each phase's own start says this instead
+                groupSize: d.groupSize ?? 0,
+                groupIntervalS: d.intervalS ?? 10,
                 showGateNametags: d.showGateNametags === true,
                 limitVisibleGates: d.limitVisibleGates !== false,
                 visibleGateCount: d.visibleGateCount || 2,
@@ -346,8 +482,27 @@ angular.module("beamjoy").component("bjMainRaces", {
                 allowTuning: d.allowTuning !== false,
                 // server plugins' own options : the race's values to start from
                 plugins: angular.copy(d.plugins && typeof d.plugins === "object" ? d.plugins : {}),
+                // the pits (a race whose pits are usable : race.pits) : the race's, else the server's
+                // defaults (services/races.lua PIT_SETTINGS)
+                pitStart: d.pitStart === true,
+                pitGhost: d.pitGhost !== false,
+                pitStops: d.pitStops ?? 0,
+                pitMissingPenaltyS: d.pitMissingPenaltyS ?? 30,
+                pitRefuel: d.pitRefuel !== false,
+                pitRepair: d.pitRepair !== false,
+                pitFuelRatePct: d.pitFuelRatePct ?? 5,
+                pitRepairMaxS: d.pitRepairMaxS ?? 60,
+                pitTyres: d.pitTyres !== false,
+                pitTyreChangeS: d.pitTyreChangeS ?? 10,
+                startFuelPct: d.startFuelPct ?? 100,
+                pitTow: d.pitTow !== false,
+                pitTowSpeed: d.pitTowSpeed ?? 50,
+                pitReturn: d.pitReturn === true,
             };
         };
+
+        // the tyre settings show only while the server's experimental tyre changes are on
+        this.experimentalTyres = () => beamjoyStore.raceSettings.experimentalTyres === true;
 
         // per direct request: hovering the pool count (browse list and start-options panel
         // alike) shows every allowed vehicle, not just the bare number. Resolved through the
@@ -364,6 +519,139 @@ angular.module("beamjoy").component("bjMainRaces", {
         this.poolCount = (presetId) => {
             const preset = this.presetById(presetId);
             return preset ? preset.entries.length : 0;
+        };
+
+        // joining while under way (direct request : it couldn't be found) : the race's own switch, or
+        // with phases every phase's at once (each keeps its own in the phase editor). Read and set
+        // through bj-toggle's two-way binding
+        const lateJoinSwitch = {};
+        Object.defineProperty(lateJoinSwitch, "on", {
+            get: () => {
+                const o = this.startOptions;
+                if (!o) return false;
+                if (Array.isArray(o.phaseList) && o.phaseList.length > 0) return o.phaseList.every((p) => p.lateJoin === true);
+                return o.lateJoin === true;
+            },
+            set: (v) => {
+                const o = this.startOptions;
+                if (!o) return;
+                o.lateJoin = v === true;
+                (o.phaseList || []).forEach((p) => (p.lateJoin = v === true));
+            },
+        });
+        this.lateJoinSwitch = lateJoinSwitch;
+
+        // FORMAT : one race (laps / time as below), or a format's phases, edited freely
+        this.setFormat = (race, id) => {
+            const o = this.startOptions;
+            o.format = id;
+            const fromPlugin = pluginFormat(id);
+            if (id === "race") o.phaseList = null;
+            else if (fromPlugin) {
+                // a plugin's : its phases as it describes them (the server keeps what it locks)
+                o.phaseList = beamjoyRacePhases.fromServer(fromPlugin.phases);
+                o.result = fromPlugin.result || "last";
+                formatAsPicked = null;
+            } else if (savedFormat(id)) {
+                // one of this player's own
+                const saved = savedFormat(id);
+                o.phaseList = beamjoyRacePhases.fromServer(saved.phases);
+                o.result = saved.result === "sum" ? "sum" : "last";
+                formatAsPicked = sent(o.phaseList);
+            } else if (id !== "custom") {
+                o.phaseList = beamjoyRacePhases.formatPhases(id, race.loopable, o.laps);
+                o.result = beamjoyRacePhases.formatResult(id);
+                formatAsPicked = sent(o.phaseList);
+            }
+        };
+        // "Phases" : today's single race as the first phase of a list to edit
+        this.editPhases = (race) => {
+            const o = this.startOptions;
+            o.phaseList = [beamjoyRacePhases.newPhase({
+                lengthMode: race.loopable ? o.lengthMode : "laps",
+                // a point-to-point track (a sprint) : one run
+                laps: race.loopable ? o.laps : 1,
+                timeLimitMin: o.timeLimitMin,
+                afterTime: o.afterTime,
+                lateJoin: o.lateJoin === true,
+            })];
+            o.format = "custom";
+        };
+        // SAVE / DELETE a format of your own (direct request) : these phases under a name, picked
+        // again from the list ; the same name replaces it (asked first)
+        this.canSaveFormat = () => {
+            const o = this.startOptions;
+            return !!o && Array.isArray(o.phaseList) && o.phaseList.length > 0 && !pluginFormat(o.format);
+        };
+        this.isSavedFormat = () => !!this.startOptions && !!savedFormat(this.startOptions.format);
+        this.saveFormat = (event) => {
+            event.stopPropagation();
+            if (!this.canSaveFormat()) return;
+            const o = this.startOptions;
+            const current = savedFormat(o.format);
+            beamjoyConfirm.askForInput(
+                translate("beamjoy.racePhases.saveFormat.prompt"),
+                current ? current.name : "",
+                translate("beamjoy.racePhases.saveFormat.placeholder"),
+                (name) => {
+                    const doSave = () => {
+                        pendingSaveName = name;
+                        beamjoyStore.send("BJRaceFormatSave", [name, beamjoyRacePhases.toServer(o.phaseList), o.result || "last"]);
+                    };
+                    const clash = this.savedFormats.find((f) => f.name === name);
+                    if (clash && (!current || clash.id !== current.id)) {
+                        beamjoyConfirm.ask(translate("beamjoy.racePhases.saveFormat.replace").replace("{name}", name), doSave);
+                    } else doSave();
+                },
+                null,
+                48
+            );
+        };
+        this.deleteFormat = (event) => {
+            event.stopPropagation();
+            const saved = this.startOptions && savedFormat(this.startOptions.format);
+            if (!saved) return;
+            beamjoyConfirm.ask(translate("beamjoy.racePhases.deleteFormat.confirm").replace("{name}", saved.name), () => {
+                beamjoyStore.send("BJRaceFormatDelete", [saved.id]);
+                // its phases stay as they are, a format of no name
+                if (this.startOptions && this.startOptions.format === `saved:${saved.id}`) this.startOptions.format = "custom";
+            });
+        };
+        // the phases edited : a format no more (compared as sent, the editor's own fields aside)
+        const sent = (list) => angular.toJson(beamjoyRacePhases.toServer(list || []));
+        let formatAsPicked = null;
+        $scope.$watch(
+            () => this.startOptions && this.startOptions.phaseList && sent(this.startOptions.phaseList),
+            (now) => {
+                const o = this.startOptions;
+                // a plugin's format stays one : the server applies what it locks by its name
+                if (!o || !now || o.format === "custom" || o.format === "race" || pluginFormat(o.format)) return;
+                if (formatAsPicked === null) formatAsPicked = now;
+                else if (now !== formatAsPicked) o.format = "custom";
+            }
+        );
+        // what's sent : the phases as the server takes them, or one race's length (what's switched
+        // off left out). The form's own fields go too, so Change settings opens on them again
+        const outgoing = (race) => {
+            const o = angular.copy(this.startOptions);
+            if (Array.isArray(o.phaseList) && o.phaseList.length > 0) {
+                o.phases = beamjoyRacePhases.toServer(o.phaseList);
+            } else {
+                delete o.phases;
+                if (!race.loopable || o.lengthMode === "laps") delete o.timeLimitMin;
+                if (race.loopable && o.lengthMode === "time") delete o.laps;
+                // released in waves : the start kind of the server's own implicit single phase
+                // (services/racePhases.lua's fromStart). Everyone together (0) sends nothing of
+                // the sort, so a plain race start is exactly what it always was
+                if (Number(o.groupSize) >= 2) {
+                    o.start = "groups";
+                    o.intervalS = Number(o.groupIntervalS) || 10;
+                } else {
+                    delete o.start;
+                    delete o.groupSize;
+                }
+            }
+            return o;
         };
 
         this.formatDistance = (meters) => {
@@ -396,7 +684,7 @@ angular.module("beamjoy").component("bjMainRaces", {
             if (this.startBlocked()) return;
             const options = this.startOptions;
             const doSave = () => {
-                beamjoyStore.send("BJRaceUpdateSettings", [options]);
+                beamjoyStore.send("BJRaceUpdateSettings", [outgoing(race)]);
                 this.startingId = null;
                 this.startOptions = null;
             };
@@ -477,6 +765,10 @@ angular.module("beamjoy").component("bjMainRaces", {
         this.lobbyTimer = () => {
             const s = this.status;
             if (!s) return null;
+            // between two phases : the next one's countdown
+            if (s.state === "BREAK" && s.breakSecondsLeft != null) {
+                return timer("beamjoy.window.main.tabs.races.nextPhaseIn", this.formatSeconds(s.breakSecondsLeft));
+            }
             if (s.state === "COUNTDOWN" && this.countdownSeconds !== null) {
                 return timer("beamjoy.window.main.tabs.races.startingIn", `${this.countdownSeconds}`);
             }
@@ -487,6 +779,15 @@ angular.module("beamjoy").component("bjMainRaces", {
                 return timer("beamjoy.window.main.tabs.races.lobbyClosesIn", this.formatSeconds(s.gridTimeoutSecondsLeft));
             }
             return null;
+        };
+        // the race's length (the phase under way's) : "5 laps", "10 min", "10 min / 5 laps"
+        this.lengthChip = () => {
+            const s = this.status;
+            if (!s) return "";
+            const laps = `${translate("beamjoy.window.config.tabs.races.laps")}: ${s.laps || 1}`;
+            if (typeof s.timeLimitMin !== "number") return laps;
+            const time = translate("beamjoy.racePhases.minutesN").replace("{n}", s.timeLimitMin);
+            return typeof s.laps === "number" ? `${time} / ${laps}` : time;
         };
         this.vehicleChip = () => {
             const s = this.status;
@@ -559,7 +860,7 @@ angular.module("beamjoy").component("bjMainRaces", {
             event.stopPropagation();
             const options = this.startOptions;
             const doStart = () => {
-                beamjoyStore.send("BJRaceStart", [race.id, options]);
+                beamjoyStore.send("BJRaceStart", [race.id, outgoing(race)]);
                 this.startingId = null;
                 this.startOptions = null;
             };
@@ -624,6 +925,15 @@ angular.module("beamjoy").component("bjMainRaces", {
                     : r.finished ? "beamjoy.window.main.tabs.races.raceControl.finished"
                     : "beamjoy.window.main.tabs.races.raceControl.racing"
             );
+        // the phase under way : ends now (a red flag), 5 more minutes (a timed one), or one more lap
+        // or run (one on laps)
+        this.staffPhase = (event, action) => {
+            event.stopPropagation();
+            if (action === "endPhase") {
+                beamjoyConfirm.ask(translate("beamjoy.window.main.tabs.races.raceControl.confirmEndPhase"),
+                    () => beamjoyStore.send("BJRaceStaffPhase", [action]));
+            } else beamjoyStore.send("BJRaceStaffPhase", [action]);
+        };
         this.staffAction = (event, r, action, seconds) => {
             event.stopPropagation();
             beamjoyStore.send("BJRaceStaffAction", [r.playerID, action, seconds]);

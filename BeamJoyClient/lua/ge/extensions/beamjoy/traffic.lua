@@ -282,7 +282,8 @@ end
 ---@return vec3? pos, quat? rot
 local function getNewRandomSpawn(job)
     local mapNodes = map.getMap().nodes
-    if table.length(mapNodes) == 0 then return end
+    -- emptiness only, so next() rather than table.length (see the top-up tick in onSlowUpdate)
+    if next(mapNodes) == nil then return end
 
     -- every player's band (only the chosen origin used to get one : the check below then failed
     -- on the others' missing values)
@@ -467,7 +468,9 @@ local spawnLock = false
 ---@param amount? integer 1-N
 local function spawnNewTrafficVehicles(amount)
     if spawnLock then return end                             -- already spawning traffic
-    if table.length(map.getMap().nodes) == 0 then return end -- map has no routes
+    -- emptiness only, so next() rather than table.length : that walks every navgraph node with
+    -- pairs() just to answer a yes/no question
+    if next(map.getMap().nodes) == nil then return end -- map has no routes
 
     spawnLock = true
     amount = amount or 1
@@ -630,9 +633,14 @@ local function allBusStopZones()
     for _, line in ipairs(lines) do
         for _, stop in ipairs(line.stops or {}) do
             if stop.pos then
+                local stopRadius = tonumber(stop.radius) or 3
                 table.insert(zones, {
                     pos = vec3(stop.pos.x, stop.pos.y, stop.pos.z),
-                    radius = (tonumber(stop.radius) or 3) + BUS_STOP_PARKING_BUFFER,
+                    -- picking a spot: the stop plus a clearance buffer
+                    radius = stopRadius + BUS_STOP_PARKING_BUFFER,
+                    -- deleting a car already there: the stop itself, deliberately tighter (see
+                    -- insideAnyBusStopZone)
+                    blockingRadius = stopRadius,
                 })
             end
         end
@@ -640,12 +648,30 @@ local function allBusStopZones()
     return zones
 end
 
+--- Real bug, found in a profiler log (reported : "it would freeze briefly in the same spot and the
+--- lua usage would spike, and the camera ring hud would show") : the two sides of this test used to
+--- share one radius while measuring DIFFERENT points. Picking a spot tests the parking marker's own
+--- anchor (v.ps.pos), while pruning tests the spawned car's bounding-box centre, and a car is not
+--- centred on its marker. A spot whose anchor sat just outside a stop's zone could therefore place
+--- a car whose centre landed just inside it : the spot passed the filter, the car spawned, the
+--- next prune pass deleted it, and the top-up picked from the same small eligible set again. The
+--- log shows that cycle running once a second at one spot on East Coast USA, each turn costing a
+--- ~220 ms spawn stall and a camera reset (which is what put the camera ring back on screen).
+---
+--- So the two thresholds are deliberately not the same. A car is only deleted once its centre is
+--- inside the stop's OWN trigger radius - the thing actually reported as blocking buses - while
+--- picking still keeps the full buffer clear. That buffer is the hysteresis band: anything the
+--- filter accepts sits far enough out that the prune can never claim it back, so the two can no
+--- longer disagree about the same car.
 ---@param pos vec3
----@param zones {pos: vec3, radius: number}[]
+---@param zones {pos: vec3, radius: number, blockingRadius: number}[]
+---@param field? string the radius to test : "radius" (picking exclusion, the default) or
+---"blockingRadius" (the stop's own trigger radius, used when deleting)
 ---@return boolean
-local function insideAnyBusStopZone(pos, zones)
+local function insideAnyBusStopZone(pos, zones, field)
+    field = field or "radius"
     for _, z in ipairs(zones) do
-        if pos:distance(z.pos) <= z.radius then return true end
+        if pos:distance(z.pos) <= z[field] then return true end
     end
     return false
 end
@@ -820,7 +846,7 @@ local function prunedParkedVehiclesNearBusStops()
         local veh = be:getObjectByID(vid)
         if not veh then
             M.parkedVehs:remove(i) -- stale entry, already gone some other way
-        elseif insideAnyBusStopZone(vec3(be:getObjectOOBBCenterXYZ(vid)), zones) then
+        elseif insideAnyBusStopZone(vec3(be:getObjectOOBBCenterXYZ(vid)), zones, "blockingRadius") then
             M.parkedVehs:remove(i)
             beamjoy_vehicles.delete(vid)
             extensions.hook("onBJTrafficVehicleDeleted", vid)
@@ -1191,7 +1217,10 @@ local function onSlowUpdate()
     if now < nextTopUpMs then return end
     nextTopUpMs = now + TOP_UP_INTERVAL_MS
     if not M.data.enabled or spawnLock then return end
-    if table.length(map.getMap().nodes) == 0 then return end
+    -- emptiness only, so next() rather than table.length : that walks every navgraph node with
+    -- pairs() (thousands on a big map) to answer a yes/no question, and this runs every 5 s, which
+    -- showed up as a periodic GE Lua spike in the performance graph
+    if next(map.getMap().nodes) == nil then return end
 
     local missing = (M.data.amount or 0) - liveTrafficCount()
     if missing > 0 then spawnNewTrafficVehicles(missing) end

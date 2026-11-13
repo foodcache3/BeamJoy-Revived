@@ -158,6 +158,14 @@ local function registerVehicle(vid, callback)
         elseif not mpVeh.isLocal and veh.jbeam == M.WALKING then
             veh.playerUsable = false
         end
+        -- another player's car : no seat figures. The game only seats this game's own players, and
+        -- BeamMP doesn't pass seats on, so a figure in it was this player's own, seated by looking at
+        -- it (focusVehicle / BeamMP's switching is be:enterVehicle) ; reported : "when leaving a car
+        -- to enter walk mode, on other players screen, your unicycle appears but the occupant still
+        -- remains in the vehicle"
+        if not mpVeh.isLocal and gameplay_seatOccupants and gameplay_seatOccupants.setVehicleOccupantsEnabledOverride then
+            pcall(gameplay_seatOccupants.setVehicleOccupantsEnabledOverride, vid, false)
+        end
         M.vehicles[vid] = {
             vid = vid,
             serverVID = mpVeh.serverVehicleID,
@@ -184,7 +192,7 @@ local function registerVehicle(vid, callback)
         -- other already-tracked vehicle got when the reversal first turned on. Its own ghost
         -- flag never changes just because it spawned, so nothing else would ever apply this
         if M.soloGhostVisualReversed then
-            veh:setMeshAlpha(M.computeDisplayAlpha(vid, veh.ghost == "1"), "")
+            M.applyDisplayAlpha(veh)
         end
 
         -- consume any ghost broadcast that arrived for this vehicle before it finished syncing in
@@ -269,7 +277,22 @@ local function onVehicleSwitched(previousVID, newVID)
         -- recomputed on BOTH sides of the switch now, not just when v.veh.ghost == "1" : under
         -- M.soloGhostVisualReversed, a non-ghosted OTHER vehicle also needs to show translucent,
         -- so "is this vehicle itself ghosted" alone isn't enough to decide anymore either
-        v.veh:setMeshAlpha(M.computeDisplayAlpha(v.vid, v.veh.ghost == "1"), "")
+        M.applyDisplayAlpha(v.veh)
+    end
+    -- and the car being switched TO, which the previous side alone never covered. Under
+    -- M.soloGhostVisualReversed the solid one is whichever car this client is actually driving
+    -- (computeDisplayAlpha reads be:getPlayerVehicle(0) live), so a swap at the grid, a rejoin in
+    -- another car or spectating someone mid-race left the new one translucent and the whole field
+    -- translucent with it - exactly the "it's still me who looks ghosted" a collisions-off race
+    -- was reported to show. Its own ghost flag doesn't change just because the camera moved, so
+    -- nothing else was ever going to re-apply it
+    local newVeh = newVID ~= -1 and M.vehicles[newVID] or nil
+    if newVeh and newVeh.veh then M.applyDisplayAlpha(newVeh.veh) end
+    -- and once more a moment later, for the whole field at once : this hook comes from the engine,
+    -- and whether be:getPlayerVehicle(0) already answers the NEW car by the time it runs isn't
+    -- ours to rely on. Only under the reversal, where that answer is what decides the look
+    if M.soloGhostVisualReversed then
+        async.delayTask(function() M.reapplyDisplayAlpha() end, 50, "bjGhostVisualAfterSwitch")
     end
     if newVID ~= -1 then
         local timeout = GetCurrentTimeMillis() + 2000
@@ -297,8 +320,11 @@ local function onVehicleSwitched(previousVID, newVID)
             end
             -- same re-assert as the previousVID side above
             if v then
-                v.veh:setMeshAlpha(M.computeDisplayAlpha(v.vid, v.veh.ghost == "1"), "")
+                M.applyDisplayAlpha(v.veh)
             end
+            -- the game claims a seat for this player in the hook above ; by now that claim (and
+            -- the permission mode it fell back to) is in place to be checked
+            M.ensureOwnVehicleDriver()
         end)
     else
         beamjoy_communications.send("updateCurrentVehicle")
@@ -350,6 +376,10 @@ end
 -- GE side to know it needs re-sending ; re-sending it every tick self-heals from that instead.
 local function pushResetPreserveFlags(v)
     local fr = beamjoy_config.data.Freeroam or {}
+    -- a race with pits keeps it too, whatever the server's setting : the tanks are the pits' to fill
+    -- (beamjoy_racePits.keepsFuel)
+    local keep = fr.PreserveFuelOnReset == true or
+        (beamjoy_racePits ~= nil and beamjoy_racePits.keepsFuel() == true)
     v.veh:queueLuaCommand(string.var([[
 if not _bjResetPreserveInstalled then
     _bjResetPreserveInstalled = true
@@ -373,7 +403,14 @@ if not _bjResetPreserveInstalled then
     end
 end
 _bjPreserveFuelOnReset={1}
-]], { tostring(fr.PreserveFuelOnReset == true) }))
+]], { tostring(keep) }))
+end
+
+--- the reset-preserve flags sent now, not at the next tick (a race's countdown, before its first reset)
+local function refreshResetPreserveFlags()
+    M.vehicles:filter(function(v)
+        return v.isLocal and not v.isAi and v.isVehicle
+    end):forEach(pushResetPreserveFlags)
 end
 
 local function onVehicleDestroyed(vid)
@@ -381,6 +418,7 @@ local function onVehicleDestroyed(vid)
     -- is cleared by BeamMP itself now : BeamMP/BeamMP#974)
     M.vehicles[vid] = nil
     M.ghostReasons[vid] = nil
+    M.occupantMeshAlphas[vid] = nil
 end
 
 local lastShut = {}
@@ -418,6 +456,15 @@ local function onSlowUpdate()
             lastShut[v.vid] = nil
         end
     end)
+
+    -- a passenger presence in this player's own car takes their controls away with no way back
+    -- (see ensureOwnVehicleDriver) : checked here so it can never outlast a second, whichever of
+    -- the game's fallbacks produced it
+    M.ensureOwnVehicleDriver()
+
+    -- and the seat figures of that same car, against whatever outside this mod last wrote their
+    -- mesh alphas (see verifyOccupantMeshes)
+    M.verifyOccupantMeshes()
 end
 
 local lastCollisionsMode = nil
@@ -461,7 +508,7 @@ local function onServerTick(ctxt)
         lastCollisionsMode = collisionsMode
         if wasDisabled ~= isDisabled then
             M.vehicles:forEach(function(mpVeh)
-                mpVeh.veh:setMeshAlpha(M.computeDisplayAlpha(mpVeh.vid, mpVeh.veh.ghost == "1"), "")
+                M.applyDisplayAlpha(mpVeh.veh)
             end)
         end
     end
@@ -513,7 +560,13 @@ end
 
 local function onVehicleResetted(vid)
     local mpVeh = M.vehicles[vid]
-    if not mpVeh or not mpVeh.isLocal or mpVeh.isAi then return end
+    if not mpVeh then return end
+    -- a reset hands the car's meshes back at full alpha. Under the reversal (see
+    -- M.soloGhostVisualReversed) ANOTHER player's car has to go see-through again, and its own
+    -- ghost flag didn't change across the reset, so setGhost's early-return means nothing else
+    -- would ever re-apply it : the others would quietly turn solid one by one as they respawned
+    if M.soloGhostVisualReversed and mpVeh.veh then M.applyDisplayAlpha(mpVeh.veh) end
+    if not mpVeh.isLocal or mpVeh.isAi then return end
     if mpVeh.veh.froze then
         M.setFreeze(vid, false)
     end
@@ -541,9 +594,28 @@ end
 ---@param req RequestAuthorization
 ---@param model string
 ---@param config string?
+--- the two spawn permissions this hook asks about, answered at most once a frame.
+---
+--- The vehicle selector calls the hook once per GRID TILE (ui_vehicleSelector_general.passesFilters,
+--- wrapped in beamjoy/../vehicleSelector.lua) : 1572 tiles on a stock install, so one grid build or
+--- one keystroke in its search box used to run 3144 permission evaluations, and hasAllPermissions
+--- is not a lookup - each call reads the nickname, resolves the player's group, allocates a
+--- varargs Table plus a closure for :every(), and linear-scans that group's permission list. The
+--- profiler measured 23.6 ms of hook time in the single frame that builds the grid.
+---
+--- Both answers are the same for every tile, and neither can change within a frame, so they are
+--- read once and reused. The cache is keyed on the millisecond clock rather than held
+--- indefinitely, so a rank change still reaches the selector on its next rebuild ; the server
+--- enforces spawn permissions independently on the actual spawn either way.
+local permsCacheMs, cachedCanSpawnTrailers, cachedCanSpawnProps = -1, false, false
 local function onBJRequestCanSpawnVehicle(req, model, config)
-    local canSpawnTrailers = beamjoy_permissions.hasAllPermissions(nil, BJ_PERMISSIONS.SpawnTrailers)
-    local canSpawnProps = beamjoy_permissions.hasAllPermissions(nil, BJ_PERMISSIONS.SpawnProps)
+    local nowMs = GetCurrentTimeMillis()
+    if nowMs ~= permsCacheMs then
+        permsCacheMs = nowMs
+        cachedCanSpawnTrailers = beamjoy_permissions.hasAllPermissions(nil, BJ_PERMISSIONS.SpawnTrailers)
+        cachedCanSpawnProps = beamjoy_permissions.hasAllPermissions(nil, BJ_PERMISSIONS.SpawnProps)
+    end
+    local canSpawnTrailers, canSpawnProps = cachedCanSpawnTrailers, cachedCanSpawnProps
     if not M.allVehicleConfigs then
         M.getAllVehicleConfigs()
     end
@@ -609,11 +681,28 @@ end
 ---@return BJVehicle?
 local function getVehicle(vid, light)
     local v = M.vehicles[vid]
-    if M.vehicles[vid] and not light then
-        v.position, v.rotation = M.getVehiclePositionRotation(v.veh)
-        v.spectators = beamjoy_context.get().players
-            :filter(function(p) return p.currentVehicle == v.remoteVID end)
-            :map(function() return true end)
+    if v and not light then
+        -- position and rotation stay fresh vectors on purpose : callers keep hold of them
+        -- (derbyRunner's own stuck check holds a position from tick to tick as its anchor), so
+        -- writing them in place would quietly turn a snapshot into a live reference
+        v.position = M.writeVehiclePosition(v.veh, vec3())
+        v.rotation = v.veh:getDirectionVector()
+        -- the spectator set rebuilt inside the table this vehicle already carries. Filtering and
+        -- mapping the player list into two new ones instead (each with a metatable of its own,
+        -- each player run through a pcall'd closure twice) was the biggest per-frame allocator
+        -- left in the mod : nametags.lua asks for this, refreshed, for every car it draws
+        local specs = v.spectators
+        if type(specs) ~= "table" then
+            specs = Table()
+            v.spectators = specs
+        end
+        table.clear(specs)
+        local players = beamjoy_context.get().players
+        if type(players) == "table" then
+            for playerName, p in pairs(players) do
+                if p.currentVehicle == v.remoteVID then specs[playerName] = true end
+            end
+        end
     end
     return v
 end
@@ -629,12 +718,35 @@ local function getVehicleByRemoteID(remoteVID, withPosition)
     end
 end
 
+--- getVehiclePositionRotation's position alone, written into a vector the caller already has
+--- instead of returning fresh ones. For a caller that asks every rendered frame and keeps no
+--- reference to the answer (raceRunner.lua's own gate-crossing test), where the five vectors the
+--- expression below builds were pure per-frame garbage.
+---@param veh NGVehicle
+---@param out vec3 written in place
+---@param up vec3? the vehicle's up vector, when the caller already has it
+---@return vec3 out
+local function writeVehiclePosition(veh, out, up)
+    local ux, uy, uz
+    if up then
+        ux, uy, uz = up.x, up.y, up.z
+    else
+        -- three numbers, not a vector : a caller that asks every frame shouldn't be handed one
+        -- more throwaway vec3 just to read its three fields and drop it again
+        ux, uy, uz = veh:getDirectionVectorUpXYZ()
+    end
+    local half = veh:getInitialHeight() / 2
+    local x, y, z = be:getObjectOOBBCenterXYZ(veh:getID())
+    out:set(x - ux * half, y - uy * half, z - uz * half)
+    return out
+end
+
 ---@param veh NGVehicle
 ---@return vec3 pos, vec3 dir, vec3 up
 local function getVehiclePositionRotation(veh)
-    return vec3(be:getObjectOOBBCenterXYZ(veh:getID())) -
-        veh:getDirectionVectorUp() * veh:getInitialHeight() / 2,
-        veh:getDirectionVector(), veh:getDirectionVectorUp()
+    -- one piece of math for both (see writeVehiclePosition), same vectors out as always
+    local up = veh:getDirectionVectorUp()
+    return writeVehiclePosition(veh, vec3(), up), veh:getDirectionVector(), up
 end
 
 ---@param veh NGVehicle
@@ -1079,6 +1191,78 @@ local function focusVehicle(vid)
     end
 end
 
+--- 0.40's seat occupants : what a player may do in the car they're in comes from their "presence"
+--- (the game's own gameplay/seatOccupants.lua) -- a seat claim plus a permission mode of "driver",
+--- "passenger" or "unrestricted". A passenger's driving inputs are masked out of the game's action
+--- maps altogether (syncDrivingForPlayer -> applyDrivingActionMapMask), their driver camera is
+--- hidden (syncPresenceCameras) and their figure sits in whichever seat was claimed.
+---
+--- Three of the game's own fallbacks land on "passenger", and all three were reported here ("I
+--- can't steer or anything using my wheel or keyboard controls", "my occupant was in the passenger
+--- seat for some reason", "not being able to switch to your own driver cam") :
+---   * an UNSEATED presence -- the car's seat data isn't readable yet (every activity here spawns a
+---     car and be:enterVehicle's it in the same tick), or the car has no occupant slots at all --
+---     takes vehiclePresencePolicy.defaultUnseatedMode, which is "unrestricted" ONLY in gamestate
+---     "freeroam". BeamMP sets the gamestate to "multiplayer" (MPCoreNetwork :
+---     core_gamestate.setGameState('multiplayer', 'beammp', 'multiplayer')), so in a BeamMP session
+---     every unseated presence is a PASSENGER instead.
+---   * a seat claim whose slot can't be read back (getSeatPermissionMode's own fallback) is a
+---     passenger too, even when the seat it claimed IS the driver's : the figure and the cameras
+---     look right and the controls are simply dead.
+---   * the driver's seat held by someone else -- a dummy occupant from the vehicle config's own
+---     Occupants page, a claim left over -- hands the player a passenger seat instead
+---     (selectAvailableSeat).
+--- None of them has a way back : the game only recomputes a presence when it changes, and
+--- re-entering the same car is a no-op (occupyPlayerVehicle returns early), so the car stays
+--- undrivable until it's replaced.
+---
+--- Nobody else can drive this player's car here : BeamMP never hands another player the controls
+--- and nothing in this mod seats an AI driver. A passenger mode in a car of this player's OWN is
+--- therefore only ever one of the fallbacks above, so it's put back to "unrestricted", and a
+--- passenger seat with the driver's seat free (or held by a dummy) is swapped for the driver's.
+--- Another player's car is never touched : riding along in one as a passenger is exactly right.
+local function ensureOwnVehicleDriver()
+    local seats = gameplay_seatOccupants
+    if not seats or not seats.getPlayerPresence or not seats.setPlayerPermissionMode then return end
+    local own = M.getCurrentOwn()
+    if not own or own.isAi or own.jbeam == M.WALKING then return end
+    local ok, presence = pcall(seats.getPlayerPresence, 0)
+    if not ok or type(presence) ~= "table" or presence.vehicleId ~= own.vid then return end
+    if presence.permissionMode ~= "passenger" then return end
+
+    -- this car's driver seat, when it has the game's seats at all and it's this player's to take
+    local driverSeatId, driverHeldByDummy
+    if seats.getSeats then
+        local okSeats, list = pcall(seats.getSeats, own.vid)
+        for _, seat in ipairs(okSeats and type(list) == "table" and list or {}) do
+            if seat.isDriver then
+                driverSeatId = seat.seatId
+                driverHeldByDummy = seat.occupied and seat.occupantType == "dummy" or false
+                if seat.occupied and not driverHeldByDummy and seat.player ~= 0 then
+                    driverSeatId = nil -- another local player's (split screen) : left as it is
+                end
+                break
+            end
+        end
+    end
+
+    if driverSeatId and presence.seatId ~= driverSeatId then
+        if driverHeldByDummy and seats.clearOccupied then
+            pcall(seats.clearOccupied, own.vid, driverSeatId)
+        end
+        if seats.requestEnterSeat then
+            pcall(seats.requestEnterSeat, own.vid, driverSeatId, 0)
+        end
+    end
+    -- after the seat, not before : taking a seat sets the mode from that seat's own slot, which is
+    -- the fallback this is here to undo. permissionOverride sticks with it, so a later claim in
+    -- this same car can't quietly go back to being a passenger either
+    pcall(seats.setPlayerPermissionMode, 0, "unrestricted")
+    LogDebug(string.format(
+        "beamjoy_vehicles : was a passenger in own vehicle %d (seat %s), driving restored",
+        own.vid, tostring(presence.seatId)))
+end
+
 ---@param jbeam string
 ---@return string
 local function getLabelByModel(jbeam)
@@ -1191,6 +1375,7 @@ M.ghostReasons = {}
 --- whole race), per direct request : a solo racer doesn't want to stare at their own half-
 --- invisible car for an entire race, and every OTHER vehicle nearby genuinely can't stop them
 --- (that's the whole point of the ghost), so flagging THOSE as the visually-odd ones reads better.
+--- Same for a race with collisions off, whatever its size (see setGhostReason's "noCollisionRace").
 --- Purely a local rendering choice. The real ghost/collision flag and its cross-client sync are
 --- completely unaffected ; every OTHER client still sees this player's own vehicle as the
 --- (correctly, per the real synced ghost flag) translucent one, exactly as before.
@@ -1200,12 +1385,23 @@ M.soloGhostVisualReversed = false
 ---@type integer?
 M.photoVID = nil
 
+--- cars a game mode hides from this client outright : not drawn at all, rather than the ghost's
+--- translucency (raceRunner.lua's hideOthers, a qualifying phase on an empty track). A rule, not
+--- a look, so it beats every visual exemption in computeDisplayAlpha below, Settings > Visual's
+--- "disable ghost transparency" included. Nothing here touches collisions : the mode that hides a
+--- car is responsible for ghosting whoever can't see it
+---@type table<integer, true>
+M.hiddenVids = {}
+
 ---@param vid integer
 ---@param isGhosted boolean the vehicle's own real ghost/collision state, as already known by the
 ---caller (M.ghostReasons only ever tracks reasons for locally-owned vehicles, never a remote
 ---vehicle's ghost state, so this can't just be re-derived from it in general)
 ---@return number
 local function computeDisplayAlpha(vid, isGhosted)
+    -- hidden by a game mode (M.hiddenVids) : first, and with no exemption of its own. Every case
+    -- below is about how a ghost should LOOK ; this one is the mode saying the car isn't there
+    if M.hiddenVids[vid] then return 0 end
     -- Settings > Visual > Disable ghost transparency : everything solid, only the look changes
     if beamjoy_markerSettings and beamjoy_markerSettings.opaqueGhosts then return 1 end
     -- a car having its build photo taken : solid for the shot (see setPhotoSubject)
@@ -1233,6 +1429,117 @@ local function computeDisplayAlpha(vid, isGhosted)
     return isGhosted and 0.5 or 1
 end
 
+-- the game's seat occupant figures (gameplay/seatOccupants.lua's setOccupantMeshes)
+local OCCUPANT_MESHES = { character_torso = true, character_head = true }
+
+--- vid -> occupant mesh name -> the alpha applyDisplayAlpha last gave it : what the figures in a
+--- car are SUPPOSED to look like, so a write by anything else can be noticed. Pruned by
+--- onVehicleDestroyed, which is why it lives on M (see verifyOccupantMeshes)
+---@type table<integer, table<string, number>>
+M.occupantMeshAlphas = {}
+
+--- sets a vehicle's transparency (computeDisplayAlpha), its seat occupants kept as the game has
+--- them. Real bug (reported : "vehicle presets sometimes fill every slot with occupants") :
+--- setMeshAlpha(alpha, "") reaches every mesh of the car, and the game hides an empty seat's
+--- occupant figure by its alpha (0), so every ghost change or vehicle switch showed a figure in
+--- every seat. The empty seats' figures are hidden again, the occupied ones follow the car's alpha ;
+--- a car without the game's seats (no seat data, or not loaded yet) has every figure hidden, and
+--- another player's car never shows one (registerVehicle : the game only seats this game's players)
+---@param veh NGVehicle
+---@param isGhosted boolean? the vehicle's ghost state, its "ghost" field when omitted
+local function applyDisplayAlpha(veh, isGhosted)
+    if isGhosted == nil then isGhosted = veh.ghost == "1" end
+    local vid = veh:getID()
+    local alpha = computeDisplayAlpha(vid, isGhosted)
+    veh:setMeshAlpha(alpha, "")
+    -- the figures can't be managed at all, or this car's part data isn't readable yet : whatever
+    -- was expected of them is dropped rather than left to read as a drift forever
+    if not gameplay_seatOccupants or not core_vehicle_manager then
+        M.occupantMeshAlphas[vid] = nil
+        return
+    end
+    local vehData = core_vehicle_manager.getVehicleData(vid)
+    local vdata = vehData and vehData.vdata
+    if not vdata then
+        M.occupantMeshAlphas[vid] = nil
+        return
+    end
+    local mpVeh = M.vehicles[vid]
+    local figuresShown = settings.getValue("enableSeatOccupants", true) and not (mpVeh and mpVeh.isLocal == false)
+    -- occupant part path -> whether its figure shows ; any other occupant figure : hidden
+    local shown = {}
+    for _, seat in ipairs(gameplay_seatOccupants.getSeats(vid) or {}) do
+        if seat.partPath then shown[seat.partPath] = figuresShown and seat.occupied == true end
+    end
+    local written
+    local function apply(meshData)
+        if meshData.mesh and OCCUPANT_MESHES[meshData.originalMesh or meshData.mesh] then
+            local meshAlpha = shown[meshData.partPath] and alpha or 0
+            veh:setMeshAlpha(meshAlpha, meshData.mesh)
+            written = written or {}
+            written[meshData.mesh] = meshAlpha
+        end
+    end
+    for _, flexbody in pairs(vdata.flexbodies or {}) do apply(flexbody) end
+    for _, prop in pairs(vdata.props or {}) do apply(prop) end
+    M.occupantMeshAlphas[vid] = written
+end
+
+--- the figures in this player's own car, put back when something outside this mod has moved them.
+---
+--- Real bug, reported twice over ("vehicle presets sometimes fill every slot with occupants", then
+--- "when I spawn traffic, my vehicle fills with occupants") : an empty seat's figure is hidden by
+--- nothing but its mesh alpha (setOccupantMeshes), and the game has several places that write a
+--- blanket alpha over every mesh a car has, none of which puts the figures back afterwards - the
+--- game's own occupant pass (applyVehicle) only ever runs on a spawn, a reset, a switch or a seat
+--- change. Each of those writes therefore seats a person in every seat at once, and takes a
+--- ghost's transparency with it :
+---   * the traffic table, on both sides (gameplay/traffic/vehicle.lua's C:init, "force vehicle to
+---     be visible", and traffic.lua's removeTraffic). This player's own car is taken in : traffic's
+---     startup walks the scene for the player-driven cars (checkPlayer, "the player vehicle should
+---     ideally be included in the traffic table at all times"), and does it again on every switch
+---     and reset while traffic runs. Caught the instant it happens by the hooks below as well.
+---   * the in-place vehicle editor (core/vehicle/inplaceEdit.lua), which the game's own parts and
+---     preset UI drives : it hides every mesh to highlight a part, and leaving the mode ends on a
+---     flat setMeshAlpha(1, ''). No hook, and no way to know a player went in there.
+---   * the parts selector's x-ray fade (core/vehicle/partmgmt.lua's clearXrayState), and the
+---     police and vehicle-pooling fades, which do the same to any car they reach.
+---
+--- Rather than chase each one (the list isn't ours, and can grow with any game update), the figures
+--- are compared against what this mod last gave them and put back when they don't match. Only this
+--- player's own car : every writer above either reaches nothing else, or fires a hook that already
+--- covers it. One native read per occupant mesh of that one car per second, against the game's own
+--- alphas, so a drift can never outlast a second whatever caused it.
+local function verifyOccupantMeshes()
+    local own = be:getPlayerVehicle(0)
+    local expected = own and M.occupantMeshAlphas[own:getID()]
+    if not expected then return end
+    for mesh, meshAlpha in pairs(expected) do
+        local ok, actual = pcall(own.getMeshAlpha, own, mesh)
+        if ok and type(actual) == "number" and math.abs(actual - meshAlpha) > .01 then
+            applyDisplayAlpha(own)
+            return
+        end
+    end
+end
+
+--- the look of a car the game's traffic system just took into, or let go of, its traffic table :
+--- both sides of it write a blanket mesh alpha over the car, which is one of the writers
+--- verifyOccupantMeshes exists for (see its own doc for what that does to the seat figures and to
+--- a ghost). Unlike the others this one has a hook, and it fires straight AFTER the write, so the
+--- look is simply re-applied on the spot instead of waiting for the next check a second later.
+---
+--- Any car, not only this player's own : beamjoy_playerPursuit hands the traffic table other
+--- players' cars too. It may not be tracked yet (registerVehicle waits on BeamMP's own list, and a
+--- freshly spawned traffic car reaches the traffic table first), so the scene object is used when
+--- it isn't ; applyDisplayAlpha reads that car's ghost state off the object either way.
+---@param vid integer
+local function onTrafficVehicleAdded(vid)
+    local mpVeh = M.vehicles[vid]
+    local veh = mpVeh and mpVeh.veh or be:getObjectByID(vid)
+    if veh then applyDisplayAlpha(veh) end
+end
+
 ---@param state boolean
 local function setSoloGhostVisualReversed(state)
     if M.soloGhostVisualReversed == state then return end
@@ -1248,9 +1555,33 @@ end
 local function reapplyDisplayAlpha()
     M.vehicles:forEach(function(mpVeh)
         if mpVeh.veh then
-            mpVeh.veh:setMeshAlpha(computeDisplayAlpha(mpVeh.vid, mpVeh.veh.ghost == "1"), "")
+            applyDisplayAlpha(mpVeh.veh)
         end
     end)
+end
+
+--- hides a car from this client entirely, or shows it again (M.hiddenVids). Idempotent : the
+--- mode setting it can call this every tick without churning mesh alphas
+---@param vid integer
+---@param hidden boolean
+local function setHidden(vid, hidden)
+    hidden = hidden == true
+    if (M.hiddenVids[vid] == true) == hidden then return end
+    M.hiddenVids[vid] = hidden or nil
+    local mpVeh = M.vehicles[vid]
+    if mpVeh and mpVeh.veh then applyDisplayAlpha(mpVeh.veh) end
+end
+
+--- shows every car this client was hiding (a race ending, a leave). Safe to call when none are
+local function clearHidden()
+    if not next(M.hiddenVids) then return end
+    local vids = {}
+    for vid in pairs(M.hiddenVids) do table.insert(vids, vid) end
+    M.hiddenVids = {}
+    for _, vid in ipairs(vids) do
+        local mpVeh = M.vehicles[vid]
+        if mpVeh and mpVeh.veh then applyDisplayAlpha(mpVeh.veh) end
+    end
 end
 
 --- the car whose build photo is being taken (vehicleBuilds.takePhoto) : shown solid while it is,
@@ -1263,7 +1594,7 @@ local function setPhotoSubject(vid)
     local function apply(id)
         local veh = id and be:getObjectByID(id)
         if veh then
-            veh:setMeshAlpha(computeDisplayAlpha(id, veh.ghost == "1"), "")
+            applyDisplayAlpha(veh)
         end
     end
     if previous ~= vid then apply(previous) end
@@ -1291,9 +1622,14 @@ local function setGhostReason(vid, reason, active, force, checkGhostedBystanders
     -- COUNTDOWN grid-ghost is unaffected. Every "race"-reason call already always targets the
     -- local player's own vehicle (raceRunner.lua never calls this for anyone else's), but checked
     -- explicitly anyway rather than assumed.
-    if reason == "race" and mpVeh.isLocal then
+    -- A race with collisions off ("noCollisionRace") too, per direct request ("everyone else should
+    -- have the ghost effect applied rather than you on your own screen") : nothing on track can
+    -- touch you for the whole race, so it's the others that look ghosted, your own car solid
+    if (reason == "race" or reason == "noCollisionRace") and mpVeh.isLocal then
+        local reasons = M.ghostReasons[vid]
         local session = beamjoy_raceRunner and beamjoy_raceRunner.session
-        M.setSoloGhostVisualReversed(active and session ~= nil and #session.participants <= 1)
+        M.setSoloGhostVisualReversed(reasons.noCollisionRace == true or
+            (reasons.race == true and session ~= nil and #session.participants <= 1))
     end
 end
 
@@ -1419,7 +1755,7 @@ local function setGhost(veh, state, force, checkGhostedBystanders)
     -- gameplay/traffic/vehicle.lua, both already using it for exactly this kind of fade) sets a
     -- vehicle's actual mesh transparency directly, unconditionally, regardless of any parts-
     -- selection state. The reliable primitive this should have used from the start.
-    veh:setMeshAlpha(M.computeDisplayAlpha(veh:getID(), state), "")
+    M.applyDisplayAlpha(veh, state)
     if mpVeh and mpVeh.isLocal then
         -- remoteVID, not vid. See the "updateVehicleGhost" handler's own comment above (onInit)
         -- for why vid alone doesn't identify this vehicle correctly on any OTHER client
@@ -1595,6 +1931,27 @@ local function serverKey(mpVeh)
     return string.format("%s-%s", tostring(mpVeh.ownerID), vid)
 end
 
+--- the vehicle a player is driving : the one whose remoteVID they reported AND which is actually
+--- theirs.
+---
+--- Real bug, found while working out why a staff teleport sometimes did nothing. remoteVID alone
+--- isn't an identity - it's the car's id in its OWNER's game, and two games loading the same map
+--- hand out nearly the same ids, so another player's car often shares its number with one of yours
+--- (serverKey's own note just above says exactly this). Every caller used to match on it alone and
+--- take the first hit out of a pairs() walk, so the answer could be an unrelated car - one of your
+--- own among them. A teleport then moved you to where you already were, which from the button is
+--- indistinguishable from it being ignored, and a spectate focused your own car instead of theirs.
+--- Pinning the owner as well can't do that : serverVID + ownerID is what serverKey itself is built
+--- out of
+---@param player table? an entry of beamjoy_players.players
+---@return BJVehicle?
+local function getPlayerCurrent(player)
+    if not player or player.currentVehicle == nil or player.playerID == nil then return nil end
+    return M.vehicles:find(function(v)
+        return v.remoteVID == player.currentVehicle and v.ownerID == player.playerID
+    end)
+end
+
 ---@param key string?
 ---@return BJVehicle?
 local function getByServerKey(key)
@@ -1655,12 +2012,16 @@ M.onServerTick = onServerTick
 M.onVehicleResetted = onVehicleResetted
 M.onBJRequestCanSpawnVehicle = onBJRequestCanSpawnVehicle
 M.onBJVehicleModChanged = onBJVehicleModChanged
+M.onTrafficVehicleAdded = onTrafficVehicleAdded
+-- removeTraffic's own setMeshAlpha(1, '') : the same wipe, on the way back out
+M.onTrafficVehicleRemoved = onTrafficVehicleAdded
 
 M.getVehicle = getVehicle
 M.getType = getType
 M.markVehicleAsAi = markVehicleAsAi
 M.getVehicleByRemoteID = getVehicleByRemoteID
 M.getVehiclePositionRotation = getVehiclePositionRotation
+M.writeVehiclePosition = writeVehiclePosition
 M.setVehiclePositionRotation = setVehiclePositionRotation
 M.getAllVehicleConfigs = getAllVehicleConfigs
 M.getAllVehicleLabels = getAllVehicleLabels
@@ -1671,6 +2032,7 @@ M.getCurrentConfigDisplayLabel = getCurrentConfigDisplayLabel
 M.getCurrentConfigIdentity = getCurrentConfigIdentity
 M.isConfigShareable = isConfigShareable
 M.getCurrent = getCurrent
+M.getPlayerCurrent = getPlayerCurrent
 M.getCurrentOwn = getCurrentOwn
 M.getCurrentModel = getCurrentModel
 M.delete = delete
@@ -1681,6 +2043,7 @@ M.setFreeze = setFreeze
 M.setEngine = setEngine
 M.setLights = setLights
 M.focusVehicle = focusVehicle
+M.ensureOwnVehicleDriver = ensureOwnVehicleDriver
 M.getLabelByModel = getLabelByModel
 M.waitForSpawn = waitForSpawn
 M.updateVehAttribute = updateVehAttribute
@@ -1689,8 +2052,13 @@ M.launch = launch
 M.switchToNextVehicle = switchToNextVehicle
 M.setGhost = setGhost
 M.setGhostReason = setGhostReason
+M.refreshResetPreserveFlags = refreshResetPreserveFlags
 M.applyRespawnProtection = applyRespawnProtection
 M.computeDisplayAlpha = computeDisplayAlpha
+M.applyDisplayAlpha = applyDisplayAlpha
+M.verifyOccupantMeshes = verifyOccupantMeshes
+M.setHidden = setHidden
+M.clearHidden = clearHidden
 M.setSoloGhostVisualReversed = setSoloGhostVisualReversed
 M.reapplyDisplayAlpha = reapplyDisplayAlpha
 M.setPhotoSubject = setPhotoSubject

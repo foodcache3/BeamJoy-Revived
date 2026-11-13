@@ -12,6 +12,8 @@ angular.module("beamjoy").component("bjConfigGeneralDeliveries", {
             OfferRotation: 5,
             HoldDuration: 3,
             LobbyDuration: 180,
+            // a job fails past twice its target time ; off, never
+            Timeouts: true,
         };
         this.init = false;
         this.default = {};
@@ -23,7 +25,8 @@ angular.module("beamjoy").component("bjConfigGeneralDeliveries", {
                 if (!this.init) return;
                 if (angular.equals(this.data, this.default)) return;
                 const payload = {};
-                Object.keys(DEFAULTS).forEach((k) => (payload[k] = Number(this.data[k])));
+                Object.keys(DEFAULTS).forEach((k) => (payload[k] = typeof DEFAULTS[k] === "boolean"
+                    ? this.data[k] === true : Number(this.data[k])));
                 // the server refuses a max below the min ; keep them ordered as you drag
                 if (payload.MaxRouteDistance < payload.MinRouteDistance) {
                     payload.MaxRouteDistance = payload.MinRouteDistance;

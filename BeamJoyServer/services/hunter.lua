@@ -3,6 +3,9 @@
 --- list layer this mode doesn't need). Owns only the STATIC config ; services/hunterGrid.lua owns
 --- live round instances, exactly mirroring the races.lua / raceGrid.lua split.
 
+---@alias BJHunterStationRoles "both"|"hunted"|"hunters"|"none" which side of a hunt a station
+---interaction is allowed for ; see BJHunterDefaults.stationRefuelRoles/stationRepairRoles
+
 ---@class BJHunterSpawn
 ---@field pos {x: number, y: number, z: number}
 ---@field dir {x: number, y: number, z: number} matches BJRaceGate.dir's convention (plain direction
@@ -53,6 +56,13 @@
 ---@field allowStations boolean? when true, freeroam energy stations and garages (BJS-placed AND
 ---the map's own gas stations) stay usable during a hunt. Default false : a hunt otherwise hides
 ---their markers and refuses refuel/repair
+---@field stationRefuelRoles BJHunterStationRoles? which role may refuel at a station once
+---`allowStations` is on. Default "both", exactly what that toggle did on its own
+---@field stationRepairRoles BJHunterStationRoles? which role may repair at a garage once
+---`allowStations` is on (direct request : a hunt where only the fugitive gets to patch itself up,
+---or only the hunters do, is a different game from one where both can). Default "both" - the same
+---behaviour `allowStations` had before this existed - and "none" leaves refuelling working while
+---refusing repairs outright
 ---@field huntedVehiclePresetId integer? optional BJVehiclePreset id restricting which vehicle the
 ---fugitive may spawn in (see services/vehiclePresets.lua) ; nil = free choice
 ---@field huntersVehiclePresetId integer? optional BJVehiclePreset id restricting hunter vehicles ;
@@ -128,6 +138,16 @@ local M = {
     data = nil,
 }
 
+--- one of the four station-role values, anything else (including nil, and anything a raw request
+--- invents) falling back to "both" : that's what `allowStations` on its own always meant, so an
+--- arena saved before these existed keeps behaving exactly as it did
+---@param value any
+---@return BJHunterStationRoles
+local function sanitizeStationRoles(value)
+    if value == "hunted" or value == "hunters" or value == "none" then return value end
+    return "both"
+end
+
 ---@param arena BJHunterArena
 ---@return string? error
 local function sanitizeArena(arena)
@@ -192,6 +212,8 @@ local function sanitizeArena(arena)
         math.round((tonumber(arena.defaults.huntedResetDistanceThreshold) or 150) / 10) * 10)
     arena.defaults.velocityGatedResets = arena.defaults.velocityGatedResets == true
     arena.defaults.allowStations = arena.defaults.allowStations == true
+    arena.defaults.stationRefuelRoles = sanitizeStationRoles(arena.defaults.stationRefuelRoles)
+    arena.defaults.stationRepairRoles = sanitizeStationRoles(arena.defaults.stationRepairRoles)
     if arena.defaults.huntedVehiclePresetId ~= nil then
         arena.defaults.huntedVehiclePresetId = tonumber(arena.defaults.huntedVehiclePresetId)
         if not arena.defaults.huntedVehiclePresetId or
@@ -552,5 +574,6 @@ M.hunterLegacyImportConfirm = hunterLegacyImportConfirm
 -- once already, see its own comment) either importer needs for a genuine facing (start/spawn
 -- positions), rather than risking a fresh re-derivation of the same fragile math a second time
 M.quatToFlatDir = quatToFlatDir
+M.sanitizeStationRoles = sanitizeStationRoles
 
 return M

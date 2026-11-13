@@ -22,6 +22,8 @@ await import(`/ui/modModules/beamjoy/directives/textareaAutoheight.js`);
 await import(`/ui/modModules/beamjoy/directives/fitText.js`);
 
 await import(`/ui/modModules/beamjoy/beamjoy-store.js`);
+// before the windows : every overlay's corner is applied from here as the UI comes up
+await import(`/ui/modModules/beamjoy/overlay-anchor.js`);
 
 await import(`/ui/modModules/beamjoy/cmps/beamjoy-style/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/icon/app.js`);
@@ -29,6 +31,7 @@ await import(`/ui/modModules/beamjoy/cmps/toggle/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/slider/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/select/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/pluginOptions/app.js`);
+await import(`/ui/modModules/beamjoy/cmps/racePhases/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/pluginPage/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/colorPicker/app.js`);
 await import(`/ui/modModules/beamjoy/cmps/window/app.js`);
@@ -50,6 +53,8 @@ await import(`/ui/modModules/beamjoy/windows/hud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/main/app.js`);
 await import(`/ui/modModules/beamjoy/windows/config/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceCountdown/app.js`);
+// the pit menu first : its formatter (beamjoyPitFormat) is the race HUD's too
+await import(`/ui/modModules/beamjoy/windows/pitControl/app.js`);
 await import(`/ui/modModules/beamjoy/windows/raceHud/app.js`);
 await import(`/ui/modModules/beamjoy/windows/hunterCountdown/app.js`);
 await import(`/ui/modModules/beamjoy/windows/hunterHud/app.js`);
@@ -84,6 +89,31 @@ beamjoyModule.component("beamjoy", {
                 const wrapper = document.querySelector("beamjoy");
                 wrapper.style.position = "absolute";
                 wrapper.style.zIndex = 1;
+
+                // Text the layout had to cut off (text-overflow: ellipsis) gets a native tooltip
+                // of what it says in full : a name, a board's line, a column head. One delegated
+                // listener for the whole of BeamJoy's UI, measured on hover, so nothing is
+                // measured per digest or per frame. A title set deliberately elsewhere (the
+                // settings rows' own tooltips) is never touched ; ours is marked so it can be
+                // dropped again once the text fits, after a wider window or a shorter translation.
+                wrapper.addEventListener("mouseover", (ev) => {
+                    for (let el = ev.target; el && el !== wrapper; el = el.parentElement) {
+                        if (el.nodeType !== 1) continue;
+                        if (window.getComputedStyle(el).textOverflow !== "ellipsis") continue;
+                        const ours = el.getAttribute("data-bj-clipped") === "1";
+                        if (el.scrollWidth > el.clientWidth + 1) {
+                            const full = (el.textContent || "").trim();
+                            if (!full || (el.hasAttribute("title") && !ours)) continue;
+                            if (el.getAttribute("title") !== full) {
+                                el.setAttribute("title", full);
+                                el.setAttribute("data-bj-clipped", "1");
+                            }
+                        } else if (ours) {
+                            el.removeAttribute("title");
+                            el.removeAttribute("data-bj-clipped");
+                        }
+                    }
+                });
                 while (wrapper.firstChild) {
                     wrapper.removeChild(wrapper.firstChild);
                 }
@@ -99,6 +129,7 @@ beamjoyModule.component("beamjoy", {
                         <bj-config></bj-config>
                         <bj-race-countdown></bj-race-countdown>
                         <bj-race-hud></bj-race-hud>
+                        <bj-pit-control></bj-pit-control>
                         <bj-plugin-overlays></bj-plugin-overlays>
                         <bj-hunter-countdown></bj-hunter-countdown>
                         <bj-hunter-hud></bj-hunter-hud>

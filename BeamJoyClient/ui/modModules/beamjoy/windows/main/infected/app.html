@@ -93,9 +93,11 @@
                 <span class="bjr-muted">{{'beamjoy.window.main.tabs.races.openSlotDetail' | translate}}</span>
             </span>
             <span style="display: flex; align-items: center; gap: 0.3em" ng-if="!slot.open">
-                <button type="button" class="bjr-btn small ghost" ng-if="$ctrl.isStaff() && slot.player.role !== 'infected' && $ctrl.status.state !== 'GAME' && $ctrl.status.state !== 'FINISHED'"
-                    ng-click="$ctrl.forceInfected($event, slot.player)" title="{{'beamjoy.window.main.tabs.infected.forceInfected.tooltip' | translate}}">
-                    {{'beamjoy.window.main.tabs.infected.forceInfected.tooltip' | translate}}
+                <button type="button" class="bjr-btn small" ng-class="{ghost: !slot.player.forcedInfected}"
+                    ng-if="$ctrl.isStaff() && slot.player.role !== 'infected' && $ctrl.status.state !== 'GAME' && $ctrl.status.state !== 'FINISHED'"
+                    ng-click="$ctrl.forceInfected($event, slot.player)"
+                    title="{{(slot.player.forcedInfected ? 'beamjoy.window.main.tabs.infected.forceInfected.clear' : 'beamjoy.window.main.tabs.infected.forceInfected.tooltip') | translate}}">
+                    {{(slot.player.forcedInfected ? 'beamjoy.window.main.tabs.infected.forceInfected.marked' : 'beamjoy.window.main.tabs.infected.forceInfected.tooltip') | translate}}
                 </button>
                 <span class="bjr-chip" ng-if="$ctrl.status.state === 'LOBBY'"
                     ng-style="slot.ready ? {background: 'rgba(73, 182, 114, 0.16)', color: '#73eb9d'} : {}">

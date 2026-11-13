@@ -10,7 +10,8 @@ Each file is rewritten in en-US's order and layout ; keys en-US no longer has ar
 
 Placeholders ({name}, <map>), slash commands, file paths, HTML entities, line breaks and the names in
 KEEP are sent as "don't translate" and checked to come back intact ; a string that loses one stays
-English and is retried on the next run.
+English and is retried on the next run. In console command arguments (keys ending ".args") the words
+typed as they are (set|add|remove, true|false, a leading "time") are kept too.
 
 Setup : an Azure "Translator" resource on the F0 (free) pricing tier, then set
     AZURE_TRANSLATOR_KEY     (Keys and Endpoint : KEY 1)
@@ -22,6 +23,15 @@ Usage :
     python Tools/translate.py --only de_DE,fr_FR   just these languages
     python Tools/translate.py --group server     just the client or the server files
     python Tools/translate.py --check            check every file against en-US, send nothing
+    python Tools/translate.py --add it_IT        start a new language (client and server files) and translate it
+    python Tools/translate.py --add-missing      give every language in LANGS a file in both groups, then fill them
+    python Tools/translate.py --no-zip           leave Client/BJ.zip alone
+A new language needs its Azure code in LANGS first. --add creates its empty files, so all of it is due ;
+with --dry-run it only creates them and shows the size. --add-missing does the same for every language
+that a group has no file for yet : the server has historically shipped fewer languages than the client,
+and this is what brings the two level.
+Changed client locale files are re-added to Client/BJ.zip at the end, since that zip, not the folder, is
+what the game loads ; --no-zip skips it, and it is skipped anyway in a checkout that has no zip beside it.
 Progress is saved after every request : if it stops (quota, network), run it again to carry on.
 """
 import argparse, hashlib, html, json, os, re, sys, time, urllib.error, urllib.request
@@ -40,23 +50,42 @@ GROUPS = {
 # locale file -> Azure language code
 LANGS = {
     "de_DE": "de", "es_419": "es-MX", "es_ES": "es", "fr_FR": "fr", "ja_JP": "ja", "ko_KR": "ko",
-    "pl_PL": "pl", "pt_BR": "pt", "pt_PT": "pt-PT", "ru_RU": "ru", "zh_Hans": "zh-Hans", "zh_Hant": "zh-Hant",
+    "it_IT": "it", "pl_PL": "pl", "pt_BR": "pt", "pt_PT": "pt-PT", "ru_RU": "ru", "zh_Hans": "zh-Hans",
+    "zh_Hant": "zh-Hant",
 }
 
 # names never translated (whole words, case-sensitive)
 KEEP = ["BeamJoy Free", "BeamJoy", "BeamMP", "BeamNG.drive", "BeamNG", "BJI", "Discord"]
+
+# the deployed client package : a zip of Client/BJ's contents at the zip root. Editing a file under
+# Client/BJ/ changes nothing in game until it is re-added to this.
+ZIP_ROOT = ROOT / "Client/BJ"
+ZIP_PATH = ROOT / "Client/BJ.zip"
 
 ENDPOINT = "https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=en&textType=html&to="
 BATCH_ITEMS, BATCH_CHARS = 100, 9000
 
 PROTECT = re.compile("|".join([
     r"\{[^{}\s]*\}",                                      # {name} {1}
+    r"(?<!\S)[{}](?!\S)",                                 # a brace standing alone : "without { or }"
     r"<[A-Za-z_][\w ]*>",                                 # <player_name> <map>
     r"&[a-zA-Z]+;|&#\d+;",                                # &lt; written out for the reader
     r"https?://\S+",                                      # links
     r"(?<![^\s(])/[a-z]{2,}\b(?!/)",                      # /bjupdate /login
     r"[\w.<>-]*(?:/[\w.<>*-]+){2,}/?|[\w.<>-]+/[\w.<>-]+\.[a-z]{2,4}\b|[\w.-]+/(?=\s|$)",  # paths
 ] + [r"(?<!\w)" + re.escape(t) + r"(?!\w)" for t in KEEP]))
+# console command arguments : the keywords typed as they are, `a|b` choices and a leading word
+ARGS_PROTECT = re.compile(PROTECT.pattern + "|" + "|".join([
+    r"<[^<>]*>",                                          # <password...>
+    r"[\w.-]+(?=\s*\|)|(?<=\|)\s*[\w.-]+",              # set|add|remove, check | channel
+    r"^[a-z]+\b",                                         # time [dawn|noon] ; help
+]))
+
+
+def protect_for(key):
+    return ARGS_PROTECT if key and key.endswith(".args") else PROTECT
+
+
 LINE = re.compile(r'^(\s*)"((?:[^"\\]|\\.)*)"\s*:\s*"((?:[^"\\]|\\.)*)"(\s*,?)\s*$')
 SPAN = re.compile(r'<span[^>]*\bid="p(\d+)"[^>]*>.*?</span>', re.S)
 
@@ -95,6 +124,34 @@ def write(path, en_path, values):
     os.replace(tmp, path)
 
 
+def repack(paths):
+    """re-add the written locale files to Client/BJ.zip. Entries sit at the zip root, so a file at
+    Client/BJ/beamjoy_locales/de_DE.json is the entry "beamjoy_locales/de_DE.json". Done with zipfile
+    rather than 7z so the script needs nothing installed ; the archive is small enough to rewrite."""
+    if not ZIP_PATH.exists():
+        return
+    rels = {}
+    for p in paths:
+        try:
+            rels[p.relative_to(ZIP_ROOT).as_posix()] = p
+        except ValueError:
+            continue  # a repo-layout checkout keeps its locales elsewhere and has no zip
+    if not rels:
+        return
+    import zipfile
+    tmp = ZIP_PATH.with_suffix(".zip.tmp")
+    with zipfile.ZipFile(ZIP_PATH) as old, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as new:
+        for info in old.infolist():
+            if info.filename in rels:
+                continue
+            new.writestr(info, old.read(info.filename))
+        for name, path in sorted(rels.items()):
+            new.write(path, name)
+    os.replace(tmp, ZIP_PATH)
+    print("re-added %d locale file%s to %s" % (len(rels), "" if len(rels) == 1 else "s",
+                                               ZIP_PATH.relative_to(ROOT)))
+
+
 PLACEHOLDER = re.compile(r"\{[^{}\s]*\}")
 
 
@@ -103,14 +160,14 @@ def tokens_of(text):
     return sorted(PLACEHOLDER.findall(text)) + ["\n"] * text.count("\n")
 
 
-def needs_translation(text):
-    return re.search(r"[A-Za-z]", PROTECT.sub("", text)) is not None
+def needs_translation(text, key=None):
+    return re.search(r"[A-Za-z]", protect_for(key).sub("", text)) is not None
 
 
-def prepare(text):
+def prepare(text, key=None):
     """-> (html sent to Azure, protected tokens)"""
     parts, tokens, last = [], [], 0
-    for m in PROTECT.finditer(text):
+    for m in protect_for(key).finditer(text):
         parts.append(html.escape(text[last:m.start()], quote=False))
         parts.append('<span class="notranslate" id="p%d">%s</span>' % (len(tokens), html.escape(m.group(0), quote=False)))
         tokens.append(m.group(0))
@@ -210,7 +267,7 @@ def check(groups):
             missing = [k for k in en if k not in values]
             extra = [k for k in values if k not in en]
             broken = [k for k in en if k in values and tokens_of(values[k]) != tokens_of(en[k])]
-            english = [k for k in en if k in values and values[k] == en[k] and needs_translation(en[k])]
+            english = [k for k in en if k in values and values[k] == en[k] and needs_translation(en[k], k)]
             print("%-6s %-8s missing %4d  extra %3d  placeholders differ %3d  still English %4d" % (
                 group, stem, len(missing), len(extra), len(broken), len(english)))
             for k in broken[:5]:
@@ -225,18 +282,39 @@ def main():
     ap.add_argument("--check", action="store_true", help="compare every file with en-US, send nothing")
     ap.add_argument("--only", help="comma-separated locale files, e.g. de_DE,es_419")
     ap.add_argument("--group", choices=sorted(GROUPS), help="just the client or the server files")
+    ap.add_argument("--add", metavar="LOCALE", help="start a new language (e.g. it_IT) and translate just it")
+    ap.add_argument("--add-missing", action="store_true",
+                    help="give every language in LANGS a file in each group it's missing from, then fill them")
+    ap.add_argument("--no-zip", action="store_true", help="don't re-add the client locales to Client/BJ.zip")
     args = ap.parse_args()
 
     groups = [args.group] if args.group else [g for g in GROUPS if group_dir(g)]
     if args.check:
         sys.exit(1 if check(groups) else 0)
+    if args.add:
+        if args.add not in LANGS:
+            sys.exit("Add %s to LANGS first, with its Azure language code" % args.add)
+        for group in groups:
+            path = group_dir(group) / (args.add + ".json")
+            if not path.exists():
+                path.write_text("{}\n", encoding="utf-8", newline="\n")
+                print("created %s" % path.relative_to(ROOT))
+        args.only = args.add
+    if args.add_missing:
+        for group in groups:
+            d = group_dir(group)
+            for stem in LANGS:
+                path = d / (stem + ".json")
+                if not path.exists():
+                    path.write_text("{}\n", encoding="utf-8", newline="\n")
+                    print("created %s" % path.relative_to(ROOT))
     stems = args.only.split(",") if args.only else list(LANGS)
     for s in stems:
         if s not in LANGS:
             sys.exit("Unknown locale %s (known : %s)" % (s, ", ".join(LANGS)))
 
     state = json.loads(STATE_PATH.read_text(encoding="utf-8")) if STATE_PATH.exists() else {}
-    total_chars, failed = 0, 0
+    total_chars, failed, written = 0, 0, set()
     for group in groups:
         d = group_dir(group)
         en_path = d / "en-US.json"
@@ -252,10 +330,10 @@ def main():
                 fp = fingerprint(text)
                 if key in values and seen.get(key, fp) == fp:
                     seen[key] = fp  # translated, English unchanged
-                elif not needs_translation(text):
+                elif not needs_translation(text, key):
                     values[key], seen[key] = text, fp  # nothing to translate ("{1} / {2}", "")
                 else:
-                    due.append((key, prepare(text)[0]))
+                    due.append((key, prepare(text, key)[0]))
             # counted with the don't-translate markup, in case Azure bills it
             chars = sum(len(h) for _, h in due)
             total_chars += chars
@@ -263,12 +341,13 @@ def main():
             if args.dry_run or not due:
                 if not args.dry_run:
                     write(path, en_path, values)
+                    written.add(path)
                 continue
             done = 0
             for batch in batches(due):
                 results = call_azure(LANGS[stem], [h for _, h in batch])
                 for (key, _), translated in zip(batch, results):
-                    text = restore(translated, prepare(en[key])[1], en[key])
+                    text = restore(translated, prepare(en[key], key)[1], en[key])
                     if text is None:
                         failed += 1
                         print("    kept English (a placeholder got lost) : %s" % key)
@@ -279,11 +358,14 @@ def main():
                 STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
                 print("    %d / %d" % (done, len(due)))
             write(path, en_path, values)
+            written.add(path)
     if not args.dry_run:
         STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
     print("%s %d characters%s" % ("Would send" if args.dry_run else "Sent", total_chars,
                                    "" if args.dry_run else ", %d kept English (retried next run)" % failed))
     if not args.dry_run:
+        if not args.no_zip:
+            repack(written)
         check(groups)
 
 

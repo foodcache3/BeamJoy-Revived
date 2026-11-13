@@ -56,6 +56,10 @@
 ---@field huntedResetDistanceThreshold number
 ---@field velocityGatedResets boolean applies Infected's own always-on speed gate to every reset
 ---type, for both roles; see services/hunter.lua's own field doc
+---@field allowStations boolean whether stations/garages show and work at all during the hunt
+---@field stationRefuelRoles BJHunterStationRoles which role may refuel, once allowStations is on
+---@field stationRepairRoles BJHunterStationRoles which role may repair, once allowStations is on ;
+---the two are independent, so "hunters may refuel but nobody repairs" is a valid hunt
 ---@field huntedVehiclePresetId integer?
 ---@field huntedVehiclePool BJVehiclePresetEntry[]? resolved once from huntedVehiclePresetId at
 ---session-build time, same "snapshot at session start, never re-read the preset live again"
@@ -511,6 +515,13 @@ local function buildSettings(arena, overrides)
             defaults.velocityGatedResets) == true,
         allowStations = (overrides.allowStations ~= nil and overrides.allowStations or
             defaults.allowStations) == true,
+        -- who the open stations are actually open to, once allowStations lets them show at all :
+        -- sanitized the same way the arena's own defaults are, so an override from a raw request
+        -- can't invent a value hunterRunner.lua's gate wouldn't recognise
+        stationRefuelRoles = services_hunter.sanitizeStationRoles(overrides.stationRefuelRoles ~= nil and
+            overrides.stationRefuelRoles or defaults.stationRefuelRoles),
+        stationRepairRoles = services_hunter.sanitizeStationRoles(overrides.stationRepairRoles ~= nil and
+            overrides.stationRepairRoles or defaults.stationRepairRoles),
         huntedVehiclePresetId = huntedVehiclePresetId,
         huntedVehiclePool = huntedVehiclePool,
         huntedVehicleLabel = huntedVehicleLabel,
@@ -540,8 +551,13 @@ local function startCountdownTimer(session)
     if session.countdownTicking then return end
     session.countdownTicking = true
     utils_async.removeTask("BJHunterGrid-" .. session.id .. "-vehicleConfirm")
-    utils_async.delayTask(function() M.beginHunt(session.id) end,
-        session.settings.countdown, "BJHunterGrid-" .. session.id .. "-countdown")
+    -- the start on the shared clock, as races do (raceGrid.lua's goAtMs) : each game lets go of
+    -- its car at "GO" itself, and the server's tick follows. utils_async.delayTask's whole-second
+    -- clock started the hunt up to ~2s after the "GO" the players saw (reported)
+    session.goAtMs = services_clockSync.nowMs() + math.floor(session.settings.countdown * 1000)
+    utils_async.task(function()
+        return services_clockSync.nowMs() >= session.goAtMs
+    end, function() M.beginHunt(session.id) end, "BJHunterGrid-" .. session.id .. "-countdown")
 end
 
 --- fallback so one player stuck without a matching vehicle (mod not installed, alt-tabbed, etc.)
@@ -583,6 +599,7 @@ local function beginCountdown(session)
     assignRoles(session)
     assignSpawns(session)
     session.countdownTicking = false
+    session.goAtMs = nil
     session.participants:forEach(function(p) p.vehicleConfirmed = false end)
     utils_async.delayTask(function() M.onVehicleConfirmTimeout(session.id) end,
         session.settings.vehicleConfirmTimeout, "BJHunterGrid-" .. session.id .. "-vehicleConfirm")

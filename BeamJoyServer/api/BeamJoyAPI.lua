@@ -324,6 +324,8 @@ local readyFns = {}
 local hooks = {}    -- hook name -> {fn, timeoutMs}
 local hookEventRegistered = false
 local raceOptions = nil -- what BJ.raceOptions registered (again after BeamJoy restarts)
+local formats = nil     -- what BJ.formats registered (again after BeamJoy restarts)
+local tyreOptions = nil -- what BJ.tyreOptions registered (again after BeamJoy restarts)
 local configTab = nil   -- what BJ.configTab registered, and its callback
 local pages = {}        -- id -> what BJ.page registered (with BJ.updatePage's latest blocks)
 local pageOrder = {}    -- their ids, in the order they were first registered
@@ -358,6 +360,20 @@ local function registerRaceOptions()
     end)
 end
 
+local function registerFormats()
+    if not formats then return end
+    send("formats.register", { formats = formats }, function(ok, err)
+        if not ok then print("[BeamJoyAPI] couldn't add the formats : " .. tostring(err.message)) end
+    end)
+end
+
+local function registerTyreOptions()
+    if not tyreOptions then return end
+    send("tyres.register", { options = tyreOptions }, function(ok, err)
+        if not ok then print("[BeamJoyAPI] couldn't add the tyre options : " .. tostring(err.message)) end
+    end)
+end
+
 local function registerConfigTab()
     if not configTab then return end
     send("config.register", configTab.tab, function(ok, result)
@@ -382,6 +398,8 @@ local function becomeReady(info)
     BJ.ready, BJ.instance, BJ.info = true, info.instance, info
     for name in pairs(hooks) do registerHook(name) end
     registerRaceOptions()
+    registerFormats()
+    registerTyreOptions()
     registerConfigTab()
     for _, pageId in ipairs(pageOrder) do registerPage(pageId) end
     for _, fn in ipairs(readyFns) do
@@ -489,7 +507,7 @@ end
 --- answers one of BeamJoy's hooks : `fn(question, answer)` returns its answer (a table), or
 --- returns nothing and calls `answer(table)` itself later (within the hook's time : `timeoutMs`,
 --- default 2000, at most 10000). An error in fn answers with nothing
----@param name string "raceReady" or "gridOrder"
+---@param name string "raceJoin", "raceReady", "gridOrder" or "phaseResult"
 ---@param fn function
 ---@param opts {timeoutMs: integer?}?
 function BJ.hook(name, fn, opts)
@@ -562,6 +580,29 @@ function BJ.raceOptions(sections)
     assert(BJ.name, "call BeamJoyAPI.init first")
     raceOptions = sections
     if BJ.ready then registerRaceOptions() end
+end
+
+--- adds this plugin's event formats to the race start menu (again whenever BeamJoy starts again),
+--- replacing the ones it added before : {id, name, description?, phases, result?, locked?, track?}.
+--- `phases` as race.setPhases takes them ; `locked` = true, or the settings the starter can't
+--- change ({"phases", "ranking", ...}) ; `track` = "any" (default), "loop" or "pointToPoint"
+---@param list table[]
+function BJ.formats(list)
+    assert(BJ.name, "call BeamJoyAPI.init first")
+    formats = list
+    if BJ.ready then registerFormats() end
+end
+
+--- the tyre sets racers can pick in the pit menu's Tyres row (again whenever BeamJoy starts again),
+--- replacing the ones this plugin added before : {id, label, seconds?} each, at most 8 ; `seconds`
+--- is that set's fitting time instead of the race's. BeamJoy fits fresh tyres either way and passes
+--- the choice on ("yourPlugin:id" : RacerPitStop's `tyreOption`, and hooks in the racer's game).
+--- Only while the server's experimental tyre changes are on (Config > General > Pits)
+---@param list {id: string, label: string, seconds: number?}[]
+function BJ.tyreOptions(list)
+    assert(BJ.name, "call BeamJoyAPI.init first")
+    tyreOptions = list
+    if BJ.ready then registerTyreOptions() end
 end
 
 --- adds a tab of this plugin's settings to BeamJoy's config window, for staff with

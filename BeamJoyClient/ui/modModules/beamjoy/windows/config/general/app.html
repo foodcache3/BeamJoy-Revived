@@ -34,6 +34,14 @@
         <bj-config-general-deliveries></bj-config-general-deliveries>
     </accordion-content>
 </bj-accordion>
+<bj-accordion id="config-pits" ng-hide="!$ctrl.display.pits">
+    <accordion-title>
+        {{"beamjoy.window.config.tabs.general.pits.title"|translate}}
+    </accordion-title>
+    <accordion-content>
+        <bj-config-general-pits></bj-config-general-pits>
+    </accordion-content>
+</bj-accordion>
 <bj-accordion id="config-voting" ng-hide="!$ctrl.display.voting">
     <accordion-title>
         {{"beamjoy.window.config.tabs.general.voting.title"|translate}}

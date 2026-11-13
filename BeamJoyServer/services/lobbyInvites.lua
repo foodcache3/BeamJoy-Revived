@@ -121,6 +121,34 @@ local function lobbyInvite(ctxt, kind, targetID)
     lobbyInviteList(ctxt, kind)
 end
 
+--- a plugin's lobby (the plugin API's race.open) inviting one of its entrants : the same notice,
+--- from the lobby's name, lasting as long as asked
+---@param kind string
+---@param session table
+---@param targetID integer
+---@param fromName string
+---@param seconds integer
+---@return boolean sent (not to a player who isn't connected, or is in an activity already)
+local function hostInvite(kind, session, targetID, fromName, seconds)
+    local k = KINDS[kind]
+    if not k then return false end
+    local target = services_players.players:find(function(p) return p.playerID == targetID end)
+    if not target or isBusy(targetID) then return false end
+    local summary = k.grid().summarize(session)
+    M.invites[targetID] = M.invites[targetID] or {}
+    M.invites[targetID][kind] = { sessionId = session.id, expiresAt = GetCurrentTime() + seconds }
+    communications_tx.sendToPlayer(targetID, "lobbyInvite", {
+        kind = kind,
+        sessionId = session.id,
+        fromName = fromName,
+        title = summary.raceName,
+        count = summary.participantCount,
+        max = summary.maxParticipants,
+        expiresIn = seconds,
+    })
+    return true
+end
+
 local function onSlowUpdate()
     local now = GetCurrentTime()
     for targetID, byKind in pairs(M.invites) do
@@ -149,5 +177,6 @@ M.lobbyInvite = lobbyInvite
 M.isBusy = isBusy
 M.activityOf = activityOf
 M.isInvited = isInvited
+M.hostInvite = hostInvite
 
 return M

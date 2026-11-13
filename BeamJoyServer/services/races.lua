@@ -1,5 +1,5 @@
 ---@alias BJRaceMode "grid"|"passive"
----@alias BJRaceRespawnStrategy "all"|"norespawn"|"lastcheckpoint"|"flipupright"|"lastroad"
+---@alias BJRaceRespawnStrategy "all"|"norespawn"|"lastcheckpoint"|"inplace"|"flipupright"|"lastroad"
 ---@alias BJRacePlacementMode "deterministic"|"random"|"manual"
 
 ---@class BJRaceGate
@@ -94,6 +94,10 @@
 ---from ghostOnCountdown's own "race" ghost reason (see vehicles.lua's M.ghostReasons), so it never
 ---interferes with ghostOnCountdown's own solo-only full-race behavior or its multiplayer
 ---RACE-transition un-ghost ; default false
+---@field flyingStart boolean? a point-to-point track only : each racer's time starts as they cross
+---its first checkpoint, not when they're released (a flying start) ; default false (a standing start)
+---@field outLap boolean? a circuit only : the lap from the grid is an out lap, not timed ; each racer's
+---time starts as they cross the line at its end ; default false
 ---@field ghostBackmarkers boolean? opt-in : once the race leader has gained a full lap of real
 ---gate-progress on a given participant (genuinely lapped them, not just a raw lap-NUMBER
 ---difference; see raceGrid.lua's buildSettings for why that distinction matters), that
@@ -101,6 +105,22 @@
 ---limitation as every other ghost option here : there's no selective "ghost against the leader
 ---only": a ghosted backmarker is ghosted against everyone, including other backmarkers ; default
 ---false
+---@field startLights boolean? the start sequence is a light gantry rather than a counted
+---countdown : five lights come on one a second, hold for a moment nobody can predict (the server
+---picks it, 0.2-3 s), then go out together - that's the green. The cars are released from their
+---freeze as the first light comes on, so a jump start is possible and is penalised
+---(jumpStartPenaltyS) ; default false
+---@field jumpStartPenaltyS number? seconds on the race time of a racer who moves off their slot
+---before the lights go out (startLights only). 0 : jump starts aren't penalised at all ; default 5
+---@field start BJRacePhaseStart? the start kind for a race run without phases of its own :
+---"groups" releases the grid in waves (see groupSize). Anything else is the grid together
+---@field groupSize integer? "groups" : how many cars are released together
+---@field intervalS integer? "groups" : seconds between two waves
+---@field hideOthers boolean? opt-in : every OTHER racer's car is hidden outright on this
+---client (not translucent : not drawn at all), and this racer's own car is ghosted so it can't
+---collide with a car nobody can see. A qualifying or practice phase run on an empty track, the
+---way a real session's out laps are judged ; typically set as one phase's rule rather than for a
+---whole event. Hides their nametags with them. Non-racers nearby are left alone ; default false
 ---@field showGateNametags boolean? whether the floating "Gate N (Start/Finish)" text label renders
 ---above each gate while actually racing (COUNTDOWN/RACE; the lobby/GRID phase always shows every
 ---label regardless of this setting). The gate quad/arrow themselves are unaffected, this only
@@ -131,6 +151,22 @@
 ---"pool": when true, each participant is automatically force-spawned a random entry from the pool
 ---the moment they join the lobby, instead of being steered to the native vehicle selector to pick
 ---one themselves ; default false
+---@field pitStart boolean? and the other `pit*` keys, and `startFuelPct` : the pits' (M.PIT_SETTINGS),
+---only used on a race whose pits are usable (M.pitsUsable)
+
+---@class BJRacePitLine a pit lane's PIT IN or PIT OUT line, shaped like a gate
+---@field pos {x: number, y: number, z: number}
+---@field dir {x: number, y: number, z: number}
+---@field width number
+---@field height number
+
+---@class BJRacePit a circuit's pit lane (PIT_SYSTEM_PLAN.md). Racers in it are `inPit` (raceGrid.lua's
+---racePit) : the steps it skips are credited to them, and the start/finish line counts across it
+---@field entry BJRacePitLine "PIT IN"
+---@field exit BJRacePitLine "PIT OUT"
+---@field fromStep integer the last route step before PIT IN : it counts only right after it
+---@field toStep integer the first route step after PIT OUT
+---@field speedLimitKmh integer the lane's limiter, [20, 150]
 
 ---@class BJRace
 ---@field id integer
@@ -162,7 +198,9 @@
 ---behavior. Purely about which crossings register as valid progress at all; no penalty of any kind
 ---is attached to a "wrong-way" crossing in either state, since a wrong-way crossing while this is
 ---on simply never registers as anything, same as before this option existed.
----@field startPositions {pos: {x: number, y: number, z: number}, dir: {x: number, y: number, z: number}}[]
+---@field startPositions {pos: {x: number, y: number, z: number}, dir: {x: number, y: number, z: number}, pit: {pos: table, dir: table, width: number?, length: number?}?}[]
+---each slot's own pit box (`pit`) : a racer's box is their first slot's, for the whole event
+---@field pit BJRacePit? a circuit's pit lane
 ---@field freeroam boolean? also run from freeroam : driving through its start gate starts a
 ---one-lap run against the clock, no lobby (services/raceFreeroam.lua). Its times go on their own
 ---board, `freeroamLeaderboard` (a rolling start isn't comparable with a grid's standing one)
@@ -245,6 +283,10 @@ local M = {
         ALL = "all",
         NORESPAWN = "norespawn",
         LASTCHECKPOINT = "lastcheckpoint",
+        -- every reset or recover becomes the game's own reset where the car stands (direct
+        -- request) : rebuilt and repaired on the spot, facing the way it was, so no ground is
+        -- gained and no checkpoint is gone back to. Unlike FLIPUPRIGHT, which keeps the damage
+        INPLACE = "inplace",
         -- every reset or recover becomes the game's flip upright (where the car is) or its recover
         -- to last road, whatever was pressed (raceRunner.lua's onBJRequestCurrentVehicleReset)
         FLIPUPRIGHT = "flipupright",
@@ -264,6 +306,37 @@ local M = {
         GRID = "grid",
         PASSIVE = "passive",
     },
+
+    --- the pits' settings : race defaults, start options and phase rules alike (racePhases.lua's
+    --- RULE_KEYS takes them too). `int` ones are clamped to [min, max]
+    PIT_SETTINGS = {
+        pitStart = { kind = "boolean", default = false },
+        pitGhost = { kind = "boolean", default = true },
+        pitStops = { kind = "int", min = 0, max = 20, default = 0 },
+        pitMissingPenaltyS = { kind = "int", min = 0, max = 600, default = 30 },
+        pitRefuel = { kind = "boolean", default = true },
+        pitRepair = { kind = "boolean", default = true },
+        pitFuelRatePct = { kind = "int", min = 1, max = 100, default = 5 },
+        pitRepairMaxS = { kind = "int", min = 0, max = 600, default = 60 },
+        -- tyre changes, apart from repairs : only while the server's RacePits.ExperimentalTyres is on
+        -- (services/config.lua). The time is the set's, a plugin's tyre option can have its own
+        pitTyres = { kind = "boolean", default = true },
+        pitTyreChangeS = { kind = "int", min = 0, max = 120, default = 10 },
+        startFuelPct = { kind = "int", min = 5, max = 100, default = 100 },
+        pitTow = { kind = "boolean", default = true },
+        -- km/h a tow to the pits is held at, for the route back (raceGrid.lua's racePit "tow")
+        pitTowSpeed = { kind = "int", min = 10, max = 200, default = 50 },
+        pitReturn = { kind = "boolean", default = false },
+    },
+    PIT_SPEED_MIN = 20,
+    PIT_SPEED_MAX = 150,
+    PIT_SPEED_DEFAULT = 60,
+
+    -- the reset speed limit's own bounds, km/h (resetSpeedLimitEnabled/resetSpeedLimitKmh): the
+    -- slider's hard range, and what an unset/garbage value falls back to
+    RESET_SPEED_MIN = 1,
+    RESET_SPEED_MAX = 300,
+    RESET_SPEED_DEFAULT = 20,
 
     ---@type BJRace[] races for the current map
     data = {},
@@ -413,6 +486,82 @@ local function sanePoint(v) return services_props.sanePoint(v) end
 ---@return table[]? props, string? err
 local function sanitizeProps(props) return services_props.sanitize(props, "A race") end
 
+--- one pit setting's value, checked (nil : not a valid one)
+---@param key string a M.PIT_SETTINGS key
+---@param v any
+---@return boolean|integer|nil
+function M.pitSettingValue(key, v)
+    local spec = M.PIT_SETTINGS[key]
+    if not spec or v == nil then return nil end
+    if spec.kind == "boolean" then
+        if type(v) == "boolean" then return v end
+        return nil
+    end
+    v = tonumber(v)
+    if not v or v ~= v then return nil end
+    return math.clamp(math.floor(v), spec.min, spec.max)
+end
+
+---@param v any
+---@return BJRacePitLine?
+local function sanitizePitLine(v)
+    if type(v) ~= "table" then return nil end
+    local pos, dir = sanePoint(v.pos), sanePoint(v.dir)
+    local width, height = tonumber(v.width), tonumber(v.height)
+    if not pos or not dir or not width or not height then return nil end
+    return { pos = pos, dir = dir, width = math.clamp(width, 1, 100), height = math.clamp(height, 1, 50) }
+end
+
+--- a race's pit lane, checked : nil when it isn't one (no lines yet is no pit lane)
+---@param pit any
+---@param gateCount integer
+---@return BJRacePit?
+local function sanitizePit(pit, gateCount)
+    if type(pit) ~= "table" then return nil end
+    local entry, exit = sanitizePitLine(pit.entry), sanitizePitLine(pit.exit)
+    if not entry and not exit then return nil end
+    local function step(v)
+        v = tonumber(v)
+        if not v or v ~= v then return nil end
+        return math.clamp(math.floor(v), 1, gateCount)
+    end
+    return {
+        entry = entry,
+        exit = exit,
+        fromStep = step(pit.fromStep),
+        toStep = step(pit.toStep),
+        speedLimitKmh = math.clamp(math.floor(tonumber(pit.speedLimitKmh) or M.PIT_SPEED_DEFAULT),
+            M.PIT_SPEED_MIN, M.PIT_SPEED_MAX),
+    }
+end
+
+---@param v any
+---@return {pos: table, dir: table, width: number?, length: number?}?
+local function sanitizePitBox(v)
+    if type(v) ~= "table" then return nil end
+    local pos, dir = sanePoint(v.pos), sanePoint(v.dir)
+    if not pos or not dir then return nil end
+    local width, length = tonumber(v.width), tonumber(v.length)
+    return { pos = pos, dir = dir, width = width and math.clamp(width, 1.5, 10) or nil,
+        length = length and math.clamp(length, 3, 30) or nil }
+end
+
+--- the pits can be used : a circuit (not a branching one) with both lines, the steps they join,
+--- and a box for every start slot. Otherwise a race runs without them, as before
+---@param race BJRace?
+---@return boolean
+function M.pitsUsable(race)
+    local pit = race and race.pit
+    if not pit or not race.loopable or race.branchingEnabled then return false end
+    if not pit.entry or not pit.exit or not pit.fromStep or not pit.toStep then return false end
+    if pit.fromStep > #race.gates or pit.toStep > #race.gates or pit.fromStep == pit.toStep then return false end
+    if not table.isArray(race.startPositions) or #race.startPositions == 0 then return false end
+    for _, sp in ipairs(race.startPositions) do
+        if type(sp.pit) ~= "table" then return false end
+    end
+    return true
+end
+
 ---@param race BJRace
 ---@param existingRaces BJRace[]? defaults to M.data (the current map's own races): only ever
 ---passed explicitly by the legacy race importer below, which may be preparing a race for a
@@ -448,6 +597,12 @@ local function sanitizeRace(race, existingRaces)
     local props, propsErr = sanitizeProps(race.props)
     if not props then return propsErr end
     race.props = props
+
+    -- the pit lane, and each slot's box (the slot's other fields as they were)
+    race.pit = sanitizePit(race.pit, #race.gates)
+    for _, sp in ipairs(race.startPositions) do
+        sp.pit = sanitizePitBox(sp.pit)
+    end
 
     race.sectorCount = math.max(1, math.min(math.floor(tonumber(race.sectorCount) or 3), #race.gates, 12))
     race.manualSectors = race.manualSectors == true
@@ -506,6 +661,15 @@ local function sanitizeRace(race, existingRaces)
     race.defaults.resetPenaltyEnabled = race.defaults.resetPenaltyEnabled == true
     race.defaults.resetPenaltySeconds = math.max(1, tonumber(race.defaults.resetPenaltySeconds) or 5)
     race.defaults.resetPenaltyMode = race.defaults.resetPenaltyMode == "time" and "time" or "hold"
+    -- the reset speed limit (a tickbox and a limit, per direct request) : a reset or recover is
+    -- refused outright while the car is moving faster than this, so one can't be used as an
+    -- airbrake - press it mid-crash and you keep the crash. Off by default, and moot under
+    -- "norespawn" (every reset type is already blocked outright there), which is why both fields
+    -- are hidden in the UI whenever that strategy is the one picked
+    race.defaults.resetSpeedLimitEnabled = race.defaults.resetSpeedLimitEnabled == true
+    race.defaults.resetSpeedLimitKmh = math.clamp(
+        math.floor(tonumber(race.defaults.resetSpeedLimitKmh) or M.RESET_SPEED_DEFAULT),
+        M.RESET_SPEED_MIN, M.RESET_SPEED_MAX)
     race.defaults.autoSpectateOnFinish = race.defaults.autoSpectateOnFinish ~= false
     race.defaults.disableNodegrabber = race.defaults.disableNodegrabber ~= false
     race.defaults.disableCameras = race.defaults.disableCameras ~= false
@@ -513,6 +677,18 @@ local function sanitizeRace(race, existingRaces)
     race.defaults.ghostOnCountdown = race.defaults.ghostOnCountdown ~= false
     race.defaults.disableCollisions = race.defaults.disableCollisions == true
     race.defaults.ghostBackmarkers = race.defaults.ghostBackmarkers == true
+    race.defaults.hideOthers = race.defaults.hideOthers == true
+    race.defaults.startLights = race.defaults.startLights == true
+    race.defaults.jumpStartPenaltyS = math.clamp(tonumber(race.defaults.jumpStartPenaltyS) or 5, 0, 60)
+    -- a start kind of the race's own (a race run without phases) : checked by racePhases.sanitize
+    -- when the session's built, so only the shape is kept here
+    race.defaults.start = type(race.defaults.start) == "string" and race.defaults.start or nil
+    race.defaults.groupSize = race.defaults.groupSize and
+        math.clamp(math.floor(tonumber(race.defaults.groupSize) or 2), 2, 64) or nil
+    race.defaults.intervalS = race.defaults.intervalS and
+        math.clamp(math.floor(tonumber(race.defaults.intervalS) or 10), 3, 600) or nil
+    race.defaults.flyingStart = race.defaults.flyingStart == true
+    race.defaults.outLap = race.defaults.outLap == true
     race.defaults.showGateNametags = race.defaults.showGateNametags == true
     race.defaults.limitVisibleGates = race.defaults.limitVisibleGates ~= false
     race.defaults.visibleGateCount = math.max(1, math.min(math.floor(tonumber(race.defaults.visibleGateCount) or 2), 5))
@@ -520,9 +696,24 @@ local function sanitizeRace(race, existingRaces)
     race.defaults.waypointBeams = race.defaults.waypointBeams ~= false
     race.defaults.allowTuning = race.defaults.allowTuning ~= false
     race.defaults.randomizeVehiclePool = race.defaults.randomizeVehiclePool == true
+    for key, spec in pairs(M.PIT_SETTINGS) do
+        local v = M.pitSettingValue(key, race.defaults[key])
+        if v == nil then v = spec.default end
+        race.defaults[key] = v
+    end
     if race.defaults.laps ~= nil then
         race.defaults.laps = math.max(1, math.floor(tonumber(race.defaults.laps) or 1))
     end
+    -- a timed race's length, and an event in phases (services/racePhases.lua) : the start menu's
+    -- starting point for this race
+    local minutes = tonumber(race.defaults.timeLimitMin)
+    race.defaults.timeLimitMin = minutes and minutes > 0 and math.clamp(minutes, 0.1, 1440) or nil
+    race.defaults.afterTime = ({ leader = true, own = true, stop = true })[race.defaults.afterTime] and
+        race.defaults.afterTime or nil
+    if race.defaults.phases ~= nil then
+        race.defaults.phases = services_racePhases and services_racePhases.sanitize(race.defaults.phases, race) or nil
+    end
+    race.defaults.result = race.defaults.phases and services_racePhases.sanitizeResult(race.defaults.result) or nil
     -- server plugins' own race options (services/pluginUi.lua), checked against the plugins running
     if services_pluginUi then
         race.defaults.plugins = services_pluginUi.raceDefaults(race.defaults.plugins)
@@ -1142,6 +1333,16 @@ local function seedBundledRaces()
                     -- also ship for would be a real bug otherwise
                     local candidate = table.deepcopy(race)
                     candidate.formerNames = nil
+                    -- Real, confirmed bug (direct report: "a race with that name already exists"
+                    -- when saving one, with every bundled race listed twice). The bundled file
+                    -- ships its races with their own ids, 1..n, and a server seeded from empty
+                    -- gives its live races those same ids. sanitizeRace's duplicate-name check
+                    -- deliberately skips the race whose id matches the candidate's own (that is
+                    -- how an edit saves over itself), so a candidate still carrying its bundled id
+                    -- made that check skip the very race it was about to duplicate. The id a
+                    -- seeded race actually gets is assigned from targetList below, so the one it
+                    -- arrives with is never meaningful here.
+                    candidate.id = nil
                     local err = sanitizeRace(candidate, targetList)
                     if err then
                         if err == "A race with this name already exists" then
@@ -1193,15 +1394,32 @@ end
 --- on that server ; only its id and name stay. Its leaderboard is cleared (direct request : times
 --- set on the old course don't compare), as editing a race does. A race deleted on a server stays
 --- deleted.
+--- An entry with `keepTimes` as well (direct request) keeps that server's recorded times instead of
+--- clearing them, for an update that leaves every lap as comparable as it was : props tidied up, or
+--- a grid moved without the gates being touched. Both boards are then carried over, the race one
+--- and the freeroam one.
 local BUNDLED_COURSE_UPDATES = {
     -- one gate removed
     { map = "west_coast_usa", name = "Street Course 2", revision = 2, previous = { gates = 19, distance = 2472 } },
     -- one-time overwrite of both directions
     { map = "west_coast_usa", name = "Street Course 2", revision = 3, force = true },
     { map = "west_coast_usa", name = "Street Course 2 Reverse", revision = 1, force = true },
+    -- East Coast USA, props tidied up on six of these and the grid fixed on two (direct request) :
+    -- the times stay, since no lap on any of them is run differently than before. "Street Stage"
+    -- has its grid moved back onto the road, which is why its measured distance moves with it, and
+    -- "Street Course (reverse)" gets gate 7 put back where it belongs and the 7 grid slots it was
+    -- missing ; both still leave a lap timed between the same gates.
+    { map = "east_coast_usa", name = "Asphalt Stage 1", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Asphalt Stage 1 (reverse)", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Asphalt Stage 2", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Asphalt Stage 2 (reverse)", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Street Stage", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Street Stage (reverse)", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Street Course", revision = 1, force = true, keepTimes = true },
+    { map = "east_coast_usa", name = "Street Course (reverse)", revision = 1, force = true, keepTimes = true },
 }
 local COURSE_FIELDS = { "mode", "gates", "startPositions", "distance", "loopable", "branchingEnabled",
-    "oneWayGates", "sectorCount", "manualSectors" }
+    "oneWayGates", "sectorCount", "manualSectors", "pit" }
 
 ---@param race table
 ---@param shape {gates: integer, distance: number}
@@ -1223,6 +1441,59 @@ local function sameGates(a, b)
         if dx * dx + dy * dy + dz * dz > .25 then return false end
     end
     return true
+end
+
+--- a race anyone has set a time on, in a race or in freeroam
+---@param race table
+---@return boolean
+local function hasRecordedTimes(race)
+    return (type(race.leaderboard) == "table" and next(race.leaderboard) ~= nil) or
+        (type(race.freeroamLeaderboard) == "table" and next(race.freeroamLeaderboard) ~= nil)
+end
+
+--- One-time cleanup, once per server, of the extra copies seeding used to leave behind (see
+--- seedBundledRaces' own note on the bundled id it used to hand sanitizeRace). On a server that
+--- hit it, every bundled race that map ships came back a second time under a fresh id, and then
+--- neither copy could be saved from the editor at all : each one is the other's duplicate name.
+--- Only an exact extra copy goes : same name, same gates, and no recorded times. The first copy
+--- in the list stays - the one every raceNamed lookup, and so every ledger props/sync key, already
+--- resolves to - with its id, times, settings and props untouched. Two races an admin named the
+--- same on purpose, a copy since edited onto another course, and a copy with times on it are all
+--- left exactly as they are.
+local DEDUPE_KEY = "dedupe@1"
+
+local function dedupeBundledRaces()
+    if dao_bundled.isSeeded(SYNC_LEDGER_MAP, M.ACTIVITY_TYPE, DEDUPE_KEY) then return end
+    for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
+        local list = dao_activity.get(mapName, M.ACTIVITY_TYPE)
+        if table.isArray(list) then
+            local firstByName = {}
+            for _, r in ipairs(list) do
+                local key = type(r) == "table" and type(r.name) == "string" and r.name:trim():lower() or nil
+                if key and firstByName[key] == nil then firstByName[key] = r end
+            end
+            local removed = 0
+            -- backwards : removing as we go
+            for i = #list, 1, -1 do
+                local r = list[i]
+                local key = type(r) == "table" and type(r.name) == "string" and r.name:trim():lower() or nil
+                local first = key and firstByName[key] or nil
+                if first and first ~= r and not hasRecordedTimes(r) and sameGates(first, r) then
+                    table.remove(list, i)
+                    removed = removed + 1
+                    LogInfo(string.format(
+                        "bundled race de-duplicated: %s / %s (id %s), an extra copy of id %s",
+                        mapName, tostring(r.name), tostring(r.id), tostring(first.id)))
+                end
+            end
+            if removed > 0 then
+                dao_activity.save(mapName, M.ACTIVITY_TYPE, list)
+                LogInfo(string.format("bundled race de-duplication: %s, %d extra %s removed",
+                    mapName, removed, removed == 1 and "copy" or "copies"))
+            end
+        end
+    end
+    dao_bundled.markSeeded(SYNC_LEDGER_MAP, M.ACTIVITY_TYPE, DEDUPE_KEY)
 end
 
 ---@return boolean done false when a race failed, retried on the next boot
@@ -1287,8 +1558,13 @@ local function applyBundledCourseUpdates()
                     -- deleted on purpose, or never seeded here : nothing to fix
                 elseif update.force then
                     candidate = table.deepcopy(bundled)
-                    candidate.id, candidate.name, candidate.leaderboard = live.id, live.name, {}
+                    candidate.id, candidate.name = live.id, live.name
                     candidate.formerNames = nil
+                    -- both boards explicitly, not just the race one : `bundled` carries its own
+                    -- empty pair, so an unset field here would silently wipe that board whichever
+                    -- way the entry goes
+                    candidate.leaderboard = update.keepTimes and live.leaderboard or {}
+                    candidate.freeroamLeaderboard = update.keepTimes and live.freeroamLeaderboard or {}
                 elseif sameGates(live, bundled) then
                     -- already the fixed course (a fresh install seeds it directly)
                 elseif courseMatches(live, update.previous) then
@@ -1393,12 +1669,17 @@ local function raceSave(ctxt, race)
         -- always log server-side, not just when console-invoked : a player-triggered failure
         -- previously only ever reached the client as a toast, leaving nothing in the server
         -- console to actually diagnose what was wrong with the submitted data
-        LogError(string.format("raceSave rejected%s: %s",
-            ctxt.sender and (" from " .. ctxt.sender.playerName) or "", err))
-        -- dump unconditionally, not gated on IsDebug() : that depends on the server's own
-        -- MP.Settings.Debug flag, which may well be off, and this is exactly the situation
-        -- where seeing the actual rejected data matters
-        dump(race)
+        -- the race's shape, not the race itself (direct request) : this used to dump(race)
+        -- unconditionally, and a real race is hundreds of gate/start/prop lines, so one rejected
+        -- save buried the console and the log file under it. The counts are what actually
+        -- diagnoses a sanitation failure ; the data itself is already on the client that sent it.
+        LogError(string.format("raceSave rejected%s: %s (name %s, mode %s, %d gates, %d starts, %d props)",
+            ctxt.sender and (" from " .. ctxt.sender.playerName) or "", err,
+            type(race) == "table" and string.format("%q", tostring(race.name)) or "?",
+            type(race) == "table" and tostring(race.mode) or "?",
+            type(race) == "table" and table.isArray(race.gates) and #race.gates or 0,
+            type(race) == "table" and table.isArray(race.startPositions) and #race.startPositions or 0,
+            type(race) == "table" and table.isArray(race.props) and #race.props or 0))
         if ctxt.sender then
             return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error", err)
         end
@@ -1927,7 +2208,8 @@ local function setEntryFields(raceId, board, playerName, plugin, fields, replace
     local boardName, field = boardField(board)
     local entry = race and race[field] and race[field][playerName]
     if not entry then return false end
-    entry.fields = services_pluginUi.applyFields(entry.fields, plugin, fields, replace)
+    -- HUD-only labels are the race's live information, never the run's
+    entry.fields = services_pluginUi.applyFields(entry.fields, plugin, services_pluginUi.keptFields(fields), replace)
     saveData(true)
     if services_api then services_api.leaderboardChanged(raceId, boardName, "fields", playerName) end
     return true
@@ -2045,6 +2327,9 @@ local function onInit()
 
     -- before seeding : seeded races are marked synced, a pre-2.0 server would then look like 2.0
     local syncFromPre20 = bundledSyncNeeded()
+    -- before renaming and seeding : both resolve a bundled race by name, and that only means
+    -- anything once there's one race per name again
+    dedupeBundledRaces()
     renameBundledRaces()
     seedBundledRaces()
     applyBundledCourseUpdates()

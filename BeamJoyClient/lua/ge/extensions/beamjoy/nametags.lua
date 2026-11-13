@@ -11,7 +11,23 @@ local M = {
     towedTrailerVids = {},
 }
 
+--- the colours tags are drawn in, read when they change instead of twice per tag per rendered
+--- frame. localStorage.get() builds a closure, pcalls it against every stored key to find the one
+--- it was handed, and then hands back a deep clone of the value : nothing at all on an event, real
+--- money sixty times a second times every car on screen (see drawNametag). Our own clones, so
+--- nothing else can see them ; still never written to, the draw copies out of them
+local colors = {}
+local function refreshColors()
+    colors.playerText = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_PLAYER_TEXT)
+    colors.playerBg = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_PLAYER_BG)
+    colors.idleText = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_IDLE_TEXT)
+    colors.idleBg = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_IDLE_BG)
+    colors.specText = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_SPEC_TEXT)
+    colors.specBg = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_SPEC_BG)
+end
+
 local function updateState()
+    refreshColors()
     local state = {
         hideNameTags = settings.getValue("hideNameTags", false),
         showSpectators = settings.getValue("showSpectators", true),
@@ -23,12 +39,12 @@ local function updateState()
         shortenNametags = settings.getValue("shortenNametags", false),
         nametagCharLimit = settings.getValue("nametagCharLimit", 50),
         nameTagShowDistance = settings.getValue("nameTagShowDistance", true),
-        playerColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_PLAYER_TEXT),
-        playerBgColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_PLAYER_BG),
-        idleColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_IDLE_TEXT),
-        idleBgColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_IDLE_BG),
-        specColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_SPEC_TEXT),
-        specBgColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_SPEC_BG),
+        playerColor = colors.playerText,
+        playerBgColor = colors.playerBg,
+        idleColor = colors.idleText,
+        idleBgColor = colors.idleBg,
+        specColor = colors.specText,
+        specBgColor = colors.specBg,
     }
     if not table.compare(M.state, state) then
         M.state = state
@@ -144,6 +160,9 @@ local function updateTagName(playerName)
 end
 
 local function onNametagsSettingsChanged()
+    -- a colour picked in the UI used to reach the next drawn frame because every drawn frame read
+    -- it back out of localStorage. The cached copy takes its place here instead
+    refreshColors()
     table.forEach(M.tagNames, function(_, playerName)
         updateTagName(tostring(playerName))
     end)
@@ -156,12 +175,55 @@ local function onBJUpdatePlayer(player)
     if player and player.playerName then M.tagNames[player.playerName] = nil end
 end
 
+--- the two colour slots every tag is drawn in : filled here, handed to shape.Text (which reads
+--- their four fields into a ColorF/ColorI and is done with them) and filled again by the next tag
+local tagText = { r = 1, g = 1, b = 1, a = 1 }
+local tagBg = { r = 0, g = 0, b = 0, a = 1 }
+
+--- where the text goes, likewise reused : the position of the tag being drawn, then of each
+--- spectator line under it (the debug drawer takes the point by value, exactly as the game's own
+--- map.lua relies on when it walks its graph with one vector)
+local tagPos = vec3()
+
+--- " 42m", built once per whole metre rather than once per tag per frame : a distance is only ever
+--- drawn rounded, so there are only ever as many of these as there are whole metres two cars on
+--- the map can be apart - a few thousand very short strings at the very worst, and in practice the
+--- handful of distances actually on screen
+---@type table<integer, string>
+local distSuffixes = {}
+
+--- the forced colours of a fugitive's tag, built once : BJColor() is a table, a table of eight
+--- closures and a metatable for it, eleven allocations a call, and these two are constants
+local FUGITIVE_TEXT, FUGITIVE_BG = BJColor(), BJColor(1)
+
+---@param out table the slot above
+---@param src table? whatever colour was chosen for this tag
+local function setColor(out, src)
+    out.r, out.g, out.b = src and src.r or 0, src and src.g or 0, src and src.b or 0
+end
+
+--- whether this spectator's own name is drawn under the car they're watching
+---@param specName string
+---@param mpVeh BJVehicle
+---@param cam string the active camera, read once for the frame
+---@param self table? this client's own player, likewise
+---@return boolean
+local function drawsSpectator(specName, mpVeh, cam, self)
+    return specName ~= mpVeh.ownerName and
+        not replay.replayPlayers[specName] and
+        (cam == camera.CAMERAS.FREE or not self or specName ~= self.playerName)
+end
+
 ---@param mpVeh BJVehicle
 ---@param orig vec3
-local function drawNametag(mpVeh, orig)
-    local textColor, bgColor
-    -- see updateTagName's comment: getSelf() can be nil briefly right after connecting.
-    local self = beamjoy_players.getSelf()
+---@param cam string the active camera, read once for the whole frame instead of once per tag and
+---once more per spectator line
+---@param self table? this client's own player, read once for the frame the same way (and see
+---updateTagName's comment: it can be nil for a moment right after connecting)
+local function drawNametag(mpVeh, orig, cam, self)
+    local pos = mpVeh.position
+    if not pos then return end
+    local textSrc, bgSrc
     local tag = M.tagNames[mpVeh.ownerName] or updateTagName(mpVeh.ownerName)
     if mpVeh.type == beamjoy_vehicles.TYPES.TRAILER then
         if self and mpVeh.ownerID == self.playerID then
@@ -174,8 +236,7 @@ local function drawNametag(mpVeh, orig)
         if beamjoy_pursuit.fugitives[mpVeh.vid] ~= nil and
             beamjoy_pursuit.isPolice then
             tag = beamjoy_lang.translate("beamjoy.pursuit.fugitiveTag")
-            textColor = BJColor()
-            bgColor = BJColor(1)
+            textSrc, bgSrc = FUGITIVE_TEXT, FUGITIVE_BG
         else
             tag = string.format("[AI] %d-%d", mpVeh.ownerID, mpVeh.vid)
         end
@@ -187,32 +248,35 @@ local function drawNametag(mpVeh, orig)
         -- round, or this vehicle's owner isn't currently a participant in it.
         local isParticipant, infTextColor, infBgColor = beamjoy_infectedRunner.infectedNametagColor(mpVeh)
         if isParticipant then
-            textColor, bgColor = infTextColor, infBgColor
+            textSrc, bgSrc = infTextColor, infBgColor
         end
         -- Derby : a player who's out keeps a greyed tag over their wreck
         local isOut, derbyTextColor, derbyBgColor = beamjoy_derbyRunner.derbyNametagColor(mpVeh)
         if isOut then
-            textColor, bgColor = derbyTextColor, derbyBgColor
+            textSrc, bgSrc = derbyTextColor, derbyBgColor
         end
         -- a player chased by police players : the traffic fugitive's colors, name kept
         if beamjoy_playerPursuit and beamjoy_playerPursuit.isFugitiveVid(mpVeh.vid) then
-            textColor = BJColor()
-            bgColor = BJColor(1)
+            textSrc, bgSrc = FUGITIVE_TEXT, FUGITIVE_BG
         end
     end
 
-    local dist = math.round(orig:distance(mpVeh.position) or 0)
+    local dist = math.round(orig:distance(pos) or 0)
     local distSuffix = ""
     if M.state.nameTagShowDistance then
         if dist > 10 then
-            distSuffix = string.format(" %dm", dist)
+            distSuffix = distSuffixes[dist]
+            if not distSuffix then
+                distSuffix = string.format(" %dm", dist)
+                distSuffixes[dist] = distSuffix
+            end
         end
     end
 
     local alpha = 1
     if M.state.nameTagFadeEnabled then
         alpha = math.scale(dist, M.state.nameTagFadeDistance, 0, 0, 1, true)
-        if camera.getCamera() ~= camera.CAMERAS.FREE and M.state.nameTagFadeInvert then
+        if cam ~= camera.CAMERAS.FREE and M.state.nameTagFadeInvert then
             alpha = 1 - alpha
         end
         if M.state.nameTagDontFullyHide then
@@ -226,40 +290,44 @@ local function drawNametag(mpVeh, orig)
     alpha = alpha * beamjoy_hunterRunner.hunterNametagAlpha(mpVeh, dist)
 
     if mpVeh.spectators[mpVeh.ownerName] then
-        textColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_PLAYER_TEXT)
-        bgColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_PLAYER_BG)
-    elseif not textColor then
-        textColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_IDLE_TEXT)
-        bgColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_IDLE_BG)
+        textSrc, bgSrc = colors.playerText, colors.playerBg
+    elseif not textSrc then
+        textSrc, bgSrc = colors.idleText, colors.idleBg
     end
-    textColor.a = alpha
-    bgColor.a = alpha / 2
+    setColor(tagText, textSrc)
+    setColor(tagBg, bgSrc)
+    tagText.a = alpha
+    tagBg.a = alpha / 2
 
-    local pos = mpVeh.position + vec3(0, 0, mpVeh.height)
-    shape.Text(string.format("%s%s", tag, distSuffix), pos, textColor, bgColor, false,
+    tagPos:set(pos.x, pos.y, pos.z + mpVeh.height)
+    shape.Text(distSuffix == "" and tag or tag .. distSuffix, tagPos, tagText, tagBg, false,
         M.state.nameTagsHideBehindObjects)
 
     if M.state.showSpectators then
-        mpVeh.spectators
-            :filter(function(_, playerName)
-                return playerName ~= mpVeh.ownerName and
-                    not replay.replayPlayers[playerName] and
-                    (camera.getCamera() == camera.CAMERAS.FREE or
-                        not self or playerName ~= self.playerName)
-            end)
-            :forEach(function(_, specName, specs)
-                specName = M.tagNames[specName] or
-                    updateTagName(tostring(specName))
-
-                textColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_SPEC_TEXT)
-                bgColor = localStorage.get(localStorage.GLOBAL_VALUES.NAMETAGS_COLOR_SPEC_BG)
-                textColor.a = alpha
-                bgColor.a = alpha / 2
-
-                pos = pos + vec3(0, 0, -math.max(mpVeh.height / specs:length(), .3))
-                shape.Text(specName, pos, textColor, bgColor,
-                    false, M.state.nameTagsHideBehindObjects)
-            end)
+        -- plain loops, for the same reason the "draw all" loop below is one : this was a pcall'd
+        -- closure per spectator to filter them, a whole new table (plus a metatable for it) to hold
+        -- the result, another closure to walk it, and :length() on top - a closure again, and a
+        -- reduce over the list, per spectator line. Per car, per rendered frame
+        local specs = mpVeh.spectators
+        local count = 0
+        for specName in pairs(specs) do
+            if drawsSpectator(specName, mpVeh, cam, self) then count = count + 1 end
+        end
+        if count > 0 then
+            -- the step between lines is the drawn count's, as it always was, not the whole list's
+            local step = math.max(mpVeh.height / count, .3)
+            setColor(tagText, colors.specText)
+            setColor(tagBg, colors.specBg)
+            tagText.a = alpha
+            tagBg.a = alpha / 2
+            for specName in pairs(specs) do
+                if drawsSpectator(specName, mpVeh, cam, self) then
+                    tagPos.z = tagPos.z - step
+                    shape.Text(M.tagNames[specName] or updateTagName(tostring(specName)),
+                        tagPos, tagText, tagBg, false, M.state.nameTagsHideBehindObjects)
+                end
+            end
+        end
     end
 end
 
@@ -273,6 +341,10 @@ local function isHiddenByMode(v)
     -- near-final-waypoint / post-reset, see hunterRunner.lua's own isHiddenFugitiveVehicle). Never
     -- hidden on the fugitive's own client, which already doesn't see its own tag while driving.
     if beamjoy_hunterRunner.isHiddenFugitiveVehicle(v) then return true end
+    -- A race phase run with the other racers hidden (hideOthers, qualifying on an empty track) :
+    -- their cars aren't drawn at all for this racer, so a tag floating where one would be would
+    -- give away exactly what the rule is there to take away
+    if beamjoy_raceRunner.isHiddenRacerVehicle(v) then return true end
     -- Infected mode, host-configurable (hideInfectedNametags, default off): an infected
     -- participant's whole nametag is hidden from a SURVIVOR viewer specifically (see
     -- infectedRunner.lua's own isHiddenInfectedVehicle for the exact scope) - staff/spectators/
@@ -280,7 +352,9 @@ local function isHiddenByMode(v)
     return beamjoy_infectedRunner.isHiddenInfectedVehicle(v)
 end
 
-local ctxt, orig, veh, mpVeh, ray
+local ctxt, veh, mpVeh, ray
+--- the point distances are measured from this frame, written into rather than replaced
+local frameOrig = vec3()
 local drawn = {}
 local lastHoverVid, lastHoverCheckMs = nil, 0
 -- Confirmed via live profiling: the native cameraMouseRayCast() call below (used only for the
@@ -299,9 +373,17 @@ local function onUpdate()
     if replay.isOn() then return end
 
     ctxt = beamjoy_context.get()
-    orig = camera.getPositionRotation()
+    -- the active camera and this client's own player, read once for the whole frame and handed
+    -- down : every drawn tag used to ask for both again, and once more per spectator line
+    local cam = camera.getCamera()
+    local self = beamjoy_players.getSelf()
+    -- where the camera is, or the car it's attached to, as three numbers into the one vector :
+    -- camera.getPositionRotation() and getVehiclePositionRotation() both hand back a fresh vector
+    -- plus two more that nothing here reads, every frame
     if ctxt.mpVeh and ctxt.camera ~= camera.CAMERAS.FREE then
-        orig = beamjoy_vehicles.getVehiclePositionRotation(ctxt.mpVeh.veh)
+        beamjoy_vehicles.writeVehiclePosition(ctxt.mpVeh.veh, frameOrig)
+    else
+        frameOrig:set(core_camera.getPositionXYZ())
     end
 
     table.clear(drawn)
@@ -330,8 +412,6 @@ local function onUpdate()
                     v.jbeam ~= beamjoy_vehicles.WALKING then
                     include = false
                 elseif v.type == beamjoy_vehicles.TYPES.TRAILER then
-                    -- see updateTagName's comment: getSelf() can be nil briefly right after connecting.
-                    local self = beamjoy_players.getSelf()
                     if not self or v.ownerName ~= self.playerName then
                         include = false -- not own trailer
                     elseif M.towedTrailerVids[v.vid] then
@@ -352,7 +432,9 @@ local function onUpdate()
             end
             if include then
                 drawn[vid] = true
-                drawNametag(beamjoy_vehicles.getVehicle(vid) or {}, orig)
+                -- getVehicle refreshes this very table's position and spectators and hands it
+                -- straight back, so there's nothing to look up twice and nothing to fall back to
+                drawNametag(beamjoy_vehicles.getVehicle(vid) or v, frameOrig, cam, self)
             end
         end
     else
@@ -364,7 +446,7 @@ local function onUpdate()
         for vid, v in pairs(beamjoy_vehicles.vehicles) do ---@type integer, BJVehicle
             if beamjoy_hunterRunner.isRevealedFugitiveVehicle(v) then
                 drawn[vid] = true
-                drawNametag(beamjoy_vehicles.getVehicle(vid) or {}, orig)
+                drawNametag(beamjoy_vehicles.getVehicle(vid) or v, frameOrig, cam, self)
             end
         end
     end
@@ -415,7 +497,7 @@ local function onUpdate()
             lastHoverVid = nil
         elseif mpVeh then
             drawn[lastHoverVid] = true
-            drawNametag(mpVeh, orig)
+            drawNametag(mpVeh, frameOrig, cam, self)
         else
             lastHoverVid = nil
         end

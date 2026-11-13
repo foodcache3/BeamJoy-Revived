@@ -231,6 +231,18 @@
                 </td>
                 <td><bj-toggle ng-model="$ctrl.defaults.allowStations"></bj-toggle></td>
             </tr>
+            <tr ng-if="$ctrl.defaults.allowStations">
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.hunterArena.stationRefuelRoles.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.hunterArena.stationRefuelRoles' | translate}}
+                </td>
+                <td><bj-select ng-model="$ctrl.defaults.stationRefuelRoles" options="$ctrl.stationRoleOptions"></bj-select></td>
+            </tr>
+            <tr ng-if="$ctrl.defaults.allowStations">
+                <td class="text-right" title="{{'beamjoy.window.config.tabs.hunterArena.stationRepairRoles.tooltip' | translate}}">
+                    {{'beamjoy.window.config.tabs.hunterArena.stationRepairRoles' | translate}}
+                </td>
+                <td><bj-select ng-model="$ctrl.defaults.stationRepairRoles" options="$ctrl.stationRoleOptions"></bj-select></td>
+            </tr>
             <tr>
                 <td class="text-right" title="{{'beamjoy.window.config.tabs.hunterArena.hunterNametagFadeDistance.tooltip' | translate}}">
                     {{'beamjoy.window.config.tabs.hunterArena.hunterNametagFadeDistance' | translate}}

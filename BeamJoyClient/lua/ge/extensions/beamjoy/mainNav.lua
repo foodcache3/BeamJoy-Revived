@@ -68,7 +68,8 @@ local HUDS = {
                 and beamjoy_kickVote.data.active == true
         end,
     },
-    { key = "raceHud", event = "BJRaceHudFocus", active = racing },
+    -- the d-pad only (held right picks, held left closes) : the face buttons stay the car's
+    { key = "raceHud", event = "BJRaceHudFocus", active = racing, dpadOnly = true },
     {
         key = "busHud",
         event = "BJBusHudFocus",
@@ -121,7 +122,7 @@ local function setHudFocus(hud)
     end
     M.hudFocused = key
     if hud then
-        beamjoy_uiNav.acquire(hud.key)
+        beamjoy_uiNav.acquire(hud.key, nil, hud.dpadOnly and beamjoy_uiNav.DPAD_ACTIONS or nil)
         beamjoy_communications_ui.send(hud.event, { active = true })
     end
 end
@@ -135,6 +136,12 @@ local function lobbySection()
         return runner ~= nil and runner.session ~= nil and runner.session.state == state
     end
     if inState(beamjoy_raceRunner, "GRID") then return "races" end
+    -- a race joined while it was already under way (a phase's lateJoin) : its lobby is where their
+    -- "ready up to start" is, so focusing lands there just as it does on a GRID lobby
+    if beamjoy_raceRunner and beamjoy_raceRunner.session then
+        local own = beamjoy_raceRunner.getSelfParticipant()
+        if own and own.lateJoining then return "races" end
+    end
     if inState(beamjoy_hunterRunner, "LOBBY") then return "hunter" end
     if inState(beamjoy_infectedRunner, "LOBBY") then return "infected" end
     if inState(beamjoy_derbyRunner, "LOBBY") then return "derby" end

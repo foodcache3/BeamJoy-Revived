@@ -271,7 +271,14 @@ end
 local function applyRepair()
     local own = beamjoy_vehicles.getCurrentOwn()
     if not own then return end
-    spawn.safeTeleport(own.veh, own.veh:getPosition(), own.veh:getRotation(), nil, nil, nil, nil, true)
+    -- the rotation here is the car's heading taken from its direction vector, NOT veh:getRotation() :
+    -- safeTeleport turns whatever it's given by quat(0,0,1,0) before setPosRot (read its body), so a
+    -- raw getRotation() comes back out spun, and on a settled/deformed car it isn't even a clean half
+    -- turn. quatFromDir(getDirectionVector()) is what the game's own in-place repair passes (see
+    -- ui/pause/providers/routeData/vehicle.lua and core/recoveryPrompt.lua), and it sets the car
+    -- upright on its wheels as a garage repair should.
+    spawn.safeTeleport(own.veh, own.veh:getPosition(), quatFromDir(own.veh:getDirectionVector()),
+        nil, nil, nil, nil, true)
     toast.info(beamjoy_lang.translate("beamjoy.stations.toastRepaired"), nil, 4)
 end
 

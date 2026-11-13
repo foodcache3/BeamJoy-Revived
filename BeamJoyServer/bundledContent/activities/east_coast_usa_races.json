@@ -684,9 +684,7 @@
             }
         ],
         "id": 1,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
@@ -4950,10 +4948,11 @@
             "waypointBeams": true
         },
         "distance": 5129,
-        "freeroam": false,
-        "freeroamLeaderboard": [
-
+        "formerNames": [
+            "Backroads Course Reverse"
         ],
+        "freeroam": false,
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -5624,15 +5623,10 @@
             }
         ],
         "id": 2,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "formerNames": [
-            "Backroads Course Reverse"
-        ],
         "name": "Backroads Course (reverse)",
         "oneWayGates": false,
         "props": [
@@ -9747,13 +9741,30 @@
             "disableNodegrabber": true,
             "dnfEnabled": true,
             "dnfTimeout": 30,
+            "flyingStart": false,
             "ghostBackmarkers": false,
             "ghostOnCountdown": true,
             "gridReadyTimeout": 10,
             "gridTimeout": 180,
+            "hideOthers": false,
             "joinable": false,
+            "jumpStartPenaltyS": 5,
             "laps": 3,
             "limitVisibleGates": true,
+            "outLap": false,
+            "pitFuelRatePct": 5,
+            "pitGhost": true,
+            "pitMissingPenaltyS": 30,
+            "pitRefuel": true,
+            "pitRepair": true,
+            "pitRepairMaxS": 60,
+            "pitReturn": false,
+            "pitStart": false,
+            "pitStops": 0,
+            "pitTow": true,
+            "pitTowSpeed": 50,
+            "pitTyreChangeS": 10,
+            "pitTyres": true,
             "placementMode": "random",
             "randomizeVehiclePool": false,
             "rejoinGraceMinutes": 10,
@@ -9763,6 +9774,8 @@
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
             "showGates": true,
+            "startFuelPct": 100,
+            "startLights": false,
             "visibleGateCount": 2,
             "waypointBeams": true
         },
@@ -10006,36 +10019,13 @@
             }
         ],
         "id": 3,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
         "name": "Asphalt Stage 1",
         "oneWayGates": false,
         "props": [
-            {
-                "dir": {
-                    "x": 0.9815,
-                    "y": -0.1908,
-                    "z": 0.0132
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 319.69,
-                    "y": 399.434,
-                    "z": 66.919
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.0161,
-                    "y": -0.0137,
-                    "z": 0.9998
-                }
-            },
             {
                 "dir": {
                     "x": 0.9877,
@@ -10311,27 +10301,6 @@
             },
             {
                 "dir": {
-                    "x": -0.9862,
-                    "y": 0.1654,
-                    "z": -0.0034
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 322.761,
-                    "y": 383.311,
-                    "z": 66.797
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.0066,
-                    "y": -0.0189,
-                    "z": 0.9998
-                }
-            },
-            {
-                "dir": {
                     "x": 0.1581,
                     "y": 0.9874,
                     "z": 0
@@ -10370,27 +10339,6 @@
                     "x": -0.0662,
                     "y": -0.0567,
                     "z": 0.9962
-                }
-            },
-            {
-                "dir": {
-                    "x": -0.3427,
-                    "y": -0.9394,
-                    "z": 0.0049
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": -602.558,
-                    "y": -855.974,
-                    "z": 43.984
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0.0273,
-                    "y": -0.0047,
-                    "z": 0.9996
                 }
             },
             {
@@ -10962,27 +10910,6 @@
             },
             {
                 "dir": {
-                    "x": 0.3427,
-                    "y": 0.9394,
-                    "z": -0.0049
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": -614.769,
-                    "y": -844.811,
-                    "z": 43.817
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.0263,
-                    "y": 0.0148,
-                    "z": 0.9995
-                }
-            },
-            {
-                "dir": {
                     "x": 0,
                     "y": 0.9969,
                     "z": -0.0781
@@ -11000,27 +10927,6 @@
                     "x": 0.0156,
                     "y": 0.0781,
                     "z": 0.9968
-                }
-            },
-            {
-                "dir": {
-                    "x": -0.9817,
-                    "y": 0.1906,
-                    "z": 0.0021
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 316.965,
-                    "y": 384.336,
-                    "z": 66.687
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.001,
-                    "y": -0.0161,
-                    "z": 0.9999
                 }
             },
             {
@@ -11172,27 +11078,6 @@
             },
             {
                 "dir": {
-                    "x": -0.3427,
-                    "y": -0.9394,
-                    "z": 0.0049
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": -600.461,
-                    "y": -850.476,
-                    "z": 43.9
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0.0073,
-                    "y": 0.0026,
-                    "z": 1
-                }
-            },
-            {
-                "dir": {
                     "x": -0.708,
                     "y": 0.7063,
                     "z": 0
@@ -11340,27 +11225,6 @@
             },
             {
                 "dir": {
-                    "x": 0.3427,
-                    "y": 0.9394,
-                    "z": -0.0049
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": -616.87,
-                    "y": -850.332,
-                    "z": 43.817
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.0263,
-                    "y": 0.0148,
-                    "z": 0.9995
-                }
-            },
-            {
-                "dir": {
                     "x": 0.9885,
                     "y": 0.151,
                     "z": 0.0009
@@ -11399,27 +11263,6 @@
                     "x": 0,
                     "y": 0,
                     "z": 1
-                }
-            },
-            {
-                "dir": {
-                    "x": 0.9862,
-                    "y": -0.1653,
-                    "z": 0.0122
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 325.431,
-                    "y": 398.815,
-                    "z": 66.913
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.0111,
-                    "y": 0.008,
-                    "z": 0.9999
                 }
             },
             {
@@ -11771,13 +11614,30 @@
             "disableNodegrabber": true,
             "dnfEnabled": true,
             "dnfTimeout": 30,
+            "flyingStart": false,
             "ghostBackmarkers": false,
             "ghostOnCountdown": true,
             "gridReadyTimeout": 10,
             "gridTimeout": 180,
+            "hideOthers": false,
             "joinable": false,
+            "jumpStartPenaltyS": 5,
             "laps": 3,
             "limitVisibleGates": true,
+            "outLap": false,
+            "pitFuelRatePct": 5,
+            "pitGhost": true,
+            "pitMissingPenaltyS": 30,
+            "pitRefuel": true,
+            "pitRepair": true,
+            "pitRepairMaxS": 60,
+            "pitReturn": false,
+            "pitStart": false,
+            "pitStops": 0,
+            "pitTow": true,
+            "pitTowSpeed": 50,
+            "pitTyreChangeS": 10,
+            "pitTyres": true,
             "placementMode": "random",
             "randomizeVehiclePool": false,
             "rejoinGraceMinutes": 10,
@@ -11787,14 +11647,17 @@
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
             "showGates": true,
+            "startFuelPct": 100,
+            "startLights": false,
             "visibleGateCount": 2,
             "waypointBeams": true
         },
         "distance": 2910,
-        "freeroam": false,
-        "freeroamLeaderboard": [
-
+        "formerNames": [
+            "Asphalt Stage 1 Reverse"
         ],
+        "freeroam": false,
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -12015,15 +11878,10 @@
             }
         ],
         "id": 4,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
-        "formerNames": [
-            "Asphalt Stage 1 Reverse"
-        ],
         "name": "Asphalt Stage 1 (reverse)",
         "oneWayGates": false,
         "props": [
@@ -12386,27 +12244,6 @@
             },
             {
                 "dir": {
-                    "x": -0.3427,
-                    "y": -0.9394,
-                    "z": 0.0049
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": -602.558,
-                    "y": -855.974,
-                    "z": 43.984
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0.0273,
-                    "y": -0.0047,
-                    "z": 0.9996
-                }
-            },
-            {
-                "dir": {
                     "x": 0.8254,
                     "y": 0.5579,
                     "z": 0.0866
@@ -12974,27 +12811,6 @@
             },
             {
                 "dir": {
-                    "x": 0.3427,
-                    "y": 0.9394,
-                    "z": -0.0049
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": -614.769,
-                    "y": -844.811,
-                    "z": 43.817
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.0263,
-                    "y": 0.0148,
-                    "z": 0.9995
-                }
-            },
-            {
-                "dir": {
                     "x": 0,
                     "y": 0.9969,
                     "z": -0.0781
@@ -13184,27 +13000,6 @@
             },
             {
                 "dir": {
-                    "x": -0.3427,
-                    "y": -0.9394,
-                    "z": 0.0049
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": -600.461,
-                    "y": -850.476,
-                    "z": 43.9
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0.0073,
-                    "y": 0.0026,
-                    "z": 1
-                }
-            },
-            {
-                "dir": {
                     "x": -0.708,
                     "y": 0.7063,
                     "z": 0
@@ -13348,27 +13143,6 @@
                     "x": -0.0009,
                     "y": -0.0946,
                     "z": 0.9955
-                }
-            },
-            {
-                "dir": {
-                    "x": 0.3427,
-                    "y": 0.9394,
-                    "z": -0.0049
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": -616.87,
-                    "y": -850.332,
-                    "z": 43.817
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.0263,
-                    "y": 0.0148,
-                    "z": 0.9995
                 }
             },
             {
@@ -13846,13 +13620,30 @@
             "disableNodegrabber": true,
             "dnfEnabled": true,
             "dnfTimeout": 30,
+            "flyingStart": false,
             "ghostBackmarkers": false,
             "ghostOnCountdown": true,
             "gridReadyTimeout": 10,
             "gridTimeout": 180,
+            "hideOthers": false,
             "joinable": false,
+            "jumpStartPenaltyS": 5,
             "laps": 3,
             "limitVisibleGates": true,
+            "outLap": false,
+            "pitFuelRatePct": 5,
+            "pitGhost": true,
+            "pitMissingPenaltyS": 30,
+            "pitRefuel": true,
+            "pitRepair": true,
+            "pitRepairMaxS": 60,
+            "pitReturn": false,
+            "pitStart": false,
+            "pitStops": 0,
+            "pitTow": true,
+            "pitTowSpeed": 50,
+            "pitTyreChangeS": 10,
+            "pitTyres": true,
             "placementMode": "random",
             "randomizeVehiclePool": false,
             "rejoinGraceMinutes": 10,
@@ -13862,6 +13653,8 @@
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
             "showGates": true,
+            "startFuelPct": 100,
+            "startLights": false,
             "visibleGateCount": 2,
             "waypointBeams": true
         },
@@ -14015,9 +13808,7 @@
             }
         ],
         "id": 5,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -14043,27 +13834,6 @@
                     "x": -0.0235,
                     "y": -0.0758,
                     "z": 0.9968
-                }
-            },
-            {
-                "dir": {
-                    "x": 0.1043,
-                    "y": -0.9945,
-                    "z": 0.002
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 168.395,
-                    "y": 827.242,
-                    "z": 43.838
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0.0009,
-                    "y": 0.0021,
-                    "z": 1
                 }
             },
             {
@@ -14127,27 +13897,6 @@
                     "x": 0.003,
                     "y": -0.0031,
                     "z": 1
-                }
-            },
-            {
-                "dir": {
-                    "x": -0.1043,
-                    "y": 0.9945,
-                    "z": -0.002
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 153.314,
-                    "y": 825.108,
-                    "z": 43.52
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.0389,
-                    "y": -0.002,
-                    "z": 0.9992
                 }
             },
             {
@@ -14400,48 +14149,6 @@
                     "x": 0,
                     "y": -0.0159,
                     "z": 0.9999
-                }
-            },
-            {
-                "dir": {
-                    "x": 0.1043,
-                    "y": -0.9945,
-                    "z": 0.002
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 167.549,
-                    "y": 833.028,
-                    "z": 43.836
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.0081,
-                    "y": 0.0012,
-                    "z": 1
-                }
-            },
-            {
-                "dir": {
-                    "x": -0.1043,
-                    "y": 0.9945,
-                    "z": -0.002
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 152.458,
-                    "y": 830.912,
-                    "z": 43.467
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.0389,
-                    "y": -0.002,
-                    "z": 0.9992
                 }
             },
             {
@@ -14961,13 +14668,30 @@
             "disableNodegrabber": true,
             "dnfEnabled": true,
             "dnfTimeout": 30,
+            "flyingStart": false,
             "ghostBackmarkers": false,
             "ghostOnCountdown": true,
             "gridReadyTimeout": 10,
             "gridTimeout": 180,
+            "hideOthers": false,
             "joinable": false,
+            "jumpStartPenaltyS": 5,
             "laps": 3,
             "limitVisibleGates": true,
+            "outLap": false,
+            "pitFuelRatePct": 5,
+            "pitGhost": true,
+            "pitMissingPenaltyS": 30,
+            "pitRefuel": true,
+            "pitRepair": true,
+            "pitRepairMaxS": 60,
+            "pitReturn": false,
+            "pitStart": false,
+            "pitStops": 0,
+            "pitTow": true,
+            "pitTowSpeed": 50,
+            "pitTyreChangeS": 10,
+            "pitTyres": true,
             "placementMode": "random",
             "randomizeVehiclePool": false,
             "rejoinGraceMinutes": 10,
@@ -14977,14 +14701,17 @@
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
             "showGates": true,
+            "startFuelPct": 100,
+            "startLights": false,
             "visibleGateCount": 2,
             "waypointBeams": true
         },
         "distance": 1656,
-        "freeroam": false,
-        "freeroamLeaderboard": [
-
+        "formerNames": [
+            "Asphalt Stage 2 Reverse"
         ],
+        "freeroam": false,
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -15133,15 +14860,10 @@
             }
         ],
         "id": 6,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
-        "formerNames": [
-            "Asphalt Stage 2 Reverse"
-        ],
         "name": "Asphalt Stage 2 (reverse)",
         "oneWayGates": false,
         "props": [
@@ -15227,27 +14949,6 @@
                     "x": -0.0105,
                     "y": 0.0747,
                     "z": 0.9972
-                }
-            },
-            {
-                "dir": {
-                    "x": -0.0033,
-                    "y": -1,
-                    "z": -0.0031
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 661.252,
-                    "y": -444.395,
-                    "z": 53.18
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0.003,
-                    "y": -0.0031,
-                    "z": 1
                 }
             },
             {
@@ -15420,27 +15121,6 @@
             },
             {
                 "dir": {
-                    "x": 0.0285,
-                    "y": 0.9996,
-                    "z": -0.0031
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 645.835,
-                    "y": -444.522,
-                    "z": 53.142
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.0029,
-                    "y": 0.0031,
-                    "z": 1
-                }
-            },
-            {
-                "dir": {
                     "x": 0.1043,
                     "y": -0.9945,
                     "z": 0.0022
@@ -15479,27 +15159,6 @@
                     "x": -0.0021,
                     "y": 0.0564,
                     "z": 0.9984
-                }
-            },
-            {
-                "dir": {
-                    "x": 0.0285,
-                    "y": 0.9996,
-                    "z": -0.0031
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 645.835,
-                    "y": -450.532,
-                    "z": 53.15
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": -0.0029,
-                    "y": 0.0031,
-                    "z": 1
                 }
             },
             {
@@ -15730,27 +15389,6 @@
                 "up": {
                     "x": -0.0023,
                     "y": 0.0012,
-                    "z": 1
-                }
-            },
-            {
-                "dir": {
-                    "x": -0.0033,
-                    "y": -1,
-                    "z": -0.0031
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 661.252,
-                    "y": -450.419,
-                    "z": 53.18
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0.003,
-                    "y": -0.0031,
                     "z": 1
                 }
             },
@@ -16081,10 +15719,11 @@
             "waypointBeams": true
         },
         "distance": 5994,
-        "freeroam": false,
-        "freeroamLeaderboard": [
-
+        "formerNames": [
+            "High Speed Highway Reverse"
         ],
+        "freeroam": false,
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -16413,15 +16052,10 @@
             }
         ],
         "id": 7,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "formerNames": [
-            "High Speed Highway Reverse"
-        ],
         "name": "High Speed Highway (reverse)",
         "oneWayGates": false,
         "props": [
@@ -19205,9 +18839,7 @@
             }
         ],
         "id": 8,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -19672,9 +19304,7 @@
             }
         ],
         "id": 9,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
@@ -20425,10 +20055,11 @@
             "waypointBeams": true
         },
         "distance": 462,
-        "freeroam": false,
-        "freeroamLeaderboard": [
-
+        "formerNames": [
+            "Sawmill Long Reverse"
         ],
+        "freeroam": false,
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -20577,15 +20208,10 @@
             }
         ],
         "id": 10,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "formerNames": [
-            "Sawmill Long Reverse"
-        ],
         "name": "Sawmill Long (reverse)",
         "oneWayGates": false,
         "props": [
@@ -21584,9 +21210,7 @@
             }
         ],
         "id": 11,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
@@ -22694,10 +22318,11 @@
             "waypointBeams": true
         },
         "distance": 427,
-        "freeroam": false,
-        "freeroamLeaderboard": [
-
+        "formerNames": [
+            "Sawmill Short Reverse"
         ],
+        "freeroam": false,
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -22864,15 +22489,10 @@
             }
         ],
         "id": 12,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "formerNames": [
-            "Sawmill Short Reverse"
-        ],
         "name": "Sawmill Short (reverse)",
         "oneWayGates": false,
         "props": [
@@ -23915,13 +23535,30 @@
             "disableNodegrabber": true,
             "dnfEnabled": true,
             "dnfTimeout": 30,
+            "flyingStart": false,
             "ghostBackmarkers": false,
             "ghostOnCountdown": true,
             "gridReadyTimeout": 10,
             "gridTimeout": 180,
+            "hideOthers": false,
             "joinable": false,
+            "jumpStartPenaltyS": 5,
             "laps": 3,
             "limitVisibleGates": true,
+            "outLap": false,
+            "pitFuelRatePct": 5,
+            "pitGhost": true,
+            "pitMissingPenaltyS": 30,
+            "pitRefuel": true,
+            "pitRepair": true,
+            "pitRepairMaxS": 60,
+            "pitReturn": false,
+            "pitStart": false,
+            "pitStops": 0,
+            "pitTow": true,
+            "pitTowSpeed": 50,
+            "pitTyreChangeS": 10,
+            "pitTyres": true,
             "placementMode": "random",
             "randomizeVehiclePool": false,
             "rejoinGraceMinutes": 10,
@@ -23931,10 +23568,12 @@
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
             "showGates": true,
+            "startFuelPct": 100,
+            "startLights": false,
             "visibleGateCount": 2,
             "waypointBeams": true
         },
-        "distance": 1002,
+        "distance": 984,
         "freeroam": false,
         "gates": [
             {
@@ -24174,9 +23813,7 @@
             }
         ],
         "id": 13,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -24307,48 +23944,6 @@
                     "x": 0.0075,
                     "y": -0.0115,
                     "z": 0.9999
-                }
-            },
-            {
-                "dir": {
-                    "x": 0.6187,
-                    "y": 0.7856,
-                    "z": 0
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 683.447,
-                    "y": -60.25,
-                    "z": 52.461
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0,
-                    "y": 0,
-                    "z": 1
-                }
-            },
-            {
-                "dir": {
-                    "x": -0.6066,
-                    "y": -0.795,
-                    "z": 0
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 699.088,
-                    "y": -65.513,
-                    "z": 52.489
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0,
-                    "y": 0,
-                    "z": 1
                 }
             },
             {
@@ -25256,27 +24851,6 @@
             },
             {
                 "dir": {
-                    "x": -0.6066,
-                    "y": -0.795,
-                    "z": 0
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 695.388,
-                    "y": -70.027,
-                    "z": 52.46
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0,
-                    "y": 0,
-                    "z": 1
-                }
-            },
-            {
-                "dir": {
                     "x": 0.754,
                     "y": -0.6567,
                     "z": 0.015
@@ -25294,27 +24868,6 @@
                     "x": -0.0113,
                     "y": 0.0098,
                     "z": 0.9999
-                }
-            },
-            {
-                "dir": {
-                    "x": 0.6187,
-                    "y": 0.7856,
-                    "z": 0
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 687.16,
-                    "y": -55.688,
-                    "z": 52.598
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0.0073,
-                    "y": -0.0058,
-                    "z": 1
                 }
             },
             {
@@ -26083,9 +25636,9 @@
                     "z": 0
                 },
                 "pos": {
-                    "x": 693.891,
-                    "y": -61.813,
-                    "z": 52.523
+                    "x": 678.82952880859,
+                    "y": -49.704292297363,
+                    "z": 52.670021057129
                 }
             },
             {
@@ -26095,9 +25648,9 @@
                     "z": 0
                 },
                 "pos": {
-                    "x": 691.073,
-                    "y": -65.497,
-                    "z": 52.455
+                    "x": 676.08111572266,
+                    "y": -53.5771484375,
+                    "z": 52.494426727295
                 }
             },
             {
@@ -26107,21 +25660,21 @@
                     "z": 0
                 },
                 "pos": {
-                    "x": 702.605,
-                    "y": -68.999,
-                    "z": 52.473
+                    "x": 684.67309570312,
+                    "y": -54.24828338623,
+                    "z": 52.622379302979
                 }
             },
             {
                 "dir": {
-                    "x": -0.785484546789,
-                    "y": 0.61888127032225,
+                    "x": -0.78860238901121,
+                    "y": 0.61490346563166,
                     "z": 0
                 },
                 "pos": {
-                    "x": 699.846,
-                    "y": -72.394,
-                    "z": 52.458
+                    "x": 681.59484863281,
+                    "y": -57.980823516846,
+                    "z": 52.488162994385
                 }
             },
             {
@@ -26131,9 +25684,9 @@
                     "z": 0
                 },
                 "pos": {
-                    "x": 711.454,
-                    "y": -76.262,
-                    "z": 52.468
+                    "x": 691.99176025391,
+                    "y": -60.602703094482,
+                    "z": 52.563041687012
                 }
             },
             {
@@ -26143,9 +25696,9 @@
                     "z": 0
                 },
                 "pos": {
-                    "x": 708.692,
-                    "y": -79.523,
-                    "z": 52.504
+                    "x": 689.20837402344,
+                    "y": -64.146499633789,
+                    "z": 52.479877471924
                 }
             },
             {
@@ -26155,9 +25708,9 @@
                     "z": 0
                 },
                 "pos": {
-                    "x": 720.965,
-                    "y": -84.041,
-                    "z": 52.478
+                    "x": 699.51220703125,
+                    "y": -66.268829345703,
+                    "z": 52.509517669678
                 }
             },
             {
@@ -26167,9 +25720,9 @@
                     "z": 0
                 },
                 "pos": {
-                    "x": 717.782,
-                    "y": -87.484,
-                    "z": 52.492
+                    "x": 696.78771972656,
+                    "y": -69.936241149902,
+                    "z": 52.484466552734
                 }
             }
         ],
@@ -26188,13 +25741,30 @@
             "disableNodegrabber": true,
             "dnfEnabled": true,
             "dnfTimeout": 30,
+            "flyingStart": false,
             "ghostBackmarkers": false,
             "ghostOnCountdown": true,
             "gridReadyTimeout": 10,
             "gridTimeout": 180,
+            "hideOthers": false,
             "joinable": false,
+            "jumpStartPenaltyS": 5,
             "laps": 3,
             "limitVisibleGates": true,
+            "outLap": false,
+            "pitFuelRatePct": 5,
+            "pitGhost": true,
+            "pitMissingPenaltyS": 30,
+            "pitRefuel": true,
+            "pitRepair": true,
+            "pitRepairMaxS": 60,
+            "pitReturn": false,
+            "pitStart": false,
+            "pitStops": 0,
+            "pitTow": true,
+            "pitTowSpeed": 50,
+            "pitTyreChangeS": 10,
+            "pitTyres": true,
             "placementMode": "random",
             "randomizeVehiclePool": false,
             "rejoinGraceMinutes": 10,
@@ -26204,14 +25774,17 @@
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
             "showGates": true,
+            "startFuelPct": 100,
+            "startLights": false,
             "visibleGateCount": 2,
             "waypointBeams": true
         },
         "distance": 1021,
-        "freeroam": false,
-        "freeroamLeaderboard": [
-
+        "formerNames": [
+            "Street Stage Reverse"
         ],
+        "freeroam": false,
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -26450,15 +26023,10 @@
             }
         ],
         "id": 14,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
-        "formerNames": [
-            "Street Stage Reverse"
-        ],
         "name": "Street Stage (reverse)",
         "oneWayGates": false,
         "props": [
@@ -26586,48 +26154,6 @@
                     "x": 0.0075,
                     "y": -0.0115,
                     "z": 0.9999
-                }
-            },
-            {
-                "dir": {
-                    "x": 0.6187,
-                    "y": 0.7856,
-                    "z": 0
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 683.447,
-                    "y": -60.25,
-                    "z": 52.461
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0,
-                    "y": 0,
-                    "z": 1
-                }
-            },
-            {
-                "dir": {
-                    "x": -0.6066,
-                    "y": -0.795,
-                    "z": 0
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 699.088,
-                    "y": -65.513,
-                    "z": 52.489
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0,
-                    "y": 0,
-                    "z": 1
                 }
             },
             {
@@ -27535,27 +27061,6 @@
             },
             {
                 "dir": {
-                    "x": -0.6066,
-                    "y": -0.795,
-                    "z": 0
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 695.388,
-                    "y": -70.027,
-                    "z": 52.46
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0,
-                    "y": 0,
-                    "z": 1
-                }
-            },
-            {
-                "dir": {
                     "x": 0.754,
                     "y": -0.6567,
                     "z": 0.015
@@ -27577,27 +27082,6 @@
             },
             {
                 "dir": {
-                    "x": 0.6187,
-                    "y": 0.7856,
-                    "z": 0
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 687.16,
-                    "y": -55.688,
-                    "z": 52.598
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0.0073,
-                    "y": -0.0058,
-                    "z": 1
-                }
-            },
-            {
-                "dir": {
                     "x": 0.6482,
                     "y": 0.7614,
                     "z": 0.0079
@@ -27615,27 +27099,6 @@
                     "x": -0.0275,
                     "y": 0.0131,
                     "z": 0.9995
-                }
-            },
-            {
-                "dir": {
-                    "x": 0.8422,
-                    "y": 0.5362,
-                    "z": -0.0566
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 828.684,
-                    "y": -455.572,
-                    "z": 48.166
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0.0829,
-                    "y": -0.025,
-                    "z": 0.9962
                 }
             },
             {
@@ -27699,27 +27162,6 @@
                     "x": 0,
                     "y": 0,
                     "z": 1
-                }
-            },
-            {
-                "dir": {
-                    "x": 0.5137,
-                    "y": -0.8526,
-                    "z": -0.0953
-                },
-                "kind": "static",
-                "lift": 0,
-                "pos": {
-                    "x": 827.234,
-                    "y": -464.783,
-                    "z": 48.11
-                },
-                "scale": 1,
-                "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
-                "up": {
-                    "x": 0.131,
-                    "y": -0.0318,
-                    "z": 0.9909
                 }
             },
             {
@@ -28509,13 +27951,30 @@
             "disableNodegrabber": true,
             "dnfEnabled": true,
             "dnfTimeout": 30,
+            "flyingStart": false,
             "ghostBackmarkers": false,
             "ghostOnCountdown": true,
             "gridReadyTimeout": 10,
             "gridTimeout": 180,
+            "hideOthers": false,
             "joinable": false,
+            "jumpStartPenaltyS": 5,
             "laps": 3,
             "limitVisibleGates": true,
+            "outLap": false,
+            "pitFuelRatePct": 5,
+            "pitGhost": true,
+            "pitMissingPenaltyS": 30,
+            "pitRefuel": true,
+            "pitRepair": true,
+            "pitRepairMaxS": 60,
+            "pitReturn": false,
+            "pitStart": false,
+            "pitStops": 0,
+            "pitTow": true,
+            "pitTowSpeed": 50,
+            "pitTyreChangeS": 10,
+            "pitTyres": true,
             "placementMode": "random",
             "randomizeVehiclePool": false,
             "rejoinGraceMinutes": 10,
@@ -28525,6 +27984,8 @@
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
             "showGates": true,
+            "startFuelPct": 100,
+            "startLights": false,
             "visibleGateCount": 2,
             "waypointBeams": true
         },
@@ -28555,7 +28016,7 @@
                     "y": 0.91427476410513,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "parents": [
                     1
                 ],
@@ -28565,7 +28026,7 @@
                     "z": 56.087
                 },
                 "step": 2,
-                "width": 9.0
+                "width": 9
             },
             {
                 "dir": {
@@ -28591,7 +28052,7 @@
                     "y": 0.99988135013461,
                     "z": 0
                 },
-                "height": 13.0,
+                "height": 13,
                 "parents": [
                     3
                 ],
@@ -28601,7 +28062,7 @@
                     "z": 53.312
                 },
                 "step": 4,
-                "width": 13.0
+                "width": 13
             },
             {
                 "dir": {
@@ -28627,7 +28088,7 @@
                     "y": 0.80146944434098,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "parents": [
                     5
                 ],
@@ -28637,7 +28098,7 @@
                     "z": 51.214
                 },
                 "step": 6,
-                "width": 9.0
+                "width": 9
             },
             {
                 "dir": {
@@ -28663,7 +28124,7 @@
                     "y": -0.95535579588851,
                     "z": 0
                 },
-                "height": 7.0,
+                "height": 7,
                 "parents": [
                     7
                 ],
@@ -28673,7 +28134,7 @@
                     "z": 53.233
                 },
                 "step": 8,
-                "width": 7.0
+                "width": 7
             },
             {
                 "dir": {
@@ -28681,7 +28142,7 @@
                     "y": -0.70764653375005,
                     "z": 0
                 },
-                "height": 5.0,
+                "height": 5,
                 "parents": [
                     8
                 ],
@@ -28691,7 +28152,7 @@
                     "z": 53.208
                 },
                 "step": 9,
-                "width": 5.0
+                "width": 5
             },
             {
                 "dir": {
@@ -28699,7 +28160,7 @@
                     "y": -0.67775745027266,
                     "z": 0
                 },
-                "height": 7.0,
+                "height": 7,
                 "parents": [
                     9
                 ],
@@ -28709,7 +28170,7 @@
                     "z": 53.371
                 },
                 "step": 10,
-                "width": 7.0
+                "width": 7
             },
             {
                 "dir": {
@@ -28753,7 +28214,7 @@
                     "y": -0.99328365754359,
                     "z": 0
                 },
-                "height": 5.0,
+                "height": 5,
                 "parents": [
                     12
                 ],
@@ -28763,7 +28224,7 @@
                     "z": 53.188
                 },
                 "step": 13,
-                "width": 5.0
+                "width": 5
             },
             {
                 "dir": {
@@ -28771,7 +28232,7 @@
                     "y": -0.49779641632881,
                     "z": 0
                 },
-                "height": 9.0,
+                "height": 9,
                 "isFinish": true,
                 "parents": [
                     13
@@ -28782,13 +28243,11 @@
                     "z": 56.722
                 },
                 "step": 14,
-                "width": 9.0
+                "width": 9
             }
         ],
         "id": 15,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
@@ -29014,9 +28473,9 @@
                 "kind": "static",
                 "lift": 0,
                 "pos": {
-                    "x": 728.206,
-                    "y": -492.237,
-                    "z": 56.793
+                    "x": 704.45682958984,
+                    "y": -490.73505110677,
+                    "z": 57.192696350098
                 },
                 "scale": 1,
                 "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
@@ -29035,9 +28494,9 @@
                 "kind": "static",
                 "lift": 0,
                 "pos": {
-                    "x": 727.976,
-                    "y": -495.622,
-                    "z": 56.872
+                    "x": 704.22682958984,
+                    "y": -494.12005110677,
+                    "z": 57.271696350098
                 },
                 "scale": 1,
                 "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
@@ -29056,9 +28515,9 @@
                 "kind": "static",
                 "lift": 0,
                 "pos": {
-                    "x": 727.704,
-                    "y": -499.354,
-                    "z": 56.915
+                    "x": 703.95482958984,
+                    "y": -497.85205110677,
+                    "z": 57.314696350098
                 },
                 "scale": 1,
                 "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
@@ -30148,9 +29607,9 @@
                 "kind": "static",
                 "lift": 0,
                 "pos": {
-                    "x": 730.213,
-                    "y": -502.165,
-                    "z": 56.872
+                    "x": 730.1826171875,
+                    "y": -502.16387939453,
+                    "z": 56.809646606445
                 },
                 "scale": 1,
                 "shape": "/art/shapes/race/s_concrete_race_barrier.dae",
@@ -30527,13 +29986,30 @@
             "disableNodegrabber": true,
             "dnfEnabled": true,
             "dnfTimeout": 30,
+            "flyingStart": false,
             "ghostBackmarkers": false,
             "ghostOnCountdown": true,
             "gridReadyTimeout": 10,
             "gridTimeout": 180,
+            "hideOthers": false,
             "joinable": false,
+            "jumpStartPenaltyS": 5,
             "laps": 3,
             "limitVisibleGates": true,
+            "outLap": false,
+            "pitFuelRatePct": 5,
+            "pitGhost": true,
+            "pitMissingPenaltyS": 30,
+            "pitRefuel": true,
+            "pitRepair": true,
+            "pitRepairMaxS": 60,
+            "pitReturn": false,
+            "pitStart": false,
+            "pitStops": 0,
+            "pitTow": true,
+            "pitTowSpeed": 50,
+            "pitTyreChangeS": 10,
+            "pitTyres": true,
             "placementMode": "random",
             "randomizeVehiclePool": false,
             "rejoinGraceMinutes": 10,
@@ -30543,14 +30019,17 @@
             "respawnStrategy": "lastcheckpoint",
             "showGateNametags": false,
             "showGates": true,
+            "startFuelPct": 100,
+            "startLights": false,
             "visibleGateCount": 2,
             "waypointBeams": true
         },
         "distance": 1381,
-        "freeroam": false,
-        "freeroamLeaderboard": [
-
+        "formerNames": [
+            "Street Course Reverse"
         ],
+        "freeroam": false,
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -30671,12 +30150,12 @@
                     6
                 ],
                 "pos": {
-                    "x": 716.404,
-                    "y": -229.146,
-                    "z": 53.225
+                    "x": 730.08227539062,
+                    "y": -247.04992675781,
+                    "z": 53.19571685791
                 },
                 "step": 7,
-                "width": 13
+                "width": 6.6419645894951
             },
             {
                 "dir": {
@@ -30761,12 +30240,12 @@
                     11
                 ],
                 "pos": {
-                    "x": 737.934,
-                    "y": -243.894,
-                    "z": 53.209
+                    "x": 735.88995361328,
+                    "y": -242.07217407227,
+                    "z": 53.200252532959
                 },
                 "step": 12,
-                "width": 6
+                "width": 6.6833752946879
             },
             {
                 "dir": {
@@ -30807,15 +30286,10 @@
             }
         ],
         "id": 16,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
-        "formerNames": [
-            "Street Course Reverse"
-        ],
         "name": "Street Course (reverse)",
         "oneWayGates": false,
         "props": [
@@ -32341,9 +31815,93 @@
                     "z": 0
                 },
                 "pos": {
-                    "x": 751.839,
-                    "y": -496.313,
-                    "z": 56.399
+                    "x": 752.48565673828,
+                    "y": -499.11975097656,
+                    "z": 56.378089904785
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99997399506091,
+                    "y": 0.0072117405608418,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 752.3232421875,
+                    "y": -494.6442565918,
+                    "z": 56.385108947754
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99942411834288,
+                    "y": 0.033932752239721,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 758.3292164084,
+                    "y": -499.37914733047,
+                    "z": 56.284271240234
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99942411841071,
+                    "y": 0.033932750241867,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 758.48319364495,
+                    "y": -494.84404276732,
+                    "z": 56.289531707764
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99891455883016,
+                    "y": 0.04658008326681,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 765.39008153741,
+                    "y": -499.81894102573,
+                    "z": 56.224086761475
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99891455872996,
+                    "y": 0.04658008541565,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 765.61494529703,
+                    "y": -494.99646061281,
+                    "z": 56.238525390625
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99905609803933,
+                    "y": 0.043438611515861,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 772.57330322266,
+                    "y": -499.76724243164,
+                    "z": 56.214958190918
+                }
+            },
+            {
+                "dir": {
+                    "x": -0.99905609803933,
+                    "y": 0.043438611515861,
+                    "z": 0
+                },
+                "pos": {
+                    "x": 772.55224609375,
+                    "y": -494.94561767578,
+                    "z": 56.239719390869
                 }
             }
         ],
@@ -32383,9 +31941,7 @@
         },
         "distance": 4355,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -32768,9 +32324,7 @@
             }
         ],
         "id": 17,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
@@ -36985,9 +36539,7 @@
         },
         "distance": 4357,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -37370,9 +36922,7 @@
             }
         ],
         "id": 18,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
@@ -41634,9 +41184,7 @@
         },
         "distance": 3908,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -42019,9 +41567,7 @@
             }
         ],
         "id": 19,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
@@ -44443,9 +43989,7 @@
         },
         "distance": 3908,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -44828,9 +44372,7 @@
             }
         ],
         "id": 20,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
@@ -47068,9 +46610,7 @@
         },
         "distance": 4594,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -47921,9 +47461,7 @@
             }
         ],
         "id": 21,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -49765,9 +49303,7 @@
         },
         "distance": 4027,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -50564,9 +50100,7 @@
             }
         ],
         "id": 22,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -52761,9 +52295,7 @@
         },
         "distance": 6110,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -53235,9 +52767,7 @@
             }
         ],
         "id": 23,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
@@ -56348,17 +55878,13 @@
             }
         ],
         "id": 24,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
         "name": "Gas Station Loop",
         "oneWayGates": false,
-        "props": [
-
-        ],
+        "props": [],
         "sectorCount": 3,
         "startPositions": [
             {
@@ -56578,9 +56104,7 @@
         },
         "distance": 2037,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -56729,9 +56253,7 @@
             }
         ],
         "id": 25,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -57735,9 +57257,7 @@
         },
         "distance": 2037,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -57886,9 +57406,7 @@
             }
         ],
         "id": 26,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -58955,9 +58473,7 @@
         },
         "distance": 948,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -59088,9 +58604,7 @@
             }
         ],
         "id": 27,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -60010,9 +59524,7 @@
         },
         "distance": 2395,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -60377,9 +59889,7 @@
             }
         ],
         "id": 28,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -61461,9 +60971,7 @@
         },
         "distance": 5274,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -62008,9 +61516,7 @@
             }
         ],
         "id": 29,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -64316,9 +63822,7 @@
         },
         "distance": 5260,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -64863,9 +64367,7 @@
             }
         ],
         "id": 30,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -67150,9 +66652,7 @@
         },
         "distance": 1290,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -67337,9 +66837,7 @@
             }
         ],
         "id": 31,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -67839,9 +67337,7 @@
         },
         "distance": 1303,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -68026,9 +67522,7 @@
             }
         ],
         "id": 32,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": false,
         "manualSectors": false,
         "mode": "grid",
@@ -68492,9 +67986,7 @@
         },
         "distance": 3731,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -68715,9 +68207,7 @@
             }
         ],
         "id": 33,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
@@ -73165,9 +72655,7 @@
         },
         "distance": 3731,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -73388,9 +72876,7 @@
             }
         ],
         "id": 34,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
@@ -77838,9 +77324,7 @@
         },
         "distance": 9122,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -78367,9 +77851,7 @@
             }
         ],
         "id": 35,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",
@@ -79331,9 +78813,7 @@
         },
         "distance": 9122,
         "freeroam": false,
-        "freeroamLeaderboard": [
-
-        ],
+        "freeroamLeaderboard": [],
         "gates": [
             {
                 "dir": {
@@ -79860,9 +79340,7 @@
             }
         ],
         "id": 36,
-        "leaderboard": [
-
-        ],
+        "leaderboard": [],
         "loopable": true,
         "manualSectors": false,
         "mode": "grid",

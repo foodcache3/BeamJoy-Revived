@@ -5,15 +5,27 @@
 //   compact  : the essentials only, the old HUD's information in the new style
 //   full     : every racer with their gap to the leader, for broadcasting / spectating
 //   off      : no HUD, racing or spectating ; the Focus control still brings up the compact one
-//              for its Race info / Retire buttons
+//              for its actions
 // Everything shown is built once per BJRaceHud push (~20/s while racing, see raceRunner.lua's
 // pushHud), never in template getters : fresh arrays per digest break ng-repeat.
+// An event's phases (practice, qualifying, the race...) : the phase's name in the header, a timed
+// phase's time left where the lap count would be, and its standings by its own ranking (best lap,
+// every lap added up, or the race order).
+// Server plugins can put up to 2 labels beside each racer's name (results.setFields with `hud`) :
+// every standings row, your own (in the header on a run alone, under the position in compact), and
+// the first one beside the cars either side ; the player can turn them off (Settings > Menu).
+// A race with pits (PIT_SYSTEM_PLAN.md) : a P beside whoever's in the pit lane, each racer's stops
+// when some are required, and your own pit line (the lane, your stop's progress, a tow's hold, the
+// plan) from beamjoy/racePits.lua (BJRacePitStatus).
+// ACTIONS : always there behind the Actions button (a click, or the Focus control, which also gives
+// the list the D-pad) : Pit (the pit menu, windows/pitControl), Tow to pits (a 2 s hold), Retire (a
+// 5 s hold), Close, one under the other.
 const RACE_HUD_LAYOUT_KEY = "beamjoy.raceHud.layout";
 const RACE_HUD_LAYOUTS = ["standard", "compact", "full", "off"];
 
 angular.module("beamjoy").component("bjRaceHud", {
     templateUrl: "/ui/modModules/beamjoy/windows/raceHud/app.html",
-    controller: function ($rootScope, $scope, $filter, $interval, beamjoyStore, beamjoyDelivery, beamjoyInfoPanel, beamjoyLeaderboardFormat) {
+    controller: function ($rootScope, $scope, $filter, $interval, beamjoyStore, beamjoyDelivery, beamjoyLeaderboardFormat, beamjoyPluginUi, beamjoyPitFormat) {
         const translate = (key) => $filter("translate")(key);
         const fill = (key, values) =>
             Object.entries(values).reduce((text, [k, v]) => text.replace(`{${k}}`, v), translate(key));
@@ -68,12 +80,23 @@ angular.module("beamjoy").component("bjRaceHud", {
             return "";
         };
         const nameOf = (row) => (row && (row.displayName || row.playerName)) || "";
+        // a timed phase's time left : 12:31, whole seconds (rounded up, 0:00 only once it's up)
+        const timeLeft = (ms) => {
+            const s = Math.max(0, Math.ceil((Number(ms) || 0) / 1000));
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const ss = String(s % 60).padStart(2, "0");
+            return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+        };
         // a racer's staff time penalty in seconds, for the penalty box ("5", "0.5") ; null : none to show
         const penText = (ms) => {
             const s = Math.round(ms / 100) / 10;
             return Number.isInteger(s) ? String(s) : s.toFixed(1);
         };
         const penOf = (row) => (row && row.penaltyMs > 0 && !row.disqualified ? penText(row.penaltyMs) : null);
+        const labelsOf = (row) => beamjoyPluginUi.labelsOf(row && row.labels);
+        // beside the cars either side, there's room for one
+        const firstLabel = (row) => labelsOf(row)[0] || null;
 
         const build = (data) => {
             this.spectator = !!data.spectator;
@@ -81,10 +104,27 @@ angular.module("beamjoy").component("bjRaceHud", {
             applyLayout();
             const self = data.self || {};
             const laps = data.totalLaps || 1;
+            // lap by lap : several laps, or a timed phase (as many as fit)
+            const timed = !!data.timed;
+            const multiLap = laps > 1 || timed;
+            const ranking = data.ranking || "position";
             const sectors = data.totalSectors || 0;
             const standings = Array.isArray(data.standings) ? data.standings : [];
+            // a race with pits : each racer's stops against those required ("1/1"), the P instead
+            // while they're in the lane
+            const stopsRequired = data.pits ? Number(data.pitStopsRequired) || 0 : 0;
+            const stopsOf = (row) => (stopsRequired > 0 && row && !row.inPit && !row.finished && !row.dnf
+                ? `${row.pitStops || 0}/${stopsRequired}` : null);
+            const phaseLabel = data.phaseCount > 1
+                ? data.phaseName || fill("beamjoy.raceHud.phaseN", { n: data.phaseIndex || 1 })
+                : null;
             const v = {
                 raceName: data.raceName,
+                // one at a time : still waiting for their turn
+                eyebrow: typeof data.waitingAhead === "number"
+                    ? fill("beamjoy.raceHud.waitingTurn", { n: data.waitingAhead })
+                    : phaseLabel || translate("beamjoy.raceHud.racing"),
+                phaseLabel,
                 spectating: data.spectatingPlayerName
                     ? fill("beamjoy.raceHud.spectating", { name: nameOf(self) })
                     : null,
@@ -95,6 +135,7 @@ angular.module("beamjoy").component("bjRaceHud", {
                 finished: !!self.finished,
                 dnf: !!self.dnf,
                 pen: penOf(self),
+                selfLabels: labelsOf(self),
             };
             v.ofCount = fill("beamjoy.raceHud.ofCount", { n: v.count });
             v.finishedText = fill("beamjoy.raceHud.finishedCount", { n: v.finishedCount });
@@ -104,7 +145,14 @@ angular.module("beamjoy").component("bjRaceHud", {
             if (self.disqualified) v.progress = translate("beamjoy.raceHud.disqualified");
             else if (self.finished) v.progress = translate("beamjoy.raceHud.finished");
             else if (self.dnf) v.progress = translate("beamjoy.raceHud.retired");
-            else if (laps > 1 && self.currentLap >= laps) v.progress = translate("beamjoy.raceHud.finalLap");
+            // an out lap (a circuit) : not timed until the line
+            else if (self.outLap) v.progress = translate("beamjoy.raceHud.outLap");
+            // a timed phase : the time left, then the lap you're on ; once it's up, your last one
+            else if (timed && data.timeUp) v.progress = translate("beamjoy.raceHud.finalLap");
+            else if (timed) {
+                v.progress = timeLeft(data.timeLeftMs);
+                v.progressOf = ` · ${fill("beamjoy.raceHud.lapN", { n: self.currentLap })}`;
+            } else if (laps > 1 && self.currentLap >= laps) v.progress = translate("beamjoy.raceHud.finalLap");
             else if (laps > 1) {
                 v.progress = fill("beamjoy.raceHud.lapN", { n: self.currentLap });
                 v.progressOf = `/${laps}`;
@@ -117,12 +165,13 @@ angular.module("beamjoy").component("bjRaceHud", {
             }
 
             // running clock : this lap on a multi-lap race, the whole run otherwise
-            v.timer = clock(laps > 1 ? self.currentLapElapsedMs : data.elapsedMs);
+            // (timed from a line, a flying start's or an out lap's end : the lap's, even on one)
+            v.timer = clock(multiLap || data.lapClock ? self.currentLapElapsedMs : data.elapsedMs);
             if (typeof self.liveDeltaMs === "number" && !self.finished && !self.dnf) {
                 v.delta = `${self.liveDeltaMs <= 0 ? "-" : "+"}${f.gap(self.liveDeltaMs)}`;
                 v.deltaCls = self.liveDeltaMs <= 0 ? "faster" : "slower";
             } else v.delta = null;
-            v.showLaps = laps > 1 && typeof self.lastLapMs === "number";
+            v.showLaps = multiLap && typeof self.lastLapMs === "number";
             v.last = clock(self.lastLapMs);
             v.best = clock(self.bestLapMs);
 
@@ -142,31 +191,44 @@ angular.module("beamjoy").component("bjRaceHud", {
             // the cars either side of you
             v.ahead = null;
             v.behind = null;
+            // a plugin's ranking : their scores, not gaps
+            const sideOf = (row) => ranking === "plugin"
+                ? { num: row.scoreDisplay || (row.score !== undefined && row.score !== null ? String(row.score) : ""), unit: "" }
+                : gapParts(row);
             if (v.multi) {
-                if (data.ahead) v.ahead = { ...gapParts(data.ahead), name: nameOf(data.ahead), fin: !!data.ahead.finished };
-                if (data.behind && !data.behind.dnf) v.behind = { ...gapParts(data.behind), name: nameOf(data.behind), fin: !!data.behind.finished };
+                if (data.ahead) v.ahead = { ...sideOf(data.ahead), name: nameOf(data.ahead), fin: !!data.ahead.finished, lbl: firstLabel(data.ahead), pit: !!data.ahead.inPit };
+                if (data.behind && !data.behind.dnf) v.behind = { ...sideOf(data.behind), name: nameOf(data.behind), fin: !!data.behind.finished, lbl: firstLabel(data.behind), pit: !!data.behind.inPit };
             }
 
             // the standings, one row per racer
+            // by the phase's ranking : best lap (practice, qualifying : retiring keeps a time), every
+            // lap added up, or the race order (finished : the winner's race time)
             const rowOf = (row, i) => {
                 const lead = i === 0;
+                const hasBest = typeof row.bestLapMs === "number";
+                const out = row.dnf && !(ranking === "best" && hasBest);
                 let gap = "";
                 if (row.disqualified) gap = translate("beamjoy.raceHud.dsq");
-                else if (row.dnf) gap = translate("beamjoy.raceHud.out");
+                else if (out) gap = translate("beamjoy.raceHud.out");
                 else if (row.disconnected) gap = translate("beamjoy.raceHud.disconnected");
-                else if (lead) gap = row.finished ? clock(row.totalMs) : "";
+                else if (ranking === "best") gap = !hasBest ? "" : lead ? clock(row.bestLapMs) : leaderGap(row);
+                else if (ranking === "plugin") gap = row.scoreDisplay || (row.score !== undefined && row.score !== null ? String(row.score) : "");
+                else if (lead) gap = (row.finished || ranking === "total") && typeof row.totalMs === "number" ? clock(row.totalMs) : "";
                 else gap = leaderGap(row);
                 return {
                     kind: "car",
-                    pos: row.disqualified ? "DSQ" : row.dnf ? "-" : String(i + 1),
-                    plateCls: row.disqualified ? "dsq" : row.dnf ? "out" : lead ? "p1" : "",
-                    rowCls: (row.playerName === self.playerName ? "you" : row.dnf || row.disqualified ? "out" : "") +
+                    pos: row.disqualified ? "DSQ" : out ? "-" : String(i + 1),
+                    plateCls: row.disqualified ? "dsq" : out ? "out" : lead ? "p1" : "",
+                    rowCls: (row.playerName === self.playerName ? "you" : out || row.disqualified ? "out" : "") +
                         (row.disqualified ? " dsq" : ""),
                     name: nameOf(row),
+                    labels: labelsOf(row),
                     pen: penOf(row),
                     fin: !!row.finished,
+                    pit: !!row.inPit && !row.finished,
+                    stops: stopsOf(row),
                     gap,
-                    gapCls: row.dnf || row.disqualified || row.disconnected ? "soft" : "",
+                    gapCls: out || row.disqualified || row.disconnected ? "soft" : "",
                 };
             };
             v.full = standings.map(rowOf);
@@ -195,9 +257,17 @@ angular.module("beamjoy").component("bjRaceHud", {
             v.fullLap = laps > 1 && leadLap < laps ? fill("beamjoy.raceHud.lapN", { n: leadLap }) : laps > 1 ? translate("beamjoy.raceHud.finalLap") : "";
             v.fullLapOf = laps > 1 && leadLap < laps ? `/${laps}` : "";
             const gates = data.totalGates || 1;
-            const done = leadRow
+            let done = leadRow
                 ? leadRow.finished ? 1 : ((Math.max(1, leadRow.currentLap || 1) - 1) * gates + (leadRow.currentGate || 0)) / (laps * gates)
                 : 0;
+            // a timed phase : its time left, and how much of it has gone
+            if (timed) {
+                v.fullLap = data.timeUp ? translate("beamjoy.raceHud.finalLap") : timeLeft(data.timeLeftMs);
+                v.fullLapOf = "";
+                const left = Number(data.timeLeftMs) || 0;
+                const gone = Number(data.elapsedMs) || 0;
+                done = data.timeUp ? 1 : gone + left > 0 ? gone / (gone + left) : 0;
+            }
             v.progressPct = `${Math.round(Math.min(1, Math.max(0, done)) * 100)}%`;
             v.fastestLap = data.fastestLap
                 ? { name: nameOf(data.fastestLap), time: clock(data.fastestLap.ms) }
@@ -210,88 +280,202 @@ angular.module("beamjoy").component("bjRaceHud", {
         this.pluginHidden = false;
         $rootScope.$on("BJPluginHides", (_, hides) => (this.pluginHidden = !!(hides && hides.race)));
 
-        $rootScope.$on("BJRaceHud", (_, data) => {
+        let lastData = null;
+        const show = (data) => {
+            lastData = data;
             this.active = !!data.active;
             this.v = this.active ? build(data) : null;
             if (this.v) {
                 // Retire only for your own run, while it's still going
                 this.v.canRetire = !data.spectatingPlayerName && !this.v.finished && !this.v.dnf;
-                if (!this.v.canRetire && this.cursor > 0) this.cursor = 0;
+                if (this.cursor >= this.buttons().length) this.cursor = 0;
             }
+        };
+        $rootScope.$on("BJRaceHud", (_, data) => show(data));
+        // plugins' labels turned on or off (Settings) : at once, not on the next push
+        $rootScope.$on("BJHudLabelsShown", () => {
+            if (lastData) $scope.$applyAsync(() => show(lastData));
         });
 
-        // FOCUS : the Focus control during a race (beamjoy/mainNav.lua) gives the HUD the pad and
-        // shows its Race info / Retire buttons ; B (or the control again) lets go
+        // YOUR PIT LINE (a race with pits) : beamjoy/racePits.lua's status, built once per push
+        this.pit = null;
+        this.pitLine = null;
+        const secs = (ms) => `${Math.max(0, (Number(ms) || 0) / 1000).toFixed(1)} s`;
+        const buildPitLine = (s) => {
+            if (!s) return null;
+            if (s.stage === "stop") {
+                const total = (Number(s.fuelMs) || 0) + (Number(s.tyreMs) || 0) + (Number(s.repairMs) || 0);
+                // the readings not back yet : the car's being looked at
+                if (typeof s.leftMs !== "number") return { kind: "stop", title: translate("beamjoy.raceHud.pit.inBox"), text: translate("beamjoy.raceHud.pit.checking") };
+                const done = total - s.leftMs;
+                let text = translate("beamjoy.raceHud.pit.nothing");
+                if (s.fuelMs > 0 && done < s.fuelMs) {
+                    text = s.fuelL > 0 ? fill("beamjoy.raceHud.pit.refuellingL", { amount: beamjoyPitFormat.amount(s.fuelL, s.tank, s.gallons) })
+                        : translate("beamjoy.raceHud.pit.refuelling");
+                } else if (s.tyreMs > 0 && done < (Number(s.fuelMs) || 0) + s.tyreMs) {
+                    text = translate("beamjoy.raceHud.pit.tyres");
+                } else if (s.repairMs > 0) text = translate("beamjoy.raceHud.pit.repairing");
+                return {
+                    kind: "stop", title: translate("beamjoy.raceHud.pit.inBox"), text, right: secs(s.leftMs),
+                    barPct: `${total > 0 ? Math.round(Math.min(1, done / total) * 100) : 100}%`,
+                    foot: fill("beamjoy.raceHud.pit.total", { n: (total / 1000).toFixed(1) }),
+                };
+            }
+            if (s.stage === "towed") {
+                return { kind: "towed", title: translate("beamjoy.raceHud.pit.towed"), text: translate("beamjoy.raceHud.pit.towedHeld"),
+                    right: fill("beamjoy.raceHud.pit.towedLeft", { n: Math.ceil((Number(s.leftMs) || 0) / 1000) }) };
+            }
+            if (s.stage === "held") return { kind: "held", title: translate("beamjoy.raceHud.pit.inBox"), text: translate("beamjoy.raceHud.pit.held") };
+            if (s.stage === "lane") {
+                return { kind: "lane", title: translate("beamjoy.raceHud.pit.lane"), right: fill("beamjoy.raceHud.pit.limit", { n: s.limitKmh || 60 }) };
+            }
+            if (s.returnPending) return { kind: "return", title: translate("beamjoy.raceHud.pit.returnTitle"), text: translate("beamjoy.raceHud.pit.returnText") };
+            // on track, the lane closed by a plugin (pit.setLane) : going in costs a penalty
+            if (typeof s.closed === "number") {
+                return { kind: "closed", title: translate("beamjoy.raceHud.pit.closedTitle"),
+                    text: translate(s.closed > 0 ? "beamjoy.raceHud.pit.closedText" : "beamjoy.raceHud.pit.closedStayOut") };
+            }
+            // on track : the stops still owed, and what the next one does
+            if (s.required > 0) {
+                return {
+                    kind: "track", text: fill("beamjoy.raceHud.pit.stops", { n: s.stops, of: s.required }),
+                    right: fill("beamjoy.raceHud.pit.plan", { plan: beamjoyPitFormat.planText(s.plan, s, translate) }),
+                };
+            }
+            return null;
+        };
+        $rootScope.$on("BJRacePitStatus", (_, s) => {
+            $scope.$applyAsync(() => {
+                this.pit = s && s.active !== false && s.stage ? s : null;
+                this.pitLine = buildPitLine(this.pit);
+                // a button gone (the tow once in the lane) : the cursor stays on the row
+                if (this.cursor >= this.buttons().length) this.cursor = Math.max(0, this.buttons().length - 1);
+            });
+        });
+        beamjoyStore.send("BJRacePitStatusRequest");
+
+        // ACTIONS : the list opens with a click on Actions (no pad), or with the Focus control during a
+        // race (beamjoy/mainNav.lua), which gives it the D-pad alone (direct request : the face buttons
+        // stay the car's) : up / down move, right held picks, left held closes, as does Close or the
+        // control again
         this.focused = false;
+        this.actionsOpen = false;
         this.cursor = 0;
+        // the Focus control's binding, for the Actions button's hint (mainNav.lua's BJFocusBinding) :
+        // the pad's chord, as every other hint shows it (windows/notices), the key without a pad one
+        this.focusLabel = null;
+        $rootScope.$on("BJFocusBinding", (_, data) => {
+            $scope.$applyAsync(() => {
+                this.focusLabel = (data && (data.pad || data.key)) || null;
+            });
+        });
+        beamjoyStore.send("BJFocusBindingRequest");
         $rootScope.$on("BJRaceHudFocus", (_, data) => {
             $rootScope.$applyAsync(() => {
                 this.focused = !!(data && data.active);
+                this.actionsOpen = this.focused;
                 this.cursor = 0;
-                cancelRetire();
+                cancelHold();
                 applyLayout();
                 beamjoyDelivery.setNavOwner("raceHud", this.focused);
             });
         });
-        this.openRaceInfo = () => {
-            beamjoyInfoPanel.open((this.v && this.v.raceName) || "", [
-                { id: "live", title: "beamjoy.window.main.tabs.races.raceInfo.live", template: "<bj-race-info-live></bj-race-info-live>" },
-                { id: "results", title: "beamjoy.window.main.tabs.races.raceInfo.results", template: "<bj-race-info-results></bj-race-info-results>" },
-            ], "live");
+        this.rowOpen = () => this.focused || this.actionsOpen;
+        this.openActions = () => {
+            this.actionsOpen = true;
+            this.cursor = 0;
         };
-        // a stray press mid-race mustn't end your run : Retire is a 5 s hold (A, or the mouse),
-        // letting go early cancels. retireProgress (0..1) fills the button
-        const RETIRE_HOLD_MS = 5000;
-        this.retireProgress = 0;
+        this.closeActions = () => {
+            cancelHold();
+            this.actionsOpen = false;
+            if (this.focused) beamjoyStore.send("BJRaceHudRelease");
+        };
+
+        // every pick on the pad is a hold of right (left : Close), and Tow and Retire are with the mouse
+        // too, so a stray press can't end a run or haul you in : letting go early cancels.
+        // holdProgress (0..1) fills the button. Pit and Close are half a second, as the pit menu's
+        // Confirm (direct request : quicker) : neither changes anything on its own
+        const HOLD_MS = { tow: 2000, retire: 5000, pit: 500, close: 500 };
+        this.holding = null;
+        this.holdProgress = 0;
         let holdStart = null;
         let holdTick = null;
-        const cancelRetire = () => {
+        // the pad's direction holding (focus_r / focus_l), its letting go ending the hold
+        let padHeld = null;
+        const cancelHold = () => {
             $interval.cancel(holdTick);
             holdTick = null;
             holdStart = null;
-            this.retireProgress = 0;
+            padHeld = null;
+            this.holding = null;
+            this.holdProgress = 0;
         };
-        this.startRetire = () => {
-            if (!this.v || !this.v.canRetire || holdStart !== null) return;
+        this.startHold = (kind) => {
+            if (holdStart !== null || !this.buttons().includes(kind)) return;
+            this.holding = kind;
             holdStart = Date.now();
             holdTick = $interval(() => {
-                this.retireProgress = Math.min(1, (Date.now() - holdStart) / RETIRE_HOLD_MS);
-                if (this.retireProgress >= 1) {
-                    cancelRetire();
-                    beamjoyStore.send("BJRaceRetire");
+                this.holdProgress = Math.min(1, (Date.now() - holdStart) / HOLD_MS[kind]);
+                if (this.holdProgress >= 1) {
+                    cancelHold();
+                    if (kind === "retire") beamjoyStore.send("BJRaceRetire");
+                    else if (kind === "tow") beamjoyStore.send("BJRacePitTow");
+                    else if (kind === "pit") this.openPit();
+                    else this.closeActions();
                 }
             }, 50);
         };
-        this.stopRetire = () => cancelRetire();
-        this.retireFill = () => ({ width: `${Math.round(this.retireProgress * 100)}%` });
-        this.buttons = () => (this.v && this.v.canRetire ? ["info", "retire"] : ["info"]);
+        this.stopHold = () => cancelHold();
+        this.holdFill = (kind) => ({ width: `${this.holding === kind ? Math.round(this.holdProgress * 100) : 0}%` });
+        this.openPit = () => beamjoyStore.send("BJRacePitMenuOpen");
+        // the tow's label : how long it holds you (none once you've finished : back to the box)
+        this.towLabel = () => {
+            if (this.holding === "tow") return translate("beamjoy.raceHud.retireHolding");
+            const ms = this.pit && Number(this.pit.towHoldMs);
+            return ms > 0 ? fill("beamjoy.raceHud.towHoldS", { n: Math.round(ms / 1000) }) : translate("beamjoy.raceHud.towHold");
+        };
+
+        // your own run (not someone you're watching) in a race with pits
+        const ownPits = () => !!this.v && !this.v.spectating && !!this.pit;
+        this.canTow = () => ownPits() && !!this.pit.canTow;
+        this.canPit = () => ownPits() && !this.v.dnf && !this.v.finished;
+        // the list's buttons, top to bottom ; Close always last
+        this.buttons = () => {
+            const out = [];
+            if (this.canPit()) out.push("pit");
+            if (this.canTow()) out.push("tow");
+            if (this.v && this.v.canRetire) out.push("retire");
+            out.push("close");
+            return out;
+        };
+        // nothing to do (spectating, finished) : no Actions button at all
+        this.hasActions = () => this.buttons().length > 1;
+        this.isCursor = (kind) => this.focused && this.buttons()[this.cursor] === kind;
         const isRising = beamjoyDelivery.pressTracker();
         const offNav = $rootScope.$on("UINavigation", (_, name, value) => {
             const rising = isRising(name, value);
-            // letting go of A ends a Retire hold, whatever else is going on
-            if (name === "ok" && Number(value) <= 0.5 && holdStart !== null) {
-                $scope.$applyAsync(() => cancelRetire());
+            // letting go of the direction holding ends its hold, whatever else is going on
+            if (Number(value) <= 0.5 && padHeld === name) {
+                $scope.$applyAsync(() => cancelHold());
                 return;
             }
-            // the race info overlay opened from here has the pad while it's up
+            // the pit menu or the race info overlay opened from here has the pad while it's up
             if (!this.focused || !rising || beamjoyDelivery.otherNavOwner("raceHud")) return;
             $scope.$applyAsync(() => {
-                const n = this.buttons().length;
-                if (name === "focus_l" || name === "focus_u") {
-                    cancelRetire();
-                    this.cursor = Math.max(0, this.cursor - 1);
-                } else if (name === "focus_r" || name === "focus_d") {
-                    cancelRetire();
-                    this.cursor = Math.min(n - 1, this.cursor + 1);
-                } else if (name === "ok") {
-                    if (this.buttons()[this.cursor] === "retire") this.startRetire();
-                    else this.openRaceInfo();
-                } else if (name === "back") beamjoyStore.send("BJRaceHudRelease");
+                const list = this.buttons();
+                if (name === "focus_u" || name === "focus_d") {
+                    cancelHold();
+                    this.cursor = Math.max(0, Math.min(list.length - 1, this.cursor + (name === "focus_u" ? -1 : 1)));
+                } else if (name === "focus_r" || name === "focus_l") {
+                    cancelHold();
+                    this.startHold(name === "focus_r" ? list[this.cursor] : "close");
+                    if (this.holding) padHeld = name;
+                }
             });
         });
         $scope.$on("$destroy", () => {
             offNav();
-            cancelRetire();
+            cancelHold();
             beamjoyDelivery.setNavOwner("raceHud", false);
         });
     },

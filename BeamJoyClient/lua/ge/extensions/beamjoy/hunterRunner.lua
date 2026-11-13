@@ -317,6 +317,38 @@ local function nearestSpawnPoint(list, pos)
     return best
 end
 
+--- the vehicle a participant is actually driving right now, resolved by player name.
+---
+--- Reported: "if the hunter is in the range of 200-500m away (with 150m distance set to get shown)
+--- and with in-line sight, the hunted will get shown sometimes for some seconds. This can happen
+--- multiple times in a short period, until the hunted is over about 500m. Not reset, not a
+--- checkpoint." The lookups below used to take whichever vehicle an owner name matched first, and
+--- the proximity scan took the nearest of ALL of them - but a player's name is on every vehicle
+--- they own: a trailer, the car they arrived in and left at the lobby once the hunt force-spawned
+--- them a new one, a walking unicycle, any traffic they spawned. A hunter's parked car inside the
+--- reveal distance therefore revealed the fugitive while the hunter themself was hundreds of metres
+--- away, again and again for as long as the fugitive stayed near it, and the same stray vehicles
+--- could hold the fugitive's reset lock shut. Exactly the mistake, and the same symptom, as
+--- busRun.lua's own findRemoteVehicle bug ("the other players couldn't see it and only saw out of
+--- service").
+---
+--- `currentVehicle` (a remoteVID, owner-matched inside getPlayerCurrent since that id is not unique
+--- between players) is the "which one are they actually driving" field players.lua's own teleport
+--- and spectate lookups already key off.
+---@param playerName string
+---@return BJVehicle?
+local function driverVehicle(playerName)
+    local players = beamjoy_players and beamjoy_players.players
+    local player = players and players[playerName]
+    local current = player and beamjoy_vehicles.getPlayerCurrent(player)
+    if current then return current end
+    -- the cache entry hasn't landed yet : the nearest thing to it, but never a trailer, a prop, a
+    -- walking unicycle or a traffic car, so the fallback can't bring back what this exists to stop
+    return beamjoy_vehicles.vehicles:find(function(v) ---@param v BJVehicle
+        return v.ownerName == playerName and v.isVehicle and not v.isAi
+    end)
+end
+
 --- "nearestSpawn" strategy's own refinement, per direct request: prefer a hunter spawn that's also
 --- OUTSIDE the fugitive's own huntedResetDistanceThreshold, so respawning a hunter after their
 --- crash penalty doesn't just extend/renew the fugitive's own reset-lock the instant they reappear
@@ -336,12 +368,17 @@ local function nearestHunterSpawnClearOfFugitive(list, pos)
     if not threshold or threshold <= 0 or not hunted or hunted.eliminated then
         return nearestSpawnPoint(list, pos)
     end
-    local fugitiveVeh = beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == hunted.playerName end)
-    if not fugitiveVeh then
+    local fugitiveVeh = driverVehicle(hunted.playerName)
+    if not fugitiveVeh or not fugitiveVeh.veh then
         return nearestSpawnPoint(list, pos)
     end
+    -- computed, not fugitiveVeh.position : that cached field is only refreshed by getVehicle(vid)
+    -- without light=true, which for another player's car happens in nametags.lua's "draw all" loop
+    -- alone - and the fugitive's tag is precisely the one that loop skips while they're hidden, so
+    -- the cache here could be from wherever they were when they were last revealed
+    local fugitivePos = beamjoy_vehicles.getVehiclePositionRotation(fugitiveVeh.veh)
     local clear = table.filter(list, function(s)
-        return (vec3(s.pos.x, s.pos.y, s.pos.z) - fugitiveVeh.position):length() > threshold
+        return (vec3(s.pos.x, s.pos.y, s.pos.z) - fugitivePos):length() > threshold
     end)
     if #clear > 0 then
         return nearestSpawnPoint(clear, pos)
@@ -779,7 +816,27 @@ local function pushSpectateStatus()
 end
 
 ---@param session BJHunterSession
+--- this countdown's start, as startAtGo keys it
+---@param session table
+---@return string?
+local function goKey(session)
+    return session.goAtMs and (tostring(session.id) .. ":" .. tostring(session.goAtMs)) or nil
+end
+
+--- "GO" on screen for a second as the car is let go, as races show it
+local function flashGo()
+    beamjoy_communications_ui.send("BJHunterCountdown", { active = true, seconds = 0 })
+    async.delayTask(function()
+        beamjoy_communications_ui.send("BJHunterCountdown", { active = false })
+    end, 1000, "BJHunterCountdownGoHide")
+end
+
 local function onSessionUpdate(session)
+    -- this hunt already started on its own at "GO" (startAtGo) : a push the server sent before its
+    -- own HUNT transition can still arrive afterwards, and would rerun the countdown setup
+    if session.state == "COUNTDOWN" and M.goStartedFor ~= nil and M.goStartedFor == goKey(session) then
+        session.state = "HUNT"
+    end
     local wasInSession = M.session ~= nil
     local wasCountdown = M.session ~= nil and M.session.state == "COUNTDOWN"
     local wasHunt = M.session ~= nil and M.session.state == "HUNT"
@@ -1027,7 +1084,7 @@ local function onSessionUpdate(session)
             M.lastSentSeconds = nil
         elseif M.scenarioLocked then
             unlockScenario()
-            beamjoy_communications_ui.send("BJHunterCountdown", { active = false })
+            flashGo()
         end
         if myVeh then
             beamjoy_vehicles.setFreeze(myVeh.vid, true)
@@ -1047,7 +1104,7 @@ local function onSessionUpdate(session)
             -- can never re-freeze on the very next frame
             if M.scenarioLocked then
                 unlockScenario()
-                beamjoy_communications_ui.send("BJHunterCountdown", { active = false })
+                flashGo()
             end
             M.countdownDisplayOnly = false
             local vid = currVeh and currVeh.vid or (myVeh and myVeh.vid)
@@ -1151,8 +1208,17 @@ local function updateCountdown()
         return
     end
 
-    local elapsedSec = (GetCurrentTimeMillis() - M.countdownStartMs) / 1000
-    local remaining = math.max(0, math.ceil(M.countdownTotal - elapsedSec))
+    local remaining
+    -- the pre-hunt countdown runs to the shared start, so every player sees the same number at
+    -- once ; a role's start delay after it (countdownDisplayOnly) is counted locally
+    local serverNow = not M.countdownDisplayOnly and M.session.state == "COUNTDOWN" and M.session.goAtMs and
+        beamjoy_clockSync.serverNowMs()
+    if serverNow then
+        remaining = math.max(0, math.ceil((M.session.goAtMs - serverNow) / 1000))
+    else
+        local elapsedSec = (GetCurrentTimeMillis() - M.countdownStartMs) / 1000
+        remaining = math.max(0, math.ceil(M.countdownTotal - elapsedSec))
+    end
     if remaining ~= M.lastSentSeconds then
         M.lastSentSeconds = remaining
         beamjoy_communications_ui.send("BJHunterCountdown", { active = true, seconds = remaining })
@@ -1172,6 +1238,26 @@ local function updateCountdown()
         end
         extensions.hook("onBJScenarioChanged")
     end
+end
+
+--- starts this player's hunt at the shared start (session.goAtMs on the server's clock), the
+--- moment "GO" shows, rather than when the server's HUNT push arrives (reported : hunts didn't
+--- start on "GO" like races). Runs the same HUNT transition a push would, as raceRunner.lua's
+--- startAtGreenLight does ; the role's start delay runs from here, and the fugitive's route
+--- arrives with the server's own push a moment later (read from M.session.route as it comes).
+--- Without a clock estimate or a goAtMs (older server) the push starts it as before.
+local function startAtGo()
+    local session = M.session
+    if not session or session.state ~= "COUNTDOWN" or not session.countdownTicking or not session.goAtMs then
+        return
+    end
+    local serverNow = beamjoy_clockSync.serverNowMs()
+    if not serverNow or serverNow < session.goAtMs then return end
+    M.goStartedFor = goKey(session)
+    local started = {}
+    for k, v in pairs(session) do started[k] = v end
+    started.state = "HUNT"
+    M.onSessionUpdate(started)
 end
 
 local function pushCountdown()
@@ -1194,7 +1280,10 @@ local function updateRevealVisuals()
     local hunted = session and getHunted(session)
     local hideVid
     if hunted and fugitiveHidden(session, hunted) then
-        local mpVeh = beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == hunted.playerName end)
+        -- the car they're driving, not the first one their name is on (driverVehicle) : picking a
+        -- trailer or a car they left at the lobby took its icon off the minimap and left the one
+        -- they're actually in on it
+        local mpVeh = driverVehicle(hunted.playerName)
         if mpVeh and not mpVeh.isLocal then hideVid = mpVeh.vid end
     end
     if M.minimapHiddenVid and M.minimapHiddenVid ~= hideVid then
@@ -1274,7 +1363,7 @@ local function updateHunterGpsGuidance()
     local hunted = active and getHunted(session) or nil
     active = active and hunted and hunted.revealed
     if active then
-        local mpVeh = beamjoy_vehicles.vehicles:find(function(v) return v.ownerName == hunted.playerName end)
+        local mpVeh = driverVehicle(hunted.playerName)
         local pos = mpVeh and mpVeh.veh and beamjoy_vehicles.getVehiclePositionRotation(mpVeh.veh)
         if pos then
             M.hunterGpsActive = true
@@ -1297,22 +1386,26 @@ local function updateFugitiveState()
     local settings = M.session.settings
     local myPos = beamjoy_vehicles.getVehiclePositionRotation(myVeh.veh)
 
-    -- Proximity: closest currently-tracked hunter vehicle. v.position is a cached field, only
+    -- Proximity: the closest hunter, measured to the one car that hunter is actually driving
+    -- (driverVehicle, whose note has the reported bug this scan had - it walked every tracked
+    -- vehicle and took the nearest one whose owner was a hunter, parked cars, trailers and traffic
+    -- included). Positions are computed fresh rather than read from v.position, a cached field only
     -- refreshed by beamjoy_vehicles.getVehicle(vid) being called without light=true, and the only
     -- place that happens for another player's vehicle is nametags.lua's "draw all" loop (skipped
     -- once nametags are disabled). With nametags off, v.position for a hunter's vehicle never
-    -- updates past registration, so this proximity check was comparing against a frozen, stale
-    -- position instead of the hunter's real one, letting the prey reset with a hunter right next
-    -- to them. Computing position fresh here removes that accidental coupling.
+    -- updated past registration, so this check was comparing against a frozen position instead of
+    -- the hunter's real one, letting the prey reset with a hunter right next to them.
     local nearestHunterDist = math.huge
-    beamjoy_vehicles.vehicles:forEach(function(v) ---@param v BJVehicle
-        local isHunter = table.find(M.session.participants, function(p)
-            return p.role == "hunter" and p.playerName == v.ownerName
-        end) ~= nil
-        if not isHunter or not v.veh then return end
-        local pos = beamjoy_vehicles.getVehiclePositionRotation(v.veh)
-        local d = myPos:distance(pos)
-        if d < nearestHunterDist then nearestHunterDist = d end
+    local nearestHunterName
+    table.forEach(M.session.participants, function(p)
+        if p.role ~= "hunter" then return end
+        local v = driverVehicle(p.playerName)
+        if not v or not v.veh then return end
+        local d = myPos:distance(beamjoy_vehicles.getVehiclePositionRotation(v.veh))
+        if d < nearestHunterDist then
+            nearestHunterDist = d
+            nearestHunterName = p.playerName
+        end
     end)
 
     local proximityReveal = nearestHunterDist <= settings.revealProximityDistance
@@ -1323,6 +1416,17 @@ local function updateFugitiveState()
     local revealed = proximityReveal or finalWaypointReveal or resetReveal
     if revealed ~= M.revealedLocally then
         M.revealedLocally = revealed
+        -- which of the three triggers did it, and off what distance, in the fugitive's own log. A
+        -- reveal that shouldn't have happened is indistinguishable from a legitimate one from
+        -- outside the client that computed it, which is what made the report above (a hunter's
+        -- parked car revealing them) take a code read rather than a look at a log to find
+        LogDebug(string.format(
+            "beamjoy_hunterRunner: reveal %s - proximity %s (nearest hunter %s at %dm, threshold %dm)" ..
+            ", final waypoint %s, post-reset %s",
+            revealed and "ON" or "OFF", tostring(proximityReveal), tostring(nearestHunterName),
+            nearestHunterDist == math.huge and -1 or math.round(nearestHunterDist),
+            settings.revealProximityDistance or -1,
+            tostring(finalWaypointReveal), tostring(resetReveal)))
         beamjoy_communications.send("hunterRevealUpdate", M.session.id, revealed)
     end
 
@@ -1715,8 +1819,43 @@ M.onBJRequestCurrentVehicleReset = onBJRequestCurrentVehicleReset
 --- Also the gate beamjoy_stations uses for whether station/garage markers show at all during a
 --- round (called with kind == nil), not just whether an interaction may start. Denied for the
 --- whole locked window unless the host set the arena's `allowStations` default.
+---
+--- With stations open, each kind is then allowed per role (direct request : "an option to allow
+--- hunter or hunted to repair at garages"). `stationRefuelRoles` and `stationRepairRoles` are
+--- independent, both default "both" - exactly what `allowStations` did on its own before they
+--- existed - so only a host who narrows one sees any change. kind == nil is the marker-visibility
+--- question, answered yes while either kind is still open to this player : a hunted who may repair
+--- but not refuel still needs to see the garage.
+---@param roles BJHunterStationRoles?
+---@param role string? this participant's own "hunted"/"hunter"
+---@return boolean
+local function stationRoleAllowed(roles, role)
+    if roles == "none" then return false end
+    if roles == "hunted" then return role == "hunted" end
+    if roles == "hunters" then return role == "hunter" end
+    return true -- "both", and any unrecognised value (the server sanitizes to one of the four)
+end
+
 local function onBJRequestStationInteraction(req, kind)
-    if isHuntLocked() and not (M.session and M.session.settings and M.session.settings.allowStations) then
+    if not isHuntLocked() then return end
+    local settings = M.session and M.session.settings
+    if not (settings and settings.allowStations) then
+        req.state = false
+        return
+    end
+    -- a spectator, or anyone whose role isn't committed yet, is treated as neither side : a
+    -- role-restricted station stays shut for them rather than falling open
+    local participant = getSelfParticipant()
+    local role = participant and participant.role or nil
+    local refuel = stationRoleAllowed(settings.stationRefuelRoles, role)
+    local repair = stationRoleAllowed(settings.stationRepairRoles, role)
+    -- only ever denies, never un-denies : this hook's own contract, and another extension may
+    -- already have refused this same request for a reason of its own
+    if kind == "refuel" then
+        if not refuel then req.state = false end
+    elseif kind == "repair" then
+        if not repair then req.state = false end
+    elseif not (refuel or repair) then
         req.state = false
     end
 end
@@ -1726,8 +1865,12 @@ local function onUpdate()
     if M.session and M.session.state == "LOBBY" then
         updateGridCountdown()
     end
-    if M.session and M.session.state == "COUNTDOWN" then
+    -- a role's start delay keeps the same overlay ticking into the hunt (countdownDisplayOnly)
+    if M.session and (M.session.state == "COUNTDOWN" or M.countdownDisplayOnly) then
         updateCountdown()
+    end
+    if M.session and M.session.state == "COUNTDOWN" then
+        startAtGo()
     end
     if M.hunterResetLockedUntilMs then
         updateHunterResetLock()

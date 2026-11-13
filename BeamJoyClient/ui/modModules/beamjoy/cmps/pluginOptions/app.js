@@ -28,7 +28,7 @@ angular.module("beamjoy").factory("beamjoyPluginUi", function ($rootScope, beamj
             .map((s) => Object.assign({}, s, { options: s.options.filter((o) => !o.where || o.where === "both" || o.where === place) }))
             .filter((s) => s.options.length > 0);
 
-    const state = { race: [], config: [], startSections: [], editorSections: [] };
+    const state = { race: [], config: [], startSections: [], editorSections: [], phaseSections: [], formats: [] };
     beamjoyStore.pluginUi = state;
     $rootScope.$on("BJPluginUi", (_, data) => {
         const race = asList(data && data.race).map((s) => prepareSection(s));
@@ -42,6 +42,12 @@ angular.module("beamjoy").factory("beamjoyPluginUi", function ($rootScope, beamj
             config,
             startSections: forPlace(race, "start"),
             editorSections: forPlace(race, "editor"),
+            // an event's phases : the options with a value of their own per phase (`where = "phase"`)
+            phaseSections: race
+                .map((s) => Object.assign({}, s, { options: s.options.filter((o) => o.where === "phase") }))
+                .filter((s) => s.options.length > 0),
+            // plugins' event formats (services/racePhases.lua, formats.register), for the start menu
+            formats: asList(data && data.formats).map((f) => Object.assign({}, f, { phases: asList(f.phases) })),
         });
         $rootScope.$broadcast("BJPluginUiChanged");
     });
@@ -99,10 +105,50 @@ angular.module("beamjoy").factory("beamjoyPluginUi", function ($rootScope, beamj
         return lines;
     };
 
+    // plugins' labels beside racers' names on the race HUD (results.setFields with `hud`) and on
+    // plugins' default-layout overlays (a row's `fields`). The player can turn them off (Settings >
+    // Menu), kept in the UI's own storage like the HUD's layout ; on unless they did
+    const LABELS_KEY = "beamjoy.raceHud.labels";
+    let labelsOn = true;
+    try {
+        labelsOn = localStorage.getItem(LABELS_KEY) !== "0";
+    } catch (e) {
+        // storage unavailable : on
+    }
+    const labelsShown = () => labelsOn;
+    const setLabelsShown = (on) => {
+        labelsOn = !!on;
+        try {
+            localStorage.setItem(LABELS_KEY, labelsOn ? "1" : "0");
+        } catch (e) {
+            // not remembered, still applied for this session
+        }
+        $rootScope.$broadcast("BJHudLabelsShown", labelsOn);
+    };
+    // the first HUD_LABELS of a racer's labels, ready to draw ({text, title, style}) ; none while
+    // they're turned off. Two at most : a HUD row is ~20 characters wide
+    const HUD_LABELS = 2;
+    const labelsOf = (fields) => {
+        if (!labelsOn) return [];
+        return asList(fields)
+            .filter((f) => f && f.value !== undefined && f.value !== null && f.value !== "")
+            .slice(0, HUD_LABELS)
+            .map((f) => {
+                const c = color(f.color);
+                const value = String(f.value);
+                const label = f.label ? String(f.label) : "";
+                return {
+                    text: f.showLabel && label ? `${label} ${value}` : value,
+                    title: label ? `${label}: ${value}` : value,
+                    style: c ? { color: c, "border-color": c } : {},
+                };
+            });
+    };
+
     // ask for them once the UI's up (the Lua side keeps them across UI reloads)
     beamjoyStore.send("BJPluginUiRequest");
 
-    return { state, asList, seed, color, describe };
+    return { state, asList, seed, color, describe, labelsOf, labelsShown, setLabelsShown };
 });
 angular.module("beamjoy").run(function (beamjoyPluginUi) {
     // instantiated at start, so the definitions are listened for before any window needs them
@@ -166,7 +212,8 @@ angular.module("beamjoy").component("bjPluginFields", {
     controller: function (beamjoyPluginUi) {
         this.list = [];
         this.$onChanges = () => {
-            this.list = beamjoyPluginUi.asList(this.fields).map((f) => {
+            // the HUD-only ones (`hud: "only"`) are the race's live information, the race HUD's alone
+            this.list = beamjoyPluginUi.asList(this.fields).filter((f) => f && f.hud !== "only").map((f) => {
                 const c = beamjoyPluginUi.color(f.color);
                 return {
                     text: f.showLabel ? `${f.label} ${f.value}` : f.value,

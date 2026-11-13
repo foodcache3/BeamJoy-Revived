@@ -140,6 +140,39 @@ local function onInit()
     end
 end
 
+--- a key object -> the name of the M.data bucket holding it. Built on demand.
+---
+--- get() and set() used to answer this with two table.find scans, each allocating a fresh closure
+--- on every call. get() sits on a 4 Hz path (beamjoy_nametags' refreshColors reads six colours per
+--- settings poll), where the profiler showed that as the bulk of a ~17 KB per-tick allocation. A
+--- lookup answers the same question with one index and no garbage.
+---@type table<table, string>?
+local keyBuckets
+---@param key LocalStorageElement
+---@param allowRebuild? boolean
+---@return string?
+local function bucketOf(key, allowRebuild)
+    if not keyBuckets then
+        keyBuckets = {}
+        for _, el in pairs(M.GLOBAL_VALUES) do keyBuckets[el] = "global" end
+        for _, el in pairs(M.VALUES) do keyBuckets[el] = "values" end
+    end
+    local bucket = keyBuckets[key]
+    if not bucket and allowRebuild ~= false then
+        -- VALUES is server-specific and can be filled after this was first built
+        keyBuckets = nil
+        return bucketOf(key, false)
+    end
+    return bucket
+end
+
+---@param key LocalStorageElement
+---@return table? parent
+local function resolveParent(key)
+    local bucket = bucketOf(key)
+    return bucket and M.data[bucket] or nil
+end
+
 ---@param key LocalStorageElement
 ---@return any
 local function get(key)
@@ -147,8 +180,7 @@ local function get(key)
         LogError(string.format("Invalid key \"%s\"", key and key.key or "nil"), M._name)
         return nil
     end
-    local parent = table.find(M.GLOBAL_VALUES, function(el) return el == key end) and M.data.global or
-        table.find(M.VALUES, function(el) return el == key end) and M.data.values or nil
+    local parent = resolveParent(key)
     if not parent then
         LogError(string.format("Invalid key \"%s\"", key and key.key or "nil"), M._name)
         return nil
@@ -168,8 +200,7 @@ local function set(key, value)
         LogError(string.format("Invalid key \"%s\"", key and key.key or "nil"), M._name)
         return nil
     end
-    local parent = table.find(M.GLOBAL_VALUES, function(el) return el == key end) and M.data.global or
-        table.find(M.VALUES, function(el) return el == key end) and M.data.values or nil
+    local parent = resolveParent(key)
     if not parent then
         LogError(string.format("Invalid key \"%s\"", key and key.key or "nil"), M._name)
         return nil
