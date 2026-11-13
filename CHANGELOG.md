@@ -8,7 +8,38 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2495, client build 2784 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+## [2.1.0] - 2026-11-13 - Race phases, new start types, BeamNG 0.40 fixes, every language filled in
+
+Server build 2496, client build 2785 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+
+- **Every language is up to date, and the server speaks all thirteen.** The client has shipped 13
+  languages and the server only 8, so Japanese, Korean, Russian and both Chinese players read the
+  server's own messages - joins, kicks, votes, command replies - in English. They have their files
+  now, and every language on both sides is filled in against the current en-US.
+  - `Tools/translate.py --add-missing` gives any language in the list a file in a group it's
+    missing from, then fills it. The script also re-adds the client's locale files to `BJ.zip`
+    at the end (`--no-zip` to skip) : a run used to write into `Client/BJ/beamjoy_locales/` and
+    stop there, so the translations never reached the game.
+  - **Fix : a literal brace could come back as a placeholder.** "A nickname is {min} to {max}
+    characters, without { or }" lost the spaces inside "{ or }" in Simplified Chinese, which turned
+    two braces the player is meant to read into a `{or}` the game would try to fill. A brace
+    standing on its own is now sent as don't-translate, like `{name}` itself, and the one string
+    this had already caught is fixed. `--check` reads every file against en-US and is what found
+    it. *(server and client)*
+
+- **A long translation broke the leaderboard's buttons, and cut-off text says what it says now.**
+  Reported from Italian, with screenshots. The section picker down the left of the leaderboards
+  (Races, Deliveries, Derby, Drift, Drag) is a row of five buttons that could neither shrink nor
+  wrap, so a language whose words are longer than English pushed the last of them out of the 20em
+  sidebar and across the board beside it. They take a second row now, which only happens when they
+  wouldn't have fitted anyway - the same for every other segmented row in the mod. The column heads
+  above the lists cut themselves off rather than push "You" off the edge.
+  - **Text the layout has to cut off says what it says in full** when you point at it : a race or
+    spot's name, a board's line, a player's name, a column head. One listener for the whole of
+    BeamJoy's UI, which measures only what's under the pointer and only while you hover, so nothing
+    is measured per frame. A tooltip something set deliberately (the settings rows' own) is never
+    replaced, and the one it adds goes away again when the text fits - a wider window, a shorter
+    language. *(client)*
 
 - **A reset speed limit for races.** Requested: a tickbox and a speed. With it on, resetting or
   recovering is only allowed below that speed, so a reset can't be used as an airbrake - press it

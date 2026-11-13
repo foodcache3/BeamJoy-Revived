@@ -89,6 +89,31 @@ beamjoyModule.component("beamjoy", {
                 const wrapper = document.querySelector("beamjoy");
                 wrapper.style.position = "absolute";
                 wrapper.style.zIndex = 1;
+
+                // Text the layout had to cut off (text-overflow: ellipsis) gets a native tooltip
+                // of what it says in full : a name, a board's line, a column head. One delegated
+                // listener for the whole of BeamJoy's UI, measured on hover, so nothing is
+                // measured per digest or per frame. A title set deliberately elsewhere (the
+                // settings rows' own tooltips) is never touched ; ours is marked so it can be
+                // dropped again once the text fits, after a wider window or a shorter translation.
+                wrapper.addEventListener("mouseover", (ev) => {
+                    for (let el = ev.target; el && el !== wrapper; el = el.parentElement) {
+                        if (el.nodeType !== 1) continue;
+                        if (window.getComputedStyle(el).textOverflow !== "ellipsis") continue;
+                        const ours = el.getAttribute("data-bj-clipped") === "1";
+                        if (el.scrollWidth > el.clientWidth + 1) {
+                            const full = (el.textContent || "").trim();
+                            if (!full || (el.hasAttribute("title") && !ours)) continue;
+                            if (el.getAttribute("title") !== full) {
+                                el.setAttribute("title", full);
+                                el.setAttribute("data-bj-clipped", "1");
+                            }
+                        } else if (ours) {
+                            el.removeAttribute("title");
+                            el.removeAttribute("data-bj-clipped");
+                        }
+                    }
+                });
                 while (wrapper.firstChild) {
                     wrapper.removeChild(wrapper.firstChild);
                 }

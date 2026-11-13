@@ -24,8 +24,14 @@ Usage :
     python Tools/translate.py --group server     just the client or the server files
     python Tools/translate.py --check            check every file against en-US, send nothing
     python Tools/translate.py --add it_IT        start a new language (client and server files) and translate it
+    python Tools/translate.py --add-missing      give every language in LANGS a file in both groups, then fill them
+    python Tools/translate.py --no-zip           leave Client/BJ.zip alone
 A new language needs its Azure code in LANGS first. --add creates its empty files, so all of it is due ;
-with --dry-run it only creates them and shows the size.
+with --dry-run it only creates them and shows the size. --add-missing does the same for every language
+that a group has no file for yet : the server has historically shipped fewer languages than the client,
+and this is what brings the two level.
+Changed client locale files are re-added to Client/BJ.zip at the end, since that zip, not the folder, is
+what the game loads ; --no-zip skips it, and it is skipped anyway in a checkout that has no zip beside it.
 Progress is saved after every request : if it stops (quota, network), run it again to carry on.
 """
 import argparse, hashlib, html, json, os, re, sys, time, urllib.error, urllib.request
@@ -51,11 +57,17 @@ LANGS = {
 # names never translated (whole words, case-sensitive)
 KEEP = ["BeamJoy Free", "BeamJoy", "BeamMP", "BeamNG.drive", "BeamNG", "BJI", "Discord"]
 
+# the deployed client package : a zip of Client/BJ's contents at the zip root. Editing a file under
+# Client/BJ/ changes nothing in game until it is re-added to this.
+ZIP_ROOT = ROOT / "Client/BJ"
+ZIP_PATH = ROOT / "Client/BJ.zip"
+
 ENDPOINT = "https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=en&textType=html&to="
 BATCH_ITEMS, BATCH_CHARS = 100, 9000
 
 PROTECT = re.compile("|".join([
     r"\{[^{}\s]*\}",                                      # {name} {1}
+    r"(?<!\S)[{}](?!\S)",                                 # a brace standing alone : "without { or }"
     r"<[A-Za-z_][\w ]*>",                                 # <player_name> <map>
     r"&[a-zA-Z]+;|&#\d+;",                                # &lt; written out for the reader
     r"https?://\S+",                                      # links
@@ -110,6 +122,34 @@ def write(path, en_path, values):
     tmp = path.with_suffix(".tmp")
     tmp.write_text("\n".join(out) + "\n", encoding="utf-8", newline="\n")
     os.replace(tmp, path)
+
+
+def repack(paths):
+    """re-add the written locale files to Client/BJ.zip. Entries sit at the zip root, so a file at
+    Client/BJ/beamjoy_locales/de_DE.json is the entry "beamjoy_locales/de_DE.json". Done with zipfile
+    rather than 7z so the script needs nothing installed ; the archive is small enough to rewrite."""
+    if not ZIP_PATH.exists():
+        return
+    rels = {}
+    for p in paths:
+        try:
+            rels[p.relative_to(ZIP_ROOT).as_posix()] = p
+        except ValueError:
+            continue  # a repo-layout checkout keeps its locales elsewhere and has no zip
+    if not rels:
+        return
+    import zipfile
+    tmp = ZIP_PATH.with_suffix(".zip.tmp")
+    with zipfile.ZipFile(ZIP_PATH) as old, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as new:
+        for info in old.infolist():
+            if info.filename in rels:
+                continue
+            new.writestr(info, old.read(info.filename))
+        for name, path in sorted(rels.items()):
+            new.write(path, name)
+    os.replace(tmp, ZIP_PATH)
+    print("re-added %d locale file%s to %s" % (len(rels), "" if len(rels) == 1 else "s",
+                                               ZIP_PATH.relative_to(ROOT)))
 
 
 PLACEHOLDER = re.compile(r"\{[^{}\s]*\}")
@@ -243,6 +283,9 @@ def main():
     ap.add_argument("--only", help="comma-separated locale files, e.g. de_DE,es_419")
     ap.add_argument("--group", choices=sorted(GROUPS), help="just the client or the server files")
     ap.add_argument("--add", metavar="LOCALE", help="start a new language (e.g. it_IT) and translate just it")
+    ap.add_argument("--add-missing", action="store_true",
+                    help="give every language in LANGS a file in each group it's missing from, then fill them")
+    ap.add_argument("--no-zip", action="store_true", help="don't re-add the client locales to Client/BJ.zip")
     args = ap.parse_args()
 
     groups = [args.group] if args.group else [g for g in GROUPS if group_dir(g)]
@@ -257,13 +300,21 @@ def main():
                 path.write_text("{}\n", encoding="utf-8", newline="\n")
                 print("created %s" % path.relative_to(ROOT))
         args.only = args.add
+    if args.add_missing:
+        for group in groups:
+            d = group_dir(group)
+            for stem in LANGS:
+                path = d / (stem + ".json")
+                if not path.exists():
+                    path.write_text("{}\n", encoding="utf-8", newline="\n")
+                    print("created %s" % path.relative_to(ROOT))
     stems = args.only.split(",") if args.only else list(LANGS)
     for s in stems:
         if s not in LANGS:
             sys.exit("Unknown locale %s (known : %s)" % (s, ", ".join(LANGS)))
 
     state = json.loads(STATE_PATH.read_text(encoding="utf-8")) if STATE_PATH.exists() else {}
-    total_chars, failed = 0, 0
+    total_chars, failed, written = 0, 0, set()
     for group in groups:
         d = group_dir(group)
         en_path = d / "en-US.json"
@@ -290,6 +341,7 @@ def main():
             if args.dry_run or not due:
                 if not args.dry_run:
                     write(path, en_path, values)
+                    written.add(path)
                 continue
             done = 0
             for batch in batches(due):
@@ -306,11 +358,14 @@ def main():
                 STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
                 print("    %d / %d" % (done, len(due)))
             write(path, en_path, values)
+            written.add(path)
     if not args.dry_run:
         STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
     print("%s %d characters%s" % ("Would send" if args.dry_run else "Sent", total_chars,
                                    "" if args.dry_run else ", %d kept English (retried next run)" % failed))
     if not args.dry_run:
+        if not args.no_zip:
+            repack(written)
         check(groups)
 
 

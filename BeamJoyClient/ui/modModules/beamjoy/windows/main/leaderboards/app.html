@@ -47,9 +47,19 @@
     bj-main-leaderboards .lb-colhead {
         display: flex;
         justify-content: space-between;
+        gap: 0.5em;
         padding: 0.25em 0.75em 0;
         font-size: 0.75em;
         color: #979dad;
+    }
+    /* a long head cuts itself off (and says so on hover) rather than pushing "You" off the side */
+    bj-main-leaderboards .lb-colhead > span:first-child {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    bj-main-leaderboards .lb-colhead > span + span {
+        flex: none;
     }
     bj-main-leaderboards .lb-pick {
         display: grid;
@@ -295,6 +305,9 @@
     }
     bj-main-leaderboards .lb-side > .lbx-seg button {
         flex: 1 1 auto;
+        /* without this a flex item never shrinks under its own text : five long labels then
+           overflowed the 20em sidebar rather than wrapping */
+        min-width: 0;
         padding: 0 0.5em;
     }
 
