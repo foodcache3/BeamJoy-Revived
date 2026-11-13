@@ -820,6 +820,93 @@ Server build 2496, client build 2785 (main got its own 2749, 2751, then 2752 for
   synced is updating from before 2.0. Renamed bundled races still follow their `formerNames`, and
   new ones are still seeded once. *(server)*
 
+## [2.0.1] - 2026-10-23 - Derby arena turning, fixes
+
+Server build 2478, client build 2752.
+
+- **Fix (2751) : the delivery HUD's buttons were squashed** (reported). With the HUD focused,
+  the "B to go back to driving" hint shared the buttons' row instead of taking its own line, and
+  crushed Hold to abandon into a sliver. *(client only)*
+
+- **Turn a whole Derby arena with the Rotate tool (2749, 2752)** (direct request). In the Derby
+  arena editor, pick the Rotate tool with nothing selected : the gizmo sits on the arena's middle
+  (its zone's centre, otherwise the middle of its start positions), and turning it round the
+  vertical turns the whole arena : every start position with its facing, the zone's facing, and
+  every prop, lines, curbs and painted lines included. The game's gizmo reads a turn when it's let
+  go, so the arena follows then. With snapping on, each keeps its height above the ground under
+  it, and props that follow the ground are laid on it again. An ordinary unsaved edit until you
+  save. A start position, the zone or a prop selected still turns on its own. 2749's turn buttons
+  were taken out (direct request). *(client only)*
+
+- **Fix (2749) : older vehicle presets refused the right car in races** (reported : "This race
+  requires <preset>"). A pool entry was matched only against the parts it captured when it was
+  added. Entries saved before that capture existed have none, and a game update that renames a
+  vehicle's parts makes the capture stale. When the capture doesn't match, the entry's
+  configuration is now checked as the game has it today : its `.pc` file (or a shared build's own
+  parts). Every slot the file sets that the car has must hold the same part, plus the same tuning
+  when the race doesn't allow tuning. Lobbies and freeroam runs alike. 2752 : the stock
+  configurations still never matched (reported again : an ETK I-Series preset). Their files write
+  an empty slot "none" where the car has it "" ; both now count as empty. The log now also says
+  why a configuration file didn't match. *(client only)*
+
+- **Fix (2749) : an error message stayed on screen until the game was restarted** (reported :
+  enabling an arena without 2 start positions). Error toasts were sent with no timeout, and the
+  game's toasts can't be clicked away. They now fade after 10 seconds (other toasts after 5 as
+  before). This was every editor's "couldn't save" message. *(client only)*
+
+- **Fix : one player saving a vehicle preset crashed another player's BeamMP launcher (2478,
+  2743)** (direct report). Every game then downloads the new shared builds' photos (up to 200 KB
+  each), and the server sent them at a fixed ~400 KB/s whatever the player's connection could take.
+  BeamMP's server writes to a player's connection from more than one thread with no lock between
+  them : once that connection is full, one write goes out in pieces, another slips in between, and
+  the launcher reads a broken packet and quits (the same "Decompression failed" crash as the old
+  join bursts). The server now
+  sends at each player's own pace : their game acknowledges what it got, and no more than 64 KB is
+  ever on its way to one player. Big messages to everyone go through the same per-player pacing
+  (small ones still go at once), order is kept, and a game that stops acknowledging slows down
+  rather than stalls. *(server + client : update both)*
+
+- **A game's own big messages are paced too (2742).** A message from a game to the server went out
+  in all its parts at once, and a preset carrying its shared builds' photos can be a megabyte or
+  more. A game's messages now queue and leave at about 400 KB/s, as the server's do ; small ones
+  still go at once when nothing is waiting, and order is kept. *(client)*
+
+- **Fix : no traffic while alone on the server, and traffic stuck off until a restart (2741)**
+  (direct report : none spawned alone, changing the settings or turning traffic off and on did
+  nothing, and it only came once a second player joined). A game spawned its share only when the
+  server's traffic settings for it changed, and on joining that lands during the loading screen,
+  with no road or car to place one by. The search for a spot then never ended and held the traffic
+  lock, so every later change waited behind it. A car's search now gives up after 3 s, and every
+  5 s each game tops its own share back up : traffic and parked cars it should have and doesn't,
+  including ones deleted since. The "waiting for traffic" message shows only once a car has
+  somewhere to go. *(client)*
+
+- **Fix : console and chat commands couldn't find some players (2476)** (direct report : `bj group
+  <name>` said the player wasn't connected, listing them as connected). A name holding "-", "(",
+  "[", "%", "+", "*" or "?" was only found typed in its exact case, since the typed part was read
+  as a pattern. Names now match as plain text, in any case, and also by a guest's nickname; "bob"
+  picks Bob over Bobby when only one is called that, and `<name>` typed with the usage line's
+  brackets works. Every command taking a player name uses this (`bj group`/`setgroup`, kick, ban,
+  mute, `/pm`, `/setgroup`, ...). `/votemap` had the same fault with map names. And a
+  player keeps the exact name they connected under : on Windows, saved data written under another
+  capitalisation of it renamed them, and commands then found them but couldn't act on them. *(server)*
+
+- **Bundled race authors** (direct request) : the 95 bundled races credited to a guest account
+  (`guest1728877`, ...) are now credited to BeamNG, and four Utah races to yep : Canyon Loop,
+  Canyon Loop (reverse), Overlook to Information Center and Information Center to Overlook. No
+  race was renamed. Servers seeding these races from now on, and servers updating from before
+  2.0 (see the sync below), get the new authors. A server that ran 2.0.0 keeps the authors it
+  has. *(server)*
+
+- **One-time bundled race sync, now only for servers updating from before 2.0 (2475, 2477)**
+  (direct request) : 2475 removed the sync 2.0.0 ran ; 2477 brings it back for a server whose last
+  version was older than 2.0, so one updating straight from 1.10.x to a later build gets every
+  bundled race as BeamJoy ships it now, as it would have with 2.0.0. A server that ran 2.0.0 already
+  had its sync and a new server seeds the races as they ship, so neither is touched. It's decided
+  once, the first boot on 2477 or later : a server whose saved data has bundled races but none
+  synced is updating from before 2.0. Renamed bundled races still follow their `formerNames`, and
+  new ones are still seeded once. *(server)*
+
 ## [2.0.0] - 2026-10-20 - Deliveries and convoys, Derby, crews, main window redesign, props editor
 
 Version 2.0.0 : client build 2740, server build 2474.
