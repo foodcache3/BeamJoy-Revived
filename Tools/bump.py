@@ -31,7 +31,10 @@ ZIPPED = ["lua/ge/extensions/beamjoy/buildversion",
           "ui/modModules/beamjoy/windows/versionCheck/app.js"]
 
 UI_BUILD_RE = re.compile(r"(const UI_BUILD = )(\d+)(;)")
-HEADER_RE = re.compile(r"(Server build )(\d+)(, client build )(\d+)")
+# "Server build N, client build M", or "Server build N" alone on a one-sided entry
+HEADER_RE = re.compile(r"(Server build )(\d+)(, client build (\d+))?")
+UNRELEASED_RE = re.compile(r"^## \[Unreleased\].*\n", re.M)
+SECTION_RE = re.compile(r"^## \[", re.M)
 
 
 def path(rel):
@@ -69,6 +72,41 @@ def repack():
     return True
 
 
+def stamp_changelog(nsrv, ncli, client):
+    """Rewrite the build line inside ## [Unreleased], and nowhere else.
+
+    This used to search the whole file for the first "Server build N, client build M" and rewrite
+    that, on the assumption it would be Unreleased's own. Mid-cycle it is. Straight after a
+    release, when [Unreleased] has been emptied into the new version's section, the first match is
+    the version that just shipped - and the tool rewrote released history and still printed
+    success, because one match anywhere satisfied it. It falsified 2.1.0's header that way
+    (2496 -> 2497) and nothing warned. So: find the window, and if there's no build line in it,
+    say so instead of looking further down the file.
+    """
+    text = read(CHANGELOG)
+    head = UNRELEASED_RE.search(text)
+    if not head:
+        print("! no '## [Unreleased]' heading in the CHANGELOG : set its build line by hand")
+        return
+    rest = text[head.end():]
+    nxt = SECTION_RE.search(rest)
+    window, tail = (rest[:nxt.start()], rest[nxt.start():]) if nxt else (rest, "")
+
+    def swap(m):
+        # a server-only entry carries no ", client build M" : keep it that way unless this bump
+        # moved the client too, in which case the line now has to say so
+        both = m.group(3) or client
+        return m.group(1) + str(nsrv) + ((", client build " + str(ncli)) if both else "")
+
+    window, n = HEADER_RE.subn(swap, window, count=1)
+    if n != 1:
+        print("! [Unreleased] has no build line yet : add \"Server build %d, client build %d\" to it"
+              % (nsrv, ncli))
+        return
+    write(CHANGELOG, text[:head.end()] + window + tail)
+    print("  CHANGELOG  the Unreleased build line")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -101,14 +139,7 @@ def main():
         else:
             write(UI_BUILD, text)
 
-    # the Unreleased section's own "Server build N, client build M" line
-    text, n = HEADER_RE.subn(
-        lambda m: m.group(1) + str(nsrv) + m.group(3) + str(ncli), read(CHANGELOG), count=1)
-    if n != 1:
-        print("! the CHANGELOG's build line wasn't found : update it by hand")
-    else:
-        write(CHANGELOG, text)
-        print("  CHANGELOG  its Unreleased header")
+    stamp_changelog(nsrv, ncli, client)
 
     if client:
         repack()

@@ -59,7 +59,7 @@ server-side).
 
 ## [2.1.0] - 2026-11-13 - Race phases, new start types, BeamNG 0.40 fixes, every language filled in
 
-Server build 2497, client build 2785 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
+Server build 2496, client build 2785 (main got its own 2749, 2751, then 2752 for the 2.0.1 release).
 
 - **Every language is up to date, and the server speaks all thirteen.** The client has shipped 13
   languages and the server only 8, so Japanese, Korean, Russian and both Chinese players read the
