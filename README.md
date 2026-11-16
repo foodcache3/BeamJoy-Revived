@@ -33,26 +33,6 @@ Updates never replace server or player data.
 Once installed, the server keeps itself up to date: it checks GitHub for new releases, tells
 owners in game, and installs one with `/bjupdate` in chat or `bj update` in the server console.
 
-## Importing from BeamJoy Free
-
-If you're moving from an old BeamJoy Free (BJI) server, you don't have to rebuild your Hunter
-arenas, races or delivery points by hand: Legacy Import converts them over automatically.
-
-1. On your old BeamJoy Free server, find its data folder's own `scenarii` subfolder (inside its
-   `BeamJoyData/db/` folder).
-2. Copy that whole `scenarii` folder into **this** server's own `BeamJoyData/db/` folder, so you
-   end up with `BeamJoyData/db/scenarii/<map>_hunter.json` and/or `<map>_races.json` files.
-3. Restart this server (or make sure it's picked up the new files).
-4. In-game, open Config → Core, scroll to the **Legacy Import** section, and click the button for
-   whichever you want to import (Hunter arenas, races, delivery points). A preview lists every map found, with
-   counts and any conflicts, before anything is actually imported. Nothing happens until you
-   confirm it. The section's own ⓘ button repeats these steps in-game.
-
-Hunter arenas import **one per map** and will **overwrite** this fork's existing arena for any map
-that already has one (the preview flags this). Races are different: every convertible race is
-added as a **brand-new** race, never overwriting anything already in your list. A race whose name
-is already used is skipped instead, so importing is always safe to re-run.
-
 ## About this fork
 
 This is an actively developed, upgraded version of BeamJoy Sandbox, updated to run on
@@ -281,13 +261,25 @@ will move into Features as things ship.
 - Trailer delivery
 - Rideshare / taxi
 
-## Support Samael
+## Importing from BeamJoy Free
 
-<p align="center">
-  <a target="_blank" href="https://coff.ee/tontonsamael" alt="Buy me a coffee">
-    <img src="https://github.com/my-name-is-samael/BeamJoy/blob/main/assets/buymeacoffee.png?raw=" width="250" alt="Buy me a coffee" />
-  </a>
-</p>
+If you're moving from an old BeamJoy Free (BJI) server, you don't have to rebuild your Hunter
+arenas, races or delivery points by hand: Legacy Import converts them over automatically.
+
+1. On your old BeamJoy Free server, find its data folder's own `scenarii` subfolder (inside its
+   `BeamJoyData/db/` folder).
+2. Copy that whole `scenarii` folder into **this** server's own `BeamJoyData/db/` folder, so you
+   end up with `BeamJoyData/db/scenarii/<map>_hunter.json` and/or `<map>_races.json` files.
+3. Restart this server (or make sure it's picked up the new files).
+4. In-game, open Config → Core, scroll to the **Legacy Import** section, and click the button for
+   whichever you want to import (Hunter arenas, races, delivery points). A preview lists every map found, with
+   counts and any conflicts, before anything is actually imported. Nothing happens until you
+   confirm it. The section's own ⓘ button repeats these steps in-game.
+
+Hunter arenas import **one per map** and will **overwrite** this fork's existing arena for any map
+that already has one (the preview flags this). Races are different: every convertible race is
+added as a **brand-new** race, never overwriting anything already in your list. A race whose name
+is already used is skipped instead, so importing is always safe to re-run.
 
 ---
 
