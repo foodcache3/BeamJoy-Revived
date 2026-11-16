@@ -31,8 +31,7 @@ Just like the free version, you can download the latest release [HERE](https://g
 Updates never replace server or player data.
 
 Once installed, the server keeps itself up to date: it checks GitHub for new releases, tells
-owners in game, and installs one with `/bjupdate` (`/bjupdate channel development` follows test
-builds instead).
+owners in game, and installs one with `/bjupdate` in chat or `bj update` in the server console.
 
 ## Importing from BeamJoy Free
 
