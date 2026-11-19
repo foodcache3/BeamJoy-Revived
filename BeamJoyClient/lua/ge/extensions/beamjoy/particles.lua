@@ -45,6 +45,7 @@ local function sendToUI()
             automaticLights = localStorage.get(localStorage.GLOBAL_VALUES.AUTOMATIC_LIGHTS) == true,
             particleAmount = M.amount,
             lockVehicles = localStorage.get(localStorage.GLOBAL_VALUES.LOCK_VEHICLES) == true,
+            forceDriverSeat = localStorage.get(localStorage.GLOBAL_VALUES.FORCE_DRIVER_SEAT) == true,
         },
     })
 end

@@ -77,6 +77,17 @@ end
 
 local function onInit()
     InitPreloadedDependencies(M)
+    -- Settings > Vehicle > "Always take the driver's seat" : see ensureOwnVehicleDriver. The whole
+    -- vehicle section is sent back to the settings page by beamjoy_particles.sendToUI, which has to
+    -- send it whole because the page merges with a shallow Object.assign
+    M.forceDriverSeat = localStorage.get(localStorage.GLOBAL_VALUES.FORCE_DRIVER_SEAT) == true
+    beamjoy_communications_ui.addHandler("BJUserSettings", function(newSettings)
+        local force = type(newSettings) == "table" and type(newSettings.vehicle) == "table" and
+            newSettings.vehicle.forceDriverSeat
+        if type(force) ~= "boolean" or force == M.forceDriverSeat then return end
+        M.forceDriverSeat = force
+        localStorage.set(localStorage.GLOBAL_VALUES.FORCE_DRIVER_SEAT, force)
+    end)
     beamjoy_communications.addHandler("deleteVehicle", M.delete)
     beamjoy_communications.addHandler("explodeVehicle", M.explode)
     beamjoy_communications.addHandler("launchVehicle", M.launch)
@@ -1089,13 +1100,25 @@ local function delete(vid)
     if veh then veh:delete() end
 end
 
+--- the vehicle selector's own "remove" on a car that isn't this player's (vehicleSelector.lua's
+--- removeCurrent, behind its confirm) : asked of the server, the way the player list's own Delete
+--- action asks, and NOT deleted here.
+---
+--- BeamMP only tells the server about a vehicle its client destroys when that vehicle is the local
+--- player's own : MPVehicleGE's onVehicleDestroyed sends the 'Od' packet inside `if
+--- vehicle.isLocal`, and for anyone else's car it just marks its own record isDeleted and returns.
+--- So a local delete of another player's car takes it off THIS screen and nowhere else -- it goes
+--- on living on the server, in its owner's game and on every other client, and nothing ever sends
+--- it here again. Reported from a race as "a car that isn't on the client's screen but is on
+--- everyone else's", and the car this is aimed at is exactly the one a spectator is looking at.
+---
+--- Through the server instead, the owner's own game does the deleting, so BeamMP tells everyone.
 local function deleteCurrentOthersVehicle()
     ---@type NGVehicle?
     local current = be:getPlayerVehicle(0)
-    if current and M.vehicles[current:getID()] and
-        not M.vehicles[current:getID()].isLocal then
-        M.delete(current:getID())
-    end
+    local v = current and M.vehicles[current:getID()]
+    if not v or v.isLocal or not v.ownerName or not v.remoteVID then return end
+    beamjoy_communications.send("deleteVehicle", v.ownerName, v.remoteVID)
 end
 
 local function deleteCurrentOwnVehicle()
@@ -1221,46 +1244,130 @@ end
 --- therefore only ever one of the fallbacks above, so it's put back to "unrestricted", and a
 --- passenger seat with the driver's seat free (or held by a dummy) is swapped for the driver's.
 --- Another player's car is never touched : riding along in one as a passenger is exactly right.
+---
+--- Two more things this got wrong, both in the same live report ("right hand drive cars spawn
+--- occupant + driver camera in back left seat") :
+---   * requestEnterSeat refuses every seat SWITCH while the player can't leave their seat, and
+---     canPlayerLeaveSeat is gameplay_walk.canSetWalkingMode -- false whenever "toggleWalkingMode"
+---     is blocked in the action filter, which every game mode here does for its whole duration
+---     (raceRunner, derbyRunner, hunterRunner, infectedRunner, busRun, delivery, playerPursuit).
+---     In a race -- the one place that spawns a car and seats the player in the same tick -- the
+---     swap could therefore never happen at all, and the player sat wherever the game's own claim
+---     had landed. setOccupied is the primitive underneath requestEnterSeat, with no walking check
+---     : it clears the player's other seats in that car, sets the presence (permissionOverride and
+---     all), re-applies the meshes, re-syncs the driving action maps and moves the camera, which is
+---     the whole job here.
+---   * the mode was then put to "unrestricted" whether or not the seat had actually moved, and the
+---     next run bailed on `permissionMode ~= "passenger"`. One failed attempt and the wrong seat
+---     was permanent. The seat is now checked on its own, whatever the mode says, and only a mode
+---     that's really wrong is written.
+---
+--- the seat the game itself calls this car's driver's, read the way gameplay/seatOccupants.lua's
+--- own getDriverSeatId reads it : the slot that declares the mode, else the side the driver camera
+--- sits on (which is what makes a right-hand-drive car's "FR" its driver's seat). Straight from the
+--- vehicle's data rather than through getSeats, which rebuilds the whole parts tree and copies
+--- every seat's action maps : this is asked once a second, in a car that's almost always fine.
+--- nil when the car has no seat system at all, or when the camera's side names a seat this car
+--- doesn't have : nothing to put right either way
+---@param vid integer
+---@return string?
+local function ownDriverSeat(vid)
+    local data = core_vehicle_manager and core_vehicle_manager.getVehicleData(vid)
+    local slots = data and data.vdata and data.vdata.occupantSlotsById
+    if type(slots) ~= "table" or not next(slots) then return end
+    for seatId, slot in pairs(slots) do
+        if type(slot) == "table" and slot.defaultPermissionMode == "driver" then return seatId end
+    end
+    local okCam, _, rightHandDrive = pcall(core_camera.getDriverDataById, vid)
+    local side = (okCam and rightHandDrive) and "FR" or "FL"
+    return slots[side] and side or nil
+end
+
+--- the last state logged below, so a correction that can't be made doesn't say so every second
+local lastDriverFix
+--- Settings > Vehicle > "Always take the driver's seat", off by default (FORCE_DRIVER_SEAT).
+---
+--- 0.40's occupant system lets a player sit anywhere, and walking up to a particular door and
+--- pressing enter seats them at THAT door on purpose. Running this every slow update overrode that
+--- choice a quarter of a second later, in their own car, whether or not they meant it -- so it is
+--- now something a player opts into rather than something done to them.
+---
+--- Off, a passenger claim in your own car is still awkward inside a game mode : a passenger
+--- presence takes the driving action maps away, and seat switching is refused for as long as
+--- `toggleWalkingMode` is blocked in the action filter, which every mode here does for its whole
+--- duration. That is a trap of our own making and wants fixing on its own terms (let the player
+--- change seats inside their car while still being unable to walk away from it) rather than by
+--- overriding every claim ; this toggle is the stopgap until then.
 local function ensureOwnVehicleDriver()
+    if not M.forceDriverSeat then return end
     local seats = gameplay_seatOccupants
     if not seats or not seats.getPlayerPresence or not seats.setPlayerPermissionMode then return end
     local own = M.getCurrentOwn()
     if not own or own.isAi or own.jbeam == M.WALKING then return end
     local ok, presence = pcall(seats.getPlayerPresence, 0)
     if not ok or type(presence) ~= "table" or presence.vehicleId ~= own.vid then return end
-    if presence.permissionMode ~= "passenger" then return end
 
-    -- this car's driver seat, when it has the game's seats at all and it's this player's to take
-    local driverSeatId, driverHeldByDummy
-    if seats.getSeats then
+    local driverSeatId = ownDriverSeat(own.vid)
+    -- seated, but not where this player's own car has to seat them. Checked whatever the permission
+    -- mode says : a claim that landed on another seat with a mode that still drives (the rear-seat
+    -- report above) was invisible here before. An unseated presence has no seat to be wrong
+    local wrongSeat = driverSeatId ~= nil and presence.seatId ~= nil and presence.seatId ~= driverSeatId
+    local wrongMode = presence.permissionMode == "passenger"
+    if not wrongSeat and not wrongMode then
+        lastDriverFix = nil
+        return
+    end
+
+    -- only now, and only for the one seat : who holds it decides whether it can be taken at all
+    local heldByDummy, heldByOther = false, false
+    if wrongSeat and seats.getSeats then
         local okSeats, list = pcall(seats.getSeats, own.vid)
         for _, seat in ipairs(okSeats and type(list) == "table" and list or {}) do
-            if seat.isDriver then
-                driverSeatId = seat.seatId
-                driverHeldByDummy = seat.occupied and seat.occupantType == "dummy" or false
-                if seat.occupied and not driverHeldByDummy and seat.player ~= 0 then
-                    driverSeatId = nil -- another local player's (split screen) : left as it is
-                end
+            if seat.seatId == driverSeatId then
+                heldByDummy = seat.occupied and seat.occupantType == "dummy" or false
+                heldByOther = seat.occupied and not heldByDummy and seat.player ~= nil and
+                    seat.player ~= 0 or false
                 break
             end
         end
     end
+    if heldByOther then wrongSeat = false end -- another local player's (split screen) : left as it is
 
-    if driverSeatId and presence.seatId ~= driverSeatId then
-        if driverHeldByDummy and seats.clearOccupied then
+    local moved = false
+    if wrongSeat then
+        if heldByDummy and seats.clearOccupied then
             pcall(seats.clearOccupied, own.vid, driverSeatId)
         end
-        if seats.requestEnterSeat then
-            pcall(seats.requestEnterSeat, own.vid, driverSeatId, 0)
+        if seats.setOccupied then
+            local okSet, done = pcall(seats.setOccupied, own.vid, driverSeatId, 0, nil, "unrestricted")
+            moved = okSet and done == true
+        end
+        if not moved and seats.requestEnterSeat then
+            -- the game's own path, for whatever setOccupied refuses (a seat claimed between the
+            -- read above and here) : it works wherever the player may leave their seat
+            local okReq, done = pcall(seats.requestEnterSeat, own.vid, driverSeatId, 0)
+            moved = okReq and done == true
         end
     end
     -- after the seat, not before : taking a seat sets the mode from that seat's own slot, which is
     -- the fallback this is here to undo. permissionOverride sticks with it, so a later claim in
-    -- this same car can't quietly go back to being a passenger either
-    pcall(seats.setPlayerPermissionMode, 0, "unrestricted")
-    LogDebug(string.format(
-        "beamjoy_vehicles : was a passenger in own vehicle %d (seat %s), driving restored",
-        own.vid, tostring(presence.seatId)))
+    -- this same car can't quietly go back to being a passenger either. A seat that moved carried
+    -- the override with it, so this is only for a mode that's wrong on its own
+    if wrongMode and not moved then
+        pcall(seats.setPlayerPermissionMode, 0, "unrestricted")
+    end
+
+    local state = string.format("%d/%s/%s/%s", own.vid, tostring(presence.seatId),
+        tostring(presence.permissionMode), tostring(moved))
+    if lastDriverFix ~= state then
+        lastDriverFix = state
+        LogDebug(string.format(
+            "beamjoy_vehicles : own vehicle %d, seat %s, mode %s : %s",
+            own.vid, tostring(presence.seatId), tostring(presence.permissionMode),
+            wrongSeat and (moved and ("moved to the driver's seat " .. tostring(driverSeatId)) or
+                ("could NOT take the driver's seat " .. tostring(driverSeatId)))
+            or "driving restored"))
+    end
 end
 
 ---@param jbeam string

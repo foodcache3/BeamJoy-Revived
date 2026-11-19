@@ -6,6 +6,9 @@ const M = {
             particleAmount: 100,
             // nobody but your crew can use your cars' buttons, see lua beamjoy/vehicleInteractions.lua
             lockVehicles: false,
+            // put me back in my own car's driver's seat if I end up anywhere else, see lua
+            // beamjoy/vehicles.lua. Off: the game lets you sit where you like
+            forceDriverSeat: false,
         },
         // in-world markers and their prompts, see lua beamjoy/markerSettings.lua
         markers: {

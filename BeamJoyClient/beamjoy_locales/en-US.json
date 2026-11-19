@@ -1017,6 +1017,8 @@
     "beamjoy.window.main.tabs.settings.sections.vehicle.particles.tooltip": "How much dust, gravel, mud, sparks and tyre smoke vehicles throw up. Lower it if big groups of cars slow your game down. Only affects your game.",
     "beamjoy.window.main.tabs.settings.sections.vehicle.lockVehicles": "Lock my vehicles",
     "beamjoy.window.main.tabs.settings.sections.vehicle.lockVehicles.tooltip": "Other players can open your doors and use your car's buttons, like you can theirs. Turn this on to stop everyone but your crew.",
+    "beamjoy.window.main.tabs.settings.sections.vehicle.forceDriverSeat": "Always take the driver's seat",
+    "beamjoy.window.main.tabs.settings.sections.vehicle.forceDriverSeat.tooltip": "Put you back in your own car's driver's seat whenever you end up in another one. Off: you sit wherever you got in, including a passenger seat you chose yourself. Only affects your own cars, never a seat you take in someone else's.",
     "beamjoy.window.main.tabs.settings.sections.vehicle.allowChases": "Police chases",
     "beamjoy.window.main.tabs.settings.sections.vehicle.allowChases.tooltip": "Take part in freeroam police chases: police players can chase you when you break the law near them, and you can chase from a police car. Off: no chases.",
     "beamjoy.window.main.tabs.settings.sections.vehicle.automaticLights": "Automatic lights",

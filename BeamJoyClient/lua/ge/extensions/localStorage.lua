@@ -20,6 +20,14 @@ local M = {
             key = "beamjoy.vehicle.lock_vehicles",
             default = false,
         },
+        -- Settings > Vehicle > Always take the driver's seat (beamjoy/vehicles.lua).
+        -- Off by default : 0.40 lets a player sit anywhere, and overriding that fights a seat the
+        -- player may well have chosen on purpose. On for anyone who would rather never land in a
+        -- passenger seat in their own car
+        FORCE_DRIVER_SEAT = {
+            key = "beamjoy.vehicle.force_driver_seat",
+            default = false,
+        },
         -- Settings > Visual (beamjoy/markerSettings.lua)
         HIDE_ACTIVITY_MARKERS = {
             key = "beamjoy.markers.hide_activities",

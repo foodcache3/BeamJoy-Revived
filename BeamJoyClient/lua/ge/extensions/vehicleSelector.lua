@@ -158,8 +158,12 @@ local function removeCurrent(...)
     local current = beamjoy_vehicles.getCurrent()
     if current then
         if current.isLocal then
-            beamjoy_vehicles:deleteCurrentOwnVehicle()
+            beamjoy_vehicles.deleteCurrentOwnVehicle()
         else
+            -- another player's car goes through the server, which only staff may ask (see
+            -- beamjoy_vehicles.deleteCurrentOthersVehicle for why it can't be done here) : offered
+            -- to nobody else, the way the player list hides its own Delete action
+            if not beamjoy_permissions.isStaff() then return end
             uiHelpers.popup(beamjoy_lang.translate("beamjoy.toast.vehicleSelector.removeOtherVeh"), {
                 uiHelpers.popupButton(beamjoy_lang.translate("beamjoy.common.cancel")),
                 uiHelpers.popupButton(beamjoy_lang.translate("beamjoy.common.confirm"),

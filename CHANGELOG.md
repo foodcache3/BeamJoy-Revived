@@ -8,8 +8,86 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2498. Server-side only : deploy and restart, no client update, no cache clear.
+Server build 2498, client build 2786. The startup entry at the bottom, and the server half of the
+stuck-vehicle entry, are server-side (deploy and restart) ; everything else is client-side, so
+BJ.zip goes out with it.
 
+- **"Always take the driver's seat" is now a setting under Settings > Vehicle, off by default.**
+  BeamNG 0.40 lets a player sit in any seat, and walking up to a particular door and pressing enter
+  seats them at *that* door deliberately. BeamJoy used to override that every slow update, in the
+  player's own car, whether or not they meant it. It is now something you opt into. Saved on this
+  PC, and it has never applied to a seat you take in someone else's car.
+
+  Off, a passenger claim in your own car is still awkward inside a game mode : a passenger presence
+  takes the driving action maps away, and seat switching is refused for as long as
+  `toggleWalkingMode` is blocked in the action filter -- which every mode here does for its whole
+  duration, to stop players walking away mid-event. That is a trap of BeamJoy's own making and
+  wants fixing on its own terms (let a player change seats inside their car while still being
+  unable to leave it) rather than by overriding every claim. This toggle is the stopgap until then.
+
+  The forcing itself was also simply broken, and is fixed for anyone who turns it on. Reported
+  from a test session : "right hand drive cars spawn occupant + driver camera in back left seat".
+  The seat figure and the first-person camera both follow the seat the game's occupant system has
+  claimed for you, and `ensureOwnVehicleDriver` is what puts that claim back on the driver's seat
+  when one of 0.40's fallbacks lands it elsewhere. It couldn't :
+  - it moved the player with `gameplay_seatOccupants.requestEnterSeat`, which refuses every seat
+    *switch* while the player may not leave their seat -- and "may not leave their seat" is
+    `gameplay_walk.canSetWalkingMode`, false whenever `toggleWalkingMode` is blocked in the action
+    filter, which every game mode here does for its whole duration (races, derby, hunter, infected,
+    the bus run, deliveries, pursuits). In a race -- the one place that spawns a car and seats the
+    player in the same tick -- the correction could never happen at all. It now uses `setOccupied`,
+    the primitive underneath that call : no walking check, and it still clears the player's other
+    seats, sets the presence, re-applies the meshes, re-syncs the driving action maps and moves the
+    camera.
+  - and it then set the permission mode to "unrestricted" whether or not the seat had actually
+    moved, while its own next run bailed out on `permissionMode ~= "passenger"`. One failed attempt
+    and the wrong seat was permanent. The seat is now checked on its own, whatever the mode says,
+    and only a mode that is really wrong gets written.
+  - the driver's seat is also read straight from the car's own data now (the slot that declares it,
+    else the side its driver camera sits on, which is what makes a right-hand-drive car's "FR" its
+    driver's) instead of through `getSeats`, which rebuilds the whole parts tree and copies every
+    seat's action maps : this runs once a second, in a car that is almost always fine.
+- **Removing another player's car from the vehicle selector asks the server instead of deleting it
+  here.** Reported as a car that isn't on one client's screen but is on everyone else's. BeamMP
+  only tells the server about a vehicle its client destroys when that vehicle is the local player's
+  own (`MPVehicleGE.onVehicleDestroyed` sends its `Od` packet inside `if vehicle.isLocal`) ; for
+  anyone else's car it marks its own record deleted and sends nothing. So removing someone else's
+  car locally took it off that one screen and nowhere else -- it went on living on the server, in
+  its owner's game and on every other client, and nothing ever sent it back. The selector's remove
+  now sends the same `deleteVehicle` request the player list's own Delete action sends, so the
+  owner's game does the deleting and BeamMP tells everyone ; and, like that action, it is offered
+  to staff only.
+- **A car that is stuck on everyone else's screen can now actually be deleted (server-side).**
+  Follow-up to the same report : "when I used the vehicle selector delete on the duplicate vehicle,
+  it left it with a grey sphere as if it were still there on the server. when I tried to use the
+  staff options to delete that vehicle, it was not able to delete that vehicle." The grey sphere is
+  BeamMP's own `blobColorDeleted` marker -- it draws one for any vehicle it still knows about whose
+  local copy is gone -- so the sphere was the game saying, correctly, "still on the server, not
+  here". Two separate things then stopped staff removing it :
+  - the server's `deleteVehicle` and `deletePlayerVehicles` only *asked the owner's client* to
+    delete the car, and that client can only make the deletion stick while it still has the object
+    (BeamMP sends its removal packet solely for `isLocal` vehicles). A car no client can see any
+    more was therefore unremovable by design. Both now call BeamMP's own
+    `MP.RemoveVehicle(playerID, vehicleID)`, which removes it at the server and propagates to
+    everyone with no client's cooperation, and drop the server-side record themselves rather than
+    waiting for an `onVehicleDeleted` that may never come.
+  - and on the client, the player list's vehicle actions indexed `targetVeh.veh` -- this game's
+    local copy -- without checking it existed, so `delete` threw on `targetVeh.veh.isLocal` in
+    exactly the one case the action exists for. Deleting is a server request and needs no local
+    copy at all ; `focus`, which genuinely does need one, now returns quietly instead.
+
+  This is also the likeliest cause of the "teleports still not working sometimes" in the same
+  report : teleporting to a player resolves their current car in *this* client's vehicle list, so a
+  player whose car this game has dropped was simply not findable, and the button did nothing. That
+  path now warns instead of failing silently (see the entry below), and the car should no longer be
+  droppable in the first place.
+- **Teleporting to a player lands beside them, not on top of whatever is above them.** The teleport
+  left `setVehiclePositionRotation`'s `cling` on, which re-snaps the car to whatever a ray from
+  10 m up hits first : a player under a bridge, in a tunnel, under a gas station awning or in a
+  multi-storey put the arriving car on the roof of it. From the button that looks like the teleport
+  did nothing. The destination needs no snapping -- it is another car's position, so the ground
+  under it is already right -- and `safeTeleport` still settles the car there. Same fix races and
+  hunters already carry for their own placements.
 - **Startup : the bundled races are parsed once a boot instead of three times over.** The server
   console logged `'onInit' in 'BeamJoyServer' failed to execute in time and was not waited for`
   right after the server was marked as running, with BeamJoy's own "Loading" and "loaded" lines

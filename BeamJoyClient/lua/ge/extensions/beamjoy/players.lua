@@ -216,8 +216,16 @@ local function tryTeleportToPlayer(targetPlayerName, forced)
         async.delayTask(function() teleportToLock = false end, delay * 1000, "BJTeleportToDelay")
     end
 
+    -- cling off, the same fix raceRunner.lua and hunterRunner.lua already carry for their own
+    -- placements : setVehiclePositionRotation's default re-snaps to whatever a ray from 10 m above
+    -- hits first, so teleporting to a player standing under a bridge, in a tunnel, under a gas
+    -- station awning, in a multi-storey or anywhere else with something overhead puts the car on
+    -- the roof of it instead of beside them -- which from the button looks like the teleport
+    -- simply didn't work. This destination needs no snapping at all : it IS another car's
+    -- position, so the ground under it is already exactly right, and safeTeleport still settles
+    -- the car there
     local pos, dir, up = beamjoy_vehicles.getVehiclePositionRotation(targetMpVeh.veh)
-    beamjoy_vehicles.setVehiclePositionRotation(myVeh.veh, pos, dir, up)
+    beamjoy_vehicles.setVehiclePositionRotation(myVeh.veh, pos, dir, up, { cling = false })
 end
 
 ---@param fromPlayerName string
@@ -309,14 +317,21 @@ local function onVehicleAction(playerName, rvid, action)
 
     LogDebug(string.format("onVehicleAction %s %d %s", playerName, rvid, action))
 
+    -- targetVeh comes from the SERVER's list of that player's cars, so it outlives this client's
+    -- own copy ; targetVeh.veh is that local copy and is nil once this game no longer has one.
+    -- Reported ("when I tried to use the staff options to delete that vehicle, it was not able to
+    -- delete that vehicle") : every branch below indexed it blind, so the one case the staff
+    -- delete exists for -- a car this client can't see any more -- threw on targetVeh.veh.isLocal
+    -- and did nothing at all. Deleting is a server request and needs no local copy whatsoever
     if action == "focus" then
+        if not targetVeh.veh then return end -- nothing here to put the camera in
         beamjoy_vehicles.focusVehicle(targetVeh.veh.vid)
     elseif action == "freeze" then
         beamjoy_communications.send("toggleFreeze", playerName, rvid)
     elseif action == "engine" then
         beamjoy_communications.send("toggleEngine", playerName, rvid)
     elseif action == "delete" then
-        if targetVeh.veh.isLocal then
+        if targetVeh.veh and targetVeh.veh.isLocal then
             beamjoy_vehicles.delete(targetVeh.vid)
         else
             beamjoy_communications.send("deleteVehicle", playerName, rvid)

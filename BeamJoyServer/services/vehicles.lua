@@ -186,6 +186,32 @@ local function updateCurrentVehicle(ctxt, vid)
     end
 end
 
+--- Removes a vehicle for real, for everyone.
+---
+--- This used to ask the owner's client to delete it, which only works while that client still has
+--- the object. BeamMP's own MPVehicleGE.onVehicleDestroyed sends its removal packet ONLY inside
+--- `if vehicle.isLocal`, so a client that has already dropped its copy of a car -- for any reason
+--- -- deletes nothing and tells nobody, and the car goes on living on the server and in every
+--- other player's game, with nothing left that can ever remove it. That is the reported "car that
+--- isn't on my screen but is on everyone else's", and the grey sphere left where it was is
+--- BeamMP's own blobColorDeleted marker saying exactly that : still on the server, gone here.
+---
+--- MP.RemoveVehicle removes it at the server and propagates to every client, needing no
+--- cooperation from the owner's game, so it works on a car that nobody's client can still see.
+---@param player BJSPlayer
+---@param veh table one of player.vehicles, keyed by BeamMP's own vehicle ID
+local function removeVehicle(player, veh)
+    MP.RemoveVehicle(player.playerID, veh.vehicleID)
+    -- MP.RemoveVehicle is not documented to raise onVehicleDeleted, so the record is dropped here
+    -- rather than waited for. If that hook does fire as well it finds the entry already gone and
+    -- does nothing, so this is safe either way
+    if player.vehicles[veh.vehicleID] then
+        player.vehicles[veh.vehicleID] = nil
+        communications_tx.sendToPlayer(communications_tx.ALL_PLAYERS, "updatePlayer",
+            player.playerName, services_players.publicView(player))
+    end
+end
+
 ---@param ctxt BJSContext
 ---@param targetName string
 local function deletePlayerVehicles(ctxt, targetName)
@@ -198,7 +224,7 @@ local function deletePlayerVehicles(ctxt, targetName)
     target.vehicles:filter(function(v)
         return not v.isAi
     end):forEach(function(v)
-        communications_tx.sendToPlayer(target.playerID, "deleteVehicle", v.vid)
+        removeVehicle(target, v)
     end)
 end
 
@@ -215,7 +241,7 @@ local function deleteVehicle(ctxt, targetName, vid)
     local targetVeh = target.vehicles:find(function(v) return v.vid == vid end)
     if not targetVeh then return end
 
-    communications_tx.sendToPlayer(target.playerID, "deleteVehicle", targetVeh.vid)
+    removeVehicle(target, targetVeh)
 end
 
 ---@param ctxt BJSContext
