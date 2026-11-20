@@ -8,11 +8,69 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2501, client build 2788. The startup entry, the swallowed-crash entry at the bottom,
-the server half of the stuck-vehicle entry, and both halves of the two race entries below, are
-server-side (deploy and restart) ; everything else is client-side, so BJ.zip goes out with it.
-The two race entries have a server half and a client half each : deploy them together, or a game
-on the old build will keep being sent splits the new server no longer repeats.
+Server build 2502, client build 2789. The startup entry, the swallowed-crash entry at the bottom,
+the server half of the stuck-vehicle entry, the crew-leader entry, and both halves of the two race
+entries and the jumped-start entry below, are server-side (deploy and restart) ; everything else is
+client-side, so BJ.zip goes out with it. The two race entries and the jumped-start entry have a
+server half and a client half each : deploy them together, or a game on the old build will keep
+being sent splits the new server no longer repeats, and a checkpoint crossed before the green light
+will be reported by the game and thrown away by the server.
+
+- **A checkpoint crossed before the green light of a lights start counted for nothing, and cost the
+  jumper the rest of the lap.** A lights start hands your car back as the first light comes on,
+  several seconds before the green : that is what makes jumping the start possible at all, and what
+  the jump-start penalty is for. Checkpoint detection only began when the race formally started, so
+  a jumper's first checkpoint was never reported, the server stayed a gate behind them, and it then
+  refused every crossing that followed until they came back round to the one that went missing --
+  the same lost-lap cascade as the gate entry below, reached a different way.
+
+  The checkpoints are armed from the first light now. A crossing before the green is credited at
+  zero on the clock, so nobody buys time by going early, and that first lap is left out of best lap
+  and best sectors the way a lap the pit lane touched already is : part of it was driven before the
+  clock started, so its splits would stand as records nobody racing properly can match. The plane
+  signs the countdown gathered are also kept across the green, so a car half-way through a
+  checkpoint as the lights go out doesn't lose it. **(Server-side half:)** a crossing reported
+  before the green is now proof of a jump start in its own right, so the penalty no longer rests
+  entirely on the jumper's own game remembering to report it. **(Server-side and client-side: both
+  halves go out together.)**
+
+- **Your own trailer could stay see-through and unable to collide with anything for the rest of the
+  session, the moment you hitched it up.** Reported as a trailer ghosted after a respawn that never
+  came back once it was attached. A car is ghosted for a few seconds after it spawns or resets, and
+  only turns solid again once nothing is close enough for that to launch both of them. A vehicle
+  with something on the hitch skips that check entirely, because a trailer's own bounding length
+  overlaps whatever it is towing or towed by and the check would never pass.
+
+  That exemption asked the game for "the trailers attached to this vehicle", and the game's walk
+  only ever descends through the *active* half of a hitch -- the ball or fifth wheel on the towing
+  vehicle. Every trailer's tongue is the passive half (`tag`, not `couplerTag` : checked in the
+  utility trailer, the caravan, the cargo trailer and the semi trailer), so the walk finds the
+  trailer from the truck and finds nothing whatsoever from the trailer. The truck was exempt ; the
+  thing it was towing never was, and with the truck sitting right in front of it the clear could
+  never succeed -- it retried every 200 ms, forever. It now reads the game's own coupled-vehicle
+  adjacency, which is written from both ends of a hitch, so both ends are exempt.
+
+  A second fault in the same place : once the ghost timer's own last-resort clear had given up
+  waiting for a gap and forced the matter, the next ordinary tick replaced that forced retry with an
+  unforced one, and the car went back to waiting on the full configured clearance for good. The
+  forcing sticks to the vehicle now until it really is solid again.
+
+- **A crew leader who dropped out and rejoined came back as an ordinary member of their own crew.**
+  While a leader is offline the crew is handed to an online member so that it isn't left without
+  one. That hand-over was permanent, so reconnecting left the crew in a stand-in's hands with no way
+  back short of being promoted again by them. A crew now remembers whose it is -- whoever made it,
+  or the last member a leader deliberately promoted -- and hands it back to them within a second of
+  them rejoining, while a stand-in only ever holds it for as long as they are away. Leaving or being
+  kicked is still final : the crew changes hands for keeps then, and whoever takes it owns it.
+  **(Server-side.)**
+
+- **The delivery HUD's Unstuck and Abandon buttons are reachable without the Focus control, behind
+  an Actions button.** They appeared only once the Focus control was pressed, so a player who never
+  bound it or never found it had no way to reach either of them during a job. The HUD now carries
+  the same always-visible Actions button the race HUD has, with the Focus control's own binding
+  shown beside it : a click opens the list without taking the pad, the Focus control still opens it
+  and gives it the pad, and the list has a Close of its own so a mouse can get back out again.
+  **(Client-side.)**
 
 - **Race updates stopped being sent the instant they were ready, partway through every busy
   race.** Found while working out why the gate replies in the entry below were occasionally

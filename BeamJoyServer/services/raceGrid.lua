@@ -134,8 +134,9 @@
 ---@field pitStopClaim table? a stop reported, waiting for the server to see the car standing in its
 ---box (settlePitStop). Not sent
 ---@field pitStops integer? stops made this phase
----@field pitLaps integer[]? the laps the pit lane touched this phase (the one they went in on and the
----next) : left out of best lap, best sectors and the leaderboard
+---@field pitLaps integer[]? the laps left out of best lap, best sectors and the leaderboard this
+---phase : the ones the pit lane touched (the one they went in on and the next), and the first lap
+---of a jumped start, part of which was driven before the clock began
 ---@field pitTyreSet {option: string?, lap: integer}? the tyres last fitted at a stop this phase : a
 ---plugin's set ("plugin:id", nil a plain one), on that lap
 ---@field pitTyreSets string[]? the plugins' sets this racer may fit ("plugin:id" each), set by a plugin
@@ -3386,7 +3387,15 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         services_clockSync.nowMs() >= session.goAtMs - GO_GRACE_MS then
         M.beginRace(session.id)
     end
-    if not session or session.state ~= "RACE" then return end
+    -- a lights start releases the cars at the first light, seconds ahead of the green (see
+    -- raceRunner's updateCountdown), so a racer who jumps can be through a checkpoint or two
+    -- while this is still COUNTDOWN. Those crossings count : refusing them leaves currentGate
+    -- behind the car and the expected-gate check below then throws away everything that follows
+    -- until they come back round to the one that was lost. They're credited at elapsed 0 below,
+    -- so nobody buys time by going early
+    local preGreen = session ~= nil and session.state == "COUNTDOWN" and
+        session.settings.startLights == true
+    if not session or (session.state ~= "RACE" and not preGreen) then return end
     local participant = session.participants[ctxt.senderID]
     if not participant or participant.finished or participant.dnf or participant.sittingOut then return end
     local race = getRace(session)
@@ -3487,6 +3496,20 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
     if participant.inPit then
         settlePitStop(session, participant, services_clockSync.nowMs(), true)
         endPitPass(participant)
+    end
+    if preGreen then
+        -- a checkpoint crossed before the green light is proof of a jump start on its own, so the
+        -- penalty is applied from here too rather than resting entirely on the racer's own client
+        -- remembering to report it. raceJumpStart re-checks everything itself and only ever fires
+        -- once per racer, so this is a no-op when their report already arrived
+        M.raceJumpStart(ctxt, sessionId)
+        -- the race clock starts at the green : their time at this gate is 0, not a negative
+        -- number no part of this (or the client's formatting) expects
+        elapsedMs = 0
+        -- and that first lap isn't one to beat, exactly as a lap the pit lane touched isn't : part
+        -- of it was driven before the clock started, so its lap time and the sectors before the
+        -- line would stand as records nobody racing properly can match
+        markPitLap(participant, participant.currentLap or 1)
     end
     applyCrossing(session, race, participant, gateIndex, elapsedMs)
     -- slim : gate crossings are by far the most frequent pushes (see buildSessionPayload)

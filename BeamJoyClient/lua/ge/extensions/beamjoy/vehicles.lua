@@ -429,6 +429,7 @@ local function onVehicleDestroyed(vid)
     -- is cleared by BeamMP itself now : BeamMP/BeamMP#974)
     M.vehicles[vid] = nil
     M.ghostReasons[vid] = nil
+    M.ghostRecoverForce[vid] = nil
     M.occupantMeshAlphas[vid] = nil
 end
 
@@ -1475,6 +1476,14 @@ end
 --- reason is still active).
 ---@type table<integer, table<string, true>> vid -> set of active ghost reasons
 M.ghostReasons = {}
+--- vid -> true while a pending ghostRecover retry for that vehicle was scheduled with
+--- `force`. setGhost is re-entered from onServerTick several times a second (its own
+--- "nonRacer"/"zone"/"collisionsDisabled" reasons), always with force=nil, and each of
+--- those used to REPLACE the pending retry task with a non-forced one -- so
+--- applyRespawnProtection's timeout+3s force fallback was wiped within a tick of arming
+--- itself and the vehicle went back to waiting on the full RespawnGhostDistance buffer
+--- forever. Sticky per vehicle instead, cleared once it actually un-ghosts
+M.ghostRecoverForce = {}
 
 --- true while this client should render its OWN vehicle normally and every OTHER vehicle
 --- translucent instead, reversed specifically for a solo race's full-duration ghost (see
@@ -1785,6 +1794,38 @@ local function applyRespawnProtection(vid)
     end, timeoutSec * 1000 + 3000, forceTaskName)
 end
 
+--- whether this vehicle is coupled to any other one, in EITHER direction.
+---
+--- Real, confirmed bug : setGhost's trailer exemption below used to ask
+--- getAttachedTrailers(vid) > 0, which is one-directional. The game's own
+--- generateAttachedVehiclesTree only ever descends through a node that carries a `couplerTag`,
+--- and that is the ACTIVE half of a hitch -- the truck's ball/fifth wheel. Every bundled
+--- trailer's own tongue node is the passive half, tagged `tag = "tow_hitch"` with no couplerTag
+--- at all (checked in boxutility, caravan, cargotrailer and tsfb). So the walk finds the trailer
+--- from the truck and finds NOTHING from the trailer : the towing vehicle was exempt from the
+--- un-ghost distance check and the thing it was towing never was.
+---
+--- Which is the reported symptom exactly ("own trailer is getting ghosted after respawning and
+--- does not become unghosted when attached") : a reset re-arms respawn protection on the trailer
+--- too, and when its timer tries to clear, the truck it is hitched to sits well inside
+--- r1 + r2 of it, so the 200ms retry below never once succeeds and the trailer stays see-through
+--- and non-colliding for good.
+---
+--- core_vehicles.vehsCouplings is the symmetric form of the same fact -- the game's own
+--- `[vid] = {[otherVid] = true}` adjacency, written from both sides in onCouplerAttached and
+--- cleared from both in onCouplerDetached, with no couplerTag reading involved. Direct
+--- neighbours only, which is all this needs: every vehicle in a coupled chain has at least one.
+---@param vid integer
+---@return boolean
+local function isCoupled(vid)
+    local all = core_vehicles and core_vehicles.vehsCouplings
+    local couplings = all and all[vid]
+    if couplings then return next(couplings) ~= nil end
+    -- no entry for this vehicle (core_vehicles reloaded after it spawned, so its onPreVehicleSpawned
+    -- never ran) : fall back to the directional walk, which at least still covers the towing side
+    return #M.getAttachedTrailers(vid) > 0
+end
+
 ---@param veh NGVehicle
 ---@param state boolean
 ---@param force boolean? real, confirmed bug fixed here (live report : ghosting could disable
@@ -1818,15 +1859,20 @@ local function setGhost(veh, state, force, checkGhostedBystanders)
     if (veh.ghost == "1") == state then return end
     local mpVeh = M.vehicles[veh:getID()]
     local processName = "ghostRecover-" .. tostring(veh:getID())
-    -- per direct request : a trailer attached to the local vehicle skips this whole distance/
-    -- contact safety check entirely, un-ghosting immediately regardless of what's nearby (not
-    -- even a literal-contact exemption, the full check is bypassed). A trailer's own separate
-    -- bounding length routinely overlaps whatever it's hitched to and anything else nearby in a
-    -- busy spawn/pits area, which could otherwise strand a towing vehicle ghosted indefinitely,
-    -- the exact same "retries forever" failure mode the timer-fallback fix above exists to guard
-    -- against, just triggered by trailer geometry instead of a crowded area.
-    local hasTrailer = mpVeh and mpVeh.isLocal and #M.getAttachedTrailers(veh:getID()) > 0
-    if mpVeh and mpVeh.isLocal and not state and not hasTrailer then
+    -- per direct request : a vehicle hitched to another one skips this whole distance/contact
+    -- safety check entirely, un-ghosting immediately regardless of what's nearby (not even a
+    -- literal-contact exemption, the full check is bypassed). A trailer's own separate bounding
+    -- length routinely overlaps whatever it's hitched to and anything else nearby in a busy
+    -- spawn/pits area, which could otherwise strand it (or the thing towing it) ghosted
+    -- indefinitely, the exact same "retries forever" failure mode the timer-fallback fix above
+    -- exists to guard against, just triggered by trailer geometry instead of a crowded area.
+    -- Both ends of the hitch, not just the towing one : see isCoupled above for why asking for
+    -- "attached trailers" alone left every trailer itself permanently ghosted.
+    local coupled = mpVeh and mpVeh.isLocal and isCoupled(veh:getID())
+    if not state then
+        force = force or M.ghostRecoverForce[veh:getID()] or nil
+    end
+    if mpVeh and mpVeh.isLocal and not state and not coupled then
         local p1 = M.getVehiclePositionRotation(veh)
         local r1 = veh:getInitialLength() / 2
         -- configurable buffer on top of the two vehicles' own bounding radii (Freeroam.
@@ -1844,11 +1890,13 @@ local function setGhost(veh, state, force, checkGhostedBystanders)
                 return p1:distance(p2) < r1 + r2 + distanceBuffer
             end) then
             async.removeTask(processName)
+            M.ghostRecoverForce[veh:getID()] = force or nil
             async.delayTask(function() setGhost(veh, false, force, checkGhostedBystanders) end, 200, processName)
             return
         end
     end
     async.removeTask(processName)
+    M.ghostRecoverForce[veh:getID()] = nil
     veh:queueLuaCommand("obj:setGhostEnabled(" .. tostring(state) .. ")")
     veh:setDynDataFieldbyName("ghost", 0, state and "1" or "0")
     -- translucency on the vehicle itself, always, including the one currently being driven,

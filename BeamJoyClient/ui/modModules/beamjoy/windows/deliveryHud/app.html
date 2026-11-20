@@ -70,6 +70,60 @@
         font-weight: 600;
         color: var(--dlv-orange-soft);
     }
+    /* ACTIONS : the button that opens the list, always clickable whatever the rest of the HUD */
+    #beamjoy-delivery-hud .hud-actbar {
+        display: flex;
+        align-items: center;
+        gap: 0.5em;
+        margin-top: 0.55em;
+    }
+    #beamjoy-delivery-hud .hud-actbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5em;
+        flex: 1 1 0;
+        padding: 0.35em 0.5em;
+        font: inherit;
+        font-size: 0.85em;
+        font-weight: 600;
+        color: var(--dlv-text);
+        background: var(--dlv-button);
+        border: 0;
+        border-radius: 0.25em;
+        cursor: pointer;
+    }
+    #beamjoy-delivery-hud .hud-actbtn:hover {
+        filter: brightness(1.15);
+    }
+    #beamjoy-delivery-hud .hud-key {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.05em 0.4em;
+        border-radius: 0.25em;
+        background: #ebebeb;
+        color: #0a0b0e;
+        font-size: 0.7em;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    #beamjoy-delivery-hud .hud-close {
+        display: block;
+        flex: 1 1 0;
+        width: 100%;
+        padding: 0.35em 0.5em;
+        font-size: 0.85em;
+        font-weight: 600;
+        color: var(--dlv-soft);
+        background: rgba(255, 255, 255, 0.06);
+        border: 0;
+        border-radius: 0.25em;
+        cursor: pointer;
+    }
+    #beamjoy-delivery-hud .hud-close:hover {
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+    }
     #beamjoy-delivery-hud .hud-buttons {
         display: flex;
         /* the focus hint takes a line of its own (flex-basis 100%) : without wrapping it shared the
@@ -177,8 +231,16 @@
     <div class="hud-state" ng-if="$ctrl.data.confirming">
         {{'beamjoy.delivery.hud.confirming' | translate}}
     </div>
-    <!-- the Focus control's buttons (hidden otherwise), same as the race HUD -->
-    <div class="hud-buttons" ng-if="$ctrl.focused">
+    <!-- ACTIONS : the button, or the list it opens (a click, or the Focus control) : the race
+         HUD's own pattern, see windows/raceHud -->
+    <div class="hud-actbar" ng-if="!$ctrl.rowOpen()">
+        <button type="button" class="hud-actbtn" ng-click="$ctrl.openActions()">
+            <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M2 4h12M2 8h12M2 12h12"></path></svg>
+            {{'beamjoy.raceHud.actions' | translate}}
+        </button>
+        <span class="hud-key">{{$ctrl.focusLabel || 'RB + X'}}</span>
+    </div>
+    <div class="hud-buttons" ng-if="$ctrl.rowOpen()">
         <button type="button" class="hud-unstuck" ng-if="$ctrl.data.unstuck"
             ng-class="{cursor: $ctrl.cursor === $ctrl.indexOf('unstuck')}"
             ng-disabled="$ctrl.data.unstuck.state !== 'ready'" ng-click="$ctrl.unstuck()"
@@ -191,6 +253,11 @@
             <span class="fill" ng-style="$ctrl.abandonFill()" aria-hidden="true"></span>
             <span class="label">{{($ctrl.abandonProgress > 0 ? 'beamjoy.delivery.hud.abandonHolding' : 'beamjoy.delivery.hud.abandonHold') | translate}}</span>
         </button>
-        <span class="hint">{{'beamjoy.raceHud.focusHint' | translate}}</span>
+        <button type="button" class="hud-close"
+            ng-class="{cursor: $ctrl.cursor === $ctrl.indexOf('close')}"
+            ng-click="$ctrl.closeActions()" aria-label="{{'beamjoy.raceHud.closeActions' | translate}}">
+            ✕ {{'beamjoy.common.close' | translate}}
+        </button>
+        <span class="hint" ng-if="$ctrl.focused">{{'beamjoy.raceHud.focusHint' | translate}}</span>
     </div>
 </div>

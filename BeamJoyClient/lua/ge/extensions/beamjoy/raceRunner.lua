@@ -2769,7 +2769,12 @@ local function onSessionUpdate(session)
         M.raceUsesSharedClock = session.goAtMs ~= nil and beamjoy_clockSync.isSynced()
         M.frameElapsedMs = nil
         M.prevFrameElapsedMs = nil
-        M.lastLy = {}
+        -- kept on a lights start, where the countdown already armed the gates (see the detection
+        -- function above) : those frames' plane signs are what a crossing spanning the green light
+        -- is measured from, and wiping them here would drop the checkpoint out from under anyone
+        -- who was half-way through it as the lights went out. Nothing can have populated lastLy
+        -- during any other kind of countdown, so clearing it stays correct for them
+        if session.settings.startLights ~= true then M.lastLy = {} end
         M.lastProgressPos = nil
         M.lastProgressCheckMs = GetCurrentTimeMillis()
         M.lastDnfWarningSecond = nil
@@ -3585,7 +3590,18 @@ local function onUpdate()
         end
     end
 
-    if not M.session or M.session.state ~= "RACE" then return end
+    -- a lights start hands the car back as the first light comes on (updateCountdown), several
+    -- seconds before the green, so someone who jumps is driving while the session is still
+    -- COUNTDOWN. The checkpoints have to be live for them from that moment : detection used to
+    -- begin only at RACE, so a jumper's first checkpoint was never reported at all, the server
+    -- stayed a gate behind them, and raceGrid then silently refused every crossing that followed
+    -- until they came back round to the one that went missing -- a whole lap lost for jumping the
+    -- start, on top of the penalty it already costs. M.jumpStartFrom is set exactly when the
+    -- freeze comes off on a lights start (and never on any other start), so it doubles as "the
+    -- gates are armed". The server credits a pre-green crossing at elapsed 0, see raceGateCrossed
+    local countdownArmed = M.session ~= nil and M.session.state == "COUNTDOWN" and
+        M.jumpStartFrom ~= nil
+    if not M.session or (M.session.state ~= "RACE" and not countdownArmed) then return end
     if M.resumePending then return end
     -- waiting for a start of their own : nothing counts yet
     if updatePersonalStart(own) then return end

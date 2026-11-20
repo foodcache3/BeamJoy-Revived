@@ -3,8 +3,15 @@
 --- joined into it (pullIn, called by the grids and deliveries) ; busy ones skip that one.
 ---
 --- Crews live in memory until the server restarts, kept by player name : a member who
---- disconnects is still in the crew when they come back. A leader who leaves hands the crew to
---- the next member (an online one first) ; an empty crew is gone.
+--- disconnects is still in the crew when they come back. An empty crew is gone.
+---
+--- Leadership : `owner` is whose crew it really is (whoever made it, or the last member a leader
+--- appointed with crewPromote) and `leader` is who holds it right now. They're the same player
+--- whenever the owner is online. While the owner is away an online member stands in, and the
+--- owner takes it straight back on their next tick in the server -- a leader who drops out and
+--- rejoins is the leader again, which is what "the crew leader" means to everyone in it. Leaving
+--- or being kicked is different from going offline : the crew is handed over for keeps then, and
+--- the new holder becomes its owner.
 ---
 --- Joining : an open crew takes anyone ; otherwise a player asks to join (the leader accepts or
 --- declines) or the leader invites them (the invitee's notification stack, beamjoy/notices.lua).
@@ -32,7 +39,9 @@ local M = {
 ---@class BJCrew
 ---@field id integer
 ---@field name string
----@field leader string playerName
+---@field leader string playerName of whoever holds the crew right now
+---@field owner string playerName of whose crew it is : the one `leader` goes back to when they're
+---online. Only crewCreate and a deliberate crewPromote set it, never a stand-in hand-over
 ---@field members string[] playerNames, in join order
 ---@field open boolean anyone can join without asking
 ---@field requests table<string, number> playerName -> expiresAt
@@ -227,13 +236,39 @@ local function removeMember(c, playerName)
         M.lastPushed[c.id] = nil
         return broadcastList()
     end
+    -- gone for good, unlike a leader who merely went offline : the crew changes hands for keeps,
+    -- so nothing hands it back if they ever rejoin and join it again
+    if c.owner == playerName or not c.owner then
+        c.owner = firstOnline(c) or c.members[1]
+    end
     if c.leader == playerName then
-        -- an online member first, else whoever joined next
-        c.leader = firstOnline(c) or c.members[1]
+        -- its owner if they're here, else an online member, else whoever joined next
+        c.leader = (online(c.owner) and c.owner) or firstOnline(c) or c.members[1]
         toast(c.leader, "crew.nowLeader")
     end
     pushState(c)
     broadcastList()
+end
+
+--- puts the crew back in the hands it belongs in : its owner whenever they're online, otherwise
+--- an online member while they're away. Called every slow tick, so a leader who dropped out has
+--- the crew back a second after they rejoin instead of staying a plain member in their own crew.
+--- Idempotent ; returns true only when it actually moved
+---@param c BJCrew
+---@return boolean changed
+local function reconcileLeader(c)
+    -- a crew made before owner existed (the server has been up across the change)
+    c.owner = c.owner or c.leader
+    local target
+    if online(c.owner) then
+        target = c.owner
+    elseif not online(c.leader) then
+        target = firstOnline(c, c.leader)
+    end
+    if not target or target == c.leader then return false end
+    c.leader = target
+    toast(target, "crew.nowLeader")
+    return true
 end
 
 ---@param ctxt BJSContext
@@ -272,6 +307,7 @@ local function crewCreate(ctxt, name)
         id = M.nextId,
         name = name:sub(1, M.NAME_MAX),
         leader = ctxt.sender.playerName,
+        owner = ctxt.sender.playerName,
         members = {},
         open = false,
         requests = {},
@@ -338,6 +374,9 @@ local function crewPromote(ctxt, playerName)
     local c = leaderCrew(ctxt)
     if not c or playerName == c.leader or not table.includes(c.members, playerName) then return end
     c.leader = playerName
+    -- an appointment, not a stand-in : the crew is theirs now, so the player who handed it over
+    -- doesn't take it back by rejoining later
+    c.owner = playerName
     toast(playerName, "crew.nowLeader")
     pushState(c)
     broadcastList()
@@ -488,15 +527,9 @@ local function onSlowUpdate()
         for name, expiresAt in pairs(c.requests) do
             if expiresAt <= now or crewOfName(name) then c.requests[name] = nil end
         end
-        -- a leader who went offline hands the crew to an online member (they stay a member)
-        if not online(c.leader) then
-            local next = firstOnline(c, c.leader)
-            if next then
-                c.leader = next
-                toast(next, "crew.nowLeader")
-                broadcastList()
-            end
-        end
+        -- a leader who went offline hands the crew to an online member (they stay a member, and
+        -- get it back the moment they're online again : see reconcileLeader)
+        if reconcileLeader(c) then broadcastList() end
         -- members come online, go offline, start and finish activities
         if M.lastPushed[c.id] ~= signature(c) then pushState(c) end
     end
