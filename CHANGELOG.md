@@ -8,9 +8,67 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2498, client build 2786. The startup entry at the bottom, and the server half of the
-stuck-vehicle entry, are server-side (deploy and restart) ; everything else is client-side, so
-BJ.zip goes out with it.
+Server build 2501, client build 2788. The startup entry, the swallowed-crash entry at the bottom,
+the server half of the stuck-vehicle entry, and both halves of the two race entries below, are
+server-side (deploy and restart) ; everything else is client-side, so BJ.zip goes out with it.
+The two race entries have a server half and a client half each : deploy them together, or a game
+on the old build will keep being sent splits the new server no longer repeats.
+
+- **Race updates stopped being sent the instant they were ready, partway through every busy
+  race.** Found while working out why the gate replies in the entry below were occasionally
+  seconds late instead of milliseconds. The server has a fast path for small messages -- under
+  4000 bytes with nothing queued ahead, it goes straight out -- and everything else joins a
+  pacing queue that drains on a 100 ms timer behind a send budget and a 64 KB in-flight window
+  whose acknowledgement timeout is three seconds.
+
+  Every racer's **per-lap sector splits for every lap so far** were going out in full on every
+  single gate crossing. Measured against the real field list, that is about 40% of each racer's
+  row, and it pushes a six-car update past the 4000-byte line at around **lap 5** of a 25-lap
+  race -- after which every update for the rest of the race takes the slow path. Two cars don't
+  cross it until lap 34, which is why small sessions never showed this and the busy ones did.
+
+  A gate crossing's update now carries only the lap it just closed, and the game adds it to the
+  splits it already has. Every full update -- joining, starting to spectate, any state or phase
+  change -- still carries the complete set and replaces what's held, so a phase reset shortens it
+  properly rather than leaving the previous phase's laps behind. A six-car, 25-lap race now stays
+  on the fast path from start to finish (the update stops growing past it until lap 28), and a
+  four-car one until lap 81. **(Server-side and client-side: both halves go out together.)**
+
+  The other modes were checked for the same thing. Hunter, Derby and Infected track only counters
+  (waypoints reached, wrecks, damage, tag count) and Deliveries and Bus build their lists fresh
+  per push, so their updates are bounded by how many players are in them and not by how long
+  they've been running. Races were the only mode where a payload grew with time.
+
+- **A race gate you drove through could go uncounted, costing you the whole lap, with nothing in
+  any log to explain it.** Found from a live report of a 25-lap race : *"a gate would not register
+  every 2 laps, and the gate that failed would move back one gate each time so it would slowly
+  move around the lap"*, and no error on the server. That player finished 7 laps down.
+
+  On a normal (non-branching) race the game watches exactly one gate at a time, and it used to
+  take which one purely from the **server's** echo of your last crossing. Detecting a crossing
+  needs the previous frame's distance to the gate's plane, so a gate that only becomes the watched
+  one *after* you are already past it can never be detected on that lap. Nothing is sent, the
+  server never hears of it, and no error is logged anywhere, because nothing failed -- the
+  crossing simply never happened as far as the mod is concerned. The server then refuses every
+  later gate until you come back round to the one that went missing, which costs a full lap, and
+  the lap counter doesn't move either. From the car it looks like one gate not working, and
+  because the next loss lands somewhere else it looks like the broken gate is walking backwards
+  around the track.
+
+  Measured in that player's own game log : the echo normally comes back in **115 ms**, and is
+  under half a second 98% of the time -- but in 3 reports out of 445 it took between 5 and 13
+  seconds, and in every one of those where the car was still moving, the next gate was lost. The
+  recovery took *exactly* one clean lap each time, to within 0.2 s, which is how we know the game
+  itself never stalled : the car was driving normally the whole way round, just watching the wrong
+  gate.
+
+  The game already knows which gate it reported, so it no longer waits to be told. It moves on to
+  the next gate the moment it sends one, and the server's reply still has the final word : it
+  reconciles as soon as it arrives, and a crossing the server genuinely refuses hands control back
+  to the server's own count. Transit time can now be as bad as it likes without costing anyone a
+  lap. **(Server-side half:)** the server's refusal of an out-of-order gate was itself completely
+  silent, so a racer could spend a whole lap having every gate thrown away with nothing written
+  anywhere ; it is logged as a warning now, with who, which gate, which was expected and when.
 
 - **"Always take the driver's seat" is now a setting under Settings > Vehicle, off by default.**
   BeamNG 0.40 lets a player sit in any seat, and walking up to a particular door and pressing enter
@@ -88,6 +146,18 @@ BJ.zip goes out with it.
   did nothing. The destination needs no snapping -- it is another car's position, so the ground
   under it is already right -- and `safeTeleport` still settles the car there. Same fix races and
   hunters already carry for their own placements.
+- **A crash while handling a message from a player is no longer swallowed in silence
+  (server-side).** Every message a game sends -- a race gate crossing, a pit action, a chat
+  command, a settings change -- is dispatched inside a protected call, and the error that call
+  caught was assigned to a local variable and then dropped, with nothing logged anywhere. A crash
+  in any handler was therefore indistinguishable from the message never having arrived : the
+  action simply did not happen, and the server console said nothing about it at all. Found while
+  chasing a live report of a race gate that would not register, with no error in the server logs
+  to explain it -- which is exactly what this blind spot looks like from the outside, whether or
+  not it turns out to be the cause in that case. The event, the player who sent it and the stack
+  it was thrown from are now logged as an error, using `xpcall` so the stack is captured while the
+  failing call is still live rather than after it has unwound. Passing the error on to that player
+  as a toast is still to do, and is still marked as such.
 - **Startup : the bundled races are parsed once a boot instead of three times over.** The server
   console logged `'onInit' in 'BeamJoyServer' failed to execute in time and was not waited for`
   right after the server was marked as running, with BeamJoy's own "Loading" and "loaded" lines

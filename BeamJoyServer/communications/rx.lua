@@ -38,6 +38,27 @@ local function dispatch(key, ctxt, ...)
     end)
 end
 
+--- xpcall's message handler for a client message's handlers (below) : runs while the failing call
+--- is still on the stack, so the traceback points at the line that actually threw. A plain pcall
+--- has already unwound by the time it returns, leaving only the message
+---@param err any whatever was thrown
+---@return any err the same thing, a string one with its stack appended
+local function withTraceback(err)
+    -- a table thrown on purpose (a translated error, see the TODO in finalizeCommunication) is
+    -- passed through untouched : debug.traceback would hand it back unchanged anyway, and it
+    -- isn't a crash to take a stack of
+    if type(err) == "table" then return err end
+    return debug.traceback(tostring(err), 2)
+end
+
+--- what a thrown error reads as in the log
+---@param err any
+---@return string
+local function errorText(err)
+    if type(err) ~= "table" then return tostring(err) end
+    return string.format("table error (key %s)", tostring(err.key))
+end
+
 local function getTimeoutKey(id)
     return string.format("BJSRxEventTimeout-%s", id)
 end
@@ -75,10 +96,17 @@ local function finalizeCommunication(id)
             comm.parts))
         dump(parsedData)
     end
-    local ok, err = pcall(dispatch, comm.key, ctxt, table.unpack(parsedData, 1, 20))
+    -- Real, confirmed blind spot (live report : a race gate that never registered, with nothing
+    -- whatsoever in the server log to explain it). This was a bare pcall whose error was assigned
+    -- to a local and then dropped on the floor, so a crash in ANY client message handler was
+    -- indistinguishable from the message never having arrived : no line, no stack, no trace of it
+    -- anywhere. Every handler error is now logged with the event, who sent it and where it threw.
+    -- Sending it on to that player as a toast is still to do (type(err) == "table" : an error
+    -- meant for them, anything else : error.generic)
+    local ok, err = xpcall(dispatch, withTraceback, comm.key, ctxt, table.unpack(parsedData, 1, 20))
     if not ok then
-        err = type(err) == "table" and err or { key = "error.generic" }
-        -- TODO send error and toast
+        LogError(string.format("Event %s from %s (ID %d) failed : %s", tostring(comm.key),
+            ctxt.sender.playerName, comm.senderID, errorText(err)))
     end
 end
 

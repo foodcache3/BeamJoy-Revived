@@ -635,14 +635,39 @@ local PAYLOAD_DROPPED_FIELDS = { gateTimes = true, bestLapGateTimes = true, lead
 --- a session's own tables never sent to clients (an entry list's player IDs, the last places)
 local SESSION_PRIVATE = { participants = true, baseSettings = true, lastPositions = true, entrants = true }
 
+--- a racer's per-lap sector splits for EVERY lap so far. Measured, and the reason this list
+--- exists : at six cars this is ~40% of each row and it was going out in full on every single
+--- gate crossing, which pushed a slim update past communications/tx.lua's SMALL_MESSAGE (4000
+--- bytes) from about lap 5 of a 25-lap race. Over that threshold the update loses tx's "small and
+--- nothing queued : send it right now" fast path and joins the pacing queue instead, where it
+--- waits on the 100ms drain, the send budget and the 64KB in-flight window (whose acknowledgement
+--- timeout is a full 3 seconds). The player's own log for the race this came from : the reply to
+--- a gate report normally lands in 115ms and is under 500ms 98% of the time, with the handful of
+--- exceptions all taking SECONDS -- two clean populations, which is what two code paths look
+--- like. A slim push now carries only the lap its own crossing just completed, which the game
+--- merges into the copy it keeps (raceRunner.lua's adoptSession) ; every full push -- joining,
+--- spectating, any state or phase change -- still sends the whole thing, so nothing can drift.
+local SLIM_PARTICIPANT_FIELDS = { lapSectorHistory = true }
+
 --- the copy of a participant that goes out in session updates : shallow (nothing in a payload
 --- is modified after it's built), without the per-gate tables, plus a `displayName`
 ---@param p BJRaceParticipant
+---@param slim boolean? a gate crossing's push : SLIM_PARTICIPANT_FIELDS thinned out as well
 ---@return table
-local function payloadParticipant(p)
+local function payloadParticipant(p, slim)
     local c = {}
     for k, v in pairs(p) do
-        if not PAYLOAD_DROPPED_FIELDS[k] then c[k] = v end
+        if not PAYLOAD_DROPPED_FIELDS[k] and not (slim and SLIM_PARTICIPANT_FIELDS[k]) then c[k] = v end
+    end
+    -- only the lap this crossing just closed, instead of every lap's splits all over again (see
+    -- SLIM_PARTICIPANT_FIELDS). Keyed by lap number, so the highest key is the newest lap ; the
+    -- game merges it into what it already has rather than replacing it
+    if slim and p.lapSectorHistory then
+        local newest
+        for lap in pairs(p.lapSectorHistory) do
+            if not newest or lap > newest then newest = lap end
+        end
+        if newest then c.lapSectorHistory = { [newest] = p.lapSectorHistory[newest] } end
     end
     if p.disconnected and p.rejoinBy then
         c.rejoinSecondsLeft = math.max(0, p.rejoinBy - GetCurrentTime())
@@ -803,7 +828,7 @@ local function buildSessionPayload(session, slim)
     }, { __index = leader })
     payload.participants = {}
     for i, p in ipairs(ordered) do
-        local row = payloadParticipant(p)
+        local row = payloadParticipant(p, slim)
         -- plugins' labels on this racer (services/pluginUi.lua), as shown
         local fields = services_pluginUi.racerFields(session, p)
         row.fields = fields and services_pluginUi.fieldList(fields) or nil
@@ -3441,7 +3466,20 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         end
     else
         local expected = (participant.currentGate % #race.gates) + 1
-        if gateIndex ~= expected then return end -- out of order / duplicate report, ignore
+        if gateIndex ~= expected then
+            -- The other half of the lost-gate bug (racePits.lua's currentGate, which has the full
+            -- story). This refusal was completely silent, so a racer could spend an entire lap
+            -- having every gate they crossed thrown away without one line written anywhere to say
+            -- it was happening -- the race just quietly stopped counting for them. A single one of
+            -- these is normal and harmless (a duplicate report, a crossing that raced the pit
+            -- lane's own crediting), which is why it's a warning and not an error : it's a RUN of
+            -- them against one player that means a gate went missing, and that is exactly what
+            -- there was no way to see before
+            LogWarn(string.format(
+                "raceGateCrossed : %s reported gate %d, expected %d (lap %d, %dms) : ignored",
+                ctxt.sender.playerName, gateIndex, expected, participant.currentLap or 0, elapsedMs))
+            return
+        end
     end
 
     -- a gate driven through while in the pit lane : they're back on track (a reset to their last

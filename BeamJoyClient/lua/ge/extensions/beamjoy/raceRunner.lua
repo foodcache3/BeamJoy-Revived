@@ -1886,6 +1886,11 @@ end
 ---@param previous BJRaceSession?
 local function adoptSession(session, previous)
     session.leaderboard = session.participants
+    -- what tells a slim gate-crossing push apart from a full one, read BEFORE the settings are
+    -- filled in from the previous copy below (after that there's nothing left to tell them apart
+    -- by). Only a slim push's omissions get carried over : a full one is authoritative, and a
+    -- phase change that resets a racer's splits has to be able to shorten what the client holds
+    local slim = session.settings == nil
     if session.settings == nil then
         if previous and previous.id == session.id and previous.settings then
             session.settings = previous.settings
@@ -1898,6 +1903,34 @@ local function adoptSession(session, previous)
     if previous and previous.id == session.id then
         for _, key in ipairs({ "phases", "phaseResults", "eventStandings" }) do
             if session[key] == nil then session[key] = previous[key] end
+        end
+    end
+    -- Each racer's per-lap sector splits accumulate here rather than being resent in full on
+    -- every gate crossing : a slim push carries only the lap its own crossing just closed (see
+    -- raceGrid.lua's SLIM_PARTICIPANT_FIELDS for the measurements and why it matters -- in short,
+    -- the full table pushed a six-car update past the server's "send it right now" size limit
+    -- partway through a race, after which every update queued instead). A full push -- joining,
+    -- spectating, any state or phase change -- carries the whole table and replaces what's here,
+    -- so a phase reset or a late join can't be left holding a stale copy.
+    if slim and previous and previous.id == session.id and type(session.participants) == "table" then
+        local kept = {}
+        for _, p in ipairs(previous.participants or {}) do
+            if p.playerID ~= nil and p.lapSectorHistory ~= nil then kept[p.playerID] = p.lapSectorHistory end
+        end
+        for _, p in ipairs(session.participants) do
+            local was = kept[p.playerID]
+            if was then
+                local merged = {}
+                -- lap keys arrive as numbers from a dense full push and as strings from a sparse
+                -- slim one (JSON has no integer keys), and keyifyLapSectorHistory downstream
+                -- tostring()s them either way : normalised here so one lap can't land twice
+                for _, src in ipairs({ was, p.lapSectorHistory or {} }) do
+                    for lap, sectors in pairs(src) do
+                        merged[tonumber(lap) or lap] = sectors
+                    end
+                end
+                p.lapSectorHistory = merged
+            end
         end
     end
 end

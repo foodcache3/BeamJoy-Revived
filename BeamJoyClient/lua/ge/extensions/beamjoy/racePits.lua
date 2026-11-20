@@ -58,6 +58,8 @@ local towHandled
 local lastGate
 -- after PIT OUT : the step the server credits last, until its echo
 local afterExitGate
+-- a gate crossing just sent : its step and when, trusted ahead of the server's echo (currentGate)
+local sentGate, sentAtMs
 -- each line's last signed distance (planeCrossed)
 local lastLy = {}
 -- the race time last frame and this one (a crossing placed between them, like the gates')
@@ -79,6 +81,12 @@ local STOP_SPEED = .5
 local ENTRY_CONFIRM_MS = 3000
 --- a tow's hold on top of the drive back (raceGrid.lua's PIT_TOW_BASE_MS)
 local TOW_BASE_MS = 10000
+--- how long a sent gate crossing is believed over the server's echo (currentGate). Measured : the
+--- echo lands in 115ms at the median and under 500ms 98% of the time, so anything near this is
+--- already far outside normal. Long enough that a slow echo can never expire it mid-lap, short
+--- enough that a crossing the server actually REFUSED (the distance check in raceGrid.lua, which
+--- logs) hands the next gate back to the server's own value within a couple of gates
+local SENT_GATE_WAIT_MS = 10000
 
 -- ---------------------------------------------------------------------------------------------
 -- the session
@@ -458,7 +466,9 @@ local function enterPit(ctx, from)
     end
     -- a start from the box isn't a stop : the car's standing in it at the green light
     M.pass = { lineDue = due, stopped = from == 0 }
-    afterExitGate = nil
+    -- in the lane the server credits the route's steps itself (skipsGates), so a step this client
+    -- sent on the way in is no longer what the next gate follows
+    afterExitGate, sentGate = nil, nil
     lastLy = {}
 end
 
@@ -666,6 +676,7 @@ local function clearAll(myVeh)
     M.holding = nil
     leavePit()
     afterExitGate, lastGate, towHandled, towLocalUntilMs = nil, nil, nil, nil
+    sentGate, sentAtMs = nil, nil
     if limiterKmh then setLimiter(myVeh and myVeh.veh, nil) end
     if myVeh and ghostOn then setGhost(myVeh.vid, false) end
     ghostOn = nil
@@ -931,12 +942,42 @@ function M.skipsGates()
     return M.inPit and context() ~= nil
 end
 
---- the step a racer's next gate follows : the server's, or after PIT OUT the lane's last credited
---- step until its echo
+--- the step a racer's next gate follows : the one just sent, else after PIT OUT the lane's last
+--- credited step, else the server's -- each held only until the echo catches up with it.
+---
+--- Real, confirmed bug fixed here (live report, a 25-lap race : "a gate would not register every
+--- 2 laps, and the gate that failed would move back one gate each time so it would slowly move
+--- around the lap", with nothing in the server logs). raceRunner.lua watches exactly one gate at a
+--- time on a non-branching race, and it used to pick that gate purely from participant.currentGate
+--- -- the SERVER's echo of the last crossing. Crossing detection needs the previous frame's signed
+--- distance to the gate's plane, so a gate that only becomes the watched one after the car is
+--- already past it can never be detected on that lap : nothing is sent, the server never hears of
+--- it, and there is no error anywhere because nothing failed, it simply never happened.
+---
+--- Measured in that player's own log : the echo normally lands in 115ms (98% under 500ms), but in
+--- 3 reports out of 445 it took 5-13s, and in every one of those where the car was actually moving
+--- the next gate was lost. One loss costs a whole lap -- raceGrid.lua then silently refuses every
+--- later gate until the car comes back round to the one that failed, and the lap doesn't count
+--- either -- which is why that race finished 7 laps down with a clean server log.
+---
+--- The client already knows what it sent, so it no longer needs to be told. The echo still has the
+--- final word : it reconciles below, and a crossing the server refuses falls back to the server's
+--- own value once SENT_GATE_WAIT_MS is up, rather than desyncing the other way.
 ---@param participant table
 ---@return integer
 function M.currentGate(participant)
-    return afterExitGate or participant.currentGate or 0
+    if afterExitGate then return afterExitGate end
+    local echo = participant.currentGate or 0
+    if sentGate then
+        if echo == sentGate then
+            sentGate = nil -- the echo caught up : back on the server's own value
+        elseif GetCurrentTimeMillis() - (sentAtMs or 0) > SENT_GATE_WAIT_MS then
+            sentGate = nil -- never confirmed : the server refused it, let it have the last word
+        else
+            return sentGate
+        end
+    end
+    return echo
 end
 
 --- a gate crossing just sent (its step)
@@ -944,6 +985,7 @@ end
 function M.onGateSent(step)
     lastGate = step
     afterExitGate = nil
+    sentGate, sentAtMs = step, GetCurrentTimeMillis()
 end
 
 --- where a reset in the pit lane puts the car : its box (nil : not in the lane)
@@ -1112,7 +1154,9 @@ local function onUpdate()
                 if crossed and forward then
                     -- the server credits the lane's steps up to toStep's : the next gate is toStep
                     if not p.finished then
-                        afterExitGate = (pit.toStep - 2) % #race.gates + 1
+                        -- those steps are the server's to credit, not ones this client sent, so
+                        -- the lane's value wins outright over any crossing sent before the pass
+                        afterExitGate, sentGate = (pit.toStep - 2) % #race.gates + 1, nil
                     end
                     leavePit()
                     send("exit", ms)

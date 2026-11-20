@@ -689,7 +689,17 @@ local function render()
                             nextGateSet[i] = true
                         end
                     else
-                        expectedIndex = (participant.currentGate % #race.gates) + 1
+                        -- the same value raceRunner.lua watches for a crossing, for this client's
+                        -- own car. A crossing already sent but not echoed back yet has moved the
+                        -- next gate on, and the marker has to move with it : left on the server's
+                        -- echo alone it sits on the gate just crossed until the reply lands, which
+                        -- is exactly the "that gate didn't register" the lost-gate bug looked like
+                        -- from the cockpit (racePits.lua's currentGate has the whole story).
+                        -- Another racer being watched only ever has the server's value to go on
+                        local isOwn = participant.playerName == MPConfig.getNickname()
+                        local current = (isOwn and beamjoy_racePits) and
+                            beamjoy_racePits.currentGate(participant) or participant.currentGate
+                        expectedIndex = (current % #race.gates) + 1
                         nextGateSet = { [expectedIndex] = true }
                     end
                 end
