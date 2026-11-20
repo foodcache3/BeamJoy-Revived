@@ -24,7 +24,8 @@ local BOX_OTHER = { .55, .58, .65, .45 }
 local BOX_STOP = { .18, .5, .88, 1 }
 -- the outline's height (m) of the boxes not picked out (direct request : your own easier to see) ;
 -- yours a little lower than the marker's own 1.2 (direct request : less in the way sat in it), the
--- editor's selected one keeps it
+-- editor's selected one keeps it. Lower wasn't enough (direct request) : your own box also asks
+-- beamjoy_pits for its `fade`, which drops the outline entirely as you come up to it
 local BOX_LOW_HEIGHT = .3
 local BOX_OWN_HEIGHT = .7
 
@@ -451,9 +452,13 @@ local function pitBoxes(race, colorOf)
         local box = sp.pit
         if box and box.pos and box.dir then
             local color = colorOf(i)
+            -- your own box, racing : the one that fades as you arrive (the others are the faint
+            -- low outlines, and the editor's are there to be seen and grabbed)
+            local own = color == BOX_OWN or color == BOX_STOP
             boxes[#boxes + 1] = { pos = box.pos, dir = box.dir, width = box.width, length = box.length, color = color,
                 height = (color == BOX_EDITOR or color == BOX_OTHER) and BOX_LOW_HEIGHT
-                    or (color == BOX_OWN or color == BOX_STOP) and BOX_OWN_HEIGHT or nil }
+                    or own and BOX_OWN_HEIGHT or nil,
+                fade = own or nil }
         end
     end
     return boxes

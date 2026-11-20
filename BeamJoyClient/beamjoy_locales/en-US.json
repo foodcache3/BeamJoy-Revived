@@ -2653,6 +2653,7 @@
     "beamjoy.window.config.tabs.races.pitGhost.tooltip": "Cars in the pit lane are ghosted, so nobody hits a car stopped in its box",
     "beamjoy.window.config.tabs.races.pitStops": "Required stops",
     "beamjoy.window.config.tabs.races.pitStops.tooltip": "Pit stops each racer must make. Each one missed adds the penalty below to their time when they finish",
+    "beamjoy.window.config.tabs.races.pitStopsPerPhase": "Required stops are set per phase, above.",
     "beamjoy.window.config.tabs.races.pitMissingPenaltyS": "Penalty per missing stop (s)",
     "beamjoy.window.config.tabs.races.pitMissingPenaltyS.tooltip": "Seconds added to a racer's time for each required stop they didn't make",
     "beamjoy.window.config.tabs.races.pitRefuel": "Refuelling",

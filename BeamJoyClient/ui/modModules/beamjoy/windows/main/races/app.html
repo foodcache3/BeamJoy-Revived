@@ -704,11 +704,17 @@
                     <span title="{{'beamjoy.window.config.tabs.races.pitGhost.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitGhost' | translate}}</span>
                     <bj-toggle ng-model="$ctrl.startOptions.pitGhost"></bj-toggle>
                 </div>
-                <div class="bjr-field" ng-if="race.pits">
+                <!-- required stops are a phase's own rule (direct request) : an event in phases sets
+                     them per phase above, so practice and qualifying don't inherit the race's. The
+                     penalty stays the event's, set once, and shows as soon as any phase asks for a stop -->
+                <div class="bjr-field" ng-if="race.pits && !$ctrl.startOptions.phaseList">
                     <span class="name" title="{{'beamjoy.window.config.tabs.races.pitStops.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitStops' | translate}}</span>
                     <bj-slider ng-model="$ctrl.startOptions.pitStops" min="0" max="5" hard-max="20" step="1"></bj-slider>
                 </div>
-                <div class="bjr-field" ng-if="race.pits && $ctrl.startOptions.pitStops > 0">
+                <span class="bjr-muted" ng-if="race.pits && $ctrl.startOptions.phaseList">
+                    {{'beamjoy.window.config.tabs.races.pitStopsPerPhase' | translate}}
+                </span>
+                <div class="bjr-field" ng-if="race.pits && $ctrl.pitStopsRequired()">
                     <span class="name" title="{{'beamjoy.window.config.tabs.races.pitMissingPenaltyS.tooltip' | translate}}">{{'beamjoy.window.config.tabs.races.pitMissingPenaltyS' | translate}}</span>
                     <bj-slider ng-model="$ctrl.startOptions.pitMissingPenaltyS" min="0" max="120" hard-max="600" step="5"></bj-slider>
                 </div>

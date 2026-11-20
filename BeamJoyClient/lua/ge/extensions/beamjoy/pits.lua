@@ -22,12 +22,24 @@ local M = {
     pending = {},
     ---@type table[] the pit boxes' markers shown (scenario/raceMarkers/parkingraceSpotMarker), in order
     boxMarkers = {},
+    ---@type table[] what each of those markers was placed from (setBoxes), by the same index : the
+    ---fade below reads each one's `fade` and `height` back every frame
+    boxSpecs = {},
     ---@type table? the race editor's box being placed with the mouse (setGhost), its own marker
     ghostMarker = nil,
 
     BOX_WIDTH = 2.6,
     BOX_LENGTH = 5.5,
 }
+
+-- the outline height the game's own marker sets in setSpot : what a box with no height of its own keeps
+local OUTLINE_FULL_HEIGHT = 1.2
+-- a box asking to fade (`fade` in its spec : your own in a race) loses its outline as you come up to
+-- it (direct request : the fence was in the way driving in, and sat in the box). Full height from
+-- FADE_FAR m away, shrinking into the ground over the approach, gone from FADE_NEAR in -- a box is
+-- 5.5 m long, so that's the moment your nose reaches it. The striped decal stays either way, so the
+-- box is still marked out while you aim for it
+local FADE_NEAR, FADE_FAR = 5, 14
 
 -- the game's parking-spot marker (its constructor), loaded the first time a box is shown
 local createSpotMarker
@@ -44,6 +56,25 @@ local function newMarker()
     return marker
 end
 
+--- a marker's outline, lower than the marker's own 1.2 m or hidden outright : its footprint is
+--- kept either way, and the ground stripes are the marker's decal, drawn in update() regardless
+---@param marker table
+---@param height number|false metres, or false to hide the outline
+local function setOutline(marker, height)
+    if marker.bjOutline == height then return end
+    marker.bjOutline = height
+    for _, id in ipairs(marker.outlineIds) do
+        local outline = scenetree.findObjectById(id)
+        if outline then
+            outline.hidden = height == false
+            if height then
+                local scl = vec3(outline:getScale())
+                outline:setScaleXYZ(scl.x, scl.y, height)
+            end
+        end
+    end
+end
+
 ---@param marker table
 ---@param box {pos: table, dir: table, width: number?, length: number?, color: table?, height: number?}
 local function placeMarker(marker, box)
@@ -51,31 +82,59 @@ local function placeMarker(marker, box)
     dir = dir:length() > 1e-4 and dir:normalized() or vec3(0, 1, 0)
     marker:setSpot(vec3(box.pos.x, box.pos.y, box.pos.z), quatFromDir(dir, vec3(0, 0, 1)),
         vec3(box.width or M.BOX_WIDTH, box.length or M.BOX_LENGTH, .5))
-    -- a lower outline than the marker's own (1.2 m, set by setSpot) : its footprint kept
-    if box.height then
-        for _, id in ipairs(marker.outlineIds) do
-            local outline = scenetree.findObjectById(id)
-            if outline then
-                local scl = vec3(outline:getScale())
-                outline:setScaleXYZ(scl.x, scl.y, box.height)
-            end
-        end
-    end
+    -- setSpot just put the outline back at the marker's own height, so that's where the cache stands
+    marker.bjOutline = OUTLINE_FULL_HEIGHT
+    setOutline(marker, box.height or OUTLINE_FULL_HEIGHT)
     marker:setColor(box.color or { 1, 1, 1, 1 })
 end
 
---- the pit boxes shown : `{pos, dir, width?, length?, color = {r, g, b, a}}` each ; nil or none
---- hides them. Markers are kept and moved, made or removed only as the count changes
+---@return vec3? where you are, for the fade : your own car, else the camera
+local function ownPos()
+    local veh = be and be:getPlayerVehicle(0)
+    if veh then return veh:getPosition() end
+    return core_camera and core_camera.getPosition and core_camera.getPosition() or nil
+end
+
+--- the fading boxes' outlines, from how close you are. Runs every frame, but a marker's transform is
+--- only touched when its height really changed (quantised to 5 cm)
+local function updateFade()
+    ---@type vec3|false|nil
+    local pos = nil
+    for i, marker in ipairs(M.boxMarkers) do
+        local spec = M.boxSpecs[i]
+        if spec and spec.fade then
+            if pos == nil then pos = ownPos() or false end
+            local base = spec.height or OUTLINE_FULL_HEIGHT
+            ---@type number|false
+            local height = base
+            if pos then
+                local d = pos:distance(vec3(spec.pos.x, spec.pos.y, spec.pos.z))
+                if d <= FADE_NEAR then
+                    height = false
+                elseif d < FADE_FAR then
+                    height = math.floor(base * (d - FADE_NEAR) / (FADE_FAR - FADE_NEAR) * 20 + .5) / 20
+                    if height <= 0 then height = false end
+                end
+            end
+            setOutline(marker, height)
+        end
+    end
+end
+
+--- the pit boxes shown : `{pos, dir, width?, length?, color = {r, g, b, a}, height?, fade?}` each ;
+--- nil or none hides them. Markers are kept and moved, made or removed only as the count changes.
+--- `fade` asks for the outline to fade out as you come up to that box (updateFade)
 ---@param list table[]?
 function M.setBoxes(list)
     list = list or {}
     for i, box in ipairs(list) do
         M.boxMarkers[i] = M.boxMarkers[i] or newMarker()
         placeMarker(M.boxMarkers[i], box)
+        M.boxSpecs[i] = box
     end
     for i = #M.boxMarkers, #list + 1, -1 do
         M.boxMarkers[i]:clearMarkers()
-        M.boxMarkers[i] = nil
+        M.boxMarkers[i], M.boxSpecs[i] = nil, nil
     end
 end
 
@@ -105,6 +164,7 @@ end
 local updateTyreTest
 
 local function onUpdate(dtReal)
+    updateFade()
     for _, marker in ipairs(M.boxMarkers) do marker:update(dtReal) end
     if M.ghostMarker then M.ghostMarker:update(dtReal) end
     updateTyreTest()

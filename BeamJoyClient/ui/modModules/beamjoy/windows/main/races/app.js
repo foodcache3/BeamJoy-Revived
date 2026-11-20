@@ -504,6 +504,16 @@ angular.module("beamjoy").component("bjMainRaces", {
         // the tyre settings show only while the server's experimental tyre changes are on
         this.experimentalTyres = () => beamjoyStore.raceSettings.experimentalTyres === true;
 
+        // required stops belong to a phase (direct request) : with phases, each one sets its own and
+        // the event asks for none (outgoing), so the penalty per missing stop -- which stays the
+        // event's, set once -- shows as soon as any phase asks for a stop
+        this.pitStopsRequired = () => {
+            const o = this.startOptions;
+            if (!o) return false;
+            if (!Array.isArray(o.phaseList) || o.phaseList.length === 0) return Number(o.pitStops) > 0;
+            return o.phaseList.some((p) => Number(p.rules && p.rules.pitStops) > 0);
+        };
+
         // per direct request: hovering the pool count (browse list and start-options panel
         // alike) shows every allowed vehicle, not just the bare number. Resolved through the
         // shared preset list (races only store a presetId reference now, see
@@ -636,6 +646,10 @@ angular.module("beamjoy").component("bjMainRaces", {
             const o = angular.copy(this.startOptions);
             if (Array.isArray(o.phaseList) && o.phaseList.length > 0) {
                 o.phases = beamjoyRacePhases.toServer(o.phaseList);
+                // required stops are each phase's own rule (direct request) : the event asks for
+                // none of its own, so a phase that doesn't set them ("as the event") requires none
+                // -- practice and qualifying no longer inherit the race's own default
+                o.pitStops = 0;
             } else {
                 delete o.phases;
                 if (!race.loopable || o.lengthMode === "laps") delete o.timeLimitMin;

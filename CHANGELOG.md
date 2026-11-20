@@ -8,13 +8,29 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2502, client build 2789. The startup entry, the swallowed-crash entry at the bottom,
+Server build 2502, client build 2790. The startup entry, the swallowed-crash entry at the bottom,
 the server half of the stuck-vehicle entry, the crew-leader entry, and both halves of the two race
 entries and the jumped-start entry below, are server-side (deploy and restart) ; everything else is
 client-side, so BJ.zip goes out with it. The two race entries and the jumped-start entry have a
 server half and a client half each : deploy them together, or a game on the old build will keep
 being sent splits the new server no longer repeats, and a checkpoint crossed before the green light
 will be reported by the game and thrown away by the server.
+
+- **Your own pit box's outline is out of the way by the time you reach it.** A box is marked out by
+  an upright outline, which is what picks yours out of the row as you come down the lane -- but it
+  was still standing there as you nosed into it and as you sat in it, straight across the view out
+  of the car. Making it lower helped and wasn't enough. It now stands at full height from about 14 m
+  out, shrinks into the ground as you come up to it, and is gone from about 5 m in -- roughly where
+  your nose reaches the box -- leaving the striped floor, still in your own colour, to show you
+  where to stop. The other boxes in the row and the race editor's are unchanged. **(Client-side.)**
+
+- **Required pit stops are a phase's own rule now.** The number of stops was the event's, so an
+  event in phases asked for the same stops in practice and qualifying as in the race, which is
+  nobody's idea of a practice session. Each phase has always been able to set its own, so the event
+  simply stops asking for any of its own : a phase left on "as the event" requires none, and the
+  start menu's Required stops only appears for a race run without phases. The penalty per missing
+  stop stays the event's, set once for all of it, and shows as soon as any phase asks for a stop.
+  **(Client-side : the server already took required stops per phase.)**
 
 - **A checkpoint crossed before the green light of a lights start counted for nothing, and cost the
   jumper the rest of the lap.** A lights start hands your car back as the first light comes on,
