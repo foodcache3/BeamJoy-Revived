@@ -16,6 +16,9 @@ Since this mod provides a sandbox experience, it should be compatible with all o
 ## Community
 
 <p align="center">
+  <a target="_blank" href="https://beamjoy.net">
+    <img src="https://img.shields.io/badge/Website%20%26%20Docs-beamjoy.net-FF7A1F?style=for-the-badge&logo=readthedocs&logoColor=white" alt="BeamJoy website and documentation" />
+  </a>
   <a target="_blank" href="https://discord.gg/TMsegWBY74">
     <img src="https://img.shields.io/badge/Discord-Join%20the%20server-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join our Discord" />
   </a>
@@ -32,6 +35,9 @@ Updates never replace server or player data.
 
 Once installed, the server keeps itself up to date: it checks GitHub for new releases, tells
 owners in game, and installs one with `/bjupdate` in chat or `bj update` in the server console.
+
+Setup guides, the full chat command list and every config option are documented at
+[beamjoy.net/docs](https://beamjoy.net/docs/).
 
 ## About this fork
 
