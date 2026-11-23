@@ -235,6 +235,8 @@ end
 
 local function onInit()
     beamjoy_communications.addHandler("raceSessionUpdate", M.onSessionUpdate)
+    beamjoy_communications.addHandler("raceGateConfirmed", M.onGateConfirmed)
+    beamjoy_communications.addHandler("raceGateRefused", M.onGateRefused)
     beamjoy_communications.addHandler("raceSessionsList", M.onSessionsList)
     beamjoy_communications.addHandler("raceSessionRemoved", M.onSessionRemoved)
     beamjoy_communications.addHandler("raceSpectateUpdate", M.onSpectateUpdate)
@@ -1526,8 +1528,11 @@ local function pushHud()
     -- and the laps before it don't count in it
     local serverNow = participant.clockBaseMs and beamjoy_clockSync.serverNowMs()
     if serverNow then elapsedMs = math.max(0, serverNow - participant.clockBaseMs) end
-    local previousLapsElapsed = -(participant.elapsedOffsetMs or 0)
-    table.forEach(participant.lapTimes or {}, function(t) previousLapsElapsed = previousLapsElapsed + t end)
+    -- the laps already done, as elapsed time : their own row's race time less any staff penalty,
+    -- which is what the server now works out and sends (raceGrid.lua's payloadParticipant). Added
+    -- up from lapTimes here before, which is history and no longer in a frequent push
+    local previousLapsElapsed = -(participant.elapsedOffsetMs or 0) +
+        ((participant.totalMs or 0) - (participant.penaltyMs or 0))
 
     -- the ones sitting this phase out aren't in its standings
     local leaderboard = session.leaderboard and table.filter(session.leaderboard, function(p)
@@ -1568,24 +1573,23 @@ local function pushHud()
             desc.currentGate = row.currentGate
             desc.leaderGapMs = row.leaderGapMs
             desc.leaderLapsDiff = row.leaderLapsDiff
-            desc.lapsDone = #(row.lapTimes or {})
-            -- every lap or run added up, as a "total" ranking goes by
+            desc.lapsDone = row.lapsDone or 0
+            -- every lap or run added up, as a "total" ranking goes by. Worked out server-side now
+            -- (raceGrid.lua's payloadParticipant) : the race time is laps plus staff penalties,
+            -- and adding it up here meant every row's whole lap list had to be on the wire
             if row.finished or session.settings.ranking == "total" then
-                -- the race time : laps plus staff penalties
-                local total = row.penaltyMs or 0
-                table.forEach(row.lapTimes or {}, function(t) total = total + t end)
-                desc.totalMs = total
+                desc.totalMs = row.totalMs
             end
             return desc
         end)
     end
 
-    -- race-wide bests (purple) : the fastest time anyone has set in each sector, and the fastest lap
-    local fastestSectorMs, fastestLap, finishedCount = {}, nil, 0
+    -- race-wide bests (purple) : the fastest time anyone has set in each sector, and the fastest
+    -- lap. The sector one comes worked out from the server (raceGrid.lua's buildSessionPayload)
+    -- because deriving it needed every racer's own bestSectorMs on every push, which is history ;
+    -- the fastest lap only ever needed bestLapMs, which is one number and still sent
+    local fastestSectorMs, fastestLap, finishedCount = session.fastestSectorMs or {}, nil, 0
     for _, p in pairs(session.participants) do
-        for sector, ms in pairs(p.bestSectorMs or {}) do
-            if not fastestSectorMs[sector] or ms < fastestSectorMs[sector] then fastestSectorMs[sector] = ms end
-        end
         if p.bestLapMs and (not fastestLap or p.bestLapMs < fastestLap.ms) then
             fastestLap = { ms = p.bestLapMs, playerName = p.playerName, displayName = p.displayName }
         end
@@ -1646,7 +1650,7 @@ local function pushHud()
                 (participant.currentGate or 0) == 0) or participant.outLapPending) and 0 or
                 elapsedMs - previousLapsElapsed,
             outLap = participant.outLapPending == true,
-            lastLapMs = participant.lapTimes and participant.lapTimes[#participant.lapTimes] or nil,
+            lastLapMs = participant.lastLapMs,
             bestLapMs = participant.bestLapMs,
             liveDeltaMs = participant.liveDeltaMs,
             -- this lap's finished sectors (keyed "s1", "s2"... see keyify)
@@ -1769,6 +1773,8 @@ local function pushRaceInfo()
         eventStandings = session.eventStandings and resultRows(session.eventStandings) or nil,
         totalGates = totalSteps(race),
         sectorCount = computeSectorCount(race, session.settings.flyingStart),
+        -- the race-wide fastest sector, from the server (see pushHud) : keyed "s1", "s2"...
+        fastestSectorMs = keyify(session.fastestSectorMs, "s"),
         selfPlayerName = MPConfig.getNickname(),
         -- leaderboard (already correctly sorted server-side) when there's someone to compare
         -- against, else just this player's own solo entry. Either way, every participant's full
@@ -1793,6 +1799,11 @@ local function pushRaceInfo()
                     currentLap = p.currentLap,
                     currentSector = p.currentSector,
                     lapTimes = p.lapTimes,
+                    -- worked out server-side (raceGrid.lua's payloadParticipant) so the panels
+                    -- never have to add up a lap list that isn't in a frequent push
+                    lapsDone = p.lapsDone,
+                    lastLapMs = p.lastLapMs,
+                    totalMs = p.totalMs,
                     bestLapMs = p.bestLapMs,
                     lapSectors = keyify(p.lapSectors, "s"),
                     lapSectorHistory = keyifyLapSectorHistory(p.lapSectorHistory),
@@ -1886,11 +1897,16 @@ end
 ---@param previous BJRaceSession?
 local function adoptSession(session, previous)
     session.leaderboard = session.participants
-    -- what tells a slim gate-crossing push apart from a full one, read BEFORE the settings are
-    -- filled in from the previous copy below (after that there's nothing left to tell them apart
-    -- by). Only a slim push's omissions get carried over : a full one is authoritative, and a
-    -- phase change that resets a racer's splits has to be able to shorten what the client holds
-    local slim = session.settings == nil
+    -- what tells a frequent (slim) push apart from a full one. Which way round it is decides
+    -- everything below : only a slim push's omissions get carried over from the copy this client
+    -- holds, because a full one is authoritative and a phase change that resets a racer's splits
+    -- has to be able to SHORTEN what's held, not just add to it.
+    --
+    -- The server states it outright now (raceGrid.lua's buildSessionPayload). It used to be
+    -- inferred from `settings` being absent -- the same fact, but by accident rather than by
+    -- contract -- so that inference is kept only as a fallback for a client newer than the server
+    -- it's talking to : whenever the flag is actually there, it has the final word
+    local slim = session.slim == true or (session.slim == nil and session.settings == nil)
     if session.settings == nil then
         if previous and previous.id == session.id and previous.settings then
             session.settings = previous.settings
@@ -1905,31 +1921,42 @@ local function adoptSession(session, previous)
             if session[key] == nil then session[key] = previous[key] end
         end
     end
-    -- Each racer's per-lap sector splits accumulate here rather than being resent in full on
-    -- every gate crossing : a slim push carries only the lap its own crossing just closed (see
-    -- raceGrid.lua's SLIM_PARTICIPANT_FIELDS for the measurements and why it matters -- in short,
-    -- the full table pushed a six-car update past the server's "send it right now" size limit
-    -- partway through a race, after which every update queued instead). A full push -- joining,
-    -- spectating, any state or phase change -- carries the whole table and replaces what's here,
-    -- so a phase reset or a late join can't be left holding a stale copy.
+    -- Each racer's HISTORY -- every lap time, every lap's sector breakdown, their own sector
+    -- bests -- is carried over here rather than being resent on every gate crossing. The three
+    -- fields that grow without bound as a race runs, and the three that nothing drawn live reads
+    -- (see raceGrid.lua's HISTORICAL_PARTICIPANT_FIELDS for the measurements : in short, sending
+    -- all three to everyone on every crossing pushed a six-car update past the server's "send it
+    -- right now" size limit partway through a race, after which every update queued instead).
+    --
+    -- A slim push leaves all three out, so what's held carries over. A full push carries them
+    -- whole and REPLACES what's held, which is what lets a phase reset actually shorten them --
+    -- so this is decided by the server's own slim flag and never by whether a key happens to be
+    -- there. The server promotes a slim push to a full one every few seconds (HISTORY_INTERVAL_MS)
+    -- so another racer's breakdown can't drift far behind, and this client's OWN row is kept live
+    -- in between by its crossing confirmations (onGateConfirmed).
     if slim and previous and previous.id == session.id and type(session.participants) == "table" then
         local kept = {}
         for _, p in ipairs(previous.participants or {}) do
-            if p.playerID ~= nil and p.lapSectorHistory ~= nil then kept[p.playerID] = p.lapSectorHistory end
+            if p.playerID ~= nil then kept[p.playerID] = p end
         end
         for _, p in ipairs(session.participants) do
             local was = kept[p.playerID]
             if was then
-                local merged = {}
-                -- lap keys arrive as numbers from a dense full push and as strings from a sparse
-                -- slim one (JSON has no integer keys), and keyifyLapSectorHistory downstream
-                -- tostring()s them either way : normalised here so one lap can't land twice
-                for _, src in ipairs({ was, p.lapSectorHistory or {} }) do
-                    for lap, sectors in pairs(src) do
-                        merged[tonumber(lap) or lap] = sectors
+                if p.lapTimes == nil then p.lapTimes = was.lapTimes end
+                if p.bestSectorMs == nil then p.bestSectorMs = was.bestSectorMs end
+                if was.lapSectorHistory then
+                    local merged = {}
+                    -- lap keys arrive as numbers from a dense full push and as strings from a
+                    -- sparse confirmation (JSON has no integer keys), and keyifyLapSectorHistory
+                    -- downstream tostring()s them either way : normalised here so one lap can't
+                    -- land twice
+                    for _, src in ipairs({ was.lapSectorHistory, p.lapSectorHistory or {} }) do
+                        for lap, sectors in pairs(src) do
+                            merged[tonumber(lap) or lap] = sectors
+                        end
                     end
+                    p.lapSectorHistory = merged
                 end
-                p.lapSectorHistory = merged
             end
         end
     end
@@ -2293,6 +2320,68 @@ local function applyGhostVisual()
         end
     end
     beamjoy_vehicles.setSoloGhostVisualReversed(reversed)
+end
+
+--- this client's own gate crossing, confirmed by the server (raceGrid.lua's raceGateCrossed).
+---
+--- A crossing used to be answered with the whole field's standings, sent to everyone -- so the one
+--- message that has to arrive promptly was carrying the one payload that grows with the number of
+--- cars and the number of laps, and it's that size which pushed it off the server transport's
+--- "small, send it now" fast path and into a paced queue partway through a race (see
+--- raceGrid.lua's SLIM_PARTICIPANT_FIELDS for the measurements). The two jobs are separate now :
+--- this is the small one, to one player, and where the field stands arrives on its own a few
+--- hundred ms at a time.
+---
+--- It carries only what a crossing changes about the racer's OWN row, which is merged into the
+--- copy this client holds -- so everything that reads a participant (the HUD, the delta bar, the
+--- gate the next crossing is watched for) keeps reading exactly what it always did, just sooner.
+--- `cleared` names the fields that are now absent, because a JSON object has no key for a nil and
+--- a merge could otherwise never clear one. Anything bigger than progress -- a finish, a
+--- retirement, a start of their own, a pit pass ending -- is still sent as a whole session update
+--- and never arrives here, so none of onSessionUpdate's own transitions can be missed by this path
+---@param reply table?
+local function onGateConfirmed(reply)
+    if type(reply) ~= "table" or type(reply.p) ~= "table" then return end
+    local session = M.session
+    if not session or session.id ~= reply.id then return end
+    local participant = getSelfParticipant()
+    if not participant then return end
+
+    for key, value in pairs(reply.p) do
+        -- a crossing only ever adds a lap to the sector history, so this one carries just the lap
+        -- it closed (as a slim push does) and is merged in rather than replacing what's held. Lap
+        -- keys arrive as strings from a sparse object and as numbers from a dense array, the same
+        -- normalisation adoptSession does and for the same reason : one lap landing twice
+        if key == "lapSectorHistory" then
+            local history = participant.lapSectorHistory or {}
+            if type(value) == "table" then
+                for lap, sectors in pairs(value) do history[tonumber(lap) or lap] = sectors end
+            end
+            participant.lapSectorHistory = history
+        else
+            participant[key] = value
+        end
+    end
+    for _, key in ipairs(reply.cleared or {}) do participant[key] = nil end
+
+    pushHud()
+    pushRaceInfo()
+end
+
+--- a gate crossing the server would not count. Nothing was sent back at all before, so the only
+--- way the game could tell a refusal from a slow answer was to wait out racePits.lua's full
+--- SENT_GATE_WAIT_MS before trusting the server's own value again. Told outright, the gate it is
+--- watching for realigns in one round trip. The warning is this player's own log only : a single
+--- refusal is a normal thing (a duplicate report, a crossing that raced the pit lane's own
+--- crediting), and the server logs its side of it too
+---@param reply table?
+local function onGateRefused(reply)
+    if type(reply) ~= "table" then return end
+    local session = M.session
+    if not session or session.id ~= reply.id then return end
+    LogWarn(string.format("beamjoy_raceRunner: the server refused gate %s (%s)",
+        tostring(reply.gate), tostring(reply.reason)))
+    if beamjoy_racePits then beamjoy_racePits.onGateRefused() end
 end
 
 local function onSessionUpdate(session)
@@ -4410,6 +4499,8 @@ M.getRace = getRace
 M.raceElapsedNowMs = raceElapsedNowMs
 
 M.onSessionUpdate = onSessionUpdate
+M.onGateConfirmed = onGateConfirmed
+M.onGateRefused = onGateRefused
 M.onSessionsList = onSessionsList
 M.onSessionRemoved = onSessionRemoved
 M.onSpectateUpdate = onSpectateUpdate

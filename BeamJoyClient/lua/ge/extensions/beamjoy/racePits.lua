@@ -988,6 +988,14 @@ function M.onGateSent(step)
     sentGate, sentAtMs = step, GetCurrentTimeMillis()
 end
 
+--- the server refused the crossing that was last sent (raceRunner.lua's onGateRefused). The
+--- prediction above falls back to the server's own value after SENT_GATE_WAIT_MS precisely because
+--- a refusal used to be indistinguishable from an answer still on its way -- ten seconds was how
+--- long it took to be sure. Told outright, it steps aside now instead
+function M.onGateRefused()
+    sentGate, sentAtMs = nil, nil
+end
+
 --- where a reset in the pit lane puts the car : its box (nil : not in the lane)
 ---@return {pos: table, dir: table}?
 function M.resetTarget()

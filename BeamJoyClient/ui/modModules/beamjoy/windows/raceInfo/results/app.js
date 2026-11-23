@@ -39,11 +39,13 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
         // a race under way : finished (by race time : laps plus staff penalties) first, then still
         // racing in race order, then retired, then disqualified. Its `score` is that race time
         const classify = (participants) => {
+            // the race time (laps plus staff penalties) comes worked out from the server
+            // (raceGrid.lua's payloadParticipant), with the lap list it used to be added up from
+            // no longer in a frequent push. Still only shown for a finisher : it is the figure
+            // they are classified by, and a racer still out there has not set one yet
             const withTotals = participants.map((p) => ({
                 ...p,
-                totalMs: p.finished && !p.disqualified && Array.isArray(p.lapTimes)
-                    ? p.lapTimes.reduce((a, b) => a + b, p.penaltyMs || 0)
-                    : null,
+                totalMs: p.finished && !p.disqualified && typeof p.totalMs === "number" ? p.totalMs : null,
             }));
             withTotals.forEach((p) => (p.score = p.totalMs));
             const done = withTotals.filter((p) => p.totalMs !== null).sort((a, b) => a.totalMs - b.totalMs);
@@ -63,8 +65,7 @@ angular.module("beamjoy").component("bjRaceInfoResults", {
                 const placed = done ? p.position != null : best ? typeof p.bestLapMs === "number" && !p.disqualified
                     : plugin ? (p.scoreKey !== undefined && p.scoreKey !== null) && !p.disqualified
                     : p.finished && !p.disqualified;
-                const totalMs = typeof p.totalMs === "number" ? p.totalMs
-                    : Array.isArray(p.lapTimes) && p.lapTimes.length > 0 ? p.lapTimes.reduce((a, b) => a + b, p.penaltyMs || 0) : null;
+                const totalMs = typeof p.totalMs === "number" ? p.totalMs : null;
                 return {
                     ...p,
                     totalMs: best || plugin ? null : placed ? totalMs : null,

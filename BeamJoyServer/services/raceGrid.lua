@@ -636,40 +636,84 @@ local PAYLOAD_DROPPED_FIELDS = { gateTimes = true, bestLapGateTimes = true, lead
 --- a session's own tables never sent to clients (an entry list's player IDs, the last places)
 local SESSION_PRIVATE = { participants = true, baseSettings = true, lastPositions = true, entrants = true }
 
---- a racer's per-lap sector splits for EVERY lap so far. Measured, and the reason this list
---- exists : at six cars this is ~40% of each row and it was going out in full on every single
---- gate crossing, which pushed a slim update past communications/tx.lua's SMALL_MESSAGE (4000
---- bytes) from about lap 5 of a 25-lap race. Over that threshold the update loses tx's "small and
---- nothing queued : send it right now" fast path and joins the pacing queue instead, where it
---- waits on the 100ms drain, the send budget and the 64KB in-flight window (whose acknowledgement
---- timeout is a full 3 seconds). The player's own log for the race this came from : the reply to
---- a gate report normally lands in 115ms and is under 500ms 98% of the time, with the handful of
---- exceptions all taking SECONDS -- two clean populations, which is what two code paths look
---- like. A slim push now carries only the lap its own crossing just completed, which the game
---- merges into the copy it keeps (raceRunner.lua's adoptSession) ; every full push -- joining,
---- spectating, any state or phase change -- still sends the whole thing, so nothing can drift.
-local SLIM_PARTICIPANT_FIELDS = { lapSectorHistory = true }
+--- a racer's HISTORY : every lap time, every lap's sector breakdown, and their own best in each
+--- sector. The three fields that grow without bound as a race runs, and the three that nothing
+--- drawn live reads -- they're read by the results panel, which is a thing you open.
+---
+--- Measured, and the reason this list exists : at six cars the sector history alone is ~40% of
+--- each row, and all three were going out in full to everyone on every single gate crossing,
+--- which pushed an update past communications/tx.lua's SMALL_MESSAGE (4000 bytes) from about lap
+--- 5 of a 25-lap race. Over that threshold the update loses tx's "small and nothing queued : send
+--- it right now" fast path and joins the pacing queue instead, where it waits on the 100ms drain,
+--- the send budget and the 64KB in-flight window (whose acknowledgement timeout is a full 3
+--- seconds). The player's own log for the race this came from : the reply to a gate report
+--- normally lands in 115ms and is under 500ms 98% of the time, with the handful of exceptions all
+--- taking SECONDS -- two clean populations, which is what two code paths look like.
+---
+--- So they're left out of the frequent push entirely. What replaces them for everything drawn
+--- live is three bounded numbers per racer (lapsDone, lastLapMs, totalMs) and one race-wide
+--- fastest-sector table for the whole session, all worked out below -- deliberately derived here
+--- rather than from a hand-written list of "what the HUD renders", which would also have dropped
+--- the labels server plugins put beside every racer's name (services/pluginUi.lua's `hud` fields)
+--- and would have kept dropping anything added later, silently.
+---
+--- A racer's own history still reaches them promptly : their crossing confirmation carries it
+--- (see CROSSING_FIELDS). Everyone else's reaches them whenever a full push happens, and
+--- pushSessionUpdate promotes a slim push to a full one every HISTORY_INTERVAL_MS so that can
+--- never be long. See that function for what this costs and what the next step would be
+local HISTORICAL_PARTICIPANT_FIELDS = { lapTimes = true, lapSectorHistory = true, bestSectorMs = true }
+
+--- every field of a racer's OWN row that a counted gate crossing changes, which is what their own
+--- confirmation of it carries (raceGateCrossed). Listing them is what lets the confirmation state
+--- the ones that are now ABSENT as well as the ones that are set : JSON simply has no key for a
+--- nil, so a merge that writes only what it sees could never clear one (a live delta from before
+--- an out lap, an outLapPending that's now over) and the game would hold it until the next
+--- standings broadcast. lapSectorHistory is deliberately not here -- a crossing only ever ADDS a
+--- lap to it, never removes one, and it's carried separately (newest lap only, as a slim push
+--- does). Anything a crossing changes BEYOND progress -- a finish, a retirement, a new personal
+--- start, the end of a pit pass, the session itself ending -- isn't in here either : those push
+--- the whole session at once instead of confirming (see raceGateCrossed's own list)
+--- the three derived numbers are in here for a reason : the HUD works out how far into the current
+--- lap you are from your race time less any penalty (payloadParticipant's totalMs), so leaving
+--- them to the next standings broadcast would make that clock read a whole lap out for the third
+--- of a second after you crossed the line -- right where it's being watched
+local CROSSING_FIELDS = { "currentGate", "lastCrossedGate", "currentLap", "currentSector",
+    "sectorStartMs", "liveDeltaMs", "lapSectors", "bestLapMs", "bestLapAtMs", "outLapPending",
+    "elapsedOffsetMs", "pitLaps", "lapsDone", "lastLapMs", "totalMs" }
+
+--- just the lap a racer's sector history most recently gained, keyed by lap number as the whole
+--- table is, so the game can merge it into what it holds instead of being resent every lap's
+--- splits all over again. A crossing only ever adds to this
+---@param p BJRaceParticipant
+---@return table?
+local function newestLapHistory(p)
+    local newest
+    for lap in pairs(p.lapSectorHistory or {}) do
+        if not newest or lap > newest then newest = lap end
+    end
+    if not newest then return nil end
+    return { [newest] = p.lapSectorHistory[newest] }
+end
 
 --- the copy of a participant that goes out in session updates : shallow (nothing in a payload
 --- is modified after it's built), without the per-gate tables, plus a `displayName`
 ---@param p BJRaceParticipant
----@param slim boolean? a gate crossing's push : SLIM_PARTICIPANT_FIELDS thinned out as well
+---@param slim boolean? a frequent push : HISTORICAL_PARTICIPANT_FIELDS left out as well
 ---@return table
 local function payloadParticipant(p, slim)
     local c = {}
     for k, v in pairs(p) do
-        if not PAYLOAD_DROPPED_FIELDS[k] and not (slim and SLIM_PARTICIPANT_FIELDS[k]) then c[k] = v end
+        if not PAYLOAD_DROPPED_FIELDS[k] and not (slim and HISTORICAL_PARTICIPANT_FIELDS[k]) then c[k] = v end
     end
-    -- only the lap this crossing just closed, instead of every lap's splits all over again (see
-    -- SLIM_PARTICIPANT_FIELDS). Keyed by lap number, so the highest key is the newest lap ; the
-    -- game merges it into what it already has rather than replacing it
-    if slim and p.lapSectorHistory then
-        local newest
-        for lap in pairs(p.lapSectorHistory) do
-            if not newest or lap > newest then newest = lap end
-        end
-        if newest then c.lapSectorHistory = { [newest] = p.lapSectorHistory[newest] } end
-    end
+    -- what everything drawn live actually wanted the history for, as three bounded numbers : how
+    -- many laps are done (the standings' lap column), the last one's time, and the race time (laps
+    -- plus any staff penalty, which is what both the HUD and the live classification add up). Sent
+    -- on every push, slim or full, so nothing live has to wait for a history to arrive
+    c.lapsDone = #(p.lapTimes or {})
+    c.lastLapMs = p.lapTimes and p.lapTimes[#p.lapTimes] or nil
+    local total = p.penaltyMs or 0
+    for _, t in ipairs(p.lapTimes or {}) do total = total + t end
+    c.totalMs = total
     if p.disconnected and p.rejoinBy then
         c.rejoinSecondsLeft = math.max(0, p.rejoinBy - GetCurrentTime())
     end
@@ -812,6 +856,15 @@ local function buildSessionPayload(session, slim)
     for k, v in pairs(session) do
         if not SESSION_PRIVATE[k] and not (slim and SLIM_DROPPED[k]) then payload[k] = v end
     end
+    -- what tells a slim push apart from a full one, stated rather than guessed. The game used to
+    -- infer it from `settings` being absent (raceRunner.lua's adoptSession) : the same fact, but
+    -- by accident instead of by contract, so anything that ever stopped sending settings for an
+    -- unrelated reason would have silently turned a full push into a merge. It matters which way
+    -- round it is : a slim push's omissions are filled in from the copy the client already holds,
+    -- a full one's are authoritative and have to be able to SHORTEN what it holds (a phase reset
+    -- clearing a racer's splits). Guessing wrong either way leaves a stale lap in place or drops
+    -- a fresh one
+    payload.slim = slim or nil
 
     local race = getRace(session)
     local totalGates = race and totalSteps(race) or 0
@@ -840,6 +893,22 @@ local function buildSessionPayload(session, slim)
         end
         payload.participants[i] = row
     end
+
+    -- the race-wide fastest time set in each sector (the results panel's and the HUD's "purple").
+    -- Derived by comparing bestSectorMs across every participant, which the game used to do for
+    -- itself -- the one thing that genuinely needed every racer's copy of a historical field on
+    -- every push. Worked out once here instead : a table of one number per sector for the whole
+    -- session, the same for everybody, instead of one table per racer
+    local fastestSectorMs
+    for _, p in ipairs(ordered) do
+        for sector, ms in pairs(p.bestSectorMs or {}) do
+            if not fastestSectorMs then fastestSectorMs = {} end
+            if not fastestSectorMs[sector] or ms < fastestSectorMs[sector] then
+                fastestSectorMs[sector] = ms
+            end
+        end
+    end
+    payload.fastestSectorMs = fastestSectorMs
 
     if session.state == "RACE" and session.goAtMs then
         payload.raceElapsedMs = math.max(0, services_clockSync.nowMs() - session.goAtMs)
@@ -932,6 +1001,24 @@ local function notePositions(session)
     apiEvent("racePositionsChanged", session, changes)
 end
 
+--- how long the standings may be left unsent once something has moved them (see
+--- markStandingsDue). 250ms against a 100ms onUpdate tick means they actually go out every 300ms,
+--- a little over 3Hz. Chosen at the fast end of what's worth having : the thing it costs is how
+--- quickly a position SWAP appears, and the only place a person can see a third of a second of
+--- that is the last corner of a close finish. The recorded result is never affected -- the
+--- results screen is recomputed from stored lap times (services/racePhases.lua's COMPARE.position,
+--- which only falls back to server arrival order on an exact millisecond tie), not from this
+local STANDINGS_INTERVAL_MS = 250
+--- how long a racer's history (HISTORICAL_PARTICIPANT_FIELDS) may be left unsent to the OTHER
+--- racers, who only read it in the results panel. Every slim push older than this is promoted to a
+--- full one, so a lap breakdown is never more than five seconds behind and no client can be left
+--- holding a hole -- which is what makes this safe to do without the results panel gaining a
+--- loading state or a failure mode it has never had
+local HISTORY_INTERVAL_MS = 5000
+--- sessions whose standings have moved since they were last sent, when each last went out, and
+--- when each last went out in full (history and all)
+local standingsDue, standingsSentMs, fullSentMs = {}, {}, {}
+
 --- pushes the full session (with leaderboard) to every current participant, and the exact same
 --- payload under a different event name (so the client never confuses the two) to anyone
 --- currently spectating this session. See M.spectators's own comment for why that has to be a
@@ -939,6 +1026,26 @@ end
 ---@param session BJRaceSession
 ---@param slim boolean? see buildSessionPayload
 local function pushSessionUpdate(session, slim)
+    -- any push at all IS the standings, so it satisfies whatever was pending and restarts the
+    -- rate limit. Which is also why nothing that pushes immediately needs to know this exists
+    standingsDue[session.id] = nil
+    local nowMs = services_clockSync.nowMs()
+    standingsSentMs[session.id] = nowMs
+    -- a slim push carries no history at all (HISTORICAL_PARTICIPANT_FIELDS), so one is promoted to
+    -- a full push whenever the history has gone HISTORY_INTERVAL_MS unsent. Done here, in the one
+    -- place every push goes through, so it covers every slim caller and a real full push -- a
+    -- join, a spectate, a state or phase change -- resets the clock by simply being one.
+    --
+    -- Stated plainly, because it is a weaker thing than fetching the history on request : with
+    -- this, a client that never opens the results panel is still sent every racer's lap
+    -- breakdown, just at a fifth of a Hz instead of fourteen times a second. That is the whole of
+    -- the measured problem and none of the risk -- the panel reads EVERY racer's sector history,
+    -- and the race-wide purple sector is derived by comparing bestSectorMs across all of them, so
+    -- a fetch has to be complete or those break quietly. Asking for it on request is still the
+    -- better end state for a large grid ; it needs a request handler, a cache, an invalidation and
+    -- a loading state in two panels, and it should be built on top of this rather than instead
+    if slim and nowMs - (fullSentMs[session.id] or 0) >= HISTORY_INTERVAL_MS then slim = nil end
+    if not slim then fullSentMs[session.id] = nowMs end
     session.participants:forEach(snapshotIdentity)
     local payload = buildSessionPayload(session, slim)
     -- encoded once per audience, not once per player (see communications_tx.sendToPlayers)
@@ -951,6 +1058,26 @@ local function pushSessionUpdate(session, slim)
         communications_tx.sendToPlayers(watchers, "raceSpectateUpdate", payload)
     end
     notePositions(session)
+end
+
+--- something has moved where the field stands, and everyone in the session wants to know -- but at
+--- the standings' own rate (STANDINGS_INTERVAL_MS), not this instant.
+---
+--- One message used to do two unrelated jobs : confirming the crossing to the one racer who made
+--- it, and telling everybody where everybody is. So the small urgent one went out at the large
+--- one's size, the large one went out at the small one's frequency, and because both grow with the
+--- field the cost of the pair rose as the product of the two -- 32 cars crossing 25 gates a lap is
+--- around 14 crossings a second, each one a full standings table to all 32 of them. Splitting them
+--- is the only thing that makes the traffic independent of field size and gate count.
+---
+--- The confirmation is the half that has to be prompt (it's what the racer's own next gate is
+--- armed from, see racePits.lua's currentGate), and it's now sent on its own, to one player, at a
+--- fixed small size. The standings are the half that's big and can wait, and they're sent from
+--- onUpdate's drain below. Exactly the same pattern as fieldsChanged further down, and for the
+--- same reason
+---@param session BJRaceSession
+local function markStandingsDue(session)
+    standingsDue[session.id] = true
 end
 
 --- pushes every session worth showing on the main HUD to every connected player: GRID+joinable
@@ -993,6 +1120,7 @@ local function removeSession(session)
         end
     end)
     M.sessions[session.id] = nil
+    standingsDue[session.id], standingsSentMs[session.id], fullSentMs[session.id] = nil, nil, nil
     pushOpenSessionsList()
 end
 
@@ -2561,6 +2689,17 @@ local function onUpdate()
             pushSessionUpdate(session, true)
         end
     end)
+    -- the standings half of a gate crossing (see markStandingsDue). pushSessionUpdate clears the
+    -- flag and stamps the time itself, so a session that's just been pushed for any other reason
+    -- is already satisfied and simply isn't due here
+    for id in pairs(standingsDue) do
+        local session = M.sessions[id]
+        if not session then
+            standingsDue[id], standingsSentMs[id], fullSentMs[id] = nil, nil, nil
+        elseif now - (standingsSentMs[id] or 0) >= STANDINGS_INTERVAL_MS then
+            pushSessionUpdate(session, true)
+        end
+    end
     if next(fieldsChanged) == nil then return end
     local ids = fieldsChanged
     fieldsChanged = {}
@@ -3211,7 +3350,9 @@ local function unreadyOnVehicleChange(playerID)
 end
 
 --- a crossing counted for a racer, already checked : a gate they drove through, or a step their pit
---- lane skips (`pit`, racePit) : their progress, lap, sectors and best lap. The caller pushes the update
+--- lane skips (`pit`, racePit) : their progress, lap, sectors and best lap. The caller pushes the
+--- update, and gets back what the crossing was (the same table the plugin API's RacerGate carries)
+--- so it can confirm it to the racer who made it
 ---@param session BJRaceSession
 ---@param race BJRace
 ---@param participant BJRaceParticipant
@@ -3285,9 +3426,10 @@ local function applyCrossing(session, race, participant, gateIndex, elapsedMs, p
             participant.gateTimes = { [gate.step] = elapsedMs }
             participant.currentSector, participant.sectorStartMs, participant.lapSectors = 1, 0, {}
         end
-        apiEvent("racerGate", session, participant, { gate = gateIndex, step = gate.step,
-            lap = participant.currentLap, outLap = true, lapComplete = lapComplete, pit = pit })
-        return
+        local outLapCrossing = { gate = gateIndex, step = gate.step, lap = participant.currentLap,
+            outLap = true, lapComplete = lapComplete, pit = pit }
+        apiEvent("racerGate", session, participant, outLapCrossing)
+        return outLapCrossing
     end
 
     -- sector tracking: a sector completes whenever its own last gate is crossed, except the final
@@ -3367,6 +3509,7 @@ local function applyCrossing(session, race, participant, gateIndex, elapsedMs, p
     end
 
     apiEvent("racerGate", session, participant, crossing)
+    return crossing
 end
 
 --- metres past a gate's half-width a reported crossing may be from (BeamMP's positions lag a little
@@ -3377,6 +3520,25 @@ local GATE_POSITION_MARGIN = 100
 local REPORT_LAG_MAX_MS = 5000
 
 ---@param ctxt BJSContext
+--- a crossing refused, said so to the racer who reported it.
+---
+--- Every rejecting exit of raceGateCrossed used to return before the push, so "refused", "still on
+--- its way" and "lost" were the same silence on the wire and the game had nothing to tell them
+--- apart by. Its only recourse was a timer : racePits.lua holds the gate it predicted for a full
+--- SENT_GATE_WAIT_MS (10s) before letting the server's own value win again, because that's how
+--- long it takes to be sure no answer is coming. Said outright, the same realignment happens in
+--- one round trip -- 115ms measured -- instead of ten seconds, which matters because the gate the
+--- game is watching for is picked from that value
+---@param ctxt BJSContext
+---@param sessionId string
+---@param gateIndex integer
+---@param reason string for the racer's own log, not shown anywhere
+local function refuseGate(ctxt, sessionId, gateIndex, reason)
+    if not ctxt.senderID then return end
+    communications_tx.sendToPlayer(ctxt.senderID, "raceGateRefused",
+        { id = sessionId, gate = gateIndex, reason = reason })
+end
+
 ---@param sessionId string
 ---@param gateIndex integer
 ---@param elapsedMs integer client-computed elapsed time since race start
@@ -3412,6 +3574,7 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
     if not elapsedMs or elapsedMs < 0 then return end
     local gateDistance = services_vehicles.distanceToPoint(ctxt.senderID, gate.pos)
     if gateDistance and gateDistance > (tonumber(gate.width) or 20) / 2 + GATE_POSITION_MARGIN then
+        refuseGate(ctxt, sessionId, gateIndex, "distance")
         return LogWarn(string.format("raceGateCrossed : %s reported gate %d from %dm away, ignored",
             ctxt.sender.playerName, gateIndex, math.floor(gateDistance)))
     end
@@ -3471,6 +3634,22 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         -- a gate the author linked to it as a parent (the normal check below).
         local isLoopClosing = race.loopable and gate.step == 1 and isBranchEnd(race, participant.lastCrossedGate)
         if not isLoopClosing and not table.includes(gate.parents, participant.lastCrossedGate) then
+            -- the branching counterpart of the expected-gate warning in the else arm below, and
+            -- the same reasoning (racePits.lua's currentGate holds the full story) : this refusal
+            -- was a bare return with nothing written anywhere, so a branching race could throw
+            -- away every gate a racer crossed for a whole lap without one line to say so. A
+            -- single one is normal and harmless (a duplicate report, a crossing that raced the
+            -- pit lane's own crediting, a gate genuinely driven out of order on a branch), which
+            -- is why it's a warning : it's a RUN of them against one player that means a gate
+            -- went missing. It's also the only signal that would say the client-side gate
+            -- prediction is needed on branching tracks too -- the lost-gate fix went into the
+            -- single-route path only, and a branching race still arms its candidate gates from
+            -- the server's echo
+            LogWarn(string.format(
+                "raceGateCrossed : %s reported gate %d (step %d) on a branching race, unreachable from gate %s (lap %d, %dms) : ignored",
+                ctxt.sender.playerName, gateIndex, gate.step or 0,
+                tostring(participant.lastCrossedGate), participant.currentLap or 0, elapsedMs))
+            refuseGate(ctxt, sessionId, gateIndex, "unreachable")
             return
         end
     else
@@ -3487,12 +3666,16 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
             LogWarn(string.format(
                 "raceGateCrossed : %s reported gate %d, expected %d (lap %d, %dms) : ignored",
                 ctxt.sender.playerName, gateIndex, expected, participant.currentLap or 0, elapsedMs))
+            refuseGate(ctxt, sessionId, gateIndex, "outOfOrder")
             return
         end
     end
 
     -- a gate driven through while in the pit lane : they're back on track (a reset to their last
-    -- checkpoint, out the way they came in) : that pass is over
+    -- checkpoint, out the way they came in) : that pass is over. Noted before it's closed, because
+    -- whether this crossing ended a pit pass is one of the things that decides below whether the
+    -- whole session goes out rather than just a confirmation
+    local wasInPit = participant.inPit
     if participant.inPit then
         settlePitStop(session, participant, services_clockSync.nowMs(), true)
         endPitPass(participant)
@@ -3511,9 +3694,52 @@ local function raceGateCrossed(ctxt, sessionId, gateIndex, elapsedMs)
         -- line would stand as records nobody racing properly can match
         markPitLap(participant, participant.currentLap or 1)
     end
-    applyCrossing(session, race, participant, gateIndex, elapsedMs)
-    -- slim : gate crossings are by far the most frequent pushes (see buildSessionPayload)
-    pushSessionUpdate(session, true)
+    -- what the crossing is allowed to do before the whole session has to go out at once rather
+    -- than just being confirmed : their race ending, a start of their own beginning, a pit pass
+    -- closing, the session itself finishing. Each of those is something the game reacts to rather
+    -- than displays (a car put away, a camera handed over, a results popup), and each happens at
+    -- most a handful of times in a race, so there's nothing to be saved by delaying it. Progress
+    -- -- a gate, a lap, a sector, a best lap -- is the frequent case and the only one confirmed
+    local before = {
+        finished = participant.finished, dnf = participant.dnf,
+        disqualified = participant.disqualified, awaitingStart = participant.awaitingStart,
+        startAtMs = participant.startAtMs, state = session.state,
+    }
+    local crossing = applyCrossing(session, race, participant, gateIndex, elapsedMs)
+    local onlyProgress = participant.finished == before.finished and participant.dnf == before.dnf and
+        participant.disqualified == before.disqualified and
+        participant.awaitingStart == before.awaitingStart and
+        participant.startAtMs == before.startAtMs and session.state == before.state and
+        -- a pit pass just closed (above), or a checkpoint crossed before the green light (a jump
+        -- start, with its penalty and its toast) : neither is plain progress, and both are rare
+        not wasInPit and not preGreen
+    if not onlyProgress then
+        -- a finish is the one this was weighed up for : finishParticipant fires at most once per
+        -- racer per race, and the finishing order being a third of a second late on the HUD is
+        -- exactly the moment anyone would notice. It goes out whole, now
+        return pushSessionUpdate(session)
+    end
+    -- their own crossing, to them alone and at once ; where the whole field stands, to everyone at
+    -- the standings' own rate (see markStandingsDue for why those are two different messages)
+    local row = payloadParticipant(participant, true)
+    local patch, cleared = {}, nil
+    for _, key in ipairs(CROSSING_FIELDS) do
+        if row[key] ~= nil then
+            patch[key] = row[key]
+        else
+            cleared = cleared or {}
+            cleared[#cleared + 1] = key
+        end
+    end
+    -- their own history, which no broadcast carries any more : their lap times and sector bests
+    -- whole (one racer's, bounded by the lap count), and only the lap the sector history just
+    -- gained. This is what keeps the results panel's own-row breakdown live between full pushes
+    patch.lapTimes = participant.lapTimes
+    patch.bestSectorMs = participant.bestSectorMs
+    patch.lapSectorHistory = newestLapHistory(participant)
+    communications_tx.sendToPlayer(ctxt.senderID, "raceGateConfirmed",
+        { id = session.id, crossing = crossing, p = patch, cleared = cleared })
+    markStandingsDue(session)
 end
 
 ---@param ctxt BJSContext

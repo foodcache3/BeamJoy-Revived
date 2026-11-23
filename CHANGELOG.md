@@ -8,13 +8,64 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2502, client build 2790. The startup entry, the swallowed-crash entry at the bottom,
-the server half of the stuck-vehicle entry, the crew-leader entry, and both halves of the two race
+Server build 2503, client build 2791. The startup entry, the swallowed-crash entry at the bottom,
+the server half of the stuck-vehicle entry, the crew-leader entry, and both halves of the four race
 entries and the jumped-start entry below, are server-side (deploy and restart) ; everything else is
-client-side, so BJ.zip goes out with it. The two race entries and the jumped-start entry have a
+client-side, so BJ.zip goes out with it. The four race entries and the jumped-start entry have a
 server half and a client half each : deploy them together, or a game on the old build will keep
-being sent splits the new server no longer repeats, and a checkpoint crossed before the green light
-will be reported by the game and thrown away by the server.
+being sent splits the new server no longer repeats, will go on waiting ten seconds for an answer
+the new server now gives it at once, will add up lap times it is no longer sent, and a checkpoint
+crossed before the green light will be reported by the game and thrown away by the server.
+
+- **A gate crossing gets an answer of its own now, instead of the whole field's standings.** One
+  message was doing two unrelated jobs : confirming *your* crossing to you, and telling everyone
+  where everyone is. So the small urgent one went out at the large one's size, the large one went
+  out at the small one's frequency, and because both grow with the number of cars the cost of the
+  pair rose as the product of the two -- thirty-two cars crossing twenty-five gates a lap is about
+  fourteen crossings a second, each one a full standings table sent to all thirty-two of them.
+
+  They are two messages now. A crossing is confirmed to the one racer who made it, small and a
+  fixed size, carrying only what the crossing changed about their own row -- and that is what the
+  game arms your next gate from, so it is the half that has to be prompt. Where the field stands
+  goes to everybody on its own timer, a little over three times a second. Anything bigger than
+  progress -- a finish, a retirement, a start of your own, a pit pass ending, the session itself
+  finishing -- still sends the whole session the instant it happens, so the finishing order is
+  never late and a photo finish is called at once. Positions on the HUD can now be up to a third of
+  a second behind in the last corner of a very close finish ; the result itself cannot change,
+  because it is worked out from the lap times the server recorded, not from the standings anyone
+  was shown.
+
+  A crossing the server **refuses** is also said out loud for the first time. Every refusal used to
+  return in silence, so "refused", "still on its way" and "lost" were the same thing on the wire,
+  and the game's only recourse was to hold the gate it had guessed for a full ten seconds before
+  giving way. Told outright it realigns in one round trip -- 115 ms, measured. The silent refusal on
+  a **branching** race is written to the server log too : that was the one remaining place a racer's
+  crossings could be thrown away for a whole lap with nothing recorded anywhere, the same condition
+  that made the gate report below take a log reconstruction to diagnose. Whether an update is a
+  crossing's or the whole session's is also a field the server sets now, rather than something the
+  game worked out from `settings` happening to be absent. **(Server-side and client-side: both
+  halves go out together.)**
+
+- **Lap times and sector bests are no longer resent to every other player on every gate crossing.**
+  The entry below cut each racer's per-lap sector breakdown down to the lap that had just closed.
+  The two fields beside it -- every lap time, and each racer's own best in every sector -- were
+  still going out in full, to everyone, on every crossing, and they grow for as long as the race
+  runs in exactly the same way.
+
+  Nothing drawn live ever read them. The standings wanted three numbers out of them (laps done, the
+  last lap's time, and the race time) and the fastest-sector "purple" wanted one table for the whole
+  race rather than one per racer : all four are worked out on the server now and sent as plain
+  numbers. The history itself is what the results panel reads, and that is a thing you open, so it
+  is left out of the frequent message and carried by full updates instead -- with a crossing's
+  update promoted to a full one whenever the history has gone five seconds unsent. So another
+  racer's lap breakdown is never more than five seconds old, your own stays live because your own
+  crossing confirmation carries it, and the panel keeps the complete table it has always had rather
+  than gaining a loading state and a way to fail.
+
+  Done by *leaving out* three named fields rather than by listing what the HUD draws, deliberately :
+  a list of what to keep would also have dropped the labels server plugins put beside every racer's
+  name, and would have gone on dropping anything added later, silently, showing a blank label to
+  everyone but yourself. **(Server-side and client-side: both halves go out together.)**
 
 - **Your own pit box's outline is out of the way by the time you reach it.** A box is marked out by
   an upright outline, which is what picks yours out of the row as you come down the lane -- but it

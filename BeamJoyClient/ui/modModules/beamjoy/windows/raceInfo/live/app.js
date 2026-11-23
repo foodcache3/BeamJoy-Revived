@@ -27,8 +27,10 @@ angular.module("beamjoy").component("bjRaceInfoLive", {
             if (typeof gapMs === "number" && gapMs !== 0) return `+${f.gapS(gapMs)}`;
             return "";
         };
-        // the race time : laps plus staff penalties
-        const total = (p) => (Array.isArray(p.lapTimes) ? p.lapTimes.reduce((a, b) => a + b, p.penaltyMs || 0) : null);
+        // the race time : laps plus staff penalties, worked out server-side (raceGrid.lua's
+        // payloadParticipant). Added up here from p.lapTimes before, which meant every racer's
+        // whole lap list had to be on the wire on every gate crossing
+        const total = (p) => (typeof p.totalMs === "number" ? p.totalMs : null);
         // a racer's staff time penalty in seconds, for the penalty box ("5", "0.5") ; null : none to show
         const penText = (ms) => {
             const s = Math.round(ms / 100) / 10;
@@ -51,14 +53,13 @@ angular.module("beamjoy").component("bjRaceInfoLive", {
                 .concat(all.filter((p) => p.dnf && !p.disqualified), all.filter((p) => p.disqualified));
             const multi = ordered.length > 1;
 
-            // race-wide bests (purple)
-            const fastestSector = {};
+            // race-wide bests (purple). The sector one comes worked out from the server
+            // (raceGrid.lua's buildSessionPayload) : deriving it here needed every racer's own
+            // bestSectorMs, which is history and no longer in a frequent push. The fastest lap
+            // only ever needed bestLapMs, one number per racer, which is still sent
+            const fastestSector = data.fastestSectorMs || {};
             let fastestLap = null;
             all.forEach((p) => {
-                for (let s = 1; s <= sectors; s++) {
-                    const ms = p.bestSectorMs && p.bestSectorMs["s" + s];
-                    if (typeof ms === "number" && (fastestSector[s] === undefined || ms < fastestSector[s])) fastestSector[s] = ms;
-                }
                 if (typeof p.bestLapMs === "number" && (fastestLap === null || p.bestLapMs < fastestLap)) fastestLap = p.bestLapMs;
             });
 
@@ -70,7 +71,7 @@ angular.module("beamjoy").component("bjRaceInfoLive", {
                 if (sectors > 1) {
                     for (let s = 1; s <= sectors; s++) {
                         const ms = own["s" + s];
-                        if (s < p.currentSector) strip.push(typeof ms === "number" && ms === fastestSector[s] ? "best" : "done");
+                        if (s < p.currentSector) strip.push(typeof ms === "number" && ms === fastestSector["s" + s] ? "best" : "done");
                         else if (s === p.currentSector && !p.dnf) strip.push("live");
                         else strip.push("");
                     }
@@ -87,14 +88,16 @@ angular.module("beamjoy").component("bjRaceInfoLive", {
                 let last = "-";
                 let lastCls = "";
                 if (laps > 1) {
-                    const t = Array.isArray(p.lapTimes) && p.lapTimes.length > 0 ? p.lapTimes[p.lapTimes.length - 1] : undefined;
+                    // the last lap's time, sent as a single number (p.lastLapMs) rather than read
+                    // off the end of a lap list that is no longer in a frequent push
+                    const t = typeof p.lastLapMs === "number" ? p.lastLapMs : undefined;
                     last = clock(t);
                     lastCls = typeof t === "number" && t === fastestLap ? "fast" : "";
                 } else if (sectors > 1 && p.currentSector > 1) {
                     const s = p.finished ? sectors : p.currentSector - 1;
                     const t = own["s" + s];
                     last = secs(t);
-                    lastCls = typeof t === "number" && t === fastestSector[s] ? "fast" : "";
+                    lastCls = typeof t === "number" && t === fastestSector["s" + s] ? "fast" : "";
                 }
                 return {
                     pos: p.disqualified ? "DSQ" : p.dnf ? "DNF" : String(i + 1),
