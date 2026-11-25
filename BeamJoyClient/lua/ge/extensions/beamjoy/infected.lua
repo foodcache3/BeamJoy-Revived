@@ -1,12 +1,15 @@
---- Client-side cache mirror for the current map's Infected arena (a single object, not an array,
---- same as hunter.lua's own arena mirror); mirrors hunter.lua's own retrieveCache/save shape exactly.
+--- Client-side cache mirror for the current map's Infected arenas (a list since server build
+--- 2504, same as hunter.lua's own mirror) ; mirrors its retrieveCache/save shape exactly.
 
 local M = {
     dependencies = {},
 
-    ---@type BJInfectedArena?
-    data = nil,
+    ---@type BJInfectedArena[]
+    data = {},
 }
+
+-- the server's own minimums (services/infected.lua)
+local MIN_SURVIVOR_SPAWNS, MIN_INFECTED_SPAWNS = 2, 1
 
 local function onInit()
     beamjoy_communications.addHandler("sendCache", M.retrieveCache)
@@ -45,22 +48,43 @@ local function onLegacyImportDone(imported, failed)
     end
 end
 
---- trimmed {enabled, defaults} summary for the Activities tab's start panel, same reasoning as
---- hunter.lua's own pushArenaInfo : the full arena geometry (spawns) is only ever needed by the
---- in-world editor itself
+--- one trimmed row per arena for the Activities tab's start panel, same reasoning as hunter.lua's
+--- own pushArenaInfo : the full arena geometry (spawns) is only ever needed by the in-world editor
 local function pushArenaInfo()
-    beamjoy_communications_ui.send("BJInfectedArenaInfo", {
-        enabled = M.data ~= nil and M.data.enabled == true,
-        defaults = M.data and M.data.defaults or {},
-    })
+    local list = {}
+    for _, a in ipairs(M.data or {}) do
+        table.insert(list, {
+            id = a.id,
+            name = a.name,
+            -- playable, not merely ticked : the server refuses a start under its own minimums
+            enabled = a.enabled == true and
+                #(a.survivorSpawns or {}) >= MIN_SURVIVOR_SPAWNS and
+                #(a.infectedSpawns or {}) >= MIN_INFECTED_SPAWNS,
+            -- a survivor slot each, plus however many of the initial infected the infected-spawn
+            -- pool can hold : the same upper bound the server's own capacity check uses
+            places = #(a.survivorSpawns or {}) + #(a.infectedSpawns or {}),
+            defaults = a.defaults or {},
+        })
+    end
+    beamjoy_communications_ui.send("BJInfectedArenaInfo", { arenas = list })
 end
 
 ---@param caches table
 local function retrieveCache(caches)
-    if caches.infectedArena ~= nil then
-        M.data = caches.infectedArena
+    if caches.infectedArenas ~= nil then
+        M.data = type(caches.infectedArenas) == "table" and caches.infectedArenas or {}
+        -- the hook's name is the one every listener already uses : the shape behind it changed,
+        -- the event didn't
         extensions.hook("onBJInfectedArenaChanged")
         pushArenaInfo()
+    end
+end
+
+---@param id integer?
+---@return BJInfectedArena?
+local function getArena(id)
+    for _, a in ipairs(M.data or {}) do
+        if a.id == id then return a end
     end
 end
 
@@ -72,6 +96,7 @@ end
 M.onInit = onInit
 M.retrieveCache = retrieveCache
 M.pushArenaInfo = pushArenaInfo
+M.getArena = getArena
 M.save = save
 M.requestLegacyImportPreview = requestLegacyImportPreview
 M.onLegacyImportPreviewResult = onLegacyImportPreviewResult

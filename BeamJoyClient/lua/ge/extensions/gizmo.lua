@@ -165,6 +165,23 @@ local function setTool(tool)
     beamjoy_communications_ui.send("BJEditorChangeTool", M.tool)
 end
 
+--- the "Editor : translate / rotate" binding (core/input/actions/beamjoy.json's
+--- bjEditorToolSwitch, Shift+K by default, beside the Shift+J focus one). Switches between the two
+--- exactly as the toolbars' own buttons do, by sending the same BJEditorChangeTool every editor in
+--- this codebase already both sends and listens to - so every editor's toolbar follows the key
+--- with no per-editor wiring whatsoever.
+---
+--- Only while a gizmo is actually shown. That is what "something is selected in an editor" amounts
+--- to here, and it keeps the binding silent everywhere else rather than quietly moving a hidden
+--- gizmo's mode while the player is only driving around.
+---
+--- Scale is deliberately not in the cycle : only the safe-zone editor offers it, so a three-way
+--- cycle would strand every other editor on a tool it doesn't draw a button for.
+M.onBJEditorToolKey = function()
+    if not M.state then return end
+    setTool(M.tool == "translate" and "rotate" or "translate")
+end
+
 M.onInit = onInit
 M.onUpdate = onUpdate
 

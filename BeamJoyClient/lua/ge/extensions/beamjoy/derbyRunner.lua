@@ -311,7 +311,10 @@ local function vehicleMatchesPool(veh, pool)
     local full = beamjoy_vehicles.getFullConfig(veh)
     if not full then return false end
     return table.find(pool, function(v)
-        return v.model == full.model and v.parts ~= nil and table.deepcompare(full.parts or {}, v.parts)
+        -- not a plain comparison against the stored snapshot : the game substitutes parts it
+        -- can no longer fit while building a configuration, so a preset captured on an older
+        -- game never equalled the car it handed out. See vehicles.lua's resolveParts
+        return beamjoy_vehicles.configMatchesSnapshot(full, v.model, v.parts, v.mainPartName)
     end) ~= nil
 end
 

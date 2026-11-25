@@ -27,6 +27,11 @@ const M = {
         passiveRaces: {
             enabled: true,
         },
+        // the game's own checkpoint and countdown sounds in races, off by default, see lua
+        // beamjoy/races.lua's playSound
+        races: {
+            sounds: false,
+        },
         nametags: {
             hideNameTags: false,
             nameTagFadeEnabled: true,

@@ -49,6 +49,19 @@ angular.module("beamjoy").component("bjConfigVehiclePresetsEditor", {
             if (!this.preset) return;
             this.preset.entries.push(identity);
         });
+        // a build re-captured from the car the editor is sitting in : its content, its photo and
+        // its own match snapshot, all replaced on the entry at that place. The preset's Save is
+        // what commits it (the server replaces the build itself, keeping its id and name)
+        $rootScope.$on("BJVehiclePresetBuildRecaptured", (_, data) => {
+            if (!this.preset || !data) return;
+            const entry = this.preset.entries[data.index];
+            if (!entry || !this.isBuild(entry) || entry.model !== data.model) return;
+            if (entry.buildId !== data.buildId) return;
+            entry.pc = data.pc;
+            entry.parts = data.parts;
+            entry.vars = data.vars;
+            if (data.photo) entry.photo = data.photo;
+        });
         // a retaken photo : still the same entry at that place
         $rootScope.$on("BJVehiclePresetPhoto", (_, data) => {
             if (!this.preset || !data) return;
@@ -135,6 +148,31 @@ angular.module("beamjoy").component("bjConfigVehiclePresetsEditor", {
                 { model: entry.model, buildId: entry.buildId, pc: entry.pc },
                 index,
             ]);
+        };
+
+        // get in this build, so it can be looked at or updated from
+        this.spawnEntry = (event, entry) => {
+            event.stopPropagation();
+            beamjoyStore.send("BJVehiclePresetSpawnEntry", [
+                { model: entry.model, config: entry.config },
+            ]);
+        };
+
+        // this build's content replaced by the car you're in, keeping its id and name. Confirmed
+        // first : it rewrites what every player's game spawns for this build, in every preset
+        // that uses it, and the car it used to be isn't kept anywhere
+        this.recaptureBuild = (event, entry, index) => {
+            event.stopPropagation();
+            const message = translate("beamjoy.window.config.tabs.vehiclePresets.recaptureBuild.confirm")
+                .replace("{name}", entry.name || "?");
+            beamjoyConfirm.ask(message, () => {
+                beamjoyStore.send("BJVehiclePresetRecaptureBuild", [
+                    { model: entry.model, modelLabel: entry.modelLabel, buildId: entry.buildId },
+                    index,
+                ]);
+            }, null, {
+                confirmLabel: translate("beamjoy.window.config.tabs.vehiclePresets.recaptureBuild"),
+            });
         };
 
         // renaming a build renames it in every preset that has it

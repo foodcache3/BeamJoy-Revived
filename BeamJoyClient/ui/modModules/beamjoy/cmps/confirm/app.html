@@ -252,13 +252,22 @@
             <button class="btn info" ng-click="$ctrl.cancel($event)" ng-if="!$ctrl.state.infoOnly">
                 {{'beamjoy.common.cancel' | translate}}
             </button>
+            <!-- ask's optional second yes. Green against the ordinary button's red : where
+                 there are two of these, the ordinary one is the one that loses something. -->
+            <button
+                class="btn success"
+                ng-if="$ctrl.state.altConfirm"
+                ng-click="$ctrl.confirmAlt($event)"
+            >
+                {{$ctrl.state.altConfirm.label | translate}}
+            </button>
             <button
                 class="btn"
                 ng-class="{danger: $ctrl.state.dangerous, success: !$ctrl.state.dangerous}"
                 ng-disabled="($ctrl.state.showInput && !$ctrl.state.inputValue.trim()) || ($ctrl.state.checklist && $ctrl.checkedCount() === 0)"
                 ng-click="$ctrl.confirm($event)"
             >
-                {{($ctrl.state.infoOnly ? 'beamjoy.common.close' : 'beamjoy.common.confirm') | translate}}
+                {{$ctrl.confirmLabel()}}
             </button>
         </div>
     </div>

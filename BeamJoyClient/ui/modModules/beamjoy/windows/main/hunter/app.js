@@ -16,10 +16,41 @@ angular.module("beamjoy").component("bjMainHunter", {
             $rootScope.$broadcast("BJOpenTab", "hunterArena");
         };
 
-        this.arena = { enabled: false, defaults: {} };
+        // ARENAS ---------------------------------------------------------------------------
+        // the map's hunter arenas (beamjoy/hunter.lua's own pushArenaInfo). `playable` is the
+        // ones a game can actually start on : enabled, and with the spawns the server insists on.
+        // Unlike derby's arenas, these aren't places you drive to - a hunt covers a whole map -
+        // so they're a picker in the start form rather than a card each with its own marker.
+        this.arenas = [];
+        this.playable = [];
+        this.arenaOptions = [];
+        // the open lobbies worth showing : one whose arena has since been disabled or deleted
+        // can't be joined (the server refuses it), so it isn't offered
+        this.openSessions = [];
+        const rebuildOpenSessions = () => {
+            this.openSessions = (this.sessions || []).filter((s) =>
+                // an older server sends no arenaId at all : nothing to check it against
+                s.arenaId === undefined || this.playable.some((a) => a.id === s.arenaId)
+            );
+        };
         $rootScope.$on("BJHunterArenaInfo", (_, info) => {
-            this.arena = info || { enabled: false, defaults: {} };
+            this.arenas = info && Array.isArray(info.arenas) ? info.arenas : [];
+            this.playable = this.arenas.filter((a) => a.enabled);
+            this.arenaOptions = this.playable.map((a) => ({ value: a.id, label: a.name }));
+            rebuildOpenSessions();
+            // the arena the open start form sits on was just disabled or deleted
+            if (this.startOptions && !this.playable.some((a) => a.id === this.startOptions.arenaId)) {
+                this.starting = false;
+                this.startOptions = null;
+            }
         });
+        // the arena the start form is on
+        this.chosenArena = () =>
+            (this.startOptions && this.arenas.find((a) => a.id === this.startOptions.arenaId)) || null;
+        this.respawnHubCount = () => {
+            const arena = this.chosenArena();
+            return arena ? arena.respawnHubCount || 0 : 0;
+        };
 
         this.vehiclePresets = [];
         this.vehiclePresetOptions = [];
@@ -46,7 +77,8 @@ angular.module("beamjoy").component("bjMainHunter", {
 
         this.sessions = [];
         $rootScope.$on("BJHunterOpenSessions", (_, sessions) => {
-            this.sessions = sessions || [];
+            this.sessions = Array.isArray(sessions) ? sessions : [];
+            rebuildOpenSessions();
         });
 
         this.status = null;
@@ -169,11 +201,12 @@ angular.module("beamjoy").component("bjMainHunter", {
 
         this.starting = false;
         this.startOptions = null;
-        this.openStart = (event) => {
-            event.stopPropagation();
-            const d = this.arena.defaults || {};
-            this.starting = true;
-            this.startOptions = {
+        // every field the start form can set, seeded from the arena's own saved defaults : each
+        // arena carries its own, so switching arena re-seeds the whole form (same as derby's)
+        const optionsFor = (arena) => {
+            const d = (arena && arena.defaults) || {};
+            return {
+                arenaId: arena ? arena.id : null,
                 winCondition: d.winCondition || "waypoints",
                 timedModeDuration: d.timedModeDuration ?? 10,
                 waypointCount: d.waypointCount || 5,
@@ -197,6 +230,19 @@ angular.module("beamjoy").component("bjMainHunter", {
                 countdown: d.countdown ?? 10,
                 vehicleConfirmTimeout: d.vehicleConfirmTimeout ?? 20,
             };
+        };
+        this.openStart = (event) => {
+            event.stopPropagation();
+            const arena = this.playable[0];
+            if (!arena) return;
+            this.starting = true;
+            this.startOptions = optionsFor(arena);
+        };
+        // another arena from the form's own picker : its defaults replace what's on screen
+        this.pickArena = (value) => {
+            const arena = this.playable.find((a) => a.id === value);
+            if (!arena) return;
+            this.startOptions = optionsFor(arena);
         };
         this.cancelStart = (event) => {
             event.stopPropagation();

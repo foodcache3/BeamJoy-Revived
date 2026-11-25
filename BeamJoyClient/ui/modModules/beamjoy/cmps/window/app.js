@@ -1,9 +1,10 @@
-// Persists per-window position/size (keyed by window-id) and hands out an
-// incrementing z-index so the last-interacted window renders on top. Also
+// Persists per-window position/size and background opacity (keyed by window-id) and hands out
+// an incrementing z-index so the last-interacted window renders on top. Also
 // consulted by windows/main and windows/config's app.js to skip re-applying
 // the Lua-driven default placement once a player has manually moved/resized.
 angular.module("beamjoy").service("beamjoyWindowRect", function () {
     const STORAGE_PREFIX = "beamjoy.windowRect.";
+    const OPACITY_PREFIX = "beamjoy.windowOpacity.";
     let topZIndex = 10;
 
     this.get = (windowId) => {
@@ -33,6 +34,29 @@ angular.module("beamjoy").service("beamjoyWindowRect", function () {
         if (!windowId) return;
         try {
             localStorage.setItem(STORAGE_PREFIX + windowId, JSON.stringify(rect));
+        } catch (e) {}
+    };
+
+    // how solid this window's background is, 0 to 1, or null when the player has never said.
+    // Per window and per player, in the same browser localStorage as the rect above rather than
+    // Lua's own localStorage : it's the same kind of state (where I like my windows), it's read
+    // while the component builds, and nothing outside this UI ever needs to know it.
+    this.getOpacity = (windowId) => {
+        if (!windowId) return null;
+        let raw;
+        try {
+            raw = localStorage.getItem(OPACITY_PREFIX + windowId);
+        } catch (e) {
+            return null;
+        }
+        const value = parseFloat(raw);
+        return isNaN(value) || value < 0 || value > 1 ? null : value;
+    };
+
+    this.setOpacity = (windowId, value) => {
+        if (!windowId) return;
+        try {
+            localStorage.setItem(OPACITY_PREFIX + windowId, String(value));
         } catch (e) {}
     };
 
@@ -74,6 +98,34 @@ angular.module("beamjoy").component("bjWindow", {
         // this correct regardless of how many scroll levels any given window/tab/panel ends up
         // with.
         const WHEEL_SCROLL_MULTIPLIER = 4;
+
+        // How solid the window's background is. 0.2 is what it has always been and stays the
+        // default ; the rest are the same step up and down, per direct request ("an opacity button
+        // that cycles the transparency in 20% increments"). 0 is no background at all, which is
+        // the point for anyone who wants to see the road through the panel.
+        //
+        // Only drawn for a window that has a background to begin with (`background`), which today
+        // is the config window alone - but it belongs here rather than there, because any window
+        // that gains a background gets the control with it instead of needing its own copy.
+        const OPACITY_STEPS = [0.2, 0.4, 0.6, 0.8, 1, 0];
+        this.opacity = OPACITY_STEPS[0];
+        // a CSS custom property on OUR OWN element, which the two background rules read. Never on
+        // documentElement : an md-select closing restores that element's whole inline style and
+        // would silently wipe it (the same trap the HUD hit).
+        const applyOpacity = () => {
+            $element[0].style.setProperty(
+                "--bj-window-bg",
+                "rgba(0, 0, 0, " + this.opacity + ")"
+            );
+        };
+        this.opacityPercent = () => Math.round(this.opacity * 100);
+        this.cycleOpacity = ($event) => {
+            if ($event) $event.stopPropagation();
+            const at = OPACITY_STEPS.indexOf(this.opacity);
+            this.opacity = OPACITY_STEPS[(at + 1) % OPACITY_STEPS.length];
+            applyOpacity();
+            beamjoyWindowRect.setOpacity(this.windowId, this.opacity);
+        };
 
         this.minimized = false;
         this.toggleMinimized = () => {
@@ -195,6 +247,16 @@ angular.module("beamjoy").component("bjWindow", {
         };
 
         this.$onInit = () => {
+            const savedOpacity = beamjoyWindowRect.getOpacity(this.windowId);
+            // an exact step, or the nearest one : a value from an older build (or a hand-edited
+            // one) still has to leave the cycle somewhere it can continue from
+            if (savedOpacity !== null) {
+                this.opacity = OPACITY_STEPS.reduce((best, step) =>
+                    Math.abs(step - savedOpacity) < Math.abs(best - savedOpacity) ? step : best
+                );
+            }
+            applyOpacity();
+
             container = $element.parent()[0];
             if (container) {
                 const saved = beamjoyWindowRect.get(this.windowId);

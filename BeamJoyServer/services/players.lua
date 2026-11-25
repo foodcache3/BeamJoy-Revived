@@ -181,6 +181,7 @@ local function onInit()
     communications_rx.addHandler("changeLang", onPlayerChangeLang)
     communications_rx.addHandler("toggleFreeze", M.toggleFreeze)
     communications_rx.addHandler("toggleEngine", M.toggleEngine)
+    communications_rx.addHandler("toggleGhost", M.toggleGhost)
     communications_rx.addHandler("staffAllVehicles", M.staffAllVehicles)
     communications_rx.addHandler("toggleReplayState", M.toggleReplayState)
     communications_rx.addHandler("demote", M.demote)
@@ -453,6 +454,55 @@ local function toggleEngine(ctxt, targetName, vid)
         target.shut = not target.shut
     end
     M.sendCacheUpdate()
+end
+
+--- staff : a vehicle ghosted (no collisions, see-through) until it's turned off again, the same
+--- row as freeze / engine / delete / explode / launch and the same plain staff check as all five.
+---
+--- Nothing is sent to anyone here, and nothing needs to be. A ghost belongs to the client that
+--- OWNS the car - `beamjoy_vehicles.setGhostReason` is local, and the server's own updateGhost
+--- (services/vehicles.lua) only ever accepts the sender's own vid, which is why no one could ghost
+--- anyone else before this. So this only records the fact on the vehicle, and the owner's own
+--- client applies it off the player cache (beamjoy/players.lua's retrieveCache, next to the froze
+--- and shut it already applies the same way) under its own "staff" ghost reason, which then takes
+--- the usual updateGhost -> updateVehicleGhost path out to everyone else's copy. It therefore
+--- combines with a race's or a zone's own ghosting instead of fighting it, and survives a reset,
+--- a respawn and a rejoin, because the record outlives all three and every cache push reasserts it
+---@param ctxt BJSContext
+---@param targetName string
+---@param vid integer their own vid for the car, as the player list gives it
+local function toggleGhost(ctxt, targetName, vid)
+    if not ctxt.sender then return end
+    if not services_permissions.isStaff(ctxt.sender.playerName) then return end
+
+    local target = M.players[targetName] ---@type BJSPlayer?
+    if not target then return end
+
+    ---@type BJSVehicle?
+    local targetVeh = target.vehicles:find(function(v) return v.vid == vid end)
+    if not targetVeh then return end
+
+    targetVeh.staffGhost = not targetVeh.staffGhost
+    M.sendCacheUpdate()
+end
+
+--- the same thing for a plugin (services/api.lua's players.ghost) : set, not toggled, and all of
+--- a player's cars at once when no vid is named. There's no sender to check here - a plugin runs
+--- on the server
+---@param target table BJSPlayer
+---@param state boolean
+---@param vid integer? nil : every vehicle of theirs
+---@return integer count how many cars it applied to
+local function setGhost(target, state, vid)
+    local count = 0
+    target.vehicles:forEach(function(v)
+        if vid ~= nil and v.vid ~= vid then return end
+        if v.isAi then return end
+        count = count + 1
+        v.staffGhost = state == true
+    end)
+    if count > 0 then M.sendCacheUpdate() end
+    return count
 end
 
 ---@param ctxt BJSContext
@@ -1240,6 +1290,8 @@ M.getConnectedByName = getConnectedByName
 M.sendCacheUpdate = sendCacheUpdate
 M.toggleFreeze = toggleFreeze
 M.toggleEngine = toggleEngine
+M.toggleGhost = toggleGhost
+M.setGhost = setGhost
 M.staffAllVehicles = staffAllVehicles
 M.toggleReplayState = toggleReplayState
 M.demote = demote

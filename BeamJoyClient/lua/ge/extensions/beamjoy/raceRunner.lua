@@ -89,6 +89,10 @@ local M = {
     countdownStartMs = nil,
     countdownTotal = nil,
     lastSentSeconds = nil,
+    ---@type string? the last countdown sound played, as "<lights>|<green>" (Settings > Races).
+    ---Its own key rather than lastSentLights', which also moves when a jump start is reported and
+    ---would beep a second time for the same light
+    lastLightSound = nil,
     cameraReleased = false,
     ---@type string? camera mode the player was on before it got forced to EXTERNAL, restored on
     ---release. stopForcedCameras() alone only stops the switch-away *enforcement*, it never
@@ -1041,13 +1045,20 @@ local function matchesConfigFile(veh, entry, allowTuning)
     local cfg = data and data.config
     if not cfg or not cfg.partsTree or cfg.model ~= entry.model then return false, "no vehicle data" end
     local mine = extensions.core_vehicle_partmgmt.partsTreeToPartsMap(cfg.partsTree)
+    -- what this game builds from the file, for the same reason the snapshot above is resolved : a
+    -- file written before a game update names parts the game now replaces while loading it (see
+    -- vehicles.lua's resolveParts). Only the slots the file itself names are still compared, so
+    -- this keeps being the lenient fallback it was ; the file's own name is used for any slot this
+    -- game couldn't resolve
+    local resolved = beamjoy_vehicles.resolveParts(entry.model, saved.parts, saved.mainPartName)
     local compared = 0
     for slot, part in pairs(saved.parts) do
         if mine[slot] ~= nil then
+            local want = resolved and resolved[slot] ~= nil and resolved[slot] or part
             -- real report : the stock ETK I-Series files leave slots "none", which never equalled
             -- the car's "" and refused the very configuration the player had picked
-            if partName(mine[slot]) ~= partName(part) then
-                return false, string.format("%s: live=%s file=%s", slot, partName(mine[slot]), partName(part))
+            if partName(mine[slot]) ~= partName(want) then
+                return false, string.format("%s: live=%s file=%s", slot, partName(mine[slot]), partName(want))
             end
             compared = compared + 1
         end
@@ -1070,8 +1081,8 @@ local function vehicleMatchesRestriction(veh, restriction)
         -- parts always required ; vars (tuning) only ALSO required when allowTuning is off. A
         -- tire-pressure slider or a paint tweak shouldn't be treated as "not the required vehicle"
         -- by default, only an actual parts swap does (or, opt-in, a tuning change too)
-        return full.model == restriction.model and
-            table.deepcompare(full.parts or {}, restriction.parts or {}) and
+        return beamjoy_vehicles.configMatchesSnapshot(full, restriction.model, restriction.parts,
+                restriction.mainPartName) and
             (restriction.allowTuning or varsMatch(full.vars, restriction.vars))
     elseif restriction.mode == "pool" then
         -- matched by PARTS (each pool entry's own captured snapshot, see services/vehiclePresets.lua),
@@ -1087,8 +1098,7 @@ local function vehicleMatchesRestriction(veh, restriction)
         -- correctly never matched (falls through, same as any other genuinely non-matching entry)
         -- rather than erroring.
         local match = table.find(restriction.pool, function(v)
-            return v.model == full.model and v.parts ~= nil and
-                table.deepcompare(full.parts or {}, v.parts) and
+            return beamjoy_vehicles.configMatchesSnapshot(full, v.model, v.parts, v.mainPartName) and
                 (restriction.allowTuning or (v.vars ~= nil and varsMatch(full.vars, v.vars)))
         end) or table.find(restriction.pool, function(v)
             -- no snapshot, or an outdated one : the entry's configuration as the game has it now
@@ -1096,34 +1106,6 @@ local function vehicleMatchesRestriction(veh, restriction)
             local ok, matches = pcall(matchesConfigFile, veh, v, restriction.allowTuning == true)
             return ok and matches == true
         end)
-        if not match then
-            -- Diagnostic only, same technique that found the real varsMatch float-precision bug
-            -- earlier (see this file's own history) : rather than guess again at why one specific
-            -- vehicle fails pool matching while others don't, log the exact key-by-key parts diff
-            -- against every same-model pool candidate. Safe to remove once a real cause is
-            -- confirmed from actual output.
-            for _, v in ipairs(restriction.pool) do
-                if v.model == full.model and v.parts ~= nil then
-                    local diffs, seen = {}, {}
-                    for k in pairs(full.parts or {}) do seen[k] = true end
-                    for k in pairs(v.parts) do seen[k] = true end
-                    for k in pairs(seen) do
-                        local a, b = (full.parts or {})[k], v.parts[k]
-                        if a ~= b then
-                            table.insert(diffs, string.format("%s: live=%s preset=%s", k, tostring(a), tostring(b)))
-                        end
-                    end
-                    LogWarn(string.format("pool match failed for '%s' (%d part diffs): %s",
-                        tostring(v.label), #diffs, table.concat(diffs, " | ")))
-                end
-                if v.model == full.model then
-                    -- and why its configuration file didn't match either
-                    local ok, _, why = pcall(matchesConfigFile, veh, v, restriction.allowTuning == true)
-                    LogWarn(string.format("pool file match failed for '%s' (%s/%s): %s", tostring(v.label),
-                        tostring(v.model), tostring(v.config), ok and tostring(why) or "error: " .. tostring(_)))
-                end
-            end
-        end
         return match ~= nil
     end
     return true
@@ -2809,6 +2791,7 @@ local function onSessionUpdate(session)
         M.countdownStartMs = GetCurrentTimeMillis()
         M.countdownTotal = session.settings.countdown
         M.lastSentSeconds = nil
+        M.lastLightSound = nil
         -- a lights start's own state, fresh for this phase's start (the hold is picked again for
         -- each one, and a jump start in an earlier phase is already paid for)
         M.lastSentLights, M.jumpStartFrom, M.jumpStartSent, M.lightsStartUsed = nil, nil, nil, nil
@@ -3306,6 +3289,20 @@ local function updateCountdown()
             lit = math.max(0, math.min(LIGHTS_COUNT,
                 1 + math.floor((clockNow - firstLightMs) / stepMs)))
         end
+        -- Settings > Races, off by default : the game's own lights, one per light and its own
+        -- "go" when they go out. beamjoy_races owns the setting because a passive run wants the
+        -- checkpoint half of it too (see its playSound)
+        local greenNow = clockNow >= lightsOutMs
+        local soundKey = string.format("%d|%s", lit, tostring(greenNow))
+        if soundKey ~= M.lastLightSound then
+            M.lastLightSound = soundKey
+            if greenNow then
+                beamjoy_races.playSound(sound.SOUNDS.RACE_START)
+            elseif lit > 0 then
+                beamjoy_races.playSound(sound.SOUNDS.RACE_COUNTDOWN)
+            end
+        end
+
         local key = string.format("%d|%s", lit, tostring(M.jumpStartSent))
         if key ~= M.lastSentLights then
             M.lastSentLights = key
@@ -3339,6 +3336,13 @@ local function updateCountdown()
     end
 
     if remaining ~= M.lastSentSeconds then
+        -- 3, 2, 1, go. This only moves on a whole-second change, which is exactly one sound per
+        -- number ; the first tick of a countdown is the full number, so it beeps there too
+        if remaining <= 0 then
+            beamjoy_races.playSound(sound.SOUNDS.RACE_START)
+        else
+            beamjoy_races.playSound(sound.SOUNDS.RACE_COUNTDOWN)
+        end
         M.lastSentSeconds = remaining
         beamjoy_communications_ui.send("BJRaceCountdown", { active = true, seconds = remaining })
     end
@@ -3796,6 +3800,12 @@ local function onUpdate()
                 beamjoy_communications.send("raceGateCrossed", M.session.id, gateIdx,
                     math.max(0, math.round(crossingMs)))
                 if beamjoy_racePits then beamjoy_racePits.onGateSent(gate.step or gateIdx) end
+                -- here, not in onGateConfirmed : the sound belongs to the moment the car went
+                -- through the gate, and the server's answer is a round trip behind that (115 ms at
+                -- best, seconds at worst). A crossing the server then refuses has already been
+                -- heard, which is the right way round - it is the car's own position that made the
+                -- sound, and a refusal is about the order gates were taken in, not about this one
+                beamjoy_races.playSound(sound.SOUNDS.RACE_WAYPOINT)
                 M.lastLy[gateIdx] = nil -- fresh start for this gate index next lap
                 break -- only one candidate can actually be crossed in a single frame
             else

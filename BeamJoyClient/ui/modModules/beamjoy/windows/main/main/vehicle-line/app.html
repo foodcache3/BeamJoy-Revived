@@ -10,6 +10,9 @@
     <button type="button" class="bjr-btn small" ng-if="$ctrl.actions.engine !== undefined" ng-click="$ctrl.action($event,'engine')">
         {{($ctrl.vehicle.shut ? 'beamjoy.window.main.playerlist.actions.start' : 'beamjoy.window.main.playerlist.actions.stop') | translate}}
     </button>
+    <button type="button" class="bjr-btn small" ng-if="$ctrl.actions.ghost !== undefined" ng-click="$ctrl.action($event,'ghost')">
+        {{($ctrl.vehicle.staffGhost ? 'beamjoy.window.main.playerlist.actions.unghost' : 'beamjoy.window.main.playerlist.actions.ghost') | translate}}
+    </button>
     <button type="button" class="bjr-btn small" ng-if="$ctrl.actions.launch !== undefined" ng-click="$ctrl.action($event,'launch')">
         {{'beamjoy.window.main.playerlist.actions.launch' | translate}}
     </button>

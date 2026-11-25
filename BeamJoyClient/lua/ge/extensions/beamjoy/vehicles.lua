@@ -435,6 +435,10 @@ end
 
 local lastShut = {}
 local function onSlowUpdate()
+    -- a couple of queued snapshot resolves (queueSnapshotResolve), so the frame that actually
+    -- needs one has it cached already
+    drainSnapshotQueue()
+
     -- speed and damage update process
     M.vehicles:filter(function(v) return v.isVehicle end)
         :forEach(function(v)
@@ -1998,6 +2002,144 @@ local function getFullConfig(veh)
     }
 end
 
+--- parts table (a stored snapshot's OWN table) -> the mainPartName it was resolved with -> what
+--- this game builds from it, or false when it can't build it at all. Weak keys : a preset entry
+--- the server replaces on its next push is collected along with it, so nothing in here ever
+--- outlives the data it describes, and no key has to be built (hashing a 600-part map on every
+--- comparison would cost more than the comparison).
+---@type table<table, table<string, table<string, string>|false>>
+local resolvedSnapshots = setmetatable({}, { __mode = "k" })
+
+--- snapshots waiting to be resolved away from a hot path : {model, parts, mainPartName}
+local snapshotQueue = {}
+local SNAPSHOT_QUEUE_MAX = 64
+--- per slow update : warming must never cost a frame itself
+local SNAPSHOTS_PER_TICK = 2
+
+--- What this game actually BUILDS from a stored parts snapshot, which is not always the snapshot
+--- itself. Real, reported break (a vehicle preset refusing the very car it had just handed out,
+--- every time) : while loading a configuration the game silently resets any chosen part that no
+--- longer fits its slot, drops a slot that no longer exists, and fills a slot the snapshot never
+--- had with that slot's own default. BeamNG 0.40 did all three to the racing seats alone -- one
+--- shared `seat_race_gray` per colour replaced `race_seat_FL`, its `skin_race_seat_FL` colour slot
+--- is gone (baked into the part), and the new seat brings a `seat_occupant` child slot defaulting
+--- to `occupant_generic` -- and it narrowed the marker-bulb slots to the 5W part. The game says so
+--- itself, three lines before the mod used to refuse the car :
+---     E|GELua.slotSystem| Chosen part has wrong slot type. Required is nil provided by part
+---     race_seat_FL is "race_seat_FL". Resetting to default
+--- So a snapshot taken on an older game can never equal the tree that game builds from it, and
+--- comparing the two directly broke every preset captured before the update.
+---
+--- Resolving the snapshot through the game's own loader is the comparison that survives this and
+--- every future version of it, with no list of renamed parts to maintain : loadJbeamOnlyConfig is
+--- the game's own "same as loadJbeam, but only returns the vehicle config", and it calls the very
+--- same jbeam/slotSystem.findParts, with the very same {model directory, /vehicles/common/} pair,
+--- that a real spawn uses (jbeam/loader.lua's own loadJbeam, and its vehicleDirectories). Its
+--- partsTree IS what spawning this snapshot produces.
+---
+--- Mods are included exactly as they are at spawn time, for the same reason : /vehicles/<model>/ is
+--- a virtual path, so a packed mod, an unpacked one and BeamMP's own mods/multiplayer all project
+--- into it. A model this game doesn't have resolves to nil (no main part) and simply never matches,
+--- which is correct -- you can't be sitting in a car you don't have. A mod PART this client is
+--- missing resolves to its slot's default on both sides at once, so the player's own car still
+--- matches, which is the point.
+---@param model string
+---@param parts table<string, string> the snapshot's own table, never modified
+---@param mainPartName string? the snapshot's own main part, when it stored one (a shared build
+---does ; a plain preset entry doesn't, and the model's own main part is then right)
+---@return table<string, string>? nil when this game can't build it
+local function resolveParts(model, parts, mainPartName)
+    if type(model) ~= "string" or model == "" or type(parts) ~= "table" then return nil end
+    local mainKey = type(mainPartName) == "string" and mainPartName or ""
+    local byMain = resolvedSnapshots[parts]
+    if byMain and byMain[mainKey] ~= nil then
+        local hit = byMain[mainKey]
+        return hit ~= false and hit or nil
+    end
+
+    local resolved = false
+    -- a FRESH wrapper table every time : loadJbeamOnlyConfig writes model/mainPartName/partsTree
+    -- into the config it is handed and clears its `parts`. The snapshot's own parts table is only
+    -- ever READ from there (slotSystem.lua's fillSlots_rec reads vehicleConfig.parts[slot] and
+    -- nothing writes it), so the preset's data is never touched -- checked, because corrupting a
+    -- server-owned preset here would be far worse than the bug this fixes
+    local ok, out = pcall(function()
+        return require("jbeam/loader").loadJbeamOnlyConfig({
+            string.var("/vehicles/{1}/", { model }), "/vehicles/common/",
+        }, { parts = parts, mainPartName = mainPartName })
+    end)
+    if ok and type(out) == "table" and type(out.partsTree) == "table" then
+        -- flattened with the mod's OWN convertPartsTree, the one getFullConfig uses on the live
+        -- tree : the game's partsTreeToPartsMap keys a slot-id collision by full path instead, and
+        -- two sides flattened by different rules would never compare equal however right they are
+        resolved = convertPartsTree(out.partsTree)
+    elseif not ok then
+        LogWarn(string.format("could not resolve a %s snapshot : %s", tostring(model), tostring(out)))
+    end
+
+    byMain = byMain or {}
+    byMain[mainKey] = resolved
+    resolvedSnapshots[parts] = byMain
+    return resolved ~= false and resolved or nil
+end
+
+--- Does the live configuration match a stored model+parts snapshot, allowing for the parts the
+--- game itself had to substitute while building it (resolveParts above) ?
+---
+--- Tries the snapshot as stored FIRST : anything captured on this game version matches there, and
+--- nothing is ever resolved, so a preset that isn't stale costs exactly what it cost before.
+---@param full ClientVehicleConfig? the live configuration (getFullConfig)
+---@param model string? the snapshot's model
+---@param parts table<string, string>? the snapshot's parts. nil never matches : an entry captured
+---before parts were stored at all falls through as "not this one", as it always has, rather than
+---erroring or matching everything
+---@param mainPartName string?
+---@return boolean
+local function configMatchesSnapshot(full, model, parts, mainPartName)
+    if type(full) ~= "table" or type(model) ~= "string" or type(parts) ~= "table" then return false end
+    if full.model ~= model then return false end
+    local live = full.parts or {}
+    if table.deepcompare(live, parts) then return true end
+    local resolved = resolveParts(model, parts, mainPartName)
+    return resolved ~= nil and table.deepcompare(live, resolved)
+end
+
+--- Resolve this snapshot soon, on a slow update, instead of on the frame that needs the answer.
+--- Nothing depends on it having happened : it only ever pre-fills the cache configMatchesSnapshot
+--- reads, so a queue that never drains costs a comparison its resolve, not its correctness.
+---@param model string?
+---@param parts table<string, string>?
+---@param mainPartName string?
+local function queueSnapshotResolve(model, parts, mainPartName)
+    if type(model) ~= "string" or type(parts) ~= "table" then return end
+    local mainKey = type(mainPartName) == "string" and mainPartName or ""
+    local byMain = resolvedSnapshots[parts]
+    if byMain and byMain[mainKey] ~= nil then return end
+    if #snapshotQueue >= SNAPSHOT_QUEUE_MAX then return end
+    for _, q in ipairs(snapshotQueue) do
+        if q.parts == parts and (q.mainPartName or "") == mainKey then return end
+    end
+    table.insert(snapshotQueue, { model = model, parts = parts, mainPartName = mainPartName })
+end
+
+--- drains a few of the queue per slow update (onSlowUpdate below)
+local function drainSnapshotQueue()
+    for _ = 1, SNAPSHOTS_PER_TICK do
+        local q = table.remove(snapshotQueue, 1)
+        if not q then return end
+        resolveParts(q.model, q.parts, q.mainPartName)
+    end
+end
+
+--- A mod mounting or unmounting changes what this game can build, and the game drops its own jbeam
+--- directory cache at exactly this moment (jbeam/io.lua's own onFileChanged), so every resolved
+--- snapshot is stale. Fires once per changed file, so this only ever replaces two tables and never
+--- iterates anything.
+local function onFileChanged()
+    resolvedSnapshots = setmetatable({}, { __mode = "k" })
+    snapshotQueue = {}
+end
+
 --- human-readable "Model - Config" (or "Model (custom)" once the live setup no longer matches any
 --- saved .pc config, BeamNG's own isConfigCustom check, same one getFullConfig already uses)
 --- label for whatever's actually currently equipped. Used for the race leaderboard's vehicle
@@ -2219,6 +2361,10 @@ M.reapplyDisplayAlpha = reapplyDisplayAlpha
 M.setPhotoSubject = setPhotoSubject
 M.getAttachedTrailers = getAttachedTrailers
 M.getFullConfig = getFullConfig
+M.resolveParts = resolveParts
+M.configMatchesSnapshot = configMatchesSnapshot
+M.queueSnapshotResolve = queueSnapshotResolve
+M.onFileChanged = onFileChanged
 M.isPolice = isPolice
 M.serverKey = serverKey
 M.getByServerKey = getByServerKey

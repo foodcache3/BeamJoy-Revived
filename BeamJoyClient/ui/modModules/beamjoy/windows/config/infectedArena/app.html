@@ -19,6 +19,16 @@
         min-height: 0;
         overflow-y: auto;
     }
+    /* the arena bar, like the derby arena editor's own : the picker takes the room the name
+       input does, so switching arenas and renaming one line up */
+    bj-config-infected-arena .arena-bar bj-select {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+    bj-config-infected-arena .name-input {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
     bj-config-infected-arena .section-bar {
         border-bottom: thin solid gray;
     }
@@ -41,21 +51,45 @@
 
 <div class="editor-root">
     <div class="editor-pinned">
-        <div class="d-flex gap-1 mb-2 align-center">
-            <span class="flex-grow-1"></span>
-            <span title="{{'beamjoy.window.config.tabs.infectedArena.enabled.tooltip' | translate}}" class="d-flex align-center gap-1">
-                {{'beamjoy.window.config.tabs.infectedArena.enabled' | translate}}
-                <bj-toggle ng-model="$ctrl.enabled"></bj-toggle>
+        <!-- which of the map's arenas is being edited : the same bar the derby arena editor has -->
+        <div class="arena-bar d-flex gap-1 mb-2 align-center">
+            <bj-select
+                ng-if="$ctrl.arenaOptions.length > 0 && !$ctrl.meta.isNew"
+                ng-model="$ctrl.pickedId"
+                options="$ctrl.arenaOptions"
+                ng-change="$ctrl.pickArena(value)"
+            ></bj-select>
+            <span class="flex-grow-1" ng-if="$ctrl.arenaOptions.length === 0 || $ctrl.meta.isNew">
+                <b ng-if="$ctrl.meta.isNew && !$ctrl.meta.blank">{{'beamjoy.window.config.tabs.infectedArena.newArena' | translate}}</b>
             </span>
-            <button
-                class="btn success"
-                ng-click="$ctrl.save($event)"
-                ng-disabled="!$ctrl.dirty"
-                title="{{'beamjoy.common.save' | translate}}"
-            >
+            <button class="btn success" ng-click="$ctrl.newArena($event)"
+                title="{{'beamjoy.window.config.tabs.infectedArena.add' | translate}}">
+                <icon name="add"></icon>
+            </button>
+            <button class="btn danger" ng-if="!$ctrl.meta.blank" ng-click="$ctrl.deleteArena($event)"
+                title="{{'beamjoy.window.config.tabs.infectedArena.delete' | translate}}">
+                <icon name="delete"></icon>
+            </button>
+            <button class="btn success" ng-if="!$ctrl.meta.blank" ng-click="$ctrl.save($event)"
+                ng-disabled="!$ctrl.dirty" title="{{'beamjoy.common.save' | translate}}">
                 <icon name="save"></icon>
             </button>
         </div>
+
+        <div ng-if="$ctrl.meta.blank" class="opacity-70 small mb-2">
+            {{'beamjoy.window.config.tabs.infectedArena.empty' | translate}}
+        </div>
+
+        <div ng-if="!$ctrl.meta.blank">
+            <div class="d-flex gap-1 mb-2 align-center">
+                <input type="text" class="name-input" maxlength="40" ng-model="$ctrl.name"
+                    placeholder="{{'beamjoy.window.config.tabs.infectedArena.name' | translate}}"
+                    aria-label="{{'beamjoy.window.config.tabs.infectedArena.name' | translate}}" />
+                <span title="{{'beamjoy.window.config.tabs.infectedArena.enabled.tooltip' | translate}}" class="d-flex align-center gap-1">
+                    {{'beamjoy.window.config.tabs.infectedArena.enabled' | translate}}
+                    <bj-toggle ng-model="$ctrl.enabled"></bj-toggle>
+                </span>
+            </div>
 
         <!-- Real gap: settings and spawn placement used to live scrolled together in one long
              view, matching the race editor's own already-established Settings/Waypoints/Starts
@@ -80,18 +114,19 @@
             <bj-point-list-editor-toolbar events="$ctrl.pointListEvents"></bj-point-list-editor-toolbar>
             <bj-prop-editor-toolbar></bj-prop-editor-toolbar>
         </div>
+        </div>
     </div>
 
-    <div class="section-panel" ng-if="$ctrl.activeSection === 'props'">
+    <div class="section-panel" ng-if="!$ctrl.meta.blank && $ctrl.activeSection === 'props'">
         <!-- the arena's props and the props drawer, shared with the race editor (cmps/propEditor) -->
         <bj-prop-editor></bj-prop-editor>
     </div>
 
-    <div class="section-panel" ng-if="$ctrl.activeSection === 'spawns'">
+    <div class="section-panel" ng-if="!$ctrl.meta.blank && $ctrl.activeSection === 'spawns'">
     <bj-point-list-editor lists="$ctrl.pointLists" events="$ctrl.pointListEvents"></bj-point-list-editor>
     </div>
 
-    <div class="section-panel" ng-if="$ctrl.activeSection === 'settings'">
+    <div class="section-panel" ng-if="!$ctrl.meta.blank && $ctrl.activeSection === 'settings'">
     <bj-accordion id="infected-arena-defaults-round" no-border-bottom="true">
     <accordion-title>
         <h5>{{'beamjoy.window.config.tabs.infectedArena.sections.round' | translate}}</h5>

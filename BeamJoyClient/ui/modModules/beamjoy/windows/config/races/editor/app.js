@@ -870,28 +870,51 @@ angular.module("beamjoy").component("bjConfigRacesEditor", {
 
         this.save = (event) => {
             event.stopPropagation();
-            const doSave = () => beamjoyStore.send("BJEditorRaceSave");
+            const doSave = (keepTimes) =>
+                beamjoyStore.send("BJEditorRaceSave", [keepTimes === true]);
             if (this.raceId !== "new") {
-                // saving an existing race always wipes its recorded times server-side (see
+                // saving an existing race clears its recorded times server-side (see
                 // services/races.lua's raceSave: gates/layout can change under a saved race, so
-                // old times are never assumed still valid/comparable), per direct request. Only
-                // worth calling out in the confirm text when there's actually something to lose;
-                // leaderboardCount comes from the trimmed race cache (races.lua's onBJRequestCache;
-                // the real per-player leaderboard itself is never synced client-side at all).
+                // old times are never assumed still valid/comparable) unless this save says to
+                // keep them, which is what the second confirming button asks. Only worth asking at
+                // all when
+                // there's actually something to lose; leaderboardCount comes from the trimmed race
+                // cache (races.lua's onBJRequestCache; the real per-player leaderboard itself is
+                // never synced client-side at all), so this is the only thing the editor knows
+                // about them. The answer travels as the second argument of ask's onConfirm.
                 const recordCount = this.race.leaderboardCount || 0;
-                const message =
-                    recordCount > 0
-                        ? translate(
-                              "beamjoy.window.config.tabs.races.confirmOverwriteWithRecords"
-                          )
-                              .replace("{name}", this.race.name)
-                              .replace("{count}", recordCount)
-                        : translate(
-                              "beamjoy.window.config.tabs.races.confirmOverwrite"
-                          ).replace("{name}", this.race.name);
-                beamjoyConfirm.ask(message, doSave);
+                if (recordCount > 0) {
+                    const message = translate(
+                        "beamjoy.window.config.tabs.races.confirmOverwriteWithRecords"
+                    )
+                        .replace("{name}", this.race.name)
+                        .replace("{count}", recordCount);
+                    // two yeses and a no. The ordinary (red) button clears them, which is what
+                    // every save did before this was a choice at all ; the second one keeps them.
+                    // Neither belongs behind Cancel - both go ahead with the save.
+                    beamjoyConfirm.ask(
+                        message,
+                        (_, keptTimes) => doSave(keptTimes),
+                        undefined,
+                        {
+                            confirmLabel:
+                                "beamjoy.window.config.tabs.races.confirmOverwrite.clearTimes",
+                            altConfirm: {
+                                label:
+                                    "beamjoy.window.config.tabs.races.confirmOverwrite.keepTimes",
+                            },
+                        }
+                    );
+                } else {
+                    beamjoyConfirm.ask(
+                        translate(
+                            "beamjoy.window.config.tabs.races.confirmOverwrite"
+                        ).replace("{name}", this.race.name),
+                        () => doSave(false)
+                    );
+                }
             } else {
-                doSave();
+                doSave(false);
             }
         };
         // replaces the old "Duplicate" button: that one auto-appended " (copy)" to the name with

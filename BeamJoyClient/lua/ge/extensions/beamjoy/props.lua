@@ -3305,14 +3305,16 @@ local function sessionProps()
     runner = beamjoy_hunterRunner
     session = runner and (runner.session or runner.spectatingSession)
     if session then
-        local list = beamjoy_hunter and beamjoy_hunter.data and own(beamjoy_hunter.data.props)
+        local arena = beamjoy_hunter and beamjoy_hunter.getArena(session.arenaId)
+        local list = arena and own(arena.props)
         if list then return list, string.format("hunter:%s:%s", session.id, tostring(list)) end
         return nil
     end
     runner = beamjoy_infectedRunner
     session = runner and (runner.session or runner.spectatingSession)
     if session then
-        local list = beamjoy_infected and beamjoy_infected.data and own(beamjoy_infected.data.props)
+        local arena = beamjoy_infected and beamjoy_infected.getArena(session.arenaId)
+        local list = arena and own(arena.props)
         if list then return list, string.format("infected:%s:%s", session.id, tostring(list)) end
         return nil
     end

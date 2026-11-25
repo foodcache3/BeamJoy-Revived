@@ -324,6 +324,10 @@ local function followRun(car, vPos)
                 if k:sub(1, 1) == "r" then lastLy[k] = nil end
             end
             beamjoy_communications.send("raceFreeroamGate", race.id, i)
+            -- Settings > Races, off by default : the same checkpoint sound a grid race's gates
+            -- play, through the same owner (beamjoy_races.playSound). A passive run has no
+            -- countdown of its own to sound, it starts by driving through the start gate
+            beamjoy_races.playSound(sound.SOUNDS.RACE_WAYPOINT)
             pushHud()
             extensions.hook("onBJRaceMarkersRefresh")
             return
@@ -376,6 +380,35 @@ local function onUpdate()
     end
 end
 
+--- A restricted race's vehicle snapshots, resolved while the player is still driving TOWARD its
+--- start gate rather than on the frame that crosses it. carAllowed below runs at exactly the
+--- moment a run would start, and a snapshot the game has to resolve (an older capture, see
+--- vehicles.lua's resolveParts) costs a slot-tree walk the first time. Nothing depends on this
+--- having run : it only pre-fills the cache the comparison reads, so it's purely "don't pay for it
+--- at speed". Only this player's own model can ever be compared, so only those are queued.
+---@param car BJVehicle?
+---@param nearby BJRace[]
+local function warmRestrictions(car, nearby)
+    local model = car and car.jbeam
+    if type(model) ~= "string" then return end
+    for _, race in ipairs(nearby) do
+        local restriction = beamjoy_raceRunner.raceVehicleRestriction(race)
+        if restriction then
+            if restriction.mode == "single" then
+                if restriction.model == model then
+                    beamjoy_vehicles.queueSnapshotResolve(model, restriction.parts, restriction.mainPartName)
+                end
+            elseif restriction.mode == "pool" then
+                for _, v in ipairs(restriction.pool or {}) do
+                    if v.model == model then
+                        beamjoy_vehicles.queueSnapshotResolve(model, v.parts, v.mainPartName)
+                    end
+                end
+            end
+        end
+    end
+end
+
 --- which freeroam races' start gates are near : watched for a start, drawn by the markers
 local lastNearbyKey
 local function onSlowUpdate()
@@ -404,6 +437,7 @@ local function onSlowUpdate()
         for k in pairs(lastLy) do
             if k:sub(1, 1) == "s" then lastLy[k] = nil end
         end
+        warmRestrictions(car, nearby)
         extensions.hook("onBJRaceMarkersRefresh")
     end
 end

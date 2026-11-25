@@ -93,6 +93,9 @@
 ---@field roundDeadlineAt integer? GetCurrentTime() timestamp at which survivors automatically win by
 ---outlasting the clock, set at GAME start ; see the plan's own "BJS-only addition" note on
 ---BJInfectedDefaults.roundDuration for why this exists at all
+---@field arenaId integer which of the map's arenas this round is on (services/infected.lua)
+---@field arenaName string its name when the session was created : what the lobby and the open-
+---lobbies list show, kept here so renaming or deleting the arena can't blank a running round
 ---@field arenaSnapshot BJInfectedArena resolved once at session-build time: editing the live arena
 ---mid-session can't retroactively change what's already running, same "snapshot at start" treatment
 ---hunterGrid.lua's own arenaSnapshot gets
@@ -244,6 +247,8 @@ local function summarize(session)
         maxParticipants = #arena.survivorSpawns +
             math.min(session.settings.initialInfectedCount, #arena.infectedSpawns),
         state = session.state,
+        arenaId = session.arenaId,
+        arenaName = session.arenaName,
     }
 end
 
@@ -577,14 +582,22 @@ local function infectedStart(ctxt, opts)
         return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
             services_lang.get("error.infected.alreadyInSession", ctxt.sender.lang))
     end
-    local arena = services_infected.getArena()
-    if not arena or not arena.enabled then return end
-    if #arena.survivorSpawns < services_infected.MIN_SURVIVOR_SPAWNS or
-        #arena.infectedSpawns < services_infected.MIN_INFECTED_SPAWNS then
-        return
-    end
-
     opts = opts or {}
+    -- the arena the start form picked. An unknown id is refused rather than quietly started
+    -- somewhere else ; only a caller that named no arena at all (a client from before a map could
+    -- hold several) gets the first playable one.
+    local arena
+    if opts.arenaId ~= nil then
+        arena = services_infected.getArena(opts.arenaId)
+    else
+        arena = services_infected.firstPlayable()
+    end
+    if not services_infected.isPlayable(arena) then
+        return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
+            services_lang.get("error.infected.arenaUnavailable", ctxt.sender.lang))
+    end
+    ---@cast arena BJInfectedArena
+
     ---@type BJInfectedSession
     local session = {
         id = UUID(),
@@ -597,6 +610,8 @@ local function infectedStart(ctxt, opts)
         createdAt = ctxt.time,
         participants = Table(),
         forcedInfectedIds = Table(),
+        arenaId = arena.id,
+        arenaName = arena.name,
         arenaSnapshot = services_props.withoutProps(arena),
         -- never trusted from the normal client UI's own opts (a modified client could otherwise
         -- self-grant this): only ever true via the staff-gated "/infected debug start" command
@@ -630,11 +645,7 @@ local function infectedJoin(ctxt, sessionId)
     -- UI now hides the "Open Lobbies" list in that case (see infected/app.html), but a modified
     -- client could still send this event directly, so the same gate infectedStart already applies
     -- to creating a session belongs here too, for anyone trying to join one that already exists.
-    local arena = services_infected.getArena()
-    if not arena or not arena.enabled or #arena.survivorSpawns < services_infected.MIN_SURVIVOR_SPAWNS or
-        #arena.infectedSpawns < services_infected.MIN_INFECTED_SPAWNS then
-        return
-    end
+    if not services_infected.isPlayable(services_infected.getArena(session.arenaId)) then return end
     if session.participants[ctxt.senderID] then return end
     if findSessionByParticipant(ctxt.senderID) then
         return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",

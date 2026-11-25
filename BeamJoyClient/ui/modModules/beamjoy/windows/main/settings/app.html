@@ -191,6 +191,27 @@
             <span>
                 <icon name="waypoint" class="light"></icon>
             </span>
+            <h3>{{ "beamjoy.window.main.tabs.settings.sections.races.title" | translate }}</h3>
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <span title="{{ 'beamjoy.window.main.tabs.settings.sections.races.sounds.tooltip' | translate }}">
+                {{ "beamjoy.window.main.tabs.settings.sections.races.sounds" | translate }}
+            </span>
+        </td>
+        <td>
+            <div class="d-flex align-center w-fitcontent">
+                <bj-toggle ng-model="$ctrl.settings.races.sounds"></bj-toggle>
+            </div>
+        </td>
+    </tr>
+
+    <tr>
+        <td colspan="3" class="settings-category d-flex align-center gap-2">
+            <span>
+                <icon name="waypoint" class="light"></icon>
+            </span>
             <h3>{{ "beamjoy.window.main.tabs.settings.sections.passiveRaces.title" | translate }}</h3>
         </td>
     </tr>

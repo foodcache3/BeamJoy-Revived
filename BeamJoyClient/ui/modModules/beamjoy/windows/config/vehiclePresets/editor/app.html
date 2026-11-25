@@ -96,13 +96,29 @@
             <span class="small opacity-70" ng-if="$ctrl.renamesElsewhere(entry)">
                 {{'beamjoy.window.config.tabs.vehiclePresets.renamesElsewhere' | translate}}
             </span>
-            <button
-                class="btn info w-fitcontent small"
-                ng-click="$ctrl.retakePhoto($event, entry, $index)"
-                title="{{'beamjoy.window.config.tabs.vehiclePresets.retakePhoto.tooltip' | translate}}"
-            >
-                {{'beamjoy.window.config.tabs.vehiclePresets.retakePhoto' | translate}}
-            </button>
+            <div class="d-flex align-center gap-1">
+                <button
+                    class="btn w-fitcontent small"
+                    ng-click="$ctrl.spawnEntry($event, entry)"
+                    title="{{'beamjoy.window.config.tabs.vehiclePresets.spawn.tooltip' | translate}}"
+                >
+                    {{'beamjoy.window.config.tabs.vehiclePresets.spawn' | translate}}
+                </button>
+                <button
+                    class="btn info w-fitcontent small"
+                    ng-click="$ctrl.retakePhoto($event, entry, $index)"
+                    title="{{'beamjoy.window.config.tabs.vehiclePresets.retakePhoto.tooltip' | translate}}"
+                >
+                    {{'beamjoy.window.config.tabs.vehiclePresets.retakePhoto' | translate}}
+                </button>
+                <button
+                    class="btn info w-fitcontent small"
+                    ng-click="$ctrl.recaptureBuild($event, entry, $index)"
+                    title="{{'beamjoy.window.config.tabs.vehiclePresets.recaptureBuild.tooltip' | translate}}"
+                >
+                    {{'beamjoy.window.config.tabs.vehiclePresets.recaptureBuild' | translate}}
+                </button>
+            </div>
         </div>
         <button
             class="btn danger"

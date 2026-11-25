@@ -149,7 +149,7 @@ read from BeamJoy's saved files.
 
 Methods that change something (`race.*`, `phase.*`, `formats.*`, `environment.set`, `overlay.*`,
 `hud.message`, `hooks.*`, `raceOptions.*`, `tyres.*`, `pit.*`, `results.setFields`, `leaderboard.setFields`,
-`config.*`, `pages.*`, `whitelist.*` but `whitelist.get`) need your plugin's name in the request's `from`. The helper always sends
+`config.*`, `pages.*`, `players.ghost`, `whitelist.*` but `whitelist.get`) need your plugin's name in the request's `from`. The helper always sends
 it.
 
 ### `server.info`
@@ -388,6 +388,30 @@ away. See [Pages](#pages). → `{id}` (`pages.unregister` without `id`: `{remove
 - `name` is the BeamMP name.
 - `nickname` is the BeamJoy nickname, if the player picked one. Only guests can: a player
   logged in to a BeamMP account keeps their account name.
+
+### `players.distance` `{playerId, otherId}` or `{players}`
+→ `{playerId, otherId, distance}`, or `{pairs: [{a, b, distance}]}` for a list
+
+How far apart players are, in metres, as the **server** sees it : from BeamMP's own copy of each
+vehicle's position, never from anything a client said. The shortest distance between any car of one
+player and any car of the other, the same measurement BeamJoy's own proximity checks use.
+
+- `players` is a list of player IDs (at most 32) and answers every pair of them in one call, which
+  is cheaper than one call per pair. Duplicates are ignored ; two different IDs at least.
+- `distance` is **absent, not zero**, when it isn't known : the server can't read positions at all,
+  or hasn't seen a car of that player yet. Skip the check then rather than read it as "touching".
+- An unknown player ID is a `badParams` error, so a typo doesn't look like "very far away".
+
+### `players.ghost` `{playerId, state, vid?}`
+→ `{playerId, state, vehicles}`
+
+Ghosts a player's car : no collisions, and see-through for everyone. `state` is required
+(`true`/`false`), `vid` picks one of their cars and defaults to all of them ; `vehicles` is how
+many it applied to. The same thing staff do from the player list's vehicle row.
+
+It stacks with whatever else is ghosting that car rather than replacing it, so `state = false`
+never un-ghosts a racer the countdown, a pit lane or a safe zone is ghosting anyway. It survives a
+reset, a respawn and a rejoin, so a plugin that turns it on is the one that has to turn it off.
 
 ### `whitelist.get`
 → `{enabled, playerNames[]}`

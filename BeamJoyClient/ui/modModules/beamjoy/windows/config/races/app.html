@@ -12,6 +12,26 @@
     bj-config-races .opacity-70 {
         opacity: 0.7;
     }
+    bj-config-races .race-tools {
+        display: flex;
+        align-items: center;
+        gap: 0.3em;
+        min-width: 0;
+    }
+    bj-config-races .race-tools input {
+        min-width: 0;
+        width: 10em;
+        padding: 0.15em 0.4em;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-radius: 0.2em;
+    }
+    bj-config-races .race-tools .sort-label {
+        font-size: 0.85em;
+        opacity: 0.7;
+        white-space: nowrap;
+    }
 </style>
 
 <div ng-if="$ctrl.editingId === null">
@@ -32,11 +52,45 @@
             <icon name="import"></icon>
             {{'beamjoy.mapRaces.button' | translate}}
         </button>
+
+        <div class="flex-grow-1"></div>
+
+        <div class="race-tools">
+            <input
+                type="text"
+                ng-if="$ctrl.searchOpen"
+                ng-model="$ctrl.search"
+                ng-change="$ctrl.refreshList()"
+                maxlength="32"
+                placeholder="{{'beamjoy.window.config.tabs.races.search.placeholder' | translate}}"
+            />
+            <button
+                class="btn"
+                ng-class="{primary: $ctrl.searchOpen}"
+                ng-click="$ctrl.toggleSearch($event)"
+                title="{{'beamjoy.window.config.tabs.races.search.tooltip' | translate}}"
+            >
+                <icon name="search"></icon>
+            </button>
+            <bj-select
+                ng-model="$ctrl.filter"
+                options="$ctrl.FILTERS"
+                ng-change="$ctrl.refreshList()"
+            ></bj-select>
+            <button
+                class="btn"
+                ng-click="$ctrl.cycleSort($event)"
+                title="{{'beamjoy.window.config.tabs.races.sort.tooltip' | translate}}"
+            >
+                <icon name="sort"></icon>
+            </button>
+            <span class="sort-label">{{$ctrl.sortLabel()}}</span>
+        </div>
     </div>
 
     <div
         class="race-row d-flex p-1 px-2 gap-1 cursor-pointer align-center"
-        ng-repeat="race in $ctrl.races track by race.id"
+        ng-repeat="race in $ctrl.shown track by race.id"
         ng-click="$ctrl.openEditor(race.id)"
     >
         <span class="flex-grow-1">
@@ -66,8 +120,10 @@
         </button>
     </div>
 
-    <div ng-if="$ctrl.races.length === 0" class="p-2 opacity-70">
-        {{'beamjoy.window.config.tabs.races.empty' | translate}}
+    <div ng-if="$ctrl.shown.length === 0" class="p-2 opacity-70">
+        {{(($ctrl.races.length > 0 && $ctrl.narrowed())
+            ? 'beamjoy.common.noMatches'
+            : 'beamjoy.window.config.tabs.races.empty') | translate}}
     </div>
 </div>
 

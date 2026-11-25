@@ -16,6 +16,10 @@ local M = {
     ---@type table<string, BJRace>
     raceByMarkerId = {},
 
+    --- Settings > Races : the game's own checkpoint and countdown sounds, off by default. Read
+    --- from localStorage at onInit, see playSound below
+    soundsEnabled = false,
+
     --- quick console-driven race builder, ahead of the real in-world editor. Call these from
     --- BeamNG's Lua console while positioned/facing where you want each gate/start, e.g.
     --- `beamjoy_races.testAddGate()`, then `beamjoy_races.testAddStart()`, then
@@ -94,7 +98,39 @@ local function onPropsReceived(raceId, rev, list)
     extensions.hook("onBJRacePropsLoaded", raceId)
 end
 
+
+--- SOUNDS, the game's own, off by default (Settings > Races). Owned here rather than in either
+--- race module because both want them : raceRunner for the grid countdown and your own gate
+--- crossings, raceFreeroam for a passive run's checkpoints. extensions/sound.lua has named these
+--- three events since long before anything played the first two.
+---
+--- Every call goes through here, so the setting is checked in exactly one place and a sound can
+--- never outlive it being turned off.
+---@param key string one of sound.SOUNDS
+---@param pos vec3? where it comes from, if it should come from somewhere
+local function playSound(key, pos)
+    if not M.soundsEnabled then return end
+    sound.play(key, pos)
+end
+
+local function sendSettingsToUI()
+    beamjoy_communications_ui.send("BJUserSettings", {
+        races = { sounds = M.soundsEnabled },
+    })
+end
+
 local function onInit()
+    M.soundsEnabled = localStorage.get(localStorage.GLOBAL_VALUES.RACE_SOUNDS) == true
+    beamjoy_communications_ui.addHandler("BJRequestVehicleSettings", sendSettingsToUI)
+    beamjoy_communications_ui.addHandler("BJUserSettings", function(newSettings)
+        local r = type(newSettings) == "table" and newSettings.races
+        if type(r) ~= "table" or type(r.sounds) ~= "boolean" or r.sounds == M.soundsEnabled then
+            return
+        end
+        M.soundsEnabled = r.sounds
+        localStorage.set(localStorage.GLOBAL_VALUES.RACE_SOUNDS, M.soundsEnabled)
+    end)
+
     beamjoy_communications.addHandler("sendCache", M.retrieveCache)
     beamjoy_communications.addHandler("raceProps", onPropsReceived)
     beamjoy_communications_ui.addHandler("BJEditorRaceListRequest", M.pushListToUI)
@@ -240,6 +276,14 @@ local function pushListToUI()
             -- the race list shows how many props a race has (direct request) : every prop a line
             -- or a prefab stands for, as the editor's prop limit counts them
             props = tonumber(r.propTotal) or (beamjoy_props and beamjoy_props.total(r.props)) or 0,
+            -- the browse list's filters (direct request) : also run from freeroam, and whether
+            -- anyone has set a time on it. This summary's field list is explicit on purpose - a
+            -- filter the list can't see is a filter that silently matches nothing - so anything
+            -- new the list wants to sort or filter by has to be added here first. `leaderboard`
+            -- itself is never synced to a client at all, only this count (services/races.lua's
+            -- onBJRequestCache), which is the same number the editor warns a save with
+            freeroam = r.freeroam == true,
+            leaderboardCount = tonumber(r.leaderboardCount) or 0,
             defaults = r.defaults,
         }
     end):values())
@@ -528,6 +572,7 @@ M.onActivityAcceptGatherData = onActivityAcceptGatherData
 M.onSlowUpdate = onSlowUpdate
 M.openStart = openStart
 M.pushListToUI = pushListToUI
+M.playSound = playSound
 M.save = save
 M.delete = delete
 M.findByName = findByName

@@ -21,9 +21,28 @@ local function capReached(adds)
     local group = beamjoy_groups and Table(beamjoy_groups.data):find(function(g) return g.name == self.group end)
     local cap = group and tonumber(group.vehicleCap)
     if not cap or cap < 0 then return false end
+    -- Real, reported bug: a vehicle the server still lists but this client has already destroyed
+    -- doesn't count. self.vehicles is the SERVER's copy of the player's vehicles, which only
+    -- catches up a full round trip after a delete, and every one of the mod's own vehicle handouts
+    -- (a race/derby/hunter/infected vehicle preset, a delivery job's car) deletes the player's car
+    -- and spawns its replacement in the SAME tick, through this very wrapper. So the count still
+    -- included the car that had just gone: anyone already at their cap had the handout refused
+    -- outright and was left with no car at all, in free cam, every single time. Reported from an
+    -- Infected round on a vehicle preset, where a player on the default group (cap 1) got nothing
+    -- while a capless admin in the same round got their random car.
+    --
+    -- Skipping those entries matches what the server itself is about to do : BeamMP sends the
+    -- delete ('Od', sent synchronously as the object is destroyed) before the new vehicle's spawn
+    -- ('Os', only sent once the object exists a frame or more later) down the same ordered
+    -- connection, so by the time the handout's spawn reaches services/vehicles.lua's own addVehicle
+    -- the slot it frees really is free. The server's count is otherwise still what's trusted, so a
+    -- vehicle it knows about and this client still has is counted as before.
     local count = 0
     for _, v in pairs(self.vehicles or {}) do
-        if type(v) == "table" and not v.isAi then count = count + 1 end
+        if type(v) == "table" and not v.isAi and beamjoy_vehicles.vehicles:find(
+                function(mpVeh) return mpVeh.remoteVID == v.vid end) then
+            count = count + 1
+        end
     end
     if count < cap then return false end
     toast.error(beamjoy_lang.translate("beamjoy.toast.vehicleSelector.capReached"):gsub("{cap}", tostring(cap)), nil, 6)

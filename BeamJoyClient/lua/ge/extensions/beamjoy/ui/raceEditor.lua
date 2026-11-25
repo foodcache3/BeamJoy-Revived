@@ -1776,11 +1776,15 @@ local function propsStillLoading()
     return true
 end
 
-local function onSave()
+--- @param keepTimes boolean? keep the times this race already has instead of clearing them.
+--- The editor's own confirm dialog asks (windows/config/races/editor/app.js), and only when there
+--- is something to lose ; the server does the keeping, from the race it already holds, and never
+--- trusts a leaderboard arriving in a save (services/races.lua's raceSave)
+local function onSave(keepTimes)
     if not M.race or propsStillLoading() then return end
     local race = table.clone(M.race)
     race.id = M.id
-    beamjoy_communications.send("raceSave", race)
+    beamjoy_communications.send("raceSave", race, keepTimes == true)
     -- List refresh is automatic. A successful save triggers a `sendCache` push to every connected
     -- player (including the sender), which `beamjoy_races.retrieveCache` turns back into a
     -- `BJEditorRaceList` broadcast on its own. No explicit re-request needed here.

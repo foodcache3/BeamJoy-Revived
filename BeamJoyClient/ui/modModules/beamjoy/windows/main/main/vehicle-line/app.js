@@ -25,6 +25,11 @@ angular.module("beamjoy").component("bjVehicleLine", {
                 this.actions.delete = true;
                 this.actions.explode = true;
                 this.actions.launch = true;
+                // ghost : no collisions and see-through, until it's turned off again. The server
+                // records it (services/players.lua's toggleGhost) and the car's OWNER applies it,
+                // so `vehicle.staffGhost` is what says which way the button reads - it reaches
+                // staff and the owner only, which is exactly who can see this row
+                this.actions.ghost = true;
             }
         };
         updateActions();

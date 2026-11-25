@@ -336,6 +336,10 @@ local function onVehicleAction(playerName, rvid, action)
         else
             beamjoy_communications.send("deleteVehicle", playerName, rvid)
         end
+    elseif action == "ghost" then
+        -- the server records it and the OWNER's client applies it (see retrieveCache above), so
+        -- unlike explode / launch this one isn't broadcast to everybody from the server
+        beamjoy_communications.send("toggleGhost", playerName, rvid)
     elseif action == "explode" then
         beamjoy_communications.send("explodeVehicle", rvid)
     elseif action == "launch" then
@@ -514,6 +518,22 @@ local function retrieveCache(caches)
                     beamjoy_vehicles.setEngine(v.vid, not v.shut)
                 end)
             end
+
+            -- a staff ghost (services/players.lua's toggleGhost, or the API's players.ghost) :
+            -- recorded on the server, applied here, because a ghost belongs to the client that
+            -- OWNS the car - setGhostReason is local, and the server only ever accepts a ghost
+            -- report about the sender's own vehicle. Its own reason, so it adds to whatever a race
+            -- or a zone is already ghosting this car for instead of fighting it, and every cache
+            -- push reasserts it, which is what carries it through a reset, a respawn and a rejoin.
+            -- Only when it actually differs from what's held : this runs on every player-cache
+            -- push, and setGhost has real work (and an async bystander retry) behind it
+            self.vehicles:forEach(function(v)
+                local want = v.staffGhost == true or nil
+                local reasons = beamjoy_vehicles.ghostReasons[v.vid]
+                if (reasons and reasons.staff or nil) ~= want then
+                    beamjoy_vehicles.setGhostReason(v.vid, "staff", want == true)
+                end
+            end)
         end
 
         beamjoy_communications_ui.send("BJUpdatePlayers", M.players:values())

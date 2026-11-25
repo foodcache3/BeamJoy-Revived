@@ -66,6 +66,9 @@
         </div>
     </header>
 
+    <div class="chips" ng-if="$ctrl.status.arenaName">
+        <span class="bjr-chip">{{$ctrl.status.arenaName}}</span>
+    </div>
     <div class="chips" ng-if="$ctrl.status.role || $ctrl.status.state === 'LOBBY'">
         <span class="bjr-chip" ng-if="$ctrl.status.role">{{'beamjoy.window.main.tabs.hunter.yourRole' | translate}} {{('beamjoy.window.hunterHud.role.' + $ctrl.status.role) | translate}}</span>
         <span class="bjr-chip" ng-if="!$ctrl.status.role && $ctrl.status.state === 'LOBBY'">{{'beamjoy.window.main.tabs.hunter.roleUndecided' | translate}}</span>
@@ -157,13 +160,13 @@
         </button>
     </div>
 
-    <div ng-if="!$ctrl.arena.enabled" class="opacity-70 small mb-2">
+    <div ng-if="!$ctrl.playable.length" class="opacity-70 small mb-2">
         {{'beamjoy.window.main.tabs.hunter.notAvailable' | translate}}
     </div>
 
     <button
         class="btn success"
-        ng-if="$ctrl.arena.enabled && !$ctrl.starting"
+        ng-if="$ctrl.playable.length && !$ctrl.starting"
         ng-click="$ctrl.openStart($event)"
     >
         {{'beamjoy.window.main.tabs.hunter.start' | translate}}
@@ -172,6 +175,14 @@
     <div class="start-options" ng-if="$ctrl.starting">
         <!-- stacked like the Races start form : label above control, so it fits the side panel -->
         <div class="hunt-form">
+            <!-- which arena : a picker only when the map has more than one to choose from, so a map
+                 with a single arena looks exactly as it always did. Each arena carries its own
+                 defaults, so picking another re-seeds every field below. -->
+            <div class="bjr-field" ng-if="$ctrl.playable.length > 1">
+                <span class="name">{{'beamjoy.window.main.tabs.hunter.arena' | translate}}</span>
+                <bj-select ng-model="$ctrl.startOptions.arenaId" options="$ctrl.arenaOptions"
+                    ng-change="$ctrl.pickArena(value)"></bj-select>
+            </div>
             <div class="bjr-field">
                 <span class="name" title="{{'beamjoy.window.config.tabs.hunterArena.winCondition.tooltip' | translate}}">{{'beamjoy.window.config.tabs.hunterArena.winCondition' | translate}}</span>
                 <div class="bjr-seg">
@@ -216,9 +227,9 @@
                     <button type="button" ng-repeat="strategy in ['free', 'nearestSpawn', 'hubs']"
                         ng-class="{on: $ctrl.startOptions.hunterRespawnStrategy === strategy}"
                         aria-pressed="{{$ctrl.startOptions.hunterRespawnStrategy === strategy}}"
-                        ng-disabled="strategy === 'hubs' && $ctrl.arena.respawnHubCount === 0"
+                        ng-disabled="strategy === 'hubs' && $ctrl.respawnHubCount() === 0"
                         ng-click="$ctrl.startOptions.hunterRespawnStrategy = strategy"
-                        title="{{strategy === 'hubs' && $ctrl.arena.respawnHubCount === 0 ? ('beamjoy.window.config.tabs.hunterArena.hunterRespawnStrategy.noHubs' | translate) : ''}}">
+                        title="{{strategy === 'hubs' && $ctrl.respawnHubCount() === 0 ? ('beamjoy.window.config.tabs.hunterArena.hunterRespawnStrategy.noHubs' | translate) : ''}}">
                         {{('beamjoy.window.config.tabs.hunterArena.hunterRespawnStrategy.options.' + strategy) | translate}}
                     </button>
                 </div>
@@ -248,15 +259,18 @@
 </div>
 
 <!-- Real bug (same fix as infected/app.html): this used to show/allow joining any already-open
-     lobby regardless of $ctrl.arena.enabled, so a lobby created while the arena was valid stayed
-     fully joinable even after the arena got disabled (or its spawns dropped below minimum) out
-     from under it. Gating this on arena.enabled too keeps the tab honest: disabled means disabled,
-     not "disabled, but you can still join a game". -->
-<div ng-if="!$ctrl.status && $ctrl.arena.enabled && $ctrl.sessions.length > 0" class="mt-2">
+     lobby regardless of whether its arena was still playable, so a lobby created while the arena
+     was valid stayed fully joinable even after the arena got disabled (or its spawns dropped below
+     minimum) out from under it. $ctrl.openSessions is the same list with exactly those dropped,
+     per session, now that a map can hold several arenas ; the server re-checks the session's own
+     arena on join too (hunterGrid.lua's hunterJoin), since a modified client could send the event
+     directly. -->
+<div ng-if="!$ctrl.status && $ctrl.openSessions.length > 0" class="mt-2">
     <h5>{{'beamjoy.window.main.tabs.hunter.openLobbies' | translate}}</h5>
-    <div class="session-row d-flex align-center gap-1 p-1" ng-repeat="session in $ctrl.sessions">
+    <div class="session-row d-flex align-center gap-1 p-1" ng-repeat="session in $ctrl.openSessions">
         <span class="flex-grow-1">
             {{session.starterName}} ({{session.participantCount}}/{{session.maxParticipants}})
+            <span class="bjr-muted" ng-if="session.arenaName">&middot; {{session.arenaName}}</span>
         </span>
         <button
             class="btn success"

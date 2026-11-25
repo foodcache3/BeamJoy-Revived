@@ -37,7 +37,9 @@
         left: 0;
         right: 0;
 
-        background-color: rgba(0, 0, 0, 0.2);
+        /* the window's own --bj-window-bg, set by the opacity button in the header (cmps/window's
+           app.js) ; the fallback is what this was before it could be changed at all */
+        background-color: var(--bj-window-bg, rgba(0, 0, 0, 0.2));
         border-radius: 0.2em 0 0 0;
 
         transition: top 0.2s ease-in-out;
@@ -162,7 +164,20 @@
     }
     .window-content-wrapper .window-accordion.bg {
         border-radius: 0 0 0.2em 0.2em;
-        background-color: rgba(0, 0, 0, 0.2);
+        background-color: var(--bj-window-bg, rgba(0, 0, 0, 0.2));
+    }
+    /* the only header button that isn't a square icon : it shows a number, and "100" needs
+       more room across than 1.6em of square does */
+    .window-header .window-header-buttons .btn.opacity-btn {
+        aspect-ratio: auto;
+        min-width: 1.6em;
+        padding: 0 0.25em;
+    }
+    .window-header .window-header-buttons .opacity-icon {
+        font-size: 0.75em;
+        font-weight: bolder;
+        line-height: 1;
+        letter-spacing: -0.03em;
     }
     .window-wrapper.minimized .window-content-wrapper .window-accordion {
         bottom: 100%;
@@ -210,6 +225,16 @@
         <div class="window-header-buttons-stripe" style="width: 2px"></div>
         <div class="window-header-buttons-stripe" style="width: 4px"></div>
         <div class="window-header-buttons">
+            <!-- only where there's a background to make more or less solid ; the title bar's own
+                 strip stays as it is either way -->
+            <button
+                class="btn opacity-btn"
+                ng-hide="!$ctrl.background"
+                ng-click="$ctrl.cycleOpacity($event)"
+                title="{{'beamjoy.cmps.window.opacity.tooltip' | translate}}"
+            >
+                <div class="opacity-icon">{{$ctrl.opacityPercent()}}</div>
+            </button>
             <button
                 class="btn"
                 ng-hide="!$ctrl.minimizable"

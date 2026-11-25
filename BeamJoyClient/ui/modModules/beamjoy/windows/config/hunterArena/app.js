@@ -7,9 +7,36 @@ angular.module("beamjoy").component("bjConfigHunterArena", {
         $filter,
         beamjoyStore,
         beamjoyNavGuard,
+        beamjoyConfirm,
         beamjoyPropEditor
     ) {
         const translate = $filter("translate");
+
+        // ARENA LIST ----------------------------------------------------------------------------
+        // the map's hunter arenas, one edited at a time. Picking another, making a new one or
+        // deleting one all go through the shared unsaved-changes guard, the same confirmation as
+        // switching config tabs (windows/config/derbyArena/app.js is the same list).
+        this.meta = { arenas: [], blank: true };
+        this.pickedId = null;
+        this.arenaOptions = [];
+        this.name = "";
+        this.pickArena = (value) => {
+            const target = value;
+            // the picker shows the arena being edited until the switch really happens
+            this.pickedId = this.meta.arenaId ?? null;
+            if (target === this.meta.arenaId) return;
+            beamjoyNavGuard.check(() => beamjoyStore.send("BJEditorHunterArenaPick", [target]));
+        };
+        this.newArena = (event) => {
+            event.stopPropagation();
+            beamjoyNavGuard.check(() => beamjoyStore.send("BJEditorHunterArenaNew"));
+        };
+        this.deleteArena = (event) => {
+            event.stopPropagation();
+            const message = translate("beamjoy.window.config.tabs.hunterArena.confirmDelete")
+                .replace("{name}", this.name || "?");
+            beamjoyConfirm.ask(message, () => beamjoyStore.send("BJEditorHunterArenaRemove"));
+        };
 
         // Real gap: settings, spawn placement, and waypoints used to live scrolled together in
         // one long view. Split into tabs, mirroring the race editor's own already-established
@@ -87,13 +114,24 @@ angular.module("beamjoy").component("bjConfigHunterArena", {
             beamjoyStore.send("BJEditorHunterArenaClose");
         });
 
-        // enabled + gameplay defaults: genuinely Hunter-specific, not part of the shared point-
-        // list editor at all (see ui/hunterEditor.lua's own pushMeta)
+        // name + enabled + gameplay defaults: genuinely Hunter-specific, not part of the shared
+        // point-list editor at all (see ui/hunterEditor.lua's own pushMeta)
         this.enabled = false;
         this.defaults = {};
-        let previousEnabled = null;
+        let previousMeta = null;
         let previousDefaults = null;
         $rootScope.$on("BJEditorHunterArenaMetaUpdate", (_, meta) => {
+            meta = meta || {};
+            meta.arenas = Array.isArray(meta.arenas) ? meta.arenas : [];
+            this.meta = meta;
+            this.pickedId = meta.arenaId ?? null;
+            this.arenaOptions = meta.arenas.map((a) => ({
+                value: a.id,
+                label: a.enabled
+                    ? a.name
+                    : `${a.name} (${translate("beamjoy.window.config.tabs.hunterArena.disabled")})`,
+            }));
+            this.name = meta.name || "";
             this.enabled = meta.enabled === true;
             this.defaults = meta.defaults || {};
             // an arena saved before the per-role station settings existed has neither field, which
@@ -102,7 +140,7 @@ angular.module("beamjoy").component("bjConfigHunterArena", {
             // previousDefaults is snapshotted, so this never marks the editor dirty on its own.
             if (!this.defaults.stationRefuelRoles) this.defaults.stationRefuelRoles = "both";
             if (!this.defaults.stationRepairRoles) this.defaults.stationRepairRoles = "both";
-            previousEnabled = this.enabled;
+            previousMeta = { name: this.name, enabled: this.enabled };
             previousDefaults = angular.copy(this.defaults);
         });
 
@@ -121,23 +159,19 @@ angular.module("beamjoy").component("bjConfigHunterArena", {
         // diff per-key here; collapses a burst of rapid slider drags into one send, same 150ms
         // window the race editor established for the same reason
         const DEBOUNCE_MS = 150;
-        let enabledTimeout = null;
+        let metaTimeout = null;
         let defaultsTimeout = null;
-        $scope.$watch(
-            () => this.enabled,
-            (val) => {
-                if (previousEnabled === null) {
-                    previousEnabled = val;
-                    return;
-                }
-                if (val === previousEnabled) return;
-                previousEnabled = val;
-                if (enabledTimeout) $timeout.cancel(enabledTimeout);
-                enabledTimeout = $timeout(() => {
-                    beamjoyStore.send("BJEditorHunterArenaSetEnabled", [val]);
-                }, DEBOUNCE_MS);
-            }
-        );
+        $scope.$watchGroup([() => this.name, () => this.enabled], () => {
+            if (!previousMeta) return;
+            if (this.name === previousMeta.name && this.enabled === previousMeta.enabled) return;
+            previousMeta = { name: this.name, enabled: this.enabled };
+            if (metaTimeout) $timeout.cancel(metaTimeout);
+            metaTimeout = $timeout(() => {
+                beamjoyStore.send("BJEditorHunterArenaSetMeta", [
+                    { name: this.name, enabled: this.enabled },
+                ]);
+            }, DEBOUNCE_MS);
+        });
         $scope.$watch(
             () => this.defaults,
             (val) => {
@@ -155,7 +189,7 @@ angular.module("beamjoy").component("bjConfigHunterArena", {
             true
         );
         $scope.$on("$destroy", () => {
-            if (enabledTimeout) $timeout.cancel(enabledTimeout);
+            if (metaTimeout) $timeout.cancel(metaTimeout);
             if (defaultsTimeout) $timeout.cancel(defaultsTimeout);
         });
 

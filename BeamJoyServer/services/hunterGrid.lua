@@ -102,6 +102,9 @@
 ---@field rolesLocked boolean once true, beginCountdown's automatic random draw no longer runs: set
 ---by a staff force-reassign (hunterForceFugitive) so an explicit LOBBY-time override can't get
 ---silently clobbered by the normal random pick moments later
+---@field arenaId integer which of the map's arenas this hunt is on (services/hunter.lua)
+---@field arenaName string its name when the session was created : what the lobby and the open-
+---lobbies list show, kept here so renaming or deleting the arena can't blank a running hunt
 ---@field arenaSnapshot BJHunterArena resolved once at session-build time: editing the live arena
 ---mid-session can't retroactively change what's already running, same "snapshot at start" treatment
 ---races' own vehicle-pool resolution gets
@@ -282,6 +285,8 @@ local function summarize(session)
         participantCount = session.participants:length(),
         maxParticipants = 1 + #session.arenaSnapshot.hunterSpawns,
         state = session.state,
+        arenaId = session.arenaId,
+        arenaName = session.arenaName,
     }
 end
 
@@ -727,15 +732,22 @@ local function hunterStart(ctxt, opts)
         return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
             services_lang.get("error.hunter.alreadyInSession", ctxt.sender.lang))
     end
-    local arena = services_hunter.getArena()
-    if not arena or not arena.enabled then return end
-    if #arena.hunterSpawns < services_hunter.MIN_HUNTER_SPAWNS or
-        #arena.preySpawns < services_hunter.MIN_PREY_SPAWNS or
-        #arena.waypoints < services_hunter.MIN_WAYPOINTS then
-        return
-    end
-
     opts = opts or {}
+    -- the arena the start form picked. An unknown id is refused rather than quietly started
+    -- somewhere else ; only a caller that named no arena at all (the debug chat command, or a
+    -- client from before a map could hold several) gets the first playable one.
+    local arena
+    if opts.arenaId ~= nil then
+        arena = services_hunter.getArena(opts.arenaId)
+    else
+        arena = services_hunter.firstPlayable()
+    end
+    if not services_hunter.isPlayable(arena) then
+        return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
+            services_lang.get("error.hunter.arenaUnavailable", ctxt.sender.lang))
+    end
+    ---@cast arena BJHunterArena
+
     local settings = buildSettings(arena, opts)
     ---@type BJHunterSession
     local session = {
@@ -752,6 +764,8 @@ local function hunterStart(ctxt, opts)
         participants = Table(),
         joinOrder = {},
         rolesLocked = false,
+        arenaId = arena.id,
+        arenaName = arena.name,
         arenaSnapshot = services_props.withoutProps(arena),
         -- never trusted from the normal client UI's own opts (a modified client could otherwise
         -- self-grant this): only ever true via the staff-gated "/hunter debug start" command,
@@ -788,13 +802,7 @@ local function hunterJoin(ctxt, sessionId)
     -- case (see hunter/app.html), but a modified client could still send this event directly, so
     -- the same gate hunterStart already applies to creating a session belongs here too, for anyone
     -- trying to join one that already exists.
-    local arena = services_hunter.getArena()
-    if not arena or not arena.enabled then return end
-    if #arena.hunterSpawns < services_hunter.MIN_HUNTER_SPAWNS or
-        #arena.preySpawns < services_hunter.MIN_PREY_SPAWNS or
-        #arena.waypoints < services_hunter.MIN_WAYPOINTS then
-        return
-    end
+    if not services_hunter.isPlayable(services_hunter.getArena(session.arenaId)) then return end
     if session.participants[ctxt.senderID] then return end
     if findSessionByParticipant(ctxt.senderID) then
         return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",

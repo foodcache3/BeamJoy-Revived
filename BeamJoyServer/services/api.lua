@@ -15,7 +15,7 @@
 local M = {
     dependencies = { "services_core", "services_maps", "services_races", "services_players",
         "services_identity", "services_permissions", "services_environment", "services_clockSync", "services_racePhases",
-        "dao_activity", "communications_tx" },
+        "services_vehicles", "dao_activity", "communications_tx" },
 
     API_VERSION = 1,
     --- this server run's own id : a plugin seeing another knows BeamJoy started again
@@ -968,6 +968,93 @@ M.methods["players.online"] = function()
     services_players.players:forEach(function(p) players[#players + 1] = playerOut(p) end)
     table.sort(players, function(a, b) return a.id < b.id end)
     return { players = players }
+end
+
+-- how many players one players.distance call may ask about : every pair of them is answered, so
+-- the work is the square of this
+local DISTANCE_PLAYERS_MAX = 32
+
+---@param id any
+---@return table? player, string? error
+local function playerParam(id)
+    local num = tonumber(id)
+    if not num then return nil, "playerId must be a player ID" end
+    local player = services_players.players:find(function(p) return p.playerID == math.floor(num) end)
+    if not player then return nil, "no player " .. tostring(math.floor(num)) end
+    return player
+end
+
+--- how far apart players are, as the SERVER sees it : from BeamMP's own copy of each vehicle's
+--- position, never from anything a client claims, which is the whole point of asking here rather
+--- than having a plugin work it out from positions it was told. The shortest distance between any
+--- car of one player and any car of the other, in metres, exactly as every activity's own
+--- proximity check measures it (services/vehicles.lua's distanceBetweenPlayers).
+---
+--- `distance` is absent, not zero, when it isn't known : this server can't read positions at all
+--- (no MP.GetPositionRaw), or it hasn't seen a car of theirs yet. A plugin should skip its check
+--- then, the way BeamJoy's own checks do, rather than treat it as "right on top of each other".
+M.methods["players.distance"] = function(params)
+    if params.players ~= nil then
+        if type(params.players) ~= "table" then
+            return nil, "badParams", "players must be a list of player IDs"
+        end
+        local ids, seen = {}, {}
+        for _, v in ipairs(params.players) do
+            local player, err = playerParam(v)
+            if not player then return nil, "badParams", err end
+            if not seen[player.playerID] then
+                seen[player.playerID] = true
+                ids[#ids + 1] = player.playerID
+            end
+        end
+        if #ids < 2 then return nil, "badParams", "players needs at least two different player IDs" end
+        if #ids > DISTANCE_PLAYERS_MAX then
+            return nil, "badParams", "at most " .. DISTANCE_PLAYERS_MAX .. " players at once"
+        end
+        local pairsOut = {}
+        for i = 1, #ids - 1 do
+            for j = i + 1, #ids do
+                pairsOut[#pairsOut + 1] = { a = ids[i], b = ids[j],
+                    distance = services_vehicles.distanceBetweenPlayers(ids[i], ids[j]) }
+            end
+        end
+        return { pairs = pairsOut }
+    end
+
+    local a, aerr = playerParam(params.playerId)
+    if not a then return nil, "badParams", aerr end
+    local b, berr = playerParam(params.otherId)
+    -- the parentheses matter : gsub returns its replacement count too, and a bare call in the last
+    -- slot of a return list would hand the dispatcher a fourth value
+    if not b then return nil, "badParams", ((berr or ""):gsub("playerId", "otherId")) end
+    if a.playerID == b.playerID then return nil, "badParams", "playerId and otherId are the same player" end
+    return { playerId = a.playerID, otherId = b.playerID,
+        distance = services_vehicles.distanceBetweenPlayers(a.playerID, b.playerID) }
+end
+
+--- a player's car(s) ghosted : no collisions, and see-through for everyone. The same thing staff
+--- do from the player list's vehicle row, and the same mechanism (services/players.lua's setGhost
+--- - the owner's own client applies it off the player cache, since a ghost belongs to the client
+--- that owns the car). It stacks with whatever else is ghosting that car rather than replacing it,
+--- so turning it off never un-ghosts a racer the countdown or a pit lane is ghosting anyway, and
+--- it survives a reset, a respawn and a rejoin until a plugin turns it off again.
+M.methods["players.ghost"] = function(params, ctx)
+    local plugin, perr = pluginOf(ctx)
+    if not plugin then return nil, "badParams", perr end
+    local player, err = playerParam(params.playerId)
+    if not player then return nil, "badParams", err end
+    if type(params.state) ~= "boolean" then return nil, "badParams", "state must be true or false" end
+    local vid
+    if not absent(params.vid) then
+        vid = tonumber(params.vid)
+        if not vid then return nil, "badParams", "vid must be one of that player's vehicle IDs" end
+        vid = math.floor(vid)
+    end
+    local count = services_players.setGhost(player, params.state, vid)
+    if count == 0 then
+        return nil, "notFound", vid and ("no vehicle " .. vid .. " of theirs") or "no vehicle of theirs"
+    end
+    return { playerId = player.playerID, state = params.state, vehicles = count }
 end
 
 -- ---------------------------------------------------------------------------------------------

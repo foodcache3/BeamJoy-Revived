@@ -32,6 +32,56 @@ racer is charged for damage that isn't there. Intermittent, so it needs several 
 
 Built (see CHANGELOG), not yet tried live. Newest first.
 
+- vehicle presets after a game update (client 2793, server 2505) : the reported break. A **race**
+  in "pool" mode on a preset captured on 0.39 (the bangers pool) -- picking one of its cars from
+  the selector should be accepted now, where it used to say the vehicle wasn't allowed, and the
+  same car should satisfy **derby**, **hunter** and **infected** pools without them deleting it and
+  handing out another. A preset captured today must still behave exactly as before, and a car
+  that genuinely isn't in the pool must still be refused (swap a part and check it is). Worth one
+  look at a **freeroam** race with a restricted pool : drive its start gate at speed and the run
+  should start without a hitch on the crossing frame. Then the preset editor's two new buttons on a
+  shared build : **Spawn** should put you in that build (replacing the car you're in, and still
+  refusing on a one-car group's cap), and **Update** should ask first, then -- once the preset is
+  saved -- leave the tile's photo and the car it spawns as what you were sitting in, for every
+  other player too, not just the one who pressed it. It should refuse a car that's already another
+  shared build for that vehicle, and a car using a mod the server doesn't send.
+- the vehicle-cap fix behind the carless-handout report (client 2792) : an **Infected** round with
+  a vehicle preset and randomize on, started by a player on a one-car group (the default group) --
+  they should now get their random car like everyone else instead of ending up in free cam with
+  none. Worth the same look in **Hunter** with a per-role preset, a **derby** with one, a **race**
+  in "single" or "pool" vehicle mode, and a **delivery job** that hands out its own car, all as a
+  non-staff player: each one deletes your car and spawns the replacement in the same instant, which
+  is what the cap was tripping over. And the ordinary limit still has to bite: on a one-car group,
+  "Spawn new" in the vehicle selector while already in a car should still refuse with the
+  limit-reached toast.
+- several hunter / infected arenas per map (server 2504, client 2792) : on a map with an arena
+  already saved, **Config > Arenas > Hunter** opens it named "Main arena" with every spawn,
+  waypoint and default exactly where it was, and the same for Infected ; **+** makes a second one,
+  naming it something taken refuses with a reason, and the delete asks first ; **Activities >
+  Hunter** with two arenas shows the Arena picker and switching it re-seeds the whole form from
+  that arena's own defaults (one arena : no picker at all, exactly as before) ; a hunt started on
+  the second arena uses its spawns and waypoints, its props load, and the lobby and open-lobbies
+  rows name it ; disabling an arena while someone's lobby is open on it takes that lobby out of
+  the list ; and the saved file under `BeamJoyData/db/activities/` is a list from the first save
+  on. Also worth a look : a map whose bundled arena an admin had deleted does **not** get it back
+  on the first boot of this build.
+- the seven requested features (server 2504, client 2792) : **saving a race** with times on it
+  offers "Save, keep times" beside "Save, clear times" -- clearing is what every save did before,
+  keeping and they survive a rename and a prop move (and a leaderboard still shows them) ; a race
+  with no times asks nothing new ; **Settings > Races > checkpoint and countdown sounds** off by
+  default, on : one sound per light and the "go" at the green, one per number on a plain
+  countdown, a ping on each of your own gates (not other people's), a passive run's checkpoints
+  too, and nothing at all with it off again ; **the config window's number button** cycles 20 to 100 % and then to no background,
+  survives a reopen and a game restart, and the number stays legible at every step ; **the race
+  editor's list** searched by name and by author, each of the nine filters, the three sorts, "No
+  matches" where nothing matches and the real empty message on a map with no races ; **Shift+K**
+  switches move / turn with a gate, a prop, a start position, a pit box and a safe-zone point
+  selected, in the hunter / infected / derby / freeroam editors too, does nothing with nothing
+  selected, and shows up in the game's controls menu beside the Shift+J one ; **Ghost** in the
+  player list on another player's car (see-through and passing through on both screens, "Unghost"
+  puts it back), on a racer mid-race (the race's own ghosting unaffected), kept across their
+  reset and their rejoin ; **`players.distance`** and **`players.ghost`** from a plugin, including
+  the list form and an unknown player ID.
 - plugin API race control (server 2487, client 2759) : `api/example/BJRaceDirector` with RACE_ID set
   and EVERY_MIN at 1 : its lobby listed under "Open race", joinable, held till its time's up, then
   started ; a reset past the two free ones gives a 5 s penalty (the red tag on the HUD, the toast

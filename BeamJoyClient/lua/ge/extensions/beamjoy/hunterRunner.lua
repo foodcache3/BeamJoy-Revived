@@ -255,7 +255,10 @@ local function vehicleMatchesPool(veh, pool)
     local full = beamjoy_vehicles.getFullConfig(veh)
     if not full then return false end
     return table.find(pool, function(v)
-        return v.model == full.model and v.parts ~= nil and table.deepcompare(full.parts or {}, v.parts)
+        -- not a plain comparison against the stored snapshot : the game substitutes parts it
+        -- can no longer fit while building a configuration, so a preset captured on an older
+        -- game never equalled the car it handed out. See vehicles.lua's resolveParts
+        return beamjoy_vehicles.configMatchesSnapshot(full, v.model, v.parts, v.mainPartName)
     end) ~= nil
 end
 
@@ -964,8 +967,12 @@ local function onSessionUpdate(session)
                             "You've been given a random vehicle for this hunt", nil, 6)
                         confirmOwnVehicle(session.id)
                     else
+                        -- anyAvailable above already said the models ARE installed, so a failure
+                        -- here is a refused spawn (the handout goes through the mod's own
+                        -- core_vehicles.spawnNewVehicle wrapper, which can turn it down on the
+                        -- player's vehicle cap), not a missing vehicle
                         toast.warn(
-                            "Your role's allowed vehicles aren't installed on your game. You won't be able to play",
+                            "Your role's vehicle couldn't be spawned, so you have no car for this hunt",
                             nil, 8)
                     end
                 else

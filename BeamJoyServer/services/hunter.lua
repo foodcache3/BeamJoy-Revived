@@ -1,7 +1,12 @@
---- Hunter arena definition (static, per-map): one arena per map, unlike races' array-of-many (see
---- the plan's own design decision : BJI's own model, kept simple rather than adding a name/browse-
---- list layer this mode doesn't need). Owns only the STATIC config ; services/hunterGrid.lua owns
---- live round instances, exactly mirroring the races.lua / raceGrid.lua split.
+--- Hunter arena definitions (static, per-map): a map holds a LIST of arenas, each carrying its
+--- own id and name, the same shape services/derby.lua already uses (and races' array-of-many).
+--- Owns only the STATIC config ; services/hunterGrid.lua owns live round instances, exactly
+--- mirroring the races.lua / raceGrid.lua split.
+---
+--- This was one arena per map until server build 2504, stored as a single object. `normalizeList`
+--- reads that shape back as a one-entry list (named DEFAULT_NAME), and the first save of any
+--- arena on that map writes the file out as a list : nothing has to be migrated by hand, and an
+--- untouched map keeps working off its old file until then.
 
 ---@alias BJHunterStationRoles "both"|"hunted"|"hunters"|"none" which side of a hunt a station
 ---interaction is allowed for ; see BJHunterDefaults.stationRefuelRoles/stationRepairRoles
@@ -112,6 +117,8 @@
 ---automatically win by survival, when winCondition == "timed" ; default 10, clamped [1, 120]
 
 ---@class BJHunterArena
+---@field id integer unique on its map
+---@field name string
 ---@field enabled boolean
 ---@field hunterSpawns BJHunterSpawn[]
 ---@field preySpawns BJHunterSpawn[]
@@ -133,9 +140,14 @@ local M = {
     MIN_HUNTER_SPAWNS = 2,
     MIN_PREY_SPAWNS = 2,
     MIN_WAYPOINTS = 2,
+    NAME_MAX = 40,
+    --- what the one arena a map used to have is called once it's one of several, and what BJI's
+    --- own single imported arena is called : re-importing or re-reading it finds the same arena
+    --- again instead of making another one
+    DEFAULT_NAME = "Main arena",
 
-    ---@type BJHunterArena?
-    data = nil,
+    ---@type BJHunterArena[] the current map's arenas
+    data = {},
 }
 
 --- one of the four station-role values, anything else (including nil, and anything a raw request
@@ -178,6 +190,10 @@ local function sanitizeArena(arena)
     local props, propsErr = services_props.sanitize(arena.props, "An arena")
     if not props then return propsErr end
     arena.props = props
+
+    arena.name = type(arena.name) == "string" and arena.name:trim() or ""
+    if #arena.name > M.NAME_MAX then arena.name = arena.name:sub(1, M.NAME_MAX) end
+    if #arena.name == 0 then return "The arena needs a name" end
 
     arena.enabled = arena.enabled == true
     if arena.enabled and (#arena.hunterSpawns < M.MIN_HUNTER_SPAWNS or
@@ -250,16 +266,61 @@ local function sanitizeArena(arena)
     arena.defaults.timedModeDuration = math.max(1, math.min(120, tonumber(arena.defaults.timedModeDuration) or 10))
 end
 
---- load the current map's arena, called on boot and on map change
-local function loadData()
-    M.data = dao_activity.get(services_core.getCurrentMap(), M.ACTIVITY_TYPE)
-    if M.data and M.data.enabled and (#M.data.hunterSpawns < M.MIN_HUNTER_SPAWNS or
-            #M.data.preySpawns < M.MIN_PREY_SPAWNS or #M.data.waypoints < M.MIN_WAYPOINTS) then
-        -- same defensive backfill reasoning as races.lua's own loadData : sanitizeArena only ever
-        -- runs at actual save time, never on load, so a hand-edited or otherwise-corrupted file
-        -- could still claim enabled=true under the real minimums
-        M.data.enabled = false
+--- a stored file's contents as a list of valid, uniquely-identified arenas. Mirrors derby.lua's
+--- own normalizeList, with one extra job : the single object a hunter file held before several
+--- arenas per map existed reads back as that map's first arena.
+---@param stored any
+---@return BJHunterArena[]
+local function normalizeList(stored)
+    local list = stored
+    if type(stored) == "table" and not table.isArray(stored) then list = { stored } end
+    if not table.isArray(list) then return {} end
+    local out, usedIds = {}, {}
+    for _, arena in ipairs(list) do
+        if type(arena) == "table" then
+            -- the old single arena had no name of its own : it gets the one the editor and the
+            -- importer both use, so there is exactly one "Main arena" per map however it got there
+            if type(arena.name) ~= "string" or #arena.name:trim() == 0 then arena.name = M.DEFAULT_NAME end
+            -- a hand-edited or otherwise corrupted file can claim enabled=true under the real
+            -- minimums. sanitizeArena REFUSES that outright, which here would drop the arena from
+            -- the list altogether, so the claim is cleared first and the arena survives as a
+            -- disabled one : exactly what loadData used to do by hand before this was a list
+            if arena.enabled == true and (
+                    #(arena.hunterSpawns or {}) < M.MIN_HUNTER_SPAWNS or
+                    #(arena.preySpawns or {}) < M.MIN_PREY_SPAWNS or
+                    #(arena.waypoints or {}) < M.MIN_WAYPOINTS) then
+                arena.enabled = false
+            end
+            if not sanitizeArena(arena) then
+                local id = math.floor(tonumber(arena.id) or 0)
+                if id < 1 or usedIds[id] then id = 0 end
+                arena.id = id
+                table.insert(out, arena)
+                if id > 0 then usedIds[id] = true end
+            end
+        end
     end
+    -- anything without a usable id gets a fresh one
+    local nextId = 1
+    for id in pairs(usedIds) do nextId = math.max(nextId, id + 1) end
+    for _, arena in ipairs(out) do
+        if arena.id == 0 then
+            arena.id = nextId
+            nextId = nextId + 1
+        end
+    end
+    return out
+end
+
+---@param list BJHunterArena[]
+---@return integer
+local function nextIdOf(list)
+    local id = 0
+    for _, a in ipairs(list) do id = math.max(id, a.id or 0) end
+    return id + 1
+end
+
+local function pushCacheToAll()
     services_players.players:forEach(function(p)
         local caches = {}
         M.onBJRequestCache(caches)
@@ -267,41 +328,59 @@ local function loadData()
     end)
 end
 
+--- load the current map's arenas, called on boot and on map change
+local function loadData()
+    M.data = normalizeList(dao_activity.get(services_core.getCurrentMap(), M.ACTIVITY_TYPE))
+    pushCacheToAll()
+end
+
 local function saveData()
     dao_activity.save(services_core.getCurrentMap(), M.ACTIVITY_TYPE, M.data)
 end
 
---- auto-imports this mod's own bundled default hunter arena for a map that doesn't have one
---- saved yet, per direct request (see races.lua's own seedBundledRaces and dao/bundled.lua's own
---- doc for the whole mechanism). Unlike races (an array, several per map), a map only ever has ONE
---- hunter arena, so there's no per-item name to dedupe by: only seeds a map that has genuinely
---- never had an arena saved at all (dao_activity.get returns nil), and only ever considers a given
---- map once (dao_bundled's own ledger, itemName fixed to "arena" since there's only ever the one),
---- so an admin explicitly clearing/disabling their own arena later never causes it to silently
---- come back.
-local function seedBundledHunterArena()
+--- the mod's own bundled arenas (bundledContent/activities/<map>_hunter.json, one object or a
+--- list of them), each seeded into a map's live data once, ever (dao_bundled's ledger, keyed by
+--- the arena's name exactly as derby.lua's own seeding is) : an arena an admin deleted doesn't
+--- come back, and one with the same name as an existing arena is skipped.
+---
+--- Before several arenas per map, this ledger held one marker per map, keyed "arena", set on the
+--- one and only pass a map ever got. That marker still counts : a map carrying it has already had
+--- its chance, so every bundled name there is marked without seeding anything. Otherwise an
+--- arena a server's admin deleted years ago would reappear the first boot after this update.
+local function seedBundledHunterArenas()
     for _, mapName in ipairs(dao_bundled.listMapsForType(M.ACTIVITY_TYPE)) do
-        if not dao_bundled.isSeeded(mapName, M.ACTIVITY_TYPE, "arena") then
-            if dao_activity.get(mapName, M.ACTIVITY_TYPE) == nil then
-                local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
-                if type(bundled) == "table" then
-                    local candidate = table.deepcopy(bundled)
-                    local err = sanitizeArena(candidate)
-                    if err then
-                        LogError(string.format(
-                            "seedBundledHunterArena: %s failed sanitation: %s", mapName, err))
-                    else
-                        dao_activity.save(mapName, M.ACTIVITY_TYPE, candidate)
-                        LogInfo(string.format("seedBundledHunterArena: seeded %s", mapName))
+        local bundled = dao_bundled.get(mapName, M.ACTIVITY_TYPE)
+        if type(bundled) == "table" and not table.isArray(bundled) then bundled = { bundled } end
+        if table.isArray(bundled) then
+            local consideredBefore = dao_bundled.isSeeded(mapName, M.ACTIVITY_TYPE, "arena")
+            local live = normalizeList(dao_activity.get(mapName, M.ACTIVITY_TYPE))
+            local changed = false
+            for _, raw in ipairs(bundled) do
+                local name = type(raw) == "table" and raw.name or M.DEFAULT_NAME
+                if type(name) == "string" and not dao_bundled.isSeeded(mapName, M.ACTIVITY_TYPE, name) then
+                    local exists = table.any(live, function(a) return a.name == name end)
+                    if consideredBefore then
+                        LogInfo(string.format(
+                            "seedBundledHunterArenas: skipped %s / %s, this map was seeded before",
+                            mapName, name))
+                    elseif not exists then
+                        local candidate = table.deepcopy(raw)
+                        candidate.name = name
+                        local err = sanitizeArena(candidate)
+                        if err then
+                            LogError(string.format("seedBundledHunterArenas: %s / %s failed sanitation: %s",
+                                mapName, name, err))
+                        else
+                            candidate.id = nextIdOf(live)
+                            table.insert(live, candidate)
+                            changed = true
+                            LogInfo(string.format("seedBundledHunterArenas: seeded %s / %s", mapName, name))
+                        end
                     end
+                    dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, name)
                 end
-            else
-                LogInfo(string.format(
-                    "seedBundledHunterArena: skipped %s, already has an arena", mapName))
             end
-            -- marked regardless of outcome (map already had an arena, or a validation failure) :
-            -- a map is only ever considered once, ever
-            dao_bundled.markSeeded(mapName, M.ACTIVITY_TYPE, "arena")
+            if changed then dao_activity.save(mapName, M.ACTIVITY_TYPE, live) end
         end
     end
 end
@@ -310,14 +389,40 @@ end
 local function onBJRequestCache(caches)
     -- visible to every player, not staff-gated : same reasoning as races.lua's own cache (meant to
     -- be played, not just administered)
-    caches.hunterArena = M.data
+    caches.hunterArenas = M.data
 end
 
+---@param id any
+---@return BJHunterArena?, integer? its index in M.data
+local function getArena(id)
+    id = tonumber(id)
+    for i, a in ipairs(M.data) do
+        if a.id == id then return a, i end
+    end
+    return nil, nil
+end
+
+--- an arena a hunt can start on right now
+---@param arena BJHunterArena?
+---@return boolean
+local function isPlayable(arena)
+    return arena ~= nil and arena.enabled == true and
+        #(arena.hunterSpawns or {}) >= M.MIN_HUNTER_SPAWNS and
+        #(arena.preySpawns or {}) >= M.MIN_PREY_SPAWNS and
+        #(arena.waypoints or {}) >= M.MIN_WAYPOINTS
+end
+
+--- the first arena a hunt could start on : what a client with no arena of its own in mind gets
 ---@return BJHunterArena?
-local function getArena()
-    return M.data
+local function firstPlayable()
+    for _, a in ipairs(M.data) do
+        if isPlayable(a) then return a end
+    end
+    return nil
 end
 
+--- saves one arena : an existing one (by id) is replaced, one without an id is added. Always
+--- answers "hunterArenaSaved" (ok, error, id) so the editor can resync on a refusal
 ---@param ctxt BJSContext
 ---@param arena BJHunterArena
 local function hunterArenaSave(ctxt, arena)
@@ -336,6 +441,10 @@ local function hunterArenaSave(ctxt, arena)
     end
 
     local err = sanitizeArena(arena)
+    local name = type(arena) == "table" and arena.name or nil
+    if not err and table.any(M.data, function(a) return a.name == name and a.id ~= tonumber(arena.id) end) then
+        err = "Another arena on this map already has that name"
+    end
     if err then
         LogError(string.format("hunterArenaSave rejected%s: %s",
             ctxt.sender and (" from " .. ctxt.sender.playerName) or "", err))
@@ -347,18 +456,37 @@ local function hunterArenaSave(ctxt, arena)
         return
     end
 
-    M.data = arena
+    local _, index = getArena(arena.id)
+    if index then
+        M.data[index] = arena
+    else
+        arena.id = nextIdOf(M.data)
+        table.insert(M.data, arena)
+    end
     saveData()
 
     if ctxt.sender then
-        communications_tx.sendToPlayer(ctxt.senderID, "hunterArenaSaved", true)
+        communications_tx.sendToPlayer(ctxt.senderID, "hunterArenaSaved", true, "", arena.id)
     end
 
-    services_players.players:forEach(function(p)
-        local caches = {}
-        M.onBJRequestCache(caches)
-        communications_tx.sendToPlayer(p.playerID, "sendCache", caches)
-    end)
+    pushCacheToAll()
+end
+
+---@param ctxt BJSContext
+---@param id integer
+local function hunterArenaDelete(ctxt, id)
+    if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
+            BJ_PERMISSIONS.EditHunterArenas) then
+        local permErr = services_lang.get("error.insufficientPermissions", ctxt.sender.lang)
+        communications_tx.sendToPlayer(ctxt.senderID, "toast", "error", permErr)
+        return communications_tx.sendToPlayer(ctxt.senderID, "hunterArenaDeleted", false, permErr)
+    end
+    local _, index = getArena(id)
+    if not index then return end
+    table.remove(M.data, index)
+    saveData()
+    if ctxt.sender then communications_tx.sendToPlayer(ctxt.senderID, "hunterArenaDeleted", true) end
+    pushCacheToAll()
 end
 
 --- Legacy BeamJoy Free (BJI) arena import: BJI stores one `<mapName>_hunter.json` file per map
@@ -452,6 +580,10 @@ end
 local function convertLegacyArena(oldData)
     if type(oldData) ~= "table" then return nil end
     return {
+        -- BJI has one arena per map and no name for it : DEFAULT_NAME, so a re-import replaces
+        -- the arena it made last time (and the one a pre-2504 file migrated into) instead of
+        -- stacking up copies of it
+        name = M.DEFAULT_NAME,
         enabled = oldData.enabledHunter == true,
         hunterSpawns = convertLegacySpawns(oldData.majorPositions),
         preySpawns = convertLegacySpawns(oldData.minorPositions),
@@ -472,12 +604,16 @@ local function scanLegacyArenas()
             local converted = convertLegacyArena(raw)
             if converted and (#converted.hunterSpawns > 0 or #converted.preySpawns > 0 or
                     #converted.waypoints > 0) then
-                local existing = dao_activity.get(mapName, M.ACTIVITY_TYPE)
+                -- a conflict is the arena this import would replace : the one already called
+                -- DEFAULT_NAME on that map, whatever else is there
+                local existing = table.find(normalizeList(dao_activity.get(mapName, M.ACTIVITY_TYPE)),
+                    function(a) return a.name == M.DEFAULT_NAME end)
                 local existingHasContent = existing ~= nil and (#(existing.hunterSpawns or {}) > 0 or
                     #(existing.preySpawns or {}) > 0 or #(existing.waypoints or {}) > 0)
                 table.insert(results, {
                     key = mapName,
                     map = mapName,
+                    name = M.DEFAULT_NAME,
                     hunterSpawnCount = #converted.hunterSpawns,
                     preySpawnCount = #converted.preySpawns,
                     waypointCount = #converted.waypoints,
@@ -528,19 +664,30 @@ local function hunterLegacyImportConfirm(ctxt, selection)
                             mapName, err))
                         failed = failed + 1
                     else
-                        dao_activity.save(mapName, M.ACTIVITY_TYPE, converted)
+                        -- the map's own arena called DEFAULT_NAME is replaced in place, keeping
+                        -- its id (a lobby's arena reference stays valid) ; every other arena on
+                        -- that map is left exactly as it is
+                        local live = normalizeList(dao_activity.get(mapName, M.ACTIVITY_TYPE))
+                        local existingIndex
+                        for i, a in ipairs(live) do
+                            if a.name == M.DEFAULT_NAME then existingIndex = i end
+                        end
+                        if existingIndex then
+                            converted.id = live[existingIndex].id
+                            live[existingIndex] = converted
+                        else
+                            converted.id = nextIdOf(live)
+                            table.insert(live, converted)
+                        end
+                        dao_activity.save(mapName, M.ACTIVITY_TYPE, live)
                         imported = imported + 1
                         -- the currently-loaded map's own in-memory M.data (and every connected
                         -- client's cache of it) needs an explicit refresh: every OTHER map's file
                         -- was just written straight to disk with nothing in memory to update, since
-                        -- services_hunter.lua only ever tracks the current map's own arena
+                        -- services_hunter.lua only ever tracks the current map's own arenas
                         if mapName == services_core.getCurrentMap() then
-                            M.data = converted
-                            services_players.players:forEach(function(p)
-                                local caches = {}
-                                M.onBJRequestCache(caches)
-                                communications_tx.sendToPlayer(p.playerID, "sendCache", caches)
-                            end)
+                            M.data = live
+                            pushCacheToAll()
                         end
                     end
                 end
@@ -555,9 +702,10 @@ end
 
 local function onInit()
     communications_rx.addHandler("hunterArenaSave", M.hunterArenaSave)
+    communications_rx.addHandler("hunterArenaDelete", M.hunterArenaDelete)
     communications_rx.addHandler("hunterLegacyImportPreview", M.hunterLegacyImportPreview)
     communications_rx.addHandler("hunterLegacyImportConfirm", M.hunterLegacyImportConfirm)
-    seedBundledHunterArena()
+    seedBundledHunterArenas()
     loadData()
 end
 
@@ -566,7 +714,10 @@ M.onBJRequestCache = onBJRequestCache
 M.onMapChanged = loadData
 
 M.getArena = getArena
+M.isPlayable = isPlayable
+M.firstPlayable = firstPlayable
 M.hunterArenaSave = hunterArenaSave
+M.hunterArenaDelete = hunterArenaDelete
 M.hunterLegacyImportPreview = hunterLegacyImportPreview
 M.hunterLegacyImportConfirm = hunterLegacyImportConfirm
 -- exported for reuse by services/races.lua's own legacy importer: this quaternion-to-flat-

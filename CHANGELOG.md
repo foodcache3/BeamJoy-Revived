@@ -8,14 +8,170 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2503, client build 2791. The startup entry, the swallowed-crash entry at the bottom,
-the server half of the stuck-vehicle entry, the crew-leader entry, and both halves of the four race
-entries and the jumped-start entry below, are server-side (deploy and restart) ; everything else is
-client-side, so BJ.zip goes out with it. The four race entries and the jumped-start entry have a
-server half and a client half each : deploy them together, or a game on the old build will keep
-being sent splits the new server no longer repeats, will go on waiting ten seconds for an answer
-the new server now gives it at once, will add up lap times it is no longer sent, and a checkpoint
-crossed before the green light will be reported by the game and thrown away by the server.
+Server build 2505, client build 2793. Server-side, needing a deploy and a restart : the startup
+entry, the swallowed-crash entry at the bottom, the server half of the stuck-vehicle entry, the
+crew-leader entry, the player-distance entry, the Update half of the vehicle preset entry, and
+both halves of the four race entries, the jumped-start entry, the recorded-times
+entry, the staff-ghost entry and the arenas entry.
+Everything else is client-side, so BJ.zip goes out with it.
+
+Eight entries have a server half and a client half, and the two halves have to go out together :
+the four race entries, the jumped-start entry, the recorded-times entry, the staff-ghost entry and
+the arenas entry. Against the old build on the other side, a game will keep being sent splits the
+new server no longer repeats, will go on waiting ten seconds for an answer the new server now
+gives it at once, will add up lap times it is no longer sent, a checkpoint crossed before the
+green light will be reported by the game and thrown away by the server, the editor's new
+"Save, keep times" button will quietly not keep them, ghosting a player's car will do nothing at
+all, and Hunter and Infected will look unavailable on every map -- the arenas now arrive as a list
+a game on the old build doesn't recognise.
+
+- **Vehicle presets built before a game update work again.** Reported directly : vehicle pools
+  made on BeamNG 0.39 "aren't compatible anymore". A preset refused the very car it had just handed
+  out -- a player picked the preset's own vehicle, or was given it, and was still told it wasn't
+  one of the allowed ones. The game is what changes the car : while loading a configuration it
+  quietly replaces any part that no longer fits its slot, drops a slot that no longer exists, and
+  fills a slot the saved car never had with that slot's own default. 0.40 did all three to the
+  racing seats alone -- one shared grey seat part replaced the old per-side one, its separate seat
+  colour slot is gone (the colour is baked into the part now), and the new seat brings a seat
+  occupant slot of its own -- and it narrowed the marker-light slots to the 5W bulb. The game says
+  so itself, in the log, three lines before the mod refused the car : *"Chosen part has wrong slot
+  type ... race_seat_FL ... Resetting to default"*. So a preset's saved car could never match the
+  car the game actually built from it.
+
+  A preset entry is now compared against **what this game builds from it**, resolved through the
+  game's own loader -- the same code, the same directories, that a real spawn goes through. That
+  holds for the next game update too, with no list of renamed parts to keep: whatever the game
+  substitutes, both sides see it. Mods are covered the same way, since a model's folder is where a
+  packed mod, an unpacked one and this server's own sent mods all live; a mod you don't have
+  resolves to the same stand-in on your game as it does in the comparison, so your car still
+  counts, and a car whose model you don't have simply never matches, as before. Nothing is resolved
+  for a preset captured on the current game -- that still matches outright, at exactly the cost it
+  did before -- and a race's own single required vehicle, the derby, hunter and infected pools and
+  Infected's forced vehicle all went through the same gate, so all of them are fixed. Freeroam
+  races resolve their nearby races a second or two ahead, while you're still driving toward the
+  start gate, rather than on the frame that crosses it. **(Client-side.)**
+
+  **Shared builds can now be brought up to date**, which the fix above deliberately doesn't do:
+  matching copes with a build that spawns as something slightly different from what it stored, but
+  the build itself, the file every player's game writes and the photo on its tile, still describe
+  the car it used to be. A build in a vehicle preset has two new buttons beside "Retake photo" :
+  **Spawn**, which puts you in that build (replacing the car you're in, so you keep your place), and
+  **Update**, which replaces the build's parts, tuning, paint and photo with the car you're in,
+  keeping its name, its id and its place in every preset that uses it. Update asks first, since it
+  changes what every player's game spawns for that build and the car it used to be isn't kept
+  anywhere. Every player's game rewrites the file by itself from there. It goes through the same
+  checks a new build does, so a car using parts from a mod this server doesn't send is still
+  refused, and so is one that is already another shared build for that vehicle. Spawn goes through
+  the mod's own spawn wrapper like every other handout, so the vehicle cap and whatever an activity
+  currently allows still have their say. **(Server-side, with a client half.)**
+
+- **A vehicle the mod hands you no longer counts against your vehicle cap twice over.** Reported
+  from an Infected round set to draw random vehicles from a preset: one player got their random
+  car, correctly coloured, while the player who had started the round was left in free cam with no
+  car at all, every single time -- and the same round with everyone's own vehicles was fine. Every
+  handout the mod does (a race, derby, hunter or infected vehicle preset, and a delivery job's own
+  car) deletes the car you have and spawns its replacement in the same instant, and the cap those
+  spawns were checked against was read from the server's copy of your vehicles, which only catches
+  up a full round trip later. So the car that had just been deleted was still counted: anyone
+  already at their cap had the replacement refused outright and was left with nothing. It hit by
+  group, not by role, which is why one player in a round could be fine while another wasn't -- the
+  default group's cap is one car, and a staff member with no cap never saw it. The cap now ignores
+  a car this game has already destroyed, which is what the server is about to do as well.
+
+  Two toasts were misleading on the way: a refused handout in Hunter and Infected said your side's
+  vehicles "aren't installed on your game", which is what sent the one report of this the wrong way
+  round. Each now says the car couldn't be spawned. **(Client-side.)**
+
+- **A map can hold several hunter and several infected arenas, as it already could derbies.** Both
+  modes were one arena per map, with no name and nothing to choose between : a map had the hunt its
+  admin had built, and building a second one meant overwriting the first. Each arena now carries
+  its own name and its own saved defaults, and the editor has the same arena bar the derby editor
+  has -- a picker, **+** for a new one, and a delete with a confirm. Starting a hunt or a round
+  asks which arena when the map has more than one, and that arena's own defaults fill in the start
+  form ; a map with a single arena looks and behaves exactly as it did. The open-lobbies list says
+  which arena each lobby is on, and a lobby whose arena has since been disabled or deleted is no
+  longer offered (the server refuses it either way). A running game is unaffected by any of this :
+  it has always worked from its own snapshot of the arena it started on.
+
+  **Nothing has to be migrated by hand.** The single arena a map has saved reads back as that
+  map's first arena, named **"Main arena"**, and the file is rewritten as a list the first time
+  anything on that map is saved. The mod's own bundled arenas are unchanged, and a map that was
+  already seeded from them stays seeded : an arena an admin deleted doesn't reappear. A legacy
+  BeamJoy Free import still brings in the one arena BJI has per map, under that same name, so
+  re-importing replaces it instead of stacking up copies.
+
+  Deliberately not copied from derby : a hunter or infected arena gets no world marker and no Big
+  Map pin. A derby arena is a place you can drive to ; a hunt covers a whole map, so there is no
+  one spot to pin it to. Also unchanged : several hunts can still run on one map at once, as they
+  always could. **(Server-side and client-side: both halves go out together.)**
+
+- **Saving an edited race no longer always throws its recorded times away.** It always did, on
+  both boards, and the only say you had in it was not saving. The reasoning still stands -- gates
+  and layout can change under a saved race, and a time set on a course that no longer exists isn't
+  comparable with one set on this one -- but it isn't always true, and renaming a race or nudging
+  one prop cost it every lap anyone had ever set on it.
+
+  The confirmation now asks, as two answers rather than one : where there is actually something to
+  lose it offers **"Save, keep times"** beside **"Save, clear times"**, with Cancel where it
+  always was. Both go ahead with the save, so neither belongs behind Cancel ; the clearing
+  one is the red one, and is what every save did before this was a choice at all. It also says what
+  the choice turns on -- keeping them only means anything if the course itself hasn't moved. The
+  times are never sent to a game in the first place, so the server does the keeping, from the copy
+  it already holds, and a save arriving with a leaderboard in it is ignored as it always was. A
+  race with no times to lose asks nothing new. **(Server-side and client-side: both halves go out
+  together.)**
+
+- **The game's own checkpoint and countdown sounds, for anyone who wants them.** Off by default,
+  under **Settings > Races**. On, the countdown ticks -- one sound per light of a lights start, or
+  per number of a plain one -- the green light gets the game's own "go", and each checkpoint you
+  cross yourself gives the ping the game's own time trials use. A passive run's checkpoints sound
+  the same way ; it has no countdown of its own to sound, since it starts by being driven through.
+
+  The ping is played where the car went through the gate, not where the server agrees it did a
+  round trip later, so it lands with the car rather than a tenth of a second behind it. It is your
+  own crossings only : a field of thirty-two would otherwise be a field of thirty-two pings.
+
+- **The config window's background can be made solid, or taken away entirely.** A number in its
+  title bar beside minimise and close ; each click takes it up 20 %, from the 20 % it has always
+  been to fully solid, then to nothing at all and round again. Remembered per window, per player,
+  the same way each window already remembers where you put it and how big you made it.
+
+- **The race editor's list of races has a search box, a filter and a sort.** It was one flat list
+  in whatever order the server held them, which is fine for the eight races a fresh map has and no
+  use at all by the fortieth. The search box matches a name or whoever made it ; the filter narrows
+  to your own, to grid or passive, to loopable, to the ones that also run from freeroam, to the
+  ones with a pit lane, with props, or with times already set on them ; the sort is by name, newest
+  or oldest. Searching finds nothing where there is nothing rather than looking like the races
+  went missing. The same toolbar the race picker in the main window already has, deliberately : the
+  two lists of races a player meets shouldn't behave differently.
+
+- **A binding for the editors' move / turn handles.** **Shift+K** by default, beside the Shift+J
+  focus one, and rebindable in the game's own controls menu like any other. It switches the handles
+  on whatever is selected between moving it and turning it, in every editor at once -- races,
+  props, pit boxes, hunter, infected, derby, safe zones, the freeroam editors -- because they all
+  already share one notion of which tool is in hand. It does nothing while nothing is selected,
+  rather than quietly changing a tool you can't see. Scale stays on its button : only the safe-zone
+  editor has one, so a three-way cycle would strand everything else on a tool it doesn't draw.
+
+- **Staff can ghost a player's car, and so can a server plugin.** A **Ghost** button in the player
+  list, in the same row as freeze, engine, launch, explode and remove : no collisions, see-through
+  for everyone, until it's turned off again. For a car wedged where it is ruining someone else's
+  run, or a player who needs to be got out of the way without their car being taken off them.
+
+  A ghost belongs to the game that owns the car -- which is exactly why nobody could ghost anyone
+  else before now -- so the server records it and the owner's own game applies it, under a reason
+  of its own. It therefore adds to whatever else is already ghosting that car (a countdown, a pit
+  lane, a safe zone) instead of fighting it, turning it off never un-ghosts a racer who should
+  stay ghosted anyway, and it survives a reset, a respawn and a rejoin until someone turns it off.
+  Plugins get the same thing as `players.ghost`. **(Server-side and client-side: both halves go out
+  together.)**
+
+- **A plugin can ask how far apart players are.** `players.distance`, for two players or for a
+  list of them in one call, answering every pair. In metres, from the server's own copy of where
+  every car is rather than from anything a game claimed, which is the whole reason to ask the
+  server : it's the same measurement every proximity check in BeamJoy already makes. An answer is
+  left out rather than guessed when the server genuinely doesn't know yet, so a plugin can tell
+  "don't know" from "right on top of each other". **(Server-side.)**
 
 - **A gate crossing gets an answer of its own now, instead of the whole field's standings.** One
   message was doing two unrelated jobs : confirming *your* crossing to you, and telling everyone

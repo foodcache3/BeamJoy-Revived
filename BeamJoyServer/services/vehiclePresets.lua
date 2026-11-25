@@ -242,7 +242,7 @@ end
 ---@param author string
 ---@return {creates: table[], renames: table<integer, string>, photos: table<integer, string>}? plan, string? error
 local function planBuilds(preset, author)
-    local plan = { creates = {}, renames = {}, photos = {} }
+    local plan = { creates = {}, renames = {}, photos = {}, updates = {} }
     ---@return string? error
     local function photoOf(e)
         if e.photo == nil then return nil end
@@ -275,6 +275,32 @@ local function planBuilds(preset, author)
             local photo, photoErr = photoOf(e)
             if photoErr then return nil, photoErr end
             if photo then plan.photos[build.id] = photo end
+            -- "Update from my current car" (beamjoy/vehiclePresets.lua's onRecaptureBuild) : this
+            -- build's own content replaced by the car the editor was sitting in, keeping its id,
+            -- its name and its place in every preset that uses it. Why it exists : the game
+            -- substitutes any part it can no longer fit while loading a configuration, so a build
+            -- captured on an older game spawns as something slightly different from what it
+            -- stored, and its photo still shows the car it used to be. Every client rewrites the
+            -- file by itself from here (beamjoy/vehicleBuilds.lua's sync compares content).
+            if e.pc ~= nil then
+                local pc, pcErr = cleanPc(e.pc)
+                if not pc then return nil, pcErr end
+                local newHash = buildHash(build.model, pc)
+                local clash = byHash[newHash]
+                if clash and clash ~= build then
+                    return nil, string.format(
+                        "That car is already the shared build \"%s\" for this vehicle",
+                        type(clash) == "table" and clash.name or "?")
+                end
+                if newHash ~= build.hash then
+                    local encoded = utils_json.stringifyRaw(pc) or ""
+                    if #encoded > MAX_BUILD_BYTES then return nil, "This build is too big to share" end
+                    -- so a create later in this same save finds it under its new content
+                    byHash[build.hash] = nil
+                    byHash[newHash] = build
+                    plan.updates[build.id] = { pc = pc, hash = newHash }
+                end
+            end
             local name = cleanLine(e.name) or build.name
             if name ~= build.name then
                 local len = charCount(name)
@@ -397,7 +423,8 @@ end
 --- applies a checked plan : new builds get their ids, renamed ones their names, new photos, and
 --- every build entry (in every preset) its config key and label
 ---@param preset BJVehiclePreset
----@param plan {creates: table[], renames: table<integer, string>, photos: table<integer, string>}
+---@param plan {creates: table[], renames: table<integer, string>, photos: table<integer, string>,
+---updates: table<integer, {pc: table, hash: string}>}
 local function commitBuilds(preset, plan)
     for _, create in ipairs(plan.creates) do
         create.id = M.nextBuildId
@@ -410,6 +437,13 @@ local function commitBuilds(preset, plan)
     for id, name in pairs(plan.renames) do
         local build = getBuild(id)
         if build then build.name = name end
+    end
+    for id, update in pairs(plan.updates) do
+        local build = getBuild(id)
+        if build then
+            build.pc = update.pc
+            build.hash = update.hash
+        end
     end
     for id, photo in pairs(plan.photos) do
         local build = getBuild(id)

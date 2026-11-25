@@ -16,6 +16,8 @@ local function onInit()
     beamjoy_communications_ui.addHandler("BJVehiclePresetListRequest", M.pushListToUI)
     beamjoy_communications_ui.addHandler("BJVehiclePresetCaptureVehicle", M.onCaptureVehicle)
     beamjoy_communications_ui.addHandler("BJVehiclePresetRetakePhoto", M.onRetakePhoto)
+    beamjoy_communications_ui.addHandler("BJVehiclePresetRecaptureBuild", M.onRecaptureBuild)
+    beamjoy_communications_ui.addHandler("BJVehiclePresetSpawnEntry", M.onSpawnEntry)
 end
 
 local function pushListToUI()
@@ -164,6 +166,80 @@ local function onRetakePhoto(entry, index)
     end)
 end
 
+--- "Spawn" on a preset's entry in the editor : puts the editor in that car, so it can be looked
+--- at, changed, and handed back through "Update". Replaces the car they're in (so they keep their
+--- place in the world) or spawns one when they're walking.
+---
+--- Deliberately goes through core_vehicles, not around it, like every other handout this mod does
+--- (see raceRunner.lua's own note) : the mod's own wrapper in vehicleSelector.lua is what enforces
+--- the vehicle cap, a group's spawn permission and whatever an activity currently allows, and a
+--- button in a config tab has no business skipping any of that.
+---@param entry table the editor's entry : {model, config}
+local function onSpawnEntry(entry)
+    if type(entry) ~= "table" or type(entry.model) ~= "string" or type(entry.config) ~= "string" then return end
+    local own = beamjoy_vehicles.getCurrentOwn()
+    local walking = own ~= nil and own.jbeam == beamjoy_vehicles.WALKING
+    local ok, res
+    if own and not walking then
+        ok, res = pcall(core_vehicles.replaceVehicle, entry.model, { config = entry.config })
+    else
+        ok, res = pcall(core_vehicles.spawnNewVehicle, entry.model, { config = entry.config })
+    end
+    -- a refusal is the cap or a policy saying no, and has already said so itself ; only a real
+    -- error is worth a word here
+    if not ok then
+        toast.warn("Couldn't spawn this one", nil, 5)
+        LogWarn(string.format("could not spawn preset entry %s/%s : %s", tostring(entry.model),
+            tostring(entry.config), tostring(res)))
+    end
+end
+
+--- "Update" on a shared build in the editor : the build's own content (its
+--- parts, tuning, paint and a fresh photo) replaced by the car the player is in, keeping the
+--- build's id and name so every preset using it keeps working.
+---
+--- Why this exists : while loading a configuration the game substitutes any part that no longer
+--- fits its slot and fills a new slot with its default (see vehicles.lua's resolveParts), so a
+--- build captured on an older game spawns as something slightly different from what it stored --
+--- and its photo, taken back then, still shows the car it used to be. Matching copes with that on
+--- its own now ; this is how the build itself is brought up to date, so its tile shows what it
+--- actually hands out. Takes the same route as any other edit : it fills the editor's entry, and
+--- the preset's own Save is what commits it.
+---@param entry table the editor's entry : {model, buildId}
+---@param index integer its place in the editor's list
+local function onRecaptureBuild(entry, index)
+    if type(entry) ~= "table" or type(entry.model) ~= "string" or entry.buildId == nil then return end
+    local mpVeh = beamjoy_vehicles.getCurrentOwn()
+    if not mpVeh then
+        toast.warn("You need to be in a vehicle to update this build from it", nil, 4)
+        return
+    end
+    -- the same capture any new build goes through, so the same refusals apply : a car using parts
+    -- from a mod this server doesn't send can't become everyone's build
+    local fresh, err = beamjoy_vehicleBuilds.capture(mpVeh.veh)
+    if not fresh then
+        toast.warn(err, nil, 8)
+        return
+    end
+    if fresh.model ~= entry.model then
+        toast.warn(string.format("Get in a %s to update this build", entry.modelLabel or entry.model), nil, 5)
+        return
+    end
+    -- its photo too (the build is being replaced, the old one would be of the old car), and the
+    -- entry's own match snapshot while we're here
+    beamjoy_vehicleBuilds.takePhoto(mpVeh.veh, function(photo)
+        beamjoy_communications_ui.send("BJVehiclePresetBuildRecaptured", {
+            index = index,
+            model = entry.model,
+            buildId = entry.buildId,
+            pc = fresh.pc,
+            parts = fresh.parts,
+            vars = fresh.vars,
+            photo = photo,
+        })
+    end)
+end
+
 M.onInit = onInit
 
 M.retrieveCache = retrieveCache
@@ -173,5 +249,7 @@ M.save = save
 M.delete = delete
 M.onCaptureVehicle = onCaptureVehicle
 M.onRetakePhoto = onRetakePhoto
+M.onRecaptureBuild = onRecaptureBuild
+M.onSpawnEntry = onSpawnEntry
 
 return M

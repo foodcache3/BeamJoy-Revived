@@ -22,12 +22,31 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
         infoOnly: false,
         // askChecklist's rows ; null for every other kind of dialog
         checklist: null,
+        // ask's optional second confirming button, {label} ; null for every other kind of
+        // dialog. `confirmLabel` goes with it : with two of them, "Confirm" stops saying anything
+        confirmLabel: null,
+        altConfirm: null,
         onConfirm: null,
         onCancel: null,
     };
 
-    this.ask = (message, onConfirm, onCancel) => {
+    // options.altConfirm, {label} : a SECOND confirming button, whose being the one pressed is
+    // onConfirm's second argument (false for the ordinary one). For a question with two different
+    // yeses rather than one (the race editor's "overwrite this race?", which is also "and what
+    // becomes of its recorded times?") - both answers go ahead, so neither belongs behind Cancel,
+    // and asking it as one button plus a tick-box asks the player to set a thing before pressing
+    // a thing when they could just press the answer they want.
+    // options.confirmLabel : what the ordinary button says instead of "Confirm", which stops
+    // meaning anything once there are two of them to tell apart.
+    // Both of those are locale KEYS, translated where they're drawn - unlike a checklist row's
+    // label, which the caller translates. A button's default is a key either way, so there was
+    // nowhere sensible to put the asymmetry.
+    this.ask = (message, onConfirm, onCancel, options) => {
         this.state.checklist = null;
+        this.state.confirmLabel = (options && options.confirmLabel) || null;
+        this.state.altConfirm = (options && options.altConfirm)
+            ? { label: options.altConfirm.label }
+            : null;
         this.state.visible = true;
         this.state.message = message;
         this.state.showInput = false;
@@ -43,6 +62,8 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
     // a second primitive just for "explain something, then dismiss".
     this.info = (message, onClose) => {
         this.state.checklist = null;
+        this.state.confirmLabel = null;
+        this.state.altConfirm = null;
         this.state.visible = true;
         this.state.message = message;
         this.state.showInput = false;
@@ -62,6 +83,8 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
     // it and silently fail to save later.
     this.askForInput = (message, defaultValue, placeholder, onConfirm, onCancel, maxLength) => {
         this.state.checklist = null;
+        this.state.confirmLabel = null;
+        this.state.altConfirm = null;
         this.state.visible = true;
         this.state.message = message;
         this.state.showInput = true;
@@ -88,6 +111,8 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
         this.state.checklistModes = (options && Array.isArray(options.modes) && options.modes.length)
             ? options.modes : null;
         this.state.checklistMode = null;
+        this.state.confirmLabel = null;
+        this.state.altConfirm = null;
         this.state.visible = true;
         this.state.message = message;
         this.state.showInput = false;
@@ -127,14 +152,18 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
         }));
     };
 
-    this.resolve = (confirmed) => {
-        const { onConfirm, onCancel, showInput, inputValue, checklist, checklistMode } = this.state;
+    // `alt` : the second confirming button (options.altConfirm) was the one pressed
+    this.resolve = (confirmed, alt) => {
+        const { onConfirm, onCancel, showInput, inputValue, checklist, checklistMode } =
+            this.state;
         const picked = checklist
             ? checklist.flatMap((g) => g.rows.filter((r) => r.checked).map((r) => r.key))
             : undefined;
         this.state.checklist = null;
         this.state.checklistModes = null;
         this.state.checklistMode = null;
+        this.state.confirmLabel = null;
+        this.state.altConfirm = null;
         this.state.visible = false;
         this.state.message = "";
         this.state.showInput = false;
@@ -145,7 +174,7 @@ angular.module("beamjoy").service("beamjoyConfirm", function () {
         this.state.onCancel = null;
         if (confirmed && onConfirm) {
             if (checklist) onConfirm(picked, checklistMode || undefined);
-            else onConfirm(showInput ? inputValue.trim() : undefined);
+            else onConfirm(showInput ? inputValue.trim() : undefined, alt === true);
         }
         if (!confirmed && onCancel) onCancel();
     };
@@ -191,6 +220,18 @@ angular.module("beamjoy").component("bjConfirm", {
             if (this.state.checklist && this.checkedCount() === 0) return;
             beamjoyConfirm.resolve(true);
         };
+        // ask's second confirming button : goes ahead like the first one, and says so
+        this.confirmAlt = (event) => {
+            event.stopPropagation();
+            beamjoyConfirm.resolve(true, true);
+        };
+        // "Confirm", unless the caller named it something that distinguishes it from its
+        // alternative (and "Close" on an info popup, which has only the one button)
+        this.confirmLabel = () =>
+            translate(
+                this.state.confirmLabel ||
+                    (this.state.infoOnly ? "beamjoy.common.close" : "beamjoy.common.confirm")
+            );
 
         // CHECKLIST
         const rows = () => (this.state.checklist || []).flatMap((g) => g.rows);

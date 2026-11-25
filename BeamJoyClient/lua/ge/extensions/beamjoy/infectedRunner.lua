@@ -351,7 +351,10 @@ local function vehicleMatchesPool(veh, pool)
     local full = beamjoy_vehicles.getFullConfig(veh)
     if not full then return false end
     return table.find(pool, function(v)
-        return v.model == full.model and v.parts ~= nil and table.deepcompare(full.parts or {}, v.parts)
+        -- not a plain comparison against the stored snapshot : the game substitutes parts it
+        -- can no longer fit while building a configuration, so a preset captured on an older
+        -- game never equalled the car it handed out. See vehicles.lua's resolveParts
+        return beamjoy_vehicles.configMatchesSnapshot(full, v.model, v.parts, v.mainPartName)
     end) ~= nil
 end
 
@@ -364,10 +367,10 @@ end
 
 --- a random entry of the pool (installed ones only), spawned in place of your vehicle
 ---@param pool {model: string, config: string}[]
----@return boolean
+---@return boolean ok, "missing"|"failed"? why not
 local function forceRandomPoolVehicle(pool)
     local available = table.filter(pool, function(v) return modelAvailableLocally(v.model) end)
-    if #available == 0 then return false end
+    if #available == 0 then return false, "missing" end
     local entry = available[math.random(#available)]
     local pos
     local currVeh = beamjoy_vehicles.getCurrent()
@@ -378,7 +381,11 @@ local function forceRandomPoolVehicle(pool)
     end
     if beamjoy_vehicles.getCurrentOwn() then beamjoy_vehicles.deleteCurrentOwnVehicle() end
     local newVeh = core_vehicles.spawnNewVehicle(entry.model, { pos = pos, config = entry.config })
-    if not newVeh then return false end
+    -- a refused spawn is its own answer, not a missing vehicle : the handout goes through the mod's
+    -- own core_vehicles.spawnNewVehicle wrapper (vehicleSelector.lua), which can turn it down on
+    -- the player's vehicle cap. "Aren't installed" was the only thing the caller said either way,
+    -- which is what sent the one report of this the wrong way round
+    if not newVeh then return false, "failed" end
     be:enterVehicle(0, newVeh)
     if camera.getCamera() == camera.CAMERAS.FREE then camera.toggleFreeCam() end
     return true
@@ -911,8 +918,11 @@ local function onSessionUpdate(session)
         local forced = session.settings.config
         local myVeh = beamjoy_vehicles.getCurrentOwn()
         local full = myVeh and beamjoy_vehicles.getFullConfig(myVeh.veh)
-        local matches = full ~= nil and full.model == forced.model and
-            table.deepcompare(full.parts or {}, forced.parts or {})
+        -- a forced config with no parts snapshot at all now falls through as "not this one", the
+        -- same graceful no-match a pool entry without one has always had, instead of matching a
+        -- car that somehow has no parts either
+        local matches = beamjoy_vehicles.configMatchesSnapshot(full, forced.model, forced.parts,
+            forced.mainPartName)
         if not matches then
             if myVeh then beamjoy_vehicles.deleteCurrentOwnVehicle() end
             toast.warn(string.format("This round requires vehicle: %s. Pick it from the vehicle selector",
@@ -955,11 +965,15 @@ local function onSessionUpdate(session)
                 local cur = beamjoy_vehicles.getCurrentOwn()
                 local matches = cur ~= nil and cur.veh.jbeam ~= beamjoy_vehicles.WALKING and vehicleMatchesPool(cur.veh, pool)
                 if session.settings.randomizeVehiclePool or not matches then
-                    if forceRandomPoolVehicle(pool) then
+                    local given, why = forceRandomPoolVehicle(pool)
+                    if given then
                         toast.info(label and string.format("Your side drives: %s. You've been given one", label) or
                             "You've been given a vehicle for your side", nil, 6)
-                    else
+                    elseif why == "missing" then
                         toast.warn("Your side's vehicles aren't installed on your game", nil, 8)
+                    else
+                        toast.warn("Your side's vehicle couldn't be spawned, so you have no car for this round",
+                            nil, 8)
                     end
                 end
             end

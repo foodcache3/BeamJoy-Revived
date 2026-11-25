@@ -1686,7 +1686,11 @@ end
 
 ---@param ctxt BJSContext
 ---@param race BJRace
-local function raceSave(ctxt, race)
+---@param ctxt BJSContext
+---@param race table BJRace
+---@param keepTimes boolean? keep the recorded times this race already has instead of clearing
+---them (see the wipe below) : the editor asks whenever there is anything to lose
+local function raceSave(ctxt, race, keepTimes)
     if ctxt.sender and not services_permissions.hasAllPermissions(ctxt.senderID,
             BJ_PERMISSIONS.EditRaces) then
         return communications_tx.sendToPlayer(ctxt.senderID, "toast", "error",
@@ -1748,12 +1752,23 @@ local function raceSave(ctxt, race)
                 services_lang.get("error.notRaceAuthor", ctxt.sender.lang))
         end
         race.author = existing.author
-        -- Per direct request: editing a saved race always wipes its recorded times, not just when
-        -- gates/layout actually changed. The editor warns about this beforehand (see the confirm
-        -- dialog in windows/config/races/editor/app.js) whenever there was anything to lose, using
-        -- the leaderboardCount onBJRequestCache computes for exactly that purpose
-        race.leaderboard = {}
-        race.freeroamLeaderboard = {}
+        -- Editing a saved race clears its recorded times, on both boards, unless the save asks to
+        -- keep them : gates and layout can change under a saved race, and a time set on a course
+        -- that no longer exists isn't comparable with one set on this one. It used to be
+        -- unconditional (an earlier direct request) ; `keepTimes` makes it the editor's choice at
+        -- save time instead (a later one), offered whenever there is actually something to lose -
+        -- the editor knows that from the leaderboardCount onBJRequestCache computes for exactly
+        -- that purpose, since the times themselves are never synced client-side at all. Same flag
+        -- name and meaning as the bundled course update's own, which has always had to make this
+        -- same call. Taken from the EXISTING race, never from the submitted one : a client's
+        -- payload has no business carrying other players' times, and sanitizeRace doesn't vet them
+        if keepTimes == true then
+            race.leaderboard = existing.leaderboard or {}
+            race.freeroamLeaderboard = existing.freeroamLeaderboard or {}
+        else
+            race.leaderboard = {}
+            race.freeroamLeaderboard = {}
+        end
         race.leaderboardCount = nil -- derived/display-only, never actually persisted
         M.data[existingIndex] = race
     else

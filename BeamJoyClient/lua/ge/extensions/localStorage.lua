@@ -52,6 +52,13 @@ local M = {
             key = "beamjoy.passive_races.enabled",
             default = true,
         },
+        -- Settings > Races > the game's own checkpoint and countdown sounds (beamjoy/races.lua's
+        -- playSound). Off by default, per direct request : a sound nobody asked for is worse than
+        -- no sound, and the race HUD already says everything these say
+        RACE_SOUNDS = {
+            key = "beamjoy.races.sounds",
+            default = false,
+        },
 
         NAMETAGS_COLOR_PLAYER_TEXT = {
             key = "beamjoy.nametags.colors.player.text",
