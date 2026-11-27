@@ -21,7 +21,7 @@
 
 <!-- the start menu's look -->
 <div ng-if="$ctrl.layout !== 'table'">
-    <div ng-repeat="s in $ctrl.sections track by s.key">
+    <div ng-repeat="s in $ctrl.shownSections track by s.key">
         <h4 title="{{s.plugin}}">{{s.title}}</h4>
         <p class="pluginopt-note" ng-if="s.note">{{s.note}}</p>
         <div ng-repeat="o in s.options track by o.id" ng-class="o.type === 'toggle' ? 'bjr-toggle-row' : 'bjr-field'">
@@ -41,7 +41,7 @@
 
 <!-- the race editor's and config window's look -->
 <table class="w-100" ng-if="$ctrl.layout === 'table'">
-    <tbody ng-repeat="s in $ctrl.sections track by s.key">
+    <tbody ng-repeat="s in $ctrl.shownSections track by s.key">
         <tr>
             <td colspan="2">
                 <h5>{{s.title}}<span class="pluginopt-from">{{s.plugin}}</span></h5>

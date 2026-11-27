@@ -28,7 +28,7 @@ angular.module("beamjoy").factory("beamjoyPluginUi", function ($rootScope, beamj
             .map((s) => Object.assign({}, s, { options: s.options.filter((o) => !o.where || o.where === "both" || o.where === place) }))
             .filter((s) => s.options.length > 0);
 
-    const state = { race: [], config: [], startSections: [], editorSections: [], phaseSections: [], formats: [] };
+    const state = { race: [], config: [], startSections: [], editorSections: [], phaseSections: [], formats: [], defaults: {} };
     beamjoyStore.pluginUi = state;
     $rootScope.$on("BJPluginUi", (_, data) => {
         const race = asList(data && data.race).map((s) => prepareSection(s));
@@ -37,7 +37,20 @@ angular.module("beamjoy").factory("beamjoyPluginUi", function ($rootScope, beamj
             tab.sections = asList(t.sections).map((s) => prepareSection(s, t.plugin));
             return tab;
         });
+        // every option's own default, by plugin. A `showIf` can name an option this window isn't
+        // drawing (an editor-only one, from a start menu), and a race that has never had that
+        // option set carries no value for it at all : the default is the answer in both cases
+        const defaults = {};
+        const noteDefaults = (plugin, options) => {
+            defaults[plugin] = defaults[plugin] || {};
+            asList(options).forEach((o) => {
+                defaults[plugin][o.id] = o.default;
+            });
+        };
+        race.forEach((s) => noteDefaults(s.plugin, s.options));
+        config.forEach((t) => asList(t.sections).forEach((s) => noteDefaults(s.plugin, s.options)));
         Object.assign(state, {
+            defaults,
             race,
             config,
             startSections: forPlace(race, "start"),
@@ -51,6 +64,20 @@ angular.module("beamjoy").factory("beamjoyPluginUi", function ($rootScope, beamj
         });
         $rootScope.$broadcast("BJPluginUiChanged");
     });
+
+    // whether a section or an option with a `showIf` is drawn : what another option of the same
+    // plugin is set to right now. Anything without one is always drawn. A hidden option is only
+    // hidden - its value is still seeded, still sent, and still comes back as it was once the
+    // condition holds again
+    const listed = (v) => (Array.isArray(v) ? v : [v]);
+    const shows = (cond, values, plugin) => {
+        if (!cond || typeof cond !== "object" || typeof cond.option !== "string") return true;
+        let v = values ? values[cond.option] : undefined;
+        if (v === undefined) v = ((state.defaults || {})[plugin] || {})[cond.option];
+        if (cond.is !== undefined && !listed(cond.is).some((x) => x === v)) return false;
+        if (cond.isNot !== undefined && listed(cond.isNot).some((x) => x === v)) return false;
+        return true;
+    };
 
     // values filled in : what's given where it fits its option, the option's default for the rest
     const fits = (o, v) => {
@@ -148,7 +175,7 @@ angular.module("beamjoy").factory("beamjoyPluginUi", function ($rootScope, beamj
     // ask for them once the UI's up (the Lua side keeps them across UI reloads)
     beamjoyStore.send("BJPluginUiRequest");
 
-    return { state, asList, seed, color, describe, labelsOf, labelsShown, setLabelsShown };
+    return { state, asList, seed, shows, color, describe, labelsOf, labelsShown, setLabelsShown };
 });
 angular.module("beamjoy").run(function (beamjoyPluginUi) {
     // instantiated at start, so the definitions are listened for before any window needs them
@@ -173,13 +200,40 @@ angular.module("beamjoy").component("bjPluginOptions", {
         const ui = beamjoyPluginUi;
         this.view = {};
         const current = () => (this.holder && this.holder.plugins) || {};
+        // what's actually drawn : everything, less whatever a `showIf` is holding back. Checked
+        // against this plugin's own values as held -- the race's editor-set ones included, which is
+        // the point: a start menu never draws an editor-only option, but that option's value is
+        // exactly what decides whether the rest belong there (a joker lap's rules, on a track with
+        // no joker lane) -- with whatever is on screen on top of them
+        this.shownSections = [];
+        let shownKey = null;
+        const rebuildShown = () => {
+            const sections = [];
+            ui.asList(this.sections).forEach((s) => {
+                const values = Object.assign({}, current()[s.plugin] || {}, this.view[s.plugin] || {});
+                if (!ui.shows(s.showIf, values, s.plugin)) return;
+                const options = s.options.filter((o) => ui.shows(o.showIf, values, s.plugin));
+                if (options.length > 0) sections.push(Object.assign({}, s, { options }));
+            });
+            // a fresh array only when what's visible actually changed : ng-repeat tracks these by
+            // the objects themselves, and handing it new ones on every digest never settles
+            const key = sections
+                .map((s) => s.key + ":" + s.options.map((o) => o.id).join(","))
+                .join("|");
+            if (key === shownKey) return;
+            shownKey = key;
+            this.shownSections = sections;
+        };
         const rebuild = () => {
             this.view = ui.seed(this.sections, current());
+            rebuildShown();
         };
         $scope.$watch(() => [this.sections, this.holder && this.holder.plugins], rebuild, true);
         $scope.$watch(
             () => this.view,
             (view, old) => {
+                // a value just changed on screen : something hidden behind it may belong here now
+                rebuildShown();
                 if (view === old || !this.holder) return;
                 const seeded = ui.seed(this.sections, current());
                 Object.keys(view).forEach((plugin) => {

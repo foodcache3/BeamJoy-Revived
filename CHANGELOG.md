@@ -8,10 +8,10 @@ the live server per the usual workflow: see each entry.
 
 ## [Unreleased]
 
-Server build 2505, client build 2793. Server-side, needing a deploy and a restart : the startup
+Server build 2506, client build 2794. Server-side, needing a deploy and a restart : the startup
 entry, the swallowed-crash entry at the bottom, the server half of the stuck-vehicle entry, the
-crew-leader entry, the player-distance entry, the Update half of the vehicle preset entry, and
-both halves of the four race entries, the jumped-start entry, the recorded-times
+crew-leader entry, the player-distance entry, the Update half of the vehicle preset entry, the
+plugin-options entry, and both halves of the four race entries, the jumped-start entry, the recorded-times
 entry, the staff-ghost entry and the arenas entry.
 Everything else is client-side, so BJ.zip goes out with it.
 
@@ -132,8 +132,8 @@ a game on the old build doesn't recognise.
   own crossings only : a field of thirty-two would otherwise be a field of thirty-two pings.
 
 - **The config window's background can be made solid, or taken away entirely.** A number in its
-  title bar beside minimise and close ; each click takes it up 20 %, from the 20 % it has always
-  been to fully solid, then to nothing at all and round again. Remembered per window, per player,
+  title bar beside minimise and close ; each click takes it up 20 %, from the 60 % a window starts
+  at to fully solid, then to nothing at all and round again. Remembered per window, per player,
   the same way each window already remembers where you put it and how big you made it.
 
 - **The race editor's list of races has a search box, a filter and a sort.** It was one flat list
@@ -145,8 +145,9 @@ a game on the old build doesn't recognise.
   went missing. The same toolbar the race picker in the main window already has, deliberately : the
   two lists of races a player meets shouldn't behave differently.
 
-- **A binding for the editors' move / turn handles.** **Shift+K** by default, beside the Shift+J
-  focus one, and rebindable in the game's own controls menu like any other. It switches the handles
+- **A binding for the editors' move / turn handles.** **T** by default -- the game leaves plain T
+  free, it only ever uses it with a modifier -- beside the Shift+J focus one, and rebindable in the
+  game's own controls menu like any other. It switches the handles
   on whatever is selected between moving it and turning it, in every editor at once -- races,
   props, pit boxes, hunter, infected, derby, safe zones, the freeroam editors -- because they all
   already share one notion of which tool is in hand. It does nothing while nothing is selected,
@@ -154,9 +155,11 @@ a game on the old build doesn't recognise.
   editor has one, so a three-way cycle would strand everything else on a tool it doesn't draw.
 
 - **Staff can ghost a player's car, and so can a server plugin.** A **Ghost** button in the player
-  list, in the same row as freeze, engine, launch, explode and remove : no collisions, see-through
-  for everyone, until it's turned off again. For a car wedged where it is ruining someone else's
-  run, or a player who needs to be got out of the way without their car being taken off them.
+  list, in the same row as freeze, engine, launch, explode and remove -- and at the top of the
+  menu a right-click on the car itself opens, above Spectate, which is the quicker way to reach the
+  car you are already looking at : no collisions, see-through for everyone, until it's turned off
+  again. For a car wedged where it is ruining someone else's run, or a player who needs to be got
+  out of the way without their car being taken off them.
 
   A ghost belongs to the game that owns the car -- which is exactly why nobody could ghost anyone
   else before now -- so the server records it and the owner's own game applies it, under a reason
@@ -165,6 +168,25 @@ a game on the old build doesn't recognise.
   stay ghosted anyway, and it survives a reset, a respawn and a rejoin until someone turns it off.
   Plugins get the same thing as `players.ghost`. **(Server-side and client-side: both halves go out
   together.)**
+
+- **A plugin's option can hide another one.** `showIf` on one of a plugin's race options, config
+  tab options or on a whole section of them : the id of another option of its own and what that
+  one has to be (`{option = "gate", isNot = 0}`, or `is` with a value or a list of them). The
+  start menu can go by an option only the race editor draws, which is the point of it -- a rule
+  belonging to something built into a track then shows up only on the races that have it. Only
+  the drawing changes : a hidden option keeps its value, the plugin is still given it, and it
+  comes back exactly as it was the moment the condition holds again. A section whose every option
+  is hidden isn't drawn at all. A condition naming an option that doesn't exist, or naming itself,
+  is refused when the plugin registers rather than quietly never showing.
+
+  **The `BJRallycross` example uses it** (reported : it asked about joker laps on races that
+  haven't got one). A race whose "Joker gate" is 0 has no joker lane, and its four joker rules --
+  how many are required, the penalty for a missing one, which laps it may be taken on, whether
+  extras cost the same -- are no longer put in front of anyone for it. In the start menu, where
+  the gate itself is never drawn, the whole "Joker lap" section goes with them, so starting an
+  ordinary race no longer asks about a joker lap it hasn't got. **(Server-side, with a client
+  half. Unlike the entries above, either half works alone : whichever side is old, every option is
+  simply drawn as it was before.)**
 
 - **A plugin can ask how far apart players are.** `players.distance`, for two players or for a
   list of them in one call, answering every pair. In metres, from the server's own copy of where

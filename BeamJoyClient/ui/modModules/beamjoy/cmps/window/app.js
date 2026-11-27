@@ -99,16 +99,21 @@ angular.module("beamjoy").component("bjWindow", {
         // with.
         const WHEEL_SCROLL_MULTIPLIER = 4;
 
-        // How solid the window's background is. 0.2 is what it has always been and stays the
-        // default ; the rest are the same step up and down, per direct request ("an opacity button
-        // that cycles the transparency in 20% increments"). 0 is no background at all, which is
-        // the point for anyone who wants to see the road through the panel.
+        // How solid the window's background is : the same step up and down, per direct request
+        // ("an opacity button that cycles the transparency in 20% increments"). 0 is no background
+        // at all, which is the point for anyone who wants to see the road through the panel.
+        //
+        // 60 % is where a window nobody has touched starts (direct request). The cycle itself is
+        // unchanged and simply carries on from wherever the window is, so that window's first
+        // click takes it to 80, then 100, then none, then round to 20 - the order the steps are
+        // written in, not an order relative to the default.
         //
         // Only drawn for a window that has a background to begin with (`background`), which today
         // is the config window alone - but it belongs here rather than there, because any window
         // that gains a background gets the control with it instead of needing its own copy.
         const OPACITY_STEPS = [0.2, 0.4, 0.6, 0.8, 1, 0];
-        this.opacity = OPACITY_STEPS[0];
+        const DEFAULT_OPACITY = 0.6;
+        this.opacity = DEFAULT_OPACITY;
         // a CSS custom property on OUR OWN element, which the two background rules read. Never on
         // documentElement : an md-select closing restores that element's whole inline style and
         // would silently wipe it (the same trap the HUD hit).

@@ -82,6 +82,43 @@ local function choice(c)
     return value and { value = value, label = value } or nil
 end
 
+--- a `showIf` : another option of the same plugin whose value decides whether this one is drawn
+--- at all, and what that value has to be. `{option = "gate", isNot = 0}`, or
+--- `{option = "mode", is = {"sprint", "endurance"}}`.
+---
+--- Only what's DRAWN. A hidden option keeps its value, the plugin still gets it in `options`, and
+--- it comes back as it was the moment the condition holds again - which is what makes it safe to
+--- hide a whole section's rules behind one switch. The option it names can be one the window
+--- isn't drawing : an editor-only option is exactly what a start menu wants to go by.
+---@param v any
+---@return table? condition, string? why not
+local function condition(v)
+    if v == nil then return nil end
+    if type(v) ~= "table" then return nil, "showIf must be an object" end
+    local oid = id(v.option)
+    if not oid then return nil, "showIf needs `option` : the id of another option of yours" end
+    --- a value, or a list of them
+    local function values(x)
+        if x == nil then return nil end
+        local list = {}
+        for _, y in ipairs(type(x) == "table" and x or { x }) do
+            if #list >= MAX_CHOICES then break end
+            local t = type(y)
+            if t == "boolean" or t == "number" then
+                list[#list + 1] = y
+            elseif t == "string" then
+                list[#list + 1] = text(y, 48)
+            end
+        end
+        return #list > 0 and list or nil
+    end
+    local is, isNot = values(v.is), values(v.isNot)
+    if not is and not isNot then
+        return nil, "showIf needs `is` or `isNot` : a value, or a list of them"
+    end
+    return { option = oid, is = is, isNot = isNot }
+end
+
 ---@param o any an option as a plugin describes it
 ---@param where "race"|"config"|"page" (a field on a plugin's page : services/pluginPages.lua)
 ---@return table? option, string? why not
@@ -140,6 +177,13 @@ local function option(o, where)
         -- its value shown on results and leaderboard entries, like a field
         out.field = o.field == true or nil
     end
+    -- drawn only while another of this plugin's options says so (cmps/pluginOptions draws both
+    -- race options and config tabs ; a plugin page builds its own fields, see pluginPages.lua)
+    if where ~= "page" then
+        local cond, why = condition(o.showIf)
+        if why then return nil, string.format("option %s : %s", oid, why) end
+        out.showIf = cond
+    end
     return out
 end
 
@@ -152,6 +196,9 @@ local function section(s, where, maxOptions)
     local sid = id(s.id)
     if not sid then return nil, "a section's id must be a word (letters first, then letters, digits, _ or -)" end
     local out = { id = sid, title = text(s.title, 48) or sid, note = text(s.note, 300), options = {} }
+    local cond, condWhy = condition(s.showIf)
+    if condWhy then return nil, string.format("section %s : %s", sid, condWhy) end
+    out.showIf = cond
     if type(s.options) ~= "table" or #s.options == 0 then
         return nil, string.format("section %s needs options", sid)
     end
@@ -188,6 +235,30 @@ local function sectionsOf(sections, where, maxSections, maxOptions)
         count = count + #sec.options
         if count > maxOptions then return nil, string.format("%d options at most", maxOptions) end
         out[#out + 1] = sec
+    end
+    -- a showIf naming an option that isn't there would simply never show, and a plugin author
+    -- would have nothing to go on : said now, where every id of every section is known
+    for _, sec in ipairs(out) do
+        ---@param cond table?
+        ---@param what string
+        ---@param own string? the id of the option the condition is on (it can't name itself)
+        ---@return string? why not
+        local function check(cond, what, own)
+            if not cond then return nil end
+            if own and cond.option == own then
+                return string.format("%s : showIf can't name itself", what)
+            end
+            if not ids[cond.option] then
+                return string.format("%s : showIf names %s, which isn't one of your options",
+                    what, cond.option)
+            end
+        end
+        local why = check(sec.showIf, "section " .. sec.id)
+        if why then return nil, why end
+        for _, o in ipairs(sec.options) do
+            why = check(o.showIf, "option " .. o.id, o.id)
+            if why then return nil, why end
+        end
     end
     return out
 end

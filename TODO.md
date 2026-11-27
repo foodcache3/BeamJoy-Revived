@@ -32,6 +32,20 @@ racer is charged for damage that isn't there. Intermittent, so it needs several 
 
 Built (see CHANGELOG), not yet tried live. Newest first.
 
+- the five notes from the last session's testing (client 2794, server 2506) : the **config
+  window's opacity button** starts at 60 % on a window nobody has touched before (an existing
+  window keeps whatever it was left on), and its tooltip now says only "Window opacity" ; **T**
+  switches move / turn in every editor, shows up in the game's controls menu as that, and still
+  does nothing with nothing selected (the game itself leaves plain T free -- worth one check that
+  nothing else in your own setup answers it) ; the **race editor's filter** now follows the
+  filter you just picked rather than the one before it -- walk down all nine of them and back,
+  then search inside one, then cycle the sort, and the list should agree with what the dropdown
+  says every time ; **Ghost** at the top of the right-click menu on another player's car (staff
+  only, reads "Unghost" on a car already ghosted, and does the same thing as the player list's
+  own button) ; and a **`BJRallycross`** race with "Joker gate" left at 0 should ask nothing about
+  joker laps at all -- no rules in the editor under the gate, no "Joker lap" section in the start
+  menu -- while a race with a gate set still asks everything, with whatever the rules were last
+  set to.
 - vehicle presets after a game update (client 2793, server 2505) : the reported break. A **race**
   in "pool" mode on a preset captured on 0.39 (the bangers pool) -- picking one of its cars from
   the selector should be accepted now, where it used to say the vehicle wasn't allowed, and the
@@ -72,13 +86,13 @@ Built (see CHANGELOG), not yet tried live. Newest first.
   default, on : one sound per light and the "go" at the green, one per number on a plain
   countdown, a ping on each of your own gates (not other people's), a passive run's checkpoints
   too, and nothing at all with it off again ; **the config window's number button** cycles 20 to 100 % and then to no background,
-  survives a reopen and a game restart, and the number stays legible at every step ; **the race
+  starts at 60 %, survives a reopen and a game restart, and the number stays legible at every step ; **the race
   editor's list** searched by name and by author, each of the nine filters, the three sorts, "No
-  matches" where nothing matches and the real empty message on a map with no races ; **Shift+K**
+  matches" where nothing matches and the real empty message on a map with no races ; **T**
   switches move / turn with a gate, a prop, a start position, a pit box and a safe-zone point
   selected, in the hunter / infected / derby / freeroam editors too, does nothing with nothing
   selected, and shows up in the game's controls menu beside the Shift+J one ; **Ghost** in the
-  player list on another player's car (see-through and passing through on both screens, "Unghost"
+  player list and in the right-click menu on another player's car (see-through and passing through on both screens, "Unghost"
   puts it back), on a racer mid-race (the race's own ghosting unaffected), kept across their
   reset and their rejoin ; **`players.distance`** and **`players.ghost`** from a plugin, including
   the list form and an unknown player ID.

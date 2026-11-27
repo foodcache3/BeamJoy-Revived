@@ -867,6 +867,9 @@ BJ.raceOptions({
   of an event, set in the phase editor : `phase.options[yourPlugin][optionId]`, not in `options`).
 - `field = true`: the option's value shows on every racer's result and goes on their leaderboard
   entry with their time, like a [field](#fields) (a toggle shows its label while on).
+- `showIf`: draw this one only while another of your options is set a certain way (see below). A
+  start menu can go by an `"editor"` option it doesn't draw itself, which is how a rule belonging
+  to a track feature only appears on the races that have it.
 - Up to 4 sections, 16 options each. Option ids are yours across your sections.
 - A race keeps its values for a plugin that isn't running (restarting, or removed for a while).
   BeamJoy only uses the options of the plugins running now.
@@ -882,6 +885,23 @@ BJ.raceOptions({
 | `{id, type = "button", label, confirm?}` | config tabs only: a click sends `ConfigAction` ; `confirm` asks first |
 
 Every option can have a `tooltip`. `id` is a word: a letter, then letters, digits, `_` or `-`.
+
+**`showIf`** keeps an option -- or a whole section -- off the screen until another of your options
+says otherwise:
+
+```lua
+{ id = "gate", type = "number", label = "Joker gate", min = 0, max = 100, where = "editor" },
+{ id = "penalty", type = "number", label = "Missing joker", min = 0, max = 120, unit = "s",
+  showIf = { option = "gate", isNot = 0 } },
+```
+
+`{option, is?, isNot?}`: the id of another option of yours, and a value (or a list of them) it
+must be, or must not be. One of `is` / `isNot` is needed, and the option it names has to exist and
+can't be itself. A section's own `showIf` works the same way, and a section whose every option is
+hidden isn't drawn at all.
+
+Only the drawing changes. A hidden option keeps its value, you still get it in `options`, and it
+comes back exactly as it was as soon as the condition holds again.
 
 ## Tyre options
 

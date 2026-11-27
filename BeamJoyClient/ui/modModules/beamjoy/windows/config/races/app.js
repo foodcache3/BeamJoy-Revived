@@ -75,7 +75,20 @@ angular.module("beamjoy").component("bjConfigRaces", {
             );
             this.shown = list;
         };
-        this.refreshList = applyList;
+        // `filter` is the value just picked, handed over by cmps/select. Reported ("the filter
+        // shows the wrong races or none at all, and the same filter shows different races every
+        // time I switch back to it") : this used to be plain `applyList`, which reads this.filter
+        // -- and at the moment a bj-select's ng-change fires, its two-way copy back to this
+        // property has NOT run yet (cmps/select's handleChange says so in its own comment, and
+        // every other bj-select in the codebase already passes `value` for exactly this reason).
+        // So the list was filtered by the player's PREVIOUS choice every single time: one behind,
+        // which reads as the wrong races, as none at all whenever the stale filter matches nothing,
+        // and as the same filter giving different answers depending on what came before it. The
+        // search box and the sort button pass nothing and keep whatever filter is held
+        this.refreshList = (filter) => {
+            if (filter !== undefined) this.filter = filter;
+            applyList();
+        };
         this.toggleSearch = (event) => {
             event.stopPropagation();
             this.searchOpen = !this.searchOpen;

@@ -23,7 +23,8 @@ BRANCH :
     meet again.
  3. Note the joker gate's own number (the one the parent picker shows beside it) and set it as
     "Joker gate" in the editor's "Joker lap" section. 0 means this race has no joker, and nothing
-    below then changes anything.
+    below then changes anything : the rules under it aren't even shown (`showIf`) until a gate is
+    set, so a race without a joker lane never asks about one.
 A crossing is checked against that parent graph, so either way round counts as real progress and
 neither can be skipped. Each gate keeps its own number whichever step it sits on, and that is how
 this plugin can tell which way a racer went : RacerGate's `gate`.
@@ -283,13 +284,21 @@ function onInit()
                 { id = "gate", type = "number", label = "Joker gate", min = 0, max = 100, step = 1,
                     default = 0, where = "editor",
                     tooltip = "The gate number of the checkpoint inside the joker lane. 0 : this race has no joker" },
+                -- the rules, only on a race that actually has a joker lane (`showIf`) : a gate of
+                -- 0 means there's none, and then there's nothing here worth asking. With the gate
+                -- itself the only option left, the whole section goes too -- in the start menu,
+                -- where the gate isn't shown at all. Hidden, not forgotten : the values stay as
+                -- they were and come straight back if a gate is set later
                 { id = "required", type = "number", label = "Jokers required", min = 0, max = 3, step = 1,
-                    default = 1, tooltip = "Per phase : each heat and the final want their own" },
+                    default = 1, showIf = { option = "gate", isNot = 0 },
+                    tooltip = "Per phase : each heat and the final want their own" },
                 { id = "penalty", type = "number", label = "Missing joker", min = 0, max = 120, step = 5,
-                    unit = "s", default = 30, tooltip = "Added to the race time for each one not taken" },
+                    unit = "s", default = 30, showIf = { option = "gate", isNot = 0 },
+                    tooltip = "Added to the race time for each one not taken" },
                 { id = "window", type = "select", label = "May be taken on", choices = WINDOWS,
-                    default = "any" },
+                    default = "any", showIf = { option = "gate", isNot = 0 } },
                 { id = "extras", type = "toggle", label = "Extra jokers cost the same", default = true,
+                    showIf = { option = "gate", isNot = 0 },
                     tooltip = "One more than required is an infringement too" },
             },
         },

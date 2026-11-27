@@ -54,6 +54,18 @@ local function onBJClick(type, data)
             :find(function(p) return p.playerID == data.mpVeh.ownerID end)
         local cacheVeh = owner and owner.vehicles[data.mpVeh.serverVID] or nil
         if owner and cacheVeh and beamjoy_permissions.isStaff() then
+            -- GHOST (first, by direct request : at the top of the list, above Spectate). The
+            -- server records it and the car's OWNER applies it, like the player list's own Ghost
+            -- button (beamjoy_players.onVehicleAction) - never broadcast from the server the way
+            -- explode and launch are, so `cacheVeh.staffGhost` is what says which way this reads
+            table.insert(M.current.actions, 1, {
+                text = "beamjoy.window.main.playerlist.actions." ..
+                    (cacheVeh.staffGhost and "unghost" or "ghost"),
+                callback = function()
+                    beamjoy_communications.send("toggleGhost", owner.playerName, data.mpVeh.remoteVID)
+                end
+            })
+
             -- FREEZE
             table.insert(M.current.actions, {
                 text = "beamjoy.window.main.playerlist.actions." ..

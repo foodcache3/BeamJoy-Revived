@@ -166,7 +166,8 @@ local function setTool(tool)
 end
 
 --- the "Editor : translate / rotate" binding (core/input/actions/beamjoy.json's
---- bjEditorToolSwitch, Shift+K by default, beside the Shift+J focus one). Switches between the two
+--- bjEditorToolSwitch, T by default - the game's own keyboard.json leaves bare T free, it only
+--- uses it with a modifier - beside the Shift+J focus one). Switches between the two
 --- exactly as the toolbars' own buttons do, by sending the same BJEditorChangeTool every editor in
 --- this codebase already both sends and listens to - so every editor's toolbar follows the key
 --- with no per-editor wiring whatsoever.

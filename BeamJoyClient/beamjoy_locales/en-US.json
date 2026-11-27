@@ -7,7 +7,7 @@
     "beamjoy.common.invalid": "Invalid",
     "beamjoy.common.reset": "Reset",
     "beamjoy.cmps.colorPicker.clear": "Clear color",
-    "beamjoy.cmps.window.opacity.tooltip": "How solid this window's background is. Each click takes it up 20%, then back to none. Kept per window.",
+    "beamjoy.cmps.window.opacity.tooltip": "Window opacity",
     "beamjoy.common.preview": "Preview",
     "beamjoy.common.confirm": "Confirm",
     "beamjoy.common.cancel": "Cancel",
